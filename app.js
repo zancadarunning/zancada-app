@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-07T14:04:30Z';
+const APP_VERSION = '2026-09-07T14:25:36Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -568,15 +568,17 @@ async function connectStrava(){
     });
     if(!res.ok) throw new Error('strava-init failed');
     const { state } = await res.json();
-    // El redirect_uri tiene que ser SIEMPRE un link absoluto a zancada.org, nunca
-    // window.location.origin a secas: en la app nativa (Capacitor) ese origin es algo
-    // como capacitor://localhost o https://localhost, un dominio que Strava jamás va a
-    // aceptar porque no coincide con el "Authorization Callback Domain" configurado en
-    // su panel de la app (zancada.org) -- eso es justo lo que producía el error
-    // "redirect_uri invalid" al conectar Strava desde el celular. En la web/PWA sí
-    // podemos usar window.location.origin normalmente (mismo dominio real).
-    const native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-    const redirectUri = native ? 'https://zancada.org/api/strava-auth' : `${window.location.origin}/api/strava-auth`;
+    // El redirect_uri tiene que ser SIEMPRE este link fijo a zancada.org -- nunca algo
+    // armado con window.location.origin. Strava solo acepta un redirect_uri cuyo dominio
+    // coincida exactamente con el "Authorization Callback Domain" configurado en el panel
+    // de la app (zancada.org), y window.location.origin puede ser cualquier otra cosa
+    // según desde dónde se haya cargado la página: capacitor://localhost o
+    // https://localhost en la app nativa, o el dominio crudo de Vercel
+    // (zancada-app.vercel.app) si alguien entra por ahí en vez de por zancada.org -- en
+    // cualquiera de esos casos Strava rechazaba todo con "redirect_uri invalid". Como el
+    // backend (api/strava-auth.js) vive en el mismo proyecto sin importar qué dominio usó
+    // el usuario para llegar hasta acá, no hace falta que coincida con el origin real.
+    const redirectUri = 'https://zancada.org/api/strava-auth';
     const url = `https://www.strava.com/oauth/authorize?client_id=${STRAVA_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=activity:read_all&state=${encodeURIComponent(state)}&approval_prompt=force`;
     window.location.href = url;
   }catch(e){
