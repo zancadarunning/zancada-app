@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-05T15:50:25Z';
+const APP_VERSION = '2026-09-07T13:56:52Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -807,6 +807,7 @@ document.getElementById('ob-days').addEventListener('click', e=>{
 document.getElementById('perfil-days').addEventListener('click', e=>{
   const c=e.target.closest('.day-pill'); if(!c) return;
   c.classList.toggle('active');
+  markPerfilDirty('days'); // toggle de clase, no dispara 'change' -- hay que marcarlo a mano
 });
 function populateOnboardDays(){
   document.querySelectorAll('#ob-days .day-pill').forEach(el=>{ el.textContent = t('day_'+el.dataset.v).slice(0,3); });
@@ -867,6 +868,42 @@ function relinkTodayRun(){
   if(todayRun){ today.status = 'done'; today.linkedRunId = todayRun.id; return true; }
   return false;
 }
+/* ---- Botones "Guardar" de Perfil: ocultos hasta que hay algo sin guardar ----
+   Antes cada sección de Perfil (Datos personales, Metas, Días, Zonas) tenía su botón
+   "Guardar" siempre visible, lo que generaba dudas sobre si un cambio ya estaba guardado
+   o no. Ahora el botón de cada sección arranca oculto (ver .perfil-save-btn en el CSS) y
+   solo aparece cuando el usuario modifica algo dentro de esa tarjeta; al tocarlo, se pide
+   una confirmación rápida antes de aplicar el cambio, y el botón vuelve a ocultarse una
+   vez guardado (dentro de flashSaved, más abajo).
+   markPerfilDirty() se llama tanto desde los listeners delegados de abajo (inputs/selects
+   nativos) como a mano desde los pocos lugares que cambian estos campos sin disparar un
+   evento nativo (elegir terreno/días con un click en un .choice/.day-pill, o elegir fecha
+   de carrera desde el calendario). */
+const PERFIL_SAVE_SECTIONS = {
+  personal: { cardId: 'perfil-personal-card', btnId: 'save-personal-btn', run: savePersonalData },
+  goals:    { cardId: 'perfil-goals-card',    btnId: 'save-goals-btn',    run: saveGoals },
+  days:     { cardId: 'perfil-days-card',     btnId: 'save-days-btn',     run: saveTrainingDays },
+  zones:    { cardId: 'perfil-zones-card',    btnId: 'save-zones-btn',    run: saveCustomZones },
+};
+function markPerfilDirty(key){
+  const cfg = PERFIL_SAVE_SECTIONS[key];
+  const btn = cfg && document.getElementById(cfg.btnId);
+  if(btn) btn.classList.add('dirty');
+}
+function wirePerfilDirtyTracking(){
+  Object.keys(PERFIL_SAVE_SECTIONS).forEach(key=>{
+    const card = document.getElementById(PERFIL_SAVE_SECTIONS[key].cardId);
+    if(!card) return;
+    ['input','change'].forEach(evt=>card.addEventListener(evt, ()=>markPerfilDirty(key)));
+  });
+}
+wirePerfilDirtyTracking();
+async function confirmAndSave(key){
+  const cfg = PERFIL_SAVE_SECTIONS[key];
+  if(!cfg) return;
+  if(!(await showConfirm(t('perfil_save_confirm_msg')))) return;
+  cfg.run();
+}
 function saveTrainingDays(){
   const selected = [...document.querySelectorAll('#perfil-days .day-pill.active')].map(el=>el.dataset.v);
   if(selected.length===0){ showToast(t('perfil_days_empty_err'),'error'); return; }
@@ -886,6 +923,7 @@ function flashSaved(btnId){
   setTimeout(()=>{
     btn.innerHTML = original;
     btn.classList.remove('btn-saved-flash');
+    btn.classList.remove('dirty'); // ya se guardó -- el botón vuelve a ocultarse hasta el próximo cambio
     delete btn.dataset.flashing;
   }, 1400);
 }
@@ -992,6 +1030,7 @@ function saveGoals(){
 document.getElementById('perfil-terrain-choice').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('perfil-terrain-choice').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
+  markPerfilDirty('personal'); // toggle de clase, no dispara 'change' -- hay que marcarlo a mano
 });
 function ageFromBirth(dateStr){ const b=new Date(dateStr); return Math.max(10, Math.floor((Date.now()-b.getTime())/(365.25*24*3600*1000))); }
 const dateBoxUpdaters = {};
@@ -1118,6 +1157,7 @@ function calSelectDay(day){
   const input = document.getElementById(calTargetInputId);
   input.value = dateStr;
   dateBoxUpdaters[calTargetInputId] && dateBoxUpdaters[calTargetInputId]();
+  if(calTargetInputId === 'perfil-racedate') markPerfilDirty('personal'); // set vía JS, no dispara 'change'
   closeCalendar();
 }
 setupDateBox('ob-birth','ob-birth-text');
@@ -5205,8 +5245,9 @@ function renderRDDetalles(panel){
     </div>
     ${r.hrLog && r.hrLog.length>1 ? `<div class="hist-hrlist" style="margin-top:12px;">${r.hrLog.map(h=>`<span class="zone-chip zone-${classifyHR(h.bpm)}">${h.bpm} bpm</span>`).join('')}</div>` : ''}
     ${r.points && r.points.length>1 ? `<button class="btn btn-outline" style="width:100%; margin-top:16px;" onclick="downloadRunGPX('${r.id}')">${t('rd_export_gpx')}</button>` : ''}
-    <button class="btn btn-outline" style="width:100%; margin-top:12px;" onclick="shareRunToFeed('${r.id}')">${t('social_share_run_btn')}</button>
   `;
+  // El botón "Compartir con amigos" queda oculto por ahora (junto con la sección social
+  // de Perfil) -- shareRunToFeed() se deja intacta para poder reactivarlo más adelante.
 }
 // Arma el GPX de una carrera a partir de los puntos GPS crudos (r.points).
 // A diferencia del .ics del calendario (que solo agenda), esto le devuelve al
