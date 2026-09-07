@@ -1,0 +1,6 @@
+# mobile/www/* es una copia sincronizada a mano (con `cp`) de app.js/index.html/locales
+# para el build nativo de Capacitor -- se mantiene siempre igual al resto del repo, así
+# que versionarla por separado solo generaría diffs duplicados en cada cambio. El resto
+# de mobile/ (config de Capacitor, README) sigue su propio ciclo de vida aparte del sitio
+# web y no se gestiona desde este repo.
+mobile/
