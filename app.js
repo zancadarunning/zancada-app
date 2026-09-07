@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-05T15:18:10Z';
+const APP_VERSION = '2026-09-05T15:50:25Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -889,15 +889,6 @@ function flashSaved(btnId){
     delete btn.dataset.flashing;
   }, 1400);
 }
-function handleGoalChange(newGoal){
-  const wrap = document.getElementById('perfil-goal-km-check');
-  if(newGoal !== state.profile.goal){
-    wrap.style.display = 'block';
-    document.getElementById('perfil-current-km-check').value = state.profile.weeklyKm || '';
-  } else {
-    wrap.style.display = 'none';
-  }
-}
 /* ---- cuándo aplicar un cambio de perfil/objetivo que afecta el plan ----
    Editar datos personales o el objetivo semanal puede cambiar el plan de la semana
    ACTUAL de golpe -- lo cual no siempre es lo que el corredor quiere si, por ejemplo,
@@ -947,19 +938,17 @@ function savePersonalData(){
   const terrainChoice = document.querySelector('#perfil-terrain-choice .choice.active');
   const goal = document.getElementById('perfil-goal').value;
   const raceDate = document.getElementById('perfil-racedate').value || null;
-  const kmCheckWrap = document.getElementById('perfil-goal-km-check');
-  const currentKmInput = document.getElementById('perfil-current-km-check');
+  const currentKmInput = document.getElementById('perfil-current-km');
   if(weight>0) state.profile.weight = weight;
   if(height>0) state.profile.height = height;
   if(terrainChoice) state.profile.terrain = terrainChoice.dataset.v;
   if(goal) state.profile.goal = goal;
   state.profile.raceDate = raceDate;
-  if(kmCheckWrap.style.display==='block' && currentKmInput.value){
+  if(currentKmInput && currentKmInput.value !== ''){
     state.profile.currentWeeklyKm = parseFloat(currentKmInput.value) || 0;
     state.profile.runnerType = 'active';
   }
   state.profile.weeklyKm = calcWeeklyKm(state.profile);
-  kmCheckWrap.style.display = 'none';
   openPlanChangeTimingModal('personal');
 }
 // --- Objetivo/meta semanal: apartado "a partir de ahora" ---
@@ -2655,10 +2644,11 @@ function renderPerfil(){
   }
   renderSocialSection();
 
-  const editingPersonal = ['perfil-weight','perfil-height','perfil-racedate'].includes(document.activeElement && document.activeElement.id);
+  const editingPersonal = ['perfil-weight','perfil-height','perfil-racedate','perfil-current-km'].includes(document.activeElement && document.activeElement.id);
   if(!editingPersonal){
     document.getElementById('perfil-weight').value = p.weight || '';
     document.getElementById('perfil-height').value = p.height || '';
+    document.getElementById('perfil-current-km').value = p.currentWeeklyKm || '';
     document.getElementById('perfil-goal').value = p.goal || 'start';
     document.getElementById('perfil-racedate').value = p.raceDate || '';
     dateBoxUpdaters['perfil-racedate'] && dateBoxUpdaters['perfil-racedate']();
@@ -4465,6 +4455,32 @@ function parseHMS(str){
   else sec = nums[0]*3600 + nums[1]*60 + nums[2];
   return sec>0 ? sec : null;
 }
+/* Selector de horas/minutos/segundos de la calculadora de ritmo: 3 <select> en vez de
+   un campo de texto libre (antes había que tipear "1:45:00" a mano). Las opciones se
+   generan una sola vez (quedan vacías la primera vez que se abre el modal). */
+function ensurePaceCalcTimeOptions(){
+  const hSel = document.getElementById('pc-time-h');
+  if(hSel.options.length) return;
+  for(let h=0; h<=9; h++) hSel.innerHTML += `<option value="${h}">${h}</option>`;
+  const pad2 = n => String(n).padStart(2,'0');
+  let mmss = '';
+  for(let n=0; n<60; n++) mmss += `<option value="${n}">${pad2(n)}</option>`;
+  document.getElementById('pc-time-m').innerHTML = mmss;
+  document.getElementById('pc-time-s').innerHTML = mmss;
+}
+function setPaceCalcTimeSec(totalSec){
+  const s = Math.max(0, Math.round(totalSec||0));
+  document.getElementById('pc-time-h').value = Math.floor(s/3600);
+  document.getElementById('pc-time-m').value = Math.floor((s%3600)/60);
+  document.getElementById('pc-time-s').value = s%60;
+}
+function getPaceCalcTimeSec(){
+  const h = parseInt(document.getElementById('pc-time-h').value, 10) || 0;
+  const m = parseInt(document.getElementById('pc-time-m').value, 10) || 0;
+  const s = parseInt(document.getElementById('pc-time-s').value, 10) || 0;
+  const total = h*3600 + m*60 + s;
+  return total>0 ? total : null;
+}
 function paceCalcCurrentKm(){
   const sel = document.getElementById('pc-distance');
   if(!sel) return null;
@@ -4494,9 +4510,10 @@ function openPaceCalcModal(){
     sel.value = '10';
     document.getElementById('pc-custom-km-field').style.display = 'none';
   }
+  ensurePaceCalcTimeOptions();
   const km = paceCalcCurrentKm();
   const prediction = km ? predictRaceTime(km) : null;
-  document.getElementById('pc-time').value = prediction ? fmtTime(Math.round(prediction.predictedSec)) : '';
+  setPaceCalcTimeSec(prediction ? Math.round(prediction.predictedSec) : 0);
   document.getElementById('pc-strategy').value = 'even';
   document.getElementById('pace-calc-modal').style.display = 'block';
   renderPaceCalcResults();
@@ -4506,7 +4523,7 @@ function renderPaceCalcResults(){
   const resultsEl = document.getElementById('pc-results');
   if(!resultsEl) return;
   const km = paceCalcCurrentKm();
-  const totalSec = parseHMS(document.getElementById('pc-time').value);
+  const totalSec = getPaceCalcTimeSec();
   if(!km || !totalSec){
     resultsEl.innerHTML = `<p class="muted" style="margin-top:16px; font-size:13px;">${t('pace_calc_need_input')}</p>`;
     return;

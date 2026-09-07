@@ -1561,6 +1561,11 @@ try{
         <div class="metric-input-cell"><label data-i18n="ob_height_label"></label><input type="number" class="metric-input" id="perfil-height"></div>
       </div>
       <div class="field">
+        <label data-i18n="ob_currentkm_label"></label>
+        <input type="number" id="perfil-current-km" min="0" max="200" placeholder="0">
+        <p class="muted" style="margin-top:6px; font-size:12px;" data-i18n="perfil_current_km_hint"></p>
+      </div>
+      <div class="field">
         <label data-i18n="ob_terrain_label"></label>
         <div class="choice-row segmented" id="perfil-terrain-choice">
           <div class="choice" data-v="asfalto" data-i18n="ob_terrain_asfalto"></div>
@@ -1570,7 +1575,7 @@ try{
       </div>
       <div class="field">
         <label data-i18n="ob_goal_label"></label>
-        <select id="perfil-goal" onchange="handleGoalChange(this.value)">
+        <select id="perfil-goal">
           <option value="start" data-i18n="ob_goal_start"></option>
           <option value="5k" data-i18n="ob_goal_5k"></option>
           <option value="10k" data-i18n="ob_goal_10k"></option>
@@ -1580,11 +1585,6 @@ try{
           <option value="ultra" data-i18n="ob_goal_ultra"></option>
           <option value="lifestyle" data-i18n="ob_goal_lifestyle"></option>
         </select>
-        <div id="perfil-goal-km-check" style="display:none; margin-top:14px;">
-          <label data-i18n="ob_currentkm_label"></label>
-          <input type="number" id="perfil-current-km-check" placeholder="20" min="0" max="200">
-          <p class="muted" style="margin-top:6px; font-size:12px;" data-i18n="perfil_goal_km_check_hint"></p>
-        </div>
         <label style="margin-top:14px;" data-i18n="ob_racedate_label"></label>
         <div class="date-box" onclick="openCalendar('perfil-racedate','perfil-racedate-text')"><span class="date-box-text placeholder" id="perfil-racedate-text"></span></div>
         <input type="hidden" id="perfil-racedate">
