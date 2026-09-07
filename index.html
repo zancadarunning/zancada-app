@@ -1485,6 +1485,18 @@ try{
     </div>
   </div>
 
+  <div class="overlay" id="pain-overlay" style="display:none;">
+    <button class="week-nav-btn" onclick="closePainOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <h2 class="display" style="font-size:22px; margin:0;" data-i18n="pain_list_title"></h2>
+      <button onclick="openPainInfo()" style="background:none; border:1.5px solid var(--mist-dim); color:var(--mist-dim); width:19px; height:19px; border-radius:50%; font-size:11px; font-weight:800; font-style:italic; font-family:Georgia,serif; display:flex; align-items:center; justify-content:center; padding:0; cursor:pointer; flex-shrink:0; line-height:1;">i</button>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <div id="pain-log-list"></div>
+      <button class="btn btn-outline btn-sm" style="margin-top:12px; width:100%;" data-i18n="pain_add_btn" onclick="openPainModal()"></button>
+    </div>
+  </div>
+
   <div class="rd-video-overlay" id="rd-video-overlay">
     <button onclick="closeDynamicVideo()" data-i18n-aria="aria_back" style="position:absolute; top:calc(16px + var(--safe-top)); right:20px; width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.12); border:none; color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:2;"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span></button>
     <canvas id="rd-video-canvas" width="720" height="1280" style="display:none;"></canvas>
@@ -1749,13 +1761,15 @@ try{
       <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
-    <div class="card">
-      <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
-        <h3 style="margin:0;" data-i18n="pain_list_title"></h3>
-        <button onclick="openPainInfo()" style="background:none; border:1.5px solid var(--mist-dim); color:var(--mist-dim); width:19px; height:19px; border-radius:50%; font-size:11px; font-weight:800; font-style:italic; font-family:Georgia,serif; display:flex; align-items:center; justify-content:center; padding:0; cursor:pointer; flex-shrink:0; line-height:1;">i</button>
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openPainOverlay()">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.5-9.5-9C.5 8 2 4.5 5.5 4.5 8 4.5 9.5 6 12 8.5 14.5 6 16 4.5 18.5 4.5 22 4.5 23.5 8 21.5 12c-2.5 4.5-9.5 9-9.5 9z"/><path d="M6 12.5h2.5l1.5-3 2 5 1.5-2.5H16"/></svg></span>
+        <div>
+          <h3 style="margin:0 0 2px;" data-i18n="pain_list_title"></h3>
+          <p class="muted" style="margin:0; font-size:12.5px;" id="perfil-pain-summary"></p>
+        </div>
       </div>
-      <div id="pain-log-list"></div>
-      <button class="btn btn-outline btn-sm" style="margin-top:12px; width:100%;" data-i18n="pain_add_btn" onclick="openPainModal()"></button>
+      <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
     <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openShoesOverlay()">

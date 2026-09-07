@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-07T23:07:10Z';
+const APP_VERSION = '2026-09-07T23:11:22Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -2537,6 +2537,8 @@ document.getElementById('pain-body-choice').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('pain-body-choice').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
 });
+function openPainOverlay(){ document.getElementById('pain-overlay').style.display = 'block'; }
+function closePainOverlay(){ document.getElementById('pain-overlay').style.display = 'none'; }
 function openPainModal(){
   document.getElementById('pain-note').value = '';
   [...document.getElementById('pain-body-choice').children].forEach(c=>c.classList.remove('active'));
@@ -2606,8 +2608,11 @@ function checkPainCheckins(){
 }
 function renderPainLog(){
   const el = document.getElementById('pain-log-list');
-  if(!el) return;
   const entries = (state.painLog||[]).slice().reverse();
+  const activeCount = entries.filter(p=>p.active).length;
+  const summaryEl = document.getElementById('perfil-pain-summary');
+  if(summaryEl) summaryEl.textContent = !entries.length ? t('perfil_pain_summary_empty') : (activeCount ? t('perfil_pain_summary_active', {n: activeCount}) : t('perfil_pain_summary_none_active'));
+  if(!el) return;
   if(!entries.length){ el.innerHTML = `<p class="muted" style="text-align:center; padding:8px 0;">${t('pain_list_empty')}</p>`; return; }
   el.innerHTML = entries.map(p=>{
     const dateStr = new Date(p.date+'T00:00:00').toLocaleDateString(LOCALE_MAP[lang], {day:'numeric', month:'short'});
@@ -4340,7 +4345,12 @@ function getAchievementSections(){
     return {achieved, label: t('ach_badge_streak_label', {n}),
       progressText: achieved ? null : t('ach_locked_streak_left', {n: n-bestStreak})};
   });
-  const allBadges = [...distanceBadges, ...runBadges, ...streakBadges];
+  // Los récords personales también cuentan como logros (una marca por distancia estándar
+  // cuenta como desbloqueada), aunque se muestran en su propia tarjeta -- con el tiempo
+  // de la marca -- en vez de la grilla genérica de "Desbloqueado" (ver renderPersonalRecordsCard).
+  const prRecords = getPersonalRecords();
+  const recordBadges = PR_DISTANCES.map(b=>({achieved: !!prRecords[b.key]}));
+  const allBadges = [...distanceBadges, ...runBadges, ...streakBadges, ...recordBadges];
   return {distanceBadges, runBadges, streakBadges, unlockedCount: allBadges.filter(b=>b.achieved).length, totalCount: allBadges.length};
 }
 function renderAchievementBadgeGrid(badges){
