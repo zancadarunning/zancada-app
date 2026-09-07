@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-07T22:50:31Z';
+const APP_VERSION = '2026-09-07T22:58:55Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -4188,26 +4188,6 @@ function computeDailyTrend(days){
   }
   return result;
 }
-function computeWeeklyTrend(weeksCount){
-  // Kilómetros REALMENTE corridos (no planeados) por semana calendario (lunes a
-  // domingo), para las últimas `weeksCount` semanas incluyendo la actual (que va a
-  // estar incompleta si todavía no terminó). Mira directo state.runs por fecha en
-  // vez de depender de planHistory -- así sigue funcionando aunque falte algún
-  // registro de semana cerrada, y es coherente con "corridas reales" en el resto
-  // de Historial.
-  const result = [];
-  const currentMonday = new Date((state.weekStart || getMondayISO(new Date())) + 'T00:00:00');
-  for(let i=weeksCount-1; i>=0; i--){
-    const start = new Date(currentMonday); start.setDate(start.getDate() - i*7);
-    const startIso = start.toISOString().slice(0,10);
-    const end = new Date(start); end.setDate(end.getDate()+7);
-    const endIso = end.toISOString().slice(0,10);
-    const km = (state.runs||[]).filter(r => { const d=localDateISO(r.date); return d>=startIso && d<endIso; })
-      .reduce((a,r)=>a+r.distanceKm, 0);
-    result.push({weekStart: startIso, km, day: start.getDate(), isCurrent: i===0});
-  }
-  return result;
-}
 function computeTrends(){
   const totalKm = state.runs.reduce((a,r)=>a+r.distanceKm,0);
   return {totalKm, totalRuns: state.runs.length};
@@ -4342,12 +4322,24 @@ function renderAchievementBadgeGrid(badges){
     return `<div class="pr-medal"><span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${b.label}</span><span class="pr-medal-locked">${b.progressText}</span></div>`;
   }).join('')}</div>`;
 }
+function renderPersonalRecordsCard(){
+  // Vivía en Historial como una tarjeta aparte; ahora se muestra acá, en Logros, junto
+  // con el resto de los hitos del corredor (mismo estilo de medalla: iluminada con el
+  // tiempo si ya hay marca para esa distancia estándar, apagada con candado si no).
+  const prRecords = getPersonalRecords();
+  return `<div class="card"><h3>${t('hist_pr_title')}</h3><div class="pr-medal-grid">${PR_DISTANCES.map(b=>{
+    const rec = prRecords[b.key];
+    if(rec) return `<div class="pr-medal achieved"><span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${t('pr_label_'+b.key)}</span><span class="pr-medal-time">${fmtTime(rec.durationSec)}</span></div>`;
+    return `<div class="pr-medal"><span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${t('pr_label_'+b.key)}</span><span class="pr-medal-locked">${t('pr_medal_locked')}</span></div>`;
+  }).join('')}</div></div>`;
+}
 function openAchievements(){
   const {distanceBadges, runBadges, streakBadges, unlockedCount, totalCount} = getAchievementSections();
   document.getElementById('achievements-content').innerHTML = `
     <h2 class="display" style="font-size:20px; margin-bottom:2px;">${t('ach_title')}</h2>
     <p class="muted" style="margin:0 0 4px;">${t('ach_subtitle')}</p>
     <p style="margin:0 0 16px; font-weight:800; color:var(--hivis-text); font-size:13px;">${t('ach_unlocked_count', {unlocked:unlockedCount, total:totalCount})}</p>
+    ${renderPersonalRecordsCard()}
     <div class="card"><h3>${t('ach_section_distance')}</h3>${renderAchievementBadgeGrid(distanceBadges)}</div>
     <div class="card"><h3>${t('ach_section_runs')}</h3>${renderAchievementBadgeGrid(runBadges)}</div>
     <div class="card"><h3>${t('ach_section_streak')}</h3>${renderAchievementBadgeGrid(streakBadges)}</div>
@@ -4754,28 +4746,6 @@ function renderHistory(){
       return `<div class="trend-col"><div class="trend-stroke ${cls}" data-h="${h}" style="height:0px; transition-delay:${i*30}ms;"></div><div class="trend-lbl">${x.day}</div></div>`;
     }).join('')}</div>
   </div>`;
-  // Tendencia de forma física a largo plazo: km reales por semana en las últimas 12
-  // semanas -- a diferencia del gráfico diario de arriba (14 días, para ver la semana
-  // actual día a día), esto muestra si el volumen viene subiendo, estable o bajando
-  // en el tiempo, algo que ni el gráfico diario ni ninguna otra vista mostraban antes.
-  const weeklyTrend = computeWeeklyTrend(12);
-  const maxWeekKm = Math.max(...weeklyTrend.map(w=>w.km), 1);
-  const weeksWithRuns = weeklyTrend.filter(w=>w.km>0);
-  const avgWeekKm = weeksWithRuns.length ? weeksWithRuns.reduce((a,w)=>a+w.km,0)/weeksWithRuns.length : 0;
-  const bestWeekKm = Math.max(...weeklyTrend.map(w=>w.km), 0);
-  const longTrendCard = `<div class="card">
-    <h3 style="margin-bottom:2px;">${t('hist_long_trend_title')}</h3>
-    <p class="muted" style="margin:0 0 10px; font-size:12px;">${t('hist_long_trend_subtitle')}</p>
-    <div class="stat-row-divided">
-      <div class="stat-cell"><div class="n">${fmtDist(avgWeekKm,1)}</div><div class="l">${t('hist_long_trend_avg')} (${distUnit()})</div></div>
-      <div class="stat-cell"><div class="n">${fmtDist(bestWeekKm,1)}</div><div class="l">${t('hist_long_trend_best')} (${distUnit()})</div></div>
-    </div>
-    <div class="trend-bars" id="hist-longtrend-bars" style="margin-top:16px; gap:4px;">${weeklyTrend.map((w,i)=>{
-      const h = w.km>0 ? Math.max(6, Math.round((w.km/maxWeekKm)*70)) : 2;
-      const cls = w.km>0 ? '' : 'trend-rest';
-      return `<div class="trend-col"><div class="trend-stroke ${cls}" data-h="${h}" style="height:0px; transition-delay:${i*25}ms;"></div><div class="trend-lbl">${w.day}</div></div>`;
-    }).join('')}</div>
-  </div>`;
   const qualityCounts = getQualitySessionBreakdown(30);
   const qualityEntries = Object.entries(qualityCounts).filter(([,c])=>c>0).sort((a,b)=>b[1]-a[1]);
   const maxQualityCount = qualityEntries.length ? qualityEntries[0][1] : 0;
@@ -4789,19 +4759,9 @@ function renderHistory(){
         <span class="type-breakdown-count">${count}</span>
       </div>`).join('')}</div>
   </div>` : '';
-  // Medallas de récords personales -- antes vivían en Perfil como una lista de tiempos;
-  // ahora se muestran acá como medallas (una por distancia estándar, iluminada con el
-  // tiempo si ya hay marca, apagada con candado si todavía no), siempre visibles.
-  const prRecords = getPersonalRecords();
-  const prCard = `<div class="card">
-    <h3>${t('hist_pr_title')}</h3>
-    <div class="pr-medal-grid">${PR_DISTANCES.map(b=>{
-      const rec = prRecords[b.key];
-      if(rec) return `<div class="pr-medal achieved"><span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${t('pr_label_'+b.key)}</span><span class="pr-medal-time">${fmtTime(rec.durationSec)}</span></div>`;
-      return `<div class="pr-medal"><span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${t('pr_label_'+b.key)}</span><span class="pr-medal-locked">${t('pr_medal_locked')}</span></div>`;
-    }).join('')}</div>
-  </div>`;
-  if(!state.runs || state.runs.length===0){ el.innerHTML = stravaSyncCard + trendsCard + longTrendCard + mixCard + prCard + `<div class="card" style="text-align:center; padding:32px 18px;"><div class="icon-sq" style="width:34px; height:34px; margin:0 auto 12px; color:var(--mist-dim);">${ICONS.empty}</div><p class="muted" style="margin:0;">${t('hist_empty')}</p></div>`; animateHistTrendBars(); return; }
+  // Los récords personales se muestran ahora en Logros (Perfil), junto con el resto de
+  // los hitos del corredor -- ver renderPersonalRecordsCard() y openAchievements().
+  if(!state.runs || state.runs.length===0){ el.innerHTML = stravaSyncCard + trendsCard + mixCard + `<div class="card" style="text-align:center; padding:32px 18px;"><div class="icon-sq" style="width:34px; height:34px; margin:0 auto 12px; color:var(--mist-dim);">${ICONS.empty}</div><p class="muted" style="margin:0;">${t('hist_empty')}</p></div>`; animateHistTrendBars(); return; }
   // Buscador simple + encabezados de mes -- con varios meses de historial cargado, una
   // lista plana se vuelve incómoda de recorrer. El buscador filtra por lo que se ve en
   // cada tarjeta (fecha, zapatilla, "manual"/Strava); los encabezados de mes se insertan
@@ -4816,12 +4776,12 @@ function renderHistory(){
     return haystack.includes(query);
   });
   if(query && !filteredRuns.length){
-    el.innerHTML = stravaSyncCard + trendsCard + longTrendCard + mixCard + prCard + `<div class="card" style="text-align:center; padding:32px 18px;"><p class="muted" style="margin:0;">${t('hist_search_empty')}</p></div>`;
+    el.innerHTML = stravaSyncCard + trendsCard + mixCard + `<div class="card" style="text-align:center; padding:32px 18px;"><p class="muted" style="margin:0;">${t('hist_search_empty')}</p></div>`;
     animateHistTrendBars();
     return;
   }
   let lastMonthKey = null;
-  el.innerHTML = stravaSyncCard + trendsCard + longTrendCard + mixCard + prCard + filteredRuns.map(r=>{
+  el.innerHTML = stravaSyncCard + trendsCard + mixCard + filteredRuns.map(r=>{
     const shoe = state.shoes.find(s=>String(s.id)===String(r.shoeId));
     const paceMin = r.distanceKm>0.02 ? (r.durationSec/60)/r.distanceKm : 0;
     const avgHr = r.avgHr || (r.hrLog && r.hrLog.length ? Math.round(r.hrLog.reduce((a,h)=>a+h.bpm,0)/r.hrLog.length) : null);
@@ -4868,7 +4828,7 @@ function renderHistory(){
   animateHistTrendBars();
 }
 function animateHistTrendBars(){
-  ['hist-trend-bars','hist-longtrend-bars'].forEach(id=>{
+  ['hist-trend-bars'].forEach(id=>{
     const barsEl = document.getElementById(id);
     if(!barsEl) return;
     requestAnimationFrame(()=>{
