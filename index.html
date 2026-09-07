@@ -217,6 +217,23 @@ try{
   .overlay h2{font-size:28px;}
   .overlay .lead{color:var(--mist); margin-top:6px; font-size:14px; line-height:1.5;}
 
+  /* Overlays "hoja" -- los que se abren desde un botón de una sola fila en Perfil/Logros
+     (Datos personales, Objetivos, Zapatillas, Evento, Idioma, Días, Zonas, Molestias,
+     Logros). Antes usaban display:none/block como el resto de los overlays de la app
+     (login, onboarding, modales de confirmación) -- práctico pero sin transición, así que
+     aparecían y desaparecían de un salto. Estos en particular quedan siempre con
+     display:block (nunca display:none) y se animan con opacity+transform nada más --
+     truco clásico y soportado en todos lados, a propósito en vez de animar la propiedad
+     display con @starting-style/allow-discrete (todavía no soportado en todos los
+     navegadores/WebViews que usa la app). pointer-events:none mientras está cerrado
+     evita que, al estar solo invisible y no removida del layout, tape clicks o el
+     scroll de lo que hay debajo. Esto habilita el gesto de "arrastrar hacia abajo para
+     cerrar" de wireOverlaySheetSwipe() en app.js. No se toca el resto de los overlays
+     (login, onboarding, los modales de confirmación/info) para no arriesgar esos flujos. */
+  .overlay-sheet{display:block; opacity:0; pointer-events:none; transform:translateY(22px);
+    transition:opacity .22s ease, transform .22s ease;}
+  .overlay-sheet.overlay-open{opacity:1; pointer-events:auto; transform:translateY(0);}
+
   .confirm-email-icon{width:76px; height:76px; border-radius:50%; background:var(--hivis-dim); color:var(--hivis-text);
     display:flex; align-items:center; justify-content:center; margin:4px auto 22px;}
   .confirm-email-icon svg{width:32px; height:32px;}
@@ -1340,7 +1357,7 @@ try{
     <div id="run-detail-content"></div>
   </div>
 
-  <div class="overlay" id="achievements-modal" style="display:none;">
+  <div class="overlay overlay-sheet" id="achievements-modal">
     <button class="week-nav-btn" onclick="closeAchievements()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <div id="achievements-content"></div>
   </div>
@@ -1350,7 +1367,7 @@ try{
     <div id="social-feed-content"></div>
   </div>
 
-  <div class="overlay" id="personal-data-overlay" style="display:none;">
+  <div class="overlay overlay-sheet" id="personal-data-overlay">
     <button class="week-nav-btn" onclick="closePersonalDataOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="display" style="font-size:22px;" data-i18n="perfil_personal_title"></h2>
     <div class="card" id="perfil-personal-card" style="margin-top:16px;">
@@ -1393,7 +1410,7 @@ try{
     </div>
   </div>
 
-  <div class="overlay" id="goals-overlay" style="display:none;">
+  <div class="overlay overlay-sheet" id="goals-overlay">
     <button class="week-nav-btn" onclick="closeGoalsOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="display" style="font-size:22px;" data-i18n="perfil_goals_title"></h2>
     <div class="card" id="perfil-goals-card" style="margin-top:16px;">
@@ -1410,7 +1427,7 @@ try{
     </div>
   </div>
 
-  <div class="overlay" id="shoes-overlay" style="display:none;">
+  <div class="overlay overlay-sheet" id="shoes-overlay">
     <button class="week-nav-btn" onclick="closeShoesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="display" style="font-size:22px;" data-i18n="perfil_gear"></h2>
     <div class="card" style="margin-top:16px;">
@@ -1427,7 +1444,7 @@ try{
     </div>
   </div>
 
-  <div class="overlay" id="event-overlay" style="display:none;">
+  <div class="overlay overlay-sheet" id="event-overlay">
     <button class="week-nav-btn" onclick="closeEventOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="display" style="font-size:22px;" data-i18n="perfil_event"></h2>
     <div class="card" style="margin-top:16px;">
@@ -1448,7 +1465,7 @@ try{
     </div>
   </div>
 
-  <div class="overlay" id="lang-overlay" style="display:none;">
+  <div class="overlay overlay-sheet" id="lang-overlay">
     <button class="week-nav-btn" onclick="closeLangOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="display" style="font-size:22px;" data-i18n="perfil_lang"></h2>
     <div class="card" style="margin-top:16px;">
@@ -1463,7 +1480,7 @@ try{
     </div>
   </div>
 
-  <div class="overlay" id="days-overlay" style="display:none;">
+  <div class="overlay overlay-sheet" id="days-overlay">
     <button class="week-nav-btn" onclick="closeDaysOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="display" style="font-size:22px;" data-i18n="perfil_days_title"></h2>
     <div class="card" id="perfil-days-card" style="margin-top:16px;">
@@ -1472,7 +1489,7 @@ try{
     </div>
   </div>
 
-  <div class="overlay" id="zones-overlay" style="display:none;">
+  <div class="overlay overlay-sheet" id="zones-overlay">
     <button class="week-nav-btn" onclick="closeZonesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
       <h2 class="display" style="font-size:22px;" data-i18n="perfil_zones_title"></h2>
@@ -1485,7 +1502,7 @@ try{
     </div>
   </div>
 
-  <div class="overlay" id="pain-overlay" style="display:none;">
+  <div class="overlay overlay-sheet" id="pain-overlay">
     <button class="week-nav-btn" onclick="closePainOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <div style="display:flex; align-items:center; gap:8px;">
       <h2 class="display" style="font-size:22px; margin:0;" data-i18n="pain_list_title"></h2>

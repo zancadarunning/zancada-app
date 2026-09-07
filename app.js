@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-07T23:11:22Z';
+const APP_VERSION = '2026-09-07T23:24:07Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -2537,8 +2537,8 @@ document.getElementById('pain-body-choice').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('pain-body-choice').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
 });
-function openPainOverlay(){ document.getElementById('pain-overlay').style.display = 'block'; }
-function closePainOverlay(){ document.getElementById('pain-overlay').style.display = 'none'; }
+function openPainOverlay(){ document.getElementById('pain-overlay').classList.add('overlay-open'); }
+function closePainOverlay(){ document.getElementById('pain-overlay').classList.remove('overlay-open'); }
 function openPainModal(){
   document.getElementById('pain-note').value = '';
   [...document.getElementById('pain-body-choice').children].forEach(c=>c.classList.remove('active'));
@@ -2840,20 +2840,56 @@ function renderPerfil(){
    que abren un overlay de pantalla completa -- mismo patrón que openAchievements(). No
    hace falta reconstruir el HTML de adentro (a diferencia de logros): los inputs ya
    existen siempre en el DOM y renderPerfil() los mantiene al día estén o no visibles. */
-function openPersonalDataOverlay(){ document.getElementById('personal-data-overlay').style.display = 'block'; }
-function closePersonalDataOverlay(){ document.getElementById('personal-data-overlay').style.display = 'none'; }
-function openGoalsOverlay(){ document.getElementById('goals-overlay').style.display = 'block'; }
-function closeGoalsOverlay(){ document.getElementById('goals-overlay').style.display = 'none'; }
-function openShoesOverlay(){ document.getElementById('shoes-overlay').style.display = 'block'; }
-function closeShoesOverlay(){ document.getElementById('shoes-overlay').style.display = 'none'; }
-function openEventOverlay(){ document.getElementById('event-overlay').style.display = 'block'; }
-function closeEventOverlay(){ document.getElementById('event-overlay').style.display = 'none'; }
-function openLangOverlay(){ document.getElementById('lang-overlay').style.display = 'block'; }
-function closeLangOverlay(){ document.getElementById('lang-overlay').style.display = 'none'; }
-function openDaysOverlay(){ document.getElementById('days-overlay').style.display = 'block'; }
-function closeDaysOverlay(){ document.getElementById('days-overlay').style.display = 'none'; }
-function openZonesOverlay(){ document.getElementById('zones-overlay').style.display = 'block'; }
-function closeZonesOverlay(){ document.getElementById('zones-overlay').style.display = 'none'; }
+function openPersonalDataOverlay(){ document.getElementById('personal-data-overlay').classList.add('overlay-open'); }
+function closePersonalDataOverlay(){ document.getElementById('personal-data-overlay').classList.remove('overlay-open'); }
+function openGoalsOverlay(){ document.getElementById('goals-overlay').classList.add('overlay-open'); }
+function closeGoalsOverlay(){ document.getElementById('goals-overlay').classList.remove('overlay-open'); }
+function openShoesOverlay(){ document.getElementById('shoes-overlay').classList.add('overlay-open'); }
+function closeShoesOverlay(){ document.getElementById('shoes-overlay').classList.remove('overlay-open'); }
+function openEventOverlay(){ document.getElementById('event-overlay').classList.add('overlay-open'); }
+function closeEventOverlay(){ document.getElementById('event-overlay').classList.remove('overlay-open'); }
+function openLangOverlay(){ document.getElementById('lang-overlay').classList.add('overlay-open'); }
+function closeLangOverlay(){ document.getElementById('lang-overlay').classList.remove('overlay-open'); }
+function openDaysOverlay(){ document.getElementById('days-overlay').classList.add('overlay-open'); }
+function closeDaysOverlay(){ document.getElementById('days-overlay').classList.remove('overlay-open'); }
+function openZonesOverlay(){ document.getElementById('zones-overlay').classList.add('overlay-open'); }
+function closeZonesOverlay(){ document.getElementById('zones-overlay').classList.remove('overlay-open'); }
+/* ---- Overlays "hoja" de Perfil/Logros: arrastrar hacia abajo para cerrar -----
+   Antes estos overlays (Datos personales, Objetivos, Zapatillas, Evento, Idioma, Días,
+   Zonas, Molestias, Logros) aparecían y desaparecían de un salto y solo se podían cerrar
+   tocando la flecha de arriba a la izquierda. Ahora entran/salen con un deslizamiento +
+   fade (ver .overlay-sheet en el CSS) y además se pueden cerrar arrastrando el dedo hacia
+   abajo, como una hoja modal nativa -- pero solo si ya se llegó al tope del scroll interno
+   del overlay, para no interferir con el scroll normal de su contenido. Un solo listener
+   delegado en document sirve para los nueve overlays: todos comparten la clase
+   .overlay-sheet y el mismo criterio de "cerrar" (sacar la clase overlay-open), así que no
+   hace falta cablear el gesto overlay por overlay. */
+(function wireOverlaySheetSwipe(){
+  let dragEl = null, startY = 0, lastDy = 0, dragging = false;
+  const CLOSE_THRESHOLD = 90;
+  document.addEventListener('touchstart', e=>{
+    const sheet = e.target.closest('.overlay-sheet.overlay-open');
+    if(!sheet || sheet.scrollTop > 0){ dragEl = null; return; }
+    dragEl = sheet; startY = e.touches[0].clientY; lastDy = 0; dragging = false;
+  }, {passive:true});
+  document.addEventListener('touchmove', e=>{
+    if(!dragEl) return;
+    if(dragEl.scrollTop > 0){ dragEl.style.transition = ''; dragEl.style.transform = ''; dragEl = null; return; }
+    const dy = e.touches[0].clientY - startY;
+    if(dy <= 0){ lastDy = 0; dragEl.style.transition = ''; dragEl.style.transform = ''; return; }
+    dragging = true; lastDy = dy;
+    dragEl.style.transition = 'none';
+    dragEl.style.transform = `translateY(${dy}px)`;
+  }, {passive:true});
+  document.addEventListener('touchend', ()=>{
+    if(!dragEl) return;
+    const el = dragEl, dy = lastDy; dragEl = null;
+    el.style.transition = '';
+    el.style.transform = '';
+    if(dragging && dy > CLOSE_THRESHOLD) el.classList.remove('overlay-open');
+    dragging = false;
+  }, {passive:true});
+})();
 // El bloque "Recordá que..." de la sección de Strava era una lista siempre visible --
 // ahora arranca colapsada detrás de este botón, para no abrumar la tarjeta de Strava con
 // texto largo apenas se entra a Perfil. Nada de esto se persiste: siempre arranca cerrado.
@@ -4372,19 +4408,24 @@ function renderPersonalRecordsCard(){
 }
 function openAchievements(){
   const {distanceBadges, runBadges, streakBadges, unlockedCount, totalCount} = getAchievementSections();
+  // Barra de progreso general (reusa .ob-progress/.ob-progress-fill, el mismo componente
+  // visual que ya usaba el onboarding) -- antes solo estaba el texto "X de Y logros
+  // desbloqueados"; de un vistazo ahora se ve además cuánto falta.
+  const pct = totalCount ? Math.round((unlockedCount/totalCount)*100) : 0;
   document.getElementById('achievements-content').innerHTML = `
     <h2 class="display" style="font-size:20px; margin-bottom:2px;">${t('ach_title')}</h2>
     <p class="muted" style="margin:0 0 4px;">${t('ach_subtitle')}</p>
-    <p style="margin:0 0 16px; font-weight:800; color:var(--hivis-text); font-size:13px;">${t('ach_unlocked_count', {unlocked:unlockedCount, total:totalCount})}</p>
+    <p style="margin:0 0 8px; font-weight:800; color:var(--hivis-text); font-size:13px;">${t('ach_unlocked_count', {unlocked:unlockedCount, total:totalCount})}</p>
+    <div class="ob-progress" style="margin-bottom:16px;"><div class="ob-progress-fill" style="width:${pct}%;"></div></div>
     ${renderPersonalRecordsCard()}
     <div class="card"><h3>${t('ach_section_distance')}</h3>${renderAchievementBadgeGrid(distanceBadges)}</div>
     <div class="card"><h3>${t('ach_section_runs')}</h3>${renderAchievementBadgeGrid(runBadges)}</div>
     <div class="card"><h3>${t('ach_section_streak')}</h3>${renderAchievementBadgeGrid(streakBadges)}</div>
   `;
-  document.getElementById('achievements-modal').style.display='block';
+  document.getElementById('achievements-modal').classList.add('overlay-open');
 }
 function closeAchievements(){
-  document.getElementById('achievements-modal').style.display='none';
+  document.getElementById('achievements-modal').classList.remove('overlay-open');
 }
 
 /* ================= SOCIAL: usernames + seguir amigos + feed + likes =================
