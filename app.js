@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-07T19:27:06Z';
+const APP_VERSION = '2026-09-07T22:06:17Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -2774,8 +2774,35 @@ function renderPerfil(){
     document.getElementById('ev-type').value = state.event.type;
   } else { evBox.innerHTML = `<div style="text-align:center; padding:10px 0;"><div class="icon-sq" style="width:24px; height:24px; margin:0 auto 8px; color:var(--mist-dim);">${ICONS.flag}</div><p class="muted" style="margin:0; font-size:13px;">${t('perfil_no_event')}</p></div>`; }
 
+  const shoesSummaryEl = document.getElementById('perfil-shoes-summary');
+  if(shoesSummaryEl) shoesSummaryEl.textContent = state.shoes.length ? t('perfil_shoes_count', {n: state.shoes.length}) : t('perfil_no_shoes');
+
+  const eventSummaryEl = document.getElementById('perfil-event-summary');
+  if(eventSummaryEl){
+    if(state.event){
+      const todayMid = new Date(); todayMid.setHours(0,0,0,0);
+      const daysLeft = Math.round((new Date(state.event.date+'T00:00:00')-todayMid)/86400000);
+      eventSummaryEl.textContent = `${state.event.name} · ${Math.max(0,daysLeft)} ${t('perfil_event_days')}`;
+    } else {
+      eventSummaryEl.textContent = t('perfil_no_event');
+    }
+  }
+
   updateCredits();
 }
+/* ---- apartados del perfil (datos personales / objetivos / zapatillas / evento) que
+   antes eran tarjetas siempre abiertas en la pantalla de Perfil, y ahora son botones
+   que abren un overlay de pantalla completa -- mismo patrón que openAchievements(). No
+   hace falta reconstruir el HTML de adentro (a diferencia de logros): los inputs ya
+   existen siempre en el DOM y renderPerfil() los mantiene al día estén o no visibles. */
+function openPersonalDataOverlay(){ document.getElementById('personal-data-overlay').style.display = 'block'; }
+function closePersonalDataOverlay(){ document.getElementById('personal-data-overlay').style.display = 'none'; }
+function openGoalsOverlay(){ document.getElementById('goals-overlay').style.display = 'block'; }
+function closeGoalsOverlay(){ document.getElementById('goals-overlay').style.display = 'none'; }
+function openShoesOverlay(){ document.getElementById('shoes-overlay').style.display = 'block'; }
+function closeShoesOverlay(){ document.getElementById('shoes-overlay').style.display = 'none'; }
+function openEventOverlay(){ document.getElementById('event-overlay').style.display = 'block'; }
+function closeEventOverlay(){ document.getElementById('event-overlay').style.display = 'none'; }
 // ---- Foto de perfil -----
 // Se guarda como JPEG chico (200x200, recorte centrado tipo "cover") codificado en
 // base64 dentro de state.profile.avatarPhoto -- así no hace falta un bucket de
