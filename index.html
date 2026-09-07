@@ -1350,6 +1350,104 @@ try{
     <div id="social-feed-content"></div>
   </div>
 
+  <div class="overlay" id="personal-data-overlay" style="display:none;">
+    <button class="week-nav-btn" onclick="closePersonalDataOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="display" style="font-size:22px;" data-i18n="perfil_personal_title"></h2>
+    <div class="card" id="perfil-personal-card" style="margin-top:16px;">
+      <div class="metric-input-row">
+        <div class="metric-input-cell"><label data-i18n="ob_weight_label"></label><input type="number" class="metric-input" id="perfil-weight"></div>
+        <div class="metric-input-cell"><label data-i18n="ob_height_label"></label><input type="number" class="metric-input" id="perfil-height"></div>
+      </div>
+      <div class="field">
+        <label data-i18n="ob_currentkm_label"></label>
+        <input type="number" id="perfil-current-km" min="0" max="200" placeholder="0">
+        <p class="muted" style="margin-top:6px; font-size:12px;" data-i18n="perfil_current_km_hint"></p>
+      </div>
+      <div class="field">
+        <label data-i18n="ob_terrain_label"></label>
+        <div class="choice-row segmented" id="perfil-terrain-choice">
+          <div class="choice" data-v="asfalto" data-i18n="ob_terrain_asfalto"></div>
+          <div class="choice" data-v="trail" data-i18n="ob_terrain_trail"></div>
+          <div class="choice" data-v="mixto" data-i18n="ob_terrain_mixto"></div>
+        </div>
+      </div>
+      <div class="field">
+        <label data-i18n="ob_goal_label"></label>
+        <select id="perfil-goal">
+          <option value="start" data-i18n="ob_goal_start"></option>
+          <option value="5k" data-i18n="ob_goal_5k"></option>
+          <option value="10k" data-i18n="ob_goal_10k"></option>
+          <option value="15k" data-i18n="ob_goal_15k"></option>
+          <option value="21k" data-i18n="ob_goal_21k"></option>
+          <option value="42k" data-i18n="ob_goal_42k"></option>
+          <option value="ultra" data-i18n="ob_goal_ultra"></option>
+          <option value="lifestyle" data-i18n="ob_goal_lifestyle"></option>
+        </select>
+        <label style="margin-top:14px;" data-i18n="ob_racedate_label"></label>
+        <div class="date-box" onclick="openCalendar('perfil-racedate','perfil-racedate-text')"><span class="date-box-text placeholder" id="perfil-racedate-text"></span></div>
+        <input type="hidden" id="perfil-racedate">
+        <p class="muted" style="margin-top:6px;" data-i18n="ob_racedate_hint"></p>
+      </div>
+      <p class="muted" style="margin-top:10px; font-size:12.5px;" data-i18n="perfil_weeklykm_auto_note"></p>
+      <button class="btn btn-primary btn-sm perfil-save-btn" id="save-personal-btn" style="margin-top:16px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('personal')"></button>
+    </div>
+  </div>
+
+  <div class="overlay" id="goals-overlay" style="display:none;">
+    <button class="week-nav-btn" onclick="closeGoalsOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="display" style="font-size:22px;" data-i18n="perfil_goals_title"></h2>
+    <div class="card" id="perfil-goals-card" style="margin-top:16px;">
+      <p class="muted" style="margin-bottom:10px;" data-i18n="perfil_goals_desc"></p>
+      <div class="field" style="margin-top:0;">
+        <label data-i18n="perfil_weekly_goal_label"></label>
+        <input type="number" id="perfil-weekly-goal" data-i18n-ph="perfil_weekly_goal_ph">
+      </div>
+      <div class="field">
+        <label data-i18n="perfil_goal_note_label"></label>
+        <textarea id="perfil-goal-note" rows="3" data-i18n-ph="perfil_goal_note_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+      </div>
+      <button class="btn btn-outline btn-sm perfil-save-btn" id="save-goals-btn" style="margin-top:10px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('goals')"></button>
+    </div>
+  </div>
+
+  <div class="overlay" id="shoes-overlay" style="display:none;">
+    <button class="week-nav-btn" onclick="closeShoesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="display" style="font-size:22px;" data-i18n="perfil_gear"></h2>
+    <div class="card" style="margin-top:16px;">
+      <div id="shoe-list"></div>
+      <div class="add-row">
+        <input type="text" id="shoe-name" data-i18n-ph="perfil_shoe_ph">
+        <select id="shoe-terrain">
+          <option value="asfalto" data-i18n="ob_terrain_asfalto"></option>
+          <option value="trail" data-i18n="ob_terrain_trail"></option>
+          <option value="mixto" data-i18n="ob_terrain_mixto"></option>
+        </select>
+      </div>
+      <button class="btn btn-outline btn-sm" style="margin-top:10px; width:100%;" data-i18n="perfil_add_shoe" onclick="addShoe()"></button>
+    </div>
+  </div>
+
+  <div class="overlay" id="event-overlay" style="display:none;">
+    <button class="week-nav-btn" onclick="closeEventOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="display" style="font-size:22px;" data-i18n="perfil_event"></h2>
+    <div class="card" style="margin-top:16px;">
+      <div id="event-box"></div>
+      <button class="small-link" style="margin-top:10px; display:flex; align-items:center; gap:5px;" onclick="openPaceCalcModal()"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v2"/></svg></span><span data-i18n="pace_calc_open_btn"></span></button>
+      <div class="add-row" style="margin-top:10px;"><input type="text" id="ev-name" data-i18n-ph="perfil_ev_name_ph"></div>
+      <div class="add-row" style="margin-top:8px;"><input type="number" id="ev-distance" step="0.1" min="0" data-i18n-ph="perfil_ev_dist_ph"></div>
+      <div class="add-row" style="margin-top:8px;">
+        <div class="date-box" style="flex:1;" onclick="openCalendar('ev-date','ev-date-text')"><span class="date-box-text" id="ev-date-text"></span></div>
+        <input type="hidden" id="ev-date">
+        <select id="ev-type">
+          <option value="ruta" data-i18n="ev_type_ruta"></option>
+          <option value="trail" data-i18n="ev_type_trail"></option>
+          <option value="obstaculos" data-i18n="ev_type_obstaculos"></option>
+        </select>
+      </div>
+      <button class="btn btn-outline btn-sm" style="margin-top:10px; width:100%;" data-i18n="perfil_ev_save" onclick="setEvent()"></button>
+    </div>
+  </div>
+
   <div class="rd-video-overlay" id="rd-video-overlay">
     <button onclick="closeDynamicVideo()" data-i18n-aria="aria_back" style="position:absolute; top:calc(16px + var(--safe-top)); right:20px; width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.12); border:none; color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:2;"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span></button>
     <canvas id="rd-video-canvas" width="720" height="1280" style="display:none;"></canvas>
@@ -1570,58 +1668,26 @@ try{
       <div id="social-section-body"></div>
     </div>
 
-    <div class="card" id="perfil-personal-card">
-      <h3 data-i18n="perfil_personal_title"></h3>
-      <div class="metric-input-row">
-        <div class="metric-input-cell"><label data-i18n="ob_weight_label"></label><input type="number" class="metric-input" id="perfil-weight"></div>
-        <div class="metric-input-cell"><label data-i18n="ob_height_label"></label><input type="number" class="metric-input" id="perfil-height"></div>
-      </div>
-      <div class="field">
-        <label data-i18n="ob_currentkm_label"></label>
-        <input type="number" id="perfil-current-km" min="0" max="200" placeholder="0">
-        <p class="muted" style="margin-top:6px; font-size:12px;" data-i18n="perfil_current_km_hint"></p>
-      </div>
-      <div class="field">
-        <label data-i18n="ob_terrain_label"></label>
-        <div class="choice-row segmented" id="perfil-terrain-choice">
-          <div class="choice" data-v="asfalto" data-i18n="ob_terrain_asfalto"></div>
-          <div class="choice" data-v="trail" data-i18n="ob_terrain_trail"></div>
-          <div class="choice" data-v="mixto" data-i18n="ob_terrain_mixto"></div>
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openPersonalDataOverlay()">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg></span>
+        <div>
+          <h3 style="margin:0 0 2px;" data-i18n="perfil_personal_title"></h3>
+          <p class="muted" style="margin:0; font-size:12.5px;" data-i18n="perfil_personal_desc"></p>
         </div>
       </div>
-      <div class="field">
-        <label data-i18n="ob_goal_label"></label>
-        <select id="perfil-goal">
-          <option value="start" data-i18n="ob_goal_start"></option>
-          <option value="5k" data-i18n="ob_goal_5k"></option>
-          <option value="10k" data-i18n="ob_goal_10k"></option>
-          <option value="15k" data-i18n="ob_goal_15k"></option>
-          <option value="21k" data-i18n="ob_goal_21k"></option>
-          <option value="42k" data-i18n="ob_goal_42k"></option>
-          <option value="ultra" data-i18n="ob_goal_ultra"></option>
-          <option value="lifestyle" data-i18n="ob_goal_lifestyle"></option>
-        </select>
-        <label style="margin-top:14px;" data-i18n="ob_racedate_label"></label>
-        <div class="date-box" onclick="openCalendar('perfil-racedate','perfil-racedate-text')"><span class="date-box-text placeholder" id="perfil-racedate-text"></span></div>
-        <input type="hidden" id="perfil-racedate">
-        <p class="muted" style="margin-top:6px;" data-i18n="ob_racedate_hint"></p>
-      </div>
-      <p class="muted" style="margin-top:10px; font-size:12.5px;" data-i18n="perfil_weeklykm_auto_note"></p>
-      <button class="btn btn-primary btn-sm perfil-save-btn" id="save-personal-btn" style="margin-top:16px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('personal')"></button>
+      <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
-    <div class="card" id="perfil-goals-card">
-      <h3 data-i18n="perfil_goals_title"></h3>
-      <p class="muted" style="margin-bottom:10px;" data-i18n="perfil_goals_desc"></p>
-      <div class="field" style="margin-top:0;">
-        <label data-i18n="perfil_weekly_goal_label"></label>
-        <input type="number" id="perfil-weekly-goal" data-i18n-ph="perfil_weekly_goal_ph">
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openGoalsOverlay()">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg></span>
+        <div>
+          <h3 style="margin:0 0 2px;" data-i18n="perfil_goals_title"></h3>
+          <p class="muted" style="margin:0; font-size:12.5px;" data-i18n="perfil_goals_desc"></p>
+        </div>
       </div>
-      <div class="field">
-        <label data-i18n="perfil_goal_note_label"></label>
-        <textarea id="perfil-goal-note" rows="3" data-i18n-ph="perfil_goal_note_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
-      </div>
-      <button class="btn btn-outline btn-sm perfil-save-btn" id="save-goals-btn" style="margin-top:10px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('goals')"></button>
+      <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
     <div class="card" id="perfil-days-card">
@@ -1649,36 +1715,26 @@ try{
       <button class="btn btn-outline btn-sm" style="margin-top:12px; width:100%;" data-i18n="pain_add_btn" onclick="openPainModal()"></button>
     </div>
 
-    <div class="card">
-      <h3 data-i18n="perfil_gear"></h3>
-      <div id="shoe-list"></div>
-      <div class="add-row">
-        <input type="text" id="shoe-name" data-i18n-ph="perfil_shoe_ph">
-        <select id="shoe-terrain">
-          <option value="asfalto" data-i18n="ob_terrain_asfalto"></option>
-          <option value="trail" data-i18n="ob_terrain_trail"></option>
-          <option value="mixto" data-i18n="ob_terrain_mixto"></option>
-        </select>
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openShoesOverlay()">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 17c0-1.2.7-2.3 1.8-2.8l5-2.3c.6-.3 1.3-.3 1.9 0l2.6 1.3c1.6.8 3.4 1.2 5.2 1.2h1.5v3.6H2.5V17z"/><path d="M9.3 11.9l.9-3.4M4.3 14.2c1.3.5 2.7.8 4.1.8"/></svg></span>
+        <div>
+          <h3 style="margin:0 0 2px;" data-i18n="perfil_gear"></h3>
+          <p class="muted" style="margin:0; font-size:12.5px;" id="perfil-shoes-summary"></p>
+        </div>
       </div>
-      <button class="btn btn-outline btn-sm" style="margin-top:10px; width:100%;" data-i18n="perfil_add_shoe" onclick="addShoe()"></button>
+      <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
-    <div class="card">
-      <h3 data-i18n="perfil_event"></h3>
-      <div id="event-box"></div>
-      <button class="small-link" style="margin-top:10px; display:flex; align-items:center; gap:5px;" onclick="openPaceCalcModal()"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v2"/></svg></span><span data-i18n="pace_calc_open_btn"></span></button>
-      <div class="add-row" style="margin-top:10px;"><input type="text" id="ev-name" data-i18n-ph="perfil_ev_name_ph"></div>
-      <div class="add-row" style="margin-top:8px;"><input type="number" id="ev-distance" step="0.1" min="0" data-i18n-ph="perfil_ev_dist_ph"></div>
-      <div class="add-row" style="margin-top:8px;">
-        <div class="date-box" style="flex:1;" onclick="openCalendar('ev-date','ev-date-text')"><span class="date-box-text" id="ev-date-text"></span></div>
-        <input type="hidden" id="ev-date">
-        <select id="ev-type">
-          <option value="ruta" data-i18n="ev_type_ruta"></option>
-          <option value="trail" data-i18n="ev_type_trail"></option>
-          <option value="obstaculos" data-i18n="ev_type_obstaculos"></option>
-        </select>
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openEventOverlay()">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4.5s2-1.3 4.5-1.3 3.5 1.5 6 1.5 3.5-1 3.5-1v9s-1.5 1-3.5 1-3.5-1.5-6-1.5-4.5 1.3-4.5 1.3z"/></svg></span>
+        <div>
+          <h3 style="margin:0 0 2px;" data-i18n="perfil_event"></h3>
+          <p class="muted" style="margin:0; font-size:12.5px;" id="perfil-event-summary"></p>
+        </div>
       </div>
-      <button class="btn btn-outline btn-sm" style="margin-top:10px; width:100%;" data-i18n="perfil_ev_save" onclick="setEvent()"></button>
+      <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
     <div class="card">
