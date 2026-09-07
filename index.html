@@ -29,6 +29,12 @@ try{
      y el fix aplicado (un scroll de verdad, no un simple reflow). -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no, interactive-widget=resizes-visual">
 <title>Zancada</title>
+<!-- Le dice a Google que zancada.org es la versión "oficial" de esta página, aunque el
+     mismo contenido también responda en el dominio crudo de Vercel (zancada-app.vercel.app)
+     -- sin esto, Search Console las trata como contenido duplicado sin versión canónica
+     indicada y puede terminar no indexando ninguna de las dos. Ver también el header
+     X-Robots-Tag para ese dominio en vercel.json (evita que Google llegue a indexarlo). -->
+<link rel="canonical" href="https://zancada.org/">
 <meta name="description" content="Zancada es tu coach de running: planes de entrenamiento personalizados, seguimiento de carreras y un coach con IA, todo en una sola app.">
 <meta property="og:title" content="Zancada — Tu coach de running">
 <meta property="og:description" content="Planes de entrenamiento personalizados, seguimiento de carreras y un coach con IA, todo en una sola app.">
