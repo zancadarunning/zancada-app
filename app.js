@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-07T23:24:07Z';
+const APP_VERSION = '2026-09-07T23:45:53Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -799,6 +799,16 @@ document.getElementById('ob-terrain').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('ob-terrain').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
 });
+document.getElementById('ob-trainby').addEventListener('click', e=>{
+  const c=e.target.closest('.choice'); if(!c) return;
+  [...document.getElementById('ob-trainby').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
+});
+document.getElementById('perfil-trainby-toggle').addEventListener('click', e=>{
+  const c=e.target.closest('.choice'); if(!c) return;
+  [...document.getElementById('perfil-trainby-toggle').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
+  state.profile.trainBy = c.dataset.v;
+  renderAll(); renderHistory(); persist();
+});
 document.getElementById('ob-runnertype').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('ob-runnertype').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
@@ -1226,6 +1236,7 @@ async function finishOnboard(){
   const runnerType = document.querySelector('#ob-runnertype .choice.active').dataset.v;
   const currentWeeklyKm = runnerType==='active' ? (parseFloat(document.getElementById('ob-currentkm').value) || 0) : 0;
   const terrain = document.querySelector('#ob-terrain .choice.active').dataset.v;
+  const trainBy = document.querySelector('#ob-trainby .choice.active').dataset.v;
   const trainingDays = DAY_KEYS.filter(d => document.querySelector(`#ob-days .day-pill[data-v="${d}"]`).classList.contains('active'));
   const goal = document.getElementById('ob-goal').value;
   const raceDate = document.getElementById('ob-racedate').value || null;
@@ -1244,7 +1255,7 @@ async function finishOnboard(){
   // esto, alguien que se sumaba un martes con lunes/miércoles/viernes como días de
   // entrenamiento veía el lunes (e incluso el domingo previo) ya marcado como sesión
   // perdida, cuando en realidad todavía ni tenía cuenta esos días.
-  state.profile = {email:pendingEmail, name, weight, height, birth, terrain, trainingDays: trainingDays.length?trainingDays:['tue','thu','sun'], goal, raceDate, runnerType, currentWeeklyKm, hrMax, hrKnown, hrZones:computeZones(hrMax), tz:detectDeviceTz(), createdAt: todayLocalISO()};
+  state.profile = {email:pendingEmail, name, weight, height, birth, terrain, trainBy, trainingDays: trainingDays.length?trainingDays:['tue','thu','sun'], goal, raceDate, runnerType, currentWeeklyKm, hrMax, hrKnown, hrZones:computeZones(hrMax), tz:detectDeviceTz(), createdAt: todayLocalISO()};
   state.profile.weeklyKm = calcWeeklyKm(state.profile);
   state.weekNumber = 1;
   state.weekStart = getMondayISO(new Date());
@@ -1343,6 +1354,7 @@ function enterApp(){
   if(relinkTodayRun()) persist();
   [...document.getElementById('voice-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.voiceEnabled===false?'off':'on')));
   [...document.getElementById('units-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.profile.units==='imperial'?'imperial':'metric')));
+  [...document.getElementById('perfil-trainby-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.profile.trainBy==='time'?'time':'distance')));
   renderPerfilDays();
   renderAll(); renderHistory(); renderZones();
   showView('inicio');
@@ -1976,17 +1988,64 @@ function generatePlan(p, weekNumber, weekStartDate){
     return dayObj;
   });
 }
+/* ---- entrenar por distancia vs. por tiempo -----
+   Por defecto todo el plan es 100% en km (generatePlan, buildIntervalStructure, etc. no
+   cambian). Si el corredor eligió "por tiempo" en el onboarding o en el Perfil, en vez de
+   tocar el motor de generación convertimos el km ya calculado a una duración estimada
+   usando su ritmo propio (de sus corridas reales, o si no hay suficientes, de su PR, o
+   si no hay nada, un valor por defecto según si es principiante). Así el plan interno
+   sigue siendo el mismo para todos, y solo cambia lo que se le muestra/pide al corredor. */
+function isTimeMode(){ return state.profile.trainBy === 'time'; }
+function estimateBasePaceMinPerKm(profile){
+  profile = profile || state.profile;
+  const recent = (state.runs||[]).filter(r=>r.distanceKm>0.5 && r.durationSec>0).slice(-10);
+  if(recent.length>=3){
+    const paces = recent.map(r=>(r.durationSec/60)/r.distanceKm);
+    return paces.reduce((a,b)=>a+b,0)/paces.length;
+  }
+  const anyPR = Object.values(getPersonalRecords())[0];
+  if(anyPR && anyPR.distanceKm>0 && anyPR.durationSec>0){
+    return (anyPR.durationSec/60)/anyPR.distanceKm + 1.3;
+  }
+  const beginner = profile.weeklyKm === 0 || profile.goal === 'start' || profile.runnerType === 'new';
+  return beginner ? 7.5 : 6.2;
+}
+function planDurationMin(d, profile){
+  if(!(d.dist>0)) return 0;
+  const pace = estimateBasePaceMinPerKm(profile);
+  return Math.max(5, Math.round((d.dist*pace)/5)*5);
+}
+function fmtDurationShort(sec){
+  sec = Math.max(15, Math.round(sec/15)*15);
+  if(sec < 60) return `${sec} ${t('time_unit_sec')}`;
+  return `${Math.max(1, Math.round(sec/60))} ${t('time_unit_min')}`;
+}
+function repDurationSec(repMeters, profile){
+  const pace = estimateBasePaceMinPerKm(profile);
+  return (repMeters/1000) * pace * 60;
+}
+function planAmountText(d){
+  if(!(d.dist>0)) return '';
+  return isTimeMode() ? `${planDurationMin(d)} ${t('time_unit_min')}` : `${fmtDist(d.dist,1)} ${distUnit()}`;
+}
 function planLabel(d){
   if(d.raceDay) return {type: t('plan_race_day_type'), desc: t('plan_race_day_desc', {name: escapeHtml(state.event ? state.event.name : '')})};
   if(d.custom) return {type:d.type, desc:d.desc};
+  const timeMode = isTimeMode();
   const suf = d.beginner && (d.typeKey==='easy'||d.typeKey==='long'||d.typeKey==='rest') ? '_beginner' : '';
   let desc = t('desc_'+d.typeKey+suf);
   if(d.typeKey==='intervals' && d.interval){
-    desc = t('desc_intervals_detail', {reps:d.interval.reps, meters:d.interval.repMeters, rest:d.interval.recoveryMin, zone:d.zone});
+    desc = timeMode
+      ? t('desc_intervals_detail_time', {reps:d.interval.reps, dur:fmtDurationShort(repDurationSec(d.interval.repMeters)), rest:d.interval.recoveryMin, zone:d.zone})
+      : t('desc_intervals_detail', {reps:d.interval.reps, meters:d.interval.repMeters, rest:d.interval.recoveryMin, zone:d.zone});
   } else if(d.typeKey==='hills' && d.interval){
-    desc = t('desc_hills_detail', {reps:d.interval.reps, meters:d.interval.repMeters, zone:d.zone});
+    desc = timeMode
+      ? t('desc_hills_detail_time', {reps:d.interval.reps, dur:fmtDurationShort(repDurationSec(d.interval.repMeters)), zone:d.zone})
+      : t('desc_hills_detail', {reps:d.interval.reps, meters:d.interval.repMeters, zone:d.zone});
   } else if(d.typeKey==='progression' && d.dist>0){
-    desc = t('desc_progression_detail', {third: Math.max(1, Math.round(d.dist/3))});
+    desc = timeMode
+      ? t('desc_progression_detail_time', {dur: `${Math.max(1, Math.round(planDurationMin(d)/3))} ${t('time_unit_min')}`})
+      : t('desc_progression_detail', {third: Math.max(1, Math.round(d.dist/3))});
   } else if(d.zone && d.dist>0 && d.typeKey!=='intervals' && d.typeKey!=='fartlek'){
     // el fartlek ya es alternar ritmos por sensación -- decirle "mantenete en zona X
     // durante el tramo principal" encima se contradice con la sesión misma
@@ -2024,7 +2083,7 @@ function generateWeekICS(){
     const date = new Date(monday); date.setDate(monday.getDate()+idx);
     const nextDate = new Date(date); nextDate.setDate(date.getDate()+1);
     const lbl = planLabel(d);
-    const summary = `${lbl.type} · ${fmtDist(d.dist,1)}${distUnit()}`;
+    const summary = `${lbl.type} · ${planAmountText(d)}`;
     const uid = `zancada-${state.weekStart}-${d.day}@zancada.app`;
     return ['BEGIN:VEVENT',
       `UID:${uid}`,
@@ -2153,7 +2212,7 @@ function renderHome(){
   // ver planLabel) -- se listan como viñetas breves en vez de un párrafo corrido.
   const nextDescLines = lbl.desc.split('\n').filter(Boolean);
   document.getElementById('home-next-desc').innerHTML = nextDescLines.map(line=>`<div class="next-session-bullet">${line}</div>`).join('');
-  document.getElementById('home-next-dist').textContent = today.dist>0 ? fmtDist(today.dist,1)+' '+distUnit() : '';
+  document.getElementById('home-next-dist').textContent = planAmountText(today);
   document.getElementById('home-next-zone').innerHTML = (today.dist>0 && today.zone) ? `<span class="zone-chip zone-${today.zone}">${t('zone_word')} ${today.zone}</span>` : '';
 
   // Si ya corrimos hoy, mostramos el resumen de esa sesión en lugar del cartel de
@@ -2182,10 +2241,17 @@ function renderHome(){
   const weekRuns = (state.runs||[]).filter(r => getMondayISO(new Date(r.date)) === state.weekStart);
   const doneKm = weekRuns.reduce((a,r)=>a+r.distanceKm, 0);
   const weekKm = state.plan.reduce((a,d)=>a+d.dist,0);
-  const doneKmDisplay = isImperial() ? doneKm * MI_PER_KM : doneKm;
-  const weekKmDisplay = isImperial() ? weekKm * MI_PER_KM : weekKm;
-  animateCountUp(document.getElementById('home-week-done-km'), doneKmDisplay, 1);
-  animateCountUp(document.getElementById('home-week-km'), weekKmDisplay, 1);
+  if(isTimeMode()){
+    const doneMin = weekRuns.reduce((a,r)=>a+(r.durationSec||0),0)/60;
+    const plannedMin = state.plan.reduce((a,d)=>a+planDurationMin(d),0);
+    animateCountUp(document.getElementById('home-week-done-km'), doneMin, 0);
+    animateCountUp(document.getElementById('home-week-km'), plannedMin, 0);
+  } else {
+    const doneKmDisplay = isImperial() ? doneKm * MI_PER_KM : doneKm;
+    const weekKmDisplay = isImperial() ? weekKm * MI_PER_KM : weekKm;
+    animateCountUp(document.getElementById('home-week-done-km'), doneKmDisplay, 1);
+    animateCountUp(document.getElementById('home-week-km'), weekKmDisplay, 1);
+  }
   animateCountUp(document.getElementById('home-week-sessions'), state.plan.filter(d=>d.dist>0).length, 0);
   document.getElementById('home-runs-count').textContent = weekRuns.length;
 
@@ -2277,7 +2343,7 @@ function renderRunTodayCard(){
   const lbl = planLabel(today);
   document.getElementById('run-today-title').textContent = lbl.type;
   document.getElementById('run-today-desc').textContent = lbl.desc;
-  document.getElementById('run-today-dist').textContent = today.dist>0 ? fmtDist(today.dist,1)+' '+distUnit() : '';
+  document.getElementById('run-today-dist').textContent = planAmountText(today);
   document.getElementById('run-today-zone').innerHTML = (today.dist>0 && today.zone) ? `<span class="zone-chip zone-${today.zone}">${t('zone_word')} ${today.zone}</span>` : '';
   card.style.display = 'block';
 }
@@ -2448,7 +2514,7 @@ function renderPlan(){
       <div class="day-row ${isRestDay?'day-row-rest':''}" onclick="toggleDay(${i})">
         <div class="day-badge"><div class="d">${t('day_'+d.day).slice(0,3)}</div>${dateLbl?`<div class="mono muted" style="font-size:10px; margin-top:2px;">${dateLbl}</div>`:''}</div>
         <div class="day-info">
-          <div class="day-info-title-row"><span class="t">${lblType}</span>${d.dist>0?`<span class="day-km-inline">${fmtDist(d.dist,1)} ${distUnit()}</span>`:''}</div>
+          <div class="day-info-title-row"><span class="t">${lblType}</span>${d.dist>0?`<span class="day-km-inline">${planAmountText(d)}</span>`:''}</div>
           ${meta?`<div class="day-row-chips">${meta}</div>`:''}
         </div>
         <div class="day-row-end">${statusIcon}</div>
@@ -2465,11 +2531,11 @@ function renderPastWeeks(){
   document.getElementById('past-weeks-list').innerHTML = state.planHistory.slice().reverse().map(w=>{
     const doneCount = w.plan.filter(d=>d.status==='done').length;
     const totalSessions = w.plan.filter(d=>d.dist>0).length;
-    const plannedKm = w.plan.reduce((a,d)=>a+d.dist,0);
+    const plannedAmount = isTimeMode() ? `${w.plan.reduce((a,d)=>a+planDurationMin(d),0)} ${t('time_unit_min')}` : `${w.plan.reduce((a,d)=>a+d.dist,0)}km`;
     const offset = w.weekNumber - (state.weekNumber||1);
     return `<div style="padding:10px 0; border-bottom:1px solid var(--asphalt-3); cursor:pointer;" onclick="viewingWeekOffset=${offset}; renderPlan();">
       <div style="display:flex; justify-content:space-between;"><span style="font-weight:700;">${t('plan_week_label',{n:w.weekNumber})}</span><span class="muted mono" style="font-size:11.5px;">${w.weekStart}</span></div>
-      <p class="muted" style="margin-top:4px; font-size:12.5px;">${doneCount}/${totalSessions} ${t('home_sessions').toLowerCase()} · ${plannedKm}km ${t('home_km_planned').toLowerCase()}</p>
+      <p class="muted" style="margin-top:4px; font-size:12.5px;">${doneCount}/${totalSessions} ${t('home_sessions').toLowerCase()} · ${plannedAmount} ${t('home_km_planned').toLowerCase()}</p>
     </div>`;
   }).join('');
 }
@@ -3803,8 +3869,13 @@ function getTodayWorkoutStructure(){
   const idx = (new Date().getDay()+6)%7;
   const today = state.plan[idx];
   if(!today || !today.interval) return null;
-  if(today.typeKey==='intervals') return {typeKey:'intervals', reps:today.interval.reps, repMeters:today.interval.repMeters, recoveryMin:today.interval.recoveryMin};
-  if(today.typeKey==='hills') return {typeKey:'hills', reps:today.interval.reps, repMeters:today.interval.repMeters};
+  // Si el corredor entrena "por tiempo", las repeticiones (series/cuestas) se completan
+  // por tiempo transcurrido (repSec) en vez de por distancia GPS (repMeters) -- ver
+  // tickWorkoutGuide() y renderWorkoutGuide(). En modo distancia repSec queda undefined
+  // y el comportamiento es exactamente el de siempre.
+  const repSec = isTimeMode() ? repDurationSec(today.interval.repMeters) : undefined;
+  if(today.typeKey==='intervals') return {typeKey:'intervals', reps:today.interval.reps, repMeters:today.interval.repMeters, repSec, recoveryMin:today.interval.recoveryMin};
+  if(today.typeKey==='hills') return {typeKey:'hills', reps:today.interval.reps, repMeters:today.interval.repMeters, repSec};
   return null;
 }
 function setupWorkoutGuide(){
@@ -3864,13 +3935,14 @@ function tickWorkoutGuide(){
   const s = w.structure;
   let complete = false;
   if(s.typeKey==='intervals'){
-    if(w.phase==='effort') complete = (tracker.distanceKm - w.phaseStartDistanceKm)*1000 >= s.repMeters;
+    if(w.phase==='effort') complete = s.repSec!=null ? (tracker.elapsedSec - w.phaseStartElapsedSec) >= s.repSec : (tracker.distanceKm - w.phaseStartDistanceKm)*1000 >= s.repMeters;
     else complete = (tracker.elapsedSec - w.phaseStartElapsedSec) >= s.recoveryMin*60;
   } else {
     // hills: tanto la subida (esfuerzo) como la bajada trotando (recuperación) se
     // miden por la misma distancia repMeters -- ver comentario arriba de
-    // getTodayWorkoutStructure().
-    complete = (tracker.distanceKm - w.phaseStartDistanceKm)*1000 >= s.repMeters;
+    // getTodayWorkoutStructure() -- salvo en modo "por tiempo", donde ambas fases
+    // se completan por tiempo transcurrido (repSec) en vez de GPS.
+    complete = s.repSec!=null ? (tracker.elapsedSec - w.phaseStartElapsedSec) >= s.repSec : (tracker.distanceKm - w.phaseStartDistanceKm)*1000 >= s.repMeters;
   }
   if(complete) advanceWorkoutPhase();
   renderWorkoutGuide();
@@ -3902,10 +3974,10 @@ function renderWorkoutGuide(){
     let pct;
     if(s.typeKey==='intervals'){
       pct = isEffort
-        ? ((tracker.distanceKm - w.phaseStartDistanceKm)*1000 / s.repMeters)*100
+        ? (s.repSec!=null ? ((tracker.elapsedSec - w.phaseStartElapsedSec) / s.repSec)*100 : ((tracker.distanceKm - w.phaseStartDistanceKm)*1000 / s.repMeters)*100)
         : ((tracker.elapsedSec - w.phaseStartElapsedSec) / (s.recoveryMin*60))*100;
     } else {
-      pct = ((tracker.distanceKm - w.phaseStartDistanceKm)*1000 / s.repMeters)*100;
+      pct = s.repSec!=null ? ((tracker.elapsedSec - w.phaseStartElapsedSec) / s.repSec)*100 : ((tracker.distanceKm - w.phaseStartDistanceKm)*1000 / s.repMeters)*100;
     }
     document.getElementById('workout-guide-progress-bar').style.width = Math.max(0,Math.min(100,pct)) + '%';
   } else if(w.phase==='done'){
@@ -4139,7 +4211,7 @@ function checkPendingRating(){
   if(idx < 0) return;
   const d = state.plan[idx];
   const lbl = planLabel(d);
-  document.getElementById('rating-session-desc').textContent = `${t('day_'+d.day)}: ${lbl.type}${d.dist>0?' · '+fmtDist(d.dist,1)+' '+distUnit():''}`;
+  document.getElementById('rating-session-desc').textContent = `${t('day_'+d.day)}: ${lbl.type}${d.dist>0?' · '+planAmountText(d):''}`;
   ratingTargetIdx = idx;
   document.getElementById('rating-modal').style.display = 'block';
 }
@@ -6479,9 +6551,18 @@ function buildContext(){
   // podía contestar algo inconsistente con lo que el usuario ya está viendo en pantalla.
   const load = calcTrainingLoad();
   if(load) ctx += ` Indicador de carga de entrenamiento (semana actual vs. promedio reciente): ${load.level} (ratio ${load.ratio.toFixed(2)}, corrió ${load.acuteKm.toFixed(1)}km esta semana vs. promedio de ${load.chronicWeeklyAvg.toFixed(1)}km/semana). Este es el mismo indicador que ve en la pantalla de Inicio -- si te pregunta por su carga o riesgo de lesión por volumen, usá este dato en vez de estimarlo de nuevo.`;
-  ctx += ` Plan actual: ${state.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km${d.status?'/'+d.status:''}${d.rating?'/calificó:'+d.rating:''}`).join(', ')}.`;
+  // trainBy: si el corredor eligió entrenar "por tiempo" en vez de "por distancia" (ver
+  // Perfil/onboarding), el coach tiene que expresar y ajustar TODO en minutos -- series,
+  // descansos, sesiones enteras -- nunca en km. El plan interno sigue siendo 100% km
+  // (generatePlan no cambia), así que acá le anotamos a cada día su duración estimada
+  // (según el ritmo propio del corredor, ver estimateBasePaceMinPerKm) junto al km real,
+  // para que el coach pueda hablar en minutos sin perder la referencia de distancia.
+  ctx += isTimeMode()
+    ? ` Este corredor entrena POR TIEMPO, no por distancia: todas las sesiones, series/pasadas y descansos que le describas o modifiques tienen que estar en minutos (o segundos si son cortos), nunca en km/metros.`
+    : ` Este corredor entrena por distancia (km), como es el modo por defecto.`;
+  ctx += ` Plan actual: ${state.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)${d.status?'/'+d.status:''}${d.rating?'/calificó:'+d.rating:''}`).join(', ')}.`;
   const nw = getNextWeekPlan();
-  ctx += ` Plan de la semana que sigue (semana ${nw.weekNumber}, ya calculado y puede ajustarse un poco según cómo termine esta semana): ${nw.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km`).join(', ')}.`;
+  ctx += ` Plan de la semana que sigue (semana ${nw.weekNumber}, ya calculado y puede ajustarse un poco según cómo termine esta semana): ${nw.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)`).join(', ')}.`;
   return ctx;
 }
 const TOOLS = [
@@ -6493,6 +6574,7 @@ const TOOLS = [
       dia:{type:"string", enum:DAY_KEYS, description:"Código del día: mon,tue,wed,thu,fri,sat,sun (siempre en estos códigos, sin importar el idioma de la charla)"},
       tipo:{type:"string", description:"Nombre del tipo de sesión en el idioma de la conversación, ej. 'Rodaje suave', 'Easy run'"},
       distancia_km:{type:"number"},
+      duracion_min:{type:"number", description:"Duración de la sesión en minutos. Usalo en vez de distancia_km si el corredor entrena por tiempo (fijate en el contexto) o si pide la sesión directamente en minutos -- se convierte sola a km internamente."},
       zona:{type:"integer", minimum:1, maximum:5},
       terreno:{type:"string", enum:["asfalto","trail","mixto"]},
       descripcion:{type:"string", description:"Instrucción breve para el corredor, en el idioma de la conversación"}
@@ -6542,13 +6624,18 @@ function applyPlanChange(input){
     if(nextDay && nextDay.raceDay) return `${input.dia} de la semana que viene es el día de tu carrera (cargada en Próximos Eventos) -- no le puedo asignar otra sesión encima.`;
     if(!state.nextWeekOverrides) state.nextWeekOverrides = {};
     const override = { type: input.tipo, desc: input.descripcion };
-    if(typeof input.distancia_km==='number') override.dist = input.distancia_km;
+    let effectiveDistKm = typeof input.distancia_km==='number' ? input.distancia_km : null;
+    if(effectiveDistKm===null && typeof input.duracion_min==='number'){
+      effectiveDistKm = Math.max(0.5, Math.round((input.duracion_min / estimateBasePaceMinPerKm(state.profile))*10)/10);
+    }
+    if(effectiveDistKm!==null) override.dist = effectiveDistKm;
     if(input.zona) override.zone = input.zona;
     if(input.terreno) override.terrain = input.terreno;
     state.nextWeekOverrides[input.dia] = override;
     renderPlan(); persist();
     state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+input.dia)), ts:Date.now()});
-    return `OK, actualicé ${input.dia} de la semana que viene: ${input.tipo}${typeof input.distancia_km==='number'?', '+input.distancia_km+'km':''}${input.zona?', zona '+input.zona:''}.`;
+    const amountTxt = typeof input.duracion_min==='number' ? `${input.duracion_min}min (~${effectiveDistKm}km)` : (effectiveDistKm!==null ? effectiveDistKm+'km' : '');
+    return `OK, actualicé ${input.dia} de la semana que viene: ${input.tipo}${amountTxt?', '+amountTxt:''}${input.zona?', zona '+input.zona:''}.`;
   }
   const d = state.plan.find(x=>x.day===input.dia);
   if(!d) return "Día no encontrado.";
@@ -6563,12 +6650,17 @@ function applyPlanChange(input){
   if(d.raceDay) return `${input.dia} es el día de tu carrera (cargada en Próximos Eventos) -- no le puedo asignar otra sesión encima. Si querés cambiar la carrera, se edita desde Perfil.`;
   d.custom = true;
   d.type = input.tipo; d.desc = input.descripcion;
-  if(typeof input.distancia_km==='number') d.dist = input.distancia_km;
+  if(typeof input.distancia_km==='number'){
+    d.dist = input.distancia_km;
+  } else if(typeof input.duracion_min==='number'){
+    d.dist = Math.max(0.5, Math.round((input.duracion_min / estimateBasePaceMinPerKm(state.profile))*10)/10);
+  }
   if(input.zona) d.zone = input.zona;
   if(input.terreno) d.terrain = input.terreno;
   renderPlan(); renderHome(); persist();
   state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+d.day)), ts:Date.now()});
-  return `OK, actualizado ${d.day}: ${d.type}, ${d.dist}km${d.zone?', zona '+d.zone:''}.`;
+  const amountTxt = typeof input.duracion_min==='number' ? `${input.duracion_min}min (~${d.dist}km)` : `${d.dist}km`;
+  return `OK, actualizado ${d.day}: ${d.type}, ${amountTxt}${d.zone?', zona '+d.zone:''}.`;
 }
 function applyCancelSession(input){
   // Antes, cuando el corredor cancelaba una sesión por chat, el modelo terminaba
@@ -6703,7 +6795,7 @@ Basá tus recomendaciones en principios reales de entrenamiento, no solo en lo q
 Ya tenés en el contexto el plan de la semana actual Y el de la semana que sigue (todavía no empezó, pero ya está calculado). Si te preguntan qué toca la semana que viene, respondé con esos datos directamente — nunca digas que todavía no está definida.
 
 Tenés cinco herramientas para aplicar cambios reales en la app. Cuando el corredor pida un cambio, usá SIEMPRE la herramienta correspondiente en la misma respuesta — nunca digas que ya lo cambiaste sin haber llamado a la herramienta:
-- modificar_sesion: para cambiar UN día puntual por OTRA sesión distinta (tipo, distancia, zona, terreno), de esta semana o de la que sigue (parámetro semana).
+- modificar_sesion: para cambiar UN día puntual por OTRA sesión distinta (tipo, distancia, zona, terreno), de esta semana o de la que sigue (parámetro semana). Si el corredor entrena por tiempo (fijate en el contexto) o te da la sesión directamente en minutos, usá duracion_min en vez de distancia_km.
 - cancelar_sesion: cuando el corredor cancela, saca o no puede hacer una sesión y NO la reemplaza por otra — deja ese día vacío, igual que un día sin entrenamiento. Nunca uses modificar_sesion para esto ni inventes una sesión suave o de zona 1 "de reemplazo": si el pedido es cancelar, el día tiene que quedar sin ningún ejercicio.
 - ajustar_volumen_semana: para pedidos generales de correr más o menos (ej. "quiero correr más km", "bajale un poco"), sin que especifiquen un día — de esta semana o de la que sigue (parámetro semana).
 - modificar_perfil: para cambios permanentes de datos personales que afectan los PRÓXIMOS planes (km semanales base, objetivo, terreno, FC máxima).
