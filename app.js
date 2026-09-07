@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-07T13:56:52Z';
+const APP_VERSION = '2026-09-07T14:04:30Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -568,7 +568,15 @@ async function connectStrava(){
     });
     if(!res.ok) throw new Error('strava-init failed');
     const { state } = await res.json();
-    const redirectUri = `${window.location.origin}/api/strava-auth`;
+    // El redirect_uri tiene que ser SIEMPRE un link absoluto a zancada.org, nunca
+    // window.location.origin a secas: en la app nativa (Capacitor) ese origin es algo
+    // como capacitor://localhost o https://localhost, un dominio que Strava jamás va a
+    // aceptar porque no coincide con el "Authorization Callback Domain" configurado en
+    // su panel de la app (zancada.org) -- eso es justo lo que producía el error
+    // "redirect_uri invalid" al conectar Strava desde el celular. En la web/PWA sí
+    // podemos usar window.location.origin normalmente (mismo dominio real).
+    const native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+    const redirectUri = native ? 'https://zancada.org/api/strava-auth' : `${window.location.origin}/api/strava-auth`;
     const url = `https://www.strava.com/oauth/authorize?client_id=${STRAVA_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=activity:read_all&state=${encodeURIComponent(state)}&approval_prompt=force`;
     window.location.href = url;
   }catch(e){
