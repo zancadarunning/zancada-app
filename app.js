@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-07T22:06:17Z';
+const APP_VERSION = '2026-09-07T22:36:16Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -120,7 +120,10 @@ const ICONS = {
   faceBad: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M8.5 15.5c1-1.3 2.2-2 3.5-2s2.5.7 3.5 2"/><circle cx="9" cy="9.5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="9.5" r="1" fill="currentColor" stroke="none"/></svg>',
   faceGood: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M8 14c1.2 1.3 2.6 2 4 2s2.8-.7 4-2"/><circle cx="9" cy="9.5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="9.5" r="1" fill="currentColor" stroke="none"/></svg>',
   faceGreat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M7.5 13.5c1.4 2 2.9 3 4.5 3s3.1-1 4.5-3"/><path d="M7.7 9.2a2 2 0 0 1 2.6 0M13.7 9.2a2 2 0 0 1 2.6 0"/></svg>',
-  shoe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 17c0-1.2.7-2.3 1.8-2.8l5-2.3c.6-.3 1.3-.3 1.9 0l2.6 1.3c1.6.8 3.4 1.2 5.2 1.2h1.5v3.6H2.5V17z"/><path d="M9.3 11.9l.9-3.4M4.3 14.2c1.3.5 2.7.8 4.1.8"/></svg>',
+  // Silueta de zapatilla "chunky" (suela alta, estilo Vomero) rellena de un solo color --
+  // elegida a mano probando varias iteraciones con el usuario hasta que la silueta se
+  // pareciera de verdad a una zapatilla de running y no a una figura abstracta.
+  shoe: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M3.3 15.2 C2.6 13 2.8 10.5 3.6 9.3 C4 9 4.2 8.8 4.6 9 C5.2 9.3 5.8 9.8 6.2 10.4 C6.9 9.9 7.7 9.2 8.6 9 C11 9.6 15 11 18.5 13.6 C19.6 14.3 20.4 15 20.8 16 L21 16 Q22.3 16 22.3 17.2 L22.3 18 Q22.3 19.3 21 19.3 L2.8 19.3 Q1.6 19.3 1.6 18 L1.6 16.4 Q1.6 15.2 2.8 15.2 Z"/></svg>',
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
   edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>',
   empty: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 12a8 8 0 1 0 3-6.3"/><path d="M4 5v4h4"/><path d="M12 8v4l3 2"/></svg>',
