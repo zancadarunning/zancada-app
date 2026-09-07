@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-07T22:36:16Z';
+const APP_VERSION = '2026-09-07T22:50:31Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -1231,7 +1231,13 @@ async function finishOnboard(){
   // recordatorio diario del lado del servidor (api/send-reminders.js) para mandar el
   // aviso a la hora local de cada uno, no a una sola hora fija para todo el mundo.
   // detectDeviceTz() está definida más abajo, junto al resto de fecha/hora.
-  state.profile = {email:pendingEmail, name, weight, height, birth, terrain, trainingDays: trainingDays.length?trainingDays:['tue','thu','sun'], goal, raceDate, runnerType, currentWeeklyKm, hrMax, hrKnown, hrZones:computeZones(hrMax), tz:detectDeviceTz()};
+  // createdAt guarda la fecha (YYYY-MM-DD, hora local) en que esta persona terminó el
+  // onboarding y arrancó el plan -- lo usa autoSkipPastDays() y computeDailyTrend() para
+  // no marcar como "no entrenó" ningún día ANTERIOR a que la cuenta existiera. Antes de
+  // esto, alguien que se sumaba un martes con lunes/miércoles/viernes como días de
+  // entrenamiento veía el lunes (e incluso el domingo previo) ya marcado como sesión
+  // perdida, cuando en realidad todavía ni tenía cuenta esos días.
+  state.profile = {email:pendingEmail, name, weight, height, birth, terrain, trainingDays: trainingDays.length?trainingDays:['tue','thu','sun'], goal, raceDate, runnerType, currentWeeklyKm, hrMax, hrKnown, hrZones:computeZones(hrMax), tz:detectDeviceTz(), createdAt: todayLocalISO()};
   state.profile.weeklyKm = calcWeeklyKm(state.profile);
   state.weekNumber = 1;
   state.weekStart = getMondayISO(new Date());
@@ -1377,6 +1383,14 @@ async function deleteAccount(){
 })();
 
 /* ================= PLAN GENERATION (con progresión semana a semana) ================= */
+// Fecha de HOY en formato YYYY-MM-DD usando los componentes LOCALES del Date (año/mes/día
+// tal como los ve el celular del usuario) -- a propósito no usa toISOString(), que convierte
+// a UTC primero y puede correr la fecha un día para atrás en husos horarios positivos
+// (ej. Japón, UTC+9): medianoche local del 1/9 ahí es 31/8 15:00 UTC.
+function todayLocalISO(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 function getMondayISO(d){
   const dt = new Date(d);
   const day = dt.getDay();
@@ -1493,9 +1507,22 @@ function eventDayIndexInWeek(weekStartDate){
 function autoSkipPastDays(){
   if(!state.onboarded || !state.weekStart) return;
   const todayIdx = (new Date().getDay()+6)%7;
+  // createdAt (si existe -- cuentas viejas de antes de este cambio no lo tienen, y ahí
+  // seguimos el comportamiento de siempre) marca el primer día que esta cuenta pudo haber
+  // entrenado. Sin este chequeo, alguien que se sumó un martes con lunes/miércoles/viernes
+  // como días de entrenamiento veía el lunes de ESA MISMA semana (día en el que la cuenta
+  // ni existía) marcado como sesión perdida, apenas terminaba el onboarding.
+  const createdAt = state.profile && state.profile.createdAt;
+  const weekStartDate = new Date(state.weekStart+'T00:00:00');
   let changed = false;
   state.plan.forEach((d,i)=>{
-    if(i < todayIdx && d.dist>0 && !d.status){ d.status = 'skipped'; changed = true; }
+    if(i >= todayIdx || !(d.dist>0) || d.status) return;
+    if(createdAt){
+      const dayDate = new Date(weekStartDate); dayDate.setDate(dayDate.getDate()+i);
+      const dayIso = `${dayDate.getFullYear()}-${String(dayDate.getMonth()+1).padStart(2,'0')}-${String(dayDate.getDate()).padStart(2,'0')}`;
+      if(dayIso < createdAt) return; // la cuenta todavía no existía ese día -- no cuenta como perdida
+    }
+    d.status = 'skipped'; changed = true;
   });
   if(changed) persist();
 }
@@ -4147,7 +4174,13 @@ function computeDailyTrend(days){
     // carrera (ver el comentario junto a localDateISO/getTodayRun).
     const km = state.runs.filter(r => localDateISO(r.date) === dateStr).reduce((a,r)=>a+r.distanceKm,0);
     let planned = false;
-    if(state.weekStart && dateStr >= state.weekStart){
+    // dateStr >= state.weekStart no alcanza solo: weekStart es el lunes de la semana en la
+    // que se creó la cuenta, así que alguien que se sumó un martes igual pasaba esa
+    // comparación para el lunes anterior (que sí es "de esta semana" pero la cuenta ni
+    // existía todavía ese día). El chequeo contra createdAt es lo que evita marcarlo como
+    // sesión planeada/perdida en el gráfico de Historial.
+    const createdAt = state.profile && state.profile.createdAt;
+    if(state.weekStart && dateStr >= state.weekStart && (!createdAt || dateStr >= createdAt)){
       const planDay = state.plan.find(p=>p.day===weekDayKeys[d.getDay()]);
       if(planDay && planDay.dist>0) planned = true;
     }
@@ -6428,6 +6461,14 @@ const TOOLS = [
     }, required:["dia","tipo","descripcion"]}
   },
   {
+    name:"cancelar_sesion",
+    description:"Cancela por completo UNA sesión puntual, dejando ese día vacío -- igual que cualquier otro día sin entrenamiento asignado (no le pone una sesión suave ni de zona 1 en su lugar). Usala cuando el corredor te avise que no va a poder entrenar ese día, o que quiere sacar/cancelar/borrar una sesión sin reemplazarla por otra. NO uses modificar_sesion para esto: modificar_sesion es para CAMBIAR una sesión por otra distinta, no para dejar el día sin nada.",
+    input_schema:{type:"object", properties:{
+      semana:{type:"string", enum:["actual","siguiente"], description:"Si el cambio es para la semana en curso o para la que sigue. Por defecto 'actual'."},
+      dia:{type:"string", enum:DAY_KEYS, description:"Código del día: mon,tue,wed,thu,fri,sat,sun (siempre en estos códigos, sin importar el idioma de la charla)"}
+    }, required:["dia"]}
+  },
+  {
     name:"ajustar_volumen_semana",
     description:"Sube o baja el volumen (distancia) de TODAS las sesiones de running de una semana, aplicando un mismo porcentaje. Usala para pedidos generales como 'quiero correr más', 'esta semana quiero sumar kilómetros' o 'bajale un poco', sin que el corredor especifique un día puntual. Por defecto aplica a la semana ACTUAL; si el corredor habla de la semana que sigue, usá semana:'siguiente'.",
     input_schema:{type:"object", properties:{
@@ -6490,6 +6531,35 @@ function applyPlanChange(input){
   renderPlan(); renderHome(); persist();
   state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+d.day)), ts:Date.now()});
   return `OK, actualizado ${d.day}: ${d.type}, ${d.dist}km${d.zone?', zona '+d.zone:''}.`;
+}
+function applyCancelSession(input){
+  // Antes, cuando el corredor cancelaba una sesión por chat, el modelo terminaba
+  // llamando a modificar_sesion igual (es la única herramienta de "un día puntual"
+  // que conocía) y como esa herramienta exige tipo/descripción, improvisaba algo
+  // como "Rodaje suave en zona 1" -- resultado: el día quedaba con un entrenamiento
+  // inventado en vez de quedar vacío. Esta herramienta deja el día realmente vacío,
+  // igual que cualquier otro día sin sesión asignada (typeKey:'rest', sin custom).
+  if(input.semana === 'siguiente'){
+    const nextDay = getNextWeekPlan().plan.find(x=>x.day===input.dia);
+    if(nextDay && nextDay.raceDay) return `${input.dia} de la semana que viene es el día de tu carrera (cargada en Próximos Eventos) -- no lo puedo dejar sin sesión.`;
+    if(!state.nextWeekOverrides) state.nextWeekOverrides = {};
+    state.nextWeekOverrides[input.dia] = { type: t('type_rest'), desc: t('desc_rest'), dist:0, zone:null, terrain:null };
+    renderPlan(); persist();
+    state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+input.dia)), ts:Date.now()});
+    return `OK, dejé ${input.dia} de la semana que viene sin sesión (descanso).`;
+  }
+  const d = state.plan.find(x=>x.day===input.dia);
+  if(!d) return "Día no encontrado.";
+  if(isDayLocked(input.dia)) return `No puedo modificar ${input.dia}: ya pasó (o ya se corrió/salteó) esta semana. Puedo dejarlo sin sesión desde hoy en adelante, o la semana que viene.`;
+  if(d.raceDay) return `${input.dia} es el día de tu carrera (cargada en Próximos Eventos) -- no lo puedo dejar sin sesión. Si querés cambiar la carrera, se edita desde Perfil.`;
+  d.custom = false;
+  d.typeKey = 'rest';
+  d.type = undefined; d.desc = undefined;
+  d.dist = 0; d.zone = null; d.terrain = null;
+  delete d.interval;
+  renderPlan(); renderHome(); persist();
+  state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+d.day)), ts:Date.now()});
+  return `OK, dejé ${d.day} sin sesión (descanso).`;
 }
 function applyVolumeAdjust(input){
   const pct = input.porcentaje;
@@ -6594,8 +6664,9 @@ Basá tus recomendaciones en principios reales de entrenamiento, no solo en lo q
 
 Ya tenés en el contexto el plan de la semana actual Y el de la semana que sigue (todavía no empezó, pero ya está calculado). Si te preguntan qué toca la semana que viene, respondé con esos datos directamente — nunca digas que todavía no está definida.
 
-Tenés cuatro herramientas para aplicar cambios reales en la app. Cuando el corredor pida un cambio, usá SIEMPRE la herramienta correspondiente en la misma respuesta — nunca digas que ya lo cambiaste sin haber llamado a la herramienta:
-- modificar_sesion: para cambiar UN día puntual (tipo, distancia, zona, terreno), de esta semana o de la que sigue (parámetro semana).
+Tenés cinco herramientas para aplicar cambios reales en la app. Cuando el corredor pida un cambio, usá SIEMPRE la herramienta correspondiente en la misma respuesta — nunca digas que ya lo cambiaste sin haber llamado a la herramienta:
+- modificar_sesion: para cambiar UN día puntual por OTRA sesión distinta (tipo, distancia, zona, terreno), de esta semana o de la que sigue (parámetro semana).
+- cancelar_sesion: cuando el corredor cancela, saca o no puede hacer una sesión y NO la reemplaza por otra — deja ese día vacío, igual que un día sin entrenamiento. Nunca uses modificar_sesion para esto ni inventes una sesión suave o de zona 1 "de reemplazo": si el pedido es cancelar, el día tiene que quedar sin ningún ejercicio.
 - ajustar_volumen_semana: para pedidos generales de correr más o menos (ej. "quiero correr más km", "bajale un poco"), sin que especifiquen un día — de esta semana o de la que sigue (parámetro semana).
 - modificar_perfil: para cambios permanentes de datos personales que afectan los PRÓXIMOS planes (km semanales base, objetivo, terreno, FC máxima).
 - guardar_nota_coach: para guardar un dato permanente del corredor (una lesión o molestia, una preferencia, una restricción de horario, etc.) apenas lo mencione, aunque no implique cambiar el plan ahora mismo. El historial de la charla no es infinito, así que esto es lo único que te garantiza acordarte de algo importante más adelante.
@@ -6630,6 +6701,7 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
       const toolResults = toolUses.map(tu=>{
         let result;
         if(tu.name==='modificar_sesion') result = applyPlanChange(tu.input);
+        else if(tu.name==='cancelar_sesion') result = applyCancelSession(tu.input);
         else if(tu.name==='ajustar_volumen_semana') result = applyVolumeAdjust(tu.input);
         else if(tu.name==='modificar_perfil') result = applyProfileChange(tu.input);
         else if(tu.name==='guardar_nota_coach') result = applyCoachNote(tu.input);
