@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-07T22:58:55Z';
+const APP_VERSION = '2026-09-07T23:07:10Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -54,6 +54,9 @@ function apiUrl(path){
   return native ? ('https://zancada.org' + path) : path;
 }
 const LANG_NAMES={es:"español",en:"English",pt:"português",fr:"français",it:"italiano",de:"Deutsch"};
+// Nombres de idioma capitalizados, como aparecen en las opciones del selector -- LANG_NAMES
+// de arriba está en minúscula a propósito (se usa dentro de una frase del prompt del coach).
+const LANG_DISPLAY={es:"Español",en:"English",pt:"Português",fr:"Français",it:"Italiano",de:"Deutsch"};
 const LOCALE_MAP={es:"es-AR",en:"en-US",pt:"pt-BR",fr:"fr-FR",it:"it-IT",de:"de-DE"};
 function detectInitialLang(){
   const supported = ['es','en','pt','fr','it','de'];
@@ -75,6 +78,8 @@ function applyStaticTranslations(){
   document.querySelectorAll('a[href^="/terms.html"]').forEach(el=>{ el.href = apiUrl('/terms.html?lang=' + lang); });
   document.getElementById('pauseBtn').textContent = tracker.running ? t('run_pause') : t('run_resume');
   [...document.getElementById('perfil-lang-choice').children].forEach(c=>c.classList.toggle('active', c.dataset.v===lang));
+  const langSummaryEl = document.getElementById('perfil-lang-summary');
+  if(langSummaryEl) langSummaryEl.textContent = LANG_DISPLAY[lang] || lang;
 }
 function setLang(code){
   lang = code; state.lang = code;
@@ -829,6 +834,8 @@ function renderPerfilDays(){
   const selected = state.profile.trainingDays || [];
   document.getElementById('perfil-days').innerHTML = DAY_KEYS.map(d=>
     `<div class="day-pill${selected.includes(d)?' active':''}" data-v="${d}">${t('day_'+d).slice(0,3)}</div>`).join('');
+  const daysSummaryEl = document.getElementById('perfil-days-summary');
+  if(daysSummaryEl) daysSummaryEl.textContent = DAY_KEYS.filter(d=>selected.includes(d)).map(d=>t('day_'+d)).join(', ');
 }
 function preserveLivedDays(oldPlan, newPlan){
   if(!oldPlan || !oldPlan.length) return newPlan;
@@ -2485,8 +2492,11 @@ function renderZones(){
   // el texto de acá siempre decía "se calcula según tu edad" aunque ya hubiera una FC
   // máxima real cargada. Las claves perfil_zones_estimated/perfil_zones_tested ya
   // existían traducidas a los 6 idiomas pero nunca se usaban.
+  const statusText = state.profile.hrKnown ? t('perfil_zones_tested') : t('perfil_zones_estimated');
   const statusEl = document.getElementById('zones-status');
-  if(statusEl) statusEl.textContent = state.profile.hrKnown ? t('perfil_zones_tested') : t('perfil_zones_estimated');
+  if(statusEl) statusEl.textContent = statusText;
+  const zonesSummaryEl = document.getElementById('perfil-zones-summary');
+  if(zonesSummaryEl) zonesSummaryEl.textContent = statusText;
   document.getElementById('zones-list').innerHTML = [1,2,3,4,5].map(n=>`
     <div class="zone-row">
       <div><span class="zone-chip zone-${n}">${t('zone_word')} ${n}</span><div class="zd">${t('zdesc_'+n)} · ${ZONE_PCT[n]}</div></div>
@@ -2833,6 +2843,23 @@ function openShoesOverlay(){ document.getElementById('shoes-overlay').style.disp
 function closeShoesOverlay(){ document.getElementById('shoes-overlay').style.display = 'none'; }
 function openEventOverlay(){ document.getElementById('event-overlay').style.display = 'block'; }
 function closeEventOverlay(){ document.getElementById('event-overlay').style.display = 'none'; }
+function openLangOverlay(){ document.getElementById('lang-overlay').style.display = 'block'; }
+function closeLangOverlay(){ document.getElementById('lang-overlay').style.display = 'none'; }
+function openDaysOverlay(){ document.getElementById('days-overlay').style.display = 'block'; }
+function closeDaysOverlay(){ document.getElementById('days-overlay').style.display = 'none'; }
+function openZonesOverlay(){ document.getElementById('zones-overlay').style.display = 'block'; }
+function closeZonesOverlay(){ document.getElementById('zones-overlay').style.display = 'none'; }
+// El bloque "Recordá que..." de la sección de Strava era una lista siempre visible --
+// ahora arranca colapsada detrás de este botón, para no abrumar la tarjeta de Strava con
+// texto largo apenas se entra a Perfil. Nada de esto se persiste: siempre arranca cerrado.
+function toggleStravaRemember(){
+  const list = document.getElementById('strava-remember-list');
+  const chevron = document.getElementById('strava-remember-chevron');
+  if(!list) return;
+  const show = list.style.display === 'none';
+  list.style.display = show ? 'block' : 'none';
+  if(chevron) chevron.style.transform = show ? 'rotate(180deg)' : 'rotate(0deg)';
+}
 // ---- Foto de perfil -----
 // Se guarda como JPEG chico (200x200, recorte centrado tipo "cover") codificado en
 // base64 dentro de state.profile.avatarPhoto -- así no hace falta un bucket de

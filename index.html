@@ -1448,6 +1448,43 @@ try{
     </div>
   </div>
 
+  <div class="overlay" id="lang-overlay" style="display:none;">
+    <button class="week-nav-btn" onclick="closeLangOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="display" style="font-size:22px;" data-i18n="perfil_lang"></h2>
+    <div class="card" style="margin-top:16px;">
+      <div class="choice-row" id="perfil-lang-choice" style="flex-wrap:wrap;">
+        <div class="choice" data-v="es">Español</div>
+        <div class="choice" data-v="en">English</div>
+        <div class="choice" data-v="pt">Português</div>
+        <div class="choice" data-v="fr">Français</div>
+        <div class="choice" data-v="it">Italiano</div>
+        <div class="choice" data-v="de">Deutsch</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="days-overlay" style="display:none;">
+    <button class="week-nav-btn" onclick="closeDaysOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="display" style="font-size:22px;" data-i18n="perfil_days_title"></h2>
+    <div class="card" id="perfil-days-card" style="margin-top:16px;">
+      <div class="day-picker" id="perfil-days"></div>
+      <button class="btn btn-outline btn-sm perfil-save-btn" id="save-days-btn" style="margin-top:12px; width:100%;" data-i18n="perfil_days_save" onclick="confirmAndSave('days')"></button>
+    </div>
+  </div>
+
+  <div class="overlay" id="zones-overlay" style="display:none;">
+    <button class="week-nav-btn" onclick="closeZonesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+      <h2 class="display" style="font-size:22px;" data-i18n="perfil_zones_title"></h2>
+      <button class="info-btn" onclick="openZonesInfo()" data-i18n-aria="aria_zones_info"><span class="icon-sq" style="width:19px; height:19px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span></button>
+    </div>
+    <div class="card" id="perfil-zones-card" style="margin-top:16px;">
+      <p class="muted" id="zones-status" data-i18n="perfil_zones_manual_note"></p>
+      <div id="zones-list" style="margin-top:8px;"></div>
+      <button class="btn btn-outline btn-sm perfil-save-btn" id="save-zones-btn" style="margin-top:12px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('zones')"></button>
+    </div>
+  </div>
+
   <div class="rd-video-overlay" id="rd-video-overlay">
     <button onclick="closeDynamicVideo()" data-i18n-aria="aria_back" style="position:absolute; top:calc(16px + var(--safe-top)); right:20px; width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.12); border:none; color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:2;"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span></button>
     <canvas id="rd-video-canvas" width="720" height="1280" style="display:none;"></canvas>
@@ -1690,20 +1727,26 @@ try{
       <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
-    <div class="card" id="perfil-days-card">
-      <h3 data-i18n="perfil_days_title"></h3>
-      <div class="day-picker" id="perfil-days"></div>
-      <button class="btn btn-outline btn-sm perfil-save-btn" id="save-days-btn" style="margin-top:12px; width:100%;" data-i18n="perfil_days_save" onclick="confirmAndSave('days')"></button>
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openDaysOverlay()">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/></svg></span>
+        <div>
+          <h3 style="margin:0 0 2px;" data-i18n="perfil_days_title"></h3>
+          <p class="muted" style="margin:0; font-size:12.5px;" id="perfil-days-summary"></p>
+        </div>
+      </div>
+      <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
-    <div class="card" id="perfil-zones-card">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-        <h3 data-i18n="perfil_zones_title" style="margin:0;"></h3>
-        <button class="info-btn" onclick="openZonesInfo()" data-i18n-aria="aria_zones_info"><span class="icon-sq" style="width:19px; height:19px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span></button>
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openZonesOverlay()">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span>
+        <div>
+          <h3 style="margin:0 0 2px;" data-i18n="perfil_zones_title"></h3>
+          <p class="muted" style="margin:0; font-size:12.5px;" id="perfil-zones-summary"></p>
+        </div>
       </div>
-      <p class="muted" id="zones-status" data-i18n="perfil_zones_manual_note"></p>
-      <div id="zones-list" style="margin-top:8px;"></div>
-      <button class="btn btn-outline btn-sm perfil-save-btn" id="save-zones-btn" style="margin-top:12px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('zones')"></button>
+      <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
     <div class="card">
@@ -1751,6 +1794,21 @@ try{
     </div>
 
     <div class="card">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+        <span class="icon-sq" style="width:22px; height:22px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v11H8l-4 4v-4H4z"/></svg></span>
+        <h3 style="margin:0;" data-i18n="perfil_coach_title"></h3>
+      </div>
+      <p class="muted" style="margin:0 0 10px;" data-i18n="perfil_coach_intro"></p>
+      <ul style="margin:0; padding-left:18px; color:var(--mist); font-size:13px; line-height:1.7;">
+        <li data-i18n="perfil_coach_cap_1"></li>
+        <li data-i18n="perfil_coach_cap_2"></li>
+        <li data-i18n="perfil_coach_cap_3"></li>
+        <li data-i18n="perfil_coach_cap_4"></li>
+        <li data-i18n="perfil_coach_cap_5"></li>
+      </ul>
+    </div>
+
+    <div class="card">
       <div style="display:flex; align-items:center; justify-content:space-between;">
         <div style="flex:1; padding-right:12px;">
           <h3 style="margin-bottom:2px;" data-i18n="perfil_theme_title"></h3>
@@ -1763,16 +1821,15 @@ try{
       </div>
     </div>
 
-    <div class="card">
-      <h3 data-i18n="perfil_lang"></h3>
-      <div class="choice-row" id="perfil-lang-choice" style="flex-wrap:wrap;">
-        <div class="choice" data-v="es">Español</div>
-        <div class="choice" data-v="en">English</div>
-        <div class="choice" data-v="pt">Português</div>
-        <div class="choice" data-v="fr">Français</div>
-        <div class="choice" data-v="it">Italiano</div>
-        <div class="choice" data-v="de">Deutsch</div>
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openLangOverlay()">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M2.5 12h19M12 2.5c2.5 2.6 4 6 4 9.5s-1.5 6.9-4 9.5c-2.5-2.6-4-6-4-9.5s1.5-6.9 4-9.5z"/></svg></span>
+        <div>
+          <h3 style="margin:0 0 2px;" data-i18n="perfil_lang"></h3>
+          <p class="muted" style="margin:0; font-size:12.5px;" id="perfil-lang-summary"></p>
+        </div>
       </div>
+      <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
     <div class="card">
@@ -1798,8 +1855,11 @@ try{
       <p id="strava-sync-note" class="muted" style="margin:8px 0 0; font-size:12px; display:none;"></p>
       <button class="btn btn-outline btn-sm" id="strava-connect-btn" style="margin-top:10px; width:100%;" onclick="connectStrava()"></button>
       <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
-        <p style="font-weight:700; margin-bottom:8px;" data-i18n="perfil_remember_title"></p>
-        <ul style="margin:0; padding-left:18px; color:var(--mist); font-size:13px; line-height:1.7;">
+        <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleStravaRemember()">
+          <span data-i18n="perfil_remember_title"></span>
+          <span class="icon-sq" id="strava-remember-chevron" style="width:13px; height:13px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+        </button>
+        <ul id="strava-remember-list" style="display:none; margin:10px 0 0; padding-left:18px; color:var(--mist); font-size:13px; line-height:1.7;">
           <li data-i18n="perfil_remember_1"></li>
           <li data-i18n="perfil_remember_2"></li>
           <li data-i18n="perfil_remember_3"></li>
