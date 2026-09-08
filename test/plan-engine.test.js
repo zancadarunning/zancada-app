@@ -213,6 +213,27 @@ test('generatePlan: una meta semanal propia mueve el volumen pero dentro de un r
   assert.ok(totalCon < totalSin * 1.5, 'el aumento debería estar acotado, no libre');
 });
 
+test('generatePlan: el total real de la semana coincide con el kilometraje semanal (con meta o sin meta)', () => {
+  // Reportado por el usuario: con una meta de 25km/semana, el plan terminaba sumando 34km --
+  // un ~35% arriba, porque cada tipo de sesión se calculaba con una proporción fija (0.85x a
+  // 1.5x) de un "per" que no tenía en cuenta cuántas sesiones había esa semana. Ahora el total
+  // real tiene que rondar bien de cerca el número real (calculado o puesto a mano), no
+  // superarlo por mucho -- para cualquiera de los dos casos, no solo cuando hay una meta.
+  const app = loadApp();
+  const conMeta = baseProfile({ weeklyKm: 20, weeklyGoalKm: 25 });
+  app.state.profile = conMeta;
+  app.state.event = null;
+  const planConMeta = app.generatePlan(conMeta, 1, '2026-09-07');
+  const totalConMeta = planConMeta.reduce((a, d) => a + d.dist, 0);
+  assert.ok(Math.abs(totalConMeta - 25) <= 3, `con meta de 25km el total debería rondar 25km, dio ${totalConMeta}`);
+
+  const sinMeta = baseProfile({ weeklyKm: 20, weeklyGoalKm: 0 });
+  app.state.profile = sinMeta;
+  const planSinMeta = app.generatePlan(sinMeta, 1, '2026-09-07');
+  const totalSinMeta = planSinMeta.reduce((a, d) => a + d.dist, 0);
+  assert.ok(Math.abs(totalSinMeta - 20) <= 3, `sin meta (weeklyKm=20) el total debería rondar 20km, dio ${totalSinMeta}`);
+});
+
 test('buildIntervalStructure: reps entre 4 y el máximo, y el total ronda la distancia pedida', () => {
   const app = loadApp();
   const { reps, repMeters, recoveryMin } = app.buildIntervalStructure(8, { level: 0 }, 1);

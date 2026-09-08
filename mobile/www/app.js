@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T15:25:00Z';
+const APP_VERSION = '2026-09-08T15:50:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -28,6 +28,7 @@ const CHANGELOG = [
   {id:'2026-09-race-phase', key:'changelog_race_phase'},
   {id:'2026-09-event-plan-decouple', key:'changelog_event_plan_decouple'},
   {id:'2026-09-preserve-custom-days', key:'changelog_preserve_custom_days'},
+  {id:'2026-09-weekly-volume-fix', key:'changelog_weekly_volume_fix'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -1974,9 +1975,6 @@ function generatePlan(p, weekNumber, weekStartDate){
     const minWk = p.weeklyKm * 0.7;
     effectiveWeeklyKm = Math.min(maxWk, Math.max(minWk, p.weeklyGoalKm));
   }
-  const per = (beginner ? 2.5 : Math.max(3, effectiveWeeklyKm/3)) * mult;
-  const easy = Math.round(per*0.9), quality = Math.round(per*1.15), tempo = Math.round(per*0.85), long = Math.round(per*(beginner?1.3:1.5));
-  const distMap = {easy, intervals:quality, tempo, long, fartlek:Math.round(per*1.0), hills:Math.round(per*0.9), progression:Math.round(per*1.0)};
   const zoneMap = {easy:beginner?1:2, intervals:4, tempo:3, long:2, fartlek:3, hills:4, progression:3};
   const defaultDays = beginner ? ['tue','thu','sun'] : ['tue','wed','fri','sun'];
   const trainingDays = DAY_KEYS.filter(d => (p.trainingDays && p.trainingDays.length ? p.trainingDays : defaultDays).includes(d));
@@ -1988,6 +1986,31 @@ function generatePlan(p, weekNumber, weekStartDate){
     // no tenía sesión) hasta la semana siguiente, que retoma el plan normal.
     const heavyTypes = ['intervals','tempo','fartlek','hills','progression','long'];
     Object.keys(sessionMap).forEach(day=>{ if(heavyTypes.includes(sessionMap[day])) sessionMap[day] = 'easy'; });
+  }
+  // Reparto del volumen semanal entre las sesiones que de verdad va a tener esta semana, en
+  // vez de calcular cada tipo de sesión por separado con una proporción fija (0.85x a 1.5x)
+  // de un "per" que no tenía en cuenta cuántas sesiones había esa semana. Esa cuenta vieja
+  // hacía que el total real de la semana sumara bastante más que el kilometraje semanal
+  // (calculado o puesto a mano en Perfil): con un plan de 4 días, por ejemplo, terminaba
+  // ~35-40% arriba -- una meta de 25km/semana podía terminar en un plan de 34km, algo que no
+  // tenía ningún sentido para alguien que cargó ese número esperando que el plan apuntara ahí.
+  // Ahora el total de la semana coincide (salvo redondeo) con effectiveWeeklyKm * mult, sin
+  // importar cuántas sesiones fuertes/suaves le toquen esa semana en particular. El caso
+  // principiante queda con su fórmula fija de siempre (no depende de ningún kilometraje
+  // puesto o calculado, así que este ajuste no le cambia nada).
+  const RATIO = {easy:0.9, intervals:1.15, tempo:0.85, long:beginner?1.3:1.5, fartlek:1.0, hills:0.9, progression:1.0};
+  let distMap;
+  if(beginner){
+    const per = 2.5 * mult;
+    distMap = {};
+    Object.keys(RATIO).forEach(type=>{ distMap[type] = Math.round(per * RATIO[type]); });
+  } else {
+    const usedTypes = trainingDays.map(d=>sessionMap[d]).filter(Boolean);
+    const weightSum = usedTypes.reduce((a,type)=> a + (RATIO[type]||1), 0);
+    const targetTotal = Math.max(9, effectiveWeeklyKm) * mult;
+    const perUnit = weightSum>0 ? targetTotal/weightSum : 0;
+    distMap = {};
+    Object.keys(RATIO).forEach(type=>{ distMap[type] = Math.round(perUnit * RATIO[type]); });
   }
   // La carrera cargada en "Próximos eventos" ya NO le saca la sesión propia al día en el que
   // cae (antes ese día quedaba fijo en descanso porque "la carrera era la sesión") -- ahora es
