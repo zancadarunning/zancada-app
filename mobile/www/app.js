@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T14:47:00Z';
+const APP_VERSION = '2026-09-08T15:05:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -2639,6 +2639,13 @@ function renderPlan(){
   // (ver isEventRaceWeek/eventRaceWeekMultiplier), pero con su propio texto aclaratorio abajo
   // para que quede claro que es por esa carrera puntual y no por el ciclo de descarga normal.
   const isEventWeek = wd.exists && wd.mode!=='future' && wd.mode!=='past' && wd.weekStart && isEventRaceWeek(wd.weekStart);
+  // La descarga PERIÓDICA (cada 3-4 semanas, ver isCutbackWeek/weekMultiplier) es un ciclo
+  // normal del plan, sin relación con ninguna carrera cargada -- antes no tenía ningún texto
+  // aclaratorio (a diferencia de taper/recuperación/carrera), así que un corredor que la veía
+  // aparecer no tenía forma de saber por qué, y podía confundirla con un efecto de una carrera
+  // que tuviera cargada. isEventWeek manda si coinciden las dos (el motivo puntual de esa
+  // carrera es más específico que "le toca descarga por ciclo").
+  const isPlainCutbackWeek = wd.exists && wd.mode!=='future' && isCutbackWeek(wn) && !isEventWeek;
   let label = t('plan_week_label',{n:wn});
   if(wd.exists && (isCutbackWeek(wn) || isEventWeek) && wd.mode!=='future') label += ` · <span class="tag tag-mixto">${t('plan_cutback')}</span>`;
   if(wd.mode==='future') label += ` · <span class="tag tag-soon">${t('plan_estimate')}</span>`;
@@ -2670,6 +2677,13 @@ function renderPlan(){
     eventWeekNote.textContent = t('plan_event_week_note', {name: state.event.name});
   } else {
     eventWeekNote.style.display='none';
+  }
+  const cutbackNote = document.getElementById('plan-cutback-note');
+  if(isPlainCutbackWeek){
+    cutbackNote.style.display='block';
+    cutbackNote.textContent = t('plan_cutback_note');
+  } else {
+    cutbackNote.style.display='none';
   }
   const recoveryNote = document.getElementById('plan-recovery-note');
   if(showRecoveryUi){
