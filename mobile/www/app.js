@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T18:15:00Z';
+const APP_VERSION = '2026-09-08T18:45:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -403,13 +403,6 @@ function updateSyncBadge(){
   else { badge.style.display = 'none'; }
 }
 let loadedStateVersion = null;
-// Snapshot de un solo nivel para "deshacer último cambio del coach" (ver deshacer_cambio /
-// captureUndoSnapshot / applyUndoLastChange más abajo). Guarda una copia profunda de lo único
-// que las herramientas del coach pueden modificar (plan, overrides de la semana que viene y
-// perfil) justo ANTES de aplicar un cambio -- así deshacer es simplemente restaurar esa copia.
-// No es una pila: cada cambio nuevo pisa el snapshot anterior a propósito, porque solo se
-// puede volver un paso atrás.
-let coachUndoSnapshot = null;
 // persist() guarda SIEMPRE el objeto `state` completo (todo: plan, chat, perfil...) en un
 // solo upsert -- y se llama muchas veces seguidas en una sola interacción (por ejemplo, cada
 // herramienta que usa el coach en el chat llama a persist() por su cuenta, y al final sendChat
@@ -1682,7 +1675,19 @@ function getNextWeekPlan(){
   const previewProfile = Object.assign({}, state.profile, {weeklyKm: Math.max(5, (state.profile.weeklyKm||0) * adj.factor)});
   const base = generatePlan(previewProfile, wn, nextStartIso);
   const overrides = state.nextWeekOverrides || {};
-  const plan = base.map(d => overrides[d.day] ? Object.assign({}, d, overrides[d.day], {custom:true}) : d);
+  // Un override de cancelar_sesion (cancelled:true) tiene que verse EXACTAMENTE como un día de
+  // descanso normal, igual que ya pasa en la semana actual (ver applyCancelSession) -- no como
+  // custom:true, que planLabel muestra distinto (usa d.type/d.desc en vez de derivarlo de
+  // typeKey) y que, al llegar el lunes y promoverse a semana actual (checkWeekRollover), quedaba
+  // marcado como "personalizado" en vez de "cancelado" -- una inconsistencia interna que no se
+  // notaba en pantalla (el texto guardado en el override ya decía "Descanso") pero sí importaba
+  // para cualquier lógica futura que mire d.cancelled en vez de d.custom.
+  const plan = base.map(d => {
+    const ov = overrides[d.day];
+    if(!ov) return d;
+    if(ov.cancelled) return Object.assign({}, d, ov, {custom:false, cancelled:true, typeKey:'rest', type:undefined, desc:undefined, interval:undefined});
+    return Object.assign({}, d, ov, {custom:true});
+  });
   return { plan, weekNumber: wn, weekStart: nextStartIso };
 }
 function buildWeeklyRecapMessage(weekPlan, weekStartIso){
@@ -1784,6 +1789,11 @@ function checkWeekRollover(){
     state.weekStart = promotedWeekStart;
     state.plan = promotedPlan || generatePlan(state.profile, state.weekNumber);
     state.nextWeekOverrides = {};
+    // Un snapshot de deshacer_cambio guardado en la semana anterior queda atado a esa semana
+    // (mismo array de 7 días, pero representando otras fechas) -- restaurarlo después de un
+    // cambio de semana pisaría el plan nuevo con el de la semana pasada. Se invalida acá para
+    // que "deshacer" nunca cruce un rollover semanal.
+    state.coachUndoSnapshot = null;
     if(recapMsg) state.chat.push({role:'coach', text: recapMsg, ts:Date.now()});
     if(breakMsg) state.chat.push({role:'coach', text: breakMsg, ts:Date.now()});
     if(adjustNote) state.chat.push({role:'coach', text: adjustNote, ts:Date.now()});
@@ -6978,19 +6988,25 @@ const TOOLS = [
 // día ya pasado, etc.) -- eso es intencional y no rompe nada: si la llamada no termina
 // modificando el estado, el snapshot queda simplemente igual al estado actual, y deshacer
 // ese "cambio" sería un no-op inofensivo.
+// Vive en state.coachUndoSnapshot (y por lo tanto se persiste igual que el resto del estado)
+// a propósito -- antes era una variable de módulo aparte, en memoria nomás, y si el corredor
+// cerraba la app (o se recargaba) entre que el coach aplicaba un cambio y el pedido de
+// deshacerlo, el snapshot se perdía y deshacer_cambio contestaba "no hay nada para deshacer"
+// aunque el cambio siguiera fresco. Guardarlo en `state` lo hace sobrevivir un cierre/reapertura,
+// igual que el resto de lo que el coach toca.
 function captureUndoSnapshot(){
-  coachUndoSnapshot = {
+  state.coachUndoSnapshot = {
     plan: JSON.parse(JSON.stringify(state.plan)),
     nextWeekOverrides: JSON.parse(JSON.stringify(state.nextWeekOverrides || {})),
     profile: JSON.parse(JSON.stringify(state.profile))
   };
 }
 function applyUndoLastChange(){
-  if(!coachUndoSnapshot) return 'No hay ningún cambio reciente para deshacer.';
-  state.plan = coachUndoSnapshot.plan;
-  state.nextWeekOverrides = coachUndoSnapshot.nextWeekOverrides;
-  state.profile = coachUndoSnapshot.profile;
-  coachUndoSnapshot = null; // un solo nivel: no se puede deshacer dos veces seguidas
+  if(!state.coachUndoSnapshot) return 'No hay ningún cambio reciente para deshacer.';
+  state.plan = state.coachUndoSnapshot.plan;
+  state.nextWeekOverrides = state.coachUndoSnapshot.nextWeekOverrides;
+  state.profile = state.coachUndoSnapshot.profile;
+  state.coachUndoSnapshot = null; // un solo nivel: no se puede deshacer dos veces seguidas
   renderAll(); renderZones(); persist();
   state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_undo_applied')), ts:Date.now()});
   return 'Listo, deshice el último cambio.';
@@ -7081,7 +7097,10 @@ function applyCancelSession(input){
   captureUndoSnapshot();
   if(input.semana === 'siguiente'){
     if(!state.nextWeekOverrides) state.nextWeekOverrides = {};
-    state.nextWeekOverrides[input.dia] = { type: t('type_rest'), desc: t('desc_rest'), dist:0, zone:null, terrain:null };
+    // cancelled:true acá (a diferencia de un override de modificar_sesion) es lo que le permite a
+    // getNextWeekPlan() distinguir "cancelé este día" de "personalicé este día" al armar el plan de
+    // la semana que viene -- ver el comentario en getNextWeekPlan más abajo.
+    state.nextWeekOverrides[input.dia] = { type: t('type_rest'), desc: t('desc_rest'), dist:0, zone:null, terrain:null, cancelled:true };
     renderPlan(); persist();
     state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+input.dia)), ts:Date.now()});
     return `OK, dejé ${input.dia} de la semana que viene sin sesión (descanso).`;
