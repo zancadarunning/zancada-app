@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T17:30:00Z';
+const APP_VERSION = '2026-09-08T18:15:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -31,6 +31,7 @@ const CHANGELOG = [
   {id:'2026-09-weekly-volume-fix', key:'changelog_weekly_volume_fix'},
   {id:'2026-09-preserve-cancelled-days', key:'changelog_preserve_cancelled_days'},
   {id:'2026-09-persist-race-fix', key:'changelog_persist_race_fix'},
+  {id:'2026-09-coach-schedule-undo', key:'changelog_coach_schedule_undo'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -402,6 +403,13 @@ function updateSyncBadge(){
   else { badge.style.display = 'none'; }
 }
 let loadedStateVersion = null;
+// Snapshot de un solo nivel para "deshacer último cambio del coach" (ver deshacer_cambio /
+// captureUndoSnapshot / applyUndoLastChange más abajo). Guarda una copia profunda de lo único
+// que las herramientas del coach pueden modificar (plan, overrides de la semana que viene y
+// perfil) justo ANTES de aplicar un cambio -- así deshacer es simplemente restaurar esa copia.
+// No es una pila: cada cambio nuevo pisa el snapshot anterior a propósito, porque solo se
+// puede volver un paso atrás.
+let coachUndoSnapshot = null;
 // persist() guarda SIEMPRE el objeto `state` completo (todo: plan, chat, perfil...) en un
 // solo upsert -- y se llama muchas veces seguidas en una sola interacción (por ejemplo, cada
 // herramienta que usa el coach en el chat llama a persist() por su cuenta, y al final sendChat
@@ -6851,6 +6859,7 @@ function paceMinPerKmOf(r){
 function buildContext(){
   const p = state.profile;
   let ctx = `Nombre: ${p.name}. Edad aprox: ${ageFromBirth(p.birth)}. Peso: ${p.weight}kg. Altura: ${p.height}cm. Corre ${p.weeklyKm}km/semana (calculado automáticamente según objetivo y fecha de carrera). Terreno: ${p.terrain}. Objetivo: ${t('ob_goal_'+p.goal)}. Zonas de FC (bpm): ${JSON.stringify(p.hrZones)}.`;
+  if(p.trainingDays && p.trainingDays.length) ctx += ` Días de entreno habituales (cronograma de base, permanente): ${p.trainingDays.map(d=>t('day_'+d)).join(', ')}. Si el corredor pide cambiar este cronograma de forma permanente (no solo esta semana), usá modificar_perfil con dias_entreno.`;
   if(p.raceDate){
     const weeksLeft = Math.round((new Date(p.raceDate) - new Date()) / (7*86400000));
     ctx += ` Fecha de la carrera objetivo: ${p.raceDate} (${weeksLeft>0?`faltan ${weeksLeft} semanas`:'ya pasó'}).`;
@@ -6939,13 +6948,14 @@ const TOOLS = [
   },
   {
     name:"modificar_perfil",
-    description:"Modifica datos personales del corredor que afectan cómo se generan sus PRÓXIMOS planes semanales: objetivo de entrenamiento, fecha de la carrera objetivo, terreno preferido o frecuencia cardíaca máxima. Los km semanales se recalculan solos según el objetivo y el tiempo hasta la carrera. Si el corredor está cambiando de objetivo (por ejemplo de 5K a 10K) y menciona cuántos km corre actualmente, pasalo en km_actuales para que el nuevo plan arranque desde su realidad real, no de una fórmula genérica — si cambia el objetivo y no te dice cuántos km corre, preguntáselo antes de aplicar el cambio. Usala para cambios permanentes o 'de ahora en adelante', no solo para esta semana.",
+    description:"Modifica datos personales del corredor que afectan cómo se generan sus PRÓXIMOS planes semanales: objetivo de entrenamiento, fecha de la carrera objetivo, terreno preferido, frecuencia cardíaca máxima o los días de la semana en que entrena. Los km semanales se recalculan solos según el objetivo y el tiempo hasta la carrera. Si el corredor está cambiando de objetivo (por ejemplo de 5K a 10K) y menciona cuántos km corre actualmente, pasalo en km_actuales para que el nuevo plan arranque desde su realidad real, no de una fórmula genérica — si cambia el objetivo y no te dice cuántos km corre, preguntáselo antes de aplicar el cambio. Usala para cambios permanentes o 'de ahora en adelante', no solo para esta semana. IMPORTANTE: si el corredor dice que quiere cambiar QUÉ DÍAS entrena de forma habitual (ej. 'de ahora en adelante entreno martes y jueves' o 'ya no puedo los lunes'), usá dias_entreno acá en vez de mover o cancelar sesiones sueltas con modificar_sesion/cancelar_sesion/mover_sesion — esas herramientas solo afectan un día puntual de una semana y no cambian el cronograma de base, así que la semana siguiente el corredor volvería a ver sesiones en los días viejos.",
     input_schema:{type:"object", properties:{
       objetivo:{type:"string", enum:["start","5k","10k","15k","21k","42k","ultra","lifestyle"]},
       fecha_carrera:{type:"string", description:"Fecha de la carrera objetivo en formato YYYY-MM-DD, si el corredor la menciona."},
       terreno:{type:"string", enum:["asfalto","trail","mixto"]},
       fc_maxima:{type:"number"},
-      km_actuales:{type:"number", description:"Km semanales que el corredor dice estar corriendo ahora mismo. Solo incluir si lo menciona explícitamente."}
+      km_actuales:{type:"number", description:"Km semanales que el corredor dice estar corriendo ahora mismo. Solo incluir si lo menciona explícitamente."},
+      dias_entreno:{type:"array", items:{type:"string", enum:DAY_KEYS}, description:"Nuevo cronograma FIJO y permanente de días de entreno del corredor, ej. ['tue','thu','sun']. Solo incluir cuando el corredor pide cambiar sus días habituales de entrenamiento de ahora en adelante, no para mover o cancelar una sesión de una sola semana."}
     }}
   },
   {
@@ -6954,9 +6964,39 @@ const TOOLS = [
     input_schema:{type:"object", properties:{
       nota:{type:"string", description:"El dato a recordar, resumido en una frase breve, en el idioma de la conversación."}
     }, required:["nota"]}
+  },
+  {
+    name:"deshacer_cambio",
+    description:"Deshace el ÚLTIMO cambio que aplicaste vos (con cualquiera de las otras herramientas) en esta conversación, dejando el plan y el perfil exactamente como estaban justo antes. Usala cuando el corredor te dice que te confundiste, que no era eso, o te pide explícitamente deshacer/revertir/volver atrás el último cambio. Solo se puede deshacer un paso -- si no hay ningún cambio reciente para deshacer, te va a avisar.",
+    input_schema:{type:"object", properties:{}}
   }
 ];
+// Snapshot de un solo nivel para deshacer_cambio: guarda plan + overrides de la semana que
+// viene + perfil justo antes de que una herramienta del coach los toque. Se llama al
+// principio de cada una de las 5 herramientas que pueden modificar el plan o el perfil,
+// incluso en llamadas que después terminan rechazadas por validación (día no encontrado,
+// día ya pasado, etc.) -- eso es intencional y no rompe nada: si la llamada no termina
+// modificando el estado, el snapshot queda simplemente igual al estado actual, y deshacer
+// ese "cambio" sería un no-op inofensivo.
+function captureUndoSnapshot(){
+  coachUndoSnapshot = {
+    plan: JSON.parse(JSON.stringify(state.plan)),
+    nextWeekOverrides: JSON.parse(JSON.stringify(state.nextWeekOverrides || {})),
+    profile: JSON.parse(JSON.stringify(state.profile))
+  };
+}
+function applyUndoLastChange(){
+  if(!coachUndoSnapshot) return 'No hay ningún cambio reciente para deshacer.';
+  state.plan = coachUndoSnapshot.plan;
+  state.nextWeekOverrides = coachUndoSnapshot.nextWeekOverrides;
+  state.profile = coachUndoSnapshot.profile;
+  coachUndoSnapshot = null; // un solo nivel: no se puede deshacer dos veces seguidas
+  renderAll(); renderZones(); persist();
+  state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_undo_applied')), ts:Date.now()});
+  return 'Listo, deshice el último cambio.';
+}
 function applyPlanChange(input){
+  captureUndoSnapshot();
   if(input.semana === 'siguiente'){
     // la semana que sigue no es un array persistido como state.plan, así que el cambio puntual
     // se guarda como "override" y se aplica encima de lo que genere getNextWeekPlan() cada vez
@@ -7011,6 +7051,7 @@ function applyMoveSession(input){
   // el modelo tenga que reescribir la descripción de memoria (eso es lo que hacía antes
   // modificar_sesion para estos casos, y por eso el día de destino terminaba con una
   // descripción distinta a la original y, a veces, sin terreno).
+  captureUndoSnapshot();
   if(input.semana === 'siguiente'){
     return 'Por ahora solo puedo mover una sesión ya planificada dentro de la semana ACTUAL. Para la semana que viene, usá modificar_sesion en cada día.';
   }
@@ -7037,6 +7078,7 @@ function applyCancelSession(input){
   // Sí queda marcado con d.cancelled (ver preserveLivedDays) para que una regeneración
   // posterior no lo "resucite" con una sesión nueva solo porque ese día sigue siendo,
   // en el perfil, un día de entreno normal -- el corredor lo canceló a propósito.
+  captureUndoSnapshot();
   if(input.semana === 'siguiente'){
     if(!state.nextWeekOverrides) state.nextWeekOverrides = {};
     state.nextWeekOverrides[input.dia] = { type: t('type_rest'), desc: t('desc_rest'), dist:0, zone:null, terrain:null };
@@ -7060,6 +7102,7 @@ function applyCancelSession(input){
 function applyVolumeAdjust(input){
   const pct = input.porcentaje;
   if(typeof pct !== 'number') return 'Falta el porcentaje.';
+  captureUndoSnapshot();
   const factor = 1 + (pct/100);
   if(input.semana === 'siguiente'){
     const nw = getNextWeekPlan();
@@ -7083,6 +7126,7 @@ function applyVolumeAdjust(input){
   return `OK, ajusté el volumen de esta semana ${pct>0?'+':''}${pct}%.`;
 }
 function applyProfileChange(input){
+  captureUndoSnapshot();
   const changes = [];
   let recalc = false;
   if(input.objetivo){ state.profile.goal = input.objetivo; changes.push('objetivo'); recalc = true; }
@@ -7090,6 +7134,18 @@ function applyProfileChange(input){
   if(input.terreno){ state.profile.terrain = input.terreno; changes.push('terreno'); }
   if(typeof input.fc_maxima==='number'){ state.profile.hrMax = input.fc_maxima; state.profile.hrKnown = true; state.profile.hrZones = computeZones(input.fc_maxima); changes.push('FC máxima'); }
   if(typeof input.km_actuales==='number'){ state.profile.currentWeeklyKm = input.km_actuales; state.profile.runnerType = 'active'; changes.push('km actuales'); recalc = true; }
+  if(Array.isArray(input.dias_entreno) && input.dias_entreno.length){
+    // Cronograma de base nuevo y permanente (no un cambio puntual de una sesión):
+    // por esto usamos recalc para forzar una regeneración completa del plan, igual
+    // que con objetivo/fecha de carrera. preserveLivedDays sigue protegiendo los
+    // días ya vividos y los personalizados/cancelados a propósito (d.custom/d.cancelled).
+    const validDays = DAY_KEYS.filter(d=>input.dias_entreno.includes(d));
+    if(validDays.length){
+      state.profile.trainingDays = validDays;
+      changes.push('días de entreno');
+      recalc = true;
+    }
+  }
   if(!changes.length) return 'No hubo cambios para aplicar.';
   if(recalc){
     state.profile.weeklyKm = calcWeeklyKm(state.profile);
@@ -7160,13 +7216,14 @@ Basá tus recomendaciones en principios reales de entrenamiento, no solo en lo q
 
 Ya tenés en el contexto el plan de la semana actual Y el de la semana que sigue (todavía no empezó, pero ya está calculado). Si te preguntan qué toca la semana que viene, respondé con esos datos directamente — nunca digas que todavía no está definida.
 
-Tenés seis herramientas para aplicar cambios reales en la app. Cuando el corredor pida un cambio, usá SIEMPRE la herramienta correspondiente en la misma respuesta — nunca digas que ya lo cambiaste sin haber llamado a la herramienta:
+Tenés estas herramientas para aplicar cambios reales en la app. Cuando el corredor pida un cambio, usá SIEMPRE la herramienta correspondiente en la misma respuesta — nunca digas que ya lo cambiaste sin haber llamado a la herramienta:
 - mover_sesion: cuando el pedido es literalmente MOVER/PASAR/CAMBIAR DE DÍA una sesión que ya está planificada, sin cambiar qué es (ej. "pasá el martes al miércoles", "corré lo de hoy para mañana"), dentro de la semana actual. Usala SIEMPRE que el pedido sea de este tipo, en vez de modificar_sesion + cancelar_sesion combinadas -- conserva el terreno, la zona y la descripción original tal cual, que es exactamente lo que se espera de un "cambio de día" (modificar_sesion te haría reescribir la descripción de memoria y perder el terreno si no lo repetís).
 - modificar_sesion: para cambiar UN día puntual por OTRA sesión DISTINTA de la que tenía (tipo, distancia, zona, terreno) -- no para mover la misma sesión de día, para eso está mover_sesion. Sirve para esta semana o la que sigue (parámetro semana). Si el corredor entrena por tiempo (fijate en el contexto) o te da la sesión directamente en minutos, usá duracion_min en vez de distancia_km.
 - cancelar_sesion: cuando el corredor cancela, saca o no puede hacer una sesión y NO la reemplaza por otra — deja ese día vacío, igual que un día sin entrenamiento. Nunca uses modificar_sesion para esto ni inventes una sesión suave o de zona 1 "de reemplazo": si el pedido es cancelar, el día tiene que quedar sin ningún ejercicio.
 - ajustar_volumen_semana: para pedidos generales de correr más o menos (ej. "quiero correr más km", "bajale un poco"), sin que especifiquen un día — de esta semana o de la que sigue (parámetro semana).
-- modificar_perfil: para cambios permanentes de datos personales que afectan los PRÓXIMOS planes (km semanales base, objetivo, terreno, FC máxima).
+- modificar_perfil: para cambios permanentes de datos personales que afectan los PRÓXIMOS planes (km semanales base, objetivo, terreno, FC máxima, o el cronograma fijo de días de entreno con dias_entreno). IMPORTANTE: si lo que cambia es QUÉ DÍAS entrena de forma habitual y permanente (ej. "de ahora en adelante entreno martes y jueves"), usá modificar_perfil con dias_entreno -- no mover_sesion/modificar_sesion/cancelar_sesion, que solo afectan una semana puntual y dejarían al corredor con el cronograma viejo la semana siguiente.
 - guardar_nota_coach: para guardar un dato permanente del corredor (una lesión o molestia, una preferencia, una restricción de horario, etc.) apenas lo mencione, aunque no implique cambiar el plan ahora mismo. El historial de la charla no es infinito, así que esto es lo único que te garantiza acordarte de algo importante más adelante.
+- deshacer_cambio: si el corredor dice que te confundiste, que no era eso, o pide deshacer/revertir el último cambio que hiciste, usá esta herramienta en vez de intentar adivinar manualmente cómo estaba antes -- restaura el plan y el perfil a como estaban justo antes de tu último cambio. Solo deshace UN cambio (el más reciente); si pide deshacer más de uno, avisale que solo podés volver un paso atrás.
 Si el pedido es ambiguo entre "esta semana" y "de ahora en adelante", aplicá el cambio a esta semana con ajustar_volumen_semana para que se note ya, y preguntá si también querés que sea la nueva base con modificar_perfil.
 
 Formato del texto: el chat solo interpreta **negrita** (usala con moderación, para resaltar un dato clave) y guiones "- " al inicio de línea para listas cortas. No uses encabezados (#), links, tablas ni bloques de código: no se muestran bien en el chat.
@@ -7176,6 +7233,7 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
   let finalText = '';
   let networkFailed = false;
   let cancelled = false;
+  let anyToolApplied = false;
   chatAbortController = new AbortController();
   try{
     // Mandamos el token de sesión igual que en los demás endpoints, para que
@@ -7195,6 +7253,7 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
       if(textPart) finalText += (finalText? '\n':'') + textPart;
       const toolUses = blocks.filter(b=>b.type==='tool_use');
       if(toolUses.length===0) break;
+      anyToolApplied = true;
       const toolResults = toolUses.map(tu=>{
         let result;
         if(tu.name==='modificar_sesion') result = applyPlanChange(tu.input);
@@ -7203,6 +7262,7 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
         else if(tu.name==='ajustar_volumen_semana') result = applyVolumeAdjust(tu.input);
         else if(tu.name==='modificar_perfil') result = applyProfileChange(tu.input);
         else if(tu.name==='guardar_nota_coach') result = applyCoachNote(tu.input);
+        else if(tu.name==='deshacer_cambio') result = applyUndoLastChange();
         else result = 'Herramienta no reconocida.';
         return {type:'tool_result', tool_use_id:tu.id, content: result};
       });
@@ -7233,6 +7293,11 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
     renderChat();
     return;
   }
+  // Si el loop de herramientas se agotó (4 vueltas, ver arriba) sin que el modelo
+  // llegara a mandar una respuesta final en texto plano, finalText puede quedar
+  // vacío aunque sí se hayan aplicado cambios reales -- antes eso se mostraba como
+  // un mensaje "..." confuso, como si el coach no hubiera hecho nada.
+  if(!finalText.trim() && anyToolApplied) finalText = t('coach_changes_applied_fallback');
   state.chat.push({role:'coach', text: finalText || '...', ts:Date.now()});
   restoreSendBtn();
   renderChat();

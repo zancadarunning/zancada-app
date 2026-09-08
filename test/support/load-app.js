@@ -120,6 +120,10 @@ function loadApp(opts) {
   sandbox.getComputedStyle = () => ({ getPropertyValue: () => '' });
   sandbox.requestAnimationFrame = (fn) => setTimeout(fn, 0);
   sandbox.cancelAnimationFrame = (id) => clearTimeout(id);
+  // performance.now(): ningún test anterior llamaba a renderHome() (siempre probaban
+  // funciones puras como generatePlan directamente), así que esta falta nunca se había
+  // notado -- animateCountUp() la usa para animar los números de la pantalla de Inicio.
+  sandbox.performance = { now: () => Date.now() };
   sandbox.URLSearchParams = URLSearchParams;
   sandbox.Intl = Intl;
   sandbox.Date = Date;
