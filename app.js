@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T14:35:00Z';
+const APP_VERSION = '2026-09-08T14:47:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -2695,27 +2695,40 @@ function renderPlan(){
     // como HTML, para no habilitar un XSS guardado en el plan.
     const lblType = d.custom ? escapeHtml(lbl.type) : lbl.type;
     const lblDesc = d.custom ? escapeHtml(lbl.desc) : lbl.desc;
-    let dateLbl = '';
+    let dateLbl = '', dayIso = null;
     if(wd.weekStart){
       const dt = new Date(wd.weekStart+'T00:00:00'); dt.setDate(dt.getDate()+i);
       dateLbl = `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}`;
+      dayIso = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
     }
     const isToday = wd.mode==='current' && i===todayIdx;
     const isPastDay = wd.mode==='current' && i<todayIdx;
     const canEdit = wd.editable && !isPastDay;
-    // Los chips de terreno/zona (y el de la carrera, si el día es raceDay) van
-    // agrupados al final de la fila, junto al ícono de estado -- no repetidos como
-    // subtítulo del tipo de sesión (un día de descanso ya dice "Descanso" en el
-    // título; no hace falta que lo repita una vez más como si fuera un chip).
+    // La carrera cargada en "Próximos eventos" ya no le saca la sesión de entrenamiento al
+    // día en el que cae (ver generatePlan) -- pero igual queremos que se VEA en el calendario
+    // del Plan, así que se marca acá con un chip aparte, comparando la fecha real de este día
+    // (dayIso) contra state.event.date en el momento del render. Al comparar por fecha (y no
+    // por un flag guardado en el día, como antes) no hay riesgo de que una carrera cargada más
+    // adelante le pise el cartel a un día de una semana ya vivida -- solo coincide si de verdad
+    // es la fecha de la carrera cargada ahora mismo.
+    const isEventDay = !!(state.event && dayIso && dayIso === state.event.date);
+    // Los chips de terreno/zona (y el de la carrera, si corresponde) van agrupados al final de
+    // la fila, junto al ícono de estado -- no repetidos como subtítulo del tipo de sesión (un
+    // día de descanso ya dice "Descanso" en el título; no hace falta repetirlo como chip).
     let meta = '';
     if(d.raceDay && d.raceEventName){
+      // Compatibilidad con planes ya generados antes de este cambio, donde ese día todavía
+      // quedó fijo en descanso con el flag raceDay -- se van regenerando solos con el tiempo.
       meta = `<span class="tag tag-mixto">${escapeHtml(d.raceEventName)}</span>`;
-    } else if(d.dist>0){
-      // d.dist>0 acá es a propósito, no solo d.terrain/d.zone: un día de
-      // descanso nunca debería mostrar cartel de terreno/zona, ni siquiera
-      // si por algún dato viejo esos campos quedaran seteados.
-      if(d.terrain) meta += `<span class="tag tag-${d.terrain}">${t('ob_terrain_'+d.terrain)}</span>`;
-      if(d.zone) meta += `<span class="zone-chip zone-${d.zone}">${t('zone_word')} ${d.zone}</span>`;
+    } else {
+      if(d.dist>0){
+        // d.dist>0 acá es a propósito, no solo d.terrain/d.zone: un día de
+        // descanso nunca debería mostrar cartel de terreno/zona, ni siquiera
+        // si por algún dato viejo esos campos quedaran seteados.
+        if(d.terrain) meta += `<span class="tag tag-${d.terrain}">${t('ob_terrain_'+d.terrain)}</span>`;
+        if(d.zone) meta += `<span class="zone-chip zone-${d.zone}">${t('zone_word')} ${d.zone}</span>`;
+      }
+      if(isEventDay) meta += `<span class="tag tag-mixto">${escapeHtml(state.event.name)}</span>`;
     }
     const isRestDay = !(d.dist>0) && !d.raceDay;
     const statusIcon = d.status==='done' ? `<div class="icon-sq" style="width:16px; height:16px; color:var(--hivis);">${ICONS.check}</div>` : d.status==='skipped' ? `<div class="icon-sq" style="width:16px; height:16px; color:var(--danger);">${ICONS.cross}</div>` : '';
