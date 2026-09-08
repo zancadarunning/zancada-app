@@ -678,16 +678,17 @@
   #history-list .swipe-item .hist-card{margin-bottom:0;}
   .swipe-action-delete{position:absolute; top:0; right:0; bottom:0; width:78px; background:var(--danger);
     color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer;}
-  /* #history-list: acá el fondo rojo NO pinta directo sobre el rectángulo del botón
-     (que sigue siendo el área completa, para no achicar el tap target) -- pinta en un
-     ::before, separado unos px de las esquinas redondeadas de la tarjeta de arriba.
-     Con las dos formas coincidiendo exactamente en la esquina, quedaba asomando un
-     hilito de rojo sin antialiasear ahí (bug clásico de recortes redondeados
-     superpuestos) -- separándolo unos píxeles, el rojo nunca llega a esa zona. */
-  #history-list .swipe-action-delete{background:none;}
-  #history-list .swipe-action-delete::before{content:''; position:absolute; top:4px; right:4px; bottom:4px; left:0;
-    background:var(--danger); border-radius:0 var(--radius-sm) var(--radius-sm) 0;}
-  #history-list .swipe-action-delete .icon-sq{position:relative;}
+  /* #history-list: antes el rojo se separaba unos px de las esquinas redondeadas de la
+     tarjeta a propósito, para evitar un hilito sin antialiasear donde las dos curvas
+     coincidían exactamente (bug clásico de recortes redondeados superpuestos) -- pero
+     eso dejaba ver el fondo oscuro de atrás en esa esquina, como si el recuadro rojo
+     fuera cuadrado. Ahora el rojo usa el MISMO radio que la tarjeta y además "sangra"
+     unos px de más por arriba/abajo/derecha -- el overflow:hidden del .swipe-item de
+     más arriba lo recorta a la curva exacta de la tarjeta, y como el rojo sobra en vez
+     de faltar, un eventual hilito sin antialiasear queda rojo sobre rojo (invisible) en
+     vez de rojo sobre fondo oscuro. */
+  #history-list .swipe-action-delete{top:-2px; right:-2px; bottom:-2px;
+    border-radius:0 calc(var(--radius) + 2px) calc(var(--radius) + 2px) 0;}
   .swipe-content{position:relative; touch-action:pan-y; will-change:transform; backface-visibility:hidden;}
   .swipe-content.swipe-anim{transition:transform .25s cubic-bezier(.22,1,.36,1);}
   .shoe-row{display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--asphalt-3);}
