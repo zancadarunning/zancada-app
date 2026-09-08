@@ -1109,13 +1109,17 @@
         <div style="min-width:0;">
           <h3 style="margin:0 0 6px;" data-i18n="home_race_card_title"></h3>
           <p style="margin:0; font-size:14.5px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" id="home-race-name">—</p>
-          <span class="tag" id="home-race-type-tag" style="margin-top:6px; display:inline-block;"></span>
+          <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
+            <span class="tag" id="home-race-type-tag" style="display:inline-block;"></span>
+            <span class="tag tag-mixto" id="home-race-phase-tag" style="display:none;"></span>
+          </div>
         </div>
         <div style="text-align:right; flex-shrink:0;">
           <div class="display" id="home-race-days" style="font-size:32px; color:var(--hivis); line-height:1;">0</div>
           <div class="muted" style="font-size:11px; margin-top:2px;" data-i18n="perfil_event_days"></div>
         </div>
       </div>
+      <p class="muted" id="home-race-phase-note" style="font-size:12.5px; margin:10px 0 0; display:none; line-height:1.4;"></p>
     </div>
 
     <div class="card">

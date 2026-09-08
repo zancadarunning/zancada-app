@@ -25,6 +25,7 @@ const CHANGELOG = [
   {id:'2026-09-weather', key:'changelog_weather'},
   {id:'2026-09-autopause', key:'changelog_autopause'},
   {id:'2026-09-reschedule-weather', key:'changelog_reschedule_weather'},
+  {id:'2026-09-race-phase', key:'changelog_race_phase'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -2393,6 +2394,20 @@ function renderHome(){
     const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
     const daysToRace = Math.round((new Date(state.event.date+'T00:00:00') - todayMidnight) / 86400000);
     document.getElementById('home-race-days').textContent = Math.max(0, daysToRace);
+    // Fase de entrenamiento respecto a esta carrera -- mismos cortes que usa taperMultiplier()
+    // (menos de 1 semana = puesta a punto final, menos de 3 semanas = puesta a punto ya en
+    // marcha, el resto = fase de carga normal) para que lo que se ve acá en Inicio sea
+    // siempre coherente con el volumen que el plan realmente le está aplicando esta semana.
+    const phaseTag = document.getElementById('home-race-phase-tag');
+    const phaseNote = document.getElementById('home-race-phase-note');
+    let phaseKey, noteKey;
+    if(daysToRace < 7){ phaseKey = 'home_race_phase_taper_final'; noteKey = 'home_race_phase_taper_final_note'; }
+    else if(daysToRace < 21){ phaseKey = 'home_race_phase_taper'; noteKey = 'home_race_phase_taper_note'; }
+    else { phaseKey = 'home_race_phase_build'; noteKey = null; }
+    phaseTag.textContent = t(phaseKey);
+    phaseTag.style.display = 'inline-block';
+    if(noteKey){ phaseNote.textContent = t(noteKey); phaseNote.style.display = 'block'; }
+    else { phaseNote.style.display = 'none'; }
   } else {
     raceCard.style.display = 'none';
   }
