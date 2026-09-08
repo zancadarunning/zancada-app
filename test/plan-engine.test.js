@@ -107,7 +107,12 @@ test('generatePlan: en semana de recuperación no sobrevive ninguna sesión pesa
   });
 });
 
-test('generatePlan: el día de una carrera cargada en Próximos eventos queda como descanso especial', () => {
+test('generatePlan: el día de una carrera cargada en Próximos eventos recibe una sesión normal (ya no queda como descanso especial)', () => {
+  // Antes, cargar una carrera en "Próximos eventos" le sacaba la sesión propia a ese día del
+  // plan (quedaba fijo en descanso, marcado raceDay:true). Eso sorprendía a corredores que
+  // cargaban ahí una carrera secundaria/de tanteo y veían "desaparecer" un entrenamiento de
+  // un día que todavía faltaba mucho -- ahora ese día recibe una sesión de entrenamiento
+  // normal, como cualquier otro día de la semana.
   const app = loadApp();
   const profile = baseProfile();
   app.state.profile = profile;
@@ -115,12 +120,15 @@ test('generatePlan: el día de una carrera cargada en Próximos eventos queda co
   app.state.event = { date: '2026-09-11', name: 'Carrera de prueba', type: 'ruta' }; // viernes de esa semana
   const plan = app.generatePlan(profile, 2, weekStartDate);
   const raceDayPlan = plan.find(d => d.day === 'fri');
-  assert.equal(raceDayPlan.typeKey, 'rest');
-  assert.equal(raceDayPlan.dist, 0);
-  assert.equal(raceDayPlan.raceDay, true);
+  assert.ok(!raceDayPlan.raceDay, 'el día de la carrera cargada ya no debería quedar marcado como raceDay');
+  assert.ok(raceDayPlan.dist > 0, 'el día de la carrera cargada debería tener una sesión de entrenamiento asignada, como cualquier otro día');
 });
 
-test('generatePlan: cerca de una carrera de trail, el rodaje largo se corre en ese terreno', () => {
+test('generatePlan: una carrera de trail cargada en Próximos eventos ya no cambia el terreno del rodaje largo', () => {
+  // El override de terreno por una carrera de "Próximos eventos" se sacó a pedido del
+  // usuario -- esa carrera es informativa nada más, no debería reprogramar nada del plan
+  // con semanas de anticipación. El rodaje largo sigue usando siempre el terreno habitual
+  // del corredor (profile.terrain).
   const app = loadApp();
   const profile = baseProfile({ terrain: 'asfalto' });
   app.state.profile = profile;
@@ -128,7 +136,38 @@ test('generatePlan: cerca de una carrera de trail, el rodaje largo se corre en e
   app.state.event = { date: '2026-09-27', name: 'Trail de prueba', type: 'trail' }; // ~3 semanas después
   const plan = app.generatePlan(profile, 2, weekStartDate);
   const longDay = plan.find(d => d.typeKey === 'long');
-  assert.equal(longDay.terrain, 'trail');
+  assert.equal(longDay.terrain, 'asfalto');
+});
+
+test('generatePlan: la semana en la que cae una carrera de Próximos eventos baja el volumen (descarga)', () => {
+  const app = loadApp();
+  const profile = baseProfile();
+  app.state.profile = profile;
+  const weekStartDate = '2026-09-07'; // lunes
+  app.state.event = { date: '2026-09-11', name: 'Carrera de prueba', type: 'ruta' }; // viernes de esa semana
+  const planConEvento = app.generatePlan(profile, 2, weekStartDate);
+  app.state.event = null;
+  const planSinEvento = app.generatePlan(profile, 2, weekStartDate);
+  const totalCon = planConEvento.reduce((a, d) => a + d.dist, 0);
+  const totalSin = planSinEvento.reduce((a, d) => a + d.dist, 0);
+  assert.ok(totalCon < totalSin, 'la semana de la carrera cargada debería tener menos volumen que la misma semana sin evento');
+});
+
+test('generatePlan: una carrera de Próximos eventos lejana (más de una semana) no le baja el volumen a la semana actual', () => {
+  // A diferencia del taper gradual de la carrera OBJETIVO del perfil (que empieza 3 semanas
+  // antes), una carrera cargada en "Próximos eventos" solo baja el volumen de SU PROPIA
+  // semana -- no debería tocar para nada semanas anteriores, por más cerca que estén.
+  const app = loadApp();
+  const profile = baseProfile();
+  app.state.profile = profile;
+  const weekStartDate = '2026-09-07'; // lunes
+  app.state.event = { date: '2026-09-20', name: 'Carrera de prueba', type: 'ruta' }; // domingo de la semana siguiente
+  const planConEvento = app.generatePlan(profile, 2, weekStartDate);
+  app.state.event = null;
+  const planSinEvento = app.generatePlan(profile, 2, weekStartDate);
+  const totalCon = planConEvento.reduce((a, d) => a + d.dist, 0);
+  const totalSin = planSinEvento.reduce((a, d) => a + d.dist, 0);
+  assert.equal(totalCon, totalSin, 'una carrera cargada para la semana siguiente no debería bajar el volumen de esta semana');
 });
 
 test('generatePlan: una meta semanal propia mueve el volumen pero dentro de un rango acotado', () => {
