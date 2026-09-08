@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T00:00:04Z';
+const APP_VERSION = '2026-09-08T00:19:40Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -2262,6 +2262,25 @@ async function fetchWeatherForecast(lat, lon){
     renderRunTodayCard();
   }
 }
+/* ================= WIDGET de pantalla de inicio (iOS/Android) =====================
+   Le pasa a un plugin nativo LOCAL (WidgetBridge -- no es un plugin de npm, vive
+   directo en el proyecto de Xcode/Android Studio, ver mobile/widget-setup/) un
+   resumen chiquito de la sesión de HOY, para que el widget de la pantalla de inicio
+   lo pueda mostrar sin depender del WebView (que el widget no tiene). En la web/PWA
+   el plugin no existe, así que esto no hace nada -- mismo patrón que haptic() y
+   handleAppleSignIn() para detectar plugins nativos sin romper la versión web. */
+function updateHomeWidget(day, lbl){
+  try{
+    const WidgetBridge = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.WidgetBridge;
+    if(!WidgetBridge) return;
+    WidgetBridge.save({
+      type: lbl.type,
+      amount: planAmountText(day),
+      zone: (day && day.dist>0 && day.zone) ? String(day.zone) : '',
+      dateISO: todayLocalISO()
+    });
+  }catch(e){}
+}
 function renderWeatherWarning(elId, day, alreadyDone){
   const el = document.getElementById(elId);
   if(!el) return;
@@ -2320,6 +2339,7 @@ function renderHome(){
   document.getElementById('home-next-desc').innerHTML = nextDescLines.map(line=>`<div class="next-session-bullet">${line}</div>`).join('');
   document.getElementById('home-next-dist').textContent = planAmountText(today);
   document.getElementById('home-next-zone').innerHTML = (today.dist>0 && today.zone) ? `<span class="zone-chip zone-${today.zone}">${t('zone_word')} ${today.zone}</span>` : '';
+  updateHomeWidget(today, lbl);
 
   // Si ya corrimos hoy, mostramos el resumen de esa sesión en lugar del cartel de
   // "próxima sesión" -- ver getTodayRun().
