@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T14:00:00Z';
+const APP_VERSION = '2026-09-08T14:35:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -26,6 +26,7 @@ const CHANGELOG = [
   {id:'2026-09-autopause', key:'changelog_autopause'},
   {id:'2026-09-reschedule-weather', key:'changelog_reschedule_weather'},
   {id:'2026-09-race-phase', key:'changelog_race_phase'},
+  {id:'2026-09-event-plan-decouple', key:'changelog_event_plan_decouple'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -1467,30 +1468,26 @@ function weekMultiplier(n, caution){
   return Math.min(mult, cap);
 }
 function taperMultiplier(p, weekStartDate){
-  // baja el volumen a propósito en las semanas justo antes de una carrera (puesta a punto / taper).
-  // Considera tanto la carrera objetivo del perfil (profile.raceDate) como cualquier carrera
-  // cargada en "Próximos eventos" (state.event) -- la que esté más cerca es la que manda.
-  if(!weekStartDate) return 1;
+  // baja el volumen a propósito en las semanas justo antes de la carrera OBJETIVO (la fecha
+  // cargada en Perfil > Metas) -- puesta a punto gradual en las últimas 3 semanas. A propósito
+  // YA NO considera la carrera cargada en "Próximos eventos": esa es informativa (nombre,
+  // cuenta regresiva, calendario, calculadora de ritmo) y por sí sola no debe reprogramar
+  // semanas de anticipación -- si el corredor carga ahí una carrera del mes que viene, no
+  // queremos que le reordene de golpe todo el plan de las próximas semanas. La semana puntual
+  // de esa carrera sí baja el volumen igual (ver isEventRaceWeek/eventRaceWeekMultiplier en
+  // generatePlan), y la semana siguiente entra en recuperación por su cuenta (isRecoveryWeek) --
+  // pero ninguna de esas dos cosas empieza semanas antes como sí hace este taper gradual.
+  if(!weekStartDate || !p || !p.raceDate) return 1;
   const start = new Date(weekStartDate+'T00:00:00');
-  if(isNaN(start.getTime())) return 1;
-  const candidateDates = [];
-  if(p && p.raceDate) candidateDates.push(p.raceDate);
-  if(state.event && state.event.date) candidateDates.push(state.event.date);
-  if(!candidateDates.length) return 1;
-  let mult = 1;
-  candidateDates.forEach(dateStr=>{
-    const raceDate = new Date(dateStr+'T00:00:00');
-    if(isNaN(raceDate.getTime())) return;
-    const daysToRace = Math.round((raceDate - start) / 86400000);
-    if(daysToRace < 0) return; // esa carrera ya pasó
-    const weeksToRace = daysToRace / 7;
-    let m = 1;
-    if(weeksToRace < 1) m = 0.55;
-    else if(weeksToRace < 2) m = 0.7;
-    else if(weeksToRace < 3) m = 0.85;
-    mult = Math.min(mult, m);
-  });
-  return mult;
+  const raceDate = new Date(p.raceDate+'T00:00:00');
+  if(isNaN(start.getTime()) || isNaN(raceDate.getTime())) return 1;
+  const daysToRace = Math.round((raceDate - start) / 86400000);
+  if(daysToRace < 0) return 1; // esa carrera ya pasó
+  const weeksToRace = daysToRace / 7;
+  if(weeksToRace < 1) return 0.55;
+  if(weeksToRace < 2) return 0.7;
+  if(weeksToRace < 3) return 0.85;
+  return 1;
 }
 function isRecoveryWeek(weekStartDate){
   // La semana de recuperación es la que arranca el lunes siguiente a una carrera cargada
@@ -1515,33 +1512,24 @@ function isRecoveryWeek(weekStartDate){
 function recoveryMultiplier(weekStartDate){
   return isRecoveryWeek(weekStartDate) ? 0.6 : 1;
 }
-function eventTerrainOverride(weekStartDate){
-  // El "Tipo" de carrera cargado en Próximos eventos (ruta/trail/obstáculos) no cambiaba
-  // nada del plan -- era un dato puramente decorativo (solo se mostraba como tag y se
-  // le pasaba de forma pasiva al chat). Ahora, en las semanas cercanas a esa carrera, el
-  // rodaje largo se practica en el terreno de la carrera (no en el terreno habitual del
-  // corredor), que es cuando más importa acostumbrarse a ese terreno específico.
-  if(!state.event || !state.event.date || !state.event.type || !weekStartDate) return null;
+function isEventRaceWeek(weekStartDate){
+  // La carrera cargada en "Próximos eventos" es informativa (nombre, cuenta regresiva,
+  // calendario, calculadora de ritmo) y a propósito YA NO reprograma el plan con semanas
+  // de anticipación (eso solo lo dispara la carrera OBJETIVO de Perfil > Metas, ver
+  // taperMultiplier) -- cargar acá una carrera del mes que viene no debería reordenarte
+  // de golpe todo el plan de las próximas semanas. Lo único que sí hace, puntualmente, es
+  // bajar el volumen la semana EXACTA en la que cae esa carrera (una semana de descarga
+  // más, igual que isCutbackWeek) para no llegar reventado a correrla -- y la semana
+  // siguiente entra en recuperación por su cuenta (ver isRecoveryWeek).
+  if(!state.event || !state.event.date || !weekStartDate) return false;
   const start = new Date(weekStartDate+'T00:00:00');
   const raceDate = new Date(state.event.date+'T00:00:00');
-  if(isNaN(start.getTime()) || isNaN(raceDate.getTime())) return null;
-  const weeksToRace = (raceDate - start) / (7*86400000);
-  if(weeksToRace < 0 || weeksToRace > 5) return null;
-  const map = {ruta:'asfalto', trail:'trail', obstaculos:'mixto'};
-  return map[state.event.type] || null;
+  if(isNaN(start.getTime()) || isNaN(raceDate.getTime())) return false;
+  const diffDays = Math.round((raceDate - start) / 86400000);
+  return diffDays >= 0 && diffDays <= 6;
 }
-function eventDayIndexInWeek(weekStartDate){
-  // en qué posición (0=lunes...6=domingo) de la semana que arranca en weekStartDate cae la
-  // fecha del evento cargado en "Próximos eventos", o -1 si esa semana no lo incluye
-  if(!state.event || !state.event.date || !weekStartDate) return -1;
-  const start = new Date(weekStartDate+'T00:00:00');
-  if(isNaN(start.getTime())) return -1;
-  for(let i=0;i<7;i++){
-    const d = new Date(start); d.setDate(d.getDate()+i);
-    const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    if(iso === state.event.date) return i;
-  }
-  return -1;
+function eventRaceWeekMultiplier(weekStartDate){
+  return isEventRaceWeek(weekStartDate) ? 0.75 : 1;
 }
 function autoSkipPastDays(){
   if(!state.onboarded || !state.weekStart) return;
@@ -1966,7 +1954,7 @@ function generatePlan(p, weekNumber, weekStartDate){
   weekStartDate = weekStartDate || state.weekStart;
   const caution = trainingCaution(p);
   const isRecovery = isRecoveryWeek(weekStartDate);
-  const mult = weekMultiplier(weekNumber, caution) * taperMultiplier(p, weekStartDate) * recoveryMultiplier(weekStartDate);
+  const mult = weekMultiplier(weekNumber, caution) * taperMultiplier(p, weekStartDate) * recoveryMultiplier(weekStartDate) * eventRaceWeekMultiplier(weekStartDate);
   const beginner = p.weeklyKm === 0 || p.goal === 'start' || p.runnerType === 'new';
   // si el corredor puso una meta semanal propia, la usamos como referencia de volumen en vez
   // del cálculo genérico -- pero acotada para no saltar de golpe a algo que podría lesionarlo
@@ -1991,17 +1979,15 @@ function generatePlan(p, weekNumber, weekStartDate){
     const heavyTypes = ['intervals','tempo','fartlek','hills','progression','long'];
     Object.keys(sessionMap).forEach(day=>{ if(heavyTypes.includes(sessionMap[day])) sessionMap[day] = 'easy'; });
   }
-  const raceDayIdx = eventDayIndexInWeek(weekStartDate);
-  const raceTerrain = eventTerrainOverride(weekStartDate);
-  return DAY_KEYS.map((day,i)=>{
-    if(i === raceDayIdx){
-      // el día de la carrera cargada en "Próximos eventos" no lleva sesión de entrenamiento propia
-      // -- ese día la carrera ES la sesión, no se le suma nada más encima
-      return {day, typeKey:'rest', dist:0, terrain:null, zone:null, beginner, raceDay:true};
-    }
+  // La carrera cargada en "Próximos eventos" ya NO le saca la sesión propia al día en el que
+  // cae (antes ese día quedaba fijo en descanso porque "la carrera era la sesión") -- ahora es
+  // un dato informativo nada más, así que ese día recibe una sesión de entrenamiento normal
+  // como cualquier otro (ver isEventRaceWeek/eventRaceWeekMultiplier más arriba para el único
+  // efecto real que sigue teniendo sobre el plan: bajar el volumen esa semana puntual).
+  return DAY_KEYS.map((day)=>{
     const typeKey = sessionMap[day];
     if(!typeKey) return {day, typeKey:'rest', dist:0, terrain:null, zone:null, beginner};
-    const terrain = typeKey==='intervals' ? 'asfalto' : (typeKey==='long' && raceTerrain) ? raceTerrain : p.terrain;
+    const terrain = typeKey==='intervals' ? 'asfalto' : p.terrain;
     const dayObj = {day, typeKey, dist:distMap[typeKey], terrain, zone:zoneMap[typeKey], beginner};
     if(typeKey==='intervals' && !beginner) dayObj.interval = buildIntervalStructure(distMap[typeKey], caution, weekNumber);
     if(typeKey==='hills' && !beginner) dayObj.interval = buildHillStructure(distMap[typeKey], caution);
@@ -2049,7 +2035,7 @@ function planAmountText(d){
   return isTimeMode() ? `${planDurationMin(d)} ${t('time_unit_min')}` : `${fmtDist(d.dist,1)} ${distUnit()}`;
 }
 function planLabel(d){
-  if(d.raceDay) return {type: t('plan_race_day_type'), desc: t('plan_race_day_desc', {name: escapeHtml(state.event ? state.event.name : '')})};
+  if(d.raceDay) return {type: t('plan_race_day_type'), desc: t('plan_race_day_desc', {name: escapeHtml(d.raceEventName || '')})};
   if(d.custom){
     // Una sesión "custom" es texto libre que el coach (IA) escribió a partir de un pedido
     // del usuario (modificar_sesion) -- pero sigue siendo una sesión de running como
@@ -2648,8 +2634,13 @@ function renderPlan(){
   document.getElementById('plan-prev-btn').disabled = !getWeekData(viewingWeekOffset-1).exists;
   document.getElementById('plan-next-btn').disabled = !(viewingWeekOffset < 12);
 
+  // Semana en la que cae la carrera cargada en "Próximos eventos" (si hay una) -- baja el
+  // volumen igual que una semana de descarga común, así que reusa la misma etiqueta visual
+  // (ver isEventRaceWeek/eventRaceWeekMultiplier), pero con su propio texto aclaratorio abajo
+  // para que quede claro que es por esa carrera puntual y no por el ciclo de descarga normal.
+  const isEventWeek = wd.exists && wd.mode!=='future' && wd.mode!=='past' && wd.weekStart && isEventRaceWeek(wd.weekStart);
   let label = t('plan_week_label',{n:wn});
-  if(wd.exists && isCutbackWeek(wn) && wd.mode!=='future') label += ` · <span class="tag tag-mixto">${t('plan_cutback')}</span>`;
+  if(wd.exists && (isCutbackWeek(wn) || isEventWeek) && wd.mode!=='future') label += ` · <span class="tag tag-mixto">${t('plan_cutback')}</span>`;
   if(wd.mode==='future') label += ` · <span class="tag tag-soon">${t('plan_estimate')}</span>`;
   if(wd.mode==='past') label += ` · <span class="tag tag-soon">${t('plan_past')}</span>`;
   const taperMult = (wd.exists && wd.mode!=='past' && wd.weekStart) ? taperMultiplier(state.profile, wd.weekStart) : 1;
@@ -2672,6 +2663,13 @@ function renderPlan(){
     taperNote.textContent = taperMult <= 0.55 ? t('plan_taper_note_final') : t('plan_taper_note_early');
   } else {
     taperNote.style.display='none';
+  }
+  const eventWeekNote = document.getElementById('plan-event-week-note');
+  if(isEventWeek && state.event){
+    eventWeekNote.style.display='block';
+    eventWeekNote.textContent = t('plan_event_week_note', {name: state.event.name});
+  } else {
+    eventWeekNote.style.display='none';
   }
   const recoveryNote = document.getElementById('plan-recovery-note');
   if(showRecoveryUi){
@@ -2710,8 +2708,8 @@ function renderPlan(){
     // subtítulo del tipo de sesión (un día de descanso ya dice "Descanso" en el
     // título; no hace falta que lo repita una vez más como si fuera un chip).
     let meta = '';
-    if(d.raceDay && state.event){
-      meta = `<span class="tag tag-mixto">${escapeHtml(state.event.name)}</span>`;
+    if(d.raceDay && d.raceEventName){
+      meta = `<span class="tag tag-mixto">${escapeHtml(d.raceEventName)}</span>`;
     } else if(d.dist>0){
       // d.dist>0 acá es a propósito, no solo d.terrain/d.zone: un día de
       // descanso nunca debería mostrar cartel de terreno/zona, ni siquiera
@@ -6777,7 +6775,7 @@ function buildContext(){
   if(activePains.length) ctx += ` Molestias activas registradas por el corredor: ${activePains.map(pa=>`${t('pain_body_'+pa.bodyPart)} (desde ${pa.date}${pa.note?', nota: "'+pa.note+'"':''})`).join('; ')}. Tenelas en cuenta al sugerir ejercicios y preguntá cómo siguen si corresponde.`;
   const todayReadiness = todayReadinessEntry();
   if(todayReadiness) ctx += ` Check-in de hoy sobre cómo durmió/energía: ${todayReadiness.quality}.`;
-  if(state.event) ctx += ` Evento objetivo: ${state.event.name} (${state.event.type}) el ${state.event.date}.`;
+  if(state.event) ctx += ` Carrera cargada en "Próximos eventos" (informativa, no es necesariamente la carrera objetivo del perfil): ${state.event.name} (${state.event.type}) el ${state.event.date}.`;
   if(state.runs.length){
     // En vez de solo la última carrera, le damos al coach una tendencia real: las
     // últimas corridas con ritmo y cuánto volumen acumulado hay en las últimas semanas.
@@ -7073,7 +7071,7 @@ Basá tus recomendaciones en principios reales de entrenamiento, no solo en lo q
 - La mayoría del volumen semanal (cerca del 80%) debería correrse suave, en zona 1-2 — reservar las sesiones fuertes (series, ritmo, fartlek) para el resto. Es el error más común de corredores amateur: correr todo "medio fuerte" y no progresar.
 - El volumen semanal no debería subir más de ~10% de una semana a la siguiente, con una semana de descarga cada 3-4 semanas.
 - El entrenamiento es específico al objetivo: para 5k/10k pesa más la velocidad, para 21k/42k pesan más el volumen y la tirada larga.
-- Antes de una carrera importante, el volumen baja gradualmente en las últimas semanas (tapering) sin perder del todo la intensidad. Esto ya se aplica automáticamente tanto para la fecha de carrera del perfil como para cualquier carrera cargada en "Próximos eventos" (la tenés en el contexto), y en la semana exacta de esa carrera el día de la carrera ya no lleva sesión propia en el plan (aparece como "Carrera"). Si te preguntan por qué bajó el volumen o por qué ese día no tiene entrenamiento, podés explicarlo así.
+- Antes de la carrera OBJETIVO del corredor (la fecha de carrera cargada en Perfil > Metas), el volumen baja gradualmente en las últimas tres semanas (tapering) sin perder del todo la intensidad. Esto se aplica SOLO a esa fecha objetivo del perfil, nunca a una carrera cargada en "Próximos eventos" (la tenés en el contexto si hay una) -- esa es informativa nomás (nombre, cuenta regresiva, calendario) y no reprograma nada con semanas de anticipación. Lo único que sí hace una carrera de "Próximos eventos" es bajar el volumen la semana puntual en la que cae (como una semana de descarga más) y activar una semana de recuperación la semana siguiente -- pero recién esa semana, nunca antes. El día exacto de esa carrera SÍ recibe una sesión de entrenamiento normal en el plan, como cualquier otro día. Si te preguntan por qué bajó el volumen en alguna de estas semanas, podés explicarlo así.
 - La edad y la contextura física del corredor importan: el plan base ya modera solo la cantidad de sesiones fuertes por semana y la velocidad de progresión según esto (más conservador para corredores mayores o con más masa corporal). Si te preguntan por qué su plan tiene menos series que el de otra persona, o por qué sube el volumen despacio, podés explicarlo así — no lo trates como si fuera un plan genérico igual para cualquiera.
 - Cuando hagas un cambio, explicá brevemente el porqué si ayuda a que el corredor entienda el criterio, no solo el qué.
 
