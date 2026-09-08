@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T02:15:00Z';
+const APP_VERSION = '2026-09-08T03:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -526,6 +526,14 @@ async function loadUserAndEnter(user, isRetry){
     else { await supabaseClient.auth.signOut(); location.reload(); }
   }
 }
+function isPasswordStrong(pw){
+  // Requisito mínimo para cualquier contraseña nueva (alta de cuenta o "olvidé mi
+  // contraseña"): 8 caracteres, al menos una mayúscula, una minúscula y un número. Esto
+  // se valida acá en el cliente ANTES de mandarla a Supabase -- Supabase solo exige un
+  // mínimo de caracteres, no complejidad, así que sin este chequeo una contraseña como
+  // "12345678" pasaría sin problema.
+  return typeof pw === 'string' && pw.length >= 8 && /[A-Z]/.test(pw) && /[a-z]/.test(pw) && /[0-9]/.test(pw);
+}
 function translateAuthError(error){
   const msg = (error && error.message) || '';
   if(msg.includes('Invalid login')) return t('login_err_wrong_password');
@@ -712,7 +720,7 @@ async function handleSignUp(){
   const err = document.getElementById('signup-err');
   err.style.display='none';
   if(!email || !email.includes('@')){ err.textContent = t('login_err'); err.style.display='block'; return; }
-  if(!password || password.length < 6){ err.textContent = t('login_err_password'); err.style.display='block'; return; }
+  if(!password || !isPasswordStrong(password)){ err.textContent = t('login_err_password_weak'); err.style.display='block'; return; }
   setBtnBusy('signup-submit-btn', true, t('signup_loading'));
   try{
     const { data, error } = await supabaseClient.auth.signUp({ email, password });
@@ -821,7 +829,7 @@ async function submitNewPassword(){
   const newPw = document.getElementById('recovery-new-pw').value;
   const err = document.getElementById('recovery-new-pw-err');
   err.style.display='none';
-  if(!newPw || newPw.length < 6){ err.textContent = t('login_err_password'); err.style.display='block'; return; }
+  if(!newPw || !isPasswordStrong(newPw)){ err.textContent = t('login_err_password_weak'); err.style.display='block'; return; }
   setBtnBusy('recovery-submit-btn', true, t('login_loading'));
   try{
     const { error } = await supabaseClient.auth.updateUser({ password: newPw });

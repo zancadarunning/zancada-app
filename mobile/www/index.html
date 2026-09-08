@@ -956,9 +956,10 @@ try{
     <div class="field">
       <label data-i18n="login_password_label"></label>
       <div class="pw-wrap">
-        <input type="password" id="signup-password" autocomplete="new-password" data-i18n-ph="login_password_ph" onkeydown="if(event.key==='Enter') handleSignUp();">
+        <input type="password" id="signup-password" autocomplete="new-password" minlength="8" data-i18n-ph="login_password_ph" onkeydown="if(event.key==='Enter') handleSignUp();">
         <button type="button" class="pw-toggle" onclick="togglePasswordVisibility('signup-password', this)" data-i18n-aria="aria_show_password"><span class="icon-sq" style="width:18px; height:18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span></button>
       </div>
+      <p class="muted" style="margin:6px 0 0; font-size:11.5px;" data-i18n="password_requirements_hint"></p>
       <p class="err-text" id="signup-err"></p>
     </div>
     <div class="field"><button class="btn btn-primary" id="signup-submit-btn" data-i18n="login_create_account" onclick="handleSignUp()"></button></div>
@@ -994,9 +995,10 @@ try{
     <div class="field">
       <label data-i18n="login_new_password_label"></label>
       <div class="pw-wrap">
-        <input type="password" id="recovery-new-pw" autocomplete="new-password" data-i18n-ph="login_password_ph" onkeydown="if(event.key==='Enter') submitNewPassword();">
+        <input type="password" id="recovery-new-pw" autocomplete="new-password" minlength="8" data-i18n-ph="login_password_ph" onkeydown="if(event.key==='Enter') submitNewPassword();">
         <button type="button" class="pw-toggle" onclick="togglePasswordVisibility('recovery-new-pw', this)" data-i18n-aria="aria_show_password"><span class="icon-sq" style="width:18px; height:18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span></button>
       </div>
+      <p class="muted" style="margin:6px 0 0; font-size:11.5px;" data-i18n="password_requirements_hint"></p>
       <p class="err-text" id="recovery-new-pw-err"></p>
     </div>
     <div class="field"><button class="btn btn-primary" id="recovery-submit-btn" data-i18n="login_recovery_submit" onclick="submitNewPassword()"></button></div>
