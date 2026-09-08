@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T15:50:00Z';
+const APP_VERSION = '2026-09-08T16:10:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -6932,8 +6932,6 @@ function applyPlanChange(input){
     // la semana que sigue no es un array persistido como state.plan, así que el cambio puntual
     // se guarda como "override" y se aplica encima de lo que genere getNextWeekPlan() cada vez
     // (que sigue reaccionando a cómo termine esta semana) hasta que se promueva a semana actual
-    const nextDay = getNextWeekPlan().plan.find(x=>x.day===input.dia);
-    if(nextDay && nextDay.raceDay) return `${input.dia} de la semana que viene es el día de tu carrera (cargada en Próximos Eventos) -- no le puedo asignar otra sesión encima.`;
     if(!state.nextWeekOverrides) state.nextWeekOverrides = {};
     const override = { type: input.tipo, desc: input.descripcion };
     let effectiveDistKm = typeof input.distancia_km==='number' ? input.distancia_km : null;
@@ -6955,11 +6953,6 @@ function applyPlanChange(input){
   // entrenamiento distinto de forma retroactiva. Se lo explicamos al modelo para
   // que se lo cuente al corredor en vez de aplicar el cambio silenciosamente.
   if(isDayLocked(input.dia)) return `No puedo modificar ${input.dia}: ya pasó (o ya se corrió/salteó) esta semana. Puedo ajustar desde hoy en adelante, o la semana que viene.`;
-  // Ese día es el día de la carrera cargada en Próximos Eventos -- no le pisamos
-  // encima otra sesión (el usuario pidió explícitamente que la carrera se siga
-  // viendo siempre como el "ejercicio" de ese día, pase lo que pase con el resto
-  // del plan). Para cambiar la carrera en sí hay que editarla en Perfil.
-  if(d.raceDay) return `${input.dia} es el día de tu carrera (cargada en Próximos Eventos) -- no le puedo asignar otra sesión encima. Si querés cambiar la carrera, se edita desde Perfil.`;
   d.custom = true;
   d.type = input.tipo; d.desc = input.descripcion;
   if(typeof input.distancia_km==='number'){
@@ -6999,7 +6992,6 @@ function applyMoveSession(input){
   if(!origDay || !destDay) return 'Día no encontrado.';
   if(isDayLocked(input.dia_origen)) return `No puedo mover ${input.dia_origen}: ya pasó (o ya se corrió/salteó) esta semana.`;
   if(isDayLocked(input.dia_destino)) return `No puedo mover la sesión a ${input.dia_destino}: ese día ya pasó (o ya se corrió/salteó) esta semana.`;
-  if(origDay.raceDay || destDay.raceDay) return 'No puedo mover una sesión hacia o desde el día de tu carrera cargada en Próximos Eventos.';
   swapPlanDaySessions(origDay, destDay);
   renderPlan(); renderHome(); renderRunTodayCard(); persist();
   state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+input.dia_origen)+' → '+t('day_'+input.dia_destino)), ts:Date.now()});
@@ -7013,8 +7005,6 @@ function applyCancelSession(input){
   // inventado en vez de quedar vacío. Esta herramienta deja el día realmente vacío,
   // igual que cualquier otro día sin sesión asignada (typeKey:'rest', sin custom).
   if(input.semana === 'siguiente'){
-    const nextDay = getNextWeekPlan().plan.find(x=>x.day===input.dia);
-    if(nextDay && nextDay.raceDay) return `${input.dia} de la semana que viene es el día de tu carrera (cargada en Próximos Eventos) -- no lo puedo dejar sin sesión.`;
     if(!state.nextWeekOverrides) state.nextWeekOverrides = {};
     state.nextWeekOverrides[input.dia] = { type: t('type_rest'), desc: t('desc_rest'), dist:0, zone:null, terrain:null };
     renderPlan(); persist();
@@ -7024,7 +7014,6 @@ function applyCancelSession(input){
   const d = state.plan.find(x=>x.day===input.dia);
   if(!d) return "Día no encontrado.";
   if(isDayLocked(input.dia)) return `No puedo modificar ${input.dia}: ya pasó (o ya se corrió/salteó) esta semana. Puedo dejarlo sin sesión desde hoy en adelante, o la semana que viene.`;
-  if(d.raceDay) return `${input.dia} es el día de tu carrera (cargada en Próximos Eventos) -- no lo puedo dejar sin sesión. Si querés cambiar la carrera, se edita desde Perfil.`;
   d.custom = false;
   d.typeKey = 'rest';
   d.type = undefined; d.desc = undefined;
