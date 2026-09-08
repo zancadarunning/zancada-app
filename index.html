@@ -405,10 +405,13 @@ try{
   .tag-load-caution{background:var(--clay-dim); color:var(--clay);}
   .tag-load-risk{background:var(--danger-dim); color:var(--danger);}
 
-  .weather-chip{align-items:center; gap:8px; font-size:12.5px; font-weight:600; line-height:1.35; padding:9px 12px; border-radius:var(--radius-sm);}
+  .weather-chip{flex-direction:column; align-items:flex-start; gap:6px; font-size:12.5px; font-weight:600; line-height:1.35; padding:9px 12px; border-radius:var(--radius-sm);}
   .weather-chip.weather-rain, .weather-chip.weather-cold{background:var(--zone1-bg); color:var(--zone1);}
   .weather-chip.weather-storm{background:var(--danger-dim); color:var(--danger);}
   .weather-chip.weather-heat{background:var(--clay-dim); color:var(--clay);}
+  .weather-chip-row{display:flex; align-items:center; gap:8px; width:100%;}
+  .weather-chip-action{background:none; border:none; padding:0; margin:0; font:inherit; font-weight:800; text-decoration:underline; color:inherit; cursor:pointer; align-self:flex-start;}
+  .weather-chip-action:active{opacity:.6;}
 
   .zone-chip{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; padding:5px 10px; border-radius:999px;}
   .zone-1{background:var(--zone1-bg); color:var(--zone1);}
@@ -1679,6 +1682,13 @@ try{
       <button class="btn btn-primary" style="padding:18px; font-size:16px;" onclick="resolvePlanChangeTiming('now')" data-i18n="plan_timing_now"></button>
       <button class="btn btn-outline" style="padding:18px; font-size:16px;" onclick="resolvePlanChangeTiming('nextWeek')" data-i18n="plan_timing_next_week"></button>
     </div>
+  </div>
+
+  <div class="overlay" id="reschedule-modal" style="display:none; z-index:58;">
+    <h2 class="display" style="font-size:22px;" data-i18n="reschedule_modal_title"></h2>
+    <p class="lead" data-i18n="reschedule_modal_subtitle"></p>
+    <div id="reschedule-day-list" style="margin-top:18px; display:flex; flex-direction:column; gap:10px;"></div>
+    <button class="btn btn-outline" style="width:100%; margin-top:20px;" onclick="closeRescheduleModal()" data-i18n="cancel_word"></button>
   </div>
 
   <div class="overlay" id="calendar-modal" style="display:none; z-index:60;">
