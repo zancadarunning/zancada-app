@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T03:20:00Z';
+const APP_VERSION = '2026-09-08T04:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -24,6 +24,7 @@ const CHANGELOG = [
   {id:'2026-09-trainby', key:'changelog_trainby'},
   {id:'2026-09-weather', key:'changelog_weather'},
   {id:'2026-09-autopause', key:'changelog_autopause'},
+  {id:'2026-09-reschedule-weather', key:'changelog_reschedule_weather'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -2328,7 +2329,55 @@ function renderWeatherWarning(elId, day, alreadyDone){
   if(!cached.level){ el.style.display = 'none'; return; }
   el.className = 'weather-chip weather-'+cached.level;
   el.style.display = 'flex';
-  el.innerHTML = `<span class="icon-sq" style="width:15px; height:15px; flex-shrink:0;">${ICONS.warn}</span><span>${t('weather_'+cached.level+'_warning', cached.vars)}</span>`;
+  el.innerHTML = `<div class="weather-chip-row"><span class="icon-sq" style="width:15px; height:15px; flex-shrink:0;">${ICONS.warn}</span><span>${t('weather_'+cached.level+'_warning', cached.vars)}</span></div><button class="weather-chip-action" onclick="openRescheduleModal()">${t('weather_reschedule_btn')}</button>`;
+}
+/* ---- Reprogramar la sesión de hoy por mal clima ----
+   Botón directo en el aviso de clima (renderWeatherWarning) para mover la sesión de HOY a
+   otro día LIBRE de la misma semana, sin tener que ir manualmente a la pestaña Plan. Un
+   "día libre" es un día de descanso (typeKey==='rest', sin distancia) que todavía no pasó
+   ni está bloqueado (ver isDayLocked) y que no es el día de una carrera cargada
+   (raceDay) -- ahí no tiene sentido meterle un entrenamiento encima. Si no hay ningún día
+   así en lo que queda de la semana, el modal lo dice en vez de mostrar una lista vacía.
+*/
+function getReschedulableDays(){
+  const todayIdx = (new Date().getDay()+6)%7;
+  const options = [];
+  for(let i=todayIdx+1; i<7; i++){
+    const d = state.plan[i];
+    if(d && d.typeKey==='rest' && !d.raceDay && !isDayLocked(d.day)) options.push(d.day);
+  }
+  return options;
+}
+function openRescheduleModal(){
+  const listEl = document.getElementById('reschedule-day-list');
+  const options = getReschedulableDays();
+  listEl.innerHTML = options.length ? options.map(dayKey=>
+    `<button class="btn btn-outline" style="width:100%;" onclick="rescheduleToday('${dayKey}')">${t('day_'+dayKey)}</button>`
+  ).join('') : `<p class="muted" style="margin:0;">${t('reschedule_no_days')}</p>`;
+  document.getElementById('reschedule-modal').style.display = 'block';
+}
+function closeRescheduleModal(){ document.getElementById('reschedule-modal').style.display = 'none'; }
+function rescheduleToday(targetDayKey){
+  const todayIdx = (new Date().getDay()+6)%7;
+  const targetIdx = DAY_KEYS.indexOf(targetDayKey);
+  if(targetIdx===-1 || targetIdx===todayIdx) return;
+  const todayPlan = state.plan[todayIdx];
+  const targetPlan = state.plan[targetIdx];
+  if(!todayPlan || !targetPlan) return;
+  // Se intercambia el CONTENIDO de la sesión (tipo, distancia, terreno, zona, estructura de
+  // series) entre los dos días -- cada objeto conserva su propio "day" (la clave del día de
+  // la semana no se mueve, lo que se mueve es qué entrenamiento le toca a cada uno).
+  const fields = ['typeKey','dist','terrain','zone','interval'];
+  const todaySession = {};
+  fields.forEach(f=>{ todaySession[f] = todayPlan[f]; });
+  fields.forEach(f=>{ if(targetPlan[f]===undefined) delete todayPlan[f]; else todayPlan[f] = targetPlan[f]; });
+  fields.forEach(f=>{ if(todaySession[f]===undefined) delete targetPlan[f]; else targetPlan[f] = todaySession[f]; });
+  closeRescheduleModal();
+  persist();
+  renderPlan();
+  renderHome();
+  renderRunTodayCard();
+  showToast(t('reschedule_success', {day: t('day_'+targetDayKey)}), 'success');
 }
 function renderHome(){
   renderDailyTip();
