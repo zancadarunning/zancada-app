@@ -2,6 +2,9 @@
   "name": "zancada-app",
   "version": "1.0.0",
   "private": true,
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
   "dependencies": {
     "web-push": "^3.6.7",
     "ffmpeg-static": "^5.2.0"
