@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T17:00:00Z';
+const APP_VERSION = '2026-09-08T17:30:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -30,6 +30,7 @@ const CHANGELOG = [
   {id:'2026-09-preserve-custom-days', key:'changelog_preserve_custom_days'},
   {id:'2026-09-weekly-volume-fix', key:'changelog_weekly_volume_fix'},
   {id:'2026-09-preserve-cancelled-days', key:'changelog_preserve_cancelled_days'},
+  {id:'2026-09-persist-race-fix', key:'changelog_persist_race_fix'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -401,8 +402,25 @@ function updateSyncBadge(){
   else { badge.style.display = 'none'; }
 }
 let loadedStateVersion = null;
+// persist() guarda SIEMPRE el objeto `state` completo (todo: plan, chat, perfil...) en un
+// solo upsert -- y se llama muchas veces seguidas en una sola interacción (por ejemplo, cada
+// herramienta que usa el coach en el chat llama a persist() por su cuenta, y al final sendChat
+// llama a persist() de nuevo con la respuesta ya agregada al historial). Sin coordinación, esas
+// llamadas viajan como pedidos de red INDEPENDIENTES y pueden llegar a Supabase en cualquier
+// orden -- si la primera (con menos datos: por ejemplo, sin el mensaje final del coach) tarda
+// más que la segunda y la "pisa" al llegar después, el resultado guardado termina siendo una
+// versión más vieja que la que el corredor vio en pantalla. Reportado por el usuario: le pidió
+// un cambio al coach, cerró la app sin querer apenas se aplicó el cambio, y al reabrirla el
+// cambio de plan estaba pero el mensaje del chat (el suyo y el del coach) habían desaparecido.
+// Un solo guardado "en vuelo" por vez, con a lo sumo un guardado más encolado (que siempre
+// termina mandando el `state` más actual al momento de salir, no una copia vieja), evita esa
+// carrera: nunca hay dos pedidos de red compitiendo por llegar último.
+let persistInFlight = false;
+let persistQueued = false;
 async function persist(){
   if(!currentUserId) return;
+  if(persistInFlight){ persistQueued = true; return; }
+  persistInFlight = true;
   try{
     const nowIso = new Date().toISOString();
     await supabaseClient.from('app_state').upsert({ user_id: currentUserId, data: state, updated_at: nowIso });
@@ -413,6 +431,8 @@ async function persist(){
     savePendingBackup(); // sin conexión: lo guardamos en el teléfono y reintentamos más tarde
   }
   updateSyncBadge();
+  persistInFlight = false;
+  if(persistQueued){ persistQueued = false; persist(); } // había un pedido más pendiente -- lo mandamos ahora con el `state` más actual
 }
 /* ---- aviso de conflicto entre dispositivos -----
    Antes, el "último que guarda gana" a ciegas: si abrís la app en el celu y la tablet

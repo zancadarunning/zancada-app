@@ -94,7 +94,8 @@ function makeFakeDocument() {
 // contexto -- desde un test se accede a las funciones globales de app.js
 // como propiedades de lo que devuelve esta función (ej. `app.generatePlan`,
 // `app.state`, `app.t`).
-function loadApp() {
+function loadApp(opts) {
+  opts = opts || {};
   const sandbox = {};
   sandbox.window = sandbox; // en un navegador, window ES el global -- acá lo imitamos
   sandbox.globalThis = sandbox;
@@ -124,10 +125,14 @@ function loadApp() {
   sandbox.Date = Date;
 
   // Cliente de Supabase de mentira: alcanza con que exista y no explote --
-  // ningún test de lógica pura llama de verdad a estos métodos.
+  // la mayoría de los tests de lógica pura ni llaman a estos métodos. Los que sí
+  // (persist(), para probar que los guardados no se pisan entre sí -- ver
+  // plan-engine.test.js) pueden pasar opts.onUpsert para controlar cuándo
+  // "responde" cada upsert y así simular guardados que llegan en otro orden.
   const chain = () => {
     const q = {
-      select(){ return q; }, eq(){ return q; }, upsert(){ return Promise.resolve({ data: null, error: null }); },
+      select(){ return q; }, eq(){ return q; },
+      upsert(payload){ return opts.onUpsert ? opts.onUpsert(payload) : Promise.resolve({ data: null, error: null }); },
       maybeSingle(){ return Promise.resolve({ data: null, error: null }); }, delete(){ return q; },
       order(){ return q; }, limit(){ return q; }, then(resolve){ resolve({ data: null, error: null }); },
     };
@@ -164,8 +169,13 @@ function loadApp() {
   // app.js, puede "ver" esas variables y copiarlas a mano al sandbox para
   // que los tests las puedan leer y modificar (ej. `app.state.profile = ...`
   // antes de llamar a generatePlan).
+  // setCurrentUserId es solo para tests que necesitan que persist() haga algo (por
+  // default currentUserId es null y persist() no llama a Supabase para nada) -- currentUserId
+  // es un `let` de nivel superior, así que (a diferencia de `state`, un objeto) no alcanza con
+  // reasignar una propiedad desde afuera: hace falta esta función, evaluada en el mismo scope
+  // léxico que el resto de app.js, para poder tocar esa variable de verdad.
   vm.runInContext(
-    'this.__exposed = { state, DAY_KEYS, lang };',
+    'this.__exposed = { state, DAY_KEYS, lang, setCurrentUserId(v){ currentUserId = v; } };',
     sandbox,
     { filename: 'expose-internals.js' }
   );
