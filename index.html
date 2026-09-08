@@ -569,6 +569,16 @@ try{
   .go-circle:active{transform:scale(.96); box-shadow:0 8px 24px var(--hivis-glow);}
   #runActive,#runSummary{display:none;}
   .rec-dot{width:9px; height:9px; border-radius:50%; background:var(--danger); animation:blink 1.4s ease-in-out infinite; display:inline-block; margin-right:7px;}
+
+  /* Micro-festejo (confetti): PR nuevo o meta semanal cumplida -- ver celebrate() en
+     app.js. Los <span> se crean y se destruyen solos por JS; acá solo va la animación. */
+  .confetti-layer{position:fixed; inset:0; pointer-events:none; z-index:9999; overflow:hidden;}
+  .confetti-piece{position:absolute; top:-12px; border-radius:2px; opacity:0; animation-name:confettiFall; animation-timing-function:cubic-bezier(.35,0,.65,1); animation-fill-mode:forwards;}
+  @keyframes confettiFall{
+    0%{opacity:1; transform:translateY(0) rotate(0deg);}
+    100%{opacity:0; transform:translateY(100vh) rotate(720deg);}
+  }
+  @media (prefers-reduced-motion:reduce){ .confetti-piece{display:none;} }
   .timer-big{font-size:48px; text-align:center; margin:10px 0 14px;}
   .map-wrap{position:relative; isolation:isolate; height:260px; border-radius:var(--radius); overflow:hidden; margin-bottom:14px; border:1px solid var(--asphalt-4);
     background:linear-gradient(90deg, var(--asphalt-3) 25%, var(--asphalt-4) 37%, var(--asphalt-3) 63%); background-size:400% 100%; animation:skeletonShine 1.4s ease infinite;}
@@ -1283,7 +1293,7 @@ try{
     </div>
 
     <div id="runActive">
-      <p style="text-align:center; margin-top:4px;"><span class="rec-dot"></span><span class="muted" style="text-transform:uppercase; font-size:11px; letter-spacing:.07em;" data-i18n="run_recording"></span></p>
+      <p style="text-align:center; margin-top:4px;"><span class="rec-dot" id="run-rec-dot"></span><span class="muted" id="run-recording-label" style="text-transform:uppercase; font-size:11px; letter-spacing:.07em;" data-i18n="run_recording"></span></p>
       <div class="timer-big mono" id="track-timer">00:00:00</div>
       <div class="map-wrap"><div id="liveMap"></div><button class="map-recenter-btn" onclick="recenterMap()">◎</button></div>
 

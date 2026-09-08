@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T00:19:40Z';
+const APP_VERSION = '2026-09-08T01:40:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -23,6 +23,7 @@ const CHANGELOG = [
   {id:'2026-09-cancel-session', key:'changelog_cancel_session'},
   {id:'2026-09-trainby', key:'changelog_trainby'},
   {id:'2026-09-weather', key:'changelog_weather'},
+  {id:'2026-09-autopause', key:'changelog_autopause'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -171,6 +172,35 @@ function haptic(pattern){
     if(Haptics){ Haptics.impact({ style: 'MEDIUM' }); return; }
   }catch(e){}
   try{ if(navigator.vibrate) navigator.vibrate(pattern); }catch(e){}
+}
+/* ---- Micro-festejo (confetti) ----
+   Los dos únicos momentos donde ya existía un showToast('success') atado a algo que el
+   corredor realmente LOGRÓ (no un guardado de rutina): una marca personal nueva y llegar
+   a la meta semanal. Son justo los disparadores correctos para un festejo visual chiquito
+   -- nada de librerías, un puñado de <span> con los mismos colores de la paleta de la
+   app, cayendo con una animación CSS y sacándose solos del DOM al terminar. Respeta
+   prefers-reduced-motion (no todos quieren cosas moviéndose por la pantalla). */
+function celebrate(){
+  try{
+    if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const layer = document.createElement('div');
+    layer.className = 'confetti-layer';
+    document.body.appendChild(layer);
+    const colors = ['#D6FF3F','#4ADE80','#FACC15','#FB923C','#5B9BFF','#FF6B5D'];
+    for(let i=0;i<26;i++){
+      const piece = document.createElement('span');
+      piece.className = 'confetti-piece';
+      const size = 6 + Math.random()*6;
+      piece.style.left = Math.random()*100+'%';
+      piece.style.width = size+'px';
+      piece.style.height = (size*0.4)+'px';
+      piece.style.background = colors[i % colors.length];
+      piece.style.animationDuration = (1.1 + Math.random()*0.7)+'s';
+      piece.style.animationDelay = (Math.random()*0.25)+'s';
+      layer.appendChild(piece);
+    }
+    setTimeout(()=>{ layer.remove(); }, 2200);
+  }catch(e){}
 }
 // Escapa texto libre (nombres, mensajes de chat, etc.) antes de insertarlo
 // en el HTML. Sin esto, alguien podía poner algo como <img onerror=...> como
@@ -2393,6 +2423,7 @@ function renderHome(){
       state.lastGoalCelebratedWeek = state.weekStart;
       haptic([15,40,15,40,25]);
       showToast(t('goal_reached_msg'), 'success');
+      celebrate();
       persist();
     }
   } else {
@@ -3925,7 +3956,34 @@ async function downloadEventIcs(){
 }
 
 /* ================= LIVE TRACKER + MAP ================= */
-let tracker = {watchId:null, timerId:null, points:[], distanceKm:0, elapsedSec:0, running:false, hrLog:[], lastAnnouncedKm:0, startedAt:null, workout:null};
+let tracker = {watchId:null, timerId:null, points:[], distanceKm:0, elapsedSec:0, running:false, hrLog:[], lastAnnouncedKm:0, startedAt:null, workout:null, autoPaused:false, lastMoveMs:null, lastFixMs:null};
+/* ---- Auto-pausa: detectar solo cuando el corredor se frena (semáforo, cruce, tomar
+   agua) sin que tenga que acordarse de tocar "Pausar" -- lo que hacen Strava/Nike/Garmin
+   de fábrica. Se mide la velocidad instantánea entre cada dos posiciones del GPS (con el
+   timestamp real del propio fix, independiente de tracker.elapsedSec, que es justamente
+   lo que congelamos mientras dura la auto-pausa) y con un poco de histéresis entre el
+   umbral de "pausar" y el de "reanudar" para no titilar por el ruido normal del GPS
+   parado en un punto. No toca la pausa manual (el botón) -- son dos banderas separadas:
+   tracker.running (pausa manual) y tracker.autoPaused (esta). */
+const AUTO_PAUSE_SPEED_MPS = 0.5; // por debajo de esto (~1.8 km/h) se considera "parado"
+const AUTO_RESUME_SPEED_MPS = 0.9; // por encima de esto (~3.2 km/h) se considera "moviéndose de nuevo"
+const AUTO_PAUSE_HOLD_MS = 10000; // cuánto tiempo quieto antes de pausar solo
+function isTrackingActive(){ return tracker.running && !tracker.autoPaused; }
+function updateRecordingLabel(){
+  const dot = document.getElementById('run-rec-dot');
+  const label = document.getElementById('run-recording-label');
+  if(!dot || !label) return;
+  if(tracker.autoPaused){
+    dot.style.background = 'var(--mist-dim)'; dot.style.animation = 'none';
+    label.textContent = t('run_auto_paused');
+  } else if(!tracker.running){
+    dot.style.background = 'var(--mist-dim)'; dot.style.animation = 'none';
+    label.textContent = t('run_paused_manual');
+  } else {
+    dot.style.background = ''; dot.style.animation = '';
+    label.textContent = t('run_recording');
+  }
+}
 let liveMap, liveMarker, startMarker, livePolyline;
 let wakeLockSentinel = null;
 
@@ -4263,8 +4321,8 @@ function startRun(){
 }
 function actuallyStartRun(saved){
   tracker = saved
-    ? {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:Math.max(0,Math.floor((Date.now()-saved.startedAt)/1000)), running:true, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt}
-    : {watchId:null, timerId:null, points:[], distanceKm:0, elapsedSec:0, running:true, hrLog:[], lastAnnouncedKm:0, startedAt:Date.now()};
+    ? {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:Math.max(0,Math.floor((Date.now()-saved.startedAt)/1000)), running:true, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt, autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null}
+    : {watchId:null, timerId:null, points:[], distanceKm:0, elapsedSec:0, running:true, hrLog:[], lastAnnouncedKm:0, startedAt:Date.now(), autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null};
   requestWakeLock();
   document.getElementById('runIdle').style.display='none';
   document.getElementById('runSummary').style.display='none';
@@ -4273,18 +4331,40 @@ function actuallyStartRun(saved){
   // última vez que se renderizó la pantalla (típicamente "Reanudar", puesto por
   // applyStaticTranslations() al cargar la app con tracker.running todavía en false).
   document.getElementById('pauseBtn').textContent = t('run_pause');
+  updateRecordingLabel();
   initLiveMap();
   updateLiveStats();
   setupWorkoutGuide();
   saveRunProgress();
   tracker.watchId = navigator.geolocation.watchPosition(onPosition, onPosError, {enableHighAccuracy:true, maximumAge:1000, timeout:15000});
-  tracker.timerId = setInterval(()=>{ if(tracker.running){ tracker.elapsedSec++; updateLiveStats(); tickWorkoutGuide(); if(tracker.elapsedSec % 15 === 0) saveRunProgress(); } }, 1000);
+  tracker.timerId = setInterval(()=>{ if(isTrackingActive()){ tracker.elapsedSec++; updateLiveStats(); tickWorkoutGuide(); if(tracker.elapsedSec % 15 === 0) saveRunProgress(); } }, 1000);
 }
 function onPosition(pos){
   const {latitude:lat, longitude:lon, accuracy, altitude} = pos.coords;
   if(accuracy && accuracy>50) return;
   const last = tracker.points[tracker.points.length-1];
-  if(last){ const d=haversine(last.lat,last.lon,lat,lon); if(d>0.002) tracker.distanceKm+=d; }
+  const stepKm = last ? haversine(last.lat,last.lon,lat,lon) : 0;
+
+  // Auto-pausa: la velocidad instantánea sale del propio timestamp del fix del GPS
+  // (pos.timestamp), no de tracker.elapsedSec -- porque elapsedSec es justo lo que
+  // queremos poder congelar sin perder la referencia de tiempo real para el cálculo.
+  const nowMs = pos.timestamp || Date.now();
+  const dtSec = tracker.lastFixMs!=null ? Math.max(0.001, (nowMs-tracker.lastFixMs)/1000) : null;
+  const speedMps = dtSec!=null ? (stepKm*1000)/dtSec : null;
+  tracker.lastFixMs = nowMs;
+  if(tracker.running){
+    if(speedMps==null){
+      tracker.lastMoveMs = nowMs; // primer fix de la carrera (o de la reanudación): todavía sin referencia, arrancamos el reloj de quietud desde acá
+    } else if(speedMps >= AUTO_RESUME_SPEED_MPS){
+      tracker.lastMoveMs = nowMs;
+      if(tracker.autoPaused){ tracker.autoPaused = false; updateRecordingLabel(); }
+    } else if(!tracker.autoPaused && speedMps < AUTO_PAUSE_SPEED_MPS && tracker.lastMoveMs!=null && (nowMs-tracker.lastMoveMs) >= AUTO_PAUSE_HOLD_MS){
+      tracker.autoPaused = true; updateRecordingLabel();
+    }
+  }
+
+  const active = isTrackingActive();
+  if(active && stepKm>0.002) tracker.distanceKm += stepKm;
   // t = segundos desde el arranque de la carrera, alt = altitud del GPS si el
   // dispositivo la da (no todos la reportan, y aun cuando la dan puede faltar
   // en puntos sueltos -- por eso el resto del código nunca asume que todos
@@ -4294,8 +4374,7 @@ function onPosition(pos){
   tracker.points.push({lat, lon, t:tracker.elapsedSec, alt:(typeof altitude==='number' && !isNaN(altitude)) ? altitude : null});
   updateLiveMap(lat,lon);
   updateLiveStats();
-  maybeAnnounceKm();
-  tickWorkoutGuide();
+  if(active){ maybeAnnounceKm(); tickWorkoutGuide(); }
   saveRunProgress();
 }
 function onPosError(){ document.getElementById('geo-warning').style.display='block'; document.getElementById('geo-warning').textContent=t('geo_err_permission'); }
@@ -4312,7 +4391,18 @@ function updateLiveStats(){
   document.getElementById('track-pace').textContent = fmtPace(paceMin);
   updateRunUnitLabels();
 }
-function togglePause(){ tracker.running = !tracker.running; document.getElementById('pauseBtn').textContent = tracker.running? t('run_pause') : t('run_resume'); }
+function togglePause(){
+  tracker.running = !tracker.running;
+  if(tracker.running){
+    // al reanudar a mano, reiniciamos el reloj de quietud de la auto-pausa -- si no,
+    // como veníamos "parados" desde antes de pausar, se auto-pausaría de nuevo apenas
+    // pasen los AUTO_PAUSE_HOLD_MS aunque el corredor ya haya arrancado a correr otra vez.
+    tracker.autoPaused = false;
+    tracker.lastMoveMs = Date.now();
+  }
+  document.getElementById('pauseBtn').textContent = tracker.running? t('run_pause') : t('run_resume');
+  updateRecordingLabel();
+}
 function stopRun(){
   clearInterval(tracker.timerId);
   if(tracker.watchId!==null) navigator.geolocation.clearWatch(tracker.watchId);
@@ -4552,6 +4642,7 @@ function checkNewPR(run){
   state.chat.push({role:'coach', text: t('coach_new_pr_'+bucket.key, {time: fmtTime(run.durationSec)}), ts:Date.now()});
   renderChat();
   showToast(t('pr_toast_new', {label: t('pr_label_'+bucket.key), time: fmtTime(run.durationSec)}), 'success');
+  celebrate();
   haptic(40);
 }
 /* ---- Logros (pantalla de hitos) ---- */
