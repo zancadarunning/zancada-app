@@ -2,17 +2,6 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<script>
-/* Aplica el tema guardado ANTES de que se pinte cualquier cosa, para que no haya
-   un parpadeo del tema equivocado al abrir la app (por ejemplo, ver un instante el
-   tema oscuro y que enseguida cambie a claro). El estado real de la preferencia
-   vive en el perfil del usuario en Supabase junto con idioma/unidades -- esto es
-   nada más que una copia local para pintar bien desde el primer instante, antes de
-   que la sesión termine de cargar; applyTheme() en app.js la mantiene al día. */
-try{
-  if(localStorage.getItem('zancada_theme') === 'light') document.documentElement.setAttribute('data-theme','light');
-}catch(e){}
-</script>
 <!-- interactive-widget: OJO -- confirmado (bugs.webkit.org #259770, todavía "NEW" sin
      resolver) que Safari/WebKit NO IMPLEMENTA esta propiedad en absoluto, así que este
      valor no tiene ningún efecto real en iPhone (sí importa en Chrome/Android, por eso
@@ -55,22 +44,20 @@ try{
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
-  /* ---- Tema oscuro (default) y tema claro ----
-     Todo el resto de la hoja de estilos usa estas variables, así que cambiar de tema
-     es (con pocas excepciones ya resueltas abajo, como el fondo de la tabbar o el
-     color de error del toast) nada más que redefinir estos valores. El atributo
-     data-theme="light" en <html> es lo que activa el segundo bloque -- lo pone
-     applyTheme() en app.js, y hay un script chiquito al principio del <head> que lo
-     aplica de una copia guardada en localStorage ANTES de que se pinte nada, para
-     que no haya un parpadeo del tema equivocado al abrir la app.
+  /* ---- Paleta única (modo claro eliminado a pedido del usuario) ----
+     Hubo un modo claro (:root[data-theme="light"]) con toggle en Perfil -- se sacó
+     entero (CSS, el toggle de Perfil, applyTheme()/handleThemeToggle() en app.js, y
+     el script de arranque que leía la preferencia de localStorage) porque el usuario
+     prefirió quedarse solo con este tema oscuro. Todo el resto de la hoja de
+     estilos usa estas variables, así que no queda ningún selector "data-theme" en
+     ningún lado: esto es lo único que hay.
 
-     --ink y --hivis-text existen porque el verde lima (--hivis) cumple dos roles
-     distintos: como RELLENO sólido (fondo de botones, barra "hoy", el punto del
-     avatar) se mantiene bien vistoso en los dos temas; pero como TEXTO -- ya sea
-     encima de ese mismo relleno (--ink) o encima de un fondo con apenas un toque de
-     color (--hivis-text, para chips y pills) -- necesita ser oscuro en el tema claro
-     para que se siga leyendo bien sobre fondos claros. En el tema oscuro ambos son
-     iguales a como estaba antes, así que el look oscuro no cambia nada. */
+     --ink y --hivis-text existen separados de --chalk/--hivis porque el verde lima
+     (--hivis) cumple dos roles distintos: como RELLENO sólido (fondo de botones,
+     barra "hoy", el punto del avatar) es el mismo color siempre; pero como TEXTO --
+     ya sea encima de ese mismo relleno (--ink) o encima de un fondo con apenas un
+     toque de color (--hivis-text, para chips y pills) -- son variables aparte por si
+     alguna vez hace falta ajustarlas por contraste sin tocar el relleno. */
   :root{
     /* Paleta "carbón profundo" (refactor visual 2026-09): el fondo general baja bastante
        más oscuro que las tarjetas (antes quedaban a solo un par de puntos de luminosidad
@@ -102,44 +89,6 @@ try{
     --zone5:#FF6B5D; --zone5-bg:rgba(255,107,93,.16); --zone5-bg-live:rgba(255,107,93,.13);
     --cs:dark;
     --safe-top:env(safe-area-inset-top); --safe-bottom:env(safe-area-inset-bottom);
-  }
-  :root[data-theme="light"]{
-    /* Rediseño 2026-09: paleta "crema" en vez del gris casi blanco de antes, y celeste
-       (en vez del verde lima de --hivis, que es el color de marca en el tema oscuro) como
-       acento del tema claro. Los 4 tonos de fondo (--asphalt.. --asphalt-4) mantienen la
-       MISMA escalera de luminosidad relativa que la versión gris (tarjeta más clara que la
-       página, y cada paso más oscuro se nota por contraste de luminosidad, no por un borde
-       marcado) -- lo único que cambia es el matiz, corrido hacia un crema cálido. Todos los
-       pares texto/fondo de acá abajo están verificados con la fórmula de contraste WCAG
-       (relative luminance) para dar como mínimo AA (4.5:1) en texto normal; --mist-dim,
-       que solo se usa para etiquetas chiquitas ya deenfatizadas a propósito (encabezados
-       del calendario, estados "disabled"), queda un poco por debajo de eso -- igual que en
-       la versión anterior -- porque no tiene sentido que un texto pensado para pasar
-       desapercibido tenga el mismo contraste que el texto principal. --asphalt-4 y
-       --overlay-hairline se dejan con la MISMA intensidad tenue que ya tenía la versión
-       gris (ver el comentario histórico que sigue): subirles el contraste para que los
-       bordes se notaran más ya se probó una vez y terminó tiñendo toda la interfaz de un
-       marrón/caqui sucio -- ese borde apenas insinuado es una decisión de diseño, no algo
-       para "arreglar". --zone1..5 (los colores de zona de ritmo/FC) NO se tocan: son una
-       escala semántica fija (azul/verde/amarillo/naranja/rojo) que nada tiene que ver con
-       el color de marca, y cambiarla rompería la lectura de las zonas en toda la app. */
-    --asphalt:#F6EFDE; --asphalt-2:#FFFDF6; --asphalt-3:#EFE6D0; --asphalt-4:#E7DCC0;
-    --chalk:#2A2620; --mist:#665D49; --mist-dim:#7A7055;
-    --hivis:#0EA5E9; --hivis-dim:#E3F2FB; --hivis-text:#0A6591; --ink:#1E1B15;
-    --clay:#A15915; --clay-dim:rgba(161,89,21,.16);
-    --danger:#BD3419; --danger-dim:rgba(189,52,25,.14);
-    --press:rgba(0,0,0,.035); --overlay-hairline:rgba(0,0,0,.06);
-    --tabbar-bg:rgba(255,253,246,.86);
-    --toast-error-bg:#FBE3DE; --toast-error-fg:#B23A28;
-    --shadow-card:0 10px 26px rgba(60,58,40,.10); --shadow-lg:0 20px 50px rgba(60,58,40,.18);
-    --hivis-glow:rgba(14,165,233,.28);
-    /* --zoneN sin cambios respecto de la versión anterior -- ver comentario de arriba. */
-    --zone1:#2062CF; --zone1-bg:rgba(44,111,222,.14); --zone1-bg-live:rgba(44,111,222,.11);
-    --zone2:#23773E; --zone2-bg:rgba(47,158,82,.14); --zone2-bg-live:rgba(47,158,82,.11);
-    --zone3:#866108; --zone3-bg:rgba(168,121,10,.16); --zone3-bg-live:rgba(168,121,10,.12);
-    --zone4:#A44C13; --zone4-bg:rgba(193,90,22,.15); --zone4-bg-live:rgba(193,90,22,.12);
-    --zone5:#BA3022; --zone5-bg:rgba(196,51,36,.14); --zone5-bg-live:rgba(196,51,36,.11);
-    --cs:light;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0; padding:0; background:var(--asphalt); height:100%;}
@@ -390,17 +339,12 @@ try{
   #view-coach.active{animation:viewFadeInOpacity .22s ease;}
   @keyframes viewFadeInOpacity{from{opacity:0;} to{opacity:1;}}
 
-  .card{background:linear-gradient(180deg, var(--asphalt-2), var(--asphalt-2)); border-radius:var(--radius); padding:22px; margin-bottom:16px; border:1px solid var(--overlay-hairline); box-shadow:var(--shadow-card);}
   /* Nada de alpha acá: las tarjetas tipo "swipe to delete" (history, zapatillas)
      ponen esta misma clase .card ARRIBA de un fondo rojo de "borrar" -- un
      segundo color con transparencia dejaba traslucir ese rojo por debajo,
      incluso en reposo. El highlight de "elevada" se logra solo con el inset,
      que no afecta la opacidad del fondo. */
-  :root:not([data-theme="light"]) .card{background:var(--asphalt-2); box-shadow:var(--shadow-card), inset 0 1px 0 rgba(255,255,255,.03);}
-  /* En modo claro el track "apagado" del switch queda bastante cerca del blanco de
-     la tarjeta -- un borde chico y neutro (no ligado a asphalt-4) ayuda a que se
-     note como control sin teñir nada de color. */
-  :root[data-theme="light"] .switch-slider{border:1px solid rgba(0,0,0,.10);}
+  .card{background:var(--asphalt-2); border-radius:var(--radius); padding:22px; margin-bottom:16px; border:1px solid var(--overlay-hairline); box-shadow:var(--shadow-card), inset 0 1px 0 rgba(255,255,255,.03);}
   .card[onclick]{cursor:pointer; transition:transform .12s ease;}
   .card[onclick]:active{transform:scale(.98);}
   .card h3{font-size:11.5px; text-transform:uppercase; letter-spacing:.09em; color:var(--mist); font-weight:700; margin-bottom:12px;}
@@ -1885,19 +1829,6 @@ try{
         <li data-i18n="perfil_coach_cap_4"></li>
         <li data-i18n="perfil_coach_cap_5"></li>
       </ul>
-    </div>
-
-    <div class="card">
-      <div style="display:flex; align-items:center; justify-content:space-between;">
-        <div style="flex:1; padding-right:12px;">
-          <h3 style="margin-bottom:2px;" data-i18n="perfil_theme_title"></h3>
-          <p class="muted" id="theme-status" style="font-size:12.5px;" data-i18n="perfil_theme_dark"></p>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="theme-toggle" onchange="handleThemeToggle(this.checked)">
-          <span class="switch-slider"></span>
-        </label>
-      </div>
     </div>
 
     <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openLangOverlay()">

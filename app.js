@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T06:00:00Z';
+const APP_VERSION = '2026-09-08T14:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -25,7 +25,6 @@ const CHANGELOG = [
   {id:'2026-09-weather', key:'changelog_weather'},
   {id:'2026-09-autopause', key:'changelog_autopause'},
   {id:'2026-09-reschedule-weather', key:'changelog_reschedule_weather'},
-  {id:'2026-09-light-theme-redesign', key:'changelog_light_theme_redesign'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -100,30 +99,6 @@ document.getElementById('perfil-lang-choice').addEventListener('click', e=>{
   setLang(c.dataset.v);
 });
 
-/* ================= TEMA CLARO / OSCURO =================
-   Vive en state.profile.theme ('dark' por default, o 'light') y se guarda junto
-   con el resto del perfil, así que sigue al usuario entre dispositivos igual que
-   el idioma o las unidades. Además se cachea en localStorage nada más que para
-   poder aplicarlo antes de que la sesión termine de cargar (ver el script chiquito
-   al principio del <head> de index.html) y evitar el parpadeo del tema equivocado
-   al abrir la app. */
-function applyTheme(theme){
-  const isLight = theme === 'light';
-  document.documentElement.setAttribute('data-theme', isLight ? 'light' : 'dark');
-  try{ localStorage.setItem('zancada_theme', isLight ? 'light' : 'dark'); }catch(e){}
-  const metaTheme = document.querySelector('meta[name="theme-color"]');
-  if(metaTheme) metaTheme.content = isLight ? '#F7F6F2' : '#121415';
-  const toggle = document.getElementById('theme-toggle');
-  if(toggle) toggle.checked = isLight;
-  const status = document.getElementById('theme-status');
-  if(status) status.textContent = t(isLight ? 'perfil_theme_light' : 'perfil_theme_dark');
-}
-function handleThemeToggle(checked){
-  const theme = checked ? 'light' : 'dark';
-  state.profile.theme = theme;
-  applyTheme(theme);
-  persist();
-}
 
 /* ================= ICONS ================= */
 const ICONS = {
@@ -1376,7 +1351,6 @@ window.addEventListener('resize', syncAppMinHeight);
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) syncAppMinHeight(); });
 window.addEventListener('pageshow', syncAppMinHeight);
 function enterApp(){
-  applyTheme(state.profile.theme === 'light' ? 'light' : 'dark');
   document.getElementById('splash').style.display='none';
   document.getElementById('login').style.display='none';
   document.getElementById('onboard').style.display='none';
