@@ -104,24 +104,36 @@ try{
     --safe-top:env(safe-area-inset-top); --safe-bottom:env(safe-area-inset-bottom);
   }
   :root[data-theme="light"]{
-    /* --mist, --mist-dim y los --zoneN quedaron más oscuros/saturados que la primera
-       versión para cumplir el contraste mínimo WCAG AA (texto secundario y badges de
-       zona que antes casi no se leían). --asphalt-4 y --overlay-hairline en cambio
-       volvieron a su valor original de siempre: subirles el contraste para que los
-       bordes de botones/inputs se notaran más terminó tiñendo TODA la interfaz de un
-       marrón/caqui sucio (asphalt-4 se usa como borde en inputs, pills, botones outline
-       y como fondo de tags/skeleton por igual) -- el usuario lo reportó como "feo" y
-       tenía razón: ese borde apenas visible era una decisión de diseño, no un bug. */
-    --asphalt:#F7F6F2; --asphalt-2:#FFFFFF; --asphalt-3:#F0EEE6; --asphalt-4:#E2DFD3;
-    --chalk:#20231F; --mist:#63675C; --mist-dim:#747362;
-    --hivis:#8FA820; --hivis-dim:#EEF3D2; --hivis-text:#5C6B14; --ink:#1B1E20;
-    --clay:#B0631F; --clay-dim:rgba(176,99,31,.14);
-    --danger:#D6402F; --danger-dim:rgba(214,64,47,.12);
+    /* Rediseño 2026-09: paleta "crema" en vez del gris casi blanco de antes, y celeste
+       (en vez del verde lima de --hivis, que es el color de marca en el tema oscuro) como
+       acento del tema claro. Los 4 tonos de fondo (--asphalt.. --asphalt-4) mantienen la
+       MISMA escalera de luminosidad relativa que la versión gris (tarjeta más clara que la
+       página, y cada paso más oscuro se nota por contraste de luminosidad, no por un borde
+       marcado) -- lo único que cambia es el matiz, corrido hacia un crema cálido. Todos los
+       pares texto/fondo de acá abajo están verificados con la fórmula de contraste WCAG
+       (relative luminance) para dar como mínimo AA (4.5:1) en texto normal; --mist-dim,
+       que solo se usa para etiquetas chiquitas ya deenfatizadas a propósito (encabezados
+       del calendario, estados "disabled"), queda un poco por debajo de eso -- igual que en
+       la versión anterior -- porque no tiene sentido que un texto pensado para pasar
+       desapercibido tenga el mismo contraste que el texto principal. --asphalt-4 y
+       --overlay-hairline se dejan con la MISMA intensidad tenue que ya tenía la versión
+       gris (ver el comentario histórico que sigue): subirles el contraste para que los
+       bordes se notaran más ya se probó una vez y terminó tiñendo toda la interfaz de un
+       marrón/caqui sucio -- ese borde apenas insinuado es una decisión de diseño, no algo
+       para "arreglar". --zone1..5 (los colores de zona de ritmo/FC) NO se tocan: son una
+       escala semántica fija (azul/verde/amarillo/naranja/rojo) que nada tiene que ver con
+       el color de marca, y cambiarla rompería la lectura de las zonas en toda la app. */
+    --asphalt:#F6EFDE; --asphalt-2:#FFFDF6; --asphalt-3:#EFE6D0; --asphalt-4:#E7DCC0;
+    --chalk:#2A2620; --mist:#665D49; --mist-dim:#7A7055;
+    --hivis:#0EA5E9; --hivis-dim:#E3F2FB; --hivis-text:#0A6591; --ink:#1E1B15;
+    --clay:#A15915; --clay-dim:rgba(161,89,21,.16);
+    --danger:#BD3419; --danger-dim:rgba(189,52,25,.14);
     --press:rgba(0,0,0,.035); --overlay-hairline:rgba(0,0,0,.06);
-    --tabbar-bg:rgba(255,255,255,.86);
+    --tabbar-bg:rgba(255,253,246,.86);
     --toast-error-bg:#FBE3DE; --toast-error-fg:#B23A28;
     --shadow-card:0 10px 26px rgba(60,58,40,.10); --shadow-lg:0 20px 50px rgba(60,58,40,.18);
-    --hivis-glow:rgba(143,168,32,.28);
+    --hivis-glow:rgba(14,165,233,.28);
+    /* --zoneN sin cambios respecto de la versión anterior -- ver comentario de arriba. */
     --zone1:#2062CF; --zone1-bg:rgba(44,111,222,.14); --zone1-bg-live:rgba(44,111,222,.11);
     --zone2:#23773E; --zone2-bg:rgba(47,158,82,.14); --zone2-bg-live:rgba(47,158,82,.11);
     --zone3:#866108; --zone3-bg:rgba(168,121,10,.16); --zone3-bg-live:rgba(168,121,10,.12);
@@ -164,7 +176,7 @@ try{
       radial-gradient(55% 35% at 100% 12%, rgba(192,106,46,.05), transparent 62%), var(--asphalt);
     display:flex; flex-direction:column;}
 
-  .pulse-strip{width:100%; height:34px; overflow:hidden; opacity:.55;}
+  .pulse-strip{width:100%; height:34px; overflow:hidden; opacity:.55; color:var(--hivis);}
   .pulse-strip svg{width:200%; height:100%; animation:pulseScroll 5.5s linear infinite;}
   @keyframes pulseScroll{from{transform:translateX(0);} to{transform:translateX(-50%);}}
   @keyframes blink{0%,100%{opacity:1;} 50%{opacity:.25;}}
@@ -900,7 +912,7 @@ try{
   <div id="offline-banner"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="2" x2="22" y2="22"/><path d="M8.5 16.5a5 5 0 0 1 7 0"/><path d="M5 12.5a10 10 0 0 1 5-2.7"/><path d="M19 12.5a10 10 0 0 0-2.3-1.9"/><path d="M2 8.5a15 15 0 0 1 4.2-2.8"/><path d="M22 8.5a15 15 0 0 0-9-4.4"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg></span><span data-i18n="offline_banner"></span></div>
 
   <div id="splash">
-    <div class="pulse-strip"><svg viewBox="0 0 300 40" preserveAspectRatio="none"><path d="M0 20 H40 L48 6 L58 34 L66 20 H90 L98 8 L108 32 L116 20 H150 H190 L198 6 L208 34 L216 20 H240 L248 8 L258 32 L266 20 H300 L308 6 L318 34 L326 20 H350 H390 L398 6 L408 34 L416 20 H440 L448 8 L458 32 L466 20 H500 L508 6 L518 34 L526 20 H600" fill="none" stroke="#D6FF3F" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg></div>
+    <div class="pulse-strip"><svg viewBox="0 0 300 40" preserveAspectRatio="none"><path d="M0 20 H40 L48 6 L58 34 L66 20 H90 L98 8 L108 32 L116 20 H150 H190 L198 6 L208 34 L216 20 H240 L248 8 L258 32 L266 20 H300 L308 6 L318 34 L326 20 H350 H390 L398 6 L408 34 L416 20 H440 L448 8 L458 32 L466 20 H500 L508 6 L518 34 L526 20 H600" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg></div>
     <h1 class="display word">ZANC<span>A</span>DA</h1>
     <p class="tag" data-i18n="app_tag"></p>
     <div class="splash-mid">
