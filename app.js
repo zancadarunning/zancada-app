@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T15:05:00Z';
+const APP_VERSION = '2026-09-08T15:25:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -27,6 +27,7 @@ const CHANGELOG = [
   {id:'2026-09-reschedule-weather', key:'changelog_reschedule_weather'},
   {id:'2026-09-race-phase', key:'changelog_race_phase'},
   {id:'2026-09-event-plan-decouple', key:'changelog_event_plan_decouple'},
+  {id:'2026-09-preserve-custom-days', key:'changelog_preserve_custom_days'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -891,6 +892,15 @@ function preserveLivedDays(oldPlan, newPlan){
     // usuario: "hoy miércoles, no me puede aparecer un ejercicio el martes").
     // Lo dejamos como descanso, que es lo que de hecho pasó ese día.
     if(i<todayIdx) return {day:newDay.day, typeKey:'rest', dist:0, terrain:null, zone:null, beginner:newDay.beginner};
+    // Un día de hoy en adelante que el corredor ya personalizó a mano por el chat del coach
+    // (modificar_sesion / ajustar_volumen_semana, ver d.custom) tampoco se pisa acá -- si no,
+    // cualquier guardado que dispare una regeneración del plan (datos personales, objetivo,
+    // días de entreno, una carrera en Próximos Eventos) le borraba en silencio un ajuste
+    // puntual que el corredor había pedido a propósito, reemplazándolo por lo que el
+    // algoritmo generaría de cero (reportado por el usuario: tenía 3 sesiones de 5km puestas
+    // a mano y, al cargar una carrera en Próximos Eventos, se le reemplazaron solas por el
+    // plan genérico, sin avisar).
+    if(old && old.custom) return old;
     return newDay;
   });
 }

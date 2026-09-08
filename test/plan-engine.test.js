@@ -107,6 +107,34 @@ test('generatePlan: en semana de recuperación no sobrevive ninguna sesión pesa
   });
 });
 
+test('preserveLivedDays: no pisa un día de hoy en adelante que el corredor ya personalizó a mano (d.custom)', () => {
+  // Reportado por el usuario: tenía 3 sesiones de 5km puestas a mano por el chat del coach
+  // (modificar_sesion las marca con d.custom=true) y, al cargar una carrera en Próximos
+  // Eventos (lo que dispara una regeneración del plan vía setEvent()), esas 3 sesiones se
+  // reemplazaron solas por el plan genérico del algoritmo -- sin avisar y sin que el usuario
+  // lo pidiera. Cualquier guardado que dispare una regeneración (datos personales, objetivo,
+  // días de entreno, un evento) tiene que respetar un día ya personalizado a mano.
+  const app = loadApp();
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  const oldPlan = app.DAY_KEYS.map(day => ({
+    day, typeKey: 'custom', dist: 5, terrain: 'asfalto', zone: 2, beginner: false,
+    custom: true, type: 'Rodaje suave', desc: 'Rodaje suave de 5km puesto a mano',
+  }));
+  const newPlan = app.DAY_KEYS.map(day => ({
+    day, typeKey: 'easy', dist: 10, terrain: 'asfalto', zone: 2, beginner: false,
+  }));
+  const result = app.preserveLivedDays(oldPlan, newPlan);
+  result.forEach((d, i) => {
+    if (i < todayIdx) {
+      // día ya pasado sin vivir -- se fuerza a descanso, comportamiento previo sin cambios
+      assert.equal(d.typeKey, 'rest', `${d.day} (antes de hoy, no vivido) debería quedar en descanso`);
+    } else {
+      assert.equal(d.dist, 5, `${d.day} (hoy en adelante, personalizado) no debería pisarse con el plan nuevo`);
+      assert.equal(d.custom, true, `${d.day} debería seguir marcado como personalizado`);
+    }
+  });
+});
+
 test('generatePlan: el día de una carrera cargada en Próximos eventos recibe una sesión normal (ya no queda como descanso especial)', () => {
   // Antes, cargar una carrera en "Próximos eventos" le sacaba la sesión propia a ese día del
   // plan (quedaba fijo en descanso, marcado raceDay:true). Eso sorprendía a corredores que
