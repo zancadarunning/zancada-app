@@ -135,6 +135,36 @@ test('preserveLivedDays: no pisa un día de hoy en adelante que el corredor ya p
   });
 });
 
+test('preserveLivedDays: no resucita un día de hoy en adelante que el corredor canceló a propósito (d.cancelled)', () => {
+  // Reportado por el usuario: canceló martes y viernes por chat (cancelar_sesion, que a
+  // propósito deja el día con la misma pinta que un descanso normal, sin d.custom) y dejó
+  // miércoles y jueves en 6km cada uno (modificar_sesion, con d.custom=true). Al rato, algo
+  // disparó una regeneración del plan (agregar una carrera, guardar Perfil, etc.) y martes y
+  // viernes volvieron a aparecer con un entrenamiento nuevo del algoritmo -- como para el
+  // generador esos días seguían siendo días de entreno normales del perfil, no tenía forma de
+  // saber que el corredor los había cancelado a propósito. cancelar_sesion ahora marca
+  // d.cancelled=true además de d.custom=false, y preserveLivedDays debe respetarlo igual que a
+  // un día personalizado.
+  const app = loadApp();
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  const oldPlan = app.DAY_KEYS.map(day => ({
+    day, typeKey: 'rest', dist: 0, terrain: null, zone: null, beginner: false,
+    custom: false, cancelled: true,
+  }));
+  const newPlan = app.DAY_KEYS.map(day => ({
+    day, typeKey: 'easy', dist: 10, terrain: 'asfalto', zone: 2, beginner: false,
+  }));
+  const result = app.preserveLivedDays(oldPlan, newPlan);
+  result.forEach((d, i) => {
+    if (i < todayIdx) {
+      assert.equal(d.typeKey, 'rest', `${d.day} (antes de hoy, no vivido) debería quedar en descanso`);
+    } else {
+      assert.equal(d.dist, 0, `${d.day} (hoy en adelante, cancelado a propósito) no debería resucitar con una sesión nueva`);
+      assert.equal(d.typeKey, 'rest', `${d.day} debería seguir en descanso`);
+    }
+  });
+});
+
 test('generatePlan: el día de una carrera cargada en Próximos eventos recibe una sesión normal (ya no queda como descanso especial)', () => {
   // Antes, cargar una carrera en "Próximos eventos" le sacaba la sesión propia a ese día del
   // plan (quedaba fijo en descanso, marcado raceDay:true). Eso sorprendía a corredores que

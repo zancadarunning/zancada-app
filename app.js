@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T16:10:00Z';
+const APP_VERSION = '2026-09-08T17:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -29,6 +29,7 @@ const CHANGELOG = [
   {id:'2026-09-event-plan-decouple', key:'changelog_event_plan_decouple'},
   {id:'2026-09-preserve-custom-days', key:'changelog_preserve_custom_days'},
   {id:'2026-09-weekly-volume-fix', key:'changelog_weekly_volume_fix'},
+  {id:'2026-09-preserve-cancelled-days', key:'changelog_preserve_cancelled_days'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -901,7 +902,15 @@ function preserveLivedDays(oldPlan, newPlan){
     // algoritmo generaría de cero (reportado por el usuario: tenía 3 sesiones de 5km puestas
     // a mano y, al cargar una carrera en Próximos Eventos, se le reemplazaron solas por el
     // plan genérico, sin avisar).
-    if(old && old.custom) return old;
+    // Un día CANCELADO a propósito (cancelar_sesion, ver d.cancelled) tiene el mismo problema
+    // aunque no sea "custom": a propósito queda con la misma pinta que un día de descanso
+    // cualquiera (sin sesión inventada de reemplazo), pero justamente por eso, sin este chequeo,
+    // cualquier regeneración posterior lo "resucitaba" con una sesión nueva del algoritmo -- el
+    // día seguía formando parte de los días de entreno del perfil, así que el generador no tenía
+    // forma de saber que ese día en particular se había cancelado a pedido explícito del
+    // corredor. Reportado por el usuario: canceló martes y viernes, dejó miércoles y jueves en
+    // 6km cada uno, y al rato martes y viernes volvieron a aparecer con un entrenamiento nuevo.
+    if(old && (old.custom || old.cancelled)) return old;
     return newDay;
   });
 }
@@ -2370,7 +2379,7 @@ function closeRescheduleModal(){ document.getElementById('reschedule-modal').sty
 // y quedaban chances de que una de las dos se olvidara de algún campo (fue justo lo que
 // pasó con el coach: modificar_sesion arrastraba tipo/distancia/zona pero no terreno).
 function swapPlanDaySessions(dayA, dayB){
-  const fields = ['typeKey','dist','terrain','zone','interval','custom','type','desc'];
+  const fields = ['typeKey','dist','terrain','zone','interval','custom','cancelled','type','desc'];
   const aCopy = {};
   fields.forEach(f=>{ aCopy[f] = dayA[f]; });
   fields.forEach(f=>{ if(dayB[f]===undefined) delete dayA[f]; else dayA[f] = dayB[f]; });
@@ -6954,6 +6963,7 @@ function applyPlanChange(input){
   // que se lo cuente al corredor en vez de aplicar el cambio silenciosamente.
   if(isDayLocked(input.dia)) return `No puedo modificar ${input.dia}: ya pasó (o ya se corrió/salteó) esta semana. Puedo ajustar desde hoy en adelante, o la semana que viene.`;
   d.custom = true;
+  d.cancelled = false; // si venía de cancelar_sesion, esta sesión nueva reemplaza esa cancelación
   d.type = input.tipo; d.desc = input.descripcion;
   if(typeof input.distancia_km==='number'){
     d.dist = input.distancia_km;
@@ -7004,6 +7014,9 @@ function applyCancelSession(input){
   // como "Rodaje suave en zona 1" -- resultado: el día quedaba con un entrenamiento
   // inventado en vez de quedar vacío. Esta herramienta deja el día realmente vacío,
   // igual que cualquier otro día sin sesión asignada (typeKey:'rest', sin custom).
+  // Sí queda marcado con d.cancelled (ver preserveLivedDays) para que una regeneración
+  // posterior no lo "resucite" con una sesión nueva solo porque ese día sigue siendo,
+  // en el perfil, un día de entreno normal -- el corredor lo canceló a propósito.
   if(input.semana === 'siguiente'){
     if(!state.nextWeekOverrides) state.nextWeekOverrides = {};
     state.nextWeekOverrides[input.dia] = { type: t('type_rest'), desc: t('desc_rest'), dist:0, zone:null, terrain:null };
@@ -7015,6 +7028,7 @@ function applyCancelSession(input){
   if(!d) return "Día no encontrado.";
   if(isDayLocked(input.dia)) return `No puedo modificar ${input.dia}: ya pasó (o ya se corrió/salteó) esta semana. Puedo dejarlo sin sesión desde hoy en adelante, o la semana que viene.`;
   d.custom = false;
+  d.cancelled = true;
   d.typeKey = 'rest';
   d.type = undefined; d.desc = undefined;
   d.dist = 0; d.zone = null; d.terrain = null;
