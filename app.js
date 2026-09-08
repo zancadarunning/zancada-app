@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T18:45:00Z';
+const APP_VERSION = '2026-09-08T19:10:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -32,6 +32,7 @@ const CHANGELOG = [
   {id:'2026-09-preserve-cancelled-days', key:'changelog_preserve_cancelled_days'},
   {id:'2026-09-persist-race-fix', key:'changelog_persist_race_fix'},
   {id:'2026-09-coach-schedule-undo', key:'changelog_coach_schedule_undo'},
+  {id:'2026-09-reschedule-skip-cancelled', key:'changelog_reschedule_skip_cancelled'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -2387,15 +2388,20 @@ function renderWeatherWarning(elId, day, alreadyDone){
    otro día LIBRE de la misma semana, sin tener que ir manualmente a la pestaña Plan. Un
    "día libre" es un día de descanso (typeKey==='rest', sin distancia) que todavía no pasó
    ni está bloqueado (ver isDayLocked) y que no es el día de una carrera cargada
-   (raceDay) -- ahí no tiene sentido meterle un entrenamiento encima. Si no hay ningún día
-   así en lo que queda de la semana, el modal lo dice en vez de mostrar una lista vacía.
+   (raceDay) -- ahí no tiene sentido meterle un entrenamiento encima. Tampoco puede ser un
+   día que el corredor canceló a propósito por chat (d.cancelled): a simple vista es
+   indistinguible de un descanso normal (mismo typeKey:'rest', sin distancia -- ver
+   applyCancelSession), pero significa "no puedo entrenar este día", así que ofrecerlo acá
+   para meterle la sesión de hoy que se movió por lluvia contradiría justo lo que el
+   corredor pidió. Si no hay ningún día así en lo que queda de la semana, el modal lo dice
+   en vez de mostrar una lista vacía.
 */
 function getReschedulableDays(){
   const todayIdx = (new Date().getDay()+6)%7;
   const options = [];
   for(let i=todayIdx+1; i<7; i++){
     const d = state.plan[i];
-    if(d && d.typeKey==='rest' && !d.raceDay && !isDayLocked(d.day)) options.push(d.day);
+    if(d && d.typeKey==='rest' && !d.raceDay && !d.cancelled && !isDayLocked(d.day)) options.push(d.day);
   }
   return options;
 }
