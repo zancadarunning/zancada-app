@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T01:40:00Z';
+const APP_VERSION = '2026-09-08T02:15:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -24,6 +24,7 @@ const CHANGELOG = [
   {id:'2026-09-trainby', key:'changelog_trainby'},
   {id:'2026-09-weather', key:'changelog_weather'},
   {id:'2026-09-autopause', key:'changelog_autopause'},
+  {id:'2026-09-pace-trend', key:'changelog_pace_trend'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -4551,6 +4552,33 @@ function computeTrends(){
   const totalKm = state.runs.reduce((a,r)=>a+r.distanceKm,0);
   return {totalKm, totalRuns: state.runs.length};
 }
+function computeWeeklyPaceTrend(weeksCount){
+  // Ritmo PROMEDIO real por semana (lunes a domingo) de las últimas `weeksCount` semanas
+  // -- a diferencia de computeDailyTrend (volumen: cuánto corrió), esto mide si el
+  // corredor está corriendo más RÁPIDO con el tiempo, que es una pregunta distinta (se
+  // puede correr más km sin mejorar el ritmo, o mejorar el ritmo corriendo menos). Una
+  // semana con menos de 1km total queda marcada sin dato (hasData:false) -- un "ritmo
+  // promedio" calculado sobre casi nada no dice nada real.
+  weeksCount = weeksCount || 10;
+  const result = [];
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dow = today.getDay();
+  const thisMonday = new Date(today); thisMonday.setDate(today.getDate() + (dow===0 ? -6 : 1-dow));
+  for(let i=weeksCount-1; i>=0; i--){
+    const weekStart = new Date(thisMonday); weekStart.setDate(thisMonday.getDate() - i*7);
+    const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate()+7);
+    const runs = (state.runs||[]).filter(r=>{
+      if(!(r.distanceKm>0) || !(r.durationSec>0)) return false;
+      const d = new Date(localDateISO(r.date)+'T00:00:00');
+      return d>=weekStart && d<weekEnd;
+    });
+    const totalKm = runs.reduce((a,r)=>a+r.distanceKm,0);
+    const totalSec = runs.reduce((a,r)=>a+r.durationSec,0);
+    const hasData = totalKm >= 1;
+    result.push({day: weekStart.getDate(), paceMin: hasData ? (totalSec/60)/totalKm : null, hasData});
+  }
+  return result;
+}
 function getQualitySessionBreakdown(daysBack){
   // Cuenta las sesiones fuertes COMPLETADAS (series, tempo, fartlek, cuestas,
   // progresivo) de los últimos `daysBack` días, mirando tanto el plan actual como
@@ -5129,9 +5157,33 @@ function renderHistory(){
         <span class="type-breakdown-count">${count}</span>
       </div>`).join('')}</div>
   </div>` : '';
+  // Evolución del ritmo: son las últimas 10 semanas, más rápido = barra más alta (misma
+  // lógica visual que el gráfico de arriba, para que se lea como "parte del mismo
+  // sistema" en vez de un componente aparte). Con menos de 2 semanas con datos todavía
+  // no hay nada real que mostrar como "evolución" -- un mensaje en vez del gráfico vacío.
+  const paceTrend = computeWeeklyPaceTrend(10);
+  const paceWeeksWithData = paceTrend.filter(w=>w.hasData);
+  const paceTrendCard = paceWeeksWithData.length >= 2 ? (()=>{
+    const paces = paceWeeksWithData.map(w=>w.paceMin);
+    const minPace = Math.min(...paces), maxPace = Math.max(...paces);
+    const spread = maxPace - minPace;
+    return `<div class="card">
+      <h3 style="margin:0 0 4px;">${t('hist_pace_trend_title')}</h3>
+      <p class="muted" style="margin:0 0 14px; font-size:12px;">${t('hist_pace_trend_subtitle')}</p>
+      <div class="trend-bars" id="hist-pace-trend-bars">${paceTrend.map((w,i)=>{
+        if(!w.hasData) return `<div class="trend-col"><div class="trend-stroke trend-rest" data-h="4" style="height:0px; transition-delay:${i*30}ms;"></div><div class="trend-lbl">${w.day}</div></div>`;
+        const norm = spread>0 ? (maxPace-w.paceMin)/spread : 0.5;
+        const h = Math.max(10, Math.round(10 + norm*60));
+        return `<div class="trend-col"><div class="trend-stroke trend-pace" data-h="${h}" style="height:0px; transition-delay:${i*30}ms;" title="${fmtPace(w.paceMin)} /${distUnit()}"></div><div class="trend-lbl">${w.day}</div></div>`;
+      }).join('')}</div>
+    </div>`;
+  })() : `<div class="card">
+    <h3 style="margin:0 0 4px;">${t('hist_pace_trend_title')}</h3>
+    <p class="muted" style="margin:0; font-size:12px;">${t('hist_pace_trend_empty')}</p>
+  </div>`;
   // Los récords personales se muestran ahora en Logros (Perfil), junto con el resto de
   // los hitos del corredor -- ver renderPersonalRecordsCard() y openAchievements().
-  if(!state.runs || state.runs.length===0){ el.innerHTML = stravaSyncCard + trendsCard + mixCard + `<div class="card" style="text-align:center; padding:32px 18px;"><div class="icon-sq" style="width:34px; height:34px; margin:0 auto 12px; color:var(--mist-dim);">${ICONS.empty}</div><p class="muted" style="margin:0;">${t('hist_empty')}</p></div>`; animateHistTrendBars(); return; }
+  if(!state.runs || state.runs.length===0){ el.innerHTML = stravaSyncCard + trendsCard + mixCard + paceTrendCard + `<div class="card" style="text-align:center; padding:32px 18px;"><div class="icon-sq" style="width:34px; height:34px; margin:0 auto 12px; color:var(--mist-dim);">${ICONS.empty}</div><p class="muted" style="margin:0;">${t('hist_empty')}</p></div>`; animateHistTrendBars(); return; }
   // Buscador simple + encabezados de mes -- con varios meses de historial cargado, una
   // lista plana se vuelve incómoda de recorrer. El buscador filtra por lo que se ve en
   // cada tarjeta (fecha, zapatilla, "manual"/Strava); los encabezados de mes se insertan
@@ -5146,12 +5198,12 @@ function renderHistory(){
     return haystack.includes(query);
   });
   if(query && !filteredRuns.length){
-    el.innerHTML = stravaSyncCard + trendsCard + mixCard + `<div class="card" style="text-align:center; padding:32px 18px;"><p class="muted" style="margin:0;">${t('hist_search_empty')}</p></div>`;
+    el.innerHTML = stravaSyncCard + trendsCard + mixCard + paceTrendCard + `<div class="card" style="text-align:center; padding:32px 18px;"><p class="muted" style="margin:0;">${t('hist_search_empty')}</p></div>`;
     animateHistTrendBars();
     return;
   }
   let lastMonthKey = null;
-  el.innerHTML = stravaSyncCard + trendsCard + mixCard + filteredRuns.map(r=>{
+  el.innerHTML = stravaSyncCard + trendsCard + mixCard + paceTrendCard + filteredRuns.map(r=>{
     const shoe = state.shoes.find(s=>String(s.id)===String(r.shoeId));
     const paceMin = r.distanceKm>0.02 ? (r.durationSec/60)/r.distanceKm : 0;
     const avgHr = r.avgHr || (r.hrLog && r.hrLog.length ? Math.round(r.hrLog.reduce((a,h)=>a+h.bpm,0)/r.hrLog.length) : null);
@@ -5198,7 +5250,7 @@ function renderHistory(){
   animateHistTrendBars();
 }
 function animateHistTrendBars(){
-  ['hist-trend-bars'].forEach(id=>{
+  ['hist-trend-bars','hist-pace-trend-bars'].forEach(id=>{
     const barsEl = document.getElementById(id);
     if(!barsEl) return;
     requestAnimationFrame(()=>{
