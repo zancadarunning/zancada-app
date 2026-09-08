@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T04:00:00Z';
+const APP_VERSION = '2026-09-08T05:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -2074,7 +2074,16 @@ function planAmountText(d){
 }
 function planLabel(d){
   if(d.raceDay) return {type: t('plan_race_day_type'), desc: t('plan_race_day_desc', {name: escapeHtml(state.event ? state.event.name : '')})};
-  if(d.custom) return {type:d.type, desc:d.desc};
+  if(d.custom){
+    // Una sesión "custom" es texto libre que el coach (IA) escribió a partir de un pedido
+    // del usuario (modificar_sesion) -- pero sigue siendo una sesión de running como
+    // cualquier otra, así que también lleva la estructura de entrada en calor / vuelta a
+    // la calma cuando tiene distancia (antes se mostraba SOLO el texto del coach, sin esa
+    // estructura, lo que hacía que un día editado por chat se viera "distinto" al resto
+    // del plan).
+    const desc = d.dist>0 ? `${t('desc_warmup_prefix')}\n${d.desc}\n${t('desc_cooldown_suffix')}` : d.desc;
+    return {type:d.type, desc};
+  }
   const timeMode = isTimeMode();
   const suf = d.beginner && (d.typeKey==='easy'||d.typeKey==='long'||d.typeKey==='rest') ? '_beginner' : '';
   let desc = t('desc_'+d.typeKey+suf);
@@ -2357,6 +2366,21 @@ function openRescheduleModal(){
   document.getElementById('reschedule-modal').style.display = 'block';
 }
 function closeRescheduleModal(){ document.getElementById('reschedule-modal').style.display = 'none'; }
+// Intercambia el CONTENIDO de la sesión (tipo, distancia, terreno, zona, estructura de
+// series, y también si es una sesión "custom" escrita por el coach vía chat) entre dos
+// días del plan -- cada objeto conserva su propio "day" (la clave del día de la semana no
+// se mueve, lo que se mueve es qué entrenamiento le toca a cada uno). La usan tanto
+// rescheduleToday (botón del aviso de clima) como applyMoveSession (herramienta
+// mover_sesion del coach) -- antes cada una reimplementaba el intercambio por su cuenta,
+// y quedaban chances de que una de las dos se olvidara de algún campo (fue justo lo que
+// pasó con el coach: modificar_sesion arrastraba tipo/distancia/zona pero no terreno).
+function swapPlanDaySessions(dayA, dayB){
+  const fields = ['typeKey','dist','terrain','zone','interval','custom','type','desc'];
+  const aCopy = {};
+  fields.forEach(f=>{ aCopy[f] = dayA[f]; });
+  fields.forEach(f=>{ if(dayB[f]===undefined) delete dayA[f]; else dayA[f] = dayB[f]; });
+  fields.forEach(f=>{ if(aCopy[f]===undefined) delete dayB[f]; else dayB[f] = aCopy[f]; });
+}
 function rescheduleToday(targetDayKey){
   const todayIdx = (new Date().getDay()+6)%7;
   const targetIdx = DAY_KEYS.indexOf(targetDayKey);
@@ -2364,14 +2388,7 @@ function rescheduleToday(targetDayKey){
   const todayPlan = state.plan[todayIdx];
   const targetPlan = state.plan[targetIdx];
   if(!todayPlan || !targetPlan) return;
-  // Se intercambia el CONTENIDO de la sesión (tipo, distancia, terreno, zona, estructura de
-  // series) entre los dos días -- cada objeto conserva su propio "day" (la clave del día de
-  // la semana no se mueve, lo que se mueve es qué entrenamiento le toca a cada uno).
-  const fields = ['typeKey','dist','terrain','zone','interval'];
-  const todaySession = {};
-  fields.forEach(f=>{ todaySession[f] = todayPlan[f]; });
-  fields.forEach(f=>{ if(targetPlan[f]===undefined) delete todayPlan[f]; else todayPlan[f] = targetPlan[f]; });
-  fields.forEach(f=>{ if(todaySession[f]===undefined) delete targetPlan[f]; else targetPlan[f] = todaySession[f]; });
+  swapPlanDaySessions(todayPlan, targetPlan);
   closeRescheduleModal();
   persist();
   renderPlan();
@@ -2421,8 +2438,10 @@ function renderHome(){
   const lbl = planLabel(today);
   document.getElementById('home-next-title').textContent = lbl.type;
   // lbl.desc trae saltos de línea reales (entrada en calor / sesión / vuelta a la calma,
-  // ver planLabel) -- se listan como viñetas breves en vez de un párrafo corrido.
-  const nextDescLines = lbl.desc.split('\n').filter(Boolean);
+  // ver planLabel) -- se listan como viñetas breves en vez de un párrafo corrido. En un día
+  // "custom" el texto del medio lo escribió el coach (IA) a partir de la charla, así que se
+  // escapa antes de insertarlo como HTML -- mismo criterio que ya usa renderPlan().
+  const nextDescLines = (today.custom ? escapeHtml(lbl.desc) : lbl.desc).split('\n').filter(Boolean);
   document.getElementById('home-next-desc').innerHTML = nextDescLines.map(line=>`<div class="next-session-bullet">${line}</div>`).join('');
   document.getElementById('home-next-dist').textContent = planAmountText(today);
   document.getElementById('home-next-zone').innerHTML = (today.dist>0 && today.zone) ? `<span class="zone-chip zone-${today.zone}">${t('zone_word')} ${today.zone}</span>` : '';
@@ -5704,50 +5723,9 @@ function renderRDDetalles(panel){
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; padding-top:16px; border-top:1px solid var(--asphalt-3); gap:8px; flex-wrap:wrap;"><span class="muted">${t('hist_shoe')}</span>${shoeSelect}</div>
     </div>
     ${r.hrLog && r.hrLog.length>1 ? `<div class="hist-hrlist" style="margin-top:12px;">${r.hrLog.map(h=>`<span class="zone-chip zone-${classifyHR(h.bpm)}">${h.bpm} bpm</span>`).join('')}</div>` : ''}
-    ${r.points && r.points.length>1 ? `<button class="btn btn-outline" style="width:100%; margin-top:16px;" onclick="downloadRunGPX('${r.id}')">${t('rd_export_gpx')}</button>` : ''}
   `;
   // El botón "Compartir con amigos" queda oculto por ahora (junto con la sección social
   // de Perfil) -- shareRunToFeed() se deja intacta para poder reactivarlo más adelante.
-}
-// Arma el GPX de una carrera a partir de los puntos GPS crudos (r.points).
-// A diferencia del .ics del calendario (que solo agenda), esto le devuelve al
-// usuario su propio recorrido en un formato estándar que cualquier otra app de
-// mapas/entrenamiento sabe abrir -- no depende de tener la carrera sincronizada
-// con Strava para poder sacarla de la app.
-function buildGPX(r){
-  const points = r.points || [];
-  const startMs = new Date(r.date).getTime();
-  const trkpts = points.map(p=>{
-    const ts = new Date(startMs + (p.t||0)*1000).toISOString();
-    const ele = (p.alt!=null && !isNaN(p.alt)) ? `<ele>${p.alt.toFixed(1)}</ele>` : '';
-    return `<trkpt lat="${p.lat}" lon="${p.lon}">${ele}<time>${ts}</time></trkpt>`;
-  }).join('');
-  const name = escapeHtml(r.name || new Date(r.date).toLocaleDateString(LOCALE_MAP[lang]));
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Zancada" xmlns="http://www.topografix.com/GPX/1/1">\n<trk><name>${name}</name><trkseg>${trkpts}</trkseg></trk>\n</gpx>\n`;
-}
-async function downloadRunGPX(runId){
-  const r = state.runs.find(x => String(x.id) === String(runId));
-  if(!r || !r.points || r.points.length<2) return;
-  const gpx = buildGPX(r);
-  const dateSlug = (r.date||new Date().toISOString()).slice(0,10);
-  const fileName = `zancada-${dateSlug}.gpx`;
-  const blob = new Blob([gpx], {type:'application/gpx+xml'});
-  // Mismo patrón que downloadEventIcs()/shareRunImage(): preferimos el panel
-  // nativo para compartir el archivo, y cae a la descarga clásica si no hay
-  // Web Share API (desktop). El GPX es texto plano bien formado, así que no
-  // arrastra ninguno de los problemas de contenedor que tuvo el video.
-  try{
-    const file = new File([blob], fileName, {type:'application/gpx+xml'});
-    if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
-      await navigator.share({files:[file], title:fileName});
-      return;
-    }
-  }catch(e){ /* si el share falla o lo cancela, seguimos con la descarga directa */ }
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = fileName;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url), 5000);
 }
 async function deleteRun(runId){
   if(!(await showConfirm(t('hist_delete_confirm'), {danger:true, confirmText:t('delete_word')}))) return;
@@ -6866,6 +6844,15 @@ const TOOLS = [
     }, required:["dia"]}
   },
   {
+    name:"mover_sesion",
+    description:"Mueve/intercambia la sesión de un día puntual a OTRO día de la MISMA semana actual, conservando exactamente el mismo tipo, distancia, terreno, zona y estructura de series -- no hace falta describir la sesión de nuevo. Usala cuando el corredor pida directamente mover/pasar/cambiar de día una sesión ya planificada (ej. 'pasá la sesión del martes al miércoles', 'corré el entrenamiento de hoy para mañana', 'movés lo de mañana al jueves'), sin que cambie el tipo de sesión en sí. Si el día de destino ya tenía otra sesión, los dos días intercambian su contenido entre sí. NO uses modificar_sesion para esto -- modificar_sesion es para CAMBIAR una sesión por una DISTINTA, no para mover la misma de día (perdería el terreno y la descripción original).",
+    input_schema:{type:"object", properties:{
+      semana:{type:"string", enum:["actual"], description:"Por ahora solo se puede mover una sesión dentro de la semana actual."},
+      dia_origen:{type:"string", enum:DAY_KEYS, description:"Día de donde se saca la sesión."},
+      dia_destino:{type:"string", enum:DAY_KEYS, description:"Día al que se mueve la sesión."}
+    }, required:["dia_origen","dia_destino"]}
+  },
+  {
     name:"ajustar_volumen_semana",
     description:"Sube o baja el volumen (distancia) de TODAS las sesiones de running de una semana, aplicando un mismo porcentaje. Usala para pedidos generales como 'quiero correr más', 'esta semana quiero sumar kilómetros' o 'bajale un poco', sin que el corredor especifique un día puntual. Por defecto aplica a la semana ACTUAL; si el corredor habla de la semana que sigue, usá semana:'siguiente'.",
     input_schema:{type:"object", properties:{
@@ -6933,11 +6920,42 @@ function applyPlanChange(input){
     d.dist = Math.max(0.5, Math.round((input.duracion_min / estimateBasePaceMinPerKm(state.profile))*10)/10);
   }
   if(input.zona) d.zone = input.zona;
+  // Si el modelo no menciona terreno (no es obligatorio en la herramienta), no queremos
+  // que el día se quede SIN terreno -- antes pasaba justo eso cuando el día venía de ser
+  // descanso (terrain:null) y el pedido era, por ejemplo, "pasá la sesión del martes acá":
+  // el terreno quedaba en null y el cartel de asfalto/trail desaparecía sin que nadie lo
+  // haya pedido. Si ya tenía terreno seteado lo dejamos como está; si no, usamos el
+  // terreno preferido del perfil como default razonable.
   if(input.terreno) d.terrain = input.terreno;
+  else if(!d.terrain) d.terrain = state.profile.terrain;
   renderPlan(); renderHome(); persist();
   state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+d.day)), ts:Date.now()});
   const amountTxt = typeof input.duracion_min==='number' ? `${input.duracion_min}min (~${d.dist}km)` : `${d.dist}km`;
   return `OK, actualizado ${d.day}: ${d.type}, ${amountTxt}${d.zone?', zona '+d.zone:''}.`;
+}
+function applyMoveSession(input){
+  // Mueve/intercambia la sesión de un día a otro DENTRO de la semana actual, conservando
+  // tipo, distancia, terreno, zona y estructura de series exactamente como estaban --
+  // pensada para pedidos de "mové/pasá/cambiá de día" una sesión ya planificada, sin que
+  // el modelo tenga que reescribir la descripción de memoria (eso es lo que hacía antes
+  // modificar_sesion para estos casos, y por eso el día de destino terminaba con una
+  // descripción distinta a la original y, a veces, sin terreno).
+  if(input.semana === 'siguiente'){
+    return 'Por ahora solo puedo mover una sesión ya planificada dentro de la semana ACTUAL. Para la semana que viene, usá modificar_sesion en cada día.';
+  }
+  const origIdx = DAY_KEYS.indexOf(input.dia_origen);
+  const destIdx = DAY_KEYS.indexOf(input.dia_destino);
+  if(origIdx===-1 || destIdx===-1) return 'Día no encontrado.';
+  if(origIdx===destIdx) return 'El día de origen y el de destino son el mismo.';
+  const origDay = state.plan[origIdx], destDay = state.plan[destIdx];
+  if(!origDay || !destDay) return 'Día no encontrado.';
+  if(isDayLocked(input.dia_origen)) return `No puedo mover ${input.dia_origen}: ya pasó (o ya se corrió/salteó) esta semana.`;
+  if(isDayLocked(input.dia_destino)) return `No puedo mover la sesión a ${input.dia_destino}: ese día ya pasó (o ya se corrió/salteó) esta semana.`;
+  if(origDay.raceDay || destDay.raceDay) return 'No puedo mover una sesión hacia o desde el día de tu carrera cargada en Próximos Eventos.';
+  swapPlanDaySessions(origDay, destDay);
+  renderPlan(); renderHome(); renderRunTodayCard(); persist();
+  state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+input.dia_origen)+' → '+t('day_'+input.dia_destino)), ts:Date.now()});
+  return `OK, moví la sesión de ${input.dia_origen} a ${input.dia_destino}.`;
 }
 function applyCancelSession(input){
   // Antes, cuando el corredor cancelaba una sesión por chat, el modelo terminaba
@@ -7071,8 +7089,9 @@ Basá tus recomendaciones en principios reales de entrenamiento, no solo en lo q
 
 Ya tenés en el contexto el plan de la semana actual Y el de la semana que sigue (todavía no empezó, pero ya está calculado). Si te preguntan qué toca la semana que viene, respondé con esos datos directamente — nunca digas que todavía no está definida.
 
-Tenés cinco herramientas para aplicar cambios reales en la app. Cuando el corredor pida un cambio, usá SIEMPRE la herramienta correspondiente en la misma respuesta — nunca digas que ya lo cambiaste sin haber llamado a la herramienta:
-- modificar_sesion: para cambiar UN día puntual por OTRA sesión distinta (tipo, distancia, zona, terreno), de esta semana o de la que sigue (parámetro semana). Si el corredor entrena por tiempo (fijate en el contexto) o te da la sesión directamente en minutos, usá duracion_min en vez de distancia_km.
+Tenés seis herramientas para aplicar cambios reales en la app. Cuando el corredor pida un cambio, usá SIEMPRE la herramienta correspondiente en la misma respuesta — nunca digas que ya lo cambiaste sin haber llamado a la herramienta:
+- mover_sesion: cuando el pedido es literalmente MOVER/PASAR/CAMBIAR DE DÍA una sesión que ya está planificada, sin cambiar qué es (ej. "pasá el martes al miércoles", "corré lo de hoy para mañana"), dentro de la semana actual. Usala SIEMPRE que el pedido sea de este tipo, en vez de modificar_sesion + cancelar_sesion combinadas -- conserva el terreno, la zona y la descripción original tal cual, que es exactamente lo que se espera de un "cambio de día" (modificar_sesion te haría reescribir la descripción de memoria y perder el terreno si no lo repetís).
+- modificar_sesion: para cambiar UN día puntual por OTRA sesión DISTINTA de la que tenía (tipo, distancia, zona, terreno) -- no para mover la misma sesión de día, para eso está mover_sesion. Sirve para esta semana o la que sigue (parámetro semana). Si el corredor entrena por tiempo (fijate en el contexto) o te da la sesión directamente en minutos, usá duracion_min en vez de distancia_km.
 - cancelar_sesion: cuando el corredor cancela, saca o no puede hacer una sesión y NO la reemplaza por otra — deja ese día vacío, igual que un día sin entrenamiento. Nunca uses modificar_sesion para esto ni inventes una sesión suave o de zona 1 "de reemplazo": si el pedido es cancelar, el día tiene que quedar sin ningún ejercicio.
 - ajustar_volumen_semana: para pedidos generales de correr más o menos (ej. "quiero correr más km", "bajale un poco"), sin que especifiquen un día — de esta semana o de la que sigue (parámetro semana).
 - modificar_perfil: para cambios permanentes de datos personales que afectan los PRÓXIMOS planes (km semanales base, objetivo, terreno, FC máxima).
@@ -7108,6 +7127,7 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
       const toolResults = toolUses.map(tu=>{
         let result;
         if(tu.name==='modificar_sesion') result = applyPlanChange(tu.input);
+        else if(tu.name==='mover_sesion') result = applyMoveSession(tu.input);
         else if(tu.name==='cancelar_sesion') result = applyCancelSession(tu.input);
         else if(tu.name==='ajustar_volumen_semana') result = applyVolumeAdjust(tu.input);
         else if(tu.name==='modificar_perfil') result = applyProfileChange(tu.input);
