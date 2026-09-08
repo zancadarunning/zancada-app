@@ -1,6 +1,52 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-03T15:40:00Z';
+const APP_VERSION = '2026-09-07T23:45:53Z';
+/* ================= NOVEDADES ("qué hay de nuevo") =================
+   APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
+   así que no sirve como versión "de release" para mostrarle algo al usuario --
+   compararíamos contra un timestamp que cambió por un fix de un pixel y le
+   mostraríamos "novedades" vacías todo el tiempo. Esta lista es manual y
+   curada a propósito: cada entrada es un cambio real que vale la pena contarle
+   a alguien que ya tiene la app instalada. El id de cada entrada es para
+   siempre -- una vez publicada una entrada, no se le cambia el id ni se borra
+   (si el cambio queda obsoleto, se deja de agregar entradas nuevas nomás). El
+   texto en sí vive en los locales (changelog_<algo> en cada idioma), como el
+   resto de los textos de la app. */
+const CHANGELOG = [
+  {id:'2026-09-gpx-export', key:'changelog_gpx_export'},
+  {id:'2026-09-pace-calc', key:'changelog_pace_calc'},
+  {id:'2026-09-achievements', key:'changelog_achievements'},
+  {id:'2026-09-social', key:'changelog_social'},
+  {id:'2026-09-redesign', key:'changelog_redesign'},
+  {id:'2026-09-profile-redesign', key:'changelog_profile_redesign'},
+  {id:'2026-09-achievements-pr', key:'changelog_achievements_pr'},
+  {id:'2026-09-cancel-session', key:'changelog_cancel_session'},
+  {id:'2026-09-trainby', key:'changelog_trainby'},
+  {id:'2026-09-weather', key:'changelog_weather'},
+];
+function maybeShowWhatsNew(){
+  if(!state.onboarded) return;
+  let lastSeen;
+  try{ lastSeen = localStorage.getItem('zancada_last_seen_changelog'); }catch(e){ lastSeen = null; }
+  if(lastSeen === null || lastSeen === undefined){
+    // No hay nada guardado -- puede ser una instalación nueva (no tiene sentido
+    // mostrarle "novedades" a alguien que recién está conociendo la app) o
+    // alguien que ya la usaba de antes de que existiera este sistema (tampoco
+    // le podemos mostrar de golpe todo el historial pasado como si fuera nuevo).
+    // En los dos casos, arrancamos "al día" desde ahora en silencio.
+    try{ localStorage.setItem('zancada_last_seen_changelog', CHANGELOG[CHANGELOG.length-1].id); }catch(e){}
+    return;
+  }
+  const lastSeenIdx = CHANGELOG.findIndex(c=>c.id===lastSeen);
+  const unseen = lastSeenIdx>=0 ? CHANGELOG.slice(lastSeenIdx+1) : CHANGELOG;
+  if(!unseen.length) return;
+  document.getElementById('whats-new-list').innerHTML = unseen.map(c=>`<li>${t(c.key)}</li>`).join('');
+  document.getElementById('whats-new-modal').style.display = 'block';
+}
+function closeWhatsNew(){
+  document.getElementById('whats-new-modal').style.display = 'none';
+  try{ localStorage.setItem('zancada_last_seen_changelog', CHANGELOG[CHANGELOG.length-1].id); }catch(e){}
+}
 /* I18N ahora vive en /locales/*.js (cargados antes que este archivo, ver index.html) — window.I18N ya está armado para cuando llegamos acá. */
 /* Cuando la app corre empaquetada nativa (Capacitor, iOS), el HTML/JS vive adentro del
    binario -- no hay un servidor propio sirviendo /api/* como pasa en la PWA web, así que
@@ -13,6 +59,9 @@ function apiUrl(path){
   return native ? ('https://zancada.org' + path) : path;
 }
 const LANG_NAMES={es:"español",en:"English",pt:"português",fr:"français",it:"italiano",de:"Deutsch"};
+// Nombres de idioma capitalizados, como aparecen en las opciones del selector -- LANG_NAMES
+// de arriba está en minúscula a propósito (se usa dentro de una frase del prompt del coach).
+const LANG_DISPLAY={es:"Español",en:"English",pt:"Português",fr:"Français",it:"Italiano",de:"Deutsch"};
 const LOCALE_MAP={es:"es-AR",en:"en-US",pt:"pt-BR",fr:"fr-FR",it:"it-IT",de:"de-DE"};
 function detectInitialLang(){
   const supported = ['es','en','pt','fr','it','de'];
@@ -34,6 +83,8 @@ function applyStaticTranslations(){
   document.querySelectorAll('a[href^="/terms.html"]').forEach(el=>{ el.href = apiUrl('/terms.html?lang=' + lang); });
   document.getElementById('pauseBtn').textContent = tracker.running ? t('run_pause') : t('run_resume');
   [...document.getElementById('perfil-lang-choice').children].forEach(c=>c.classList.toggle('active', c.dataset.v===lang));
+  const langSummaryEl = document.getElementById('perfil-lang-summary');
+  if(langSummaryEl) langSummaryEl.textContent = LANG_DISPLAY[lang] || lang;
 }
 function setLang(code){
   lang = code; state.lang = code;
@@ -79,7 +130,10 @@ const ICONS = {
   faceBad: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M8.5 15.5c1-1.3 2.2-2 3.5-2s2.5.7 3.5 2"/><circle cx="9" cy="9.5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="9.5" r="1" fill="currentColor" stroke="none"/></svg>',
   faceGood: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M8 14c1.2 1.3 2.6 2 4 2s2.8-.7 4-2"/><circle cx="9" cy="9.5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="9.5" r="1" fill="currentColor" stroke="none"/></svg>',
   faceGreat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M7.5 13.5c1.4 2 2.9 3 4.5 3s3.1-1 4.5-3"/><path d="M7.7 9.2a2 2 0 0 1 2.6 0M13.7 9.2a2 2 0 0 1 2.6 0"/></svg>',
-  shoe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 17c0-1.2.7-2.3 1.8-2.8l5-2.3c.6-.3 1.3-.3 1.9 0l2.6 1.3c1.6.8 3.4 1.2 5.2 1.2h1.5v3.6H2.5V17z"/><path d="M9.3 11.9l.9-3.4M4.3 14.2c1.3.5 2.7.8 4.1.8"/></svg>',
+  // Silueta de zapatilla "chunky" (suela alta, estilo Vomero) rellena de un solo color --
+  // elegida a mano probando varias iteraciones con el usuario hasta que la silueta se
+  // pareciera de verdad a una zapatilla de running y no a una figura abstracta.
+  shoe: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M3.3 15.2 C2.6 13 2.8 10.5 3.6 9.3 C4 9 4.2 8.8 4.6 9 C5.2 9.3 5.8 9.8 6.2 10.4 C6.9 9.9 7.7 9.2 8.6 9 C11 9.6 15 11 18.5 13.6 C19.6 14.3 20.4 15 20.8 16 L21 16 Q22.3 16 22.3 17.2 L22.3 18 Q22.3 19.3 21 19.3 L2.8 19.3 Q1.6 19.3 1.6 18 L1.6 16.4 Q1.6 15.2 2.8 15.2 Z"/></svg>',
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
   edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>',
   empty: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 12a8 8 0 1 0 3-6.3"/><path d="M4 5v4h4"/><path d="M12 8v4l3 2"/></svg>',
@@ -98,7 +152,12 @@ const ICONS = {
   info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg>',
   eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>',
   eyeOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.8 21.8 0 0 1 5.06-5.94M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 7 11 7a21.8 21.8 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
-  medal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 2.5 10.5 8M15.5 2.5 13.5 8"/><circle cx="12" cy="14.5" r="6.5"/><path d="M12 11.2l1.1 2.2 2.4.35-1.75 1.7.4 2.4-2.15-1.15-2.15 1.15.4-2.4-1.75-1.7 2.4-.35z" fill="currentColor" stroke="none"/></svg>'
+  medal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 2.5 10.5 8M15.5 2.5 13.5 8"/><circle cx="12" cy="14.5" r="6.5"/><path d="M12 11.2l1.1 2.2 2.4.35-1.75 1.7.4 2.4-2.15-1.15-2.15 1.15.4-2.4-1.75-1.7 2.4-.35z" fill="currentColor" stroke="none"/></svg>',
+  locate: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3.5M12 18.5V22M2 12h3.5M18.5 12H22"/></svg>',
+  video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="M15.5 10.2l6-3.2v10l-6-3.2z"/></svg>',
+  stopwatch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v2"/></svg>',
+  heart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-10-9.3C.4 8 1.8 4.5 5 3.5c2-.6 4 .2 5.2 2C11.4 3.7 13.4 2.9 15.4 3.5c3.2 1 4.6 4.5 3 7.7-2.5 4.7-10 9.3-10 9.3z"/></svg>',
+  heartFilled: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 20.5s-7.5-4.6-10-9.3C.4 8 1.8 4.5 5 3.5c2-.6 4 .2 5.2 2C11.4 3.7 13.4 2.9 15.4 3.5c3.2 1 4.6 4.5 3 7.7-2.5 4.7-10 9.3-10 9.3z"/></svg>'
 };
 
 /* ================= FEEDBACK: toast / confirm / haptics ================= */
@@ -219,6 +278,10 @@ function showConfirm(message, opts){
 let state = {onboarded:false, profile:{}, plan:[], runs:[], shoes:[], event:null, chat:[], lang:lang, painLog:[], readinessLog:[]};
 let pendingEmail = '';
 let currentUserId = null;
+// Nombre de usuario para la parte social (usernames + seguir amigos + feed + likes).
+// Vive en su propia tabla de Supabase (no adentro de app_state) porque hace falta
+// poder buscarlo entre usuarios sin exponer el resto del perfil -- ver sql/social.sql.
+let myUsername = null;
 /* ---- pantalla de "confirmá tu mail", con reintento automático de login mientras se espera ---- */
 let confirmEmailAddr = '';
 let confirmEmailPw = '';
@@ -503,7 +566,7 @@ async function handleAppleSignIn(btnId){
 }
 
 /* ---- Strava ---- */
-const STRAVA_CLIENT_ID = '275082';
+const STRAVA_CLIENT_ID = '276715';
 async function connectStrava(){
   // Pedimos un "state" firmado por el backend antes de mandar al usuario a
   // Strava, en vez de mandar el user_id suelto — así el callback puede
@@ -518,7 +581,17 @@ async function connectStrava(){
     });
     if(!res.ok) throw new Error('strava-init failed');
     const { state } = await res.json();
-    const redirectUri = `${window.location.origin}/api/strava-auth`;
+    // El redirect_uri tiene que ser SIEMPRE este link fijo a zancada.org -- nunca algo
+    // armado con window.location.origin. Strava solo acepta un redirect_uri cuyo dominio
+    // coincida exactamente con el "Authorization Callback Domain" configurado en el panel
+    // de la app (zancada.org), y window.location.origin puede ser cualquier otra cosa
+    // según desde dónde se haya cargado la página: capacitor://localhost o
+    // https://localhost en la app nativa, o el dominio crudo de Vercel
+    // (zancada-app.vercel.app) si alguien entra por ahí en vez de por zancada.org -- en
+    // cualquiera de esos casos Strava rechazaba todo con "redirect_uri invalid". Como el
+    // backend (api/strava-auth.js) vive en el mismo proyecto sin importar qué dominio usó
+    // el usuario para llegar hasta acá, no hace falta que coincida con el origin real.
+    const redirectUri = 'https://zancada.org/api/strava-auth';
     const url = `https://www.strava.com/oauth/authorize?client_id=${STRAVA_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=activity:read_all&state=${encodeURIComponent(state)}&approval_prompt=force`;
     window.location.href = url;
   }catch(e){
@@ -731,6 +804,16 @@ document.getElementById('ob-terrain').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('ob-terrain').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
 });
+document.getElementById('ob-trainby').addEventListener('click', e=>{
+  const c=e.target.closest('.choice'); if(!c) return;
+  [...document.getElementById('ob-trainby').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
+});
+document.getElementById('perfil-trainby-toggle').addEventListener('click', e=>{
+  const c=e.target.closest('.choice'); if(!c) return;
+  [...document.getElementById('perfil-trainby-toggle').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
+  state.profile.trainBy = c.dataset.v;
+  renderAll(); renderHistory(); persist();
+});
 document.getElementById('ob-runnertype').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('ob-runnertype').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
@@ -757,6 +840,7 @@ document.getElementById('ob-days').addEventListener('click', e=>{
 document.getElementById('perfil-days').addEventListener('click', e=>{
   const c=e.target.closest('.day-pill'); if(!c) return;
   c.classList.toggle('active');
+  markPerfilDirty('days'); // toggle de clase, no dispara 'change' -- hay que marcarlo a mano
 });
 function populateOnboardDays(){
   document.querySelectorAll('#ob-days .day-pill').forEach(el=>{ el.textContent = t('day_'+el.dataset.v).slice(0,3); });
@@ -765,6 +849,8 @@ function renderPerfilDays(){
   const selected = state.profile.trainingDays || [];
   document.getElementById('perfil-days').innerHTML = DAY_KEYS.map(d=>
     `<div class="day-pill${selected.includes(d)?' active':''}" data-v="${d}">${t('day_'+d).slice(0,3)}</div>`).join('');
+  const daysSummaryEl = document.getElementById('perfil-days-summary');
+  if(daysSummaryEl) daysSummaryEl.textContent = DAY_KEYS.filter(d=>selected.includes(d)).map(d=>t('day_'+d)).join(', ');
 }
 function preserveLivedDays(oldPlan, newPlan){
   if(!oldPlan || !oldPlan.length) return newPlan;
@@ -817,6 +903,42 @@ function relinkTodayRun(){
   if(todayRun){ today.status = 'done'; today.linkedRunId = todayRun.id; return true; }
   return false;
 }
+/* ---- Botones "Guardar" de Perfil: ocultos hasta que hay algo sin guardar ----
+   Antes cada sección de Perfil (Datos personales, Metas, Días, Zonas) tenía su botón
+   "Guardar" siempre visible, lo que generaba dudas sobre si un cambio ya estaba guardado
+   o no. Ahora el botón de cada sección arranca oculto (ver .perfil-save-btn en el CSS) y
+   solo aparece cuando el usuario modifica algo dentro de esa tarjeta; al tocarlo, se pide
+   una confirmación rápida antes de aplicar el cambio, y el botón vuelve a ocultarse una
+   vez guardado (dentro de flashSaved, más abajo).
+   markPerfilDirty() se llama tanto desde los listeners delegados de abajo (inputs/selects
+   nativos) como a mano desde los pocos lugares que cambian estos campos sin disparar un
+   evento nativo (elegir terreno/días con un click en un .choice/.day-pill, o elegir fecha
+   de carrera desde el calendario). */
+const PERFIL_SAVE_SECTIONS = {
+  personal: { cardId: 'perfil-personal-card', btnId: 'save-personal-btn', run: savePersonalData },
+  goals:    { cardId: 'perfil-goals-card',    btnId: 'save-goals-btn',    run: saveGoals },
+  days:     { cardId: 'perfil-days-card',     btnId: 'save-days-btn',     run: saveTrainingDays },
+  zones:    { cardId: 'perfil-zones-card',    btnId: 'save-zones-btn',    run: saveCustomZones },
+};
+function markPerfilDirty(key){
+  const cfg = PERFIL_SAVE_SECTIONS[key];
+  const btn = cfg && document.getElementById(cfg.btnId);
+  if(btn) btn.classList.add('dirty');
+}
+function wirePerfilDirtyTracking(){
+  Object.keys(PERFIL_SAVE_SECTIONS).forEach(key=>{
+    const card = document.getElementById(PERFIL_SAVE_SECTIONS[key].cardId);
+    if(!card) return;
+    ['input','change'].forEach(evt=>card.addEventListener(evt, ()=>markPerfilDirty(key)));
+  });
+}
+wirePerfilDirtyTracking();
+async function confirmAndSave(key){
+  const cfg = PERFIL_SAVE_SECTIONS[key];
+  if(!cfg) return;
+  if(!(await showConfirm(t('perfil_save_confirm_msg')))) return;
+  cfg.run();
+}
 function saveTrainingDays(){
   const selected = [...document.querySelectorAll('#perfil-days .day-pill.active')].map(el=>el.dataset.v);
   if(selected.length===0){ showToast(t('perfil_days_empty_err'),'error'); return; }
@@ -836,17 +958,9 @@ function flashSaved(btnId){
   setTimeout(()=>{
     btn.innerHTML = original;
     btn.classList.remove('btn-saved-flash');
+    btn.classList.remove('dirty'); // ya se guardó -- el botón vuelve a ocultarse hasta el próximo cambio
     delete btn.dataset.flashing;
   }, 1400);
-}
-function handleGoalChange(newGoal){
-  const wrap = document.getElementById('perfil-goal-km-check');
-  if(newGoal !== state.profile.goal){
-    wrap.style.display = 'block';
-    document.getElementById('perfil-current-km-check').value = state.profile.weeklyKm || '';
-  } else {
-    wrap.style.display = 'none';
-  }
 }
 /* ---- cuándo aplicar un cambio de perfil/objetivo que afecta el plan ----
    Editar datos personales o el objetivo semanal puede cambiar el plan de la semana
@@ -897,19 +1011,17 @@ function savePersonalData(){
   const terrainChoice = document.querySelector('#perfil-terrain-choice .choice.active');
   const goal = document.getElementById('perfil-goal').value;
   const raceDate = document.getElementById('perfil-racedate').value || null;
-  const kmCheckWrap = document.getElementById('perfil-goal-km-check');
-  const currentKmInput = document.getElementById('perfil-current-km-check');
+  const currentKmInput = document.getElementById('perfil-current-km');
   if(weight>0) state.profile.weight = weight;
   if(height>0) state.profile.height = height;
   if(terrainChoice) state.profile.terrain = terrainChoice.dataset.v;
   if(goal) state.profile.goal = goal;
   state.profile.raceDate = raceDate;
-  if(kmCheckWrap.style.display==='block' && currentKmInput.value){
+  if(currentKmInput && currentKmInput.value !== ''){
     state.profile.currentWeeklyKm = parseFloat(currentKmInput.value) || 0;
     state.profile.runnerType = 'active';
   }
   state.profile.weeklyKm = calcWeeklyKm(state.profile);
-  kmCheckWrap.style.display = 'none';
   openPlanChangeTimingModal('personal');
 }
 // --- Objetivo/meta semanal: apartado "a partir de ahora" ---
@@ -953,6 +1065,7 @@ function saveGoals(){
 document.getElementById('perfil-terrain-choice').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('perfil-terrain-choice').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
+  markPerfilDirty('personal'); // toggle de clase, no dispara 'change' -- hay que marcarlo a mano
 });
 function ageFromBirth(dateStr){ const b=new Date(dateStr); return Math.max(10, Math.floor((Date.now()-b.getTime())/(365.25*24*3600*1000))); }
 const dateBoxUpdaters = {};
@@ -1079,6 +1192,7 @@ function calSelectDay(day){
   const input = document.getElementById(calTargetInputId);
   input.value = dateStr;
   dateBoxUpdaters[calTargetInputId] && dateBoxUpdaters[calTargetInputId]();
+  if(calTargetInputId === 'perfil-racedate') markPerfilDirty('personal'); // set vía JS, no dispara 'change'
   closeCalendar();
 }
 setupDateBox('ob-birth','ob-birth-text');
@@ -1127,6 +1241,7 @@ async function finishOnboard(){
   const runnerType = document.querySelector('#ob-runnertype .choice.active').dataset.v;
   const currentWeeklyKm = runnerType==='active' ? (parseFloat(document.getElementById('ob-currentkm').value) || 0) : 0;
   const terrain = document.querySelector('#ob-terrain .choice.active').dataset.v;
+  const trainBy = document.querySelector('#ob-trainby .choice.active').dataset.v;
   const trainingDays = DAY_KEYS.filter(d => document.querySelector(`#ob-days .day-pill[data-v="${d}"]`).classList.contains('active'));
   const goal = document.getElementById('ob-goal').value;
   const raceDate = document.getElementById('ob-racedate').value || null;
@@ -1139,7 +1254,13 @@ async function finishOnboard(){
   // recordatorio diario del lado del servidor (api/send-reminders.js) para mandar el
   // aviso a la hora local de cada uno, no a una sola hora fija para todo el mundo.
   // detectDeviceTz() está definida más abajo, junto al resto de fecha/hora.
-  state.profile = {email:pendingEmail, name, weight, height, birth, terrain, trainingDays: trainingDays.length?trainingDays:['tue','thu','sun'], goal, raceDate, runnerType, currentWeeklyKm, hrMax, hrKnown, hrZones:computeZones(hrMax), tz:detectDeviceTz()};
+  // createdAt guarda la fecha (YYYY-MM-DD, hora local) en que esta persona terminó el
+  // onboarding y arrancó el plan -- lo usa autoSkipPastDays() y computeDailyTrend() para
+  // no marcar como "no entrenó" ningún día ANTERIOR a que la cuenta existiera. Antes de
+  // esto, alguien que se sumaba un martes con lunes/miércoles/viernes como días de
+  // entrenamiento veía el lunes (e incluso el domingo previo) ya marcado como sesión
+  // perdida, cuando en realidad todavía ni tenía cuenta esos días.
+  state.profile = {email:pendingEmail, name, weight, height, birth, terrain, trainBy, trainingDays: trainingDays.length?trainingDays:['tue','thu','sun'], goal, raceDate, runnerType, currentWeeklyKm, hrMax, hrKnown, hrZones:computeZones(hrMax), tz:detectDeviceTz(), createdAt: todayLocalISO()};
   state.profile.weeklyKm = calcWeeklyKm(state.profile);
   state.weekNumber = 1;
   state.weekStart = getMondayISO(new Date());
@@ -1221,6 +1342,7 @@ function enterApp(){
   document.getElementById('onboard').style.display='none';
   document.getElementById('mainHeader').style.display='flex';
   document.getElementById('tabbar').style.display='flex';
+  document.getElementById('coach-fab-wrap').style.display='block';
   syncTabbarHeight();
   applyStaticTranslations();
   document.getElementById('perfil-name').value = state.profile.name;
@@ -1237,11 +1359,14 @@ function enterApp(){
   if(relinkTodayRun()) persist();
   [...document.getElementById('voice-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.voiceEnabled===false?'off':'on')));
   [...document.getElementById('units-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.profile.units==='imperial'?'imperial':'metric')));
+  [...document.getElementById('perfil-trainby-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.profile.trainBy==='time'?'time':'distance')));
   renderPerfilDays();
   renderAll(); renderHistory(); renderZones();
   showView('inicio');
   setTimeout(checkPendingRating, 600);
   setTimeout(maybeShowInstallBanner, 1200);
+  setTimeout(maybeShowWhatsNew, 1800);
+  loadMyUsername().then(()=>renderPerfil());
 }
 async function logout(){ await supabaseClient.auth.signOut(); location.reload(); }
 async function resetApp(){
@@ -1282,6 +1407,14 @@ async function deleteAccount(){
 })();
 
 /* ================= PLAN GENERATION (con progresión semana a semana) ================= */
+// Fecha de HOY en formato YYYY-MM-DD usando los componentes LOCALES del Date (año/mes/día
+// tal como los ve el celular del usuario) -- a propósito no usa toISOString(), que convierte
+// a UTC primero y puede correr la fecha un día para atrás en husos horarios positivos
+// (ej. Japón, UTC+9): medianoche local del 1/9 ahí es 31/8 15:00 UTC.
+function todayLocalISO(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 function getMondayISO(d){
   const dt = new Date(d);
   const day = dt.getDay();
@@ -1398,9 +1531,22 @@ function eventDayIndexInWeek(weekStartDate){
 function autoSkipPastDays(){
   if(!state.onboarded || !state.weekStart) return;
   const todayIdx = (new Date().getDay()+6)%7;
+  // createdAt (si existe -- cuentas viejas de antes de este cambio no lo tienen, y ahí
+  // seguimos el comportamiento de siempre) marca el primer día que esta cuenta pudo haber
+  // entrenado. Sin este chequeo, alguien que se sumó un martes con lunes/miércoles/viernes
+  // como días de entrenamiento veía el lunes de ESA MISMA semana (día en el que la cuenta
+  // ni existía) marcado como sesión perdida, apenas terminaba el onboarding.
+  const createdAt = state.profile && state.profile.createdAt;
+  const weekStartDate = new Date(state.weekStart+'T00:00:00');
   let changed = false;
   state.plan.forEach((d,i)=>{
-    if(i < todayIdx && d.dist>0 && !d.status){ d.status = 'skipped'; changed = true; }
+    if(i >= todayIdx || !(d.dist>0) || d.status) return;
+    if(createdAt){
+      const dayDate = new Date(weekStartDate); dayDate.setDate(dayDate.getDate()+i);
+      const dayIso = `${dayDate.getFullYear()}-${String(dayDate.getMonth()+1).padStart(2,'0')}-${String(dayDate.getDate()).padStart(2,'0')}`;
+      if(dayIso < createdAt) return; // la cuenta todavía no existía ese día -- no cuenta como perdida
+    }
+    d.status = 'skipped'; changed = true;
   });
   if(changed) persist();
 }
@@ -1502,6 +1648,10 @@ function buildWeeklyRecapMessage(weekPlan, weekStartIso){
   // la segunda semana seguida, para no sonar como un contador vacío en la primera.
   const metGoal = plannedCount>0 && (doneCount/plannedCount) >= 0.7;
   state.streakWeeks = metGoal ? (state.streakWeeks||0)+1 : 0;
+  // Guardamos también la racha más larga alcanzada alguna vez (no solo la actual) --
+  // la usa la pantalla de Logros para no perder un hito ya conseguido cuando la racha
+  // en curso se corta.
+  state.bestStreakWeeks = Math.max(state.bestStreakWeeks||0, state.streakWeeks);
   if(state.streakWeeks >= 2){
     msg += ' ' + t('coach_streak_line', {n: state.streakWeeks});
   }
@@ -1843,17 +1993,64 @@ function generatePlan(p, weekNumber, weekStartDate){
     return dayObj;
   });
 }
+/* ---- entrenar por distancia vs. por tiempo -----
+   Por defecto todo el plan es 100% en km (generatePlan, buildIntervalStructure, etc. no
+   cambian). Si el corredor eligió "por tiempo" en el onboarding o en el Perfil, en vez de
+   tocar el motor de generación convertimos el km ya calculado a una duración estimada
+   usando su ritmo propio (de sus corridas reales, o si no hay suficientes, de su PR, o
+   si no hay nada, un valor por defecto según si es principiante). Así el plan interno
+   sigue siendo el mismo para todos, y solo cambia lo que se le muestra/pide al corredor. */
+function isTimeMode(){ return state.profile.trainBy === 'time'; }
+function estimateBasePaceMinPerKm(profile){
+  profile = profile || state.profile;
+  const recent = (state.runs||[]).filter(r=>r.distanceKm>0.5 && r.durationSec>0).slice(-10);
+  if(recent.length>=3){
+    const paces = recent.map(r=>(r.durationSec/60)/r.distanceKm);
+    return paces.reduce((a,b)=>a+b,0)/paces.length;
+  }
+  const anyPR = Object.values(getPersonalRecords())[0];
+  if(anyPR && anyPR.distanceKm>0 && anyPR.durationSec>0){
+    return (anyPR.durationSec/60)/anyPR.distanceKm + 1.3;
+  }
+  const beginner = profile.weeklyKm === 0 || profile.goal === 'start' || profile.runnerType === 'new';
+  return beginner ? 7.5 : 6.2;
+}
+function planDurationMin(d, profile){
+  if(!(d.dist>0)) return 0;
+  const pace = estimateBasePaceMinPerKm(profile);
+  return Math.max(5, Math.round((d.dist*pace)/5)*5);
+}
+function fmtDurationShort(sec){
+  sec = Math.max(15, Math.round(sec/15)*15);
+  if(sec < 60) return `${sec} ${t('time_unit_sec')}`;
+  return `${Math.max(1, Math.round(sec/60))} ${t('time_unit_min')}`;
+}
+function repDurationSec(repMeters, profile){
+  const pace = estimateBasePaceMinPerKm(profile);
+  return (repMeters/1000) * pace * 60;
+}
+function planAmountText(d){
+  if(!(d.dist>0)) return '';
+  return isTimeMode() ? `${planDurationMin(d)} ${t('time_unit_min')}` : `${fmtDist(d.dist,1)} ${distUnit()}`;
+}
 function planLabel(d){
   if(d.raceDay) return {type: t('plan_race_day_type'), desc: t('plan_race_day_desc', {name: escapeHtml(state.event ? state.event.name : '')})};
   if(d.custom) return {type:d.type, desc:d.desc};
+  const timeMode = isTimeMode();
   const suf = d.beginner && (d.typeKey==='easy'||d.typeKey==='long'||d.typeKey==='rest') ? '_beginner' : '';
   let desc = t('desc_'+d.typeKey+suf);
   if(d.typeKey==='intervals' && d.interval){
-    desc = t('desc_intervals_detail', {reps:d.interval.reps, meters:d.interval.repMeters, rest:d.interval.recoveryMin, zone:d.zone});
+    desc = timeMode
+      ? t('desc_intervals_detail_time', {reps:d.interval.reps, dur:fmtDurationShort(repDurationSec(d.interval.repMeters)), rest:d.interval.recoveryMin, zone:d.zone})
+      : t('desc_intervals_detail', {reps:d.interval.reps, meters:d.interval.repMeters, rest:d.interval.recoveryMin, zone:d.zone});
   } else if(d.typeKey==='hills' && d.interval){
-    desc = t('desc_hills_detail', {reps:d.interval.reps, meters:d.interval.repMeters, zone:d.zone});
+    desc = timeMode
+      ? t('desc_hills_detail_time', {reps:d.interval.reps, dur:fmtDurationShort(repDurationSec(d.interval.repMeters)), zone:d.zone})
+      : t('desc_hills_detail', {reps:d.interval.reps, meters:d.interval.repMeters, zone:d.zone});
   } else if(d.typeKey==='progression' && d.dist>0){
-    desc = t('desc_progression_detail', {third: Math.max(1, Math.round(d.dist/3))});
+    desc = timeMode
+      ? t('desc_progression_detail_time', {dur: `${Math.max(1, Math.round(planDurationMin(d)/3))} ${t('time_unit_min')}`})
+      : t('desc_progression_detail', {third: Math.max(1, Math.round(d.dist/3))});
   } else if(d.zone && d.dist>0 && d.typeKey!=='intervals' && d.typeKey!=='fartlek'){
     // el fartlek ya es alternar ritmos por sensación -- decirle "mantenete en zona X
     // durante el tramo principal" encima se contradice con la sesión misma
@@ -1891,7 +2088,7 @@ function generateWeekICS(){
     const date = new Date(monday); date.setDate(monday.getDate()+idx);
     const nextDate = new Date(date); nextDate.setDate(date.getDate()+1);
     const lbl = planLabel(d);
-    const summary = `${lbl.type} · ${fmtDist(d.dist,1)}${distUnit()}`;
+    const summary = `${lbl.type} · ${planAmountText(d)}`;
     const uid = `zancada-${state.weekStart}-${d.day}@zancada.app`;
     return ['BEGIN:VEVENT',
       `UID:${uid}`,
@@ -1975,6 +2172,107 @@ function openRaceTipsInfo(){
   document.getElementById('race-tips-info-modal').style.display = 'block';
 }
 function closeRaceTipsInfo(){ document.getElementById('race-tips-info-modal').style.display = 'none'; }
+
+/* ================= CLIMA: aviso antes de entrenar =====================
+   Antes de una sesión con distancia (en Inicio y en Correr), avisamos si el pronóstico
+   de HOY trae lluvia/tormenta, mucho calor o mucho frío -- para que el corredor decida
+   si reprograma o se prepara distinto (hidratación, abrigo, paraguas). Es 100% opcional
+   y silencioso: si no hay geolocalización, se niega el permiso, o falla la consulta,
+   la app sigue funcionando exactamente igual, sin mostrar nada y sin insistir en el
+   permiso más de una vez por sesión de uso. Usamos Open-Meteo (gratis, sin API key,
+   ver https://open-meteo.com/en/docs) directo desde el navegador del corredor -- no
+   pasa por nuestro backend. El resultado se cachea en localStorage por día calendario
+   para no repetir la consulta en cada render ni cada vez que se abre la app.
+*/
+let weatherFetchInFlight = false;
+function weatherCacheKey(){ return 'zancada_weather_'+todayLocalISO(); }
+function getCachedWeatherWarning(){
+  try{
+    const raw = localStorage.getItem(weatherCacheKey());
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+function setCachedWeatherWarning(data){
+  try{ localStorage.setItem(weatherCacheKey(), JSON.stringify(data)); }catch(e){}
+}
+function classifyWeatherCode(code, precipProb, tempMax, tempMin){
+  const stormCodes = [95,96,99];
+  const rainCodes = [51,53,55,56,57,61,63,65,66,67,80,81,82];
+  if(stormCodes.includes(code)) return 'storm';
+  if(rainCodes.includes(code) || precipProb>=60) return 'rain';
+  if(tempMax>=30) return 'heat';
+  if(tempMin<=3) return 'cold';
+  return null;
+}
+function fmtWeatherTemp(celsius){
+  const val = isImperial() ? Math.round(celsius*9/5+32) : Math.round(celsius);
+  return `${val}°${isImperial()?'F':'C'}`;
+}
+function getCachedGeo(){
+  try{
+    const raw = localStorage.getItem('zancada_geo');
+    if(!raw) return null;
+    const geo = JSON.parse(raw);
+    if(geo.denied) return geo;
+    if(Date.now() - geo.ts > 6*3600000) return null; // refrescar la ubicación cada 6hs
+    return geo;
+  }catch(e){ return null; }
+}
+function ensureWeatherFetched(){
+  if(weatherFetchInFlight || getCachedWeatherWarning()) return;
+  const geo = getCachedGeo();
+  if(geo && geo.denied) return; // ya dijo que no antes -- no insistimos
+  if(geo){ weatherFetchInFlight = true; fetchWeatherForecast(geo.lat, geo.lon); return; }
+  if(!navigator.geolocation) return;
+  weatherFetchInFlight = true;
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      try{ localStorage.setItem('zancada_geo', JSON.stringify({lat:pos.coords.latitude, lon:pos.coords.longitude, ts:Date.now()})); }catch(e){}
+      fetchWeatherForecast(pos.coords.latitude, pos.coords.longitude);
+    },
+    () => {
+      weatherFetchInFlight = false;
+      try{ localStorage.setItem('zancada_geo', JSON.stringify({denied:true, ts:Date.now()})); }catch(e){}
+    },
+    {timeout:8000, maximumAge:3600000}
+  );
+}
+async function fetchWeatherForecast(lat, lon){
+  try{
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=auto&forecast_days=1`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('weather http '+res.status);
+    const json = await res.json();
+    const d = json.daily;
+    if(!d || !d.time || !d.time.length) throw new Error('sin datos de clima');
+    const tempMax = d.temperature_2m_max[0], tempMin = d.temperature_2m_min[0];
+    const precipProb = d.precipitation_probability_max ? d.precipitation_probability_max[0] : 0;
+    const level = classifyWeatherCode(d.weather_code[0], precipProb, tempMax, tempMin);
+    const vars = level==='rain' ? {prob: Math.round(precipProb)}
+      : level==='heat' ? {temp: fmtWeatherTemp(tempMax)}
+      : level==='cold' ? {temp: fmtWeatherTemp(tempMin)}
+      : {};
+    setCachedWeatherWarning({level, vars});
+  }catch(e){
+    console.error('fetchWeatherForecast error', e);
+    setCachedWeatherWarning({level:null}); // no insistir el resto del día si falló
+  }finally{
+    weatherFetchInFlight = false;
+    renderHome();
+    renderRunTodayCard();
+  }
+}
+function renderWeatherWarning(elId, day, alreadyDone){
+  const el = document.getElementById(elId);
+  if(!el) return;
+  if(alreadyDone || !(day && day.dist>0)){ el.style.display = 'none'; return; }
+  const cached = getCachedWeatherWarning();
+  if(!cached){ el.style.display = 'none'; ensureWeatherFetched(); return; }
+  if(!cached.level){ el.style.display = 'none'; return; }
+  el.className = 'weather-chip weather-'+cached.level;
+  el.style.display = 'flex';
+  el.innerHTML = `<span class="icon-sq" style="width:15px; height:15px; flex-shrink:0;">${ICONS.warn}</span><span>${t('weather_'+cached.level+'_warning', cached.vars)}</span>`;
+}
 function renderHome(){
   renderDailyTip();
   renderRaceTip();
@@ -2016,8 +2314,11 @@ function renderHome(){
   const today = state.plan[idx];
   const lbl = planLabel(today);
   document.getElementById('home-next-title').textContent = lbl.type;
-  document.getElementById('home-next-desc').textContent = lbl.desc;
-  document.getElementById('home-next-dist').textContent = today.dist>0 ? fmtDist(today.dist,1)+' '+distUnit() : '';
+  // lbl.desc trae saltos de línea reales (entrada en calor / sesión / vuelta a la calma,
+  // ver planLabel) -- se listan como viñetas breves en vez de un párrafo corrido.
+  const nextDescLines = lbl.desc.split('\n').filter(Boolean);
+  document.getElementById('home-next-desc').innerHTML = nextDescLines.map(line=>`<div class="next-session-bullet">${line}</div>`).join('');
+  document.getElementById('home-next-dist').textContent = planAmountText(today);
   document.getElementById('home-next-zone').innerHTML = (today.dist>0 && today.zone) ? `<span class="zone-chip zone-${today.zone}">${t('zone_word')} ${today.zone}</span>` : '';
 
   // Si ya corrimos hoy, mostramos el resumen de esa sesión en lugar del cartel de
@@ -2042,14 +2343,22 @@ function renderHome(){
     nextSessionBlock.style.display = '';
     doneBlock.style.display = 'none';
   }
+  renderWeatherWarning('home-weather-warning', today, !!todayRun);
 
   const weekRuns = (state.runs||[]).filter(r => getMondayISO(new Date(r.date)) === state.weekStart);
   const doneKm = weekRuns.reduce((a,r)=>a+r.distanceKm, 0);
   const weekKm = state.plan.reduce((a,d)=>a+d.dist,0);
-  const doneKmDisplay = isImperial() ? doneKm * MI_PER_KM : doneKm;
-  const weekKmDisplay = isImperial() ? weekKm * MI_PER_KM : weekKm;
-  animateCountUp(document.getElementById('home-week-done-km'), doneKmDisplay, 1);
-  animateCountUp(document.getElementById('home-week-km'), weekKmDisplay, 1);
+  if(isTimeMode()){
+    const doneMin = weekRuns.reduce((a,r)=>a+(r.durationSec||0),0)/60;
+    const plannedMin = state.plan.reduce((a,d)=>a+planDurationMin(d),0);
+    animateCountUp(document.getElementById('home-week-done-km'), doneMin, 0);
+    animateCountUp(document.getElementById('home-week-km'), plannedMin, 0);
+  } else {
+    const doneKmDisplay = isImperial() ? doneKm * MI_PER_KM : doneKm;
+    const weekKmDisplay = isImperial() ? weekKm * MI_PER_KM : weekKm;
+    animateCountUp(document.getElementById('home-week-done-km'), doneKmDisplay, 1);
+    animateCountUp(document.getElementById('home-week-km'), weekKmDisplay, 1);
+  }
   animateCountUp(document.getElementById('home-week-sessions'), state.plan.filter(d=>d.dist>0).length, 0);
   document.getElementById('home-runs-count').textContent = weekRuns.length;
 
@@ -2070,18 +2379,21 @@ function renderHome(){
     goalWrap.style.display = 'none';
   }
 
-  const maxD = Math.max(...state.plan.map(d=>d.dist),1);
+  // Tira de días L-D: un trazo vertical fino por día (chico en descanso, alto y lima
+  // según el volumen planeado en entrenamiento), con el día de hoy remarcado --
+  // mini gráfico de barras en vez de la fila de puntos/barras gruesas de antes.
+  const todayIdx = (new Date().getDay()+6)%7;
+  const maxPlanDist = Math.max(...state.plan.map(d=>d.dist||0), 1);
   const barsEl = document.getElementById('home-week-bars');
   barsEl.innerHTML = state.plan.map((d,i)=>{
-    if(d.dist===0) return `<div class="bar-col"><div class="bar rest-day"></div><div class="lbl">${t('day_'+d.day).slice(0,2)}</div></div>`;
-    const h = Math.max(14, Math.round((d.dist/maxD)*70));
-    return `<div class="bar-col"><div class="bar hivis" data-h="${h}" style="height:0px; transition-delay:${i*35}ms;"></div><div class="lbl">${t('day_'+d.day).slice(0,2)}</div></div>`;
+    const isRest = d.dist===0;
+    const isToday = i===todayIdx;
+    const h = isRest ? 4 : Math.max(10, Math.round((d.dist/maxPlanDist)*44));
+    return `<div class="wd-col ${isRest?'rest':'training'} ${isToday?'today':''}">
+      <div class="wd-bar-wrap"><div class="wd-bar" style="height:${h}px"></div></div>
+      <div class="wd-lbl">${t('day_'+d.day).slice(0,2)}</div>
+    </div>`;
   }).join('');
-  requestAnimationFrame(()=>{
-    requestAnimationFrame(()=>{
-      barsEl.querySelectorAll('.bar[data-h]').forEach(el=>{ el.style.height = el.dataset.h+'px'; });
-    });
-  });
 
 
   renderReadinessCard();
@@ -2131,16 +2443,18 @@ function renderRunTodayCard(){
     // ya se hizo) -- antes esto solo se decía en el comentario de arriba, pero el código
     // nunca llegaba a ocultar `card`, así que quedaban las dos tarjetas apiladas.
     card.style.display = 'none';
+    renderWeatherWarning('run-weather-warning', today, true);
     return;
   }
   doneCard.style.display = 'none';
-  if(!today){ card.style.display = 'none'; return; }
+  if(!today){ card.style.display = 'none'; renderWeatherWarning('run-weather-warning', today, false); return; }
   const lbl = planLabel(today);
   document.getElementById('run-today-title').textContent = lbl.type;
   document.getElementById('run-today-desc').textContent = lbl.desc;
-  document.getElementById('run-today-dist').textContent = today.dist>0 ? fmtDist(today.dist,1)+' '+distUnit() : '';
+  document.getElementById('run-today-dist').textContent = planAmountText(today);
   document.getElementById('run-today-zone').innerHTML = (today.dist>0 && today.zone) ? `<span class="zone-chip zone-${today.zone}">${t('zone_word')} ${today.zone}</span>` : '';
   card.style.display = 'block';
+  renderWeatherWarning('run-weather-warning', today, false);
 }
 function getPlanStartDate(){
   // la fecha más vieja de weekStart que tengamos registrada (historial de semanas + la semana actual)
@@ -2274,18 +2588,21 @@ function renderPlan(){
     const isToday = wd.mode==='current' && i===todayIdx;
     const isPastDay = wd.mode==='current' && i<todayIdx;
     const canEdit = wd.editable && !isPastDay;
+    // Los chips de terreno/zona (y el de la carrera, si el día es raceDay) van
+    // agrupados al final de la fila, junto al ícono de estado -- no repetidos como
+    // subtítulo del tipo de sesión (un día de descanso ya dice "Descanso" en el
+    // título; no hace falta que lo repita una vez más como si fuera un chip).
     let meta = '';
     if(d.raceDay && state.event){
       meta = `<span class="tag tag-mixto">${escapeHtml(state.event.name)}</span>`;
-    } else {
+    } else if(d.dist>0){
       // d.dist>0 acá es a propósito, no solo d.terrain/d.zone: un día de
       // descanso nunca debería mostrar cartel de terreno/zona, ni siquiera
-      // si por algún dato viejo esos campos quedaran seteados -- así el
-      // cartel de "Descanso" siempre gana en un día sin distancia.
-      if(d.dist>0 && d.terrain) meta += `<span class="tag tag-${d.terrain}">${t('ob_terrain_'+d.terrain)}</span>`;
-      if(d.dist>0 && d.zone) meta += `<span class="zone-chip zone-${d.zone}">${t('zone_word')} ${d.zone}</span>`;
-      if(!meta) meta = t('type_rest');
+      // si por algún dato viejo esos campos quedaran seteados.
+      if(d.terrain) meta += `<span class="tag tag-${d.terrain}">${t('ob_terrain_'+d.terrain)}</span>`;
+      if(d.zone) meta += `<span class="zone-chip zone-${d.zone}">${t('zone_word')} ${d.zone}</span>`;
     }
+    const isRestDay = !(d.dist>0) && !d.raceDay;
     const statusIcon = d.status==='done' ? `<div class="icon-sq" style="width:16px; height:16px; color:var(--hivis);">${ICONS.check}</div>` : d.status==='skipped' ? `<div class="icon-sq" style="width:16px; height:16px; color:var(--danger);">${ICONS.cross}</div>` : '';
     const zoneDetail = d.zone ? `<br><br><span class="zone-chip zone-${d.zone}">${t('zone_word')} ${d.zone}</span> <span class="mono muted">${z[d.zone].min}-${z[d.zone].max} bpm</span>` : '';
     let statusBlock = '';
@@ -2303,10 +2620,13 @@ function renderPlan(){
       statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;"><button class="btn btn-outline btn-sm" onclick="markSession(${i},'done')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.check}</span> ${t('plan_mark_done')}</button><button class="btn btn-outline btn-sm" onclick="markSession(${i},'skipped')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.cross}</span> ${t('plan_mark_skipped')}</button>${isToday?`<button class="btn btn-outline btn-sm" id="sync-today-btn" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}</div>`;
     }
     return `<div>
-      <div class="day-row" onclick="toggleDay(${i})">
+      <div class="day-row ${isRestDay?'day-row-rest':''}" onclick="toggleDay(${i})">
         <div class="day-badge"><div class="d">${t('day_'+d.day).slice(0,3)}</div>${dateLbl?`<div class="mono muted" style="font-size:10px; margin-top:2px;">${dateLbl}</div>`:''}</div>
-        <div class="day-info"><div class="t">${lblType}</div><div class="m">${meta}</div></div>
-        <div style="text-align:right;"><div class="day-dist">${d.dist>0? fmtDist(d.dist,1)+' '+distUnit():''}</div>${statusIcon}</div>
+        <div class="day-info">
+          <div class="day-info-title-row"><span class="t">${lblType}</span>${d.dist>0?`<span class="day-km-inline">${planAmountText(d)}</span>`:''}</div>
+          ${meta?`<div class="day-row-chips">${meta}</div>`:''}
+        </div>
+        <div class="day-row-end">${statusIcon}</div>
       </div>
       <div class="day-detail" id="detail-${i}">${lblDesc}${zoneDetail}${statusBlock}</div>
     </div>`;
@@ -2320,11 +2640,11 @@ function renderPastWeeks(){
   document.getElementById('past-weeks-list').innerHTML = state.planHistory.slice().reverse().map(w=>{
     const doneCount = w.plan.filter(d=>d.status==='done').length;
     const totalSessions = w.plan.filter(d=>d.dist>0).length;
-    const plannedKm = w.plan.reduce((a,d)=>a+d.dist,0);
+    const plannedAmount = isTimeMode() ? `${w.plan.reduce((a,d)=>a+planDurationMin(d),0)} ${t('time_unit_min')}` : `${w.plan.reduce((a,d)=>a+d.dist,0)}km`;
     const offset = w.weekNumber - (state.weekNumber||1);
     return `<div style="padding:10px 0; border-bottom:1px solid var(--asphalt-3); cursor:pointer;" onclick="viewingWeekOffset=${offset}; renderPlan();">
       <div style="display:flex; justify-content:space-between;"><span style="font-weight:700;">${t('plan_week_label',{n:w.weekNumber})}</span><span class="muted mono" style="font-size:11.5px;">${w.weekStart}</span></div>
-      <p class="muted" style="margin-top:4px; font-size:12.5px;">${doneCount}/${totalSessions} ${t('home_sessions').toLowerCase()} · ${plannedKm}km ${t('home_km_planned').toLowerCase()}</p>
+      <p class="muted" style="margin-top:4px; font-size:12.5px;">${doneCount}/${totalSessions} ${t('home_sessions').toLowerCase()} · ${plannedAmount} ${t('home_km_planned').toLowerCase()}</p>
     </div>`;
   }).join('');
 }
@@ -2347,8 +2667,11 @@ function renderZones(){
   // el texto de acá siempre decía "se calcula según tu edad" aunque ya hubiera una FC
   // máxima real cargada. Las claves perfil_zones_estimated/perfil_zones_tested ya
   // existían traducidas a los 6 idiomas pero nunca se usaban.
+  const statusText = state.profile.hrKnown ? t('perfil_zones_tested') : t('perfil_zones_estimated');
   const statusEl = document.getElementById('zones-status');
-  if(statusEl) statusEl.textContent = state.profile.hrKnown ? t('perfil_zones_tested') : t('perfil_zones_estimated');
+  if(statusEl) statusEl.textContent = statusText;
+  const zonesSummaryEl = document.getElementById('perfil-zones-summary');
+  if(zonesSummaryEl) zonesSummaryEl.textContent = statusText;
   document.getElementById('zones-list').innerHTML = [1,2,3,4,5].map(n=>`
     <div class="zone-row">
       <div><span class="zone-chip zone-${n}">${t('zone_word')} ${n}</span><div class="zd">${t('zdesc_'+n)} · ${ZONE_PCT[n]}</div></div>
@@ -2389,6 +2712,8 @@ document.getElementById('pain-body-choice').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('pain-body-choice').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
 });
+function openPainOverlay(){ document.getElementById('pain-overlay').classList.add('overlay-open'); }
+function closePainOverlay(){ document.getElementById('pain-overlay').classList.remove('overlay-open'); }
 function openPainModal(){
   document.getElementById('pain-note').value = '';
   [...document.getElementById('pain-body-choice').children].forEach(c=>c.classList.remove('active'));
@@ -2458,8 +2783,11 @@ function checkPainCheckins(){
 }
 function renderPainLog(){
   const el = document.getElementById('pain-log-list');
-  if(!el) return;
   const entries = (state.painLog||[]).slice().reverse();
+  const activeCount = entries.filter(p=>p.active).length;
+  const summaryEl = document.getElementById('perfil-pain-summary');
+  if(summaryEl) summaryEl.textContent = !entries.length ? t('perfil_pain_summary_empty') : (activeCount ? t('perfil_pain_summary_active', {n: activeCount}) : t('perfil_pain_summary_none_active'));
+  if(!el) return;
   if(!entries.length){ el.innerHTML = `<p class="muted" style="text-align:center; padding:8px 0;">${t('pain_list_empty')}</p>`; return; }
   el.innerHTML = entries.map(p=>{
     const dateStr = new Date(p.date+'T00:00:00').toLocaleDateString(LOCALE_MAP[lang], {day:'numeric', month:'short'});
@@ -2579,10 +2907,18 @@ function renderPerfil(){
   }
   renderPainLog();
 
-  const editingPersonal = ['perfil-weight','perfil-height','perfil-racedate'].includes(document.activeElement && document.activeElement.id);
+  const achSummaryEl = document.getElementById('perfil-ach-summary');
+  if(achSummaryEl){
+    const {unlockedCount, totalCount} = getAchievementSections();
+    achSummaryEl.textContent = t('ach_unlocked_count', {unlocked:unlockedCount, total:totalCount});
+  }
+  renderSocialSection();
+
+  const editingPersonal = ['perfil-weight','perfil-height','perfil-racedate','perfil-current-km'].includes(document.activeElement && document.activeElement.id);
   if(!editingPersonal){
     document.getElementById('perfil-weight').value = p.weight || '';
     document.getElementById('perfil-height').value = p.height || '';
+    document.getElementById('perfil-current-km').value = p.currentWeeklyKm || '';
     document.getElementById('perfil-goal').value = p.goal || 'start';
     document.getElementById('perfil-racedate').value = p.raceDate || '';
     dateBoxUpdaters['perfil-racedate'] && dateBoxUpdaters['perfil-racedate']();
@@ -2658,7 +2994,87 @@ function renderPerfil(){
     document.getElementById('ev-type').value = state.event.type;
   } else { evBox.innerHTML = `<div style="text-align:center; padding:10px 0;"><div class="icon-sq" style="width:24px; height:24px; margin:0 auto 8px; color:var(--mist-dim);">${ICONS.flag}</div><p class="muted" style="margin:0; font-size:13px;">${t('perfil_no_event')}</p></div>`; }
 
+  const shoesSummaryEl = document.getElementById('perfil-shoes-summary');
+  if(shoesSummaryEl) shoesSummaryEl.textContent = state.shoes.length ? t('perfil_shoes_count', {n: state.shoes.length}) : t('perfil_no_shoes');
+
+  const eventSummaryEl = document.getElementById('perfil-event-summary');
+  if(eventSummaryEl){
+    if(state.event){
+      const todayMid = new Date(); todayMid.setHours(0,0,0,0);
+      const daysLeft = Math.round((new Date(state.event.date+'T00:00:00')-todayMid)/86400000);
+      eventSummaryEl.textContent = `${state.event.name} · ${Math.max(0,daysLeft)} ${t('perfil_event_days')}`;
+    } else {
+      eventSummaryEl.textContent = t('perfil_no_event');
+    }
+  }
+
   updateCredits();
+}
+/* ---- apartados del perfil (datos personales / objetivos / zapatillas / evento) que
+   antes eran tarjetas siempre abiertas en la pantalla de Perfil, y ahora son botones
+   que abren un overlay de pantalla completa -- mismo patrón que openAchievements(). No
+   hace falta reconstruir el HTML de adentro (a diferencia de logros): los inputs ya
+   existen siempre en el DOM y renderPerfil() los mantiene al día estén o no visibles. */
+function openPersonalDataOverlay(){ document.getElementById('personal-data-overlay').classList.add('overlay-open'); }
+function closePersonalDataOverlay(){ document.getElementById('personal-data-overlay').classList.remove('overlay-open'); }
+function openGoalsOverlay(){ document.getElementById('goals-overlay').classList.add('overlay-open'); }
+function closeGoalsOverlay(){ document.getElementById('goals-overlay').classList.remove('overlay-open'); }
+function openShoesOverlay(){ document.getElementById('shoes-overlay').classList.add('overlay-open'); }
+function closeShoesOverlay(){ document.getElementById('shoes-overlay').classList.remove('overlay-open'); }
+function openEventOverlay(){ document.getElementById('event-overlay').classList.add('overlay-open'); }
+function closeEventOverlay(){ document.getElementById('event-overlay').classList.remove('overlay-open'); }
+function openLangOverlay(){ document.getElementById('lang-overlay').classList.add('overlay-open'); }
+function closeLangOverlay(){ document.getElementById('lang-overlay').classList.remove('overlay-open'); }
+function openDaysOverlay(){ document.getElementById('days-overlay').classList.add('overlay-open'); }
+function closeDaysOverlay(){ document.getElementById('days-overlay').classList.remove('overlay-open'); }
+function openZonesOverlay(){ document.getElementById('zones-overlay').classList.add('overlay-open'); }
+function closeZonesOverlay(){ document.getElementById('zones-overlay').classList.remove('overlay-open'); }
+/* ---- Overlays "hoja" de Perfil/Logros: arrastrar hacia abajo para cerrar -----
+   Antes estos overlays (Datos personales, Objetivos, Zapatillas, Evento, Idioma, Días,
+   Zonas, Molestias, Logros) aparecían y desaparecían de un salto y solo se podían cerrar
+   tocando la flecha de arriba a la izquierda. Ahora entran/salen con un deslizamiento +
+   fade (ver .overlay-sheet en el CSS) y además se pueden cerrar arrastrando el dedo hacia
+   abajo, como una hoja modal nativa -- pero solo si ya se llegó al tope del scroll interno
+   del overlay, para no interferir con el scroll normal de su contenido. Un solo listener
+   delegado en document sirve para los nueve overlays: todos comparten la clase
+   .overlay-sheet y el mismo criterio de "cerrar" (sacar la clase overlay-open), así que no
+   hace falta cablear el gesto overlay por overlay. */
+(function wireOverlaySheetSwipe(){
+  let dragEl = null, startY = 0, lastDy = 0, dragging = false;
+  const CLOSE_THRESHOLD = 90;
+  document.addEventListener('touchstart', e=>{
+    const sheet = e.target.closest('.overlay-sheet.overlay-open');
+    if(!sheet || sheet.scrollTop > 0){ dragEl = null; return; }
+    dragEl = sheet; startY = e.touches[0].clientY; lastDy = 0; dragging = false;
+  }, {passive:true});
+  document.addEventListener('touchmove', e=>{
+    if(!dragEl) return;
+    if(dragEl.scrollTop > 0){ dragEl.style.transition = ''; dragEl.style.transform = ''; dragEl = null; return; }
+    const dy = e.touches[0].clientY - startY;
+    if(dy <= 0){ lastDy = 0; dragEl.style.transition = ''; dragEl.style.transform = ''; return; }
+    dragging = true; lastDy = dy;
+    dragEl.style.transition = 'none';
+    dragEl.style.transform = `translateY(${dy}px)`;
+  }, {passive:true});
+  document.addEventListener('touchend', ()=>{
+    if(!dragEl) return;
+    const el = dragEl, dy = lastDy; dragEl = null;
+    el.style.transition = '';
+    el.style.transform = '';
+    if(dragging && dy > CLOSE_THRESHOLD) el.classList.remove('overlay-open');
+    dragging = false;
+  }, {passive:true});
+})();
+// El bloque "Recordá que..." de la sección de Strava era una lista siempre visible --
+// ahora arranca colapsada detrás de este botón, para no abrumar la tarjeta de Strava con
+// texto largo apenas se entra a Perfil. Nada de esto se persiste: siempre arranca cerrado.
+function toggleStravaRemember(){
+  const list = document.getElementById('strava-remember-list');
+  const chevron = document.getElementById('strava-remember-chevron');
+  if(!list) return;
+  const show = list.style.display === 'none';
+  list.style.display = show ? 'block' : 'none';
+  if(chevron) chevron.style.transform = show ? 'rotate(180deg)' : 'rotate(0deg)';
 }
 // ---- Foto de perfil -----
 // Se guarda como JPEG chico (200x200, recorte centrado tipo "cover") codificado en
@@ -3311,6 +3727,9 @@ async function showView(v){
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   document.getElementById('view-'+v).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.view===v));
+  // El botón flotante del coach abre esa misma vista -- de pie sobre ella no aporta nada
+  // (taparía el chat), así que se esconde mientras ya estamos adentro.
+  document.getElementById('coach-fab-wrap').style.display = (v==='coach') ? 'none' : 'block';
   document.getElementById('chatBar').classList.toggle('active', v==='coach');
   (document.scrollingElement || document.documentElement).scrollTop = 0;
   // syncAppMinHeight() acá también: #view-coach es la única vista sin contenido real
@@ -3559,8 +3978,13 @@ function getTodayWorkoutStructure(){
   const idx = (new Date().getDay()+6)%7;
   const today = state.plan[idx];
   if(!today || !today.interval) return null;
-  if(today.typeKey==='intervals') return {typeKey:'intervals', reps:today.interval.reps, repMeters:today.interval.repMeters, recoveryMin:today.interval.recoveryMin};
-  if(today.typeKey==='hills') return {typeKey:'hills', reps:today.interval.reps, repMeters:today.interval.repMeters};
+  // Si el corredor entrena "por tiempo", las repeticiones (series/cuestas) se completan
+  // por tiempo transcurrido (repSec) en vez de por distancia GPS (repMeters) -- ver
+  // tickWorkoutGuide() y renderWorkoutGuide(). En modo distancia repSec queda undefined
+  // y el comportamiento es exactamente el de siempre.
+  const repSec = isTimeMode() ? repDurationSec(today.interval.repMeters) : undefined;
+  if(today.typeKey==='intervals') return {typeKey:'intervals', reps:today.interval.reps, repMeters:today.interval.repMeters, repSec, recoveryMin:today.interval.recoveryMin};
+  if(today.typeKey==='hills') return {typeKey:'hills', reps:today.interval.reps, repMeters:today.interval.repMeters, repSec};
   return null;
 }
 function setupWorkoutGuide(){
@@ -3620,13 +4044,14 @@ function tickWorkoutGuide(){
   const s = w.structure;
   let complete = false;
   if(s.typeKey==='intervals'){
-    if(w.phase==='effort') complete = (tracker.distanceKm - w.phaseStartDistanceKm)*1000 >= s.repMeters;
+    if(w.phase==='effort') complete = s.repSec!=null ? (tracker.elapsedSec - w.phaseStartElapsedSec) >= s.repSec : (tracker.distanceKm - w.phaseStartDistanceKm)*1000 >= s.repMeters;
     else complete = (tracker.elapsedSec - w.phaseStartElapsedSec) >= s.recoveryMin*60;
   } else {
     // hills: tanto la subida (esfuerzo) como la bajada trotando (recuperación) se
     // miden por la misma distancia repMeters -- ver comentario arriba de
-    // getTodayWorkoutStructure().
-    complete = (tracker.distanceKm - w.phaseStartDistanceKm)*1000 >= s.repMeters;
+    // getTodayWorkoutStructure() -- salvo en modo "por tiempo", donde ambas fases
+    // se completan por tiempo transcurrido (repSec) en vez de GPS.
+    complete = s.repSec!=null ? (tracker.elapsedSec - w.phaseStartElapsedSec) >= s.repSec : (tracker.distanceKm - w.phaseStartDistanceKm)*1000 >= s.repMeters;
   }
   if(complete) advanceWorkoutPhase();
   renderWorkoutGuide();
@@ -3658,10 +4083,10 @@ function renderWorkoutGuide(){
     let pct;
     if(s.typeKey==='intervals'){
       pct = isEffort
-        ? ((tracker.distanceKm - w.phaseStartDistanceKm)*1000 / s.repMeters)*100
+        ? (s.repSec!=null ? ((tracker.elapsedSec - w.phaseStartElapsedSec) / s.repSec)*100 : ((tracker.distanceKm - w.phaseStartDistanceKm)*1000 / s.repMeters)*100)
         : ((tracker.elapsedSec - w.phaseStartElapsedSec) / (s.recoveryMin*60))*100;
     } else {
-      pct = ((tracker.distanceKm - w.phaseStartDistanceKm)*1000 / s.repMeters)*100;
+      pct = s.repSec!=null ? ((tracker.elapsedSec - w.phaseStartElapsedSec) / s.repSec)*100 : ((tracker.distanceKm - w.phaseStartDistanceKm)*1000 / s.repMeters)*100;
     }
     document.getElementById('workout-guide-progress-bar').style.width = Math.max(0,Math.min(100,pct)) + '%';
   } else if(w.phase==='done'){
@@ -3682,6 +4107,103 @@ function fmtTime(sec){
 function classifyHR(bpm){
   const z = state.profile.hrZones; if(!z) return 2;
   if(bpm<=z[1].max) return 1; if(bpm<=z[2].max) return 2; if(bpm<=z[3].max) return 3; if(bpm<=z[4].max) return 4; return 5;
+}
+// Zona de ritmo RELATIVA al propio promedio de la carrera (no a un umbral de
+// laboratorio ni a un test de esfuerzo que Zancada no le pide a nadie) --
+// clasifica cada tramo como más lento/más rápido que el promedio de ESE
+// entrenamiento puntual. Es deliberadamente distinto de las zonas de FC
+// (que sí están personalizadas con state.profile.hrZones): no tenemos base
+// para decir "esto es tu ritmo de maratón", así que no lo afirmamos.
+function classifyPaceRelative(paceMin, avgPaceMin){
+  if(!avgPaceMin || avgPaceMin<=0) return 3;
+  const ratio = paceMin/avgPaceMin;
+  if(ratio > 1.15) return 1;
+  if(ratio > 1.05) return 2;
+  if(ratio >= 0.95) return 3;
+  if(ratio >= 0.85) return 4;
+  return 5;
+}
+// Deriva splits por km reales a partir de los puntos GPS de una carrera
+// trackeada en vivo (con t=segundos desde el arranque, ver onPosition).
+// Antes esto solo existía para carreras sincronizadas de Strava -- las
+// trackeadas desde el celular no guardaban ni la hora de cada punto, así que
+// no había forma de calcular ritmo real por tramo.
+function computeSplitsFromPoints(points){
+  if(!points || points.length < 2) return [];
+  const cum = [0];
+  for(let i=1;i<points.length;i++){
+    cum.push(cum[i-1] + haversine(points[i-1].lat,points[i-1].lon,points[i].lat,points[i].lon));
+  }
+  const totalKm = cum[cum.length-1];
+  const numFullKm = Math.floor(totalKm);
+  if(numFullKm < 1 && totalKm*1000 < 50) return [];
+  function buildSegment(fromIdx, toIdx, fromTime, label){
+    const segKm = cum[toIdx] - cum[fromIdx];
+    const segTime = (points[toIdx].t||0) - fromTime;
+    const paceMin = segKm>0 ? (segTime/60)/segKm : 0;
+    let elevGain = 0;
+    for(let j=fromIdx+1;j<=toIdx;j++){
+      if(points[j].alt!=null && points[j-1].alt!=null){ const d=points[j].alt-points[j-1].alt; if(d>0) elevGain+=d; }
+    }
+    return {km:label, paceMin: Math.round(paceMin*100)/100, elevGain: Math.round(elevGain), avgHr:null, avgCadence:null};
+  }
+  const splits = [];
+  let startIdx = 0, startTime = points[0].t||0;
+  for(let km=1; km<=numFullKm; km++){
+    let idx = startIdx;
+    while(idx<cum.length && cum[idx]<km) idx++;
+    if(idx>=cum.length) idx = cum.length-1;
+    splits.push(buildSegment(startIdx, idx, startTime, km));
+    startIdx = idx; startTime = points[idx].t||0;
+  }
+  const lastIdx = cum.length-1;
+  const remainderKm = cum[lastIdx] - cum[startIdx];
+  if(remainderKm*1000 > 50){
+    splits.push(buildSegment(startIdx, lastIdx, startTime, Math.round(remainderKm*100)/100));
+  }
+  return splits;
+}
+// Ascenso/descenso total a partir de la altitud del GPS del celular. No todos
+// los dispositivos la reportan (ni siquiera de forma constante en todos sus
+// puntos) -- devolvemos null/null cuando no hay ningún dato real de altitud
+// en vez de inventar un número, para que la pantalla de detalle simplemente
+// no muestre esa fila en esos casos.
+function computeElevationFromPoints(points){
+  if(!points || points.length<2) return {gain:null, loss:null};
+  let gain=0, loss=0, any=false;
+  for(let i=1;i<points.length;i++){
+    if(points[i].alt!=null && points[i-1].alt!=null){
+      any = true;
+      const d = points[i].alt - points[i-1].alt;
+      if(d>0) gain+=d; else loss+=-d;
+    }
+  }
+  return any ? {gain:Math.round(gain), loss:Math.round(loss)} : {gain:null, loss:null};
+}
+// Curva de ritmo en el tiempo para el gráfico de la pestaña "Gráficos" en
+// carreras trackeadas en vivo (sin FC -- eso necesitaría un sensor externo
+// que hoy la app no lee). Promediamos en ventanas de ~30s para suavizar el
+// ruido normal del GPS punto a punto.
+function computePaceSeriesFromPoints(points){
+  if(!points || points.length<3) return null;
+  const windowSec = 30;
+  const out = {t:[], paceMin:[]};
+  let i = 0;
+  while(i<points.length-1){
+    const t0 = points[i].t||0;
+    let j = i, distKm = 0;
+    while(j<points.length-1 && (points[j+1].t||0)-t0 < windowSec){
+      distKm += haversine(points[j].lat,points[j].lon,points[j+1].lat,points[j+1].lon);
+      j++;
+    }
+    const dt = (points[j].t||0) - t0;
+    if(dt>0 && distKm>0.01){
+      out.t.push(Math.round((t0 + (points[j].t||0))/2));
+      out.paceMin.push(Math.round(((dt/60)/distKm)*100)/100);
+    }
+    i = j>i ? j : i+1;
+  }
+  return out.t.length>=2 ? out : null;
 }
 function initLiveMap(){
   if(liveMap){ liveMap.remove(); liveMap=null; }
@@ -3739,11 +4261,17 @@ function actuallyStartRun(saved){
   tracker.timerId = setInterval(()=>{ if(tracker.running){ tracker.elapsedSec++; updateLiveStats(); tickWorkoutGuide(); if(tracker.elapsedSec % 15 === 0) saveRunProgress(); } }, 1000);
 }
 function onPosition(pos){
-  const {latitude:lat, longitude:lon, accuracy} = pos.coords;
+  const {latitude:lat, longitude:lon, accuracy, altitude} = pos.coords;
   if(accuracy && accuracy>50) return;
   const last = tracker.points[tracker.points.length-1];
   if(last){ const d=haversine(last.lat,last.lon,lat,lon); if(d>0.002) tracker.distanceKm+=d; }
-  tracker.points.push({lat,lon});
+  // t = segundos desde el arranque de la carrera, alt = altitud del GPS si el
+  // dispositivo la da (no todos la reportan, y aun cuando la dan puede faltar
+  // en puntos sueltos -- por eso el resto del código nunca asume que todos
+  // los puntos la tienen). Con esto podemos calcular ritmo real por tramo y
+  // ascenso/descenso para carreras trackeadas desde el celular, algo que
+  // antes solo teníamos para las carreras sincronizadas de Strava.
+  tracker.points.push({lat, lon, t:tracker.elapsedSec, alt:(typeof altitude==='number' && !isNaN(altitude)) ? altitude : null});
   updateLiveMap(lat,lon);
   updateLiveStats();
   maybeAnnounceKm();
@@ -3792,7 +4320,7 @@ function checkPendingRating(){
   if(idx < 0) return;
   const d = state.plan[idx];
   const lbl = planLabel(d);
-  document.getElementById('rating-session-desc').textContent = `${t('day_'+d.day)}: ${lbl.type}${d.dist>0?' · '+fmtDist(d.dist,1)+' '+distUnit():''}`;
+  document.getElementById('rating-session-desc').textContent = `${t('day_'+d.day)}: ${lbl.type}${d.dist>0?' · '+planAmountText(d):''}`;
   ratingTargetIdx = idx;
   document.getElementById('rating-modal').style.display = 'block';
 }
@@ -3824,7 +4352,15 @@ async function closeSummary(){
   checkShoeWearAlerts();
   const runDate = new Date().toISOString();
   const runId = Date.now();
-  state.runs.push({id:runId, date:runDate, distanceKm:tracker.distanceKm, durationSec:tracker.elapsedSec, hrLog:tracker.hrLog, points:tracker.points, shoeId:shoeId||null});
+  const elev = computeElevationFromPoints(tracker.points);
+  const paceSeries = computePaceSeriesFromPoints(tracker.points);
+  state.runs.push({
+    id:runId, date:runDate, distanceKm:tracker.distanceKm, durationSec:tracker.elapsedSec,
+    hrLog:tracker.hrLog, points:tracker.points, shoeId:shoeId||null,
+    splits: computeSplitsFromPoints(tracker.points), splitsV:3,
+    elevationGain: elev.gain, elevationLoss: elev.loss,
+    series: paceSeries ? {t: paceSeries.t, hr: null, paceMin: paceSeries.paceMin} : null
+  });
   checkNewPR(state.runs[state.runs.length-1]);
   autoMarkSessionDone(runDate, runId);
   clearRunProgress();
@@ -3887,31 +4423,17 @@ function computeDailyTrend(days){
     // carrera (ver el comentario junto a localDateISO/getTodayRun).
     const km = state.runs.filter(r => localDateISO(r.date) === dateStr).reduce((a,r)=>a+r.distanceKm,0);
     let planned = false;
-    if(state.weekStart && dateStr >= state.weekStart){
+    // dateStr >= state.weekStart no alcanza solo: weekStart es el lunes de la semana en la
+    // que se creó la cuenta, así que alguien que se sumó un martes igual pasaba esa
+    // comparación para el lunes anterior (que sí es "de esta semana" pero la cuenta ni
+    // existía todavía ese día). El chequeo contra createdAt es lo que evita marcarlo como
+    // sesión planeada/perdida en el gráfico de Historial.
+    const createdAt = state.profile && state.profile.createdAt;
+    if(state.weekStart && dateStr >= state.weekStart && (!createdAt || dateStr >= createdAt)){
       const planDay = state.plan.find(p=>p.day===weekDayKeys[d.getDay()]);
       if(planDay && planDay.dist>0) planned = true;
     }
     result.push({date:dateStr, km, planned, day:d.getDate()});
-  }
-  return result;
-}
-function computeWeeklyTrend(weeksCount){
-  // Kilómetros REALMENTE corridos (no planeados) por semana calendario (lunes a
-  // domingo), para las últimas `weeksCount` semanas incluyendo la actual (que va a
-  // estar incompleta si todavía no terminó). Mira directo state.runs por fecha en
-  // vez de depender de planHistory -- así sigue funcionando aunque falte algún
-  // registro de semana cerrada, y es coherente con "corridas reales" en el resto
-  // de Historial.
-  const result = [];
-  const currentMonday = new Date((state.weekStart || getMondayISO(new Date())) + 'T00:00:00');
-  for(let i=weeksCount-1; i>=0; i--){
-    const start = new Date(currentMonday); start.setDate(start.getDate() - i*7);
-    const startIso = start.toISOString().slice(0,10);
-    const end = new Date(start); end.setDate(end.getDate()+7);
-    const endIso = end.toISOString().slice(0,10);
-    const km = (state.runs||[]).filter(r => { const d=localDateISO(r.date); return d>=startIso && d<endIso; })
-      .reduce((a,r)=>a+r.distanceKm, 0);
-    result.push({weekStart: startIso, km, day: start.getDate(), isCurrent: i===0});
   }
   return result;
 }
@@ -4012,6 +4534,252 @@ function checkNewPR(run){
   showToast(t('pr_toast_new', {label: t('pr_label_'+bucket.key), time: fmtTime(run.durationSec)}), 'success');
   haptic(40);
 }
+/* ---- Logros (pantalla de hitos) ---- */
+// Hitos de distancia total, cantidad de carreras y constancia (racha de semanas
+// cumpliendo el plan). Todo se calcula al vuelo a partir de datos que ya existen
+// (state.runs, state.bestStreakWeeks) -- nada nuevo que persistir salvo
+// bestStreakWeeks, que ya se actualiza en weeklyRecap().
+const ACH_DISTANCE_KM = [50, 100, 250, 500, 1000, 2000];
+const ACH_RUN_COUNT = [10, 25, 50, 100, 250];
+const ACH_STREAK_WEEKS = [2, 4, 8, 12, 26];
+function getAchievementSections(){
+  const totalKm = (state.runs||[]).reduce((a,r)=>a+r.distanceKm,0);
+  const totalRuns = (state.runs||[]).length;
+  const bestStreak = Math.max(state.bestStreakWeeks||0, state.streakWeeks||0);
+
+  const distanceBadges = ACH_DISTANCE_KM.map(km=>{
+    const achieved = totalKm >= km;
+    return {achieved, label: `${fmtDist(km,0)} ${distUnit()}`,
+      progressText: achieved ? null : t('ach_locked_distance_left', {n: `${fmtDist(km-totalKm,0)} ${distUnit()}`})};
+  });
+  const runBadges = ACH_RUN_COUNT.map(n=>{
+    const achieved = totalRuns >= n;
+    return {achieved, label: t('ach_badge_runs_label', {n}),
+      progressText: achieved ? null : t('ach_locked_runs_left', {n: n-totalRuns})};
+  });
+  const streakBadges = ACH_STREAK_WEEKS.map(n=>{
+    const achieved = bestStreak >= n;
+    return {achieved, label: t('ach_badge_streak_label', {n}),
+      progressText: achieved ? null : t('ach_locked_streak_left', {n: n-bestStreak})};
+  });
+  // Los récords personales también cuentan como logros (una marca por distancia estándar
+  // cuenta como desbloqueada), aunque se muestran en su propia tarjeta -- con el tiempo
+  // de la marca -- en vez de la grilla genérica de "Desbloqueado" (ver renderPersonalRecordsCard).
+  const prRecords = getPersonalRecords();
+  const recordBadges = PR_DISTANCES.map(b=>({achieved: !!prRecords[b.key]}));
+  const allBadges = [...distanceBadges, ...runBadges, ...streakBadges, ...recordBadges];
+  return {distanceBadges, runBadges, streakBadges, unlockedCount: allBadges.filter(b=>b.achieved).length, totalCount: allBadges.length};
+}
+function renderAchievementBadgeGrid(badges){
+  return `<div class="pr-medal-grid">${badges.map(b=>{
+    if(b.achieved) return `<div class="pr-medal achieved"><span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${b.label}</span><span class="pr-medal-time">${t('ach_unlocked_tag')}</span></div>`;
+    return `<div class="pr-medal"><span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${b.label}</span><span class="pr-medal-locked">${b.progressText}</span></div>`;
+  }).join('')}</div>`;
+}
+function renderPersonalRecordsCard(){
+  // Vivía en Historial como una tarjeta aparte; ahora se muestra acá, en Logros, junto
+  // con el resto de los hitos del corredor (mismo estilo de medalla: iluminada con el
+  // tiempo si ya hay marca para esa distancia estándar, apagada con candado si no).
+  const prRecords = getPersonalRecords();
+  return `<div class="card"><h3>${t('hist_pr_title')}</h3><div class="pr-medal-grid">${PR_DISTANCES.map(b=>{
+    const rec = prRecords[b.key];
+    if(rec) return `<div class="pr-medal achieved"><span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${t('pr_label_'+b.key)}</span><span class="pr-medal-time">${fmtTime(rec.durationSec)}</span></div>`;
+    return `<div class="pr-medal"><span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${t('pr_label_'+b.key)}</span><span class="pr-medal-locked">${t('pr_medal_locked')}</span></div>`;
+  }).join('')}</div></div>`;
+}
+function openAchievements(){
+  const {distanceBadges, runBadges, streakBadges, unlockedCount, totalCount} = getAchievementSections();
+  // Barra de progreso general (reusa .ob-progress/.ob-progress-fill, el mismo componente
+  // visual que ya usaba el onboarding) -- antes solo estaba el texto "X de Y logros
+  // desbloqueados"; de un vistazo ahora se ve además cuánto falta.
+  const pct = totalCount ? Math.round((unlockedCount/totalCount)*100) : 0;
+  document.getElementById('achievements-content').innerHTML = `
+    <h2 class="display" style="font-size:20px; margin-bottom:2px;">${t('ach_title')}</h2>
+    <p class="muted" style="margin:0 0 4px;">${t('ach_subtitle')}</p>
+    <p style="margin:0 0 8px; font-weight:800; color:var(--hivis-text); font-size:13px;">${t('ach_unlocked_count', {unlocked:unlockedCount, total:totalCount})}</p>
+    <div class="ob-progress" style="margin-bottom:16px;"><div class="ob-progress-fill" style="width:${pct}%;"></div></div>
+    ${renderPersonalRecordsCard()}
+    <div class="card"><h3>${t('ach_section_distance')}</h3>${renderAchievementBadgeGrid(distanceBadges)}</div>
+    <div class="card"><h3>${t('ach_section_runs')}</h3>${renderAchievementBadgeGrid(runBadges)}</div>
+    <div class="card"><h3>${t('ach_section_streak')}</h3>${renderAchievementBadgeGrid(streakBadges)}</div>
+  `;
+  document.getElementById('achievements-modal').classList.add('overlay-open');
+}
+function closeAchievements(){
+  document.getElementById('achievements-modal').classList.remove('overlay-open');
+}
+
+/* ================= SOCIAL: usernames + seguir amigos + feed + likes =================
+   Todo esto vive en tablas nuevas y chicas de Supabase (sql/social.sql), separadas de
+   app_state a propósito: app_state es un blob único por usuario con TODO (perfil, plan,
+   carreras con GPS y frecuencia cardíaca) -- exponerlo a otros usuarios, aunque sea un
+   campo, sería un lío de privacidad. Estas tablas nuevas guardan a propósito lo mínimo
+   para que la parte social funcione: un nombre de usuario, quién sigue a quién, y una
+   versión resumida de cada carrera que el usuario decide compartir (distancia, tiempo,
+   fecha -- nunca la ruta ni la frecuencia cardíaca). Compartir una carrera es una acción
+   explícita (botón "Compartir con amigos" en el detalle de esa carrera) -- no se comparte
+   nada solo, ni automáticamente al agregar una carrera nueva. */
+async function loadMyUsername(){
+  if(!currentUserId) return;
+  try{
+    const { data, error } = await supabaseClient.from('usernames').select('username').eq('user_id', currentUserId).maybeSingle();
+    if(!error && data) myUsername = data.username;
+  }catch(e){ console.error('loadMyUsername error', e); }
+}
+async function saveUsername(){
+  const input = document.getElementById('social-username-input');
+  if(!input) return;
+  const raw = input.value.trim().toLowerCase();
+  if(!/^[a-z0-9_]{3,20}$/.test(raw)){ showToast(t('social_username_invalid'), 'error'); return; }
+  try{
+    const { error } = await supabaseClient.from('usernames').upsert({ user_id: currentUserId, username: raw });
+    if(error){
+      if(error.code === '23505') showToast(t('social_username_taken'), 'error');
+      else{ console.error('saveUsername error', error); showToast(t('social_generic_error'), 'error'); }
+      return;
+    }
+    myUsername = raw;
+    showToast(t('social_username_saved'), 'success');
+    renderSocialSection();
+  }catch(e){
+    console.error('saveUsername error', e);
+    showToast(t('social_generic_error'), 'error');
+  }
+}
+async function followByUsername(){
+  const input = document.getElementById('social-follow-input');
+  if(!input) return;
+  const raw = input.value.trim().toLowerCase();
+  if(!raw) return;
+  try{
+    const { data: found, error: findErr } = await supabaseClient.from('usernames').select('user_id').eq('username', raw).maybeSingle();
+    if(findErr || !found){ showToast(t('social_user_not_found'), 'error'); return; }
+    if(String(found.user_id) === String(currentUserId)){ showToast(t('social_cant_follow_self'), 'error'); return; }
+    const { error: insErr } = await supabaseClient.from('follows').insert({ follower_id: currentUserId, followee_id: found.user_id });
+    if(insErr && insErr.code !== '23505'){ console.error('followByUsername error', insErr); showToast(t('social_generic_error'), 'error'); return; }
+    showToast(insErr ? t('social_already_following') : t('social_now_following', {username: raw}), insErr ? 'info' : 'success');
+    input.value = '';
+    renderSocialFollowingList();
+  }catch(e){
+    console.error('followByUsername error', e);
+    showToast(t('social_generic_error'), 'error');
+  }
+}
+async function unfollowUser(userId){
+  try{
+    await supabaseClient.from('follows').delete().eq('follower_id', currentUserId).eq('followee_id', userId);
+    renderSocialFollowingList();
+  }catch(e){ console.error('unfollowUser error', e); showToast(t('social_generic_error'), 'error'); }
+}
+async function renderSocialFollowingList(){
+  const el = document.getElementById('social-following-list');
+  if(!el) return;
+  try{
+    const { data, error } = await supabaseClient.from('follows').select('followee_id, usernames(username)').eq('follower_id', currentUserId).order('created_at', {ascending:false});
+    if(error || !data || !data.length){
+      el.innerHTML = `<p class="muted" style="margin:10px 0 0; font-size:12.5px;">${t('social_following_empty')}</p>`;
+      return;
+    }
+    el.innerHTML = data.map(f=>`<div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-top:1px solid var(--asphalt-3);"><span>@${escapeHtml(f.usernames ? f.usernames.username : '?')}</span><button class="small-link" onclick="unfollowUser('${f.followee_id}')">${t('social_unfollow')}</button></div>`).join('');
+  }catch(e){ console.error('renderSocialFollowingList error', e); }
+}
+function renderSocialSection(){
+  const el = document.getElementById('social-section-body');
+  if(!el) return;
+  if(!myUsername){
+    el.innerHTML = `
+      <p class="muted" style="margin:0 0 10px; font-size:12.5px;">${t('social_username_intro')}</p>
+      <div class="field" style="margin-top:0;"><input type="text" id="social-username-input" maxlength="20" placeholder="${t('social_username_ph')}"></div>
+      <button class="btn btn-outline btn-sm" style="width:100%; margin-top:8px;" onclick="saveUsername()">${t('social_username_save_btn')}</button>
+    `;
+  }else{
+    el.innerHTML = `
+      <p style="margin:0 0 12px; font-weight:800;">@${escapeHtml(myUsername)}</p>
+      <div class="field" style="margin-top:0;">
+        <label>${t('social_follow_label')}</label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="social-follow-input" maxlength="20" placeholder="${t('social_follow_ph')}" style="flex:1;">
+          <button class="btn btn-outline btn-sm" onclick="followByUsername()">${t('social_follow_btn')}</button>
+        </div>
+      </div>
+      <div id="social-following-list"></div>
+      <button class="btn btn-outline btn-sm" style="width:100%; margin-top:14px;" onclick="openSocialFeed()">${t('social_open_feed_btn')}</button>
+    `;
+    renderSocialFollowingList();
+  }
+}
+async function openSocialFeed(){
+  const el = document.getElementById('social-feed-content');
+  const title = `<h2 class="display" style="font-size:20px; margin-bottom:16px;">${t('social_feed_title')}</h2>`;
+  el.innerHTML = title + `<p class="muted">${t('social_feed_loading')}</p>`;
+  document.getElementById('social-feed-modal').style.display = 'block';
+  try{
+    const { data, error } = await supabaseClient.from('run_feed')
+      .select('id, distance_km, duration_sec, run_date, usernames(username), run_likes(user_id)')
+      .order('run_date', {ascending:false}).limit(50);
+    if(error) throw error;
+    if(!data || !data.length){ el.innerHTML = title + `<p class="muted">${t('social_feed_empty')}</p>`; return; }
+    el.innerHTML = title + data.map(r=>{
+      const likedByMe = (r.run_likes||[]).some(l=>String(l.user_id)===String(currentUserId));
+      const likeCount = (r.run_likes||[]).length;
+      const dateStr = new Date(r.run_date+'T00:00:00').toLocaleDateString(LOCALE_MAP[lang], {day:'numeric', month:'short'});
+      const paceMin = r.distance_km>0 ? (r.duration_sec/60)/r.distance_km : 0;
+      return `<div class="card" style="margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+          <span style="font-weight:800;">@${escapeHtml(r.usernames ? r.usernames.username : '?')}</span>
+          <span class="muted" style="font-size:12px;">${dateStr}</span>
+        </div>
+        <div style="display:flex; gap:20px; margin-top:10px;">
+          <div><div class="mono" style="font-weight:800;">${fmtDist(r.distance_km,2)} ${distUnit()}</div></div>
+          <div><div class="mono" style="font-weight:800;">${fmtTime(r.duration_sec)}</div></div>
+          <div><div class="mono" style="font-weight:800;">${fmtPace(paceMin)}/${distUnit()}</div></div>
+        </div>
+        <button class="small-link" style="margin-top:12px; display:flex; align-items:center; gap:6px; ${likedByMe?'color:var(--hivis-text);':''}" onclick="toggleRunLike('${r.id}', ${likedByMe})">
+          <span class="icon-sq" style="width:15px; height:15px;">${likedByMe ? ICONS.heartFilled : ICONS.heart}</span>${likedByMe ? t('social_liked') : t('social_like')}${likeCount>0 ? ' · '+likeCount : ''}
+        </button>
+      </div>`;
+    }).join('');
+  }catch(e){
+    console.error('openSocialFeed error', e);
+    el.innerHTML = title + `<p class="muted">${t('social_generic_error')}</p>`;
+  }
+}
+function closeSocialFeed(){
+  document.getElementById('social-feed-modal').style.display = 'none';
+}
+async function toggleRunLike(runFeedId, currentlyLiked){
+  try{
+    if(currentlyLiked) await supabaseClient.from('run_likes').delete().eq('run_feed_id', runFeedId).eq('user_id', currentUserId);
+    else await supabaseClient.from('run_likes').insert({ run_feed_id: runFeedId, user_id: currentUserId });
+    openSocialFeed();
+  }catch(e){ console.error('toggleRunLike error', e); showToast(t('social_generic_error'), 'error'); }
+}
+// Compartir una carrera puntual al feed de amigos -- acción explícita desde el detalle
+// de esa carrera (junto al botón de exportar GPX). Solo manda distancia/tiempo/fecha,
+// nunca la ruta GPS ni la frecuencia cardíaca (esas columnas ni existen en run_feed).
+async function shareRunToFeed(runId){
+  if(!myUsername){ showToast(t('social_need_username_first'), 'error'); return; }
+  const r = state.runs.find(x => String(x.id) === String(runId));
+  if(!r || !r.distanceKm || !r.durationSec) return;
+  try{
+    const { error } = await supabaseClient.from('run_feed').insert({
+      user_id: currentUserId,
+      run_id: String(r.id),
+      distance_km: r.distanceKm,
+      duration_sec: r.durationSec,
+      run_date: localDateISO(r.date),
+    });
+    if(error){
+      if(error.code === '23505') showToast(t('social_already_shared'), 'info');
+      else{ console.error('shareRunToFeed error', error); showToast(t('social_generic_error'), 'error'); }
+      return;
+    }
+    showToast(t('social_share_success'), 'success');
+  }catch(e){
+    console.error('shareRunToFeed error', e);
+    showToast(t('social_generic_error'), 'error');
+  }
+}
 function predictRaceTime(targetKm){
   // Estima el tiempo objetivo para `targetKm` con la fórmula de Riegel (T2 = T1 *
   // (D2/D1)^1.06), usando como referencia la marca personal más cercana en distancia
@@ -4029,6 +4797,136 @@ function predictRaceTime(targetKm){
 }
 function getGoalRaceKm(){
   return {'5k':5, '10k':10, '15k':15, '21k':21.0975, '42k':42.195}[state.profile.goal] || null;
+}
+/* ================= CALCULADORA DE RITMO DE CARRERA =================
+   Dada una distancia y un tiempo objetivo, arma el plan de ritmo km a km del
+   día de la carrera -- "parejo" (mismo ritmo todo el recorrido) o "progresivo"
+   (arranca un poco más lento y termina más rápido, el clásico negative split
+   que además es más seguro que salir demasiado rápido y sufrir los últimos km).
+   Se abre desde la tarjeta de "Próximos eventos" de Perfil, y si hay marcas
+   personales cargadas se sugiere un tiempo con la misma fórmula de Riegel que
+   ya usa el bloque de "ritmo objetivo estimado" de esa misma tarjeta. */
+function parseHMS(str){
+  // Acepta "mm:ss" o "h:mm:ss" (con 1 o 2 dígitos en cada parte) -- lo que
+  // el usuario probablemente tipee a mano en vez de forzarlo a un formato
+  // rígido con inputs separados de horas/minutos/segundos.
+  const parts = String(str||'').trim().split(':').map(p=>p.trim());
+  if(parts.length<2 || parts.length>3 || parts.some(p=>p==='' || isNaN(p))) return null;
+  const nums = parts.map(Number);
+  if(nums.some(n=>n<0)) return null;
+  let sec;
+  if(nums.length===2) sec = nums[0]*60 + nums[1];
+  else sec = nums[0]*3600 + nums[1]*60 + nums[2];
+  return sec>0 ? sec : null;
+}
+/* Selector de horas/minutos/segundos de la calculadora de ritmo: 3 <select> en vez de
+   un campo de texto libre (antes había que tipear "1:45:00" a mano). Las opciones se
+   generan una sola vez (quedan vacías la primera vez que se abre el modal). */
+function ensurePaceCalcTimeOptions(){
+  const hSel = document.getElementById('pc-time-h');
+  if(hSel.options.length) return;
+  for(let h=0; h<=9; h++) hSel.innerHTML += `<option value="${h}">${h}</option>`;
+  const pad2 = n => String(n).padStart(2,'0');
+  let mmss = '';
+  for(let n=0; n<60; n++) mmss += `<option value="${n}">${pad2(n)}</option>`;
+  document.getElementById('pc-time-m').innerHTML = mmss;
+  document.getElementById('pc-time-s').innerHTML = mmss;
+}
+function setPaceCalcTimeSec(totalSec){
+  const s = Math.max(0, Math.round(totalSec||0));
+  document.getElementById('pc-time-h').value = Math.floor(s/3600);
+  document.getElementById('pc-time-m').value = Math.floor((s%3600)/60);
+  document.getElementById('pc-time-s').value = s%60;
+}
+function getPaceCalcTimeSec(){
+  const h = parseInt(document.getElementById('pc-time-h').value, 10) || 0;
+  const m = parseInt(document.getElementById('pc-time-m').value, 10) || 0;
+  const s = parseInt(document.getElementById('pc-time-s').value, 10) || 0;
+  const total = h*3600 + m*60 + s;
+  return total>0 ? total : null;
+}
+function paceCalcCurrentKm(){
+  const sel = document.getElementById('pc-distance');
+  if(!sel) return null;
+  if(sel.value==='custom'){
+    const km = parseFloat(document.getElementById('pc-custom-km').value);
+    return km>0 ? km : null;
+  }
+  return parseFloat(sel.value);
+}
+function onPaceCalcDistanceChange(){
+  const isCustom = document.getElementById('pc-distance').value==='custom';
+  document.getElementById('pc-custom-km-field').style.display = isCustom ? 'block' : 'none';
+  renderPaceCalcResults();
+}
+function openPaceCalcModal(){
+  const goalKm = (state.event && state.event.distanceKm>0) ? state.event.distanceKm : getGoalRaceKm();
+  const sel = document.getElementById('pc-distance');
+  const knownOptions = ['5','10','15','21.0975','42.195'];
+  if(goalKm && knownOptions.includes(String(goalKm))){
+    sel.value = String(goalKm);
+    document.getElementById('pc-custom-km-field').style.display = 'none';
+  } else if(goalKm){
+    sel.value = 'custom';
+    document.getElementById('pc-custom-km').value = goalKm;
+    document.getElementById('pc-custom-km-field').style.display = 'block';
+  } else {
+    sel.value = '10';
+    document.getElementById('pc-custom-km-field').style.display = 'none';
+  }
+  ensurePaceCalcTimeOptions();
+  const km = paceCalcCurrentKm();
+  const prediction = km ? predictRaceTime(km) : null;
+  setPaceCalcTimeSec(prediction ? Math.round(prediction.predictedSec) : 0);
+  document.getElementById('pc-strategy').value = 'even';
+  document.getElementById('pace-calc-modal').style.display = 'block';
+  renderPaceCalcResults();
+}
+function closePaceCalcModal(){ document.getElementById('pace-calc-modal').style.display = 'none'; }
+function renderPaceCalcResults(){
+  const resultsEl = document.getElementById('pc-results');
+  if(!resultsEl) return;
+  const km = paceCalcCurrentKm();
+  const totalSec = getPaceCalcTimeSec();
+  if(!km || !totalSec){
+    resultsEl.innerHTML = `<p class="muted" style="margin-top:16px; font-size:13px;">${t('pace_calc_need_input')}</p>`;
+    return;
+  }
+  const strategy = document.getElementById('pc-strategy').value;
+  const avgPaceMin = (totalSec/60)/km;
+  const numFullKm = Math.floor(km);
+  const remainderKm = km - numFullKm;
+  const segments = []; // {label, distKm}
+  for(let i=1;i<=numFullKm;i++) segments.push({label:String(i), distKm:1});
+  if(remainderKm>0.005) segments.push({label:fmtDist(km,2), distKm:remainderKm});
+  // Negative split simple: el ritmo de cada tramo va del +4% al -4% del promedio,
+  // de forma lineal a lo largo de la carrera. Con distancias exactas (5, 10, 15km)
+  // esos factores ya promedian justo 1 y el tiempo total cae exacto -- pero
+  // 21.0975/42.195km dejan un último tramo más corto (la "fracción" de km), que
+  // pesa menos que los demás y corre el promedio ponderado unos segundos. Para
+  // que el tiempo acumulado de la última fila SIEMPRE caiga en el objetivo exacto
+  // (no unos segundos de más/menos), se normalizan los factores dividiendo por su
+  // propio promedio ponderado por distancia antes de aplicarlos.
+  const rawFactor = (i)=> (strategy==='negative' && segments.length>1) ? (1.04 - 0.08*(i/(segments.length-1))) : 1;
+  const weightedMeanFactor = segments.reduce((sum, seg, i)=> sum + rawFactor(i)*seg.distKm, 0) / km;
+  let cumSec = 0;
+  const rows = segments.map((seg, i)=>{
+    const segPaceMin = avgPaceMin * (rawFactor(i)/weightedMeanFactor);
+    const segSec = segPaceMin*60*seg.distKm;
+    cumSec += segSec;
+    return `<tr><td>${seg.label}</td><td class="mono">${fmtTime(Math.round(cumSec))}</td><td class="mono">${fmtPace(segPaceMin)}</td></tr>`;
+  });
+  resultsEl.innerHTML = `
+    <div style="margin-top:18px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
+      <p class="muted" style="margin:0 0 4px; font-size:12px;">${t('pace_calc_avg_pace_label')}</p>
+      <p class="mono" style="font-size:22px; font-weight:800; color:var(--hivis); margin:0 0 14px;">${fmtPace(avgPaceMin)} /${distUnit()}</p>
+      <div style="max-height:260px; overflow-y:auto;">
+        <table class="rd-seg-table">
+          <thead><tr><th>${t('pace_calc_km_col')}</th><th>${t('pace_calc_cum_col')}</th><th>${t('pace_calc_pace_col')}</th></tr></thead>
+          <tbody>${rows.join('')}</tbody>
+        </table>
+      </div>
+    </div>`;
 }
 // Antes, si la sincronización con Strava fallaba (token revocado, la API de Strava
 // caída, lo que sea) o simplemente dejaba de correr, no había NINGÚN aviso -- el cron
@@ -4097,36 +4995,14 @@ function renderHistory(){
       <h3 style="margin:0;" data-i18n="hist_trends">${t('hist_trends')}</h3>
       <button onclick="shareWeeklyRecapImage()" style="background:none; border:1.5px solid var(--asphalt-4); color:var(--hivis); font-size:12px; cursor:pointer; padding:5px 9px; border-radius:6px; display:flex; align-items:center; gap:5px; font-weight:700; flex-shrink:0;">${t('hist_share')}</button>
     </div>
-    <div class="stat-row">
-      <div class="stat-box"><div class="n mono">${fmtDist(tr.totalKm,0)}</div><div class="l">${t('hist_total_km')} (${distUnit()})</div></div>
-      <div class="stat-box"><div class="n mono">${tr.totalRuns}</div><div class="l">${t('hist_total_runs')}</div></div>
+    <div class="stat-row-divided">
+      <div class="stat-cell"><div class="n">${fmtDist(tr.totalKm,0)}</div><div class="l">${t('hist_total_km')} (${distUnit()})</div></div>
+      <div class="stat-cell"><div class="n">${tr.totalRuns}</div><div class="l">${t('hist_total_runs')}</div></div>
     </div>
-    <div class="week-bars" id="hist-trend-bars" style="margin-top:14px;">${daily.map((x,i)=>{
+    <div class="trend-bars" id="hist-trend-bars" style="margin-top:16px;">${daily.map((x,i)=>{
       const h = x.km>0 ? Math.max(6, Math.round((x.km/maxKmDay)*70)) : (x.planned ? 4 : 2);
-      const cls = x.km>0 ? 'hivis' : (x.planned ? 'planned-day' : 'rest-day');
-      return `<div class="bar-col"><div class="bar ${cls}" data-h="${h}" style="height:0px; transition-delay:${i*30}ms;"></div><div class="lbl">${x.day}</div></div>`;
-    }).join('')}</div>
-  </div>`;
-  // Tendencia de forma física a largo plazo: km reales por semana en las últimas 12
-  // semanas -- a diferencia del gráfico diario de arriba (14 días, para ver la semana
-  // actual día a día), esto muestra si el volumen viene subiendo, estable o bajando
-  // en el tiempo, algo que ni el gráfico diario ni ninguna otra vista mostraban antes.
-  const weeklyTrend = computeWeeklyTrend(12);
-  const maxWeekKm = Math.max(...weeklyTrend.map(w=>w.km), 1);
-  const weeksWithRuns = weeklyTrend.filter(w=>w.km>0);
-  const avgWeekKm = weeksWithRuns.length ? weeksWithRuns.reduce((a,w)=>a+w.km,0)/weeksWithRuns.length : 0;
-  const bestWeekKm = Math.max(...weeklyTrend.map(w=>w.km), 0);
-  const longTrendCard = `<div class="card">
-    <h3 style="margin-bottom:2px;">${t('hist_long_trend_title')}</h3>
-    <p class="muted" style="margin:0 0 10px; font-size:12px;">${t('hist_long_trend_subtitle')}</p>
-    <div class="stat-row">
-      <div class="stat-box"><div class="n mono">${fmtDist(avgWeekKm,1)}</div><div class="l">${t('hist_long_trend_avg')} (${distUnit()})</div></div>
-      <div class="stat-box"><div class="n mono">${fmtDist(bestWeekKm,1)}</div><div class="l">${t('hist_long_trend_best')} (${distUnit()})</div></div>
-    </div>
-    <div class="week-bars" id="hist-longtrend-bars" style="margin-top:14px; gap:4px;">${weeklyTrend.map((w,i)=>{
-      const h = w.km>0 ? Math.max(6, Math.round((w.km/maxWeekKm)*70)) : 2;
-      const cls = w.km>0 ? 'hivis' : 'rest-day';
-      return `<div class="bar-col"><div class="bar ${cls}" data-h="${h}" style="height:0px; transition-delay:${i*25}ms;"></div><div class="lbl">${w.day}</div></div>`;
+      const cls = x.km>0 ? '' : (x.planned ? 'trend-planned' : 'trend-rest');
+      return `<div class="trend-col"><div class="trend-stroke ${cls}" data-h="${h}" style="height:0px; transition-delay:${i*30}ms;"></div><div class="trend-lbl">${x.day}</div></div>`;
     }).join('')}</div>
   </div>`;
   const qualityCounts = getQualitySessionBreakdown(30);
@@ -4142,19 +5018,9 @@ function renderHistory(){
         <span class="type-breakdown-count">${count}</span>
       </div>`).join('')}</div>
   </div>` : '';
-  // Medallas de récords personales -- antes vivían en Perfil como una lista de tiempos;
-  // ahora se muestran acá como medallas (una por distancia estándar, iluminada con el
-  // tiempo si ya hay marca, apagada con candado si todavía no), siempre visibles.
-  const prRecords = getPersonalRecords();
-  const prCard = `<div class="card">
-    <h3>${t('hist_pr_title')}</h3>
-    <div class="pr-medal-grid">${PR_DISTANCES.map(b=>{
-      const rec = prRecords[b.key];
-      if(rec) return `<div class="pr-medal achieved"><span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${t('pr_label_'+b.key)}</span><span class="pr-medal-time">${fmtTime(rec.durationSec)}</span></div>`;
-      return `<div class="pr-medal"><span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${t('pr_label_'+b.key)}</span><span class="pr-medal-locked">${t('pr_medal_locked')}</span></div>`;
-    }).join('')}</div>
-  </div>`;
-  if(!state.runs || state.runs.length===0){ el.innerHTML = stravaSyncCard + trendsCard + longTrendCard + mixCard + prCard + `<div class="card" style="text-align:center; padding:32px 18px;"><div class="icon-sq" style="width:34px; height:34px; margin:0 auto 12px; color:var(--mist-dim);">${ICONS.empty}</div><p class="muted" style="margin:0;">${t('hist_empty')}</p></div>`; animateHistTrendBars(); return; }
+  // Los récords personales se muestran ahora en Logros (Perfil), junto con el resto de
+  // los hitos del corredor -- ver renderPersonalRecordsCard() y openAchievements().
+  if(!state.runs || state.runs.length===0){ el.innerHTML = stravaSyncCard + trendsCard + mixCard + `<div class="card" style="text-align:center; padding:32px 18px;"><div class="icon-sq" style="width:34px; height:34px; margin:0 auto 12px; color:var(--mist-dim);">${ICONS.empty}</div><p class="muted" style="margin:0;">${t('hist_empty')}</p></div>`; animateHistTrendBars(); return; }
   // Buscador simple + encabezados de mes -- con varios meses de historial cargado, una
   // lista plana se vuelve incómoda de recorrer. El buscador filtra por lo que se ve en
   // cada tarjeta (fecha, zapatilla, "manual"/Strava); los encabezados de mes se insertan
@@ -4169,16 +5035,17 @@ function renderHistory(){
     return haystack.includes(query);
   });
   if(query && !filteredRuns.length){
-    el.innerHTML = stravaSyncCard + trendsCard + longTrendCard + mixCard + prCard + `<div class="card" style="text-align:center; padding:32px 18px;"><p class="muted" style="margin:0;">${t('hist_search_empty')}</p></div>`;
+    el.innerHTML = stravaSyncCard + trendsCard + mixCard + `<div class="card" style="text-align:center; padding:32px 18px;"><p class="muted" style="margin:0;">${t('hist_search_empty')}</p></div>`;
     animateHistTrendBars();
     return;
   }
   let lastMonthKey = null;
-  el.innerHTML = stravaSyncCard + trendsCard + longTrendCard + mixCard + prCard + filteredRuns.map(r=>{
+  el.innerHTML = stravaSyncCard + trendsCard + mixCard + filteredRuns.map(r=>{
     const shoe = state.shoes.find(s=>String(s.id)===String(r.shoeId));
     const paceMin = r.distanceKm>0.02 ? (r.durationSec/60)/r.distanceKm : 0;
     const avgHr = r.avgHr || (r.hrLog && r.hrLog.length ? Math.round(r.hrLog.reduce((a,h)=>a+h.bpm,0)/r.hrLog.length) : null);
     const cal = r.calories || Math.round((state.profile.weight||70)*r.distanceKm*1.036);
+    const hasMap = !!(r.points && r.points.length>1);
     const dateStr = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {weekday:'short', day:'numeric', month:'short'});
     const monthKey = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {month:'long', year:'numeric'});
     let monthHeader = '';
@@ -4189,13 +5056,13 @@ function renderHistory(){
     return `${monthHeader}<div class="swipe-item" data-swipe-id="${r.id}">
       <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" onclick="deleteRun('${r.id}')"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
       <div class="card hist-card swipe-content" onclick="openRunDetail('${r.id}')" style="cursor:pointer;">
-        <div class="hist-top"><span style="font-weight:700;">${dateStr}</span><span class="hist-date">${r.manual? `<span class="tag tag-soon" style="margin-right:6px;">${t('hist_manual_tag')}</span>`:''}${r.source==='strava'? `<span class="tag tag-mixto" style="margin-right:6px;">Strava</span>`:''}${fmtTime(r.durationSec)}</span></div>
-        ${r.points && r.points.length>1 ? `<div class="hist-map" id="hist-map-${r.id}"></div>` : ''}
-        <div class="stat-row">
-          <div class="stat-box"><div class="n mono">${fmtDist(r.distanceKm)}</div><div class="l">${distUnit()}</div></div>
-          <div class="stat-box"><div class="n mono">${fmtPace(paceMin)}</div><div class="l">${t('run_pace_word')}</div></div>
-          <div class="stat-box"><div class="n mono">${avgHr||'—'}</div><div class="l">${t('hist_avg_hr')}</div></div>
-          <div class="stat-box"><div class="n mono">${cal}</div><div class="l">${t('run_calories')}</div></div>
+        <div class="hist-top"><span style="font-weight:700;">${dateStr}</span>${hasMap ? '' : `<span class="hist-date">${r.manual? `<span class="tag tag-soon" style="margin-right:6px;">${t('hist_manual_tag')}</span>`:''}${r.source==='strava'? `<span class="tag tag-mixto" style="margin-right:6px;">Strava</span>`:''}${fmtTime(r.durationSec)}</span>`}</div>
+        ${hasMap ? `<div class="hist-map" id="hist-map-${r.id}"><div class="hist-map-badge">${r.manual? `<span class="tag tag-soon">${t('hist_manual_tag')}</span>`:''}${r.source==='strava'? `<span class="tag tag-mixto">Strava</span>`:''}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
+        <div class="stat-row-divided">
+          <div class="stat-cell"><div class="n">${fmtDist(r.distanceKm)}</div><div class="l">${distUnit()}</div></div>
+          <div class="stat-cell"><div class="n">${fmtPace(paceMin)}</div><div class="l">${t('run_pace_word')}</div></div>
+          <div class="stat-cell"><div class="n">${avgHr||'—'}</div><div class="l">${t('hist_avg_hr')}</div></div>
+          <div class="stat-cell"><div class="n">${cal}</div><div class="l">${t('run_calories')}</div></div>
         </div>
         <p class="muted" style="margin-top:10px; font-size:12.5px;">${t('hist_benefit_'+runBenefitKey(r))}</p>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:8px;">
@@ -4220,12 +5087,12 @@ function renderHistory(){
   animateHistTrendBars();
 }
 function animateHistTrendBars(){
-  ['hist-trend-bars','hist-longtrend-bars'].forEach(id=>{
+  ['hist-trend-bars'].forEach(id=>{
     const barsEl = document.getElementById(id);
     if(!barsEl) return;
     requestAnimationFrame(()=>{
       requestAnimationFrame(()=>{
-        barsEl.querySelectorAll('.bar[data-h]').forEach(el=>{ el.style.height = el.dataset.h+'px'; });
+        barsEl.querySelectorAll('.trend-stroke[data-h]').forEach(el=>{ el.style.height = el.dataset.h+'px'; });
       });
     });
   });
@@ -4251,31 +5118,15 @@ function analyzeSplitPacing(splits){
   else kind = 'even';
   return { kind, diffPct };
 }
-function renderSplitsSection(splits){
-  if(!splits || !splits.length) return '';
-  const pacingAnalysis = analyzeSplitPacing(splits);
-  const paces = splits.map(s=>s.paceMin);
-  const maxPace = Math.max(...paces), minPace = Math.min(...paces);
-  const range = (maxPace - minPace) || 1;
-  const rows = splits.map(s=>{
-    const pct = 22 + ((s.paceMin - minPace) / range) * 73;
-    const paceStr = `${Math.floor(s.paceMin)}:${String(Math.round((s.paceMin%1)*60)).padStart(2,'0')}`;
-    const elevStr = s.elevGain ? `+${s.elevGain}m` : '—';
-    const hrStr = s.avgHr ? `${s.avgHr}bpm` : '—';
-    return `<div style="display:flex; align-items:center; gap:9px; margin-bottom:9px;">
-      <span class="mono" style="width:44px; font-size:12px; color:var(--mist); flex-shrink:0;">${s.km}km</span>
-      <div style="flex:1; height:24px; background:var(--asphalt-3); border-radius:5px; overflow:hidden; position:relative;">
-        <div style="height:100%; width:${pct}%; background:#4A9EFF; border-radius:5px;"></div>
-        <span style="position:absolute; left:8px; top:50%; transform:translateY(-50%); font-size:11px; font-weight:700; color:#fff;">${paceStr}/km</span>
-      </div>
-      <span class="mono muted" style="font-size:10px; width:80px; text-align:right; flex-shrink:0;">${elevStr} · ${hrStr}</span>
-    </div>`;
-  }).join('');
-  return `<div class="card" style="margin-top:10px;">
-    ${pacingAnalysis ? `<p style="font-weight:700; margin-bottom:10px;">${t('hist_split_'+pacingAnalysis.kind)}</p>` : ''}
-    <p class="muted" style="margin-bottom:14px; font-size:12px;">${t('hist_splits_hint')}</p>
-    ${rows}
-  </div>`;
+/* ================= DETALLE DE CARRERA (pestañas Ruta/Ritmo/Segmentos/Gráficos/Detalles) =================
+   rdCurrent guarda la carrera activa y los valores derivados que varias pestañas
+   necesitan (ritmo promedio, FC promedio, calorías) para no recalcularlos en cada
+   una. Cada pestaña se renderiza recién la primera vez que se abre (panel.dataset.rendered),
+   no las cinco de una -- así abrir el detalle de una carrera no arma de entrada un
+   mapa Leaflet + dos gráficos que la mayoría de las veces la persona ni va a mirar. */
+let rdCurrent = null;
+function zoneColorVar(n){
+  return (getComputedStyle(document.documentElement).getPropertyValue('--zone'+n) || '').trim() || '#8B9296';
 }
 function openRunDetail(runId){
   if(swipeSuppressClick) return;
@@ -4284,52 +5135,451 @@ function openRunDetail(runId){
   const paceMin = r.distanceKm>0.02 ? (r.durationSec/60)/r.distanceKm : 0;
   const avgHr = r.avgHr || (r.hrLog && r.hrLog.length ? Math.round(r.hrLog.reduce((a,h)=>a+h.bpm,0)/r.hrLog.length) : null);
   const cal = r.calories || Math.round((state.profile.weight||70)*r.distanceKm*1.036);
+  const hasRoute = !!(r.points && r.points.length>1);
+  const hasSplits = !!(r.splits && r.splits.length>0);
+  const hasHrSeries = !!(r.series && r.series.hr && r.series.t && r.series.hr.filter(v=>v!=null).length>1);
+  const hasPaceSeries = !!(r.series && r.series.paceMin && r.series.t && r.series.paceMin.filter(v=>v!=null).length>1);
+  rdCurrent = {r, paceMin, avgHr, cal, hasRoute, hasSplits, hasHrSeries, hasPaceSeries};
+
+  const tabs = [];
+  if(hasRoute) tabs.push('ruta');
+  if(hasSplits) tabs.push('ritmo');
+  if(hasSplits) tabs.push('segmentos');
+  if(hasHrSeries || hasPaceSeries) tabs.push('graficos');
+  tabs.push('detalles');
+  rdCurrent.tabs = tabs;
+  const tabLabels = {ruta:t('rd_tab_ruta'), ritmo:t('rd_tab_ritmo'), segmentos:t('rd_tab_segmentos'), graficos:t('rd_tab_graficos'), detalles:t('rd_tab_detalles')};
   const dateStr = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long', year:'numeric'});
 
-  const rows = [];
-  rows.push([t('run_km'), `${fmtDist(r.distanceKm)} ${distUnit()}`]);
-  rows.push([t('run_time'), fmtTime(r.durationSec)]);
-  rows.push([`${t('run_pace_word')} /${distUnit()}`, fmtPace(paceMin)]);
-  if(avgHr) rows.push([t('hist_avg_hr'), avgHr+' bpm']);
-  if(r.maxHr) rows.push([t('hist_max_hr'), r.maxHr+' bpm']);
-  if(r.elevationGain) rows.push([t('hist_elevation'), isImperial() ? Math.round(r.elevationGain*3.28084)+' ft' : Math.round(r.elevationGain)+' m']);
-  if(r.avgCadence) rows.push([t('hist_cadence'), Math.round(r.avgCadence*2)+' spm']);
-  rows.push([t('run_calories'), cal]);
+  document.getElementById('run-detail-content').innerHTML = `
+    <h2 class="display" style="font-size:20px; margin-bottom:2px;">${escapeHtml(r.name) || dateStr}</h2>
+    ${r.name ? `<p class="muted" style="margin-bottom:10px;">${dateStr}</p>` : '<div style="margin-bottom:10px;"></div>'}
+    <div class="rd-tabs">${tabs.map(tb=>`<button class="rd-tab-btn" id="rd-tabbtn-${tb}" onclick="switchRDTab('${tb}')">${tabLabels[tb]}</button>`).join('')}</div>
+    ${tabs.map(tb=>`<div class="rd-panel" id="rd-panel-${tb}"></div>`).join('')}
+    <button class="btn btn-outline" style="width:100%; margin-top:24px;" onclick="openEditRun('${r.id}')">${t('edit_run_btn')}</button>
+    <button class="btn btn-danger" style="width:100%; margin-top:12px;" onclick="deleteRun('${r.id}')">${t('hist_delete_run')}</button>
+  `;
+  document.getElementById('run-detail-modal').style.display='block';
+  switchRDTab(tabs[0]);
+}
+function switchRDTab(tab){
+  if(!rdCurrent) return;
+  rdCurrent.tabs.forEach(tb=>{
+    const btn = document.getElementById('rd-tabbtn-'+tb);
+    const panel = document.getElementById('rd-panel-'+tb);
+    if(btn) btn.classList.toggle('active', tb===tab);
+    if(panel) panel.classList.toggle('active', tb===tab);
+  });
+  const panel = document.getElementById('rd-panel-'+tab);
+  if(!panel) return;
+  if(panel.dataset.rendered==='1'){
+    if(tab==='ruta' && detailMap) setTimeout(()=>detailMap.invalidateSize(), 50);
+    return;
+  }
+  panel.dataset.rendered = '1';
+  if(tab==='ruta') renderRDRuta(panel);
+  else if(tab==='ritmo') renderRDRitmo(panel);
+  else if(tab==='segmentos') renderRDSegmentos(panel);
+  else if(tab==='graficos') renderRDGraficos(panel);
+  else if(tab==='detalles') renderRDDetalles(panel);
+}
+// Corta el recorrido (r.points) en tramos por km alineados con r.splits, y le
+// asigna a cada tramo el color de zona de ritmo (relativa al promedio de ESA
+// carrera, ver classifyPaceRelative) -- así el mapa de la pestaña Ruta se ve
+// coloreado por velocidad como en la referencia, en vez de una línea plana.
+function buildColoredRouteSegments(r){
+  const points = r.points||[];
+  if(points.length<2) return [];
+  if(!r.splits || !r.splits.length || points.length<3){
+    return [{latlngs:points.map(p=>[p.lat,p.lon]), color: zoneColorVar(3)}];
+  }
+  const cum=[0];
+  for(let i=1;i<points.length;i++) cum.push(cum[i-1]+haversine(points[i-1].lat,points[i-1].lon,points[i].lat,points[i].lon));
+  const avgPace = rdCurrent.paceMin;
+  const segs = [];
+  let startIdx = 0;
+  r.splits.forEach((split, i)=>{
+    const isLast = i===r.splits.length-1;
+    const targetCum = isLast ? cum[cum.length-1] : split.km;
+    let idx = startIdx;
+    while(idx<cum.length-1 && cum[idx]<targetCum) idx++;
+    const chunk = points.slice(startIdx, idx+1);
+    if(chunk.length>=2){
+      const zone = classifyPaceRelative(split.paceMin, avgPace);
+      segs.push({latlngs:chunk.map(p=>[p.lat,p.lon]), color: zoneColorVar(zone)});
+    }
+    startIdx = idx;
+  });
+  return segs.length ? segs : [{latlngs:points.map(p=>[p.lat,p.lon]), color: zoneColorVar(3)}];
+}
+function renderRDRuta(panel){
+  const {r, paceMin, cal} = rdCurrent;
+  const dateStr = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
+  const timeStr = new Date(r.date).toLocaleTimeString(LOCALE_MAP[lang], {hour:'numeric', minute:'2-digit'});
+  const paces = (r.splits||[]).map(s=>s.paceMin).filter(p=>p>0);
+  const slowest = paces.length ? Math.max(...paces) : paceMin;
+  const fastest = paces.length ? Math.min(...paces) : paceMin;
+  panel.innerHTML = `
+    <div class="rd-map-full" id="rd-map-full">
+      <div id="rd-route-map" style="height:100%; width:100%;"></div>
+      <div class="rd-map-fade"></div>
+      <div class="rd-map-controls"><button onclick="rdRecenterMap()" data-i18n-aria="aria_recenter">${ICONS.locate}</button></div>
+      <div class="rd-map-handle" id="rd-map-handle" onclick="toggleRDMapExpanded()"></div>
+    </div>
+    <div class="rd-ruta-below" id="rd-ruta-below">
+      <div class="rd-big-dist">${fmtDist(r.distanceKm)} <span style="font-size:19px; font-weight:700; color:var(--mist);">${distUnit()}</span></div>
+      <p class="muted" style="margin-top:2px; text-transform:capitalize;">${dateStr}, ${timeStr}</p>
+      <!-- Botón "Video del recorrido" sacado a pedido del usuario: en la web (PWA)
+           nunca se pudo lograr que el video se guarde/comparta de forma confiable
+           en iPhone (ver el historial de intentos alrededor de rdRemuxVideoIfNeeded
+           más abajo). La idea es retomarlo cuando haya apps nativas de Android/iOS
+           (Capacitor), donde compartir un archivo es mucho más directo que por el
+           navegador. El resto del sistema de video (startDynamicVideo y compañía)
+           queda intacto, sin usarse, listo para volver a engancharse acá con solo
+           reponer este botón. -->
+      ${paces.length>1 ? `
+        <div class="rd-legend-bar"></div>
+        <div class="rd-legend-labels"><span>${t('rd_slowest')} ${fmtPace(slowest)}/${distUnit()}</span><span>${t('rd_fastest')} ${fmtPace(fastest)}/${distUnit()}</span></div>
+      ` : ''}
+      <div class="rd-stat-row">
+        <div><span class="mono">${fmtTime(r.durationSec)}</span><span class="muted" style="font-size:11px;">${t('run_time')}</span></div>
+        <div><span class="mono">${fmtPace(paceMin)}</span><span class="muted" style="font-size:11px;">${t('run_pace_word')}/${distUnit()}</span></div>
+        <div><span class="mono">${cal}</span><span class="muted" style="font-size:11px;">${t('run_calories')}</span></div>
+      </div>
+    </div>
+  `;
+  rdMapExpanded = false;
+  setTimeout(()=>{
+    if(detailMap){ detailMap.remove(); detailMap=null; }
+    detailMap = L.map('rd-route-map', {zoomControl:false, attributionControl:true});
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=cb1_2i8k_1_882919874396f1a734cae151', {maxZoom:20, attribution:'&copy; OpenStreetMap contributors &copy; CARTO'}).addTo(detailMap);
+    const segs = buildColoredRouteSegments(r);
+    const allLatLngs = [];
+    segs.forEach(seg=>{ L.polyline(seg.latlngs, {color:seg.color, weight:5, lineCap:'round', lineJoin:'round'}).addTo(detailMap); allLatLngs.push(...seg.latlngs); });
+    if(allLatLngs.length) detailMap.fitBounds(L.latLngBounds(allLatLngs), {padding:[20,20]});
+    applyStaticTranslations();
+  }, 60);
+}
+/* ---- arrastrar el mapa de la pestaña Ruta hacia arriba para agrandarlo ----
+   Igual que el resto de los gestos de la app (swipe-to-delete, swipe del plan
+   semanal): se decide con el primer movimiento si es un drag vertical del mapa
+   o si hay que dejar pasar el toque (por ej. un tap en el botón de recentrar,
+   o un scroll normal de la pantalla). Dos estados nada más -- achicado (340px,
+   el de siempre) y agrandado (~72% del alto de pantalla, dejando arriba el
+   título y las pestañas) -- con umbral a mitad de camino para decidir a cuál
+   de los dos "engancha" al soltar. */
+let rdMapExpanded = false;
+let rdMapDragging = false, rdMapDragStartY = 0, rdMapDragStartH = 0, rdMapDragAxisLocked = false;
+let rdMapInvalidateRaf = false;
+const RD_MAP_COLLAPSED_H = 340;
+function rdMapExpandedH(){ return Math.round(window.innerHeight * 0.72); }
+function rdSetMapExpanded(expand, animate){
+  const mapEl = document.getElementById('rd-map-full');
+  const belowEl = document.getElementById('rd-ruta-below');
+  if(!mapEl) return;
+  rdMapExpanded = expand;
+  if(animate===false) mapEl.classList.add('rd-map-dragging'); else mapEl.classList.remove('rd-map-dragging');
+  mapEl.style.height = (expand ? rdMapExpandedH() : RD_MAP_COLLAPSED_H) + 'px';
+  if(belowEl) belowEl.classList.toggle('rd-collapsed', expand);
+  // invalidateSize() sólo le avisa a Leaflet que su contenedor cambió de tamaño --
+  // no reencuadra el recorrido. Sin el fitBounds de rdRecenterMap() de acá abajo,
+  // al agrandar el mapa se veía más área de alrededor pero la ruta quedaba chica
+  // y corrida en vez de aprovechar el espacio nuevo (lo mismo al achicarlo).
+  setTimeout(()=>{ if(detailMap){ detailMap.invalidateSize(); rdRecenterMap(); } }, animate===false ? 0 : 320);
+}
+function toggleRDMapExpanded(){
+  if(swipeSuppressClick) return;
+  haptic(8);
+  rdSetMapExpanded(!rdMapExpanded);
+}
+document.addEventListener('touchstart', e=>{
+  const mapEl = e.target.closest ? e.target.closest('#rd-map-full') : null;
+  if(!mapEl || e.target.closest('.rd-map-controls')){ rdMapDragging = false; return; }
+  rdMapDragStartY = e.touches[0].clientY;
+  rdMapDragStartH = mapEl.getBoundingClientRect().height;
+  rdMapDragAxisLocked = false;
+  rdMapDragging = false;
+}, {passive:true});
+document.addEventListener('touchmove', e=>{
+  const mapEl = document.getElementById('rd-map-full');
+  if(!mapEl || rdMapDragStartY===0) return;
+  const dy = rdMapDragStartY - e.touches[0].clientY;
+  const dx = 0;
+  if(!rdMapDragAxisLocked){
+    if(Math.abs(dy) > 8){
+      rdMapDragAxisLocked = true;
+      rdMapDragging = true;
+      mapEl.classList.add('rd-map-dragging');
+    } else { return; }
+  }
+  if(!rdMapDragging) return;
+  const newH = Math.max(RD_MAP_COLLAPSED_H, Math.min(rdMapExpandedH(), rdMapDragStartH + dy));
+  mapEl.style.height = newH + 'px';
+  if(!rdMapInvalidateRaf){
+    rdMapInvalidateRaf = true;
+    requestAnimationFrame(()=>{ rdMapInvalidateRaf = false; if(detailMap){ detailMap.invalidateSize(); rdRecenterMap(); } });
+  }
+  e.preventDefault();
+}, {passive:false});
+document.addEventListener('touchend', ()=>{
+  if(rdMapDragging){
+    const mapEl = document.getElementById('rd-map-full');
+    if(mapEl){
+      const h = mapEl.getBoundingClientRect().height;
+      const mid = (RD_MAP_COLLAPSED_H + rdMapExpandedH()) / 2;
+      mapEl.classList.remove('rd-map-dragging');
+      rdSetMapExpanded(h > mid);
+      haptic(10);
+    }
+    swipeSuppressClick = true;
+    setTimeout(()=>{ swipeSuppressClick = false; }, 300);
+  }
+  rdMapDragStartY = 0;
+  rdMapDragging = false;
+  rdMapDragAxisLocked = false;
+}, {passive:true});
+function rdRecenterMap(){
+  if(!detailMap || !rdCurrent) return;
+  const pts = rdCurrent.r.points;
+  if(pts && pts.length) detailMap.fitBounds(L.latLngBounds(pts.map(p=>[p.lat,p.lon])), {padding:[20,20]});
+}
+function renderRDRitmo(panel){
+  const {r, paceMin} = rdCurrent;
+  const splits = r.splits||[];
+  const splitPaces = splits.map(s=>s.paceMin).filter(p=>p>0);
+  const fastest = splitPaces.length ? Math.min(...splitPaces) : paceMin;
+  const maxPaceForBar = Math.max(...splitPaces, paceMin) * 1.02 || 1;
+  const pacingAnalysis = analyzeSplitPacing(splits);
+  panel.innerHTML = `
+    <div style="display:flex; justify-content:space-around; text-align:center; margin-bottom:20px;">
+      <div><span class="mono" style="font-size:22px; font-weight:800; display:block;">${fmtPace(paceMin)}</span><span class="muted" style="font-size:12px;">${t('rd_avg_pace')}</span></div>
+      <div><span class="mono" style="font-size:22px; font-weight:800; display:block;">${fmtPace(fastest)}</span><span class="muted" style="font-size:12px;">${t('rd_fastest_pace')}</span></div>
+    </div>
+    ${pacingAnalysis ? `<p style="font-weight:700; margin-bottom:14px; font-size:13.5px;">${t('hist_split_'+pacingAnalysis.kind)}</p>` : ''}
+    <div class="muted" style="font-size:11px; margin-bottom:8px; display:flex; justify-content:space-between;"><span>${distUnit()}</span><span>${t('run_pace_word')} (/${distUnit()})</span></div>
+    ${splits.map(s=>{
+      const zone = classifyPaceRelative(s.paceMin, paceMin);
+      const widthPct = s.paceMin>0 ? Math.max(22, Math.min(100, (s.paceMin/maxPaceForBar)*100)) : 22;
+      return `<div class="pace-bar-row">
+        <div class="pace-bar-label">${s.km}</div>
+        <div class="pace-bar-track"><div class="pace-bar-fill" style="width:${widthPct}%; background:${zoneColorVar(zone)};">${fmtPace(s.paceMin)}</div></div>
+      </div>`;
+    }).join('')}
+  `;
+}
+function renderRDSegmentos(panel){
+  const {r, paceMin, avgHr} = rdCurrent;
+  const splits = r.splits||[];
+  const anyHr = splits.some(s=>s.avgHr!=null);
+  const anyCad = splits.some(s=>s.avgCadence!=null);
+  const rows = splits.map(s=>{
+    const segDistKm = Number.isInteger(s.km) ? 1 : s.km;
+    const segSec = Math.round(s.paceMin*60*segDistKm);
+    return `<tr>
+      <td>${s.km}</td>
+      <td>${fmtTime(segSec)}</td>
+      <td>${fmtDist(segDistKm)}</td>
+      <td>${fmtPace(s.paceMin)}</td>
+      ${anyHr ? `<td>${s.avgHr!=null ? s.avgHr : '–'}</td>` : ''}
+      ${anyCad ? `<td>${s.avgCadence!=null ? s.avgCadence : '–'}</td>` : ''}
+    </tr>`;
+  }).join('');
+  panel.innerHTML = `
+    <div style="overflow-x:auto;">
+    <table class="rd-seg-table">
+      <thead><tr>
+        <th>${t('rd_seg_col')}</th><th>${t('rd_seg_dur')}</th><th>${t('rd_seg_dist')} (${distUnit()})</th><th>${t('run_pace_word')} (/${distUnit()})</th>
+        ${anyHr ? `<th>${t('hist_avg_hr')}</th>` : ''}
+        ${anyCad ? `<th>${t('hist_cadence')}</th>` : ''}
+      </tr></thead>
+      <tbody>
+        ${rows}
+        <tr>
+          <td>${t('rd_total')}</td><td>${fmtTime(r.durationSec)}</td><td>${fmtDist(r.distanceKm)}</td><td>${fmtPace(paceMin)}</td>
+          ${anyHr ? `<td>${avgHr!=null?avgHr:'–'}</td>` : ''}
+          ${anyCad ? `<td>${r.avgCadence!=null?r.avgCadence:'–'}</td>` : ''}
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  `;
+}
+// Área de FC/ritmo en el tiempo, dibujada como SVG a mano (sin librería de
+// gráficos -- no hay bundler en este proyecto, ver comentario de arriba de
+// todo el archivo). invertY=true pone los valores más ALTOS arriba (para FC:
+// más pulsaciones = más arriba); invertY=false deja los valores más BAJOS
+// arriba (para ritmo: correr más rápido = número más chico = arriba, como
+// leería cualquier corredor el gráfico).
+function buildAreaChartSVG(tArr, valArr, colorHex, invertY){
+  const W=300, H=100, padT=6, padB=6;
+  const pairs = tArr.map((tv,i)=>({tv, v:valArr[i]})).filter(p=>p.v!=null);
+  if(pairs.length<2) return '';
+  const vals = pairs.map(p=>p.v);
+  const minV = Math.min(...vals), maxV = Math.max(...vals);
+  const spanV = (maxV-minV) || 1;
+  const minT = pairs[0].tv, maxT = pairs[pairs.length-1].tv;
+  const spanT = (maxT-minT) || 1;
+  const pts = pairs.map(p=>{
+    const x = ((p.tv-minT)/spanT) * W;
+    const frac = (p.v-minV)/spanV;
+    const y = invertY ? (padT + (1-frac)*(H-padT-padB)) : (padT + frac*(H-padT-padB));
+    return [x,y];
+  });
+  const linePath = pts.map((p,i)=> (i===0?'M':'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+  const areaPath = `M${pts[0][0].toFixed(1)},${H} L` + pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' L') + ` L${pts[pts.length-1][0].toFixed(1)},${H} Z`;
+  const gradId = 'rdgrad'+Math.random().toString(36).slice(2,9);
+  return `<svg class="rd-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${colorHex}" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="${colorHex}" stop-opacity="0"/>
+    </linearGradient></defs>
+    <path d="${areaPath}" fill="url(#${gradId})" stroke="none"/>
+    <path d="${linePath}" fill="none" stroke="${colorHex}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+// Minutos pasados en cada zona (1-5) a lo largo de una serie en el tiempo.
+// classifyFn recibe (valor, extra) -- extra es el promedio de la carrera para
+// classifyPaceRelative, e ignorado por classifyHR.
+function computeZoneMinutes(tArr, valArr, classifyFn, extra){
+  const mins = {1:0,2:0,3:0,4:0,5:0};
+  for(let i=0;i<tArr.length-1;i++){
+    if(valArr[i]==null) continue;
+    const dt = (tArr[i+1]-tArr[i])/60;
+    if(dt<=0) continue;
+    mins[classifyFn(valArr[i], extra)] += dt;
+  }
+  return mins;
+}
+function buildDonutCSS(zoneMinutes){
+  const total = [1,2,3,4,5].reduce((a,z)=>a+zoneMinutes[z],0);
+  if(total<=0) return `<div style="width:96px; height:96px; border-radius:50%; background:var(--asphalt-3); flex-shrink:0;"></div>`;
+  let acc = 0;
+  const stops = [];
+  [1,2,3,4,5].forEach(z=>{
+    const frac = zoneMinutes[z]/total;
+    if(frac<=0) return;
+    stops.push(`${zoneColorVar(z)} ${(acc*360).toFixed(1)}deg ${((acc+frac)*360).toFixed(1)}deg`);
+    acc += frac;
+  });
+  return `<div style="width:96px; height:96px; border-radius:50%; background:conic-gradient(${stops.join(',')}); flex-shrink:0; position:relative;">
+    <div style="position:absolute; inset:18px; border-radius:50%; background:var(--asphalt-2);"></div>
+  </div>`;
+}
+function fmtZoneMin(min){ return min<1 ? '<1' : Math.round(min); }
+function renderRDGraficos(panel){
+  const {r, paceMin, avgHr} = rdCurrent;
+  let html = '';
+  if(rdCurrent.hasHrSeries){
+    const hrColor = zoneColorVar(5);
+    const maxHr = r.maxHr || Math.max(...r.series.hr.filter(v=>v!=null));
+    const zoneMin = computeZoneMinutes(r.series.t, r.series.hr, classifyHR);
+    html += `<div class="card rd-chart-card">
+      <h3 style="font-size:16px; margin-bottom:14px;">${t('rd_chart_hr')}</h3>
+      <div style="display:flex; justify-content:space-around; text-align:center; margin-bottom:12px;">
+        <div><span class="mono" style="font-size:20px; font-weight:800; display:block;">${avgHr||'–'}</span><span class="muted" style="font-size:11.5px;">${t('rd_avg_hr_full')}</span></div>
+        <div><span class="mono" style="font-size:20px; font-weight:800; display:block;">${maxHr||'–'}</span><span class="muted" style="font-size:11.5px;">${t('hist_max_hr')}</span></div>
+      </div>
+      ${buildAreaChartSVG(r.series.t, r.series.hr, hrColor, true)}
+      <div class="rd-donut-row">
+        ${buildDonutCSS(zoneMin)}
+        <div class="rd-donut-legend">
+          ${[1,2,3,4,5].map(z=>zoneMin[z]>0.05 ? `<div class="rd-donut-legend-row"><span class="rd-donut-legend-name"><span class="dot" style="background:${zoneColorVar(z)};"></span>${t('zdesc_'+z)}</span><span class="rd-donut-legend-val">${fmtZoneMin(zoneMin[z])} ${t('rd_min_short')}</span></div>` : '').join('')}
+        </div>
+      </div>
+    </div>`;
+  }
+  if(rdCurrent.hasPaceSeries){
+    const paceColor = zoneColorVar(2);
+    const fastest = Math.min(...r.series.paceMin.filter(v=>v!=null));
+    const zoneMin = computeZoneMinutes(r.series.t, r.series.paceMin, classifyPaceRelative, paceMin);
+    html += `<div class="card rd-chart-card">
+      <h3 style="font-size:16px; margin-bottom:14px;">${t('rd_chart_pace')}</h3>
+      <div style="display:flex; justify-content:space-around; text-align:center; margin-bottom:12px;">
+        <div><span class="mono" style="font-size:20px; font-weight:800; display:block;">${fmtPace(paceMin)}</span><span class="muted" style="font-size:11.5px;">${t('rd_avg_pace')}</span></div>
+        <div><span class="mono" style="font-size:20px; font-weight:800; display:block;">${fmtPace(fastest)}</span><span class="muted" style="font-size:11.5px;">${t('rd_fastest_pace')}</span></div>
+      </div>
+      ${buildAreaChartSVG(r.series.t, r.series.paceMin, paceColor, false)}
+      <div class="rd-donut-row">
+        ${buildDonutCSS(zoneMin)}
+        <div class="rd-donut-legend">
+          ${[1,2,3,4,5].map(z=>zoneMin[z]>0.05 ? `<div class="rd-donut-legend-row"><span class="rd-donut-legend-name"><span class="dot" style="background:${zoneColorVar(z)};"></span>${t('rd_pacezone_'+z)}</span><span class="rd-donut-legend-val">${fmtZoneMin(zoneMin[z])} ${t('rd_min_short')}</span></div>` : '').join('')}
+        </div>
+      </div>
+    </div>`;
+  }
+  panel.innerHTML = html;
+}
+function renderRDDetalles(panel){
+  const {r, paceMin, avgHr, cal} = rdCurrent;
+  const speedKmh = r.durationSec>0 ? (r.distanceKm/(r.durationSec/3600)) : 0;
+  const tiles = [];
+  tiles.push([t('run_time'), fmtTime(r.durationSec)]);
+  tiles.push([t('run_calories'), cal+' kcal']);
+  tiles.push([`${t('run_pace_word')} /${distUnit()}`, fmtPace(paceMin)]);
+  tiles.push([t('rd_avg_speed'), (isImperial()? (speedKmh*0.621371).toFixed(2)+' mph' : speedKmh.toFixed(2)+' km/h')]);
+  if(r.avgCadence) tiles.push([t('hist_cadence'), Math.round(r.avgCadence)+' spm']);
+  if(avgHr) tiles.push([t('hist_avg_hr'), avgHr+' bpm']);
+  if(r.maxHr) tiles.push([t('hist_max_hr'), r.maxHr+' bpm']);
+  if(r.elevationGain!=null) tiles.push([t('rd_ascent'), isImperial() ? Math.round(r.elevationGain*3.28084)+' ft' : Math.round(r.elevationGain)+' m']);
+  if(r.elevationLoss!=null) tiles.push([t('rd_descent'), isImperial() ? Math.round(r.elevationLoss*3.28084)+' ft' : Math.round(r.elevationLoss)+' m']);
 
   const shoeSelect = `<select onchange="changeRunShoe('${r.id}', this.value)" style="background:var(--asphalt-3); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:6px 8px; border-radius:6px; font-family:inherit; font-size:13px; max-width:60%;">
     <option value="">${t('hist_no_shoe')}</option>
     ${state.shoes.map(s=>`<option value="${s.id}" ${String(s.id)===String(r.shoeId)?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}
   </select>`;
 
-  document.getElementById('run-detail-content').innerHTML = `
-    <h2 class="display" style="font-size:22px; margin-bottom:2px;">${escapeHtml(r.name) || dateStr}</h2>
-    ${r.name ? `<p class="muted" style="margin-bottom:12px;">${dateStr}</p>` : ''}
-    ${r.points && r.points.length>1 ? `<div class="map-wrap" style="height:220px;"><div id="run-detail-map" style="height:100%; width:100%;"></div></div>` : ''}
+  panel.innerHTML = `
     <div class="card">
-      ${rows.map(([label,val])=>`<div style="display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--asphalt-3);"><span class="muted">${label}</span><span class="mono" style="font-weight:700;">${val}</span></div>`).join('')}
-      <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 0; gap:8px; flex-wrap:wrap;"><span class="muted">${t('hist_shoe')}</span>${shoeSelect}</div>
+      <div class="rd-stat-grid">
+        ${tiles.map(([lbl,val])=>`<div class="rd-stat-tile"><div><div class="rd-tile-val mono">${val}</div><div class="rd-tile-lbl">${lbl}</div></div></div>`).join('')}
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; padding-top:16px; border-top:1px solid var(--asphalt-3); gap:8px; flex-wrap:wrap;"><span class="muted">${t('hist_shoe')}</span>${shoeSelect}</div>
     </div>
     ${r.hrLog && r.hrLog.length>1 ? `<div class="hist-hrlist" style="margin-top:12px;">${r.hrLog.map(h=>`<span class="zone-chip zone-${classifyHR(h.bpm)}">${h.bpm} bpm</span>`).join('')}</div>` : ''}
-    ${r.splits && r.splits.length ? `<button class="btn" style="width:100%; margin-top:20px; background:#4A9EFF; color:#fff; border:none;" onclick="toggleSplitsPanel()">${t('hist_splits_title')}</button><div id="splits-panel" style="display:none;">${renderSplitsSection(r.splits)}</div>` : ''}
-    <button class="btn btn-outline" style="width:100%; margin-top:20px;" onclick="openEditRun('${r.id}')">${t('edit_run_btn')}</button>
-    <button class="btn btn-danger" style="width:100%; margin-top:12px;" onclick="deleteRun('${r.id}')">${t('hist_delete_run')}</button>
+    ${r.points && r.points.length>1 ? `<button class="btn btn-outline" style="width:100%; margin-top:16px;" onclick="downloadRunGPX('${r.id}')">${t('rd_export_gpx')}</button>` : ''}
   `;
-  document.getElementById('run-detail-modal').style.display='block';
-
-  if(r.points && r.points.length>1){
-    setTimeout(()=>{
-      if(detailMap){ detailMap.remove(); detailMap=null; }
-      detailMap = L.map('run-detail-map', {zoomControl:false, attributionControl:true});
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=cb1_2i8k_1_882919874396f1a734cae151', {maxZoom:20, attribution:'&copy; OpenStreetMap contributors &copy; CARTO'}).addTo(detailMap);
-      const latlngs = r.points.map(p=>[p.lat,p.lon]);
-      const poly = L.polyline(latlngs, {color:'#0B5D2E', weight:4, lineCap:'round', lineJoin:'round'}).addTo(detailMap);
-      detailMap.fitBounds(poly.getBounds(), {padding:[16,16]});
-    }, 60);
-  }
+  // El botón "Compartir con amigos" queda oculto por ahora (junto con la sección social
+  // de Perfil) -- shareRunToFeed() se deja intacta para poder reactivarlo más adelante.
 }
-function toggleSplitsPanel(){
-  const panel = document.getElementById('splits-panel');
-  if(panel) panel.style.display = panel.style.display==='none' ? 'block' : 'none';
+// Arma el GPX de una carrera a partir de los puntos GPS crudos (r.points).
+// A diferencia del .ics del calendario (que solo agenda), esto le devuelve al
+// usuario su propio recorrido en un formato estándar que cualquier otra app de
+// mapas/entrenamiento sabe abrir -- no depende de tener la carrera sincronizada
+// con Strava para poder sacarla de la app.
+function buildGPX(r){
+  const points = r.points || [];
+  const startMs = new Date(r.date).getTime();
+  const trkpts = points.map(p=>{
+    const ts = new Date(startMs + (p.t||0)*1000).toISOString();
+    const ele = (p.alt!=null && !isNaN(p.alt)) ? `<ele>${p.alt.toFixed(1)}</ele>` : '';
+    return `<trkpt lat="${p.lat}" lon="${p.lon}">${ele}<time>${ts}</time></trkpt>`;
+  }).join('');
+  const name = escapeHtml(r.name || new Date(r.date).toLocaleDateString(LOCALE_MAP[lang]));
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Zancada" xmlns="http://www.topografix.com/GPX/1/1">\n<trk><name>${name}</name><trkseg>${trkpts}</trkseg></trk>\n</gpx>\n`;
+}
+async function downloadRunGPX(runId){
+  const r = state.runs.find(x => String(x.id) === String(runId));
+  if(!r || !r.points || r.points.length<2) return;
+  const gpx = buildGPX(r);
+  const dateSlug = (r.date||new Date().toISOString()).slice(0,10);
+  const fileName = `zancada-${dateSlug}.gpx`;
+  const blob = new Blob([gpx], {type:'application/gpx+xml'});
+  // Mismo patrón que downloadEventIcs()/shareRunImage(): preferimos el panel
+  // nativo para compartir el archivo, y cae a la descarga clásica si no hay
+  // Web Share API (desktop). El GPX es texto plano bien formado, así que no
+  // arrastra ninguno de los problemas de contenedor que tuvo el video.
+  try{
+    const file = new File([blob], fileName, {type:'application/gpx+xml'});
+    if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title:fileName});
+      return;
+    }
+  }catch(e){ /* si el share falla o lo cancela, seguimos con la descarga directa */ }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fileName;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 5000);
 }
 async function deleteRun(runId){
   if(!(await showConfirm(t('hist_delete_confirm'), {danger:true, confirmText:t('delete_word')}))) return;
@@ -4606,6 +5856,610 @@ function closeRunDetail(){
   document.getElementById('run-detail-modal').style.display='none';
   if(detailMap){ detailMap.remove(); detailMap=null; }
 }
+
+/* ================= VIDEO DE SEGUIMIENTO DINÁMICO =================
+   Genera, 100% en el dispositivo (canvas + MediaRecorder, sin backend ni
+   librerías externas), un video real y descargable/compartible: la ruta se
+   va dibujando de a poco, coloreada por zona de ritmo igual que el mapa de
+   la pestaña Ruta, con un punto que la recorre y las estadísticas reales
+   (distancia, tiempo, ritmo promedio hasta ese punto) actualizándose a
+   medida que avanza. Reusa la misma identidad visual que ya tiene la
+   tarjeta para compartir (shareRunImage): verde #D6FF3F, Bebas Neue para
+   el logo, JetBrains Mono para los números grandes. */
+let rdVideoState = null;
+
+// Dibuja un rectángulo con esquinas redondeadas a mano (ctx.roundRect no
+// está disponible en todos los WebView de Android/iOS que usa la app empaquetada).
+function rdRoundRectPath(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+}
+
+const MAP_TILE_SIZE = 256;
+// Cuánto mundo real (en metros) queremos que se vea a lo ancho/alto del
+// recuadro del mapa en el modo "cámara dinámica" (ver más abajo) -- un valor
+// chico da un acercamiento tipo Strava (se ven las calles cercanas mientras
+// la cámara sigue al corredor); uno grande se parecería más al mapa
+// "panorama fijo" que teníamos antes.
+const FOLLOW_TARGET_METERS = 550;
+const FOLLOW_MIN_ZOOM = 12, FOLLOW_MAX_ZOOM = 17;
+// Tope de tiles distintas a pedir para armar el mosaico de la cámara
+// dinámica. Si una carrera muy larga necesitaría más que esto al zoom
+// ideal, vamos bajando el zoom (mapa más "alejado") hasta que entre.
+const FOLLOW_MAX_TILES = 220;
+
+// Plantilla de URL de las tiles, en una variable (no una constante) a
+// propósito: así un test puede redirigirla a un servidor local para poder
+// probar la carga y el armado del mosaico de punta a punta sin depender de
+// la red real (bloqueada en este entorno de pruebas).
+let cartoTileUrl = function(subdomain, zoom, x, y){
+  return `https://${subdomain}.basemaps.cartocdn.com/rastertiles/voyager/${zoom}/${x}/${y}.png?key=cb1_2i8k_1_882919874396f1a734cae151`;
+};
+
+// Proyección Web Mercator estándar (la misma matemática que usan los mapas
+// tipo slippy-map / Leaflet / Google Maps), en píxeles de "mundo" a un zoom
+// dado. La usamos tanto para ubicar los puntos de la ruta como para elegir
+// qué tiles de mapa real pedir -- así quedan perfectamente alineados.
+function webMercatorProject(lat, lon, zoom){
+  const scale = MAP_TILE_SIZE * Math.pow(2, zoom);
+  const x = (lon + 180) / 360 * scale;
+  const latRad = lat * Math.PI / 180;
+  const y = (1 - Math.log(Math.tan(latRad) + 1/Math.cos(latRad)) / Math.PI) / 2 * scale;
+  return { x, y };
+}
+
+// Calcula qué tiles hacen falta para que, mientras la cámara recorre TODA la
+// ruta (no solo su encuadre final), el recuadro del mapa esté siempre
+// cubierto -- como el "corredor" de tiles alrededor de todo el trazado, no
+// el rectángulo que contiene a toda la ruta (que para una carrera larga
+// podría ser gigantesco). Si ese corredor no entra en FOLLOW_MAX_TILES al
+// zoom ideal, vamos alejando el mapa (bajando el zoom) hasta que entre.
+function computeFollowCameraPlan(pts, latMid, availW, availH){
+  const halfW = availW/2, halfH = availH/2;
+  const idealMpp = FOLLOW_TARGET_METERS / Math.max(availW, availH);
+  const cosLat = Math.max(0.15, Math.cos(latMid * Math.PI/180));
+  let zoom = Math.round(Math.log2((156543.03392 * cosLat) / idealMpp));
+  zoom = Math.max(FOLLOW_MIN_ZOOM, Math.min(FOLLOW_MAX_ZOOM, zoom));
+
+  // Para rutas con muchísimos puntos GPS no hace falta mirar cada uno para
+  // saber qué tiles hacen falta -- muestreamos, pero nos aseguramos de
+  // incluir siempre el último punto (el muestreo por paso fijo puede
+  // saltearlo).
+  const addTilesForPoint = (tileSet, lat, lon, zoomLevel) => {
+    const wp = webMercatorProject(lat, lon, zoomLevel);
+    const txMin = Math.floor((wp.x-halfW)/MAP_TILE_SIZE)-1, txMax = Math.floor((wp.x+halfW)/MAP_TILE_SIZE)+1;
+    const tyMin = Math.floor((wp.y-halfH)/MAP_TILE_SIZE)-1, tyMax = Math.floor((wp.y+halfH)/MAP_TILE_SIZE)+1;
+    for(let tx=txMin; tx<=txMax; tx++) for(let ty=tyMin; ty<=tyMax; ty++) tileSet.add(tx+'_'+ty);
+  };
+
+  for(; zoom>=FOLLOW_MIN_ZOOM; zoom--){
+    const tileSet = new Set();
+    const step = Math.max(1, Math.floor(pts.length/400));
+    for(let i=0;i<pts.length;i+=step) addTilesForPoint(tileSet, pts[i].lat, pts[i].lon, zoom);
+    addTilesForPoint(tileSet, pts[pts.length-1].lat, pts[pts.length-1].lon, zoom);
+
+    if(tileSet.size <= FOLLOW_MAX_TILES || zoom===FOLLOW_MIN_ZOOM){
+      const tiles = Array.from(tileSet, key=>{ const [tx,ty] = key.split('_').map(Number); return {tx, ty}; });
+      let txMin=Infinity, txMax=-Infinity, tyMin=Infinity, tyMax=-Infinity;
+      tiles.forEach(tl=>{ if(tl.tx<txMin)txMin=tl.tx; if(tl.tx>txMax)txMax=tl.tx; if(tl.ty<tyMin)tyMin=tl.ty; if(tl.ty>tyMax)tyMax=tl.ty; });
+      return { zoom, tiles, txMin, txMax, tyMin, tyMax };
+    }
+  }
+  return null;
+}
+
+// Proyecta los puntos GPS reales de la carrera usando Web Mercator para el
+// modo "cámara dinámica" del video: en vez de encoger toda la ruta para que
+// entre en el recuadro (como hacíamos antes), acá la escala es real (metros
+// por píxel fijo, ver FOLLOW_TARGET_METERS) y en cada cuadro la cámara se
+// centra en la posición actual del corredor -- el mapa y el trazado ya
+// recorrido se mueven por debajo, como en los videos de Strava. También
+// devuelve el plan de tiles (computeFollowCameraPlan) que necesita
+// loadFollowMapForVideo para cargar el mosaico real.
+function computeVideoRouteData(r, rectX, rectY, rectW, rectH, pad){
+  // Filtramos puntos sin lat/lon numérica (defensivo: un solo punto corrupto
+  // en el estado guardado no debería tirar abajo el cálculo de toda la ruta).
+  const pts = (r.points||[]).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon));
+  if(pts.length<2) return null;
+  let latMin=Infinity, latMax=-Infinity, lonMin=Infinity, lonMax=-Infinity;
+  pts.forEach(p=>{
+    if(p.lat<latMin) latMin=p.lat; if(p.lat>latMax) latMax=p.lat;
+    if(p.lon<lonMin) lonMin=p.lon; if(p.lon>lonMax) lonMax=p.lon;
+  });
+  const latMid = (latMin+latMax)/2;
+  const availW = rectW - pad*2, availH = rectH - pad*2;
+
+  const followPlan = computeFollowCameraPlan(pts, latMid, availW, availH);
+  const followZoom = followPlan.zoom;
+  const followProj = pts.map(p => webMercatorProject(p.lat, p.lon, followZoom));
+
+  const cum=[0];
+  for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+haversine(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon));
+  const totalDist = cum[cum.length-1];
+
+  // Las carreras trackeadas en vivo (después de este cambio) guardan tiempo
+  // real por punto GPS (points[].t); las sincronizadas desde Strava sólo
+  // traen la posición (polilínea decodificada), sin marca de tiempo por
+  // punto. Cuando hay tiempo real lo usamos (refleja mejor los cambios de
+  // ritmo reales dentro de la carrera); si no, el tiempo se reparte de forma
+  // proporcional a la distancia recorrida -- una aproximación honesta, sin
+  // inventar precisión que no tenemos.
+  const hasRealTime = pts[0].t!=null && pts[pts.length-1].t!=null && pts[pts.length-1].t > pts[0].t;
+
+  return {
+    followProj, cum, totalDist, hasRealTime, times: hasRealTime ? pts.map(p=>p.t) : null,
+    followZoom, followPlan, availW, availH
+  };
+}
+
+// Carga el mosaico de tiles reales (mismo servidor CARTO que ya usa el mapa
+// en vivo de la app) que necesita la cámara dinámica para recorrer TODA la
+// ruta, según el plan que ya calculó computeVideoRouteData -- así no hace
+// falta pedir tiles nuevas cuadro a cuadro mientras se graba, todo el
+// recorrido de cámara se arma sobre este único mosaico offscreen.
+//
+// Devuelve null ante CUALQUIER problema (una tile que falla, timeout, sin
+// conexión, canvas contaminado por CORS, mosaico demasiado grande, etc.)
+// para garantizar que esto nunca puede producir algo peor que la tarjeta
+// plana de antes -- en el peor caso simplemente no se ve el mapa real y el
+// trazado se sigue dibujando igual (la cámara dinámica no depende de tener
+// mapa real, ver drawFrame en startDynamicVideo).
+async function loadFollowMapForVideo(routeData){
+  if(!routeData || !routeData.followPlan) return null;
+  try{
+    const { zoom, tiles, txMin, txMax, tyMin, tyMax } = routeData.followPlan;
+    const tileCountX = txMax-txMin+1, tileCountY = tyMax-tyMin+1;
+    // Chequeo extra además del tope de tiles ÚNICAS: para una ruta con forma
+    // rara (ida y vuelta muy separadas, etc.) el rectángulo que ENVUELVE a
+    // todas las tiles necesarias podría ser mucho más grande que la cantidad
+    // de tiles real -- no queremos reservar un canvas gigantesco vacío.
+    if(tileCountX<=0 || tileCountY<=0 || tileCountX*tileCountY > FOLLOW_MAX_TILES*2) return null;
+
+    const maxTile = Math.pow(2, zoom);
+    const subdomains = ['a','b','c','d'];
+    const loadTile = (tx, ty) => new Promise(resolve=>{
+      if(ty<0 || ty>=maxTile){ resolve(null); return; }
+      const wrappedX = ((tx % maxTile) + maxTile) % maxTile;
+      const s = subdomains[Math.abs(tx+ty) % subdomains.length];
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      let done = false;
+      const finish = (val)=>{ if(done) return; done=true; resolve(val); };
+      const timer = setTimeout(()=>finish(null), 6000);
+      img.onload = ()=>{ clearTimeout(timer); finish(img); };
+      img.onerror = ()=>{ clearTimeout(timer); finish(null); };
+      img.src = cartoTileUrl(s, zoom, wrappedX, ty);
+    });
+
+    const results = await Promise.all(tiles.map(tl => loadTile(tl.tx, tl.ty)));
+    if(results.every(img=>!img)) return null;
+
+    const off = document.createElement('canvas');
+    off.width = tileCountX*MAP_TILE_SIZE;
+    off.height = tileCountY*MAP_TILE_SIZE;
+    const octx = off.getContext('2d');
+    // Fondo parejo antes de pegar las tiles: si alguna tile puntual falló
+    // (timeout, 404, etc.) el hueco se ve como el resto de la tarjeta en vez
+    // de quedar transparente/negro.
+    octx.fillStyle = '#23282c';
+    octx.fillRect(0, 0, off.width, off.height);
+    tiles.forEach((tl,i)=>{
+      const img = results[i];
+      if(!img) return;
+      try{ octx.drawImage(img, (tl.tx-txMin)*MAP_TILE_SIZE, (tl.ty-tyMin)*MAP_TILE_SIZE); }catch(e){}
+    });
+
+    // Chequeo de "taint": si alguna tile contaminó el canvas (cross-origin
+    // sin CORS bien habilitado), getImageData tira excepción. En ese caso NO
+    // copiamos nada de esto al canvas de grabación -- un canvas contaminado
+    // rompe captureStream() en silencio (graba cuadros vacíos).
+    try{ octx.getImageData(0,0,1,1); }catch(e){ return null; }
+
+    return { canvas: off, originWX: txMin*MAP_TILE_SIZE, originWY: tyMin*MAP_TILE_SIZE };
+  }catch(e){
+    return null;
+  }
+}
+
+function closeDynamicVideo(){
+  if(rdVideoState){
+    rdVideoState.cancelled = true;
+    if(rdVideoState.raf) cancelAnimationFrame(rdVideoState.raf);
+    if(rdVideoState.recorder && rdVideoState.recorder.state!=='inactive'){
+      try{ rdVideoState.recorder.stop(); }catch(e){}
+    }
+    if(rdVideoState.url) URL.revokeObjectURL(rdVideoState.url);
+  }
+  rdVideoState = null;
+  const overlay = document.getElementById('rd-video-overlay');
+  const canvas = document.getElementById('rd-video-canvas');
+  const video = document.getElementById('rd-video-preview');
+  const actions = document.getElementById('rd-video-actions');
+  const progressEl = document.getElementById('rd-video-progress');
+  if(overlay) overlay.style.display='none';
+  if(video){ try{ video.pause(); }catch(e){} video.removeAttribute('src'); try{ video.load(); }catch(e){} video.style.display='none'; }
+  if(canvas) canvas.style.display='none';
+  if(actions) actions.style.display='none';
+  if(progressEl) progressEl.textContent='';
+}
+
+async function startDynamicVideo(runId){
+  if(rdVideoState) closeDynamicVideo();
+  const r = state.runs.find(x => String(x.id) === String(runId));
+  if(!r || !r.points || r.points.length<2){ showToast(t('rd_video_error'), 'error'); return; }
+  if(typeof MediaRecorder==='undefined' || !document.createElement('canvas').captureStream){
+    showToast(t('rd_video_unsupported'), 'error');
+    return;
+  }
+
+  const overlay = document.getElementById('rd-video-overlay');
+  const canvas = document.getElementById('rd-video-canvas');
+  const video = document.getElementById('rd-video-preview');
+  const progressEl = document.getElementById('rd-video-progress');
+  const actions = document.getElementById('rd-video-actions');
+  const W = canvas.width, H = canvas.height;
+  const ctx = canvas.getContext('2d');
+
+  const mapX=34, mapY=176, mapW=W-68, mapH=640, mapPad=26;
+  const routeData = computeVideoRouteData(r, mapX, mapY, mapW, mapH, mapPad);
+  if(!routeData || routeData.totalDist<=0){ showToast(t('rd_video_error'), 'error'); return; }
+
+  // Mapa real: intentamos cargar el mosaico de tiles que necesita la cámara
+  // dinámica para recorrer toda la ruta (ver loadFollowMapForVideo). Si algo
+  // falla -- sin conexión, CORS, timeout, lo que sea -- followMap queda en
+  // null y drawFrame sigue mostrando la cámara dinámica igual (el trazado
+  // moviéndose bajo el corredor centrado) pero sobre la tarjeta plana de
+  // siempre en vez de calles reales: nunca puede quedar peor que antes.
+  let followMap = null;
+  try{
+    followMap = await loadFollowMapForVideo(routeData);
+  }catch(e){ followMap = null; }
+
+  video.style.display='none'; video.removeAttribute('src');
+  actions.style.display='none';
+  canvas.style.display='block';
+  overlay.style.display='flex';
+  progressEl.textContent = t('rd_video_generating');
+
+  try{
+    await Promise.all([
+      document.fonts.load('400 60px "Bebas Neue"'),
+      document.fonts.load('700 64px "JetBrains Mono"'),
+      document.fonts.load('700 24px "Inter"'),
+    ]);
+    await document.fonts.ready;
+  }catch(e){}
+
+  const dateStr = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {day:'numeric', month:'long', year:'numeric'});
+  const totalDist = routeData.totalDist;
+  const ANIM_MS = Math.round(Math.min(12000, Math.max(6000, 1500 + totalDist*900)));
+  const bg1 = (getComputedStyle(document.documentElement).getPropertyValue('--asphalt-2')||'#1c2126').trim() || '#1c2126';
+  const bg2 = (getComputedStyle(document.documentElement).getPropertyValue('--asphalt')||'#14181b').trim() || '#14181b';
+
+  // Capa auxiliar SOLO para el trazado y el marcador, del tamaño exacto del
+  // interior del recuadro del mapa. En el modo "cámara dinámica" el trazado
+  // ya recorrido puede quedar, en píxeles de mundo, muy lejos del centro de
+  // pantalla (la escala ahora es real, no se encoge para que la ruta entera
+  // entre en el recuadro como antes) -- así que hace falta recortarlo a los
+  // límites de la tarjeta. En vez de ctx.clip() en el canvas principal
+  // (sospechoso de romper canvas.captureStream() en el WebView de iOS, ver
+  // comentario más abajo) dibujamos en este canvas aparte, que recorta solo
+  // por tener ese tamaño fijo, y lo pegamos entero con un drawImage() plano.
+  const routeLayer = document.createElement('canvas');
+  routeLayer.width = Math.max(1, Math.round(routeData.availW));
+  routeLayer.height = Math.max(1, Math.round(routeData.availH));
+  const routeCtx = routeLayer.getContext('2d');
+
+  // Tarjeta del mapa: fondo bien visible (antes casi transparente, por eso no se
+  // veía) + borde sutil, dibujados con fill/stroke normales, SIN ctx.clip(). En
+  // algunos WebView de iOS (donde corre la app empaquetada) combinar ctx.clip()
+  // con canvas.captureStream() puede hacer que esa región no quede grabada.
+  function drawFrame(p, virtualDist, cursor){
+    // Reseteamos sombra explícitamente: en el WebView de la app empaquetada
+    // (iOS) usar ctx.shadowBlur en un canvas que se está grabando con
+    // captureStream() puede dejar el resto del cuadro -- todo lo que se
+    // dibuja con fill()/stroke() después, no el texto -- sin grabarse, aunque
+    // en el canvas en vivo se vea bien. Por eso ya no usamos sombra en nada
+    // de este video (antes la tarjeta del mapa tenía una, y todo lo que se
+    // dibujaba después -- la propia tarjeta, la ruta, el marcador -- no
+    // aparecía en el video final, aunque el texto sí).
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
+
+    const grad = ctx.createLinearGradient(0,0,0,H);
+    grad.addColorStop(0, bg1); grad.addColorStop(1, bg2);
+    ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#D6FF3F';
+    ctx.font = '400 54px "Bebas Neue", Arial, sans-serif';
+    ctx.fillText('ZANCADA', 40, 78);
+    ctx.fillStyle = 'rgba(237,239,239,0.6)';
+    ctx.font = '500 22px "Inter", Arial, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(dateStr, W-40, 68);
+    ctx.textAlign = 'left';
+
+    // Posición actual de la cámara en píxeles de "mundo" al zoom de
+    // seguimiento (mismo sistema que routeData.followProj) -- interpolada
+    // entre el punto actual y el siguiente para que el paneo sea suave
+    // cuadro a cuadro, igual que antes se interpolaba la posición del
+    // marcador.
+    let camX = routeData.followProj[cursor].x, camY = routeData.followProj[cursor].y;
+    if(cursor < routeData.followProj.length-1){
+      const dA = routeData.cum[cursor], dB = routeData.cum[cursor+1];
+      const frac = dB>dA ? Math.max(0, Math.min(1, (virtualDist-dA)/(dB-dA))) : 0;
+      camX = routeData.followProj[cursor].x + (routeData.followProj[cursor+1].x-routeData.followProj[cursor].x)*frac;
+      camY = routeData.followProj[cursor].y + (routeData.followProj[cursor+1].y-routeData.followProj[cursor].y)*frac;
+    }
+
+    if(followMap){
+      // Mapa real: recortamos del mosaico precargado la ventana que
+      // corresponde a la posición actual de la cámara (sin ctx.clip() a
+      // propósito -- el recorte lo hace el propio ancho/alto del destino)
+      // más un velo bien sutil, solo para que el trazado y el marcador no
+      // se pierdan sobre calles muy claras -- antes era más oscuro y tapaba
+      // demasiado el mapa real.
+      try{
+        const sx = camX - followMap.originWX - routeData.availW/2;
+        const sy = camY - followMap.originWY - routeData.availH/2;
+        ctx.drawImage(followMap.canvas, sx, sy, routeData.availW, routeData.availH, mapX+mapPad, mapY+mapPad, routeData.availW, routeData.availH);
+        ctx.fillStyle = 'rgba(0,0,0,0.07)';
+        ctx.fillRect(mapX+mapPad, mapY+mapPad, routeData.availW, routeData.availH);
+      }catch(e){
+        ctx.fillStyle = 'rgba(255,255,255,0.10)';
+        rdRoundRectPath(ctx, mapX, mapY, mapW, mapH, 28);
+        ctx.fill();
+      }
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.10)';
+      rdRoundRectPath(ctx, mapX, mapY, mapW, mapH, 28);
+      ctx.fill();
+    }
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    rdRoundRectPath(ctx, mapX, mapY, mapW, mapH, 28);
+    ctx.stroke();
+
+    // Trazo parejo de un solo color (el verde de la marca), dibujado en
+    // coordenadas relativas a la cámara -- el corredor queda siempre fijo en
+    // el centro de la tarjeta (como en los videos de Strava) y el trazado ya
+    // recorrido se desliza por debajo a medida que avanza la carrera. Se
+    // dibuja en routeLayer (ver más arriba) para que quede recortado a los
+    // límites de la tarjeta sin usar ctx.clip() en el canvas que se graba.
+    // Envuelto en try/catch a propósito: si algo de esto tira una excepción
+    // en el teléfono, preferimos ver el mensaje de error dibujado en rojo
+    // (aparece en el video) a que la carátula quede muda sobre qué pasó.
+    const centerLocalX = routeData.availW/2, centerLocalY = routeData.availH/2;
+    try{
+      routeCtx.clearRect(0, 0, routeLayer.width, routeLayer.height);
+      routeCtx.beginPath();
+      routeCtx.moveTo(centerLocalX + (routeData.followProj[0].x-camX), centerLocalY + (routeData.followProj[0].y-camY));
+      for(let i=1;i<=cursor;i++){
+        routeCtx.lineTo(centerLocalX + (routeData.followProj[i].x-camX), centerLocalY + (routeData.followProj[i].y-camY));
+      }
+      routeCtx.lineTo(centerLocalX, centerLocalY);
+      routeCtx.lineCap='round'; routeCtx.lineJoin='round';
+      routeCtx.lineWidth = 12; routeCtx.strokeStyle = 'rgba(0,0,0,0.35)';
+      routeCtx.stroke();
+      routeCtx.lineWidth = 7; routeCtx.strokeStyle = '#D6FF3F';
+      routeCtx.stroke();
+
+      routeCtx.beginPath(); routeCtx.arc(centerLocalX,centerLocalY,17,0,Math.PI*2); routeCtx.fillStyle='rgba(255,255,255,0.22)'; routeCtx.fill();
+      routeCtx.beginPath(); routeCtx.arc(centerLocalX,centerLocalY,8,0,Math.PI*2); routeCtx.fillStyle='#fff'; routeCtx.fill();
+      routeCtx.lineWidth=3; routeCtx.strokeStyle = '#D6FF3F'; routeCtx.stroke();
+
+      ctx.drawImage(routeLayer, mapX+mapPad, mapY+mapPad);
+    }catch(drawErr){
+      ctx.textAlign='left';
+      ctx.font = '700 15px monospace';
+      ctx.fillStyle = '#FF5A5A';
+      ctx.fillText('ERROR: '+drawErr.message, mapX+10, mapY+mapH/2);
+    }
+
+    let currentTimeSec;
+    if(routeData.hasRealTime){
+      const nextIdx = Math.min(cursor+1, routeData.times.length-1);
+      const dA=routeData.cum[cursor], dB=routeData.cum[nextIdx];
+      const frac = dB>dA ? Math.max(0, Math.min(1, (virtualDist-dA)/(dB-dA))) : 0;
+      currentTimeSec = routeData.times[cursor] + (routeData.times[nextIdx]-routeData.times[cursor])*frac;
+    } else {
+      currentTimeSec = totalDist>0 ? (virtualDist/totalDist)*r.durationSec : 0;
+    }
+    const currentPace = virtualDist>0.05 ? (currentTimeSec/60)/virtualDist : null;
+
+    // Estadísticas más abajo (antes quedaban pegadas al borde del mapa).
+    const statsY = mapY+mapH+130;
+    ctx.textAlign='center';
+    ctx.fillStyle = '#EDEFEF';
+    ctx.font = '700 88px "JetBrains Mono", monospace';
+    ctx.fillText(fmtDist(virtualDist), W/2, statsY);
+    ctx.fillStyle = 'rgba(237,239,239,0.55)';
+    ctx.font = '700 24px "Inter", Arial, sans-serif';
+    ctx.fillText(distUnit().toUpperCase(), W/2, statsY+38);
+
+    const rowY = statsY+118;
+    const colW = (W-80)/2;
+    ctx.font = '700 46px "JetBrains Mono", monospace';
+    ctx.fillStyle = '#EDEFEF';
+    ctx.fillText(fmtTime(Math.round(currentTimeSec)), 40+colW/2, rowY);
+    ctx.fillText(currentPace!=null ? (fmtPace(currentPace)+'/'+distUnit()) : '--:--', 40+colW+colW/2, rowY);
+    ctx.font = '700 20px "Inter", Arial, sans-serif';
+    ctx.fillStyle = 'rgba(237,239,239,0.55)';
+    ctx.fillText(t('run_time').toUpperCase(), 40+colW/2, rowY+34);
+    ctx.fillText(t('run_pace_word').toUpperCase(), 40+colW+colW/2, rowY+34);
+
+    const barY = H-56, barW = W-80, barH=6;
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    rdRoundRectPath(ctx, 40, barY, barW, barH, 3); ctx.fill();
+    ctx.fillStyle = '#D6FF3F';
+    rdRoundRectPath(ctx, 40, barY, Math.max(barH, barW*p), barH, 3); ctx.fill();
+    ctx.textAlign='left';
+  }
+
+  // Pintamos el primer cuadro ANTES de pedir captureStream(): en algunos
+  // WebView (iOS) si el canvas todavía está en blanco cuando se llama a
+  // captureStream(), el video queda grabado en negro/vacío de principio a
+  // fin, aunque el canvas se siga dibujando bien después.
+  drawFrame(0, 0, 0);
+
+  let mimeType = '';
+  ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4'].forEach(c=>{
+    if(!mimeType && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) mimeType=c;
+  });
+
+  let stream, recorder;
+  try{
+    stream = canvas.captureStream(30);
+    recorder = mimeType ? new MediaRecorder(stream, {mimeType, videoBitsPerSecond:4000000}) : new MediaRecorder(stream);
+  }catch(e){
+    closeDynamicVideo();
+    showToast(t('rd_video_unsupported'), 'error');
+    return;
+  }
+
+  // El tipo real del archivo grabado lo sabe el propio MediaRecorder
+  // (recorder.mimeType) -- lo usamos en vez de nuestra variable "mimeType"
+  // (que es solo lo que NOSOTROS pedimos) porque en algunos navegadores el
+  // valor real puede diferir. Y le sacamos el ";codecs=..." de la cola: el
+  // resto de la app comparte archivos (la imagen de la carrera, el .ics del
+  // calendario) siempre con un tipo MIME "pelado" como 'image/png', nunca
+  // con parámetros de codec -- ese es justo el tipo de string que
+  // navigator.canShare()/el share sheet de iOS puede no reconocer como
+  // "compartible" y hacer que la app caiga al método de descarga directa
+  // (que en el WebView empaquetado no sabe qué hacer con un video y por eso
+  // se veía como "formato incompatible").
+  const recordedMimeType = ((recorder.mimeType || mimeType || 'video/webm').split(';')[0] || 'video/webm').trim();
+
+  const chunks = [];
+  recorder.ondataavailable = (e)=>{ if(e.data && e.data.size>0) chunks.push(e.data); };
+  rdVideoState = { recorder, cancelled:false, raf:null, url:null, blob:null };
+
+  recorder.onstop = ()=>{
+    if(!rdVideoState || rdVideoState.cancelled) return;
+    const blob = new Blob(chunks, {type: recordedMimeType});
+    rdVideoState.blob = blob;
+    const url = URL.createObjectURL(blob);
+    rdVideoState.url = url;
+    canvas.style.display='none';
+    video.src = url;
+    video.style.display='block';
+    video.play().catch(()=>{});
+    progressEl.textContent='';
+    actions.style.display='flex';
+    // Arrancamos en paralelo (sin esperar acá) el arreglo del contenedor del
+    // video del lado del servidor -- ver rdRemuxVideoIfNeeded. La vista previa
+    // ya se puede mostrar con el video tal cual sale de MediaRecorder porque
+    // <video> lo reproduce bien; el problema es sólo al exportarlo. Si para
+    // cuando el usuario aprieta compartir/descargar ya terminó, usamos el
+    // arreglado; si no, downloadDynamicVideo() lo espera un toque.
+    rdRemuxVideoIfNeeded();
+  };
+
+  recorder.start();
+  let cursor = 0;
+  const t0 = performance.now();
+  function frame(now){
+    if(!rdVideoState || rdVideoState.cancelled) return;
+    const p = Math.min(1, (now-t0)/ANIM_MS);
+    const virtualDist = p*totalDist;
+    while(cursor < routeData.followProj.length-2 && routeData.cum[cursor+1]<=virtualDist) cursor++;
+    drawFrame(p, virtualDist, cursor);
+    if(progressEl) progressEl.textContent = Math.round(p*100)+'%';
+    if(p<1){
+      rdVideoState.raf = requestAnimationFrame(frame);
+    } else {
+      if(progressEl) progressEl.textContent = t('rd_video_finishing');
+      setTimeout(()=>{ if(rdVideoState && !rdVideoState.cancelled) recorder.stop(); }, 400);
+    }
+  }
+  rdVideoState.raf = requestAnimationFrame(frame);
+}
+
+// El video que graba MediaRecorder en Safari/WKWebView (iPhone) queda en MP4
+// "fragmentado" -- un formato válido (por eso el <video> de la vista previa
+// lo reproduce bien) pero que el importador de Fotos de iOS y el validador de
+// adjuntos de WhatsApp rechazan sin avisar bien por qué (el panel de compartir
+// se abre, pero falla al elegir destino). El arreglo real es reprocesarlo del
+// lado del servidor con ffmpeg (api/remux-video.js) para reordenarlo al
+// formato clásico -- no hay forma confiable de hacer esto en el propio
+// celular sin una librería pesada. Si algo falla acá (sin sesión, sin datos
+// móviles en ese momento, el servidor tarda, etc.) nos quedamos con el video
+// original tal cual salió -- nunca dejamos al usuario sin nada.
+async function rdRemuxVideoIfNeeded(){
+  if(!rdVideoState || !rdVideoState.blob) return;
+  const blob = rdVideoState.blob;
+  if(!(blob.type||'').includes('mp4')) return; // el problema es específico de MP4 (Safari); webm no lo necesita
+  rdVideoState.remuxState = 'pending';
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session || !session.access_token) throw new Error('no session');
+    const resp = await fetch(apiUrl('/api/remux-video'), {
+      method:'POST',
+      headers:{'Content-Type': blob.type, 'Authorization':`Bearer ${session.access_token}`},
+      body: blob
+    });
+    if(!resp.ok) throw new Error('remux http '+resp.status);
+    const fixedBlob = await resp.blob();
+    if(fixedBlob && fixedBlob.size>0 && rdVideoState && !rdVideoState.cancelled){
+      rdVideoState.blob = fixedBlob;
+    }
+  }catch(e){
+    console.warn('rdRemuxVideoIfNeeded: no se pudo optimizar el video del lado del servidor, se comparte el original', e);
+  }finally{
+    if(rdVideoState) rdVideoState.remuxState = 'done';
+  }
+}
+async function downloadDynamicVideo(){
+  if(!rdVideoState || !rdVideoState.blob) return;
+  if(rdVideoState.remuxState === 'pending'){
+    // Le damos un margen a que termine de optimizarse en el servidor -- pero
+    // no de más: si tarda mucho (sin datos móviles, servidor lento), preferimos
+    // compartir el original a dejar al usuario esperando sin poder hacer nada.
+    const downloadBtn = document.querySelector('#rd-video-actions .btn-primary');
+    const originalLabel = downloadBtn ? downloadBtn.textContent : '';
+    if(downloadBtn) downloadBtn.textContent = t('rd_video_optimizing');
+    await Promise.race([
+      new Promise(resolve=>{
+        const iv = setInterval(()=>{
+          if(!rdVideoState || rdVideoState.remuxState !== 'pending'){ clearInterval(iv); resolve(); }
+        }, 150);
+      }),
+      new Promise(resolve=>setTimeout(resolve, 6000))
+    ]);
+    if(downloadBtn) downloadBtn.textContent = originalLabel;
+  }
+  if(!rdVideoState || !rdVideoState.blob) return;
+  const blob = rdVideoState.blob;
+  const dateSlug = (rdCurrent && rdCurrent.r && rdCurrent.r.date ? rdCurrent.r.date : new Date().toISOString()).slice(0,10);
+  // La extensión del archivo tiene que coincidir con el tipo real del video
+  // grabado. Antes el nombre quedaba hardcodeado en ".webm" sin importar qué
+  // formato haya elegido MediaRecorder -- pero Safari/WKWebView (la app
+  // empaquetada de iOS) normalmente NO soporta grabar en webm y termina
+  // grabando en video/mp4. Un archivo "algo.webm" cuyo contenido real es MP4
+  // confunde al share sheet: por eso WhatsApp lo trataba como si "no
+  // existiera" (lo recibía pero no lo reconocía como un video válido).
+  const mime = blob.type || 'video/webm';
+  const ext = mime.includes('mp4') ? 'mp4' : (mime.includes('webm') ? 'webm' : 'mp4');
+  const fileName = `zancada-${dateSlug}.${ext}`;
+  try{
+    const file = new File([blob], fileName, {type: mime});
+    if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title:'Zancada'});
+      return;
+    }
+  }catch(e){ /* si el share falla o lo cancela, seguimos con la descarga directa */ }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fileName;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 5000);
+}
 function changeRunShoe(runId, newShoeId){
   const r = state.runs.find(x => String(x.id) === String(runId));
   if(!r) return;
@@ -4806,9 +6660,18 @@ function buildContext(){
   // podía contestar algo inconsistente con lo que el usuario ya está viendo en pantalla.
   const load = calcTrainingLoad();
   if(load) ctx += ` Indicador de carga de entrenamiento (semana actual vs. promedio reciente): ${load.level} (ratio ${load.ratio.toFixed(2)}, corrió ${load.acuteKm.toFixed(1)}km esta semana vs. promedio de ${load.chronicWeeklyAvg.toFixed(1)}km/semana). Este es el mismo indicador que ve en la pantalla de Inicio -- si te pregunta por su carga o riesgo de lesión por volumen, usá este dato en vez de estimarlo de nuevo.`;
-  ctx += ` Plan actual: ${state.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km${d.status?'/'+d.status:''}${d.rating?'/calificó:'+d.rating:''}`).join(', ')}.`;
+  // trainBy: si el corredor eligió entrenar "por tiempo" en vez de "por distancia" (ver
+  // Perfil/onboarding), el coach tiene que expresar y ajustar TODO en minutos -- series,
+  // descansos, sesiones enteras -- nunca en km. El plan interno sigue siendo 100% km
+  // (generatePlan no cambia), así que acá le anotamos a cada día su duración estimada
+  // (según el ritmo propio del corredor, ver estimateBasePaceMinPerKm) junto al km real,
+  // para que el coach pueda hablar en minutos sin perder la referencia de distancia.
+  ctx += isTimeMode()
+    ? ` Este corredor entrena POR TIEMPO, no por distancia: todas las sesiones, series/pasadas y descansos que le describas o modifiques tienen que estar en minutos (o segundos si son cortos), nunca en km/metros.`
+    : ` Este corredor entrena por distancia (km), como es el modo por defecto.`;
+  ctx += ` Plan actual: ${state.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)${d.status?'/'+d.status:''}${d.rating?'/calificó:'+d.rating:''}`).join(', ')}.`;
   const nw = getNextWeekPlan();
-  ctx += ` Plan de la semana que sigue (semana ${nw.weekNumber}, ya calculado y puede ajustarse un poco según cómo termine esta semana): ${nw.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km`).join(', ')}.`;
+  ctx += ` Plan de la semana que sigue (semana ${nw.weekNumber}, ya calculado y puede ajustarse un poco según cómo termine esta semana): ${nw.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)`).join(', ')}.`;
   return ctx;
 }
 const TOOLS = [
@@ -4820,10 +6683,19 @@ const TOOLS = [
       dia:{type:"string", enum:DAY_KEYS, description:"Código del día: mon,tue,wed,thu,fri,sat,sun (siempre en estos códigos, sin importar el idioma de la charla)"},
       tipo:{type:"string", description:"Nombre del tipo de sesión en el idioma de la conversación, ej. 'Rodaje suave', 'Easy run'"},
       distancia_km:{type:"number"},
+      duracion_min:{type:"number", description:"Duración de la sesión en minutos. Usalo en vez de distancia_km si el corredor entrena por tiempo (fijate en el contexto) o si pide la sesión directamente en minutos -- se convierte sola a km internamente."},
       zona:{type:"integer", minimum:1, maximum:5},
       terreno:{type:"string", enum:["asfalto","trail","mixto"]},
       descripcion:{type:"string", description:"Instrucción breve para el corredor, en el idioma de la conversación"}
     }, required:["dia","tipo","descripcion"]}
+  },
+  {
+    name:"cancelar_sesion",
+    description:"Cancela por completo UNA sesión puntual, dejando ese día vacío -- igual que cualquier otro día sin entrenamiento asignado (no le pone una sesión suave ni de zona 1 en su lugar). Usala cuando el corredor te avise que no va a poder entrenar ese día, o que quiere sacar/cancelar/borrar una sesión sin reemplazarla por otra. NO uses modificar_sesion para esto: modificar_sesion es para CAMBIAR una sesión por otra distinta, no para dejar el día sin nada.",
+    input_schema:{type:"object", properties:{
+      semana:{type:"string", enum:["actual","siguiente"], description:"Si el cambio es para la semana en curso o para la que sigue. Por defecto 'actual'."},
+      dia:{type:"string", enum:DAY_KEYS, description:"Código del día: mon,tue,wed,thu,fri,sat,sun (siempre en estos códigos, sin importar el idioma de la charla)"}
+    }, required:["dia"]}
   },
   {
     name:"ajustar_volumen_semana",
@@ -4861,13 +6733,18 @@ function applyPlanChange(input){
     if(nextDay && nextDay.raceDay) return `${input.dia} de la semana que viene es el día de tu carrera (cargada en Próximos Eventos) -- no le puedo asignar otra sesión encima.`;
     if(!state.nextWeekOverrides) state.nextWeekOverrides = {};
     const override = { type: input.tipo, desc: input.descripcion };
-    if(typeof input.distancia_km==='number') override.dist = input.distancia_km;
+    let effectiveDistKm = typeof input.distancia_km==='number' ? input.distancia_km : null;
+    if(effectiveDistKm===null && typeof input.duracion_min==='number'){
+      effectiveDistKm = Math.max(0.5, Math.round((input.duracion_min / estimateBasePaceMinPerKm(state.profile))*10)/10);
+    }
+    if(effectiveDistKm!==null) override.dist = effectiveDistKm;
     if(input.zona) override.zone = input.zona;
     if(input.terreno) override.terrain = input.terreno;
     state.nextWeekOverrides[input.dia] = override;
     renderPlan(); persist();
     state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+input.dia)), ts:Date.now()});
-    return `OK, actualicé ${input.dia} de la semana que viene: ${input.tipo}${typeof input.distancia_km==='number'?', '+input.distancia_km+'km':''}${input.zona?', zona '+input.zona:''}.`;
+    const amountTxt = typeof input.duracion_min==='number' ? `${input.duracion_min}min (~${effectiveDistKm}km)` : (effectiveDistKm!==null ? effectiveDistKm+'km' : '');
+    return `OK, actualicé ${input.dia} de la semana que viene: ${input.tipo}${amountTxt?', '+amountTxt:''}${input.zona?', zona '+input.zona:''}.`;
   }
   const d = state.plan.find(x=>x.day===input.dia);
   if(!d) return "Día no encontrado.";
@@ -4882,12 +6759,46 @@ function applyPlanChange(input){
   if(d.raceDay) return `${input.dia} es el día de tu carrera (cargada en Próximos Eventos) -- no le puedo asignar otra sesión encima. Si querés cambiar la carrera, se edita desde Perfil.`;
   d.custom = true;
   d.type = input.tipo; d.desc = input.descripcion;
-  if(typeof input.distancia_km==='number') d.dist = input.distancia_km;
+  if(typeof input.distancia_km==='number'){
+    d.dist = input.distancia_km;
+  } else if(typeof input.duracion_min==='number'){
+    d.dist = Math.max(0.5, Math.round((input.duracion_min / estimateBasePaceMinPerKm(state.profile))*10)/10);
+  }
   if(input.zona) d.zone = input.zona;
   if(input.terreno) d.terrain = input.terreno;
   renderPlan(); renderHome(); persist();
   state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+d.day)), ts:Date.now()});
-  return `OK, actualizado ${d.day}: ${d.type}, ${d.dist}km${d.zone?', zona '+d.zone:''}.`;
+  const amountTxt = typeof input.duracion_min==='number' ? `${input.duracion_min}min (~${d.dist}km)` : `${d.dist}km`;
+  return `OK, actualizado ${d.day}: ${d.type}, ${amountTxt}${d.zone?', zona '+d.zone:''}.`;
+}
+function applyCancelSession(input){
+  // Antes, cuando el corredor cancelaba una sesión por chat, el modelo terminaba
+  // llamando a modificar_sesion igual (es la única herramienta de "un día puntual"
+  // que conocía) y como esa herramienta exige tipo/descripción, improvisaba algo
+  // como "Rodaje suave en zona 1" -- resultado: el día quedaba con un entrenamiento
+  // inventado en vez de quedar vacío. Esta herramienta deja el día realmente vacío,
+  // igual que cualquier otro día sin sesión asignada (typeKey:'rest', sin custom).
+  if(input.semana === 'siguiente'){
+    const nextDay = getNextWeekPlan().plan.find(x=>x.day===input.dia);
+    if(nextDay && nextDay.raceDay) return `${input.dia} de la semana que viene es el día de tu carrera (cargada en Próximos Eventos) -- no lo puedo dejar sin sesión.`;
+    if(!state.nextWeekOverrides) state.nextWeekOverrides = {};
+    state.nextWeekOverrides[input.dia] = { type: t('type_rest'), desc: t('desc_rest'), dist:0, zone:null, terrain:null };
+    renderPlan(); persist();
+    state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+input.dia)), ts:Date.now()});
+    return `OK, dejé ${input.dia} de la semana que viene sin sesión (descanso).`;
+  }
+  const d = state.plan.find(x=>x.day===input.dia);
+  if(!d) return "Día no encontrado.";
+  if(isDayLocked(input.dia)) return `No puedo modificar ${input.dia}: ya pasó (o ya se corrió/salteó) esta semana. Puedo dejarlo sin sesión desde hoy en adelante, o la semana que viene.`;
+  if(d.raceDay) return `${input.dia} es el día de tu carrera (cargada en Próximos Eventos) -- no lo puedo dejar sin sesión. Si querés cambiar la carrera, se edita desde Perfil.`;
+  d.custom = false;
+  d.typeKey = 'rest';
+  d.type = undefined; d.desc = undefined;
+  d.dist = 0; d.zone = null; d.terrain = null;
+  delete d.interval;
+  renderPlan(); renderHome(); persist();
+  state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+d.day)), ts:Date.now()});
+  return `OK, dejé ${d.day} sin sesión (descanso).`;
 }
 function applyVolumeAdjust(input){
   const pct = input.porcentaje;
@@ -4992,8 +6903,9 @@ Basá tus recomendaciones en principios reales de entrenamiento, no solo en lo q
 
 Ya tenés en el contexto el plan de la semana actual Y el de la semana que sigue (todavía no empezó, pero ya está calculado). Si te preguntan qué toca la semana que viene, respondé con esos datos directamente — nunca digas que todavía no está definida.
 
-Tenés cuatro herramientas para aplicar cambios reales en la app. Cuando el corredor pida un cambio, usá SIEMPRE la herramienta correspondiente en la misma respuesta — nunca digas que ya lo cambiaste sin haber llamado a la herramienta:
-- modificar_sesion: para cambiar UN día puntual (tipo, distancia, zona, terreno), de esta semana o de la que sigue (parámetro semana).
+Tenés cinco herramientas para aplicar cambios reales en la app. Cuando el corredor pida un cambio, usá SIEMPRE la herramienta correspondiente en la misma respuesta — nunca digas que ya lo cambiaste sin haber llamado a la herramienta:
+- modificar_sesion: para cambiar UN día puntual por OTRA sesión distinta (tipo, distancia, zona, terreno), de esta semana o de la que sigue (parámetro semana). Si el corredor entrena por tiempo (fijate en el contexto) o te da la sesión directamente en minutos, usá duracion_min en vez de distancia_km.
+- cancelar_sesion: cuando el corredor cancela, saca o no puede hacer una sesión y NO la reemplaza por otra — deja ese día vacío, igual que un día sin entrenamiento. Nunca uses modificar_sesion para esto ni inventes una sesión suave o de zona 1 "de reemplazo": si el pedido es cancelar, el día tiene que quedar sin ningún ejercicio.
 - ajustar_volumen_semana: para pedidos generales de correr más o menos (ej. "quiero correr más km", "bajale un poco"), sin que especifiquen un día — de esta semana o de la que sigue (parámetro semana).
 - modificar_perfil: para cambios permanentes de datos personales que afectan los PRÓXIMOS planes (km semanales base, objetivo, terreno, FC máxima).
 - guardar_nota_coach: para guardar un dato permanente del corredor (una lesión o molestia, una preferencia, una restricción de horario, etc.) apenas lo mencione, aunque no implique cambiar el plan ahora mismo. El historial de la charla no es infinito, así que esto es lo único que te garantiza acordarte de algo importante más adelante.
@@ -5028,6 +6940,7 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
       const toolResults = toolUses.map(tu=>{
         let result;
         if(tu.name==='modificar_sesion') result = applyPlanChange(tu.input);
+        else if(tu.name==='cancelar_sesion') result = applyCancelSession(tu.input);
         else if(tu.name==='ajustar_volumen_semana') result = applyVolumeAdjust(tu.input);
         else if(tu.name==='modificar_perfil') result = applyProfileChange(tu.input);
         else if(tu.name==='guardar_nota_coach') result = applyCoachNote(tu.input);

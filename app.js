@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-07T23:45:53Z';
+const APP_VERSION = '2026-09-08T00:00:04Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -18,6 +18,11 @@ const CHANGELOG = [
   {id:'2026-09-achievements', key:'changelog_achievements'},
   {id:'2026-09-social', key:'changelog_social'},
   {id:'2026-09-redesign', key:'changelog_redesign'},
+  {id:'2026-09-profile-redesign', key:'changelog_profile_redesign'},
+  {id:'2026-09-achievements-pr', key:'changelog_achievements_pr'},
+  {id:'2026-09-cancel-session', key:'changelog_cancel_session'},
+  {id:'2026-09-trainby', key:'changelog_trainby'},
+  {id:'2026-09-weather', key:'changelog_weather'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -2167,6 +2172,107 @@ function openRaceTipsInfo(){
   document.getElementById('race-tips-info-modal').style.display = 'block';
 }
 function closeRaceTipsInfo(){ document.getElementById('race-tips-info-modal').style.display = 'none'; }
+
+/* ================= CLIMA: aviso antes de entrenar =====================
+   Antes de una sesión con distancia (en Inicio y en Correr), avisamos si el pronóstico
+   de HOY trae lluvia/tormenta, mucho calor o mucho frío -- para que el corredor decida
+   si reprograma o se prepara distinto (hidratación, abrigo, paraguas). Es 100% opcional
+   y silencioso: si no hay geolocalización, se niega el permiso, o falla la consulta,
+   la app sigue funcionando exactamente igual, sin mostrar nada y sin insistir en el
+   permiso más de una vez por sesión de uso. Usamos Open-Meteo (gratis, sin API key,
+   ver https://open-meteo.com/en/docs) directo desde el navegador del corredor -- no
+   pasa por nuestro backend. El resultado se cachea en localStorage por día calendario
+   para no repetir la consulta en cada render ni cada vez que se abre la app.
+*/
+let weatherFetchInFlight = false;
+function weatherCacheKey(){ return 'zancada_weather_'+todayLocalISO(); }
+function getCachedWeatherWarning(){
+  try{
+    const raw = localStorage.getItem(weatherCacheKey());
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+function setCachedWeatherWarning(data){
+  try{ localStorage.setItem(weatherCacheKey(), JSON.stringify(data)); }catch(e){}
+}
+function classifyWeatherCode(code, precipProb, tempMax, tempMin){
+  const stormCodes = [95,96,99];
+  const rainCodes = [51,53,55,56,57,61,63,65,66,67,80,81,82];
+  if(stormCodes.includes(code)) return 'storm';
+  if(rainCodes.includes(code) || precipProb>=60) return 'rain';
+  if(tempMax>=30) return 'heat';
+  if(tempMin<=3) return 'cold';
+  return null;
+}
+function fmtWeatherTemp(celsius){
+  const val = isImperial() ? Math.round(celsius*9/5+32) : Math.round(celsius);
+  return `${val}°${isImperial()?'F':'C'}`;
+}
+function getCachedGeo(){
+  try{
+    const raw = localStorage.getItem('zancada_geo');
+    if(!raw) return null;
+    const geo = JSON.parse(raw);
+    if(geo.denied) return geo;
+    if(Date.now() - geo.ts > 6*3600000) return null; // refrescar la ubicación cada 6hs
+    return geo;
+  }catch(e){ return null; }
+}
+function ensureWeatherFetched(){
+  if(weatherFetchInFlight || getCachedWeatherWarning()) return;
+  const geo = getCachedGeo();
+  if(geo && geo.denied) return; // ya dijo que no antes -- no insistimos
+  if(geo){ weatherFetchInFlight = true; fetchWeatherForecast(geo.lat, geo.lon); return; }
+  if(!navigator.geolocation) return;
+  weatherFetchInFlight = true;
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      try{ localStorage.setItem('zancada_geo', JSON.stringify({lat:pos.coords.latitude, lon:pos.coords.longitude, ts:Date.now()})); }catch(e){}
+      fetchWeatherForecast(pos.coords.latitude, pos.coords.longitude);
+    },
+    () => {
+      weatherFetchInFlight = false;
+      try{ localStorage.setItem('zancada_geo', JSON.stringify({denied:true, ts:Date.now()})); }catch(e){}
+    },
+    {timeout:8000, maximumAge:3600000}
+  );
+}
+async function fetchWeatherForecast(lat, lon){
+  try{
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=auto&forecast_days=1`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('weather http '+res.status);
+    const json = await res.json();
+    const d = json.daily;
+    if(!d || !d.time || !d.time.length) throw new Error('sin datos de clima');
+    const tempMax = d.temperature_2m_max[0], tempMin = d.temperature_2m_min[0];
+    const precipProb = d.precipitation_probability_max ? d.precipitation_probability_max[0] : 0;
+    const level = classifyWeatherCode(d.weather_code[0], precipProb, tempMax, tempMin);
+    const vars = level==='rain' ? {prob: Math.round(precipProb)}
+      : level==='heat' ? {temp: fmtWeatherTemp(tempMax)}
+      : level==='cold' ? {temp: fmtWeatherTemp(tempMin)}
+      : {};
+    setCachedWeatherWarning({level, vars});
+  }catch(e){
+    console.error('fetchWeatherForecast error', e);
+    setCachedWeatherWarning({level:null}); // no insistir el resto del día si falló
+  }finally{
+    weatherFetchInFlight = false;
+    renderHome();
+    renderRunTodayCard();
+  }
+}
+function renderWeatherWarning(elId, day, alreadyDone){
+  const el = document.getElementById(elId);
+  if(!el) return;
+  if(alreadyDone || !(day && day.dist>0)){ el.style.display = 'none'; return; }
+  const cached = getCachedWeatherWarning();
+  if(!cached){ el.style.display = 'none'; ensureWeatherFetched(); return; }
+  if(!cached.level){ el.style.display = 'none'; return; }
+  el.className = 'weather-chip weather-'+cached.level;
+  el.style.display = 'flex';
+  el.innerHTML = `<span class="icon-sq" style="width:15px; height:15px; flex-shrink:0;">${ICONS.warn}</span><span>${t('weather_'+cached.level+'_warning', cached.vars)}</span>`;
+}
 function renderHome(){
   renderDailyTip();
   renderRaceTip();
@@ -2237,6 +2343,7 @@ function renderHome(){
     nextSessionBlock.style.display = '';
     doneBlock.style.display = 'none';
   }
+  renderWeatherWarning('home-weather-warning', today, !!todayRun);
 
   const weekRuns = (state.runs||[]).filter(r => getMondayISO(new Date(r.date)) === state.weekStart);
   const doneKm = weekRuns.reduce((a,r)=>a+r.distanceKm, 0);
@@ -2336,16 +2443,18 @@ function renderRunTodayCard(){
     // ya se hizo) -- antes esto solo se decía en el comentario de arriba, pero el código
     // nunca llegaba a ocultar `card`, así que quedaban las dos tarjetas apiladas.
     card.style.display = 'none';
+    renderWeatherWarning('run-weather-warning', today, true);
     return;
   }
   doneCard.style.display = 'none';
-  if(!today){ card.style.display = 'none'; return; }
+  if(!today){ card.style.display = 'none'; renderWeatherWarning('run-weather-warning', today, false); return; }
   const lbl = planLabel(today);
   document.getElementById('run-today-title').textContent = lbl.type;
   document.getElementById('run-today-desc').textContent = lbl.desc;
   document.getElementById('run-today-dist').textContent = planAmountText(today);
   document.getElementById('run-today-zone').innerHTML = (today.dist>0 && today.zone) ? `<span class="zone-chip zone-${today.zone}">${t('zone_word')} ${today.zone}</span>` : '';
   card.style.display = 'block';
+  renderWeatherWarning('run-weather-warning', today, false);
 }
 function getPlanStartDate(){
   // la fecha más vieja de weekStart que tengamos registrada (historial de semanas + la semana actual)

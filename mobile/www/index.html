@@ -29,6 +29,12 @@ try{
      y el fix aplicado (un scroll de verdad, no un simple reflow). -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no, interactive-widget=resizes-visual">
 <title>Zancada</title>
+<!-- Le dice a Google que zancada.org es la versión "oficial" de esta página, aunque el
+     mismo contenido también responda en el dominio crudo de Vercel (zancada-app.vercel.app)
+     -- sin esto, Search Console las trata como contenido duplicado sin versión canónica
+     indicada y puede terminar no indexando ninguna de las dos. Ver también el header
+     X-Robots-Tag para ese dominio en vercel.json (evita que Google llegue a indexarlo). -->
+<link rel="canonical" href="https://zancada.org/">
 <meta name="description" content="Zancada es tu coach de running: planes de entrenamiento personalizados, seguimiento de carreras y un coach con IA, todo en una sola app.">
 <meta property="og:title" content="Zancada — Tu coach de running">
 <meta property="og:description" content="Planes de entrenamiento personalizados, seguimiento de carreras y un coach con IA, todo en una sola app.">
@@ -39,7 +45,7 @@ try{
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Zancada">
-<meta name="theme-color" content="#121415">
+<meta name="theme-color" content="#0A0A0A">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -66,17 +72,29 @@ try{
      para que se siga leyendo bien sobre fondos claros. En el tema oscuro ambos son
      iguales a como estaba antes, así que el look oscuro no cambia nada. */
   :root{
-    --asphalt:#121415; --asphalt-2:#1B1E20; --asphalt-3:#242829; --asphalt-4:#2E3335;
+    /* Paleta "carbón profundo" (refactor visual 2026-09): el fondo general baja bastante
+       más oscuro que las tarjetas (antes quedaban a solo un par de puntos de luminosidad
+       de diferencia, y esa cercanía es lo que obligaba a apoyarse en bordes duros para que
+       una tarjeta se notara separada del fondo). Con --asphalt bien carbón y --asphalt-2
+       varios pasos más claro, la separación se nota sola por contraste de luminosidad --
+       el borde (--overlay-hairline) queda como un detalle apenas insinuado, no como el
+       recurso principal. */
+    --asphalt:#0A0A0A; --asphalt-2:#18181B; --asphalt-3:#202023; --asphalt-4:#2C2C30;
     --chalk:#EDEFEF; --mist:#8B9296; --mist-dim:#5C6366;
     --hivis:#D6FF3F; --hivis-dim:rgba(214,255,63,.14); --hivis-text:#D6FF3F; --ink:#121415;
     --clay:#C06A2E; --clay-dim:rgba(192,106,46,.16);
     --danger:#FF6B5D; --danger-dim:rgba(255,107,93,.15);
     --radius:26px; --radius-sm:18px;
-    --press:rgba(255,255,255,.045); --overlay-hairline:rgba(255,255,255,.05);
-    --tabbar-bg:rgba(27,30,32,.92);
+    --press:rgba(255,255,255,.045); --overlay-hairline:rgba(255,255,255,.045);
+    --tabbar-bg:rgba(24,24,27,.92);
     --toast-error-bg:#3a1f1c; --toast-error-fg:#FF9A8D;
-    --shadow-card:0 4px 14px rgba(0,0,0,.22); --shadow-lg:0 16px 48px rgba(0,0,0,.5);
+    --shadow-card:0 8px 22px rgba(0,0,0,.4); --shadow-lg:0 16px 48px rgba(0,0,0,.55);
     --hivis-glow:rgba(214,255,63,.32);
+    /* Colores de zona (ritmo/FC) del tema oscuro: se probó una versión pastel
+       más suave y se volvió atrás a pedido del usuario -- estos son los
+       saturados/"neon" originales. El tema claro de acá abajo se deja como
+       está, sin tocar (ver su propio comentario: está oscurecido a propósito
+       por contraste WCAG AA sobre fondo blanco). */
     --zone1:#5B9BFF; --zone1-bg:rgba(91,155,255,.16); --zone1-bg-live:rgba(91,155,255,.13);
     --zone2:#4ADE80; --zone2-bg:rgba(74,222,128,.16); --zone2-bg-live:rgba(74,222,128,.13);
     --zone3:#FACC15; --zone3-bg:rgba(250,204,21,.16); --zone3-bg-live:rgba(250,204,21,.13);
@@ -199,6 +217,23 @@ try{
   .overlay h2{font-size:28px;}
   .overlay .lead{color:var(--mist); margin-top:6px; font-size:14px; line-height:1.5;}
 
+  /* Overlays "hoja" -- los que se abren desde un botón de una sola fila en Perfil/Logros
+     (Datos personales, Objetivos, Zapatillas, Evento, Idioma, Días, Zonas, Molestias,
+     Logros). Antes usaban display:none/block como el resto de los overlays de la app
+     (login, onboarding, modales de confirmación) -- práctico pero sin transición, así que
+     aparecían y desaparecían de un salto. Estos en particular quedan siempre con
+     display:block (nunca display:none) y se animan con opacity+transform nada más --
+     truco clásico y soportado en todos lados, a propósito en vez de animar la propiedad
+     display con @starting-style/allow-discrete (todavía no soportado en todos los
+     navegadores/WebViews que usa la app). pointer-events:none mientras está cerrado
+     evita que, al estar solo invisible y no removida del layout, tape clicks o el
+     scroll de lo que hay debajo. Esto habilita el gesto de "arrastrar hacia abajo para
+     cerrar" de wireOverlaySheetSwipe() en app.js. No se toca el resto de los overlays
+     (login, onboarding, los modales de confirmación/info) para no arriesgar esos flujos. */
+  .overlay-sheet{display:block; opacity:0; pointer-events:none; transform:translateY(22px);
+    transition:opacity .22s ease, transform .22s ease;}
+  .overlay-sheet.overlay-open{opacity:1; pointer-events:auto; transform:translateY(0);}
+
   .confirm-email-icon{width:76px; height:76px; border-radius:50%; background:var(--hivis-dim); color:var(--hivis-text);
     display:flex; align-items:center; justify-content:center; margin:4px auto 22px;}
   .confirm-email-icon svg{width:32px; height:32px;}
@@ -262,6 +297,13 @@ try{
     border:1.5px solid var(--asphalt-4); background:var(--asphalt-2); color:var(--mist);
     font-size:12.5px; font-weight:600; cursor:pointer; user-select:none;}
   .choice.active{border-color:var(--hivis); color:var(--hivis-text); background:var(--hivis-dim); box-shadow:0 4px 14px var(--hivis-glow);}
+  /* Control segmentado de una sola pieza (borde redondeado continuo, sin que cada
+     opción sea un botón suelto con su propio borde) -- para grupos chicos de 2-3
+     opciones mutuamente excluyentes (sueño, terreno, unidades, voz). Los grupos con
+     muchas opciones (dolores, idioma) siguen usando .choice-row sin esta clase. */
+  .choice-row.segmented{flex-wrap:nowrap; gap:2px; background:var(--asphalt-3); border-radius:var(--radius-sm); padding:3px;}
+  .choice-row.segmented .choice{min-width:0; border:none; background:none; box-shadow:none; padding:9px 4px; color:var(--mist);}
+  .choice-row.segmented .choice.active{background:var(--hivis); color:var(--ink); box-shadow:0 2px 10px var(--hivis-glow);}
   .switch{position:relative; display:inline-block; width:51px; height:31px; flex-shrink:0;}
   .switch input{opacity:0; width:0; height:0; position:absolute;}
   .switch-slider{position:absolute; cursor:pointer; inset:0; background:var(--asphalt-4); transition:.2s; border-radius:31px;}
@@ -280,7 +322,20 @@ try{
   .btn-outline{background:var(--asphalt-2); border:1.5px solid var(--overlay-hairline); color:var(--chalk); box-shadow:var(--shadow-card); transition:transform .12s ease, background .12s ease;}
   .btn-outline:active{transform:scale(.97); background:var(--press);}
   .btn-saved-flash{background:var(--hivis) !important; border-color:var(--hivis) !important; color:var(--ink) !important; transition:background .15s ease, color .15s ease;}
+  /* Los botones "Guardar" de Perfil quedan ocultos hasta que el usuario modifica algo en
+     esa sección -- antes estaban siempre visibles y generaban dudas sobre si un cambio ya
+     estaba guardado o no. Ver PERFIL_SAVE_SECTIONS / confirmAndSave en app.js. */
+  .perfil-save-btn{display:none;}
+  .perfil-save-btn.dirty{display:flex;}
   .btn-danger{background:var(--danger-dim); color:var(--danger);}
+  /* Acciones secundarias al pie de Plan (agregar al calendario / pedirle un ajuste al
+     coach) -- antes eran botones outline de peso completo, iguales a cualquier acción
+     primaria; bajan de escala a un link con ícono, y con más aire antes de la tabbar. */
+  .plan-secondary-actions{display:flex; flex-direction:column; align-items:center; gap:8px; margin:18px 0 30px;}
+  .plan-secondary-btn{background:none; border:none; color:var(--mist); font-size:13px; font-weight:600;
+    padding:10px 18px; border-radius:999px; display:flex; align-items:center; gap:7px; cursor:pointer;
+    transition:background .12s ease, color .12s ease;}
+  .plan-secondary-btn:active{background:var(--press); color:var(--chalk);}
   .btn-sm{padding:10px 16px; font-size:13.5px; width:auto;}
   .btn-disabled{background:var(--asphalt-2); color:var(--mist-dim); border:1.5px solid var(--asphalt-4);
     cursor:not-allowed; position:relative; margin-top:10px;}
@@ -350,6 +405,11 @@ try{
   .tag-load-caution{background:var(--clay-dim); color:var(--clay);}
   .tag-load-risk{background:var(--danger-dim); color:var(--danger);}
 
+  .weather-chip{align-items:center; gap:8px; font-size:12.5px; font-weight:600; line-height:1.35; padding:9px 12px; border-radius:var(--radius-sm);}
+  .weather-chip.weather-rain, .weather-chip.weather-cold{background:var(--zone1-bg); color:var(--zone1);}
+  .weather-chip.weather-storm{background:var(--danger-dim); color:var(--danger);}
+  .weather-chip.weather-heat{background:var(--clay-dim); color:var(--clay);}
+
   .zone-chip{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; padding:5px 10px; border-radius:999px;}
   .zone-1{background:var(--zone1-bg); color:var(--zone1);}
   .zone-2{background:var(--zone2-bg); color:var(--zone2);}
@@ -367,51 +427,225 @@ try{
   .greeting{font-size:25px; font-weight:600; margin:14px 0 4px; letter-spacing:-.01em;}
   .next-session{display:flex; justify-content:space-between; align-items:flex-start;}
   .next-session .big{font-size:42px; line-height:.95;}
+  /* Tarjeta destacada -- "próxima sesión" es LA acción del día, así que se diferencia
+     del resto de las tarjetas con un borde lima tenue y un degradado interno apenas
+     insinuado, no con un color de fondo sólido distinto (eso competiría demasiado). */
+  .card-highlight{background:linear-gradient(160deg, rgba(214,255,63,.07), var(--asphalt-2) 55%); border-color:var(--hivis); border-width:1.5px;
+    box-shadow:0 0 0 1px rgba(214,255,63,.25), 0 0 22px rgba(214,255,63,.35), 0 4px 18px rgba(0,0,0,.3);}
+  /* Viñetas breves para la descripción de la sesión (entrada en calor / sesión /
+     vuelta a la calma vienen como líneas separadas por \n desde planLabel()) -- se
+     listan una debajo de otra con una marca chica, en vez de un párrafo corrido. */
+  .next-session-bullets{margin-top:2px;}
+  .next-session-bullet{display:flex; gap:7px; align-items:flex-start; color:var(--mist); font-size:13.5px; line-height:1.45; margin-top:5px;}
+  .next-session-bullet::before{content:''; width:5px; height:5px; margin-top:7px; border-radius:50%; background:var(--hivis); flex-shrink:0;}
   .stat-row{display:flex; gap:10px;}
   .stat-box{flex:1; background:var(--asphalt-3); border-radius:var(--radius-sm); padding:13px 10px; text-align:center; border:1px solid var(--overlay-hairline); box-shadow:0 2px 8px rgba(0,0,0,.14);}
   .stat-box .n{font-size:21px; font-weight:800;}
-  .hist-card .stat-box .n{font-size:16px;}
+  .hist-card .stat-row-divided .stat-cell .n{font-size:16px;}
   .hist-map{position:relative; isolation:isolate; height:108px; border-radius:var(--radius-sm); overflow:hidden; margin-bottom:10px; background:var(--asphalt-3);}
   .hist-map:empty{background:linear-gradient(90deg, var(--asphalt-3) 25%, var(--asphalt-4) 37%, var(--asphalt-3) 63%); background-size:400% 100%; animation:skeletonShine 1.4s ease infinite;}
   .stat-box .l{font-size:10px; color:var(--mist); text-transform:uppercase; letter-spacing:.05em;}
-  .week-bars{display:flex; align-items:flex-end; gap:6px; height:70px; margin-top:14px;}
-  .week-bars .bar-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%;}
-  .week-bars .bar{width:100%; border-radius:7px 7px 3px 3px; background:var(--asphalt-4); transition:height .5s cubic-bezier(.22,1,.36,1);}
-  .week-bars .bar.rest-day{background:transparent; border:1px dashed var(--asphalt-4); height:4px !important;}
-  .week-bars .bar.planned-day{background:transparent; border:1.5px dashed var(--mist-dim);}
-  .week-bars .bar.hivis{background:var(--hivis); box-shadow:0 3px 12px var(--hivis-glow);}
-  .week-bars .lbl{font-size:9.5px; color:var(--mist); margin-top:6px;}
+  /* Reemplaza los stat-box cuadrados por números grandes separados por divisores
+     verticales finos -- mismo dato, sin cajas. Reutilizado en "Esta semana" (Inicio)
+     y en las métricas de la tarjeta de Strava (Historial). */
+  .stat-row-divided{display:flex; align-items:stretch; margin-top:2px;}
+  .stat-row-divided .stat-cell{flex:1; min-width:0; text-align:center; padding:0 6px; position:relative; display:flex; flex-direction:column; gap:4px;}
+  .stat-row-divided .stat-cell:first-child{padding-left:0;}
+  .stat-row-divided .stat-cell:last-child{padding-right:0;}
+  .stat-row-divided .stat-cell + .stat-cell::before{content:''; position:absolute; left:0; top:8%; bottom:8%; width:1px; background:var(--asphalt-4);}
+  .stat-row-divided .stat-cell .n{font-size:20px; font-weight:800; font-family:'JetBrains Mono',monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .stat-row-divided .stat-cell .l{font-size:10px; color:var(--mist); text-transform:uppercase; letter-spacing:.05em;}
+  /* Botón compacto "+" del encabezado de Historial -- reemplaza la barra ancha de
+     "+ Agregar carrera manual" de antes; mismo tamaño/tratamiento que los demás
+     botones circulares chicos de la app (.week-nav-btn, .info-btn). */
+  .hist-add-btn{width:34px; height:34px; border-radius:50%; background:var(--asphalt-3); border:1px solid var(--overlay-hairline);
+    color:var(--hivis-text); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; padding:0;
+    transition:transform .12s ease, background .12s ease;}
+  .hist-add-btn:active{transform:scale(.88); background:var(--asphalt-4);}
+  .hist-add-btn svg{width:16px; height:16px;}
+  /* Gráficos de tendencia (Historial): reemplaza las barras dentro de cajas grises por
+     trazos verticales finos y redondeados -- los días/semanas sin actividad quedan como
+     una línea fina en vez de una barra, así el ojo va directo a los días con volumen. */
+  .trend-bars{display:flex; align-items:flex-end; justify-content:space-between; height:70px; gap:3px;}
+  .trend-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:6px; min-width:0;}
+  .trend-stroke{width:5px; border-radius:99px; background:var(--hivis); transition:height .4s cubic-bezier(.22,1,.36,1);}
+  .trend-stroke.trend-planned{background:var(--mist-dim);}
+  .trend-stroke.trend-rest{width:1.5px; background:var(--asphalt-4);}
+  .trend-lbl{font-size:9.5px; color:var(--mist-dim); text-transform:uppercase; letter-spacing:.04em; flex-shrink:0;}
+  /* Insignia "STRAVA" + duración sobre la vista previa del mapa, en vez de una fila de
+     texto aparte encima de la tarjeta -- libera espacio y agrupa el origen del dato
+     (Strava) con el mapa que ya lo representa visualmente. */
+  .hist-map-badge{position:absolute; top:8px; right:8px; z-index:1000; display:flex; align-items:center; gap:6px;}
+  .hist-map-badge .tag{margin:0;}
+  .hist-map-badge .hist-map-duration{background:rgba(10,10,10,.62); backdrop-filter:blur(3px); color:var(--chalk); font-size:11.5px; font-weight:700; font-family:'JetBrains Mono',monospace; padding:4px 8px; border-radius:99px;}
+  /* Peso/Altura (Perfil): en vez de dos inputs numéricos encajonados, un valor grande
+     centrado con la etiqueta arriba y un divisor fino abajo -- se ve y se edita como un
+     dato destacado, no como un formulario. */
+  .metric-input-row{display:flex; gap:20px; margin-top:16px;}
+  .metric-input-cell{flex:1; display:flex; flex-direction:column; align-items:center; gap:8px; min-width:0;}
+  .metric-input-cell label{margin:0; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--mist); font-weight:600;}
+  .metric-input{width:100%; max-width:130px; background:none; border:none; border-bottom:1.5px solid var(--asphalt-4);
+    color:var(--chalk); font-size:26px; font-weight:800; font-family:'JetBrains Mono',monospace; text-align:center;
+    padding:2px 0 9px; -moz-appearance:textfield; transition:border-color .15s ease;}
+  .metric-input::-webkit-outer-spin-button,.metric-input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
+  .metric-input:focus{outline:none; border-bottom-color:var(--hivis);}
+  /* Selector de tiempo (horas:minutos:segundos) para la calculadora de ritmo -- 3
+     selects nativos en vez de un campo de texto libre, así se elige el tiempo tocando
+     en vez de tipear números a mano (el picker nativo del celular hace el resto). */
+  .time-picker-row{display:flex; align-items:flex-start; justify-content:center; gap:6px; margin-top:6px;
+    background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); border-radius:var(--radius-sm); padding:10px 6px 8px;}
+  .time-picker-row .tp-col{display:flex; flex-direction:column; align-items:center; flex:1; min-width:0;}
+  .time-picker-row select{width:100%; background:none; border:none; color:var(--chalk); font-size:19px; font-weight:800;
+    font-family:'JetBrains Mono',monospace; text-align:center; text-align-last:center; padding:4px 0; cursor:pointer;}
+  .time-picker-row select:focus{outline:none;}
+  .time-picker-row .tp-colon{color:var(--mist-dim); font-weight:800; font-size:19px; padding-top:4px;}
+  .time-picker-row .tp-unit{font-size:9px; color:var(--mist); text-transform:uppercase; letter-spacing:.04em; margin-top:2px;}
+  /* Tira de días L-D: reemplaza las barras verticales por día/punto -- el punto se
+     agranda y se llena de lima en un día de entrenamiento, queda chico y hueco en un
+     descanso, y el día de hoy se marca con un anillo fino alrededor. */
+  .week-days{display:flex; justify-content:space-between; align-items:flex-end; margin-top:18px; height:66px; gap:4px;}
+  .week-days .wd-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:8px; height:100%; min-width:0;}
+  .week-days .wd-lbl{font-size:10px; color:var(--mist); text-transform:uppercase; letter-spacing:.04em;}
+  .week-days .wd-bar-wrap{flex:1; display:flex; align-items:flex-end;}
+  .week-days .wd-bar{width:7px; border-radius:99px; background:var(--asphalt-4); transition:height .3s cubic-bezier(.22,1,.36,1);}
+  .week-days .wd-col.training .wd-bar{background:var(--hivis); box-shadow:0 0 8px var(--hivis-glow);}
+  .week-days .wd-col.today .wd-bar{box-shadow:0 0 0 1.5px var(--mist-dim), 0 0 8px var(--hivis-glow);}
+  .week-days .wd-col.today .wd-lbl{color:var(--chalk); font-weight:700;}
   .coach-snippet{display:flex; gap:12px; align-items:flex-start;}
   .coach-avatar{width:40px; height:40px; border-radius:14px; background:var(--hivis-dim); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
 
-  .day-row{display:flex; align-items:center; gap:12px; padding:13px 0; border-bottom:1px solid var(--asphalt-3); cursor:pointer; transition:background .12s ease;}
+  .day-row{display:flex; align-items:flex-start; gap:12px; padding:13px 0; border-bottom:1px solid var(--asphalt-3); cursor:pointer; transition:background .12s ease, opacity .12s ease;}
   .day-row:active{background:var(--press);}
   .day-row:last-child{border-bottom:none;}
   .day-badge{width:42px; text-align:center; flex-shrink:0;}
   .day-badge .d{font-size:11px; color:var(--mist); text-transform:uppercase;}
   .day-info{flex:1; min-width:0;}
-  .day-info .t{font-weight:700; font-size:14px;}
+  .day-info .t{font-weight:700; font-size:15.5px;}
   .day-info .m{font-size:12px; color:var(--mist); margin-top:4px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
+  .day-info-title-row{display:flex; align-items:baseline; gap:9px; flex-wrap:wrap;}
+  /* Kilometraje integrado en la misma fila del tipo de sesión, con un divisor fino en
+     vez de vivir solo en su propia columna a la derecha (que dejaba la fila con mucho
+     aire vacío en el medio en pantallas angostas). */
+  .day-km-inline{font-family:'JetBrains Mono',monospace; font-size:12.5px; font-weight:700; color:var(--hivis-text); flex-shrink:0;
+    padding-left:9px; border-left:1px solid var(--asphalt-4);}
   .day-dist{font-family:'JetBrains Mono',monospace; font-size:14.5px; font-weight:700; color:var(--hivis-text); flex-shrink:0;}
+  /* Ícono de estado (check/x) solo, siempre al final de la fila. Los chips de
+     terreno/zona viven debajo del título (ver .day-row-chips), no acá. */
+  .day-row-end{display:flex; align-items:center; flex-shrink:0; padding-top:2px;}
+  .day-row-chips{display:flex; gap:5px; flex-wrap:wrap; margin-top:6px;}
+  /* Día de descanso: toda la fila baja de opacidad para que los días CON entrenamiento
+     salten a la vista de entrada, sin tener que leer cada renglón. */
+  .day-row.day-row-rest{opacity:.5;}
   .day-detail{display:none; padding:0 0 14px 54px; font-size:13px; color:var(--mist); line-height:1.7; white-space:pre-line;}
   .day-detail.open{display:block;}
 
   #runIdle{text-align:center; padding-top:16px;}
-  .go-circle{width:100%; max-width:280px; height:120px; border-radius:var(--radius); margin:22px auto; background:var(--hivis);
+  /* Tarjeta de estado GPS: reemplaza el bloque de dos párrafos de advertencia por una
+     tarjeta prolija con ícono satelital discreto + micro-viñetas (mismo patrón visual
+     que .next-session-bullet en Inicio, para que se sienta parte del mismo sistema). */
+  .gps-status-card{display:flex; gap:12px; align-items:flex-start; background:var(--asphalt-2); border:1px solid var(--overlay-hairline);
+    border-radius:var(--radius-sm); padding:16px; margin-top:14px; text-align:left; box-shadow:var(--shadow-card);}
+  .gps-status-title{margin:0 0 6px; font-weight:700; font-size:13.5px; color:var(--chalk);}
+  .gps-status-bullet{margin:5px 0 0; font-size:12px; line-height:1.4; color:var(--mist); display:flex; gap:6px;}
+  .gps-status-bullet::before{content:'—'; color:var(--mist-dim); flex-shrink:0;}
+  /* Zona del botón de arrancar: el fondo de líneas de ruta/altimetría es puramente
+     decorativo (aria-hidden), muy tenue, para que el espacio vacío alrededor del botón
+     dé contexto de "esto registra tu recorrido" antes de arrancar a correr. */
+  .run-idle-cta{position:relative; margin-top:8px; min-height:400px; display:flex; align-items:flex-start; justify-content:center; padding-top:28px;}
+  .run-bg-route{position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none;}
+  .run-bg-route svg{width:100%; height:100%;}
+  /* Fondo decorativo detrás del botón START: una pista de atletismo (carriles + línea de
+     llegada) tenue en gris, con el carril interno resaltado en lima -- ocupa el espacio
+     vacío entre el botón y la tabbar en vez de dejarlo en blanco. */
+  .run-bg-route .rbr-contour{fill:none; stroke:var(--asphalt-4); stroke-width:1.4; opacity:.6;}
+  .run-bg-route .rbr-route{fill:none; stroke:var(--hivis); stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; opacity:.55;
+    filter:drop-shadow(0 0 5px var(--hivis-glow));}
+  .run-bg-route .rbr-finish{stroke:var(--mist-dim); stroke-width:1.6; opacity:.5;}
+  .run-bg-route .rbr-finish-dim{opacity:.3;}
+  .go-circle{position:relative; z-index:1; width:100%; max-width:220px; height:88px; border-radius:999px; margin:0 auto; background:var(--hivis);
     display:flex; align-items:center; justify-content:center; flex-direction:column; color:var(--ink); border:none; cursor:pointer;
-    box-shadow:0 14px 34px var(--hivis-glow);}
-  .go-circle .display{font-size:29px;}
-  .go-circle:active{transform:scale(.97);}
+    box-shadow:0 16px 40px var(--hivis-glow); transition:transform .12s ease, box-shadow .12s ease;}
+  .go-circle .display{font-size:25px; letter-spacing:.03em;}
+  .go-circle:active{transform:scale(.96); box-shadow:0 8px 24px var(--hivis-glow);}
   #runActive,#runSummary{display:none;}
   .rec-dot{width:9px; height:9px; border-radius:50%; background:var(--danger); animation:blink 1.4s ease-in-out infinite; display:inline-block; margin-right:7px;}
   .timer-big{font-size:48px; text-align:center; margin:10px 0 14px;}
   .map-wrap{position:relative; isolation:isolate; height:260px; border-radius:var(--radius); overflow:hidden; margin-bottom:14px; border:1px solid var(--asphalt-4);
     background:linear-gradient(90deg, var(--asphalt-3) 25%, var(--asphalt-4) 37%, var(--asphalt-3) 63%); background-size:400% 100%; animation:skeletonShine 1.4s ease infinite;}
   #liveMap{height:100%; width:100%; background:var(--asphalt-3);}
-  .map-wrap .leaflet-control-attribution{background:rgba(18,20,21,.75); color:var(--mist-dim); font-size:9px; padding:1px 5px;}
+  .map-wrap .leaflet-control-attribution{background:rgba(10,10,10,.75); color:var(--mist-dim); font-size:9px; padding:1px 5px;}
   .map-wrap .leaflet-control-attribution a{color:var(--mist);}
   .map-recenter-btn{position:absolute; bottom:12px; right:12px; z-index:10; width:40px; height:40px; border-radius:50%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--hivis-text); font-size:17px; cursor:pointer; display:flex; align-items:center; justify-content:center;}
   .run-controls{display:flex; gap:10px; margin-top:16px;}
+
+  /* ---- Detalle de carrera con pestañas (Ruta/Ritmo/Segmentos/Gráficos/Detalles) ----
+     El mapa de la pestaña Ruta se hace sangrar hasta el borde de la pantalla con
+     márgenes negativos (el .overlay que lo contiene tiene 24px de padding lateral
+     fijo, ver la regla .overlay más arriba) -- así se ve edge-to-edge como en la
+     referencia en vez de quedar como una tarjeta más. */
+  .rd-tabs{display:flex; gap:4px; margin:0 -24px 14px; padding:0 24px 2px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; border-bottom:1px solid var(--asphalt-4);}
+  .rd-tabs::-webkit-scrollbar{display:none;}
+  .rd-tab-btn{background:none; border:none; color:var(--mist); font-family:inherit; font-size:14px; font-weight:700; padding:8px 12px 12px; cursor:pointer; white-space:nowrap; border-bottom:2.5px solid transparent; flex-shrink:0;}
+  .rd-tab-btn.active{color:var(--hivis-text); border-bottom-color:var(--hivis);}
+  .rd-panel{display:none;}
+  .rd-panel.active{display:block;}
+  .rd-map-full{position:relative; isolation:isolate; height:340px; margin:0 -24px 16px; background:var(--asphalt-3); transition:height .3s cubic-bezier(.22,.9,.3,1);}
+  .rd-map-full.rd-map-dragging{transition:none;}
+  .rd-map-full .leaflet-control-attribution{background:rgba(10,10,10,.75); color:var(--mist-dim); font-size:9px; padding:1px 5px;}
+  .rd-map-full .leaflet-control-attribution a{color:var(--mist);}
+  .rd-map-controls{position:absolute; top:12px; right:12px; z-index:10; display:flex; flex-direction:column; gap:8px;}
+  .rd-map-controls button{width:38px; height:38px; border-radius:50%; background:rgba(10,10,10,.82); border:1.5px solid var(--asphalt-4); color:var(--chalk); cursor:pointer; display:flex; align-items:center; justify-content:center;}
+  /* Degradado gris arriba del mapa (como en la foto de referencia) -- además de
+     prolijo, sirve para que el botón de recentrar de arriba se siga viendo bien
+     apenas el mapa crece y queda con mucho cielo/tile clarito detrás. pointer-events
+     none para no tapar los controles ni interferir con el drag de la agarradera. */
+  .rd-map-fade{position:absolute; top:0; left:0; right:0; height:90px; z-index:9; pointer-events:none;
+    background:linear-gradient(to bottom, rgba(10,12,13,.5), rgba(10,12,13,0));}
+  /* Agarradera para arrastrar el mapa de la pestaña Ruta hacia arriba y agrandarlo
+     (a pantalla casi completa), y volver a arrastrarlo hacia abajo para achicarlo --
+     el touch-action:none evita que el navegador intente hacer scroll de la página
+     mientras el dedo está sobre la agarradera. */
+  .rd-map-handle{position:absolute; left:50%; bottom:10px; transform:translateX(-50%); width:42px; height:5px; border-radius:999px;
+    background:rgba(255,255,255,.55); z-index:11; box-shadow:0 1px 5px rgba(0,0,0,.35); touch-action:none; cursor:grab;}
+  .rd-ruta-below{transition:opacity .26s ease, max-height .3s ease, margin .3s ease; max-height:600px; opacity:1;}
+  .rd-ruta-below.rd-collapsed{opacity:0; max-height:0; margin:0; overflow:hidden; pointer-events:none;}
+  .rd-big-dist{font-size:44px; font-weight:800; line-height:1;}
+  .rd-legend-bar{height:6px; border-radius:999px; margin:14px 0 6px; background:linear-gradient(90deg, var(--zone2), var(--zone3), var(--zone5));}
+  .rd-legend-labels{display:flex; justify-content:space-between; font-size:11.5px; color:var(--mist);}
+  .rd-stat-row{display:flex; justify-content:space-around; text-align:center; margin-top:18px; padding-top:16px; border-top:1px solid var(--asphalt-3);}
+  .rd-stat-row div span{display:block; font-size:19px; font-weight:800; margin-bottom:2px;}
+  .pace-bar-row{display:flex; align-items:center; gap:10px; margin-bottom:8px;}
+  .pace-bar-row .pace-bar-label{width:18px; font-size:12.5px; color:var(--mist); flex-shrink:0;}
+  .pace-bar-track{flex:1; height:26px; border-radius:8px; background:var(--asphalt-3); overflow:hidden; position:relative;}
+  /* A pedido del usuario, las barras de ritmo de la pestaña Ritmo se ven más
+     intensas/vivas que el resto de los usos de --zoneN (mapa de la ruta,
+     donuts de zona) -- en vez de duplicar las variables de color, se le suma
+     un filtro que satura/aclara un poco lo que ya venga de --zoneN, así el
+     resto de la app sigue compartiendo la misma fuente de verdad de colores. */
+  .pace-bar-fill{height:100%; border-radius:8px; display:flex; align-items:center; justify-content:flex-end; padding-right:8px; font-size:12px; font-weight:700; color:var(--ink); min-width:38px; filter:saturate(1.45) brightness(1.06);}
+  .rd-stat-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px 12px;}
+  .rd-stat-tile{display:flex; align-items:flex-start; gap:9px;}
+  .rd-stat-tile .rd-tile-ico{width:26px; height:26px; flex-shrink:0; margin-top:2px; color:var(--hivis-text);}
+  .rd-stat-tile .rd-tile-val{font-size:17px; font-weight:800;}
+  .rd-stat-tile .rd-tile-lbl{font-size:12px; color:var(--mist);}
+  .rd-seg-table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  .rd-seg-table th{text-align:right; color:var(--mist); font-weight:600; font-size:11px; padding:0 0 8px; white-space:nowrap;}
+  .rd-seg-table th:first-child, .rd-seg-table td:first-child{text-align:left;}
+  .rd-seg-table td{text-align:right; padding:8px 0; border-top:1px solid var(--asphalt-3); font-weight:700; white-space:nowrap;}
+  .rd-seg-table tr:last-child td{font-weight:800; color:var(--hivis-text);}
+  .rd-chart-card{margin-bottom:16px;}
+  .rd-chart-svg{width:100%; height:110px; display:block;}
+  .rd-donut-row{display:flex; align-items:center; gap:18px; margin-top:10px;}
+  .rd-donut-legend{flex:1; display:flex; flex-direction:column; gap:6px;}
+  .rd-donut-legend-row{display:flex; align-items:center; justify-content:space-between; font-size:12.5px;}
+  .rd-donut-legend-row .dot{width:9px; height:9px; border-radius:50%; margin-right:7px; display:inline-block; flex-shrink:0;}
+  .rd-donut-legend-name{display:flex; align-items:center; color:var(--chalk);}
+  .rd-donut-legend-val{color:var(--mist); flex-shrink:0;}
+  .rd-video-btn{background:var(--hivis-dim); color:var(--hivis-text); border:none; border-radius:999px; padding:11px 18px; font-weight:700; font-size:13.5px; display:inline-flex; align-items:center; gap:7px; cursor:pointer; white-space:nowrap;}
+  .rd-video-overlay{position:fixed; inset:0; z-index:70; background:#000; display:none; flex-direction:column; align-items:center; justify-content:center;}
+  .rd-video-overlay canvas{max-width:100%; max-height:70vh; border-radius:14px;}
+  .rd-video-overlay .rd-video-actions{display:flex; gap:12px; margin-top:20px; padding:0 24px; width:100%; max-width:420px;}
+  .rd-video-progress{color:#fff; font-size:14px; margin-top:16px; font-weight:600;}
 
   /* ---- Contenedor del chat: alto real medido por JS (syncCoachChatLayout), no CSS
      adivinado -- ver ese comentario largo junto a la función en el <script> para el
@@ -545,8 +779,16 @@ try{
   .pw-toggle{position:absolute; right:2px; top:0; bottom:0; margin:auto; height:fit-content; background:none; border:none; color:var(--mist-dim); cursor:pointer; padding:10px; display:flex; align-items:center; justify-content:center;}
   .pw-toggle:active{color:var(--hivis-text);}
   .small-link:active{opacity:.55;}
-  .week-nav{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px;}
-  .week-nav-label{margin:0; text-align:center; color:var(--mist); font-size:13px; font-weight:700; flex:1; letter-spacing:.01em;}
+  /* En Plan, .week-nav se ve como una única cápsula compacta y centrada (flechas +
+     texto adentro de un mismo contenedor) en vez de las flechas sueltas a los
+     costados de antes -- las otras dos veces que se reusa .week-nav-btn (volver del
+     detalle de carrera, el calendario) no usan la clase .week-nav y no se ven
+     afectadas por esto. */
+  .week-nav{display:flex; align-items:center; justify-content:center; gap:10px; margin:0 auto 16px; max-width:280px;}
+  .week-nav .week-nav-btn{width:34px; height:34px; background:var(--hivis); color:#0a0a0a; flex-shrink:0; box-shadow:0 3px 12px var(--hivis-glow);}
+  .week-nav .week-nav-btn:active{background:var(--hivis); transform:scale(.88);}
+  .week-nav-label{margin:0; text-align:center; color:var(--chalk); font-size:13px; font-weight:700; flex:1; letter-spacing:.01em; white-space:nowrap;
+    padding:9px 18px; background:var(--asphalt-2); border:1px solid var(--overlay-hairline); border-radius:999px;}
   .week-nav-btn{width:32px; height:32px; border-radius:50%; background:var(--asphalt-3); border:none; color:var(--chalk);
     display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; padding:0;
     transition:transform .12s ease, background .12s ease, opacity .15s ease;}
@@ -610,6 +852,28 @@ try{
   nav.tabbar button.active{color:var(--hivis-text);}
   nav.tabbar button.active svg{background:var(--hivis-dim);}
   nav.tabbar button:active{transform:scale(.9);}
+  /* Tab central de acción primaria (Correr): un círculo lleno que sobresale por
+     encima de la línea de la barra, como el botón de cámara/grabar de apps de
+     actividad -- se nota de un vistazo cuál es LA acción del día, sin depender
+     de la etiqueta de texto (que se saca para no competir con el círculo). */
+  nav.tabbar button.nav-btn-primary{flex:0 0 auto; width:64px; margin-top:-24px;}
+  nav.tabbar button.nav-btn-primary .nav-primary-circle{width:56px; height:56px; border-radius:50%; background:var(--hivis);
+    display:flex; align-items:center; justify-content:center; border:4px solid var(--asphalt);
+    box-shadow:0 10px 24px var(--hivis-glow); transition:transform .12s ease, box-shadow .12s ease;}
+  nav.tabbar button.nav-btn-primary svg{width:37px; height:37px; padding:0; color:var(--ink); background:none !important;}
+  nav.tabbar button.nav-btn-primary.active .nav-primary-circle{box-shadow:0 12px 30px var(--hivis-glow), 0 0 0 3px var(--hivis-dim);}
+  nav.tabbar button.nav-btn-primary:active .nav-primary-circle{transform:scale(.92);}
+  /* Botón flotante del coach: al sacar Coach de la tabbar (para bajar de 6 a 5
+     pestañas, menos saturada), la conversación con el coach pasa a un burbuja
+     flotante siempre a mano -- mismo destino (showView('coach')) y mismo badge
+     de no leídos que tenía el tab, solo que ya no compite por espacio abajo. */
+  .coach-fab-wrap{position:fixed; left:0; right:0; bottom:calc(104px + var(--safe-bottom)); max-width:480px; margin:0 auto; pointer-events:none; z-index:21;}
+  .coach-fab{position:absolute; right:16px; bottom:0; width:50px; height:50px; border-radius:50%; pointer-events:auto;
+    background:var(--asphalt-3); border:1.5px solid var(--hivis); color:var(--hivis-text);
+    display:flex; align-items:center; justify-content:center; box-shadow:0 6px 18px rgba(0,0,0,.4), 0 0 14px var(--hivis-glow); cursor:pointer; transition:transform .12s ease;}
+  .coach-fab:active{transform:scale(.92);}
+  .coach-fab svg{width:22px; height:22px;}
+  .coach-fab .nav-badge-dot{top:1px; right:3px;}
 
   .elev-divider{display:flex; align-items:center; gap:8px; margin:22px 0 14px; color:var(--mist-dim);}
   .elev-divider svg{width:60px; height:14px; flex-shrink:0;}
@@ -775,6 +1039,13 @@ try{
           <div class="choice" data-v="mixto" data-i18n="ob_terrain_mixto"></div>
         </div>
       </div>
+      <div class="field">
+        <label data-i18n="ob_trainby_label"></label>
+        <div class="choice-row segmented" id="ob-trainby">
+          <div class="choice active" data-v="distance" data-i18n="ob_trainby_distance"></div>
+          <div class="choice" data-v="time" data-i18n="ob_trainby_time"></div>
+        </div>
+      </div>
       <div class="field"><button class="btn btn-primary" data-i18n="login_continue" onclick="obNextStep()"></button></div>
     </div>
 
@@ -831,7 +1102,7 @@ try{
 
   <section class="view" id="view-inicio">
     <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:14px 0 4px;">
-      <p class="greeting" style="margin:0;"><span data-i18n="home_hi"></span> <span class="display" id="home-name">—</span> 👋</p>
+      <p class="greeting" style="margin:0;"><span data-i18n="home_hi"></span> <span id="home-name" style="font-weight:800;">—</span> 👋</p>
       <div class="streak-badge" id="home-streak-badge" style="display:none;"></div>
     </div>
 
@@ -842,12 +1113,13 @@ try{
       <button class="info-btn" onclick="dismissInstallBanner()" style="flex-shrink:0;" data-i18n-aria="aria_close"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span></button>
     </div>
 
-    <div class="card">
+    <div class="card card-highlight">
       <h3 id="home-next-card-title" data-i18n="home_next"></h3>
       <div class="next-session" id="home-next-session">
-        <div><div class="big display" id="home-next-title">—</div><p class="muted" id="home-next-desc"></p></div>
-        <div style="text-align:right;"><div class="day-dist" id="home-next-dist" style="font-size:20px;"></div><div id="home-next-zone" style="margin-top:6px;"></div></div>
+        <div style="min-width:0;"><div class="big display" id="home-next-title">—</div><div class="next-session-bullets" id="home-next-desc"></div></div>
+        <div style="text-align:right; flex-shrink:0;"><div class="day-dist" id="home-next-dist" style="font-size:20px;"></div><div id="home-next-zone" style="margin-top:6px;"></div></div>
       </div>
+      <div id="home-weather-warning" class="weather-chip" style="display:none; margin-top:12px;"></div>
       <div id="home-session-done-block" style="display:none;">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
           <span class="icon-sq" style="width:18px; height:18px; color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6.5 9 17.5l-5-5"/></svg></span>
@@ -877,17 +1149,17 @@ try{
 
     <div class="card">
       <h3 data-i18n="home_week"></h3>
-      <div class="stat-row">
-        <div class="stat-box"><div class="n mono" id="home-week-done-km">0</div><div class="l" data-i18n="home_km_done"></div></div>
-        <div class="stat-box"><div class="n mono" id="home-week-km">0</div><div class="l" data-i18n="home_km_planned"></div></div>
-        <div class="stat-box"><div class="n mono" id="home-week-sessions">0</div><div class="l" data-i18n="home_sessions"></div></div>
+      <div class="stat-row-divided">
+        <div class="stat-cell"><span class="n" id="home-week-done-km">0</span><span class="l" data-i18n="home_km_done"></span></div>
+        <div class="stat-cell"><span class="n" id="home-week-km">0</span><span class="l" data-i18n="home_km_planned"></span></div>
+        <div class="stat-cell"><span class="n" id="home-week-sessions">0</span><span class="l" data-i18n="home_sessions"></span></div>
       </div>
-      <div class="week-bars" id="home-week-bars"></div>
+      <div class="week-days" id="home-week-bars"></div>
     </div>
 
     <div class="card" id="readiness-card" style="display:none;">
       <h3 style="margin:0 0 12px;" data-i18n="readiness_title"></h3>
-      <div class="choice-row" id="readiness-choice">
+      <div class="choice-row segmented" id="readiness-choice">
         <div class="choice" data-v="mal" data-i18n="readiness_bad"></div>
         <div class="choice" data-v="regular" data-i18n="readiness_ok"></div>
         <div class="choice" data-v="bien" data-i18n="readiness_good"></div>
@@ -953,8 +1225,10 @@ try{
     <p class="muted" id="plan-taper-note" style="display:none; color:var(--hivis-text); margin-bottom:14px;"></p>
     <p class="muted" id="plan-recovery-note" style="display:none; color:var(--hivis-text); margin-bottom:14px;"></p>
     <div class="card" id="plan-list"></div>
-    <button class="btn btn-outline" style="margin-bottom:10px;" onclick="exportWeekToCalendar()" data-i18n="plan_export_ics"></button>
-    <button class="btn btn-outline" data-i18n="plan_adjust" onclick="goCoachWithPrompt('')"></button>
+    <div class="plan-secondary-actions">
+      <button class="plan-secondary-btn" onclick="exportWeekToCalendar()"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/></svg></span><span data-i18n="plan_export_ics"></span></button>
+      <button class="plan-secondary-btn" onclick="goCoachWithPrompt('')"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v11H8l-4 4v-4H4z"/></svg></span><span data-i18n="plan_adjust"></span></button>
+    </div>
     <div class="card" id="past-weeks-card" style="display:none; margin-top:14px;">
       <h3 data-i18n="plan_past_weeks"></h3>
       <div id="past-weeks-list"></div>
@@ -982,10 +1256,29 @@ try{
           <span id="run-today-dist" class="mono" style="font-weight:700;"></span>
           <span id="run-today-zone"></span>
         </div>
+        <div id="run-weather-warning" class="weather-chip" style="display:none; margin-top:10px;"></div>
       </div>
-      <p class="muted" style="margin-top:6px;" data-i18n="run_idle_desc"></p>
-      <p class="muted" style="font-size:12px; margin-top:4px;" data-i18n="run_bg_warning"></p>
-      <button class="go-circle" onclick="startRun()"><span class="display" data-i18n="run_start"></span><span style="font-size:12.5px; opacity:.7; margin-top:2px;" data-i18n="run_start_hint"></span></button>
+      <div class="gps-status-card">
+        <span style="font-size:19px; line-height:1; flex-shrink:0;" aria-hidden="true">🛰️</span>
+        <div style="min-width:0; text-align:left;">
+          <p class="gps-status-title" data-i18n="run_gps_status_title"></p>
+          <p class="gps-status-bullet" data-i18n="run_idle_desc"></p>
+          <p class="gps-status-bullet" data-i18n="run_bg_warning"></p>
+        </div>
+      </div>
+      <div class="run-idle-cta">
+        <div class="run-bg-route" aria-hidden="true"><svg viewBox="0 0 320 400" preserveAspectRatio="xMidYMid slice">
+          <path class="rbr-contour" d="M90,160 A70,70 0 0,1 230,160 L230,300 A70,70 0 0,1 90,300 Z"/>
+          <path class="rbr-contour" d="M101,160 A59,59 0 0,1 219,160 L219,300 A59,59 0 0,1 101,300 Z"/>
+          <path class="rbr-contour" d="M112,160 A48,48 0 0,1 208,160 L208,300 A48,48 0 0,1 112,300 Z"/>
+          <path class="rbr-contour" d="M123,160 A37,37 0 0,1 197,160 L197,300 A37,37 0 0,1 123,300 Z"/>
+          <path class="rbr-contour" d="M134,160 A26,26 0 0,1 186,160 L186,300 A26,26 0 0,1 134,300 Z"/>
+          <path class="rbr-route" d="M145,160 A15,15 0 0,1 175,160 L175,300 A15,15 0 0,1 145,300 Z"/>
+          <line class="rbr-finish" x1="90" y1="262" x2="145" y2="262"/>
+          <line class="rbr-finish rbr-finish-dim" x1="90" y1="254" x2="145" y2="254"/>
+        </svg></div>
+        <button class="go-circle" onclick="startRun()"><span class="display" data-i18n="run_start"></span><span style="font-size:12.5px; opacity:.7; margin-top:2px;" data-i18n="run_start_hint"></span></button>
+      </div>
       <p class="muted" id="geo-warning" style="display:none; color:var(--danger);"></p>
     </div>
 
@@ -1045,14 +1338,16 @@ try{
   </section>
 
   <section class="view" id="view-history" style="padding-bottom:180px;">
-    <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px;">
-      <div style="display:flex; align-items:center; gap:8px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:10px;">
+      <div style="display:flex; align-items:center; gap:8px; min-width:0;">
         <h2 class="display" style="font-size:25px; margin:0;" data-i18n="hist_title"></h2>
         <button onclick="openHistInfo()" style="background:none; border:1.5px solid var(--mist-dim); color:var(--mist-dim); width:19px; height:19px; border-radius:50%; font-size:11px; font-weight:800; font-style:italic; font-family:Georgia,serif; display:flex; align-items:center; justify-content:center; padding:0; cursor:pointer; flex-shrink:0; line-height:1;">i</button>
       </div>
-      <div style="text-align:right;"><div class="n mono" id="home-runs-count" style="font-size:20px; font-weight:800;">0</div><div class="l" style="font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--mist);" data-i18n="home_logged"></div></div>
+      <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
+        <div style="text-align:right;"><div class="n mono" id="home-runs-count" style="font-size:20px; font-weight:800;">0</div><div class="l" style="font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--mist);" data-i18n="home_logged"></div></div>
+        <button class="hist-add-btn" onclick="toggleManualForm()" data-i18n-aria="hist_manual_add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+      </div>
     </div>
-    <button class="btn btn-outline btn-sm" style="width:100%; margin-bottom:14px;" data-i18n="hist_manual_add" onclick="toggleManualForm()"></button>
     <div class="card" id="manual-run-card" style="display:none;">
       <h3 data-i18n="hist_manual_title"></h3>
       <div class="field"><label data-i18n="hist_manual_date"></label>
@@ -1067,13 +1362,181 @@ try{
       <div class="field"><label data-i18n="run_summary_shoe_q"></label><select id="man-shoe"></select></div>
       <button class="btn btn-primary btn-sm" style="width:100%; margin-top:6px;" data-i18n="hist_manual_save" onclick="saveManualRun()"></button>
     </div>
-    <input type="text" id="hist-search" data-i18n-ph="hist_search_ph" oninput="renderHistory()" style="width:100%; margin-bottom:14px; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:10px 12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit;">
+    <input type="text" id="hist-search" data-i18n-ph="hist_search_ph" oninput="renderHistory()" style="width:100%; margin-bottom:14px; background:var(--asphalt-2); border:1px solid var(--overlay-hairline); color:var(--chalk); padding:8px 14px; border-radius:999px; font-size:13.5px; font-family:inherit;">
     <div id="history-list"></div>
   </section>
 
   <div class="overlay" id="run-detail-modal" style="display:none;">
     <button class="week-nav-btn" onclick="closeRunDetail()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <div id="run-detail-content"></div>
+  </div>
+
+  <div class="overlay overlay-sheet" id="achievements-modal">
+    <button class="week-nav-btn" onclick="closeAchievements()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <div id="achievements-content"></div>
+  </div>
+
+  <div class="overlay" id="social-feed-modal" style="display:none;">
+    <button class="week-nav-btn" onclick="closeSocialFeed()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <div id="social-feed-content"></div>
+  </div>
+
+  <div class="overlay overlay-sheet" id="personal-data-overlay">
+    <button class="week-nav-btn" onclick="closePersonalDataOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="display" style="font-size:22px;" data-i18n="perfil_personal_title"></h2>
+    <div class="card" id="perfil-personal-card" style="margin-top:16px;">
+      <div class="metric-input-row">
+        <div class="metric-input-cell"><label data-i18n="ob_weight_label"></label><input type="number" class="metric-input" id="perfil-weight"></div>
+        <div class="metric-input-cell"><label data-i18n="ob_height_label"></label><input type="number" class="metric-input" id="perfil-height"></div>
+      </div>
+      <div class="field">
+        <label data-i18n="ob_currentkm_label"></label>
+        <input type="number" id="perfil-current-km" min="0" max="200" placeholder="0">
+        <p class="muted" style="margin-top:6px; font-size:12px;" data-i18n="perfil_current_km_hint"></p>
+      </div>
+      <div class="field">
+        <label data-i18n="ob_terrain_label"></label>
+        <div class="choice-row segmented" id="perfil-terrain-choice">
+          <div class="choice" data-v="asfalto" data-i18n="ob_terrain_asfalto"></div>
+          <div class="choice" data-v="trail" data-i18n="ob_terrain_trail"></div>
+          <div class="choice" data-v="mixto" data-i18n="ob_terrain_mixto"></div>
+        </div>
+      </div>
+      <div class="field">
+        <label data-i18n="ob_goal_label"></label>
+        <select id="perfil-goal">
+          <option value="start" data-i18n="ob_goal_start"></option>
+          <option value="5k" data-i18n="ob_goal_5k"></option>
+          <option value="10k" data-i18n="ob_goal_10k"></option>
+          <option value="15k" data-i18n="ob_goal_15k"></option>
+          <option value="21k" data-i18n="ob_goal_21k"></option>
+          <option value="42k" data-i18n="ob_goal_42k"></option>
+          <option value="ultra" data-i18n="ob_goal_ultra"></option>
+          <option value="lifestyle" data-i18n="ob_goal_lifestyle"></option>
+        </select>
+        <label style="margin-top:14px;" data-i18n="ob_racedate_label"></label>
+        <div class="date-box" onclick="openCalendar('perfil-racedate','perfil-racedate-text')"><span class="date-box-text placeholder" id="perfil-racedate-text"></span></div>
+        <input type="hidden" id="perfil-racedate">
+        <p class="muted" style="margin-top:6px;" data-i18n="ob_racedate_hint"></p>
+      </div>
+      <p class="muted" style="margin-top:10px; font-size:12.5px;" data-i18n="perfil_weeklykm_auto_note"></p>
+      <button class="btn btn-primary btn-sm perfil-save-btn" id="save-personal-btn" style="margin-top:16px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('personal')"></button>
+    </div>
+  </div>
+
+  <div class="overlay overlay-sheet" id="goals-overlay">
+    <button class="week-nav-btn" onclick="closeGoalsOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="display" style="font-size:22px;" data-i18n="perfil_goals_title"></h2>
+    <div class="card" id="perfil-goals-card" style="margin-top:16px;">
+      <p class="muted" style="margin-bottom:10px;" data-i18n="perfil_goals_desc"></p>
+      <div class="field" style="margin-top:0;">
+        <label data-i18n="perfil_weekly_goal_label"></label>
+        <input type="number" id="perfil-weekly-goal" data-i18n-ph="perfil_weekly_goal_ph">
+      </div>
+      <div class="field">
+        <label data-i18n="perfil_goal_note_label"></label>
+        <textarea id="perfil-goal-note" rows="3" data-i18n-ph="perfil_goal_note_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+      </div>
+      <button class="btn btn-outline btn-sm perfil-save-btn" id="save-goals-btn" style="margin-top:10px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('goals')"></button>
+    </div>
+  </div>
+
+  <div class="overlay overlay-sheet" id="shoes-overlay">
+    <button class="week-nav-btn" onclick="closeShoesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="display" style="font-size:22px;" data-i18n="perfil_gear"></h2>
+    <div class="card" style="margin-top:16px;">
+      <div id="shoe-list"></div>
+      <div class="add-row">
+        <input type="text" id="shoe-name" data-i18n-ph="perfil_shoe_ph">
+        <select id="shoe-terrain">
+          <option value="asfalto" data-i18n="ob_terrain_asfalto"></option>
+          <option value="trail" data-i18n="ob_terrain_trail"></option>
+          <option value="mixto" data-i18n="ob_terrain_mixto"></option>
+        </select>
+      </div>
+      <button class="btn btn-outline btn-sm" style="margin-top:10px; width:100%;" data-i18n="perfil_add_shoe" onclick="addShoe()"></button>
+    </div>
+  </div>
+
+  <div class="overlay overlay-sheet" id="event-overlay">
+    <button class="week-nav-btn" onclick="closeEventOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="display" style="font-size:22px;" data-i18n="perfil_event"></h2>
+    <div class="card" style="margin-top:16px;">
+      <div id="event-box"></div>
+      <button class="small-link" style="margin-top:10px; display:flex; align-items:center; gap:5px;" onclick="openPaceCalcModal()"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v2"/></svg></span><span data-i18n="pace_calc_open_btn"></span></button>
+      <div class="add-row" style="margin-top:10px;"><input type="text" id="ev-name" data-i18n-ph="perfil_ev_name_ph"></div>
+      <div class="add-row" style="margin-top:8px;"><input type="number" id="ev-distance" step="0.1" min="0" data-i18n-ph="perfil_ev_dist_ph"></div>
+      <div class="add-row" style="margin-top:8px;">
+        <div class="date-box" style="flex:1;" onclick="openCalendar('ev-date','ev-date-text')"><span class="date-box-text" id="ev-date-text"></span></div>
+        <input type="hidden" id="ev-date">
+        <select id="ev-type">
+          <option value="ruta" data-i18n="ev_type_ruta"></option>
+          <option value="trail" data-i18n="ev_type_trail"></option>
+          <option value="obstaculos" data-i18n="ev_type_obstaculos"></option>
+        </select>
+      </div>
+      <button class="btn btn-outline btn-sm" style="margin-top:10px; width:100%;" data-i18n="perfil_ev_save" onclick="setEvent()"></button>
+    </div>
+  </div>
+
+  <div class="overlay overlay-sheet" id="lang-overlay">
+    <button class="week-nav-btn" onclick="closeLangOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="display" style="font-size:22px;" data-i18n="perfil_lang"></h2>
+    <div class="card" style="margin-top:16px;">
+      <div class="choice-row" id="perfil-lang-choice" style="flex-wrap:wrap;">
+        <div class="choice" data-v="es">Español</div>
+        <div class="choice" data-v="en">English</div>
+        <div class="choice" data-v="pt">Português</div>
+        <div class="choice" data-v="fr">Français</div>
+        <div class="choice" data-v="it">Italiano</div>
+        <div class="choice" data-v="de">Deutsch</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay overlay-sheet" id="days-overlay">
+    <button class="week-nav-btn" onclick="closeDaysOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="display" style="font-size:22px;" data-i18n="perfil_days_title"></h2>
+    <div class="card" id="perfil-days-card" style="margin-top:16px;">
+      <div class="day-picker" id="perfil-days"></div>
+      <button class="btn btn-outline btn-sm perfil-save-btn" id="save-days-btn" style="margin-top:12px; width:100%;" data-i18n="perfil_days_save" onclick="confirmAndSave('days')"></button>
+    </div>
+  </div>
+
+  <div class="overlay overlay-sheet" id="zones-overlay">
+    <button class="week-nav-btn" onclick="closeZonesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+      <h2 class="display" style="font-size:22px;" data-i18n="perfil_zones_title"></h2>
+      <button class="info-btn" onclick="openZonesInfo()" data-i18n-aria="aria_zones_info"><span class="icon-sq" style="width:19px; height:19px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span></button>
+    </div>
+    <div class="card" id="perfil-zones-card" style="margin-top:16px;">
+      <p class="muted" id="zones-status" data-i18n="perfil_zones_manual_note"></p>
+      <div id="zones-list" style="margin-top:8px;"></div>
+      <button class="btn btn-outline btn-sm perfil-save-btn" id="save-zones-btn" style="margin-top:12px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('zones')"></button>
+    </div>
+  </div>
+
+  <div class="overlay overlay-sheet" id="pain-overlay">
+    <button class="week-nav-btn" onclick="closePainOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <h2 class="display" style="font-size:22px; margin:0;" data-i18n="pain_list_title"></h2>
+      <button onclick="openPainInfo()" style="background:none; border:1.5px solid var(--mist-dim); color:var(--mist-dim); width:19px; height:19px; border-radius:50%; font-size:11px; font-weight:800; font-style:italic; font-family:Georgia,serif; display:flex; align-items:center; justify-content:center; padding:0; cursor:pointer; flex-shrink:0; line-height:1;">i</button>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <div id="pain-log-list"></div>
+      <button class="btn btn-outline btn-sm" style="margin-top:12px; width:100%;" data-i18n="pain_add_btn" onclick="openPainModal()"></button>
+    </div>
+  </div>
+
+  <div class="rd-video-overlay" id="rd-video-overlay">
+    <button onclick="closeDynamicVideo()" data-i18n-aria="aria_back" style="position:absolute; top:calc(16px + var(--safe-top)); right:20px; width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.12); border:none; color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:2;"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span></button>
+    <canvas id="rd-video-canvas" width="720" height="1280" style="display:none;"></canvas>
+    <video id="rd-video-preview" playsinline controls style="display:none; max-width:100%; max-height:70vh; border-radius:14px;"></video>
+    <div class="rd-video-progress" id="rd-video-progress"></div>
+    <div class="rd-video-actions" id="rd-video-actions" style="display:none;">
+      <button class="btn btn-outline" style="width:auto; flex:1;" onclick="closeDynamicVideo()" data-i18n="rd_video_close"></button>
+      <button class="btn btn-primary" style="width:auto; flex:1;" onclick="downloadDynamicVideo()" data-i18n="rd_video_download"></button>
+    </div>
   </div>
 
   <div class="overlay" id="edit-run-modal" style="display:none; z-index:55;">
@@ -1152,6 +1615,51 @@ try{
     <button class="btn btn-primary" style="width:100%; margin-top:28px;" onclick="closePainInfo()" data-i18n="hist_info_ok"></button>
   </div>
 
+  <div class="overlay" id="whats-new-modal" style="display:none; z-index:60;">
+    <h2 class="display" style="font-size:22px;" data-i18n="whats_new_title"></h2>
+    <ul id="whats-new-list" style="margin-top:18px; padding-left:20px; display:flex; flex-direction:column; gap:12px; font-size:14.5px; line-height:1.5; color:var(--chalk);"></ul>
+    <button class="btn btn-primary" style="width:100%; margin-top:24px;" onclick="closeWhatsNew()" data-i18n="whats_new_close"></button>
+  </div>
+
+  <div class="overlay" id="pace-calc-modal" style="display:none; z-index:58;">
+    <h2 class="display" style="font-size:22px;" data-i18n="pace_calc_title"></h2>
+    <p class="lead" data-i18n="pace_calc_subtitle"></p>
+    <div class="field" style="margin-top:20px;">
+      <label data-i18n="pace_calc_distance_label"></label>
+      <select id="pc-distance" onchange="onPaceCalcDistanceChange()">
+        <option value="5">5 km</option>
+        <option value="10">10 km</option>
+        <option value="15">15 km</option>
+        <option value="21.0975">21.1 km</option>
+        <option value="42.195">42.2 km</option>
+        <option value="custom" data-i18n="pace_calc_custom_option"></option>
+      </select>
+    </div>
+    <div class="field" id="pc-custom-km-field" style="display:none;">
+      <label data-i18n="pace_calc_custom_km_label"></label>
+      <input type="number" id="pc-custom-km" step="0.1" min="0.1" oninput="renderPaceCalcResults()">
+    </div>
+    <div class="field">
+      <label data-i18n="pace_calc_time_label"></label>
+      <div class="time-picker-row">
+        <div class="tp-col"><select id="pc-time-h" onchange="renderPaceCalcResults()"></select><span class="tp-unit" data-i18n="time_unit_h"></span></div>
+        <span class="tp-colon">:</span>
+        <div class="tp-col"><select id="pc-time-m" onchange="renderPaceCalcResults()"></select><span class="tp-unit" data-i18n="time_unit_min"></span></div>
+        <span class="tp-colon">:</span>
+        <div class="tp-col"><select id="pc-time-s" onchange="renderPaceCalcResults()"></select><span class="tp-unit" data-i18n="time_unit_sec"></span></div>
+      </div>
+    </div>
+    <div class="field">
+      <label data-i18n="pace_calc_strategy_label"></label>
+      <select id="pc-strategy" onchange="renderPaceCalcResults()">
+        <option value="even" data-i18n="pace_calc_strategy_even"></option>
+        <option value="negative" data-i18n="pace_calc_strategy_negative"></option>
+      </select>
+    </div>
+    <div id="pc-results"></div>
+    <button class="btn btn-outline" style="width:100%; margin-top:16px;" onclick="closePaceCalcModal()" data-i18n="hist_info_ok"></button>
+  </div>
+
   <div class="overlay" id="plan-change-timing-modal" style="display:none; z-index:58;">
     <h2 class="display" style="font-size:22px;" data-i18n="plan_timing_title"></h2>
     <p class="lead" data-i18n="plan_timing_subtitle"></p>
@@ -1221,114 +1729,100 @@ try{
       </div>
     </div>
 
-    <div class="card">
-      <h3 data-i18n="perfil_personal_title"></h3>
-      <div class="two-col">
-        <div class="field" style="margin-top:0;"><label data-i18n="ob_weight_label"></label><input type="number" id="perfil-weight"></div>
-        <div class="field" style="margin-top:0;"><label data-i18n="ob_height_label"></label><input type="number" id="perfil-height"></div>
-      </div>
-      <div class="field">
-        <label data-i18n="ob_terrain_label"></label>
-        <div class="choice-row" id="perfil-terrain-choice">
-          <div class="choice" data-v="asfalto" data-i18n="ob_terrain_asfalto"></div>
-          <div class="choice" data-v="trail" data-i18n="ob_terrain_trail"></div>
-          <div class="choice" data-v="mixto" data-i18n="ob_terrain_mixto"></div>
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openAchievements()">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 2.5 10.5 8M15.5 2.5 13.5 8"/><circle cx="12" cy="14.5" r="6.5"/><path d="M12 11.2l1.1 2.2 2.4.35-1.75 1.7.4 2.4-2.15-1.15-2.15 1.15.4-2.4-1.75-1.7 2.4-.35z" fill="currentColor" stroke="none"/></svg></span>
+        <div>
+          <h3 style="margin:0 0 2px;" data-i18n="ach_open_title"></h3>
+          <p class="muted" style="margin:0; font-size:12.5px;" id="perfil-ach-summary"></p>
         </div>
       </div>
-      <div class="field">
-        <label data-i18n="ob_goal_label"></label>
-        <select id="perfil-goal" onchange="handleGoalChange(this.value)">
-          <option value="start" data-i18n="ob_goal_start"></option>
-          <option value="5k" data-i18n="ob_goal_5k"></option>
-          <option value="10k" data-i18n="ob_goal_10k"></option>
-          <option value="15k" data-i18n="ob_goal_15k"></option>
-          <option value="21k" data-i18n="ob_goal_21k"></option>
-          <option value="42k" data-i18n="ob_goal_42k"></option>
-          <option value="ultra" data-i18n="ob_goal_ultra"></option>
-          <option value="lifestyle" data-i18n="ob_goal_lifestyle"></option>
-        </select>
-        <div id="perfil-goal-km-check" style="display:none; margin-top:14px;">
-          <label data-i18n="ob_currentkm_label"></label>
-          <input type="number" id="perfil-current-km-check" placeholder="20" min="0" max="200">
-          <p class="muted" style="margin-top:6px; font-size:12px;" data-i18n="perfil_goal_km_check_hint"></p>
+      <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
+    </div>
+
+    <!-- Sección social (amigos) oculta por ahora a pedido del usuario -- el markup y la
+         lógica (renderSocialSection, saveUsername, followByUsername, etc.) se dejan intactos
+         para poder reactivarla más adelante sacando este display:none. -->
+    <div class="card" id="social-section-card" style="display:none;">
+      <h3 data-i18n="social_section_title"></h3>
+      <div id="social-section-body"></div>
+    </div>
+
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openPersonalDataOverlay()">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg></span>
+        <div>
+          <h3 style="margin:0 0 2px;" data-i18n="perfil_personal_title"></h3>
+          <p class="muted" style="margin:0; font-size:12.5px;" data-i18n="perfil_personal_desc"></p>
         </div>
-        <label style="margin-top:14px;" data-i18n="ob_racedate_label"></label>
-        <div class="date-box" onclick="openCalendar('perfil-racedate','perfil-racedate-text')"><span class="date-box-text placeholder" id="perfil-racedate-text"></span></div>
-        <input type="hidden" id="perfil-racedate">
-        <p class="muted" style="margin-top:6px;" data-i18n="ob_racedate_hint"></p>
       </div>
-      <p class="muted" style="margin-top:10px; font-size:12.5px;" data-i18n="perfil_weeklykm_auto_note"></p>
-      <button class="btn btn-outline btn-sm" id="save-personal-btn" style="margin-top:10px; width:100%;" data-i18n="save_word" onclick="savePersonalData()"></button>
+      <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
-    <div class="card">
-      <h3 data-i18n="perfil_goals_title"></h3>
-      <p class="muted" style="margin-bottom:10px;" data-i18n="perfil_goals_desc"></p>
-      <div class="field" style="margin-top:0;">
-        <label data-i18n="perfil_weekly_goal_label"></label>
-        <input type="number" id="perfil-weekly-goal" data-i18n-ph="perfil_weekly_goal_ph">
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openGoalsOverlay()">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg></span>
+        <div>
+          <h3 style="margin:0 0 2px;" data-i18n="perfil_goals_title"></h3>
+          <p class="muted" style="margin:0; font-size:12.5px;" data-i18n="perfil_goals_desc"></p>
+        </div>
       </div>
-      <div class="field">
-        <label data-i18n="perfil_goal_note_label"></label>
-        <textarea id="perfil-goal-note" rows="3" data-i18n-ph="perfil_goal_note_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
-      </div>
-      <button class="btn btn-outline btn-sm" id="save-goals-btn" style="margin-top:10px; width:100%;" data-i18n="save_word" onclick="saveGoals()"></button>
+      <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
-    <div class="card">
-      <h3 data-i18n="perfil_days_title"></h3>
-      <div class="day-picker" id="perfil-days"></div>
-      <button class="btn btn-outline btn-sm" id="save-days-btn" style="margin-top:12px; width:100%;" data-i18n="perfil_days_save" onclick="saveTrainingDays()"></button>
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openDaysOverlay()">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/></svg></span>
+        <div>
+          <h3 style="margin:0 0 2px;" data-i18n="perfil_days_title"></h3>
+          <p class="muted" style="margin:0; font-size:12.5px;" id="perfil-days-summary"></p>
+        </div>
+      </div>
+      <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
-    <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-        <h3 data-i18n="perfil_zones_title" style="margin:0;"></h3>
-        <button class="info-btn" onclick="openZonesInfo()" data-i18n-aria="aria_zones_info"><span class="icon-sq" style="width:19px; height:19px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span></button>
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openZonesOverlay()">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span>
+        <div>
+          <h3 style="margin:0 0 2px;" data-i18n="perfil_zones_title"></h3>
+          <p class="muted" style="margin:0; font-size:12.5px;" id="perfil-zones-summary"></p>
+        </div>
       </div>
-      <p class="muted" id="zones-status" data-i18n="perfil_zones_manual_note"></p>
-      <div id="zones-list" style="margin-top:8px;"></div>
-      <button class="btn btn-outline btn-sm" id="save-zones-btn" style="margin-top:12px; width:100%;" data-i18n="save_word" onclick="saveCustomZones()"></button>
+      <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
-    <div class="card">
-      <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
-        <h3 style="margin:0;" data-i18n="pain_list_title"></h3>
-        <button onclick="openPainInfo()" style="background:none; border:1.5px solid var(--mist-dim); color:var(--mist-dim); width:19px; height:19px; border-radius:50%; font-size:11px; font-weight:800; font-style:italic; font-family:Georgia,serif; display:flex; align-items:center; justify-content:center; padding:0; cursor:pointer; flex-shrink:0; line-height:1;">i</button>
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openPainOverlay()">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.5-9.5-9C.5 8 2 4.5 5.5 4.5 8 4.5 9.5 6 12 8.5 14.5 6 16 4.5 18.5 4.5 22 4.5 23.5 8 21.5 12c-2.5 4.5-9.5 9-9.5 9z"/><path d="M6 12.5h2.5l1.5-3 2 5 1.5-2.5H16"/></svg></span>
+        <div>
+          <h3 style="margin:0 0 2px;" data-i18n="pain_list_title"></h3>
+          <p class="muted" style="margin:0; font-size:12.5px;" id="perfil-pain-summary"></p>
+        </div>
       </div>
-      <div id="pain-log-list"></div>
-      <button class="btn btn-outline btn-sm" style="margin-top:12px; width:100%;" data-i18n="pain_add_btn" onclick="openPainModal()"></button>
+      <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
-    <div class="card">
-      <h3 data-i18n="perfil_gear"></h3>
-      <div id="shoe-list"></div>
-      <div class="add-row">
-        <input type="text" id="shoe-name" data-i18n-ph="perfil_shoe_ph">
-        <select id="shoe-terrain">
-          <option value="asfalto" data-i18n="ob_terrain_asfalto"></option>
-          <option value="trail" data-i18n="ob_terrain_trail"></option>
-          <option value="mixto" data-i18n="ob_terrain_mixto"></option>
-        </select>
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openShoesOverlay()">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M3.3 15.2 C2.6 13 2.8 10.5 3.6 9.3 C4 9 4.2 8.8 4.6 9 C5.2 9.3 5.8 9.8 6.2 10.4 C6.9 9.9 7.7 9.2 8.6 9 C11 9.6 15 11 18.5 13.6 C19.6 14.3 20.4 15 20.8 16 L21 16 Q22.3 16 22.3 17.2 L22.3 18 Q22.3 19.3 21 19.3 L2.8 19.3 Q1.6 19.3 1.6 18 L1.6 16.4 Q1.6 15.2 2.8 15.2 Z"/></svg></span>
+        <div>
+          <h3 style="margin:0 0 2px;" data-i18n="perfil_gear"></h3>
+          <p class="muted" style="margin:0; font-size:12.5px;" id="perfil-shoes-summary"></p>
+        </div>
       </div>
-      <button class="btn btn-outline btn-sm" style="margin-top:10px; width:100%;" data-i18n="perfil_add_shoe" onclick="addShoe()"></button>
+      <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
-    <div class="card">
-      <h3 data-i18n="perfil_event"></h3>
-      <div id="event-box"></div>
-      <div class="add-row" style="margin-top:10px;"><input type="text" id="ev-name" data-i18n-ph="perfil_ev_name_ph"></div>
-      <div class="add-row" style="margin-top:8px;"><input type="number" id="ev-distance" step="0.1" min="0" data-i18n-ph="perfil_ev_dist_ph"></div>
-      <div class="add-row" style="margin-top:8px;">
-        <div class="date-box" style="flex:1;" onclick="openCalendar('ev-date','ev-date-text')"><span class="date-box-text" id="ev-date-text"></span></div>
-        <input type="hidden" id="ev-date">
-        <select id="ev-type">
-          <option value="ruta" data-i18n="ev_type_ruta"></option>
-          <option value="trail" data-i18n="ev_type_trail"></option>
-          <option value="obstaculos" data-i18n="ev_type_obstaculos"></option>
-        </select>
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openEventOverlay()">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4.5s2-1.3 4.5-1.3 3.5 1.5 6 1.5 3.5-1 3.5-1v9s-1.5 1-3.5 1-3.5-1.5-6-1.5-4.5 1.3-4.5 1.3z"/></svg></span>
+        <div>
+          <h3 style="margin:0 0 2px;" data-i18n="perfil_event"></h3>
+          <p class="muted" style="margin:0; font-size:12.5px;" id="perfil-event-summary"></p>
+        </div>
       </div>
-      <button class="btn btn-outline btn-sm" style="margin-top:10px; width:100%;" data-i18n="perfil_ev_save" onclick="setEvent()"></button>
+      <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
     <div class="card">
@@ -1345,6 +1839,21 @@ try{
     </div>
 
     <div class="card">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+        <span class="icon-sq" style="width:22px; height:22px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v11H8l-4 4v-4H4z"/></svg></span>
+        <h3 style="margin:0;" data-i18n="perfil_coach_title"></h3>
+      </div>
+      <p class="muted" style="margin:0 0 10px;" data-i18n="perfil_coach_intro"></p>
+      <ul style="margin:0; padding-left:18px; color:var(--mist); font-size:13px; line-height:1.7;">
+        <li data-i18n="perfil_coach_cap_1"></li>
+        <li data-i18n="perfil_coach_cap_2"></li>
+        <li data-i18n="perfil_coach_cap_3"></li>
+        <li data-i18n="perfil_coach_cap_4"></li>
+        <li data-i18n="perfil_coach_cap_5"></li>
+      </ul>
+    </div>
+
+    <div class="card">
       <div style="display:flex; align-items:center; justify-content:space-between;">
         <div style="flex:1; padding-right:12px;">
           <h3 style="margin-bottom:2px;" data-i18n="perfil_theme_title"></h3>
@@ -1357,29 +1866,36 @@ try{
       </div>
     </div>
 
-    <div class="card">
-      <h3 data-i18n="perfil_lang"></h3>
-      <div class="choice-row" id="perfil-lang-choice" style="flex-wrap:wrap;">
-        <div class="choice" data-v="es">Español</div>
-        <div class="choice" data-v="en">English</div>
-        <div class="choice" data-v="pt">Português</div>
-        <div class="choice" data-v="fr">Français</div>
-        <div class="choice" data-v="it">Italiano</div>
-        <div class="choice" data-v="de">Deutsch</div>
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" role="button" tabindex="0" onclick="openLangOverlay()">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M2.5 12h19M12 2.5c2.5 2.6 4 6 4 9.5s-1.5 6.9-4 9.5c-2.5-2.6-4-6-4-9.5s1.5-6.9 4-9.5z"/></svg></span>
+        <div>
+          <h3 style="margin:0 0 2px;" data-i18n="perfil_lang"></h3>
+          <p class="muted" style="margin:0; font-size:12.5px;" id="perfil-lang-summary"></p>
+        </div>
       </div>
+      <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
     <div class="card">
       <h3 data-i18n="perfil_units"></h3>
-      <div class="choice-row" id="units-toggle">
+      <div class="choice-row segmented" id="units-toggle">
         <div class="choice active" data-v="metric" data-i18n="perfil_units_metric"></div>
         <div class="choice" data-v="imperial" data-i18n="perfil_units_imperial"></div>
       </div>
     </div>
 
     <div class="card">
+      <h3 data-i18n="perfil_trainby_title"></h3>
+      <div class="choice-row segmented" id="perfil-trainby-toggle">
+        <div class="choice active" data-v="distance" data-i18n="ob_trainby_distance"></div>
+        <div class="choice" data-v="time" data-i18n="ob_trainby_time"></div>
+      </div>
+    </div>
+
+    <div class="card">
       <h3 data-i18n="perfil_voice_label"></h3>
-      <div class="choice-row" id="voice-toggle">
+      <div class="choice-row segmented" id="voice-toggle">
         <div class="choice active" data-v="on" data-i18n="word_yes"></div>
         <div class="choice" data-v="off" data-i18n="word_no"></div>
       </div>
@@ -1392,8 +1908,11 @@ try{
       <p id="strava-sync-note" class="muted" style="margin:8px 0 0; font-size:12px; display:none;"></p>
       <button class="btn btn-outline btn-sm" id="strava-connect-btn" style="margin-top:10px; width:100%;" onclick="connectStrava()"></button>
       <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
-        <p style="font-weight:700; margin-bottom:8px;" data-i18n="perfil_remember_title"></p>
-        <ul style="margin:0; padding-left:18px; color:var(--mist); font-size:13px; line-height:1.7;">
+        <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleStravaRemember()">
+          <span data-i18n="perfil_remember_title"></span>
+          <span class="icon-sq" id="strava-remember-chevron" style="width:13px; height:13px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+        </button>
+        <ul id="strava-remember-list" style="display:none; margin:10px 0 0; padding-left:18px; color:var(--mist); font-size:13px; line-height:1.7;">
           <li data-i18n="perfil_remember_1"></li>
           <li data-i18n="perfil_remember_2"></li>
           <li data-i18n="perfil_remember_3"></li>
@@ -1427,11 +1946,13 @@ try{
   <nav class="tabbar" id="tabbar" style="display:none;">
     <button class="nav-btn active" data-view="inicio" onclick="showView('inicio')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-7 9 7"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg><span data-i18n="nav_home"></span></button>
     <button class="nav-btn" data-view="plan" onclick="showView('plan')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/></svg><span data-i18n="nav_plan"></span></button>
-    <button class="nav-btn" data-view="correr" onclick="showView('correr')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v4.5l3 2"/></svg><span data-i18n="nav_run"></span></button>
+    <button class="nav-btn nav-btn-primary" data-view="correr" onclick="showView('correr')" data-i18n-aria="nav_run"><span class="nav-primary-circle"><svg viewBox="77 6 233 535" fill="currentColor" fill-rule="evenodd"><path d="M118,484 L121,495 L144,515 L175,526 L216,524 L247,499 L211,476 L179,484 L156,471 Z M216,456 L217,468 L253,487 L261,469 L258,465 L223,455 Z M203,454 L193,462 L193,467 L192,468 L192,473 L193,474 L197,473 L200,470 L202,461 L204,458 Z M169,452 L167,455 L168,461 L172,468 L175,471 L177,471 L178,469 L177,457 L171,452 Z M113,469 L158,458 L157,447 L115,446 Z M208,430 L203,430 L197,433 L195,436 L195,442 L196,443 L199,443 L206,440 L208,438 Z M221,424 L220,442 L254,451 L263,450 L266,433 Z M171,424 L168,430 L170,436 L176,440 L181,441 L182,439 L181,431 L175,424 Z M113,431 L114,433 L157,433 L160,429 L160,418 L136,413 L118,413 Z M212,395 L207,399 L203,399 L199,401 L198,413 L200,416 L204,416 L213,411 Z M176,390 L172,395 L172,405 L174,409 L179,413 L185,414 L186,399 Z M225,386 L224,412 L267,418 L269,390 Z M128,370 L119,395 L120,400 L162,402 L165,383 L163,375 Z M242,270 L237,295 L279,316 L286,282 Z M159,266 L116,286 L129,314 L170,290 Z M192,252 L189,252 L172,263 L172,267 L180,282 L194,270 Z M205,249 L204,269 L227,286 L231,267 Z M295,232 L290,229 L249,230 L247,251 L251,255 L290,259 Z M146,230 L101,236 L108,267 L153,253 Z M189,209 L161,232 L166,251 L190,231 L191,212 Z M203,207 L202,228 L224,243 L236,246 L237,225 Z M93,188 L95,220 L141,215 L138,189 Z M293,189 L285,186 L250,194 L249,214 L292,214 Z M186,169 L152,197 L155,215 L187,192 Z M198,166 L200,185 L235,208 L236,183 L202,165 Z M286,144 L277,143 L245,155 L247,178 L287,171 L290,163 Z M98,140 L92,166 L95,170 L122,174 L138,172 L140,149 Z M183,126 L153,150 L153,176 L184,149 Z M196,124 L197,147 L232,164 L231,150 L224,136 Z M267,96 L231,115 L240,139 L277,123 Z M109,93 L101,122 L143,131 L149,108 Z M179,92 L171,96 L164,106 L159,121 L160,125 L173,111 L182,105 L182,98 Z M194,90 L193,103 L218,118 L213,106 L207,98 L199,91 Z M114,74 L154,95 L172,79 L196,77 L224,101 L261,79 L239,47 L190,21 L172,21 L139,40 Z"/></svg></span></button>
     <button class="nav-btn" data-view="history" onclick="showView('history')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12a8 8 0 1 0 3-6.3"/><path d="M4 5v4h4"/><path d="M12 8v4l3 2"/></svg><span data-i18n="nav_history"></span></button>
-    <button class="nav-btn" data-view="coach" onclick="showView('coach')"><span class="nav-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5.5h16v11H8l-4 4v-4H4z"/></svg><span class="nav-badge-dot" id="chat-tab-badge"></span></span><span data-i18n="nav_coach"></span></button>
     <button class="nav-btn" data-view="perfil" onclick="showView('perfil')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 20c1.5-4 5-5.5 7.5-5.5s6 1.5 7.5 5.5"/></svg><span data-i18n="nav_profile"></span></button>
   </nav>
+  <div class="coach-fab-wrap" id="coach-fab-wrap" style="display:none;">
+    <button class="coach-fab" onclick="showView('coach')" data-i18n-aria="nav_coach"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5.5h16v11H8l-4 4v-4H4z"/></svg><span class="nav-badge-dot" id="chat-tab-badge"></span></button>
+  </div>
 </div>
 <!-- Spacer invisible que garantiza SIEMPRE unos pocos px de overflow real en el
      documento. Es clave para forceFixedLayoutReflow() en app.js: ese truco necesita
