@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T19:10:00Z';
+const APP_VERSION = '2026-09-08T19:35:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -33,6 +33,7 @@ const CHANGELOG = [
   {id:'2026-09-persist-race-fix', key:'changelog_persist_race_fix'},
   {id:'2026-09-coach-schedule-undo', key:'changelog_coach_schedule_undo'},
   {id:'2026-09-reschedule-skip-cancelled', key:'changelog_reschedule_skip_cancelled'},
+  {id:'2026-09-run-recovery-duration-fix', key:'changelog_run_recovery_duration_fix'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -4182,7 +4183,8 @@ function saveRunProgress(){
       points: tracker.points,
       distanceKm: tracker.distanceKm,
       hrLog: tracker.hrLog,
-      lastAnnouncedKm: tracker.lastAnnouncedKm
+      lastAnnouncedKm: tracker.lastAnnouncedKm,
+      elapsedSec: tracker.elapsedSec
     }));
   }catch(e){}
 }
@@ -4497,8 +4499,19 @@ function startRun(){
   actuallyStartRun(null);
 }
 function actuallyStartRun(saved){
+  // Ojo con elapsedSec al recuperar una carrera guardada: ANTES se recalculaba como
+  // Date.now()-saved.startedAt, o sea el reloj de pared completo desde que arrancó la
+  // carrera -- lo cual incluía CUALQUIER rato con la app cerrada (que es exactamente el
+  // caso que esta recuperación existe para cubrir) como si hubiera sido tiempo corriendo.
+  // Cerrar la app 2 horas a mitad de una carrera y recuperarla después inflaba la duración
+  // guardada en 2 horas, arruinando el ritmo/las calorías de esa carrera para siempre.
+  // distanceKm/points/hrLog ya se restauraban tal cual quedaron guardados (sin intentar
+  // "adivinar" nada del tiempo cerrado, porque no se grabó ningún punto de GPS durante ese
+  // rato) -- elapsedSec ahora hace lo mismo: se restaura tal cual, sin extrapolar por reloj
+  // de pared. El único margen de error es el intervalo entre el último guardado (cada fix
+  // de GPS, y como mucho cada 15s por el timer) y el cierre real, siempre chico.
   tracker = saved
-    ? {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:Math.max(0,Math.floor((Date.now()-saved.startedAt)/1000)), running:true, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt, autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null}
+    ? {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:saved.elapsedSec||0, running:true, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt, autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null}
     : {watchId:null, timerId:null, points:[], distanceKm:0, elapsedSec:0, running:true, hrLog:[], lastAnnouncedKm:0, startedAt:Date.now(), autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null};
   requestWakeLock();
   document.getElementById('runIdle').style.display='none';
@@ -4579,6 +4592,11 @@ function togglePause(){
   }
   document.getElementById('pauseBtn').textContent = tracker.running? t('run_pause') : t('run_resume');
   updateRecordingLabel();
+  // Guardamos el progreso justo al pausar/reanudar a mano -- si la app se cierra
+  // segundos después de tocar "Pausar" (llamada, se apaga el teléfono, etc.), el
+  // elapsedSec recuperado más tarde queda lo más cerca posible del momento real de la
+  // pausa, en vez de depender de que llegue el próximo fix de GPS o el timer de 15s.
+  saveRunProgress();
 }
 function stopRun(){
   clearInterval(tracker.timerId);

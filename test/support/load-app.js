@@ -178,8 +178,14 @@ function loadApp(opts) {
   // es un `let` de nivel superior, así que (a diferencia de `state`, un objeto) no alcanza con
   // reasignar una propiedad desde afuera: hace falta esta función, evaluada en el mismo scope
   // léxico que el resto de app.js, para poder tocar esa variable de verdad.
+  // getTracker/setTracker: mismo motivo -- `tracker` es un `let` de nivel superior que además
+  // se REASIGNA entero (no solo se le mutan propiedades) en actuallyStartRun/stopRun, así que
+  // ni siquiera copiarlo una vez al sandbox alcanzaría (quedaría apuntando al objeto viejo tras
+  // la reasignación). Sirve para probar saveRunProgress/readRunProgress sin tener que llamar a
+  // actuallyStartRun de verdad (que necesita geolocalización, mapa de Leaflet, etc. -- nada de
+  // eso existe en este sandbox mínimo).
   vm.runInContext(
-    'this.__exposed = { state, DAY_KEYS, lang, setCurrentUserId(v){ currentUserId = v; } };',
+    'this.__exposed = { state, DAY_KEYS, lang, setCurrentUserId(v){ currentUserId = v; }, getTracker(){ return tracker; }, setTracker(v){ tracker = v; } };',
     sandbox,
     { filename: 'expose-internals.js' }
   );
