@@ -4,3 +4,8 @@
 # de mobile/ (config de Capacitor, README) sigue su propio ciclo de vida aparte del sitio
 # web y no se gestiona desde este repo.
 mobile/
+
+# scratch/ es material descartable para responder preguntas puntuales (ej. mockups
+# armados para mostrar como se ve algo) -- no es parte de la app ni un deliverable,
+# asi que no tiene sentido versionarlo.
+scratch/
