@@ -864,6 +864,22 @@ document.getElementById('ob-runnertype').addEventListener('click', e=>{
   document.getElementById('ob-currentkm-wrap').style.display = isActive?'block':'none';
   document.getElementById('ob-newrunner-note').style.display = isActive?'none':'block';
 });
+// .choice/.day-pill son divs clickeables sin equivalente de teclado en ningun lado de la
+// app (a diferencia de swipe-action-delete, que si tiene role="button"/tabindex) -- un
+// usuario que navega solo con teclado o lector de pantalla no puede completar el
+// onboarding ni tocar el check-in de "como te sentis" en Inicio. Se agrega el mismo
+// tratamiento de forma centralizada en vez de repetirlo div por div.
+document.querySelectorAll('.choice, .day-pill').forEach(el=>{
+  if(!el.hasAttribute('tabindex')) el.setAttribute('tabindex','0');
+  if(!el.hasAttribute('role')) el.setAttribute('role','button');
+});
+document.addEventListener('keydown', e=>{
+  if(e.key!=='Enter' && e.key!==' ') return;
+  const el = e.target;
+  if(!(el.classList && (el.classList.contains('choice') || el.classList.contains('day-pill')))) return;
+  e.preventDefault();
+  el.click();
+});
 document.getElementById('voice-toggle').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('voice-toggle').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
@@ -891,7 +907,7 @@ function populateOnboardDays(){
 function renderPerfilDays(){
   const selected = state.profile.trainingDays || [];
   document.getElementById('perfil-days').innerHTML = DAY_KEYS.map(d=>
-    `<div class="day-pill${selected.includes(d)?' active':''}" data-v="${d}">${t('day_'+d).slice(0,3)}</div>`).join('');
+    `<div class="day-pill${selected.includes(d)?' active':''}" data-v="${d}" role="button" tabindex="0">${t('day_'+d).slice(0,3)}</div>`).join('');
   const daysSummaryEl = document.getElementById('perfil-days-summary');
   if(daysSummaryEl) daysSummaryEl.textContent = DAY_KEYS.filter(d=>selected.includes(d)).map(d=>t('day_'+d)).join(', ');
 }
@@ -1255,7 +1271,7 @@ function calSelectDay(day){
   if(calTargetInputId === 'perfil-racedate') markPerfilDirty('personal'); // set vía JS, no dispara 'change'
   closeCalendar();
 }
-setupDateBox('ob-birth','ob-birth-text');
+setupDateBox('ob-birth','ob-birth-text','date_placeholder');
 setupDateBox('ob-racedate','ob-racedate-text','date_placeholder');
 setupDateBox('perfil-racedate','perfil-racedate-text','date_placeholder');
 setupDateBox('man-date','man-date-text');
@@ -1297,7 +1313,7 @@ async function finishOnboard(){
   const name = document.getElementById('ob-name').value.trim() || 'Runner';
   const weight = parseFloat(document.getElementById('ob-weight').value) || 70;
   const height = parseFloat(document.getElementById('ob-height').value) || 170;
-  const birth = document.getElementById('ob-birth').value;
+  const birth = document.getElementById('ob-birth').value || '1995-01-01';
   const runnerType = document.querySelector('#ob-runnertype .choice.active').dataset.v;
   const currentWeeklyKm = runnerType==='active' ? (parseFloat(document.getElementById('ob-currentkm').value) || 0) : 0;
   const terrain = document.querySelector('#ob-terrain .choice.active').dataset.v;
@@ -2448,6 +2464,16 @@ function rescheduleToday(targetDayKey){
 function renderHome(){
   renderDailyTip();
   renderRaceTip();
+  // La card de tips de carrera solo tiene sentido si hay una carrera cargada -- antes se
+  // mostraba siempre, incluso para quien eligio un objetivo "salud y estilo de vida" sin
+  // fecha puntual, dandole consejos de "que comer 2 dias antes de tu carrera" a alguien
+  // que no tiene ninguna.
+  document.getElementById('home-race-tips-card').style.display = state.event ? '' : 'none';
+  // install-help-card (el acordeon de "como instalar la app") no tenia gating: quedaba
+  // visible para siempre, incluso ya instalada y corriendo en modo standalone -- mismo
+  // chequeo que ya usa install-banner mas arriba (isRunningStandalone()).
+  const installHelpCard = document.getElementById('install-help-card');
+  if(installHelpCard) installHelpCard.style.display = isRunningStandalone() ? 'none' : '';
   document.getElementById('home-name').textContent = state.profile.name;
   document.getElementById('headerDate').textContent = new Date().toLocaleDateString(LOCALE_MAP[lang],{weekday:'short',day:'numeric',month:'short'});
 
@@ -2592,7 +2618,7 @@ function renderHome(){
   const load = calcTrainingLoad();
   if(load){
     loadCard.style.display = 'block';
-    const tagClassMap = {low:'tag-soon', optimal:'tag-mixto', caution:'tag-load-caution', risk:'tag-load-risk'};
+    const tagClassMap = {low:'tag-soon', optimal:'tag-asfalto', caution:'tag-load-caution', risk:'tag-load-risk'};
     const tag = document.getElementById('load-tag');
     tag.className = 'tag ' + tagClassMap[load.level];
     tag.textContent = t('home_load_'+load.level);

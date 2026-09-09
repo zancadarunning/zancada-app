@@ -350,8 +350,20 @@
   .card h3{font-size:11.5px; text-transform:uppercase; letter-spacing:.09em; color:var(--mist); font-weight:700; margin-bottom:12px;}
   .muted{color:var(--mist); font-size:13.5px; line-height:1.5; white-space:pre-line;}
 
+  /* Encabezados de zona en Inicio (Hoy / Esta semana / Más) -- separan visualmente lo
+     accionable de hoy de lo informativo/pasivo, en vez de una sola fila de cards del
+     mismo peso. Reutiliza la misma receta tipográfica que .card h3 (eyebrow uppercase),
+     asi que se lee como parte del mismo sistema, no como un componente nuevo. */
+  .home-section-label{font-size:11px; text-transform:uppercase; letter-spacing:.09em; color:var(--mist-dim); font-weight:700; margin:26px 4px 10px;}
+  .home-section-label:first-of-type{margin-top:16px;}
+  /* Cards "quietas" para la zona Más (tips, ayuda de instalación): mismo color/radio que
+     .card para seguir leyéndose como parte del mismo sistema, pero sin la sombra que en
+     este sistema significa "esto flota sobre la página" (ver DESIGN.md, Elevation) --
+     la falta de sombra es justamente la señal de que es contenido secundario/pasivo. */
+  .card-quiet{padding:16px; box-shadow:none; border-color:transparent;}
+
   .streak-badge{display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:800; padding:6px 12px; border-radius:999px;
-    background:var(--hivis-dim); color:var(--hivis-text); white-space:nowrap; flex-shrink:0;}
+    background:var(--asphalt-3); color:var(--chalk); white-space:nowrap; flex-shrink:0;}
 
   .tag{display:inline-block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:5px 10px; border-radius:999px;}
   .tag-asfalto{background:var(--asphalt-4); color:var(--chalk);}
@@ -467,8 +479,8 @@
   .week-days .wd-lbl{font-size:10px; color:var(--mist); text-transform:uppercase; letter-spacing:.04em;}
   .week-days .wd-bar-wrap{flex:1; display:flex; align-items:flex-end;}
   .week-days .wd-bar{width:7px; border-radius:99px; background:var(--asphalt-4); transition:height .3s cubic-bezier(.22,1,.36,1);}
-  .week-days .wd-col.training .wd-bar{background:var(--hivis); box-shadow:0 0 8px var(--hivis-glow);}
-  .week-days .wd-col.today .wd-bar{box-shadow:0 0 0 1.5px var(--mist-dim), 0 0 8px var(--hivis-glow);}
+  .week-days .wd-col.training .wd-bar{background:var(--chalk);}
+  .week-days .wd-col.today .wd-bar{background:var(--hivis); box-shadow:0 0 8px var(--hivis-glow);}
   .week-days .wd-col.today .wd-lbl{color:var(--chalk); font-weight:700;}
   .coach-snippet{display:flex; gap:12px; align-items:flex-start;}
   .coach-avatar{width:40px; height:40px; border-radius:14px; background:var(--hivis-dim); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
@@ -984,7 +996,7 @@
       </div>
       <div class="field"><label data-i18n="ob_birth_label"></label>
         <div class="date-box" onclick="openCalendar('ob-birth','ob-birth-text')"><span class="date-box-text" id="ob-birth-text"></span></div>
-        <input type="hidden" id="ob-birth" value="1995-01-01">
+        <input type="hidden" id="ob-birth">
       </div>
       <div class="field"><button class="btn btn-primary" data-i18n="login_continue" onclick="obNextStep()"></button></div>
     </div>
@@ -994,14 +1006,14 @@
       <div class="field">
         <label data-i18n="ob_runnertype_label"></label>
         <div class="choice-row" id="ob-runnertype">
-          <div class="choice" data-v="new" data-i18n="ob_runnertype_new"></div>
-          <div class="choice active" data-v="active" data-i18n="ob_runnertype_active"></div>
+          <div class="choice active" data-v="new" data-i18n="ob_runnertype_new"></div>
+          <div class="choice" data-v="active" data-i18n="ob_runnertype_active"></div>
         </div>
-        <div id="ob-currentkm-wrap" style="margin-top:14px;">
+        <div id="ob-currentkm-wrap" style="margin-top:14px; display:none;">
           <label data-i18n="ob_currentkm_label"></label>
           <input type="number" id="ob-currentkm" placeholder="20" min="0" max="200">
         </div>
-        <p class="muted" id="ob-newrunner-note" style="margin-top:8px; display:none;" data-i18n="ob_newrunner_note"></p>
+        <p class="muted" id="ob-newrunner-note" style="margin-top:8px;" data-i18n="ob_newrunner_note"></p>
       </div>
       <div class="field">
         <label data-i18n="ob_terrain_label"></label>
@@ -1085,6 +1097,8 @@
       <button class="info-btn" onclick="dismissInstallBanner()" style="flex-shrink:0;" data-i18n-aria="aria_close"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span></button>
     </div>
 
+    <div class="home-section-label" data-i18n="home_section_today"></div>
+
     <div class="card card-highlight">
       <h3 id="home-next-card-title" data-i18n="home_next"></h3>
       <div class="next-session" id="home-next-session">
@@ -1105,6 +1119,17 @@
       </div>
     </div>
 
+    <div class="card" id="readiness-card" style="display:none;">
+      <h3 style="margin:0 0 12px;" data-i18n="readiness_title"></h3>
+      <div class="choice-row segmented" id="readiness-choice">
+        <div class="choice" data-v="mal" data-i18n="readiness_bad"></div>
+        <div class="choice" data-v="regular" data-i18n="readiness_ok"></div>
+        <div class="choice" data-v="bien" data-i18n="readiness_good"></div>
+      </div>
+    </div>
+
+    <div class="home-section-label" data-i18n="home_week"></div>
+
     <div class="card" id="home-race-card" style="display:none;">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
         <div style="min-width:0;">
@@ -1116,7 +1141,7 @@
           </div>
         </div>
         <div style="text-align:right; flex-shrink:0;">
-          <div class="display" id="home-race-days" style="font-size:32px; color:var(--hivis); line-height:1;">0</div>
+          <div class="display" id="home-race-days" style="font-size:32px; color:var(--chalk); line-height:1;">0</div>
           <div class="muted" style="font-size:11px; margin-top:2px;" data-i18n="perfil_event_days"></div>
         </div>
       </div>
@@ -1124,7 +1149,6 @@
     </div>
 
     <div class="card">
-      <h3 data-i18n="home_week"></h3>
       <div class="stat-row-divided">
         <div class="stat-cell"><span class="n" id="home-week-done-km">0</span><span class="l" data-i18n="home_km_done"></span></div>
         <div class="stat-cell"><span class="n" id="home-week-km">0</span><span class="l" data-i18n="home_km_planned"></span></div>
@@ -1133,26 +1157,12 @@
       <div class="week-days" id="home-week-bars"></div>
     </div>
 
-    <div class="card" id="readiness-card" style="display:none;">
-      <h3 style="margin:0 0 12px;" data-i18n="readiness_title"></h3>
-      <div class="choice-row segmented" id="readiness-choice">
-        <div class="choice" data-v="mal" data-i18n="readiness_bad"></div>
-        <div class="choice" data-v="regular" data-i18n="readiness_ok"></div>
-        <div class="choice" data-v="bien" data-i18n="readiness_good"></div>
-      </div>
-    </div>
-
     <div class="card" id="load-card" style="display:none;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
         <h3 style="margin:0;" data-i18n="home_load_title"></h3>
         <span class="tag" id="load-tag"></span>
       </div>
       <p class="muted" id="load-hint" style="margin:0; font-size:12.5px;"></p>
-    </div>
-
-    <div class="card" style="display:flex; gap:12px; align-items:flex-start;">
-      <span class="icon-sq" style="width:20px; height:20px; color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.45 1 1.2 1 2.1h5c0-.9.4-1.65 1-2.1A6 6 0 0 0 12 3z"/></svg></span>
-      <p id="daily-tip-text" style="margin:0; font-size:14.5px; line-height:1.5; color:var(--mist);"></p>
     </div>
 
     <div class="card" id="goal-progress-wrap" style="display:none;">
@@ -1165,7 +1175,14 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="home-section-label" data-i18n="home_section_more"></div>
+
+    <div class="card card-quiet" style="display:flex; gap:12px; align-items:flex-start;">
+      <span class="icon-sq" style="width:20px; height:20px; color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.45 1 1.2 1 2.1h5c0-.9.4-1.65 1-2.1A6 6 0 0 0 12 3z"/></svg></span>
+      <p id="daily-tip-text" style="margin:0; font-size:14.5px; line-height:1.5; color:var(--mist);"></p>
+    </div>
+
+    <div class="card card-quiet" id="home-race-tips-card">
       <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" onclick="openRaceTipsInfo()">
         <h3 style="margin:0;" data-i18n="home_race_tips_title"></h3>
         <span class="icon-sq" style="width:16px; height:16px; color:var(--mist); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
@@ -1176,7 +1193,7 @@
       </div>
     </div>
 
-    <div class="card" id="install-help-card">
+    <div class="card card-quiet" id="install-help-card">
       <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleInstallHelp()">
         <h3 style="margin:0;" data-i18n="home_install_help_title"></h3>
         <span class="icon-sq" id="install-help-chevron" style="width:16px; height:16px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
