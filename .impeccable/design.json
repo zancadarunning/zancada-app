@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-09T00:00:00Z",
+  "title": "Design System: Zancada",
+  "extensions": {
+    "colorMeta": {
+      "hivis": { "role": "primary", "displayName": "Hi-Vis Lime", "canonical": "#D6FF3F", "tonalRamp": ["#1A2400", "#334700", "#4D6B00", "#748F00", "#A6C400", "#D6FF3F", "#E4FF74", "#F3FFC2"] },
+      "clay": { "role": "secondary", "displayName": "Clay", "canonical": "#C06A2E", "tonalRamp": ["#2B1300", "#4A2308", "#6D3712", "#8F4E1C", "#AC5F26", "#C06A2E", "#D68E5C", "#EDC3A0"] },
+      "asphalt": { "role": "neutral", "displayName": "Asphalt", "canonical": "#0A0A0A", "tonalRamp": ["#0A0A0A", "#18181B", "#202023", "#2C2C30", "#3F3F44", "#6B6B70", "#9C9CA0", "#EDEFEF"] },
+      "asphalt-2": { "role": "neutral", "displayName": "Asphalt Raised", "canonical": "#18181B" },
+      "asphalt-3": { "role": "neutral", "displayName": "Asphalt Recessed", "canonical": "#202023" },
+      "asphalt-4": { "role": "neutral", "displayName": "Asphalt Stroke", "canonical": "#2C2C30" },
+      "chalk": { "role": "neutral", "displayName": "Chalk", "canonical": "#EDEFEF" },
+      "mist": { "role": "neutral", "displayName": "Mist", "canonical": "#8B9296" },
+      "mist-dim": { "role": "neutral", "displayName": "Mist Dim", "canonical": "#5C6366" },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#121415" },
+      "danger": { "role": "error", "displayName": "Danger Red", "canonical": "#FF3B30", "tonalRamp": ["#3A0805", "#5C0F0A", "#82150E", "#A81C12", "#CC2A1E", "#FF3B30", "#FF7A72", "#FFC0BB"] },
+      "zone1": { "role": "data", "displayName": "Zone 1 — Easy", "canonical": "#5B9BFF" },
+      "zone2": { "role": "data", "displayName": "Zone 2 — Aerobic", "canonical": "#4ADE80" },
+      "zone3": { "role": "data", "displayName": "Zone 3 — Tempo", "canonical": "#FACC15" },
+      "zone4": { "role": "data", "displayName": "Zone 4 — Threshold", "canonical": "#FB923C" },
+      "zone5": { "role": "data", "displayName": "Zone 5 — Max", "canonical": "#FF6B5D" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display (Bebas Neue)", "purpose": "Every section heading, the splash wordmark, and standout stat numbers (e.g. days-to-race)." },
+      "body": { "displayName": "Body (Inter)", "purpose": "Running copy, descriptions, chat messages, form values." },
+      "label": { "displayName": "Label (Inter, uppercase)", "purpose": "Field labels, card eyebrow headers, tag text." },
+      "mono": { "displayName": "Mono (JetBrains Mono)", "purpose": "Every measurement on screen — pace, distance, time, date, percent. Never used for prose." }
+    },
+    "shadows": [
+      { "name": "shadow-card", "value": "0 8px 22px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.03)", "purpose": "Default lift for cards and chips; the inset line reads as a faint top sheen, not a border." },
+      { "name": "shadow-lg", "value": "0 16px 48px rgba(0,0,0,.55)", "purpose": "Deeper elevation for confirm dialogs and full sheet overlays." },
+      { "name": "hivis-glow", "value": "0 10px 24px rgba(214,255,63,.32)", "purpose": "Colored glow (not a neutral shadow) under Hi-Vis-filled elements — primary button, active segmented choice, the raised Correr tab." }
+    ],
+    "motion": [
+      { "name": "press-scale", "value": "transform .12s ease", "purpose": "Buttons and tappable cards scale down (0.97–0.98) on press for tactile feedback." },
+      { "name": "state-ease", "value": "background .12s ease, color .12s ease, border-color .15s ease, box-shadow .15s ease", "purpose": "Default easing for hover/active/focus color and border transitions." },
+      { "name": "view-fade-in", "value": "opacity .22s ease, transform .22s ease (translateY 6px → 0)", "purpose": "View/section entrance animation (viewFadeIn keyframe)." },
+      { "name": "sheet-slide", "value": "opacity .22s ease, transform .22s ease (translateY 22px → 0)", "purpose": "Bottom-sheet-style overlays (overlay-sheet) fading and rising into place." }
+    ],
+    "breakpoints": [
+      { "name": "app-max-width", "value": "480px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Full-width pill CTA — the highest-emphasis action on a screen.",
+      "html": "<button class=\"ds-btn-primary\">Empezar a correr</button>",
+      "css": ".ds-btn-primary { background: #D6FF3F; color: #121415; border: none; border-radius: 999px; padding: 15px 22px; font-family: 'Inter', -apple-system, sans-serif; font-weight: 700; font-size: 15px; width: 100%; box-shadow: 0 10px 24px rgba(214,255,63,.32); transition: transform .12s ease, box-shadow .12s ease; cursor: pointer; } .ds-btn-primary:hover { box-shadow: 0 12px 28px rgba(214,255,63,.4); } .ds-btn-primary:active { transform: scale(.98); box-shadow: 0 4px 12px rgba(214,255,63,.32); } .ds-btn-primary:focus-visible { outline: 3px solid rgba(214,255,63,.5); outline-offset: 2px; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary action — same pill shape, quiet neutral fill.",
+      "html": "<button class=\"ds-btn-outline\">Cancelar</button>",
+      "css": ".ds-btn-outline { background: #18181B; border: 1.5px solid rgba(255,255,255,.045); color: #EDEFEF; border-radius: 999px; padding: 15px 22px; font-family: 'Inter', -apple-system, sans-serif; font-weight: 700; font-size: 15px; width: 100%; box-shadow: 0 8px 22px rgba(0,0,0,.4); transition: transform .12s ease, background .12s ease; cursor: pointer; } .ds-btn-outline:hover { background: #202023; } .ds-btn-outline:active { transform: scale(.97); background: rgba(255,255,255,.045); } .ds-btn-outline:focus-visible { outline: 2px solid #D6FF3F; outline-offset: 2px; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The default content container — an eyebrow label, then content.",
+      "html": "<div class=\"ds-card\"><h3 class=\"ds-card-eyebrow\">Próxima sesión</h3><p class=\"ds-card-body\">6km suaves a ritmo de recuperación.</p></div>",
+      "css": ".ds-card { background: #18181B; border-radius: 26px; padding: 22px; border: 1px solid rgba(255,255,255,.045); box-shadow: 0 8px 22px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.03); } .ds-card-eyebrow { font-family: 'Inter', -apple-system, sans-serif; font-size: 11.5px; text-transform: uppercase; letter-spacing: .09em; color: #8B9296; font-weight: 700; margin: 0 0 12px; } .ds-card-body { font-family: 'Inter', -apple-system, sans-serif; font-size: 13.5px; line-height: 1.5; color: #8B9296; margin: 0; }"
+    },
+    {
+      "name": "Chip (segmented, active/inactive)",
+      "kind": "chip",
+      "refersTo": "chip-active",
+      "description": "Choice chip used in segmented pickers (terrain, units, sleep) — inactive vs. active state.",
+      "html": "<div class=\"ds-choice-row\"><button class=\"ds-choice ds-choice-active\">Km</button><button class=\"ds-choice\">Millas</button></div>",
+      "css": ".ds-choice-row { display: flex; gap: 2px; flex-wrap: nowrap; background: #202023; border-radius: 18px; padding: 3px; } .ds-choice { flex: 1; border: none; background: none; box-shadow: none; padding: 9px 4px; text-align: center; border-radius: 18px; color: #8B9296; font-family: 'Inter', -apple-system, sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: background .12s ease, color .12s ease; } .ds-choice-active { background: #D6FF3F; color: #121415; box-shadow: 0 2px 10px rgba(214,255,63,.32); } .ds-choice:focus-visible { outline: 2px solid #D6FF3F; outline-offset: 1px; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "field-input",
+      "description": "Standard text field with label — 16px font size to avoid iOS Safari auto-zoom.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-field-label\">Nombre</label><input class=\"ds-field-input\" type=\"text\" placeholder=\"Tu nombre\"/></div>",
+      "css": ".ds-field-label { display: block; font-family: 'Inter', -apple-system, sans-serif; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: #8B9296; font-weight: 600; margin-bottom: 8px; } .ds-field-input { width: 100%; background: #18181B; border: 1.5px solid #2C2C30; color: #EDEFEF; padding: 13px 15px; border-radius: 18px; font-family: 'Inter', -apple-system, sans-serif; font-size: 16px; outline: none; transition: border-color .15s ease, box-shadow .15s ease; } .ds-field-input::placeholder { color: #5C6366; } .ds-field-input:focus { border-color: #D6FF3F; box-shadow: 0 0 0 3px rgba(214,255,63,.14); }"
+    },
+    {
+      "name": "Tab Bar with Raised Action",
+      "kind": "nav",
+      "refersTo": "nav-tabbar",
+      "description": "Floating glass tab bar; the center item is a raised circular FAB-style button for starting a run.",
+      "html": "<nav class=\"ds-tabbar\"><button class=\"ds-tab ds-tab-active\">Inicio</button><button class=\"ds-tab\">Plan</button><button class=\"ds-tab ds-tab-primary\"><span class=\"ds-tab-primary-circle\">▶</span></button><button class=\"ds-tab\">Historial</button><button class=\"ds-tab\">Coach</button></nav>",
+      "css": ".ds-tabbar { display: flex; align-items: center; position: sticky; bottom: 0; background: rgba(24,24,27,.92); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 999px; padding: 8px 6px; box-shadow: 0 16px 48px rgba(0,0,0,.55); } .ds-tab { flex: 1; background: none; border: none; color: #5C6366; display: flex; flex-direction: column; align-items: center; gap: 4px; font-family: 'Inter', -apple-system, sans-serif; font-size: 10.5px; font-weight: 600; cursor: pointer; padding: 4px 2px; transition: transform .12s ease, color .12s ease; } .ds-tab-active { color: #D6FF3F; } .ds-tab:active { transform: scale(.9); } .ds-tab-primary { flex: 0 0 auto; width: 64px; margin-top: -24px; } .ds-tab-primary-circle { width: 56px; height: 56px; border-radius: 50%; background: #D6FF3F; color: #121415; display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 10px 24px rgba(214,255,63,.32); transition: transform .12s ease; } .ds-tab-primary:active .ds-tab-primary-circle { transform: scale(.92); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "La Pista Nocturna (The Night Track)",
+    "overview": "Zancada is built for running before the sun's up or after it's down — the hours when a runner's own visibility is the thing keeping them safe. The interface is genuinely dark, not a \"dark mode\" toggle bolted onto a light design: near-black carbon (#0A0A0A) is the only background this app has, by deliberate, confirmed decision (a light theme existed and was removed at the user's request). Out of that darkness, one color does real work the way hi-vis gear does in real life: a lime-green accent (#D6FF3F) that exists to be seen, not to decorate. It marks the thing that's active, the button that matters, the number that's live right now — everywhere else, the screen stays quiet.\n\nSurfaces separate from each other by luminosity, not by borders. Cards sit a few steps lighter than the page behind them; hairline strokes exist only as a faint finishing touch, never as the primary way two surfaces tell each other apart. Numbers — pace, distance, time, splits, percentages — always render in a monospaced face, so a runner glancing down mid-stride reads a tabular, precise, GPS-watch kind of number, visually distinct from the conversational prose around it. Everything else about the shape language is built for a hand that might be tired, sweaty, or moving: big pill buttons, generous 26px card corners, and a tab bar that floats like a HUD, its center pinned by a raised circular \"Correr\" button that has to be visibly gravity-defying to earn the interruption of stopping your day to start a run.",
+    "keyCharacteristics": [
+      "Single, deliberate dark theme — carbon-black ground, no light variant, ever.",
+      "Depth from luminosity layering, not from borders — hairlines are a whisper, not the boundary.",
+      "One accent color, hi-vis lime, used with the same restraint and purpose as real reflective gear.",
+      "Every number on screen renders in JetBrains Mono; every heading renders in Bebas Neue.",
+      "Large, confident, pill-and-round-corner shapes built for a runner's hand, not a mouse pointer."
+    ],
+    "rules": [
+      { "name": "The Luminosity-Not-Line Rule", "body": "Two adjacent surfaces separate because one is measurably lighter than the other, not because a hard border was drawn between them. Reach for a lighter Asphalt step before reaching for a stroke.", "section": "colors" },
+      { "name": "The One Signal Rule", "body": "Hi-Vis lime means \"active\" or \"this is the one thing to act on\" — never used as a decorative accent, never applied to more than the thing currently earning attention. If everything is lime, nothing is.", "section": "colors" },
+      { "name": "The Data-Is-Mono Rule", "body": "Any value that is a measurement — distance, time, pace, percent, a date — renders in JetBrains Mono. This is how a runner tells \"a number I can trust\" from \"a sentence,\" at a glance, mid-stride.", "section": "typography" },
+      { "name": "The Ambient-Only Rule", "body": "Shadows in this system are soft and diffuse (rgba(0,0,0,.4–.55) blurred), never sharp or directional. A shadow signals \"this surface is above the page,\" not \"light is coming from a specific angle.\"", "section": "elevation" }
+    ],
+    "dos": [
+      "Do separate surfaces by moving up the Asphalt luminosity ladder before adding a stroke.",
+      "Do render every measurement (pace, distance, time, date, percent) in JetBrains Mono.",
+      "Do use Bebas Neue for every section heading and standout number — it's the system's only display voice.",
+      "Do keep the primary \"Correr\" tab visually distinct (raised, circular, glowing) from the other four flat tab-bar items.",
+      "Do pair a Hi-Vis fill with Ink (#121415) text/icons, never white or Chalk.",
+      "Do keep shadows soft and ambient (large blur, no offset drama); depth should feel like the surface is lit, not like it's casting a directional shadow."
+    ],
+    "donts": [
+      "Don't reintroduce a light theme or a theme toggle — this was built, shipped, and deliberately removed at the user's request; the product is dark-only by decision, not by default.",
+      "Don't use hard borders as the primary way two surfaces read as separate; the hairline (rgba(255,255,255,.045)) is a finishing touch, not a boundary.",
+      "Don't spend the Hi-Vis accent on more than one \"this is the active/primary thing\" per screen — it loses its meaning (and its resemblance to real hi-vis gear) the moment it's decorative.",
+      "Don't repurpose the five effort-zone colors (Zone 1–5) for anything other than heart-rate/pace zone data — they're a fixed semantic scale, not a brand palette to draw from.",
+      "Don't use a sharp 0px corner anywhere; the system's smallest radius is 18px.",
+      "Don't put prose or labels in JetBrains Mono, and don't put a measurement in Inter — the mono/sans split is how the interface tells data from language."
+    ]
+  }
+}
