@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-10T01:10:00Z';
+const APP_VERSION = '2026-09-10T01:40:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -1772,29 +1772,43 @@ function repairCorruptedCustomDays(){
   });
   if(changed) persist();
 }
+async function callSyncEndpoint(path, session){
+  try{
+    const controller = new AbortController();
+    const timeoutId = setTimeout(()=>controller.abort(), 12000);
+    const res = await fetch(apiUrl(path), {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${session.access_token}` },
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    return await res.json().catch(()=>null);
+  }catch(e){ console.error('sync-now error', path, e); return {error: e.message}; }
+}
+// Pide sincronizar tanto Strava como Polar en paralelo -- alguien puede tener
+// las dos conectadas, o solo una; cada endpoint devuelve {synced:false,
+// reason:'not_connected'} solito si esa cuenta en particular no está
+// vinculada, así que no hace falta chequear antes cuál está activa.
 async function syncTodayNow(){
   const btn = document.getElementById('sync-today-btn');
   if(btn){ btn.disabled = true; btn.innerHTML = `<span class="icon-sq spin-icon" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_syncing')}`; }
-  let syncResult = null;
+  let stravaResult = null, polarResult = null;
   try{
     const { data: { session } } = await supabaseClient.auth.getSession();
     if(session && session.access_token){
-      const controller = new AbortController();
-      const timeoutId = setTimeout(()=>controller.abort(), 12000);
-      const res = await fetch(apiUrl('/api/strava-sync-now'), {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${session.access_token}` },
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      syncResult = await res.json().catch(()=>null);
+      [stravaResult, polarResult] = await Promise.all([
+        callSyncEndpoint('/api/strava-sync-now', session),
+        callSyncEndpoint('/api/polar-sync-now', session)
+      ]);
     }
-  }catch(e){ console.error('sync-now error', e); syncResult = {error: e.message}; }
+  }catch(e){ console.error('sync-now error', e); }
   await refreshStateFromServer();
   if(relinkTodayRun()) persist();
   renderPlan(); renderHome(); renderHistory();
-  if(syncResult && !syncResult.synced){
-    const reasonMsg = syncResult.error ? `Error: ${syncResult.error}` : syncResult.reason==='not_connected' ? 'Tu cuenta no está conectada a Strava.' : syncResult.reason==='no_new_activity' ? 'No encontramos actividades nuevas en las últimas 24 horas en tu Strava.' : 'No se encontró nada nuevo.';
+  const bothSynced = (stravaResult && stravaResult.synced) || (polarResult && polarResult.synced);
+  const bothDisconnected = (!stravaResult || stravaResult.reason==='not_connected') && (!polarResult || polarResult.reason==='not_connected');
+  if(!bothSynced){
+    const reasonMsg = bothDisconnected ? 'Tu cuenta no está conectada a Strava ni a Polar.' : (stravaResult && stravaResult.error) || (polarResult && polarResult.error) ? `Error: ${(stravaResult&&stravaResult.error)||(polarResult&&polarResult.error)}` : 'No encontramos actividades nuevas.';
     showToast(reasonMsg,'error');
   }
   if(btn){ btn.disabled = false; btn.innerHTML = `<span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}`; }
