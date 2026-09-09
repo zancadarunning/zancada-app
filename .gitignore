@@ -9,3 +9,10 @@ mobile/
 # armados para mostrar como se ve algo) -- no es parte de la app ni un deliverable,
 # asi que no tiene sentido versionarlo.
 scratch/
+
+# .claude/worktrees/ son copias de trabajo temporales que Claude Code crea para correr
+# tareas en paralelo de forma aislada (ej. las dos evaluaciones del critique de Home).
+# Cada una es su propio repo Git (gitlink), no archivos normales -- un cliente Git las
+# detecta como "cambios" pero no hay nada real para commitear ahi, y se borran solas
+# cuando la tarea que las creo termina.
+.claude/worktrees/
