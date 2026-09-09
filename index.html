@@ -179,8 +179,27 @@
      entienden la unidad svh (una declaración con un valor no soportado se ignora por
      completo, así que la anterior queda en pie). */
   #splash{position:fixed; top:0; left:0; right:0; height:100vh; height:100dvh; height:100svh;
-    z-index:60; background:var(--asphalt); display:flex; flex-direction:column;
+    z-index:60;
+    background:
+      radial-gradient(65% 45% at 50% 0%, rgba(214,255,63,.1), transparent 60%),
+      radial-gradient(60% 40% at 100% 15%, rgba(192,106,46,.08), transparent 62%),
+      var(--asphalt);
+    display:flex; flex-direction:column;
     align-items:center; justify-content:flex-start; text-align:center; padding:32px; max-width:480px; margin:0 auto;}
+  /* Fondo atmosférico de la splash: una cordillera hecha con el mismo lenguaje que ya
+     usa el resto de la app (el mismo motivo de perfil de elevación de los separadores,
+     acá como escenario en vez de ícono) -- "el terreno que viene" detrás de la marca,
+     no una textura genérica. Muy tenue a propósito, atrás de todo el contenido real. */
+  .splash-bg{position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none;}
+  /* El resto del contenido de la splash queda arriba del fondo (mismo truco que ya usa
+     .run-bg-route con .go-circle en Correr: el fondo es z-index:0 absoluto, y todo lo
+     real se levanta a z-index:1). */
+  #splash > *:not(.splash-bg){position:relative; z-index:1;}
+  #login > *:not(.splash-bg), #signup > *:not(.splash-bg){position:relative; z-index:1;}
+  .splash-bg svg{position:absolute; bottom:0; left:0; width:100%; height:42%;}
+  .splash-terrain-far{fill:var(--asphalt-3); opacity:.5;}
+  .splash-terrain-near{fill:var(--asphalt-2); opacity:.85;}
+  .splash-terrain-line{fill:none; stroke:var(--clay); stroke-width:1.6; stroke-linejoin:round; opacity:.4;}
   /* Un solo gesto de entrada, en opacity+transform nada mas (nunca en alto/margen/padding)
      para no interferir con el ajuste de altura real de #splash que ya es delicado -- ver el
      comentario largo mas arriba junto a la regla de #splash sobre por que 100svh se elige a
@@ -920,6 +939,13 @@
   <div id="offline-banner"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="2" x2="22" y2="22"/><path d="M8.5 16.5a5 5 0 0 1 7 0"/><path d="M5 12.5a10 10 0 0 1 5-2.7"/><path d="M19 12.5a10 10 0 0 0-2.3-1.9"/><path d="M2 8.5a15 15 0 0 1 4.2-2.8"/><path d="M22 8.5a15 15 0 0 0-9-4.4"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg></span><span data-i18n="offline_banner"></span></div>
 
   <div id="splash">
+    <div class="splash-bg" aria-hidden="true">
+      <svg viewBox="0 0 400 220" preserveAspectRatio="none">
+        <polygon class="splash-terrain-far" points="0,220 0,150 35,130 70,158 110,110 150,145 185,95 225,135 260,100 300,140 335,105 370,138 400,120 400,220"/>
+        <polygon class="splash-terrain-near" points="0,220 0,190 40,172 85,198 130,160 175,188 215,150 255,182 295,155 335,185 370,165 400,180 400,220"/>
+        <polyline class="splash-terrain-line" points="0,190 40,172 85,198 130,160 175,188 215,150 255,182 295,155 335,185 370,165 400,180"/>
+      </svg>
+    </div>
     <div class="pulse-strip"><svg viewBox="0 0 300 40" preserveAspectRatio="none"><path d="M0 20 H40 L48 6 L58 34 L66 20 H90 L98 8 L108 32 L116 20 H150 H190 L198 6 L208 34 L216 20 H240 L248 8 L258 32 L266 20 H300 L308 6 L318 34 L326 20 H350 H390 L398 6 L408 34 L416 20 H440 L448 8 L458 32 L466 20 H500 L508 6 L518 34 L526 20 H600" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg></div>
     <h1 class="display word">ZANC<span>A</span>DA</h1>
     <p class="tag" data-i18n="app_tag"></p>
@@ -946,6 +972,13 @@
   </div>
 
   <div class="overlay" id="login">
+    <div class="splash-bg" aria-hidden="true">
+      <svg viewBox="0 0 400 220" preserveAspectRatio="none">
+        <polygon class="splash-terrain-far" points="0,220 0,150 35,130 70,158 110,110 150,145 185,95 225,135 260,100 300,140 335,105 370,138 400,120 400,220"/>
+        <polygon class="splash-terrain-near" points="0,220 0,190 40,172 85,198 130,160 175,188 215,150 255,182 295,155 335,185 370,165 400,180 400,220"/>
+        <polyline class="splash-terrain-line" points="0,190 40,172 85,198 130,160 175,188 215,150 255,182 295,155 335,185 370,165 400,180"/>
+      </svg>
+    </div>
     <h2 class="display" data-i18n="login_title"></h2>
     <p class="lead" data-i18n="login_lead_signin"></p>
     <div class="field">
@@ -969,6 +1002,13 @@
   </div>
 
   <div class="overlay" id="signup" style="display:none;">
+    <div class="splash-bg" aria-hidden="true">
+      <svg viewBox="0 0 400 220" preserveAspectRatio="none">
+        <polygon class="splash-terrain-far" points="0,220 0,150 35,130 70,158 110,110 150,145 185,95 225,135 260,100 300,140 335,105 370,138 400,120 400,220"/>
+        <polygon class="splash-terrain-near" points="0,220 0,190 40,172 85,198 130,160 175,188 215,150 255,182 295,155 335,185 370,165 400,180 400,220"/>
+        <polyline class="splash-terrain-line" points="0,190 40,172 85,198 130,160 175,188 215,150 255,182 295,155 335,185 370,165 400,180"/>
+      </svg>
+    </div>
     <h2 class="display" data-i18n="signup_title"></h2>
     <p class="lead" data-i18n="signup_lead"></p>
     <div class="field">
