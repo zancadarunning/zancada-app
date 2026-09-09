@@ -16,11 +16,11 @@ colors:
   clay-dim: "rgba(192,106,46,.16)"
   danger: "#FF3B30"
   danger-dim: "rgba(255,59,48,.16)"
-  zone1: "#5B9BFF"
-  zone2: "#4ADE80"
-  zone3: "#FACC15"
-  zone4: "#FB923C"
-  zone5: "#FF6B5D"
+  zone1: "#7B9BC9"
+  zone2: "#7CB88F"
+  zone3: "#D4B356"
+  zone4: "#CC8A56"
+  zone5: "#C9695C"
 typography:
   display:
     fontFamily: "'Bebas Neue', sans-serif"
@@ -116,7 +116,7 @@ A near-monochrome carbon scale carries almost the entire interface; a single hi-
 - **Overlay Hairline** (`rgba(255,255,255,.045)`): the only border most cards and buttons get — intentionally almost invisible; it's a finishing detail, not the mechanism that separates surfaces.
 
 ### Effort Zones (semantic, not brand)
-- **Zone 1** (`#5B9BFF`, blue) → **Zone 5** (`#FF6B5D`, coral-red), stepping through green (`#4ADE80`), yellow (`#FACC15`), and orange (`#FB923C`) — a fixed, saturated five-step scale for heart-rate/pace training zones, cool-to-hot mapping easy effort to max effort. Each zone also has a `-bg` translucent variant (`.16` alpha at rest, `.13` alpha in a live/active context) for its badge background. This scale is functional data-encoding, not brand expression — never repurpose these five hues for anything else.
+- **Zone 1** (`#7B9BC9`, slate blue) → **Zone 5** (`#C9695C`, muted brick), stepping through sage green (`#7CB88F`), muted gold (`#D4B356`), and terracotta (`#CC8A56`) — a fixed five-step scale for heart-rate/pace training zones, cool-to-hot mapping easy effort to max effort. Deliberately desaturated from a generic saturated "traffic light" scale so the five hues read as part of this system's moody, carbon-and-clay register rather than an imported Material palette. Each zone also has a `-bg` translucent variant (`.18` alpha at rest, `.15` alpha in a live/active context) for its badge background. This scale is functional data-encoding, not brand expression — never repurpose these five hues for anything else.
 
 ### Named Rules
 **The Luminosity-Not-Line Rule.** Two adjacent surfaces separate because one is measurably lighter than the other, not because a hard border was drawn between them. Reach for a lighter Asphalt step before reaching for a stroke.
@@ -132,13 +132,16 @@ A near-monochrome carbon scale carries almost the entire interface; a single hi-
 **Character:** A tall, condensed, all-caps poster face for anything that announces itself (headings, big stats, the wordmark) against a workmanlike, highly legible grotesque for everything you actually read, with a tabular mono face reserved strictly for numbers — the pairing reads like a race bib next to a watch face.
 
 ### Hierarchy
-- **Display** (Bebas Neue, 400, 22–60px contextual, line-height 0.9, letter-spacing 0.02em): every section `<h2>`, the splash wordmark, and standout stat highlights (e.g. days-to-race countdown). Always uppercase-reading by nature of the typeface itself, not text-transform.
+- **Display** (Bebas Neue, 400, 25–60px contextual, line-height 0.9, letter-spacing 0.02em): hero moments only — the splash wordmark, the four tab-view titles (Plan/Correr/Historial/Coach), login/signup/onboarding step titles, and standout stat highlights (e.g. days-to-race countdown). Always uppercase-reading by nature of the typeface itself, not text-transform.
+- **Subtitle** (Inter, 800, 22px typical, letter-spacing -0.01em): the `<h2>` title of a secondary overlay or modal reached by drilling in (Datos personales, Editar carrera, Objetivos, and the ~15 other settings/info panels). Same structural role as Display — "this screen's title" — but in a strong Inter weight instead of the poster face, so Display stays reserved for moments that should hit harder.
 - **Body** (Inter, 400, 14–16px, line-height 1.5): running copy, descriptions, chat messages, form values.
 - **Label** (Inter, 600–700, 10.5–12.5px, letter-spacing 0.04–0.09em, often uppercase): field labels, card eyebrow headers (`.card h3`), tag text.
 - **Mono** (JetBrains Mono, tabular figures): every metric on screen — pace, distance, elapsed time, dates, percentages, the live run timer. Never used for prose.
 
 ### Named Rules
 **The Data-Is-Mono Rule.** Any value that is a measurement — distance, time, pace, percent, a date — renders in JetBrains Mono. This is how a runner tells "a number I can trust" from "a sentence," at a glance, mid-stride.
+
+**The Hero-Only Display Rule.** Bebas Neue is reserved for the handful of moments that should announce themselves — the app's own name, the four things you can navigate to, and the numbers that matter most. A screen you drilled into to change a setting gets Subtitle instead. If Bebas Neue shows up on every screen, it stops being a voice and becomes wallpaper.
 
 ## Layout
 
@@ -190,12 +193,15 @@ Two radius steps, both generous, plus a hard pill for anything you tap to act: `
 - **States:** inactive icons/labels in Mist-Dim; the active tab's icon gets a Hi-Vis-Dim rounded backdrop and Hi-Vis text; press scales the button to `0.9`.
 - **Signature Component — the raised primary action:** the center "Correr" (Run) tab breaks the row — it's a 56px Hi-Vis-filled circle that hangs 24px above the rest of the bar, with its own Hi-Vis Glow shadow that intensifies when active. It's the one nav item that behaves like a floating action button, not a tab, because starting a run is the one action this app exists to make effortless.
 
+### The Elevation Squiggle (signature motif)
+A small hand-drawn line — five short climbs and descents ending flat, `viewBox="0 0 60 14"`, stroked in Clay (`#C06A2E`), never filled — is the one purely decorative, non-functional mark in the whole system: a miniature elevation profile, the one piece of "running" imagery that isn't a stat or an icon. It appears as a section-divider glyph (before "Conectividad," "Preferencias") paired with an uppercase label and a trailing hairline, and, enlarged and dimmed to ~60-70% opacity, as the centerpiece of empty states that are specifically about *not having run yet* (an empty Historial, a Plan week with no data) — "here's the shape of the road ahead" rather than a generic clock or folder icon. Reuse this exact path when a new empty state or section break needs a running-specific touch; do not invent a second decorative glyph alongside it.
+
 ## Do's and Don'ts
 
 ### Do:
 - **Do** separate surfaces by moving up the Asphalt luminosity ladder before adding a stroke.
 - **Do** render every measurement (pace, distance, time, date, percent) in JetBrains Mono.
-- **Do** use Bebas Neue for every section heading and standout number — it's the system's only display voice.
+- **Do** reserve Bebas Neue for hero moments (splash, the 4 tab titles, auth/onboarding, standout numbers); use Subtitle (Inter 800) for overlay/modal screen titles.
 - **Do** keep the primary "Correr" tab visually distinct (raised, circular, glowing) from the other four flat tab-bar items.
 - **Do** pair a Hi-Vis fill with Ink (`#121415`) text/icons, never white or Chalk.
 - **Do** keep shadows soft and ambient (large blur, no offset drama); depth should feel like the surface is lit, not like it's casting a directional shadow.

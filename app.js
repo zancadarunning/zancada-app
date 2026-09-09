@@ -2821,7 +2821,7 @@ function renderPlan(){
   }
 
   if(!wd.exists){
-    document.getElementById('plan-list').innerHTML = `<p class="muted" style="padding:24px 0; text-align:center;">${t('plan_no_data')}</p>`;
+    document.getElementById('plan-list').innerHTML = `<div style="text-align:center; padding:24px 0;"><svg viewBox="0 0 60 14" style="width:80px; height:19px; margin:0 auto 12px; display:block; opacity:.6;"><polyline points="0,12 10,12 16,4 22,10 28,2 34,9 40,12 60,12" fill="none" stroke="#C06A2E" stroke-width="1.6"/></svg><p class="muted" style="margin:0;">${t('plan_no_data')}</p></div>`;
     renderPastWeeks();
     return;
   }
@@ -5366,7 +5366,11 @@ function renderHistory(){
   </div>` : '';
   // Los récords personales se muestran ahora en Logros (Perfil), junto con el resto de
   // los hitos del corredor -- ver renderPersonalRecordsCard() y openAchievements().
-  if(!state.runs || state.runs.length===0){ el.innerHTML = stravaSyncCard + trendsCard + mixCard + `<div class="card" style="text-align:center; padding:32px 18px;"><div class="icon-sq" style="width:34px; height:34px; margin:0 auto 12px; color:var(--mist-dim);">${ICONS.empty}</div><p class="muted" style="margin:0;">${t('hist_empty')}</p></div>`; animateHistTrendBars(); return; }
+  // El icono generico de "historial" (reloj+flecha) no decia nada de running -- se
+  // reemplaza por el mismo perfil de elevacion que ya es la firma visual de la app
+  // (hoy usado como separador en Perfil), agrandado como pieza central acá: "todavia
+  // no recorriste este camino" en vez de un ícono de reloj cualquiera.
+  if(!state.runs || state.runs.length===0){ el.innerHTML = stravaSyncCard + trendsCard + mixCard + `<div class="card" style="text-align:center; padding:32px 18px;"><svg viewBox="0 0 60 14" style="width:90px; height:21px; margin:0 auto 14px; display:block; opacity:.7;"><polyline points="0,12 10,12 16,4 22,10 28,2 34,9 40,12 60,12" fill="none" stroke="#C06A2E" stroke-width="1.6"/></svg><p class="muted" style="margin:0;">${t('hist_empty')}</p></div>`; animateHistTrendBars(); return; }
   // Buscador simple + encabezados de mes -- con varios meses de historial cargado, una
   // lista plana se vuelve incómoda de recorrer. El buscador filtra por lo que se ve en
   // cada tarjeta (fecha, zapatilla, "manual"/Strava); los encabezados de mes se insertan

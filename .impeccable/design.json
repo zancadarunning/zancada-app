@@ -15,14 +15,15 @@
       "mist-dim": { "role": "neutral", "displayName": "Mist Dim", "canonical": "#5C6366" },
       "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#121415" },
       "danger": { "role": "error", "displayName": "Danger Red", "canonical": "#FF3B30", "tonalRamp": ["#3A0805", "#5C0F0A", "#82150E", "#A81C12", "#CC2A1E", "#FF3B30", "#FF7A72", "#FFC0BB"] },
-      "zone1": { "role": "data", "displayName": "Zone 1 — Easy", "canonical": "#5B9BFF" },
-      "zone2": { "role": "data", "displayName": "Zone 2 — Aerobic", "canonical": "#4ADE80" },
-      "zone3": { "role": "data", "displayName": "Zone 3 — Tempo", "canonical": "#FACC15" },
-      "zone4": { "role": "data", "displayName": "Zone 4 — Threshold", "canonical": "#FB923C" },
-      "zone5": { "role": "data", "displayName": "Zone 5 — Max", "canonical": "#FF6B5D" }
+      "zone1": { "role": "data", "displayName": "Zone 1 — Easy", "canonical": "#7B9BC9" },
+      "zone2": { "role": "data", "displayName": "Zone 2 — Aerobic", "canonical": "#7CB88F" },
+      "zone3": { "role": "data", "displayName": "Zone 3 — Tempo", "canonical": "#D4B356" },
+      "zone4": { "role": "data", "displayName": "Zone 4 — Threshold", "canonical": "#CC8A56" },
+      "zone5": { "role": "data", "displayName": "Zone 5 — Max", "canonical": "#C9695C" }
     },
     "typographyMeta": {
-      "display": { "displayName": "Display (Bebas Neue)", "purpose": "Every section heading, the splash wordmark, and standout stat numbers (e.g. days-to-race)." },
+      "display": { "displayName": "Display (Bebas Neue)", "purpose": "Hero moments only: splash wordmark, the 4 tab-view titles, login/signup/onboarding, standout stat numbers (e.g. days-to-race)." },
+      "subtitle": { "displayName": "Subtitle (Inter 800)", "purpose": "Secondary overlay/modal screen titles (Datos personales, Editar carrera, etc.) — same role as Display but without competing with true hero moments." },
       "body": { "displayName": "Body (Inter)", "purpose": "Running copy, descriptions, chat messages, form values." },
       "label": { "displayName": "Label (Inter, uppercase)", "purpose": "Field labels, card eyebrow headers, tag text." },
       "mono": { "displayName": "Mono (JetBrains Mono)", "purpose": "Every measurement on screen — pace, distance, time, date, percent. Never used for prose." }

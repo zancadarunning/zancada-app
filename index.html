@@ -82,11 +82,11 @@
        saturados/"neon" originales. El tema claro de acá abajo se deja como
        está, sin tocar (ver su propio comentario: está oscurecido a propósito
        por contraste WCAG AA sobre fondo blanco). */
-    --zone1:#5B9BFF; --zone1-bg:rgba(91,155,255,.16); --zone1-bg-live:rgba(91,155,255,.13);
-    --zone2:#4ADE80; --zone2-bg:rgba(74,222,128,.16); --zone2-bg-live:rgba(74,222,128,.13);
-    --zone3:#FACC15; --zone3-bg:rgba(250,204,21,.16); --zone3-bg-live:rgba(250,204,21,.13);
-    --zone4:#FB923C; --zone4-bg:rgba(251,146,60,.16); --zone4-bg-live:rgba(251,146,60,.13);
-    --zone5:#FF6B5D; --zone5-bg:rgba(255,107,93,.16); --zone5-bg-live:rgba(255,107,93,.13);
+    --zone1:#7B9BC9; --zone1-bg:rgba(123,155,201,.18); --zone1-bg-live:rgba(123,155,201,.15);
+    --zone2:#7CB88F; --zone2-bg:rgba(124,184,143,.18); --zone2-bg-live:rgba(124,184,143,.15);
+    --zone3:#D4B356; --zone3-bg:rgba(212,179,86,.18); --zone3-bg-live:rgba(212,179,86,.15);
+    --zone4:#CC8A56; --zone4-bg:rgba(204,138,86,.18); --zone4-bg-live:rgba(204,138,86,.15);
+    --zone5:#C9695C; --zone5-bg:rgba(201,105,92,.18); --zone5-bg-live:rgba(201,105,92,.15);
     --cs:dark;
     --safe-top:env(safe-area-inset-top); --safe-bottom:env(safe-area-inset-bottom);
   }
@@ -94,6 +94,13 @@
   html,body{margin:0; padding:0; background:var(--asphalt); height:100%;}
   body{font-family:'Inter',-apple-system,sans-serif; color:var(--chalk); overscroll-behavior-y:none;}
   .display{font-family:'Bebas Neue',sans-serif; letter-spacing:.02em;}
+  /* Bebas Neue queda reservada para momentos hero (splash, los 4 títulos de pestaña,
+     login/onboarding, números grandes) -- .subtitle es el mismo rol de "título de
+     pantalla" pero para los ~19 overlays/modales secundarios (Datos personales, Editar
+     carrera, etc.), en Inter bien cargado en vez de la tipografía cartel. Antes todos
+     usaban Bebas Neue por igual, así que dejaba de sentirse especial en los momentos
+     que sí importan. */
+  .subtitle{font-family:'Inter',-apple-system,sans-serif; font-weight:800; letter-spacing:-0.01em;}
   .mono{font-family:'JetBrains Mono',monospace;}
   h1,h2,h3,p{margin:0;}
   button,input,select{font-family:inherit;}
@@ -1389,7 +1396,7 @@
 
   <div class="overlay overlay-sheet" id="personal-data-overlay">
     <button class="week-nav-btn" onclick="closePersonalDataOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
-    <h2 class="display" style="font-size:22px;" data-i18n="perfil_personal_title"></h2>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_personal_title"></h2>
     <div class="card" id="perfil-personal-card" style="margin-top:16px;">
       <div class="metric-input-row">
         <div class="metric-input-cell"><label data-i18n="ob_weight_label"></label><input type="number" class="metric-input" id="perfil-weight"></div>
@@ -1432,7 +1439,7 @@
 
   <div class="overlay overlay-sheet" id="goals-overlay">
     <button class="week-nav-btn" onclick="closeGoalsOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
-    <h2 class="display" style="font-size:22px;" data-i18n="perfil_goals_title"></h2>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_goals_title"></h2>
     <div class="card" id="perfil-goals-card" style="margin-top:16px;">
       <p class="muted" style="margin-bottom:10px;" data-i18n="perfil_goals_desc"></p>
       <div class="field" style="margin-top:0;">
@@ -1449,7 +1456,7 @@
 
   <div class="overlay overlay-sheet" id="shoes-overlay">
     <button class="week-nav-btn" onclick="closeShoesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
-    <h2 class="display" style="font-size:22px;" data-i18n="perfil_gear"></h2>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_gear"></h2>
     <div class="card" style="margin-top:16px;">
       <div id="shoe-list"></div>
       <div class="add-row">
@@ -1466,7 +1473,7 @@
 
   <div class="overlay overlay-sheet" id="event-overlay">
     <button class="week-nav-btn" onclick="closeEventOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
-    <h2 class="display" style="font-size:22px;" data-i18n="perfil_event"></h2>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_event"></h2>
     <div class="card" style="margin-top:16px;">
       <div id="event-box"></div>
       <button class="small-link" style="margin-top:10px; display:flex; align-items:center; gap:5px;" onclick="openPaceCalcModal()"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v2"/></svg></span><span data-i18n="pace_calc_open_btn"></span></button>
@@ -1487,7 +1494,7 @@
 
   <div class="overlay overlay-sheet" id="lang-overlay">
     <button class="week-nav-btn" onclick="closeLangOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
-    <h2 class="display" style="font-size:22px;" data-i18n="perfil_lang"></h2>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_lang"></h2>
     <div class="card" style="margin-top:16px;">
       <div class="choice-row" id="perfil-lang-choice" style="flex-wrap:wrap;">
         <div class="choice" data-v="es">Español</div>
@@ -1502,7 +1509,7 @@
 
   <div class="overlay overlay-sheet" id="days-overlay">
     <button class="week-nav-btn" onclick="closeDaysOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
-    <h2 class="display" style="font-size:22px;" data-i18n="perfil_days_title"></h2>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_days_title"></h2>
     <div class="card" id="perfil-days-card" style="margin-top:16px;">
       <div class="day-picker" id="perfil-days"></div>
       <button class="btn btn-outline btn-sm perfil-save-btn" id="save-days-btn" style="margin-top:12px; width:100%;" data-i18n="perfil_days_save" onclick="confirmAndSave('days')"></button>
@@ -1512,7 +1519,7 @@
   <div class="overlay overlay-sheet" id="zones-overlay">
     <button class="week-nav-btn" onclick="closeZonesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-      <h2 class="display" style="font-size:22px;" data-i18n="perfil_zones_title"></h2>
+      <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_zones_title"></h2>
       <button class="info-btn" onclick="openZonesInfo()" data-i18n-aria="aria_zones_info"><span class="icon-sq" style="width:19px; height:19px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span></button>
     </div>
     <div class="card" id="perfil-zones-card" style="margin-top:16px;">
@@ -1525,7 +1532,7 @@
   <div class="overlay overlay-sheet" id="pain-overlay">
     <button class="week-nav-btn" onclick="closePainOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <div style="display:flex; align-items:center; gap:8px;">
-      <h2 class="display" style="font-size:22px; margin:0;" data-i18n="pain_list_title"></h2>
+      <h2 class="subtitle" style="font-size:22px; margin:0;" data-i18n="pain_list_title"></h2>
       <button onclick="openPainInfo()" style="background:none; border:1.5px solid var(--mist-dim); color:var(--mist-dim); width:19px; height:19px; border-radius:50%; font-size:11px; font-weight:800; font-style:italic; font-family:Georgia,serif; display:flex; align-items:center; justify-content:center; padding:0; cursor:pointer; flex-shrink:0; line-height:1;">i</button>
     </div>
     <div class="card" style="margin-top:16px;">
@@ -1546,7 +1553,7 @@
   </div>
 
   <div class="overlay" id="edit-run-modal" style="display:none; z-index:55;">
-    <h2 class="display" style="font-size:22px;" data-i18n="edit_run_title"></h2>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="edit_run_title"></h2>
     <div class="field"><label data-i18n="hist_manual_date"></label>
       <div class="date-box" onclick="openCalendar('edit-run-date')"><span class="date-box-text" id="edit-run-date-text"></span></div>
       <input type="hidden" id="edit-run-date">
@@ -1565,27 +1572,27 @@
 
   <div class="overlay" id="hist-info-modal" style="display:none; z-index:59;">
     <div class="icon-sq" style="width:38px; height:38px; margin:0 auto 8px; color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></div>
-    <h2 class="display" style="font-size:22px;" data-i18n="hist_info_title"></h2>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="hist_info_title"></h2>
     <p class="lead" data-i18n="hist_info_text"></p>
     <button class="btn btn-primary" style="width:100%; margin-top:28px;" onclick="closeHistInfo()" data-i18n="hist_info_ok"></button>
   </div>
 
   <div class="overlay" id="zones-info-modal" style="display:none; z-index:59;">
     <div class="icon-sq" style="width:38px; height:38px; margin:0 auto 8px; color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></div>
-    <h2 class="display" style="font-size:22px; text-align:center;" data-i18n="perfil_zones_title"></h2>
+    <h2 class="subtitle" style="font-size:22px; text-align:center;" data-i18n="perfil_zones_title"></h2>
     <div id="zones-info-body" style="margin-top:18px; display:flex; flex-direction:column; gap:14px;"></div>
     <button class="btn btn-primary" style="width:100%; margin-top:24px;" onclick="closeZonesInfo()" data-i18n="hist_info_ok"></button>
   </div>
 
   <div class="overlay" id="race-tips-info-modal" style="display:none; z-index:59;">
     <div class="icon-sq" style="width:38px; height:38px; margin:0 auto 8px; color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4.5s2-1.3 4.5-1.3 3.5 1.5 6 1.5 3.5-1 3.5-1v9s-1.5 1-3.5 1-3.5-1.5-6-1.5-4.5 1.3-4.5 1.3z"/></svg></div>
-    <h2 class="display" style="font-size:22px; text-align:center;" data-i18n="home_race_tips_title"></h2>
+    <h2 class="subtitle" style="font-size:22px; text-align:center;" data-i18n="home_race_tips_title"></h2>
     <div id="race-tips-info-body" style="margin-top:18px; display:flex; flex-direction:column; gap:16px;"></div>
     <button class="btn btn-primary" style="width:100%; margin-top:24px;" onclick="closeRaceTipsInfo()" data-i18n="hist_info_ok"></button>
   </div>
 
   <div class="overlay" id="rating-modal" style="display:none; z-index:58;">
-    <h2 class="display" style="font-size:22px;" data-i18n="rating_title"></h2>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="rating_title"></h2>
     <p class="lead" id="rating-session-desc"></p>
     <div style="display:flex; flex-direction:column; gap:12px; margin-top:28px;">
       <button class="btn btn-outline" style="padding:18px; font-size:16px; display:flex; align-items:center; gap:10px; justify-content:center;" onclick="submitRating('mal')"><span class="icon-sq" style="width:22px; height:22px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M8.5 15.5c1-1.3 2.2-2 3.5-2s2.5.7 3.5 2"/><circle cx="9" cy="9.5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="9.5" r="1" fill="currentColor" stroke="none"/></svg></span> <span data-i18n="rating_bad"></span></button>
@@ -1595,7 +1602,7 @@
   </div>
 
   <div class="overlay" id="pain-modal" style="display:none; z-index:58;">
-    <h2 class="display" style="font-size:22px;" data-i18n="pain_modal_title"></h2>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="pain_modal_title"></h2>
     <p class="lead" data-i18n="pain_modal_subtitle"></p>
     <div class="choice-row" id="pain-body-choice" style="margin-top:18px;">
       <div class="choice" data-v="rodilla" data-i18n="pain_body_rodilla"></div>
@@ -1616,19 +1623,19 @@
   </div>
 
   <div class="overlay" id="pain-info-modal" style="display:none; z-index:59;">
-    <h2 class="display" style="font-size:22px;" data-i18n="pain_info_title"></h2>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="pain_info_title"></h2>
     <p class="lead" data-i18n="pain_info_text"></p>
     <button class="btn btn-primary" style="width:100%; margin-top:28px;" onclick="closePainInfo()" data-i18n="hist_info_ok"></button>
   </div>
 
   <div class="overlay" id="whats-new-modal" style="display:none; z-index:60;">
-    <h2 class="display" style="font-size:22px;" data-i18n="whats_new_title"></h2>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="whats_new_title"></h2>
     <ul id="whats-new-list" style="margin-top:18px; padding-left:20px; display:flex; flex-direction:column; gap:12px; font-size:14.5px; line-height:1.5; color:var(--chalk);"></ul>
     <button class="btn btn-primary" style="width:100%; margin-top:24px;" onclick="closeWhatsNew()" data-i18n="whats_new_close"></button>
   </div>
 
   <div class="overlay" id="pace-calc-modal" style="display:none; z-index:58;">
-    <h2 class="display" style="font-size:22px;" data-i18n="pace_calc_title"></h2>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="pace_calc_title"></h2>
     <p class="lead" data-i18n="pace_calc_subtitle"></p>
     <div class="field" style="margin-top:20px;">
       <label data-i18n="pace_calc_distance_label"></label>
@@ -1667,7 +1674,7 @@
   </div>
 
   <div class="overlay" id="plan-change-timing-modal" style="display:none; z-index:58;">
-    <h2 class="display" style="font-size:22px;" data-i18n="plan_timing_title"></h2>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="plan_timing_title"></h2>
     <p class="lead" data-i18n="plan_timing_subtitle"></p>
     <div style="display:flex; flex-direction:column; gap:12px; margin-top:28px;">
       <button class="btn btn-primary" style="padding:18px; font-size:16px;" onclick="resolvePlanChangeTiming('now')" data-i18n="plan_timing_now"></button>
@@ -1676,7 +1683,7 @@
   </div>
 
   <div class="overlay" id="reschedule-modal" style="display:none; z-index:58;">
-    <h2 class="display" style="font-size:22px;" data-i18n="reschedule_modal_title"></h2>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="reschedule_modal_title"></h2>
     <p class="lead" data-i18n="reschedule_modal_subtitle"></p>
     <div id="reschedule-day-list" style="margin-top:18px; display:flex; flex-direction:column; gap:10px;"></div>
     <button class="btn btn-outline" style="width:100%; margin-top:20px;" onclick="closeRescheduleModal()" data-i18n="cancel_word"></button>
