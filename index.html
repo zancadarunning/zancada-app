@@ -1927,6 +1927,20 @@
     </div>
     </div>
 
+    <!-- Polar es una segunda vía de conexión además de Strava -- una card
+         normal (no card-shell/vidrio), a propósito: el vidrio esmerilado está
+         reservado para UNA card destacada por pantalla (ver el comentario
+         grande junto a .card-highlight), y esa ya la ocupa Strava. -->
+    <div class="card">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="3"/></svg></span>
+        <span class="n" style="font-size:14.5px; font-weight:700; flex:1;">Polar</span>
+        <span id="polar-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
+      </div>
+      <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_polar_desc"></p>
+      <button class="btn btn-outline btn-sm" id="polar-connect-btn" style="margin-top:10px; width:100%;" onclick="connectPolar()"></button>
+    </div>
+
     <!-- Las 9 filas de navegación de antes (una por línea, scroll largo) ahora son una
          grilla de 2 columnas: se escanean de un vistazo. Mismos onclick, mismos ids de
          resumen dinámico (renderPerfilDays() y compañía siguen escribiendo en los mismos

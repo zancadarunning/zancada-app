@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-10T00:20:00Z';
+const APP_VERSION = '2026-09-10T01:10:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -751,6 +751,76 @@ async function disconnectStrava(){
     renderHistory(); renderHome(); renderPerfil(); persist();
   }
   await updateStravaStatusDisplay();
+}
+
+/* ---- Polar AccessLink -----
+   Mismo patrón que Strava arriba: authorize -> callback firma+intercambia
+   token -> el backend trae las últimas carreras. La diferencia real está
+   toda del lado del backend (ver api/polar-auth.js) -- acá el front es
+   prácticamente un calco de connectStrava/disconnectStrava. */
+const POLAR_CLIENT_ID = 'a4236422-03d7-4814-b772-09c51e50ecba';
+async function connectPolar(){
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session){ showToast(t('polar_connect_error'),'error'); return; }
+    const res = await fetch(apiUrl('/api/polar-init'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
+    });
+    if(!res.ok) throw new Error('polar-init failed');
+    const { state } = await res.json();
+    // Mismo motivo que en connectStrava: redirect_uri fijo a zancada.org, nunca
+    // armado con window.location.origin (ver ese comentario para el detalle).
+    const redirectUri = 'https://zancada.org/api/polar-auth';
+    const url = `https://flow.polar.com/oauth2/authorization?response_type=code&client_id=${POLAR_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
+    window.location.href = url;
+  }catch(e){
+    console.error(e);
+    showToast(t('polar_connect_error'),'error');
+  }
+}
+async function updatePolarStatusDisplay(){
+  const el = document.getElementById('polar-status');
+  const btn = document.getElementById('polar-connect-btn');
+  if(!el || !currentUserId) return;
+  try{
+    const { data } = await supabaseClient.from('polar_connections').select('polar_user_id').eq('user_id', currentUserId).maybeSingle();
+    if(data){
+      el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
+      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectPolar; }
+    } else {
+      el.textContent = t('perfil_native'); el.className = 'tag tag-asfalto';
+      if(btn){ btn.textContent = t('perfil_polar_connect'); btn.onclick = connectPolar; }
+    }
+  }catch(e){}
+}
+async function disconnectPolar(){
+  if(!currentUserId) return;
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(session){
+      const res = await fetch(apiUrl('/api/polar-disconnect'), {
+        method:'POST',
+        headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
+      });
+      if(!res.ok) throw new Error('polar-disconnect failed');
+    } else {
+      await supabaseClient.from('polar_connections').delete().eq('user_id', currentUserId);
+    }
+  }catch(e){
+    console.error(e);
+    try{ await supabaseClient.from('polar_connections').delete().eq('user_id', currentUserId); }catch(e2){}
+  }
+  if(state.runs && state.runs.some(r=>r.source==='polar')){
+    state.runs = state.runs.filter(r=>r.source!=='polar');
+    if(state.shoes){
+      state.shoes.forEach(shoe=>{
+        shoe.km = state.runs.filter(r=>String(r.shoeId)===String(shoe.id)).reduce((a,r)=>a+(r.distanceKm||0),0);
+      });
+    }
+    renderHistory(); renderHome(); renderPerfil(); persist();
+  }
+  await updatePolarStatusDisplay();
 }
 async function handleSignIn(){
   if(document.getElementById('login-submit-btn')?.disabled) return;
@@ -4149,7 +4219,7 @@ async function showView(v){
   if(v==='inicio'){ await refreshStateFromServer(); renderHome(); renderPlan(); }
   if(v==='history'){ await refreshStateFromServer(); renderHistory(); }
   if(v==='plan'){ await refreshStateFromServer(); viewingWeekOffset = 0; renderPlan(); }
-  if(v==='perfil'){ renderPerfilDays(); updatePushStatusDisplay(); updateStravaStatusDisplay(); }
+  if(v==='perfil'){ renderPerfilDays(); updatePushStatusDisplay(); updateStravaStatusDisplay(); updatePolarStatusDisplay(); }
   if(v==='correr'){ renderRunTodayCard(); }
 }
 function goCoachWithPrompt(prefill){
