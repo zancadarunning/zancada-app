@@ -426,6 +426,12 @@
      insinuado, no con un color de fondo sólido distinto (eso competiría demasiado). */
   .card-highlight{background:linear-gradient(160deg, rgba(214,255,63,.07), var(--asphalt-2) 55%); border-color:var(--hivis); border-width:1.5px;
     box-shadow:0 0 0 1px rgba(214,255,63,.25), 0 0 22px rgba(214,255,63,.35), 0 4px 18px rgba(0,0,0,.3);}
+  /* Mismo tratamiento que .card-highlight (borde + degradado interno + glow apenas
+     insinuado) pero en arcilla en vez de lima -- le da identidad propia a la card de
+     conectividad sin inventar un color nuevo: arcilla ya es el color secundario
+     establecido del sistema (mismo que .tag-trail, mismo que el separador de elevación). */
+  .card-strava{background:linear-gradient(160deg, rgba(192,106,46,.09), var(--asphalt-2) 55%); border-color:var(--clay); border-width:1.5px;
+    box-shadow:0 0 0 1px rgba(192,106,46,.25), 0 0 22px rgba(192,106,46,.3), 0 4px 18px rgba(0,0,0,.3);}
   /* Viñetas breves para la descripción de la sesión (entrada en calor / sesión /
      vuelta a la calma vienen como líneas separadas por \n desde planLabel()) -- se
      listan una debajo de otra con una marca chica, en vez de un párrafo corrido. */
@@ -1918,9 +1924,13 @@
     </div>
 
     <div class="elev-divider"><svg viewBox="0 0 60 14"><polyline points="0,12 10,12 16,4 22,10 28,2 34,9 40,12 60,12" fill="none" stroke="#C06A2E" stroke-width="1.6"/></svg><span data-i18n="perfil_connectivity"></span></div>
-    <div class="card">
+    <div class="card card-strava">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+        <span class="icon-sq" style="width:26px; height:26px; color:var(--clay); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></span>
+        <span class="n" style="font-size:14.5px; font-weight:700; flex:1;">Strava</span>
+        <span id="strava-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
+      </div>
       <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_connectivity_desc"></p>
-      <div class="conn-item"><span class="n">Strava</span><span id="strava-status" class="tag tag-asfalto" data-i18n="perfil_native"></span></div>
       <p id="strava-sync-note" class="muted" style="margin:8px 0 0; font-size:12px; display:none;"></p>
       <button class="btn btn-outline btn-sm" id="strava-connect-btn" style="margin-top:10px; width:100%;" onclick="connectStrava()"></button>
       <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
