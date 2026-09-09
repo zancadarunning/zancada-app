@@ -278,7 +278,7 @@
   .switch input{opacity:0; width:0; height:0; position:absolute;}
   .switch-slider{position:absolute; cursor:pointer; inset:0; background:var(--asphalt-4); transition:.2s; border-radius:31px;}
   .switch-slider:before{content:""; position:absolute; height:27px; width:27px; left:2px; top:2px; background:#fff; transition:.2s; border-radius:50%; box-shadow:0 2px 4px rgba(0,0,0,.3);}
-  .switch input:checked + .switch-slider{background:#34C759;}
+  .switch input:checked + .switch-slider{background:var(--hivis);}
   .switch input:checked + .switch-slider:before{transform:translateX(20px);}
   .two-col{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
   .divider-or{display:flex; align-items:center; gap:10px; margin:20px 0; color:var(--mist-dim);
@@ -1875,6 +1875,7 @@
       <span class="icon-sq" style="width:15px; height:15px; color:var(--mist-dim); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
     </div>
 
+    <div class="elev-divider"><svg viewBox="0 0 60 14"><polyline points="0,12 10,12 16,4 22,10 28,2 34,9 40,12 60,12" fill="none" stroke="#C06A2E" stroke-width="1.6"/></svg><span data-i18n="perfil_preferences"></span></div>
     <div class="card">
       <h3 data-i18n="perfil_units"></h3>
       <div class="choice-row segmented" id="units-toggle">
@@ -1902,7 +1903,7 @@
     <div class="elev-divider"><svg viewBox="0 0 60 14"><polyline points="0,12 10,12 16,4 22,10 28,2 34,9 40,12 60,12" fill="none" stroke="#C06A2E" stroke-width="1.6"/></svg><span data-i18n="perfil_connectivity"></span></div>
     <div class="card">
       <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_connectivity_desc"></p>
-      <div class="conn-item"><span class="n">Strava</span><span id="strava-status" class="tag tag-soon" data-i18n="perfil_native"></span></div>
+      <div class="conn-item"><span class="n">Strava</span><span id="strava-status" class="tag tag-asfalto" data-i18n="perfil_native"></span></div>
       <p id="strava-sync-note" class="muted" style="margin:8px 0 0; font-size:12px; display:none;"></p>
       <button class="btn btn-outline btn-sm" id="strava-connect-btn" style="margin-top:10px; width:100%;" onclick="connectStrava()"></button>
       <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">

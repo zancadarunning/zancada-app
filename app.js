@@ -650,7 +650,7 @@ async function updateStravaStatusDisplay(){
   try{
     const { data } = await supabaseClient.from('strava_connections').select('athlete_id').eq('user_id', currentUserId).maybeSingle();
     if(data){
-      el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
+      el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
       if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectStrava; }
       // Mismo aviso que el cartel de Historial (ver getStravaSyncIssue), pero acá como
       // nota corta -- este es justo el lugar donde ya está el botón para reconectar.
@@ -660,7 +660,7 @@ async function updateStravaStatusDisplay(){
         else { note.style.display = 'none'; }
       }
     } else {
-      el.textContent = t('perfil_native'); el.className = 'tag tag-soon';
+      el.textContent = t('perfil_native'); el.className = 'tag tag-asfalto';
       if(btn){ btn.textContent = t('perfil_strava_connect'); btn.onclick = connectStrava; }
       if(note) note.style.display = 'none';
     }

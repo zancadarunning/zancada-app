@@ -121,7 +121,7 @@ A near-monochrome carbon scale carries almost the entire interface; a single hi-
 ### Named Rules
 **The Luminosity-Not-Line Rule.** Two adjacent surfaces separate because one is measurably lighter than the other, not because a hard border was drawn between them. Reach for a lighter Asphalt step before reaching for a stroke.
 
-**The One Signal Rule.** Hi-Vis lime means "active" or "this is the one thing to act on" — never used as a decorative accent, never applied to more than the thing currently earning attention. If everything is lime, nothing is.
+**The One Signal Rule.** Hi-Vis lime means "active" or "this is the one thing to act on" — never used as a decorative accent, never applied to more than the thing currently earning attention. If everything is lime, nothing is. This governs status badges, tags, and fills (a card, a chip, a bar) — anywhere lime stands in for "this is the answer." It does not govern the leading icon inside a row-nav card (Perfil's list rows, and the equivalent icon slot elsewhere): every such icon is tinted Hi-Vis-Text consistently, on every screen, as a confirmed identity choice, not a signal — treat that tint as a fixed property of the icon slot itself, the same way its size and stroke weight are fixed, not as an instance of "the one thing to act on."
 
 ## Typography
 
