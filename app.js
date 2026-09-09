@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-09T21:35:00Z';
+const APP_VERSION = '2026-09-09T22:15:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -115,11 +115,18 @@ function applyStaticTranslations(){
   const langSummaryEl = document.getElementById('perfil-lang-summary');
   if(langSummaryEl) langSummaryEl.textContent = LANG_DISPLAY[lang] || lang;
 }
+let latestRequestedLang = null;
 async function setLang(code){
   // ensureLocaleLoaded no hace nada si ese idioma ya está en memoria (el inicial, o uno
   // que ya se haya pedido antes en esta misma sesión) -- el fetch solo pasa la primera
   // vez que alguien elige un idioma nuevo.
+  latestRequestedLang = code;
   try{ await ensureLocaleLoaded(code); }catch(e){ showToast(t('generic_error'), 'error'); return; }
+  // Si mientras esperábamos este fetch el usuario tocó OTRO idioma (ej: toca "English" --
+  // ya en memoria, resuelve al toque -- y enseguida "Français" -- todavía no cargado, tarda
+  // un poco más), sin este chequeo la llamada más vieja podía terminar de resolver último y
+  // pisar la elección real más reciente. Si ya no somos el pedido más nuevo, no aplicamos nada.
+  if(latestRequestedLang !== code) return;
   lang = code; state.lang = code;
   applyStaticTranslations();
   populateOnboardDays();
@@ -404,7 +411,12 @@ async function disablePushNotifications(){
     if(sub) await sub.unsubscribe();
     if(currentUserId) await supabaseClient.from('push_subscriptions').delete().eq('user_id', currentUserId);
     await updatePushStatusDisplay();
-  }catch(e){ console.error(e); }
+  }catch(e){
+    // El checkbox nativo ya se muestra destildado apenas el usuario lo toca (antes de
+    // que corra este handler) -- sin avisar ni volver a sincronizar el estado real acá,
+    // quedaba pareciendo apagado aunque la baja de verdad haya fallado.
+    console.error(e); showToast(t('push_error'),'error'); await updatePushStatusDisplay();
+  }
 }
 
 /* ---- Respaldo local (para no perder una carrera si se guarda sin conexión) ---- */
@@ -530,7 +542,13 @@ async function loadUserAndEnter(user, isRetry){
       // inglés pero eligió español en Perfil, por ejemplo) -- si es otro, hace falta
       // traerlo antes de renderizar nada, sino t() cae de vuelta a español a mitad de
       // camino y despues "salta" cuando este fetch termine.
-      await ensureLocaleLoaded(lang);
+      // Try/catch propio y a propósito, separado del que envuelve todo esto: si el
+      // fetch de la cuenta (arriba) salió bien pero ESTE script puntual falla (blip de
+      // red, caché vieja de CDN -- una app que se usa afuera corriendo pisa esto seguido),
+      // antes se caía en el catch de "no pudimos cargar tu cuenta" y le ofrecía cerrar
+      // sesión, tirando a la basura un `state` que en realidad ya llegó bien. Si falla,
+      // seguimos igual -- t() ya cae de vuelta a español si el idioma pedido no está.
+      try{ await ensureLocaleLoaded(lang); }catch(e){ console.error('locale load error', e); }
       // Al mantener profile.tz al día en cada apertura (no solo en el onboarding)
       // cubrimos tanto a corredores que ya venían usando la app antes de que
       // existiera este campo (lo tienen undefined) como a alguien que viaja y abre
@@ -1355,10 +1373,14 @@ async function finishOnboard(){
   const weight = parseFloat(document.getElementById('ob-weight').value) || 70;
   const height = parseFloat(document.getElementById('ob-height').value) || 170;
   const birth = document.getElementById('ob-birth').value || '1995-01-01';
-  const runnerType = document.querySelector('#ob-runnertype .choice.active').dataset.v;
+  // Con guarda + default, igual que el mismo patrón en savePersonalData: hoy siempre hay
+  // una opción marcada "active" de entrada en el HTML y los handlers de click nunca la
+  // sacan sin poner otra en su lugar, pero sin esta guarda un cambio futuro en ese markup
+  // rompería finishOnboard con un TypeError justo en el último paso del onboarding.
+  const runnerType = document.querySelector('#ob-runnertype .choice.active')?.dataset.v || 'new';
   const currentWeeklyKm = runnerType==='active' ? (parseFloat(document.getElementById('ob-currentkm').value) || 0) : 0;
-  const terrain = document.querySelector('#ob-terrain .choice.active').dataset.v;
-  const trainBy = document.querySelector('#ob-trainby .choice.active').dataset.v;
+  const terrain = document.querySelector('#ob-terrain .choice.active')?.dataset.v || 'asfalto';
+  const trainBy = document.querySelector('#ob-trainby .choice.active')?.dataset.v || 'distance';
   const trainingDays = DAY_KEYS.filter(d => document.querySelector(`#ob-days .day-pill[data-v="${d}"]`).classList.contains('active'));
   const goal = document.getElementById('ob-goal').value;
   const raceDate = document.getElementById('ob-racedate').value || null;
@@ -1532,11 +1554,15 @@ function todayLocalISO(){
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
 function getMondayISO(d){
+  // Mismo motivo que todayLocalISO() de arriba: toISOString() convierte a UTC antes de
+  // recortar la fecha, así que en husos horarios positivos (Europa, gran parte de Asia --
+  // justo mercados que este app soporta en en/fr/it/de/pt) la medianoche local del lunes
+  // cae todavía el domingo en UTC, y esta función devolvía la fecha del domingo. Se arma
+  // el string a mano con los componentes LOCALES, igual que todayLocalISO().
   const dt = new Date(d);
   const day = dt.getDay();
   dt.setDate(dt.getDate() + (day===0 ? -6 : 1-day));
-  dt.setHours(0,0,0,0);
-  return dt.toISOString().slice(0,10);
+  return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
 }
 function isCutbackWeek(n){ return n % 4 === 0; }
 const GOAL_PEAK_KM = {start:18, '5k':25, '10k':35, '15k':42, '21k':50, '42k':65, ultra:75, lifestyle:15};
@@ -3226,7 +3252,9 @@ function renderPerfil(){
   if(!editingPersonal){
     document.getElementById('perfil-weight').value = p.weight || '';
     document.getElementById('perfil-height').value = p.height || '';
-    document.getElementById('perfil-current-km').value = p.currentWeeklyKm || '';
+    // 0 es un valor real y guardado a propósito (alguien nuevo que arranca desde cero) --
+    // "|| ''" lo mostraba como campo vacío, indistinguible de "todavía no se cargó nada".
+    document.getElementById('perfil-current-km').value = (p.currentWeeklyKm===0 || p.currentWeeklyKm) ? p.currentWeeklyKm : '';
     document.getElementById('perfil-goal').value = p.goal || 'start';
     document.getElementById('perfil-racedate').value = p.raceDate || '';
     dateBoxUpdaters['perfil-racedate'] && dateBoxUpdaters['perfil-racedate']();
@@ -4557,8 +4585,11 @@ function updateLiveMap(lat, lon){
   if(!startMarker){
     startMarker = L.circleMarker([lat,lon], {radius:6, color:'#fff', weight:2, fillColor:'#4ADE80', fillOpacity:1}).addTo(liveMap);
   }
-  if(liveMarker) liveMap.removeLayer(liveMarker);
-  liveMarker = L.circleMarker([lat,lon], {radius:8, color:'#121415', weight:3, fillColor:'#D6FF3F', fillOpacity:1}).addTo(liveMap);
+  // Antes se destruía y se creaba de nuevo el marcador en cada punto GPS (varias veces
+  // por minuto durante toda la carrera) -- moverlo con setLatLng es una operación mucho
+  // más liviana y el resultado visual es idéntico.
+  if(liveMarker){ liveMarker.setLatLng([lat,lon]); }
+  else{ liveMarker = L.circleMarker([lat,lon], {radius:8, color:'#121415', weight:3, fillColor:'#D6FF3F', fillOpacity:1}).addTo(liveMap); }
   liveMap.setView([lat,lon], Math.max(liveMap.getZoom(),16));
 }
 function recenterMap(){
@@ -4646,7 +4677,12 @@ function onPosition(pos){
   updateLiveMap(lat,lon);
   updateLiveStats();
   if(active){ maybeAnnounceKm(); tickWorkoutGuide(); }
-  saveRunProgress();
+  // Se sacó el saveRunProgress() de acá -- se llamaba en cada fix de GPS (varias veces
+  // por minuto durante toda la carrera), reserializando y regrabando en localStorage el
+  // array de puntos COMPLETO cada vez, que no para de crecer -- una carrera larga hacía
+  // esa escritura sincrónica cada vez más pesada a medida que pasaba el tiempo. El timer
+  // de arriba (setInterval, línea ~4642) ya guarda cada 15s, y pausar/reanudar guarda al
+  // toque -- de sobra para no perder progreso real ante un cierre inesperado.
 }
 function onPosError(){ document.getElementById('geo-warning').style.display='block'; document.getElementById('geo-warning').textContent=t('geo_err_permission'); }
 function updateRunUnitLabels(){
@@ -4780,7 +4816,11 @@ function saveManualRun(){
   const date = document.getElementById('man-date').value;
   const dist = parseFloat(document.getElementById('man-dist').value);
   const durMin = parseFloat(document.getElementById('man-dur').value);
-  if(!date || !dist || !durMin) return;
+  // Antes solo chequeaba "truthy" (!dist), asi que un valor negativo (o -0) pasaba
+  // derecho -- mismo criterio que ya usa saveEditRun, exigiendo que sean positivos de
+  // verdad. Sin esto, una distancia negativa terminaba restando km de la zapatilla
+  // elegida en vez de sumarlos (ver mas abajo).
+  if(!date || !(dist>0) || !(durMin>0)){ showToast(t('edit_run_invalid'),'error'); return; }
   const hr = parseInt(document.getElementById('man-hr').value);
   const shoeId = parseInt(document.getElementById('man-shoe').value) || null;
   const isoDate = new Date(date+'T12:00:00').toISOString();
@@ -6864,6 +6904,13 @@ async function saveEditRun(){
   // puede ser el mismo par, en cuyo caso el resultado neto es solo el ajuste de km.
   const oldShoe = state.shoes.find(s => String(s.id) === String(r.shoeId));
   if(oldShoe) oldShoe.km = Math.max(0, oldShoe.km - r.distanceKm);
+
+  // Si este run estaba linkeado a un día del plan (autoMarkSessionDone lo marca "hecho"
+  // al grabar la carrera), cambiarle la fecha acá lo deja huérfano -- el día viejo seguía
+  // mostrando "hecho" para una carrera que ya no ocurrió ese día. deleteRun ya hace este
+  // mismo desvínculo al borrar; acá hace falta al mover la fecha por el mismo motivo.
+  const staleLinkedDay = state.plan.find(d => d.linkedRunId === r.id);
+  if(staleLinkedDay){ staleLinkedDay.status = null; staleLinkedDay.linkedRunId = null; }
 
   // conservamos la hora original de la carrera, solo cambiamos el día -- así no se
   // desordena si en algún lado se usa la hora para algo.
