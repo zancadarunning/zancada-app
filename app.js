@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-10T01:40:00Z';
+const APP_VERSION = '2026-09-10T02:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -1808,7 +1808,14 @@ async function syncTodayNow(){
   const bothSynced = (stravaResult && stravaResult.synced) || (polarResult && polarResult.synced);
   const bothDisconnected = (!stravaResult || stravaResult.reason==='not_connected') && (!polarResult || polarResult.reason==='not_connected');
   if(!bothSynced){
-    const reasonMsg = bothDisconnected ? 'Tu cuenta no está conectada a Strava ni a Polar.' : (stravaResult && stravaResult.error) || (polarResult && polarResult.error) ? `Error: ${(stravaResult&&stravaResult.error)||(polarResult&&polarResult.error)}` : 'No encontramos actividades nuevas.';
+    let reasonMsg = bothDisconnected ? 'Tu cuenta no está conectada a Strava ni a Polar.' : (stravaResult && stravaResult.error) || (polarResult && polarResult.error) ? `Error: ${(stravaResult&&stravaResult.error)||(polarResult&&polarResult.error)}` : 'No encontramos actividades nuevas.';
+    // Temporal, solo mientras probamos la conexión con Polar por primera vez: sin
+    // esto, "no encontramos nada nuevo" no dice si Polar no tenía el ejercicio, lo
+    // tenía con otro deporte, o la llamada en sí falló -- y el usuario probando esto
+    // no tiene forma fácil de mirar la consola del navegador. Sacar una vez probado.
+    if(polarResult && polarResult.debug){
+      reasonMsg += ' [Polar debug: ' + JSON.stringify(polarResult.debug).slice(0,200) + ']';
+    }
     showToast(reasonMsg,'error');
   }
   if(btn){ btn.disabled = false; btn.innerHTML = `<span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}`; }

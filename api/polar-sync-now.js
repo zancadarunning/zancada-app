@@ -36,12 +36,22 @@ module.exports = async (req, res) => {
     const exsRes = await fetch('https://www.polaraccesslink.com/v3/exercises', {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
-    const exsData = await exsRes.json();
+    const exsData = await exsRes.json().catch(() => null);
+    // exsRes.ok es la primera pregunta a hacerse acá -- si Polar devuelve un
+    // 401/403/lo que sea, exsData no tiene forma de {exercises:[...]} y antes
+    // esto se leía como "0 ejercicios" silenciosamente, sin ninguna pista de
+    // que en realidad la llamada había fallado.
+    if (!exsRes.ok) {
+      return res.status(200).json({ synced: false, reason: 'no_new_activity', debug: { httpStatus: exsRes.status, body: exsData } });
+    }
     const exercises = (exsData && exsData.exercises) || [];
     const runExercises = exercises.filter(ex => String(ex.sport || '').toUpperCase().includes('RUN'));
 
     if (!runExercises.length) {
-      return res.status(200).json({ synced: false, reason: 'no_new_activity' });
+      return res.status(200).json({
+        synced: false, reason: 'no_new_activity',
+        debug: { totalExercises: exercises.length, sports: exercises.map(ex => ex.sport) }
+      });
     }
 
     const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${userId}&select=data`, { headers });
