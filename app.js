@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-09T19:20:00Z';
+const APP_VERSION = '2026-09-09T20:05:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -79,7 +79,25 @@ function detectInitialLang(){
   const nav = ((navigator.language || navigator.userLanguage || 'es')+'').slice(0,2).toLowerCase();
   return supported.includes(nav) ? nav : 'es';
 }
-let lang = detectInitialLang();
+// index.html ya cargó UN SOLO locale de forma sincrónica (el que detectó por
+// navigator.language, vía document.write antes de este script -- ver el bootstrap chico
+// junto a los <script> de /locales/ en index.html) y dejó guardado cuál en
+// window.__ZANCADA_INITIAL_LANG__. Antes se cargaban los 6 diccionarios siempre, sin
+// importar el idioma real (~75KB comprimidos tirados a la basura en cada carga, para
+// siempre, para el 100% de la gente que nunca toca el selector de idioma) -- ahora el
+// resto se trae recién si hace falta: al restaurar una cuenta con otro idioma guardado
+// (loadUserAndEnter), o si alguien realmente abre el selector en Perfil (setLang).
+let lang = (typeof window!=='undefined' && window.__ZANCADA_INITIAL_LANG__) || detectInitialLang();
+function ensureLocaleLoaded(code){
+  if(window.I18N && window.I18N[code]) return Promise.resolve();
+  return new Promise((resolve, reject)=>{
+    const s = document.createElement('script');
+    s.src = '/locales/' + code + '.js';
+    s.onload = ()=>resolve();
+    s.onerror = ()=>reject(new Error('No se pudo cargar /locales/'+code+'.js'));
+    document.head.appendChild(s);
+  });
+}
 function t(key, vars){
   let s = (I18N[lang]&&I18N[lang][key]) || I18N.es[key] || key;
   if(vars) Object.keys(vars).forEach(k=>{ s = s.replace('{'+k+'}', vars[k]); });
@@ -97,7 +115,11 @@ function applyStaticTranslations(){
   const langSummaryEl = document.getElementById('perfil-lang-summary');
   if(langSummaryEl) langSummaryEl.textContent = LANG_DISPLAY[lang] || lang;
 }
-function setLang(code){
+async function setLang(code){
+  // ensureLocaleLoaded no hace nada si ese idioma ya está en memoria (el inicial, o uno
+  // que ya se haya pedido antes en esta misma sesión) -- el fetch solo pasa la primera
+  // vez que alguien elige un idioma nuevo.
+  try{ await ensureLocaleLoaded(code); }catch(e){ showToast(t('generic_error'), 'error'); return; }
   lang = code; state.lang = code;
   applyStaticTranslations();
   populateOnboardDays();
@@ -503,6 +525,12 @@ async function loadUserAndEnter(user, isRetry){
         state = pending.data; lang = state.lang || lang;
         persist();
       }
+      // El idioma guardado en la cuenta puede no ser el que index.html adivinó por
+      // navigator.language y cargó de entrada (alguien que configuró el teléfono en
+      // inglés pero eligió español en Perfil, por ejemplo) -- si es otro, hace falta
+      // traerlo antes de renderizar nada, sino t() cae de vuelta a español a mitad de
+      // camino y despues "salta" cuando este fetch termine.
+      await ensureLocaleLoaded(lang);
       // Al mantener profile.tz al día en cada apertura (no solo en el onboarding)
       // cubrimos tanto a corredores que ya venían usando la app antes de que
       // existiera este campo (lo tienen undefined) como a alguien que viaja y abre

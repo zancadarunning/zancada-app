@@ -1984,15 +1984,24 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<!-- Diccionarios de traducción: van ANTES de app.js a propósito, para que
-     window.I18N ya esté armado cuando app.js empieza a correr (los <script>
-     sin defer/async se ejecutan en orden, uno atrás del otro). -->
-<script src="/locales/es.js"></script>
-<script src="/locales/en.js"></script>
-<script src="/locales/pt.js"></script>
-<script src="/locales/fr.js"></script>
-<script src="/locales/it.js"></script>
-<script src="/locales/de.js"></script>
+<!-- Diccionarios de traducción: antes se cargaban los 6 siempre (~75KB comprimidos
+     tirados a la basura en cada carga para el 100% de la gente que usa un solo idioma),
+     nada más para que el selector de idioma en Perfil pudiera cambiar sin pedir nada a
+     la red. Ahora se carga UN SOLO diccionario acá -- el que corresponde a
+     navigator.language, con document.write para que siga siendo un <script> más,
+     sincrónico y en orden, exactamente como los de antes (por eso sigue yendo ANTES de
+     app.js: window.I18N tiene que estar armado cuando ese script arranca). Los otros 5
+     se traen recién si hacen falta de verdad: ver ensureLocaleLoaded() en app.js, usado
+     al restaurar una cuenta con otro idioma guardado, o si alguien abre el selector. -->
+<script>
+(function(){
+  var supported = ['es','en','pt','fr','it','de'];
+  var nav = ((navigator.language || navigator.userLanguage || 'es')+'').slice(0,2).toLowerCase();
+  var initial = supported.indexOf(nav) >= 0 ? nav : 'es';
+  window.__ZANCADA_INITIAL_LANG__ = initial;
+  document.write('<script src="/locales/' + initial + '.js"><\/script>');
+})();
+</script>
 <script src="/app.js"></script>
 </body>
 </html>
