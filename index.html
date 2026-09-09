@@ -79,6 +79,10 @@
        sigue siendo la base para todo lo demás; esto es la excepción deliberada, no
        el reemplazo general. */
     --ease-spring:cubic-bezier(.34,1.56,.64,1);
+    /* Mismo ease-out "fuerte" que ya se usaba suelto en un par de transiciones
+       (barras de tendencia, swipe) -- nombrado para reusarlo a propósito en vez de
+       repetir el número mágico cada vez. */
+    --ease-out:cubic-bezier(.22,1,.36,1);
     --tabbar-bg:rgba(24,24,27,.92);
     --toast-error-bg:#3a1f1c; --toast-error-fg:#FF9A8D;
     --shadow-card:0 8px 22px rgba(0,0,0,.4); --shadow-lg:0 16px 48px rgba(0,0,0,.55);
@@ -146,6 +150,16 @@
     background:radial-gradient(60% 40% at 50% 0%, rgba(214,255,63,.07), transparent 60%),
       radial-gradient(55% 35% at 100% 12%, rgba(192,106,46,.05), transparent 62%), var(--asphalt);
     display:flex; flex-direction:column;}
+
+  /* Grano sutilísimo sobre el contenido (no sobre el chrome fijo ni los overlays --
+     z-index:2 lo deja por debajo del header/tabbar/modales a propósito) para que el
+     carbón de fondo no se lea perfectamente liso/digital. Un solo <div> con ruido
+     generado por SVG (sin pedir ninguna imagen), blend "overlay" para que se mezcle
+     con lo que hay debajo en vez de tapar nada. */
+  .app-grain{position:fixed; inset:0; z-index:2; pointer-events:none; opacity:.05; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    background-size:180px 180px;}
+  @media (prefers-reduced-transparency:reduce){ .app-grain{display:none;} }
 
   .pulse-strip{width:100%; height:34px; overflow:hidden; opacity:.55; color:var(--hivis);}
   .pulse-strip svg{width:200%; height:100%; animation:pulseScroll 5.5s linear infinite;}
@@ -239,9 +253,14 @@
      scroll de lo que hay debajo. Esto habilita el gesto de "arrastrar hacia abajo para
      cerrar" de wireOverlaySheetSwipe() en app.js. No se toca el resto de los overlays
      (login, onboarding, los modales de confirmación/info) para no arriesgar esos flujos. */
+  /* Entrada/salida asimétricas a propósito: cerrar (esta regla base, la que aplica
+     cuando se saca overlay-open) es rápido y directo -- es una respuesta del sistema.
+     Abrir (la regla de abajo) se toma unos milisegundos más con un resorte apenas
+     insinuado -- es la hoja "llegando", tiene sentido que se sienta un poco viva. */
   .overlay-sheet{display:block; opacity:0; pointer-events:none; transform:translateY(22px);
-    transition:opacity .22s ease, transform .22s ease;}
-  .overlay-sheet.overlay-open{opacity:1; pointer-events:auto; transform:translateY(0);}
+    transition:opacity .18s var(--ease-out), transform .18s var(--ease-out);}
+  .overlay-sheet.overlay-open{opacity:1; pointer-events:auto; transform:translateY(0);
+    transition:opacity .3s var(--ease-spring), transform .3s var(--ease-spring);}
 
   .confirm-email-icon{width:76px; height:76px; border-radius:50%; background:var(--hivis-dim); color:var(--hivis-text);
     display:flex; align-items:center; justify-content:center; margin:4px auto 22px;}
@@ -260,7 +279,7 @@
   body.chat-kb-open .toast-wrap{bottom:calc(85px + (var(--safe-bottom) * 2));}
   .toast{background:var(--asphalt-4); color:var(--chalk); padding:13px 18px; border-radius:999px; font-size:13.5px; font-weight:600;
     box-shadow:0 8px 24px rgba(0,0,0,.4); display:flex; align-items:center; gap:8px; max-width:360px; text-align:center;
-    opacity:0; transform:translateY(10px) scale(.96); transition:opacity .22s ease, transform .22s ease; pointer-events:auto;}
+    opacity:0; transform:translateY(10px) scale(.96); transition:opacity .22s var(--ease-out), transform .22s var(--ease-out); pointer-events:auto;}
   .toast.show{opacity:1; transform:translateY(0) scale(1);}
   .toast.error{background:var(--toast-error-bg); color:var(--toast-error-fg); border:1px solid rgba(255,107,93,.3);}
   .toast.success{background:var(--hivis-dim); color:var(--hivis-text); border:1px solid rgba(214,255,63,.3);}
@@ -328,9 +347,9 @@
 
   .btn{border:none; border-radius:999px; padding:15px 22px; font-weight:700; font-size:15px; cursor:pointer;
     width:100%; display:flex; align-items:center; justify-content:center; gap:8px;}
-  .btn-primary{background:var(--hivis); color:var(--ink); box-shadow:0 10px 24px var(--hivis-glow); transition:transform .12s ease, box-shadow .12s ease;}
-  .btn-primary:active{transform:scale(.98); box-shadow:0 4px 12px var(--hivis-glow);}
-  .btn-outline{background:var(--asphalt-2); border:1.5px solid var(--overlay-hairline); color:var(--chalk); box-shadow:var(--shadow-card); transition:transform .12s ease, background .12s ease;}
+  .btn-primary{background:var(--hivis); color:var(--ink); box-shadow:0 10px 24px var(--hivis-glow); transition:transform .13s var(--ease-out), box-shadow .13s var(--ease-out);}
+  .btn-primary:active{transform:scale(.97); box-shadow:0 4px 12px var(--hivis-glow);}
+  .btn-outline{background:var(--asphalt-2); border:1.5px solid var(--overlay-hairline); color:var(--chalk); box-shadow:var(--shadow-card); transition:transform .13s var(--ease-out), background .13s var(--ease-out);}
   .btn-outline:active{transform:scale(.97); background:var(--press);}
   .btn-saved-flash{background:var(--hivis) !important; border-color:var(--hivis) !important; color:var(--ink) !important; transition:background .15s ease, color .15s ease;}
   /* Los botones "Guardar" de Perfil quedan ocultos hasta que el usuario modifica algo en
@@ -394,9 +413,25 @@
      segundo color con transparencia dejaba traslucir ese rojo por debajo,
      incluso en reposo. El highlight de "elevada" se logra solo con el inset,
      que no afecta la opacidad del fondo. */
-  .card{background:var(--asphalt-2); border-radius:var(--radius); padding:22px; margin-bottom:20px; border:1px solid var(--overlay-hairline); box-shadow:var(--shadow-card), inset 0 1px 0 rgba(255,255,255,.03);}
-  .card[onclick]{cursor:pointer; transition:transform .12s ease;}
+  /* La tercera capa de sombra es un halo ambiente casi imperceptible en el color de
+     marca (lima) -- no compite con --shadow-card (esa sigue siendo la sombra real
+     que separa la tarjeta del fondo), es solo el mismo verde que ya usan los
+     radiales de fondo de #app filtrando por debajo, para que cada tarjeta se sienta
+     parte de la misma atmósfera en vez de un rectángulo neutro cualquiera. */
+  .card{background:var(--asphalt-2); border-radius:var(--radius); padding:22px; margin-bottom:20px; border:1px solid var(--overlay-hairline);
+    box-shadow:var(--shadow-card), inset 0 1px 0 rgba(255,255,255,.03), 0 30px 60px -35px rgba(214,255,63,.06);}
+  .card[onclick]{cursor:pointer; transition:transform .13s var(--ease-out);}
   .card[onclick]:active{transform:scale(.98);}
+  /* El ícono principal de cada fila-botón (Datos personales, Objetivos, Zapatillas...
+     en Perfil) flotaba solo contra el fondo -- una ficha circular chica detrás (vía
+     ::before, no toca el tamaño real del ícono) le da un lugar propio, mismo radio
+     que un touch target de 44px. Selector estructural a propósito: no hace falta
+     tocar cada una de las 9 filas que comparten este mismo patrón markup. */
+  .card[role="button"] > div:first-child > .icon-sq:first-child{position:relative;}
+  .card[role="button"] > div:first-child > .icon-sq:first-child::before{
+    content:''; position:absolute; inset:-9px; border-radius:50%; background:var(--asphalt-3); z-index:-1;}
+  .card[role="button"] > .icon-sq:last-child{transition:transform .15s var(--ease-out);}
+  .card[role="button"]:active > .icon-sq:last-child{transform:translateX(2px);}
   .card h3{font-size:11.5px; text-transform:uppercase; letter-spacing:.09em; color:var(--mist); font-weight:700; margin-bottom:12px;}
   .muted{color:var(--mist); font-size:13.5px; line-height:1.5; white-space:pre-line;}
 
@@ -471,6 +506,17 @@
     -webkit-backdrop-filter:blur(22px) saturate(1.4); backdrop-filter:blur(22px) saturate(1.4);
     border-color:var(--clay); border-width:1.5px;
     box-shadow:0 0 0 1px rgba(192,106,46,.22), 0 0 26px rgba(192,106,46,.24), 0 16px 32px rgba(0,0,0,.4);}
+  /* "Doble bisel": una carcasa fina por fuera de las dos cards destacadas, como si
+     el vidrio esmerilado de arriba estuviera calzado en una bandeja -- en vez de la
+     tarjeta flotando sola contra el fondo. El radio exterior crece exactamente lo
+     mismo que el padding (26px + 6px = 32px) para que las dos curvas queden
+     concéntricas de verdad, no aproximadas. */
+  .card-shell{padding:6px; border-radius:32px; margin-bottom:20px;}
+  .card-shell > .card{margin-bottom:0;}
+  .card-shell-hivis{background:rgba(214,255,63,.035); border:1px solid rgba(214,255,63,.14);
+    box-shadow:0 20px 44px -14px rgba(214,255,63,.16);}
+  .card-shell-clay{background:rgba(192,106,46,.04); border:1px solid rgba(192,106,46,.16);
+    box-shadow:0 20px 44px -14px rgba(192,106,46,.14);}
   /* Viñetas breves para la descripción de la sesión (entrada en calor / sesión /
      vuelta a la calma vienen como líneas separadas por \n desde planLabel()) -- se
      listan una debajo de otra con una marca chica, en vez de un párrafo corrido. */
@@ -897,10 +943,10 @@
   nav.tabbar{position:sticky; bottom:var(--safe-bottom); width:calc(100% - 28px); max-width:452px; margin:14px auto 0; background:var(--tabbar-bg);
     backdrop-filter:blur(20px) saturate(1.6); -webkit-backdrop-filter:blur(20px) saturate(1.6); display:flex; padding:9px 6px; flex-shrink:0;
     border-radius:26px; border:1px solid var(--overlay-hairline); box-shadow:var(--shadow-lg); z-index:20;}
-  nav.tabbar button{flex:1; background:none; border:none; color:var(--mist); display:flex; flex-direction:column; align-items:center; gap:4px; font-size:10.5px; font-weight:600; cursor:pointer; padding:4px 2px; transition:transform .12s ease, color .12s ease;}
+  nav.tabbar button{flex:1; background:none; border:none; color:var(--mist); display:flex; flex-direction:column; align-items:center; gap:4px; font-size:10.5px; font-weight:600; cursor:pointer; padding:4px 2px; transition:transform .13s var(--ease-out), color .13s var(--ease-out);}
   .nav-icon-wrap{position:relative; display:inline-flex;}
   .nav-badge-dot{position:absolute; top:-2px; right:-4px; width:8px; height:8px; border-radius:50%; background:var(--hivis); border:1.5px solid var(--asphalt); display:none;}
-  nav.tabbar button svg{width:22px; height:22px; padding:3px; box-sizing:content-box; border-radius:10px; transition:background .15s ease;}
+  nav.tabbar button svg{width:22px; height:22px; padding:3px; box-sizing:content-box; border-radius:10px; transition:background .15s var(--ease-out);}
   nav.tabbar button.active{color:var(--hivis-text);}
   nav.tabbar button.active svg{background:var(--hivis-dim);}
   nav.tabbar button:active{transform:scale(.9);}
@@ -911,7 +957,7 @@
   nav.tabbar button.nav-btn-primary{flex:0 0 auto; width:64px; margin-top:-24px;}
   nav.tabbar button.nav-btn-primary .nav-primary-circle{width:56px; height:56px; border-radius:50%; background:var(--hivis);
     display:flex; align-items:center; justify-content:center; border:4px solid var(--asphalt);
-    box-shadow:0 10px 24px var(--hivis-glow); transition:transform .12s ease, box-shadow .12s ease;}
+    box-shadow:0 10px 24px var(--hivis-glow); transition:transform .13s var(--ease-out), box-shadow .13s var(--ease-out);}
   nav.tabbar button.nav-btn-primary svg{width:37px; height:37px; padding:0; color:var(--ink); background:none !important;}
   nav.tabbar button.nav-btn-primary.active .nav-primary-circle{box-shadow:0 12px 30px var(--hivis-glow), 0 0 0 3px var(--hivis-dim);}
   nav.tabbar button.nav-btn-primary:active .nav-primary-circle{transform:scale(.92);}
@@ -935,6 +981,7 @@
 </head>
 <body>
 <div id="app">
+  <div class="app-grain" aria-hidden="true"></div>
 
   <div id="offline-banner"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="2" x2="22" y2="22"/><path d="M8.5 16.5a5 5 0 0 1 7 0"/><path d="M5 12.5a10 10 0 0 1 5-2.7"/><path d="M19 12.5a10 10 0 0 0-2.3-1.9"/><path d="M2 8.5a15 15 0 0 1 4.2-2.8"/><path d="M22 8.5a15 15 0 0 0-9-4.4"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg></span><span data-i18n="offline_banner"></span></div>
 
@@ -1191,6 +1238,7 @@
 
     <div class="home-section-label" data-i18n="home_section_today"></div>
 
+    <div class="card-shell card-shell-hivis">
     <div class="card card-highlight">
       <h3 id="home-next-card-title" data-i18n="home_next"></h3>
       <div class="next-session" id="home-next-session">
@@ -1209,6 +1257,7 @@
           <div class="stat-box"><div class="n mono" id="home-done-pace">0</div><div class="l" id="home-done-pace-label"></div></div>
         </div>
       </div>
+    </div>
     </div>
 
     <div class="card" id="readiness-card" style="display:none;">
@@ -1984,6 +2033,7 @@
     </div>
 
     <div class="elev-divider"><svg viewBox="0 0 60 14"><polyline points="0,12 10,12 16,4 22,10 28,2 34,9 40,12 60,12" fill="none" stroke="#C06A2E" stroke-width="1.6"/></svg><span data-i18n="perfil_connectivity"></span></div>
+    <div class="card-shell card-shell-clay">
     <div class="card card-strava">
       <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
         <span class="icon-sq" style="width:26px; height:26px; color:var(--clay); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></span>
@@ -2007,6 +2057,7 @@
           <li data-i18n="perfil_remember_6"></li>
         </ul>
       </div>
+    </div>
     </div>
 
     <div class="card">
