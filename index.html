@@ -98,6 +98,15 @@
   h1,h2,h3,p{margin:0;}
   button,input,select{font-family:inherit;}
   ::selection{background:var(--hivis); color:var(--ink);}
+  /* Foco de teclado consistente en toda la app: sin esto, cualquier control clickeable
+     (choice/day-pill, botones, cards con onclick, tabs) cae en el anillo azul por defecto
+     del navegador -- correcto funcionalmente pero fuera del sistema visual. Los inputs de
+     formulario ya tenian su propio tratamiento (borde + glow lima); esto lo extiende a
+     todo lo demas que ahora es focuseable. */
+  button:focus-visible, .choice:focus-visible, .day-pill:focus-visible, [role="button"]:focus-visible,
+  .card[onclick]:focus-visible, a:focus-visible{
+    outline:2px solid var(--hivis); outline-offset:2px; border-radius:inherit;
+  }
 
   /* min-height: TERCER intento, ninguna unidad CSS fija alcanza sola. Primero era
      100dvh -- eso hacía que la tabbar (sticky, en flujo normal DENTRO de #app)
@@ -1137,7 +1146,7 @@
           <p style="margin:0; font-size:14.5px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" id="home-race-name">—</p>
           <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
             <span class="tag" id="home-race-type-tag" style="display:inline-block;"></span>
-            <span class="tag tag-mixto" id="home-race-phase-tag" style="display:none;"></span>
+            <span class="tag tag-asfalto" id="home-race-phase-tag" style="display:none;"></span>
           </div>
         </div>
         <div style="text-align:right; flex-shrink:0;">

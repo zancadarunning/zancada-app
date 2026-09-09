@@ -864,11 +864,20 @@ document.getElementById('ob-runnertype').addEventListener('click', e=>{
   document.getElementById('ob-currentkm-wrap').style.display = isActive?'block':'none';
   document.getElementById('ob-newrunner-note').style.display = isActive?'none':'block';
 });
-// .choice/.day-pill son divs clickeables sin equivalente de teclado en ningun lado de la
-// app (a diferencia de swipe-action-delete, que si tiene role="button"/tabindex) -- un
-// usuario que navega solo con teclado o lector de pantalla no puede completar el
-// onboarding ni tocar el check-in de "como te sentis" en Inicio. Se agrega el mismo
-// tratamiento de forma centralizada en vez de repetirlo div por div.
+// Los divs clickeables (choice chips, day-pill, cards con onclick, toggles de "mas info")
+// no tenian equivalente de teclado en ningun lado de la app (a diferencia de
+// swipe-action-delete, que si tiene role="button"/tabindex) -- un usuario que navega solo
+// con teclado o lector de pantalla no podia completar el onboarding, tocar el check-in de
+// "como te sentis", ni abrir ningun panel de ayuda/tips. Selector generico ([onclick] que
+// no sea ya un elemento nativamente focuseable) en vez de listar clase por clase, para que
+// cubra tambien los que se agreguen a futuro sin repetir este tratamiento cada vez.
+function makeClickablesFocusable(root){
+  (root||document).querySelectorAll('[onclick]:not(button):not(a):not(input):not(select):not(textarea)').forEach(el=>{
+    if(!el.hasAttribute('tabindex')) el.setAttribute('tabindex','0');
+    if(!el.hasAttribute('role')) el.setAttribute('role','button');
+  });
+}
+makeClickablesFocusable();
 document.querySelectorAll('.choice, .day-pill').forEach(el=>{
   if(!el.hasAttribute('tabindex')) el.setAttribute('tabindex','0');
   if(!el.hasAttribute('role')) el.setAttribute('role','button');
@@ -876,7 +885,7 @@ document.querySelectorAll('.choice, .day-pill').forEach(el=>{
 document.addEventListener('keydown', e=>{
   if(e.key!=='Enter' && e.key!==' ') return;
   const el = e.target;
-  if(!(el.classList && (el.classList.contains('choice') || el.classList.contains('day-pill')))) return;
+  if(!el.hasAttribute || (!el.hasAttribute('onclick') && !(el.classList && (el.classList.contains('choice') || el.classList.contains('day-pill'))))) return;
   e.preventDefault();
   el.click();
 });
