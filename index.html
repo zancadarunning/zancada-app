@@ -254,7 +254,7 @@
     display:flex; align-items:center; height:48px; box-sizing:border-box;}
   .date-box .date-box-text{color:var(--chalk);}
   .date-box .date-box-text.placeholder{color:var(--mist-dim);}
-  .cal-weekdays{display:grid; grid-template-columns:repeat(7,1fr); text-align:center; font-size:11px; color:var(--mist-dim); margin-bottom:8px; text-transform:uppercase; letter-spacing:.04em;}
+  .cal-weekdays{display:grid; grid-template-columns:repeat(7,1fr); text-align:center; font-size:11px; color:var(--mist); margin-bottom:8px; text-transform:uppercase; letter-spacing:.04em;}
   .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:4px;}
   .cal-day{aspect-ratio:1; display:flex; align-items:center; justify-content:center; border-radius:50%; font-size:15px; cursor:pointer; color:var(--chalk);}
   .cal-day.other-month{color:var(--mist-dim); opacity:.35; pointer-events:none;}
@@ -370,7 +370,7 @@
      accionable de hoy de lo informativo/pasivo, en vez de una sola fila de cards del
      mismo peso. Reutiliza la misma receta tipográfica que .card h3 (eyebrow uppercase),
      asi que se lee como parte del mismo sistema, no como un componente nuevo. */
-  .home-section-label{font-size:11px; text-transform:uppercase; letter-spacing:.09em; color:var(--mist-dim); font-weight:700; margin:26px 4px 10px;}
+  .home-section-label{font-size:11px; text-transform:uppercase; letter-spacing:.09em; color:var(--mist); font-weight:700; margin:26px 4px 10px;}
   .home-section-label:first-of-type{margin-top:16px;}
   /* Cards "quietas" para la zona Más (tips, ayuda de instalación): mismo color/radio que
      .card para seguir leyéndose como parte del mismo sistema, pero sin la sombra que en
@@ -459,7 +459,7 @@
   .trend-stroke.trend-planned{background:var(--mist-dim);}
   .trend-stroke.trend-rest{width:1.5px; background:var(--asphalt-4);}
   .trend-stroke.trend-today{background:var(--hivis); box-shadow:0 0 8px var(--hivis-glow);}
-  .trend-lbl{font-size:9.5px; color:var(--mist-dim); text-transform:uppercase; letter-spacing:.04em; flex-shrink:0;}
+  .trend-lbl{font-size:9.5px; color:var(--mist); text-transform:uppercase; letter-spacing:.04em; flex-shrink:0;}
   /* Insignia "STRAVA" + duración sobre la vista previa del mapa, en vez de una fila de
      texto aparte encima de la tarjeta -- libera espacio y agrupa el origen del dato
      (Strava) con el mapa que ya lo representa visualmente. */
@@ -656,7 +656,7 @@
   #coachChatWrap{position:fixed; left:0; right:0; max-width:480px; margin:0 auto; top:64px; bottom:78px;
     display:flex; flex-direction:column; z-index:15; background:var(--asphalt);}
   #coachChatTitle{font-size:25px; margin:0; padding:14px 20px 0; flex-shrink:0;}
-  .coach-disclaimer{flex-shrink:0; margin:0; padding:4px 20px 10px; font-size:11px; color:var(--mist-dim); line-height:1.4;}
+  .coach-disclaimer{flex-shrink:0; margin:0; padding:4px 20px 10px; font-size:11px; color:var(--mist); line-height:1.4;}
   #chatLog{display:flex; flex-direction:column; flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:0 20px 10px; overscroll-behavior:contain;}
   .msg{max-width:82%; padding:11px 14px; border-radius:16px; font-size:14px; line-height:1.5; margin-bottom:10px;}
   .msg.first,.msg.mid{margin-bottom:2px;}
@@ -845,7 +845,7 @@
   nav.tabbar{position:sticky; bottom:var(--safe-bottom); width:calc(100% - 28px); max-width:452px; margin:14px auto 0; background:var(--tabbar-bg);
     backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); display:flex; padding:9px 6px; flex-shrink:0;
     border-radius:26px; border:1px solid var(--overlay-hairline); box-shadow:var(--shadow-lg); z-index:20;}
-  nav.tabbar button{flex:1; background:none; border:none; color:var(--mist-dim); display:flex; flex-direction:column; align-items:center; gap:4px; font-size:10.5px; font-weight:600; cursor:pointer; padding:4px 2px; transition:transform .12s ease, color .12s ease;}
+  nav.tabbar button{flex:1; background:none; border:none; color:var(--mist); display:flex; flex-direction:column; align-items:center; gap:4px; font-size:10.5px; font-weight:600; cursor:pointer; padding:4px 2px; transition:transform .12s ease, color .12s ease;}
   .nav-icon-wrap{position:relative; display:inline-flex;}
   .nav-badge-dot{position:absolute; top:-2px; right:-4px; width:8px; height:8px; border-radius:50%; background:var(--hivis); border:1.5px solid var(--asphalt); display:none;}
   nav.tabbar button svg{width:22px; height:22px; padding:3px; box-sizing:content-box; border-radius:10px; transition:background .15s ease;}
@@ -1016,6 +1016,7 @@
         <div class="date-box" onclick="openCalendar('ob-birth','ob-birth-text')"><span class="date-box-text" id="ob-birth-text"></span></div>
         <input type="hidden" id="ob-birth">
       </div>
+      <p class="muted" style="margin-top:10px; font-size:12px;" data-i18n="ob_step2_hint"></p>
       <div class="field"><button class="btn btn-primary" data-i18n="login_continue" onclick="obNextStep()"></button></div>
     </div>
 
@@ -1212,7 +1213,7 @@
     </div>
 
     <div class="card card-quiet" id="install-help-card">
-      <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleInstallHelp()">
+      <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleInstallHelp(event)" aria-expanded="false" aria-controls="install-help-body">
         <h3 style="margin:0;" data-i18n="home_install_help_title"></h3>
         <span class="icon-sq" id="install-help-chevron" style="width:16px; height:16px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
       </div>
@@ -1916,7 +1917,7 @@
       <p id="strava-sync-note" class="muted" style="margin:8px 0 0; font-size:12px; display:none;"></p>
       <button class="btn btn-outline btn-sm" id="strava-connect-btn" style="margin-top:10px; width:100%;" onclick="connectStrava()"></button>
       <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
-        <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleStravaRemember()">
+        <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleStravaRemember(event)" aria-expanded="false" aria-controls="strava-remember-list">
           <span data-i18n="perfil_remember_title"></span>
           <span class="icon-sq" id="strava-remember-chevron" style="width:13px; height:13px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
         </button>

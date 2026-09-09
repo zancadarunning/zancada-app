@@ -2559,9 +2559,16 @@ function renderHome(){
   if(todayRun){
     cardTitleEl.textContent = t('home_session_done_title');
     nextSessionBlock.style.display = 'none';
+    // El "pop" de reconocimiento (mismo keyframe que ya usa confirm-card) solo se dispara la
+    // primera vez que este bloque pasa de oculto a visible -- renderHome() se re-llama seguido
+    // (cambio de pestaña, cualquier cambio de estado) mientras la carrera de hoy sigue cargada,
+    // así que sin este chequeo la animación se repetiría en cada render en vez de sentirse
+    // como el momento puntual de "recién terminaste".
+    const justRevealed = doneBlock.style.display !== 'block';
     doneBlock.style.display = 'block';
+    doneBlock.style.animation = justRevealed ? 'confirmPop .25s ease' : 'none';
     const paceMin = todayRun.distanceKm>0.02 ? (todayRun.durationSec/60)/todayRun.distanceKm : 0;
-    document.getElementById('home-session-done-sub').textContent = t('home_session_done_sub');
+    document.getElementById('home-session-done-sub').textContent = t('home_session_done_sub', {type: lbl.type});
     document.getElementById('home-done-dist').textContent = fmtDist(todayRun.distanceKm);
     document.getElementById('home-done-dist-label').textContent = distUnit();
     document.getElementById('home-done-time').textContent = fmtTime(todayRun.durationSec);
@@ -3337,13 +3344,15 @@ function closeZonesOverlay(){ document.getElementById('zones-overlay').classList
 // El bloque "Recordá que..." de la sección de Strava era una lista siempre visible --
 // ahora arranca colapsada detrás de este botón, para no abrumar la tarjeta de Strava con
 // texto largo apenas se entra a Perfil. Nada de esto se persiste: siempre arranca cerrado.
-function toggleStravaRemember(){
+function toggleStravaRemember(e){
   const list = document.getElementById('strava-remember-list');
   const chevron = document.getElementById('strava-remember-chevron');
   if(!list) return;
   const show = list.style.display === 'none';
   list.style.display = show ? 'block' : 'none';
   if(chevron) chevron.style.transform = show ? 'rotate(180deg)' : 'rotate(0deg)';
+  const btn = e && e.currentTarget;
+  if(btn) btn.setAttribute('aria-expanded', show ? 'true' : 'false');
 }
 // ---- Foto de perfil -----
 // Se guarda como JPEG chico (200x200, recorte centrado tipo "cover") codificado en
@@ -5955,12 +5964,14 @@ async function triggerInstallPrompt(){
   deferredInstallPrompt = null;
   dismissInstallBanner();
 }
-function toggleInstallHelp(){
+function toggleInstallHelp(e){
   const body = document.getElementById('install-help-body');
   const chevron = document.getElementById('install-help-chevron');
   const open = body.style.display === 'block';
   body.style.display = open ? 'none' : 'block';
   chevron.style.transform = open ? '' : 'rotate(180deg)';
+  const trigger = e && e.currentTarget;
+  if(trigger) trigger.setAttribute('aria-expanded', open ? 'false' : 'true');
 }
 function dismissInstallBanner(){
   const card = document.getElementById('install-banner');
