@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-08T19:35:00Z';
+const APP_VERSION = '2026-09-09T16:50:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -2481,8 +2481,13 @@ function renderHome(){
   // install-help-card (el acordeon de "como instalar la app") no tenia gating: quedaba
   // visible para siempre, incluso ya instalada y corriendo en modo standalone -- mismo
   // chequeo que ya usa install-banner mas arriba (isRunningStandalone()).
+  // Se oculta también cuando hay un prompt nativo de instalación disponible (Chrome/Android):
+  // ahí el banner de arriba ya tiene un botón "Instalar" de un solo toque -- mostrar además
+  // el acordeón con los pasos manuales es redundante en ese caso. En iOS (sin prompt nativo
+  // posible) el banner es solo un aviso de texto, así que ahí esta card sigue siendo la única
+  // fuente real de instrucciones paso a paso, y se mantiene.
   const installHelpCard = document.getElementById('install-help-card');
-  if(installHelpCard) installHelpCard.style.display = isRunningStandalone() ? 'none' : '';
+  if(installHelpCard) installHelpCard.style.display = (isRunningStandalone() || !!deferredInstallPrompt) ? 'none' : '';
   document.getElementById('home-name').textContent = state.profile.name;
   document.getElementById('headerDate').textContent = new Date().toLocaleDateString(LOCALE_MAP[lang],{weekday:'short',day:'numeric',month:'short'});
 
@@ -3059,7 +3064,7 @@ function renderPainLog(){
       <div style="min-width:0;">
         <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
           <span style="font-weight:700; font-size:13.5px;">${t('pain_body_'+p.bodyPart)}</span>
-          <span class="tag tag-${p.active?'load-caution':'mixto'}">${p.active ? t('pain_active_tag') : t('pain_resolved_tag')}</span>
+          <span class="tag tag-${p.active?'load-caution':'asfalto'}">${p.active ? t('pain_active_tag') : t('pain_resolved_tag')}</span>
         </div>
         <div class="muted" style="font-size:12px; margin-top:2px;">${dateStr}${p.note?' · '+escapeHtml(p.note):''}</div>
       </div>
