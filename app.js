@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-09T16:50:00Z';
+const APP_VERSION = '2026-09-09T19:20:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -172,7 +172,11 @@ function celebrate(){
     const layer = document.createElement('div');
     layer.className = 'confetti-layer';
     document.body.appendChild(layer);
-    const colors = ['#D6FF3F','#4ADE80','#FACC15','#FB923C','#5B9BFF','#FF6B5D'];
+    // Mismos colores que el resto del sistema despues de desaturar las zonas de esfuerzo
+    // (ver --zone1..5 en el :root) -- antes este array tenia los hex viejos, saturados,
+    // hardcodeados aparte, asi que el confetti seguia tirando un arcoiris "de manual" que
+    // ya no pegaba con el resto de la paleta.
+    const colors = ['#D6FF3F','#7CB88F','#D4B356','#CC8A56','#7B9BC9','#C06A2E'];
     for(let i=0;i<26;i++){
       const piece = document.createElement('span');
       piece.className = 'confetti-piece';
