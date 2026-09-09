@@ -2769,7 +2769,7 @@ function renderPlan(){
   // carrera es más específico que "le toca descarga por ciclo").
   const isPlainCutbackWeek = wd.exists && wd.mode!=='future' && isCutbackWeek(wn) && !isEventWeek;
   let label = t('plan_week_label',{n:wn});
-  if(wd.exists && (isCutbackWeek(wn) || isEventWeek) && wd.mode!=='future') label += ` · <span class="tag tag-mixto">${t('plan_cutback')}</span>`;
+  if(wd.exists && (isCutbackWeek(wn) || isEventWeek) && wd.mode!=='future') label += ` · <span class="tag tag-asfalto">${t('plan_cutback')}</span>`;
   if(wd.mode==='future') label += ` · <span class="tag tag-soon">${t('plan_estimate')}</span>`;
   if(wd.mode==='past') label += ` · <span class="tag tag-soon">${t('plan_past')}</span>`;
   const taperMult = (wd.exists && wd.mode!=='past' && wd.weekStart) ? taperMultiplier(state.profile, wd.weekStart) : 1;
@@ -2778,13 +2778,13 @@ function renderPlan(){
   // sigue) -- en una semana "estimado, puede ajustarse" no tiene sentido afirmar algo puntual
   // como "acá empieza tu puesta a punto" sobre una proyección que todavía puede cambiar entera
   const showTaperUi = isTapering && wd.mode!=='future';
-  if(showTaperUi) label += ` · <span class="tag tag-mixto">${t('plan_taper_tag')}</span>`;
+  if(showTaperUi) label += ` · <span class="tag tag-asfalto">${t('plan_taper_tag')}</span>`;
   // La semana de recuperación se recalcula siempre en base a wd.weekStart -- no depende de
   // que state.event siga cargado (isRecoveryWeek() ya contempla que se haya limpiado solo
   // al pasar la fecha, ver autoClearPastEvent()), así que se puede mostrar toda la semana,
   // no solo el día del rollover.
   const showRecoveryUi = wd.exists && wd.mode!=='past' && wd.mode!=='future' && wd.weekStart && isRecoveryWeek(wd.weekStart);
-  if(showRecoveryUi) label += ` · <span class="tag tag-mixto">${t('plan_recovery_tag')}</span>`;
+  if(showRecoveryUi) label += ` · <span class="tag tag-asfalto">${t('plan_recovery_tag')}</span>`;
   document.getElementById('plan-week-info').innerHTML = label;
   const taperNote = document.getElementById('plan-taper-note');
   if(showTaperUi){
@@ -2884,7 +2884,7 @@ function renderPlan(){
       statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;"><button class="btn btn-outline btn-sm" onclick="markSession(${i},'done')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.check}</span> ${t('plan_mark_done')}</button><button class="btn btn-outline btn-sm" onclick="markSession(${i},'skipped')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.cross}</span> ${t('plan_mark_skipped')}</button>${isToday?`<button class="btn btn-outline btn-sm" id="sync-today-btn" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}</div>`;
     }
     return `<div>
-      <div class="day-row ${isRestDay?'day-row-rest':''}" onclick="toggleDay(${i})">
+      <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" onclick="toggleDay(${i})">
         <div class="day-badge"><div class="d">${t('day_'+d.day).slice(0,3)}</div>${dateLbl?`<div class="mono muted" style="font-size:10px; margin-top:2px;">${dateLbl}</div>`:''}</div>
         <div class="day-info">
           <div class="day-info-title-row"><span class="t">${lblType}</span>${d.dist>0?`<span class="day-km-inline">${planAmountText(d)}</span>`:''}</div>
@@ -5342,7 +5342,7 @@ function renderHistory(){
     </div>
     <div class="trend-bars" id="hist-trend-bars" style="margin-top:16px;">${daily.map((x,i)=>{
       const h = x.km>0 ? Math.max(6, Math.round((x.km/maxKmDay)*70)) : (x.planned ? 4 : 2);
-      const cls = x.km>0 ? '' : (x.planned ? 'trend-planned' : 'trend-rest');
+      const cls = (x.km>0 ? '' : (x.planned ? 'trend-planned' : 'trend-rest')) + (i===daily.length-1 ? ' trend-today' : '');
       return `<div class="trend-col"><div class="trend-stroke ${cls}" data-h="${h}" style="height:0px; transition-delay:${i*30}ms;"></div><div class="trend-lbl">${x.day}</div></div>`;
     }).join('')}</div>
   </div>`;
@@ -5397,8 +5397,8 @@ function renderHistory(){
     return `${monthHeader}<div class="swipe-item" data-swipe-id="${r.id}">
       <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" onclick="deleteRun('${r.id}')"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
       <div class="card hist-card swipe-content" onclick="openRunDetail('${r.id}')" style="cursor:pointer;">
-        <div class="hist-top"><span style="font-weight:700;">${dateStr}</span>${hasMap ? '' : `<span class="hist-date">${r.manual? `<span class="tag tag-soon" style="margin-right:6px;">${t('hist_manual_tag')}</span>`:''}${r.source==='strava'? `<span class="tag tag-mixto" style="margin-right:6px;">Strava</span>`:''}${fmtTime(r.durationSec)}</span>`}</div>
-        ${hasMap ? `<div class="hist-map" id="hist-map-${r.id}"><div class="hist-map-badge">${r.manual? `<span class="tag tag-soon">${t('hist_manual_tag')}</span>`:''}${r.source==='strava'? `<span class="tag tag-mixto">Strava</span>`:''}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
+        <div class="hist-top"><span style="font-weight:700;">${dateStr}</span>${hasMap ? '' : `<span class="hist-date">${r.manual? `<span class="tag tag-asfalto" style="margin-right:6px;">${t('hist_manual_tag')}</span>`:''}${r.source==='strava'? `<span class="tag tag-asfalto" style="margin-right:6px;">Strava</span>`:''}${fmtTime(r.durationSec)}</span>`}</div>
+        ${hasMap ? `<div class="hist-map" id="hist-map-${r.id}"><div class="hist-map-badge">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${r.source==='strava'? `<span class="tag tag-asfalto">Strava</span>`:''}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
         <div class="stat-row-divided">
           <div class="stat-cell"><div class="n">${fmtDist(r.distanceKm)}</div><div class="l">${distUnit()}</div></div>
           <div class="stat-cell"><div class="n">${fmtPace(paceMin)}</div><div class="l">${t('run_pace_word')}</div></div>

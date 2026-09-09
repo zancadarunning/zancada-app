@@ -448,9 +448,10 @@
      una línea fina en vez de una barra, así el ojo va directo a los días con volumen. */
   .trend-bars{display:flex; align-items:flex-end; justify-content:space-between; height:70px; gap:3px;}
   .trend-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:6px; min-width:0;}
-  .trend-stroke{width:5px; border-radius:99px; background:var(--hivis); transition:height .4s cubic-bezier(.22,1,.36,1);}
+  .trend-stroke{width:5px; border-radius:99px; background:var(--chalk); transition:height .4s cubic-bezier(.22,1,.36,1);}
   .trend-stroke.trend-planned{background:var(--mist-dim);}
   .trend-stroke.trend-rest{width:1.5px; background:var(--asphalt-4);}
+  .trend-stroke.trend-today{background:var(--hivis); box-shadow:0 0 8px var(--hivis-glow);}
   .trend-lbl{font-size:9.5px; color:var(--mist-dim); text-transform:uppercase; letter-spacing:.04em; flex-shrink:0;}
   /* Insignia "STRAVA" + duración sobre la vista previa del mapa, en vez de una fila de
      texto aparte encima de la tarjeta -- libera espacio y agrupa el origen del dato
@@ -506,7 +507,8 @@
   /* Kilometraje integrado en la misma fila del tipo de sesión, con un divisor fino en
      vez de vivir solo en su propia columna a la derecha (que dejaba la fila con mucho
      aire vacío en el medio en pantallas angostas). */
-  .day-km-inline{font-family:'JetBrains Mono',monospace; font-size:12.5px; font-weight:700; color:var(--hivis-text); flex-shrink:0;
+  .day-row.day-row-today .day-badge .d{color:var(--hivis-text); font-weight:800;}
+  .day-km-inline{font-family:'JetBrains Mono',monospace; font-size:12.5px; font-weight:700; color:var(--chalk); flex-shrink:0;
     padding-left:9px; border-left:1px solid var(--asphalt-4);}
   .day-dist{font-family:'JetBrains Mono',monospace; font-size:14.5px; font-weight:700; color:var(--hivis-text); flex-shrink:0;}
   /* Ícono de estado (check/x) solo, siempre al final de la fila. Los chips de
@@ -1263,7 +1265,7 @@
         <div id="run-weather-warning" class="weather-chip" style="display:none; margin-top:10px;"></div>
       </div>
       <div class="gps-status-card">
-        <span style="font-size:19px; line-height:1; flex-shrink:0;" aria-hidden="true">🛰️</span>
+        <span class="icon-sq" style="width:20px; height:20px; color:var(--hivis-text); flex-shrink:0;" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="6.5"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21"/></svg></span>
         <div style="min-width:0; text-align:left;">
           <p class="gps-status-title" data-i18n="run_gps_status_title"></p>
           <p class="gps-status-bullet" data-i18n="run_idle_desc"></p>
@@ -1289,7 +1291,7 @@
     <div id="runActive">
       <p style="text-align:center; margin-top:4px;"><span class="rec-dot" id="run-rec-dot"></span><span class="muted" id="run-recording-label" style="text-transform:uppercase; font-size:11px; letter-spacing:.07em;" data-i18n="run_recording"></span></p>
       <div class="timer-big mono" id="track-timer">00:00:00</div>
-      <div class="map-wrap"><div id="liveMap"></div><button class="map-recenter-btn" onclick="recenterMap()">◎</button></div>
+      <div class="map-wrap"><div id="liveMap"></div><button class="map-recenter-btn" onclick="recenterMap()" data-i18n-aria="aria_recenter"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></button></div>
 
       <div class="track-stats stat-row">
         <div class="stat-box"><div class="n mono" id="track-dist">0.00</div><div class="l" id="track-dist-label" data-i18n="run_km"></div></div>
