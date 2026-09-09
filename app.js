@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-09T22:15:00Z';
+const APP_VERSION = '2026-09-09T23:05:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -3365,41 +3365,111 @@ function openDaysOverlay(){ document.getElementById('days-overlay').classList.ad
 function closeDaysOverlay(){ document.getElementById('days-overlay').classList.remove('overlay-open'); }
 function openZonesOverlay(){ document.getElementById('zones-overlay').classList.add('overlay-open'); }
 function closeZonesOverlay(){ document.getElementById('zones-overlay').classList.remove('overlay-open'); }
+/* ---- Resorte estilo Apple (WWDC 2018, "Designing Fluid Interfaces") ----
+   damping 1 = crítico, sin rebote; response = segundos hasta asentarse -- no es una
+   duración fija, la física decide cuánto tarda. Se integra cuadro a cuadro (Euler
+   semi-implícito) en vez de animar con un CSS transition de duración fija, así se puede
+   interrumpir en cualquier instante: si el usuario agarra el sheet de nuevo a mitad de
+   un resorte, se cancela y el próximo arranca desde el valor real en pantalla (nunca
+   desde el valor lógico final, o saltaría). */
+const activeSprings = new WeakMap();
+function springTo(el, target, {from, velocity = 0, damping = 1, response = 0.35, onUpdate, onComplete} = {}){
+  const prev = activeSprings.get(el);
+  if(prev) prev.cancel();
+  let pos = from != null ? from : target, vel = velocity;
+  const w = 2 * Math.PI / response, dampCoef = 2 * w * damping, stiffness = w * w;
+  let raf, cancelled = false;
+  const handle = {value: pos, cancel(){ cancelled = true; if(raf) cancelAnimationFrame(raf); activeSprings.delete(el); }};
+  function step(){
+    if(cancelled) return;
+    const dt = 1 / 60;
+    vel += (-stiffness * (pos - target) - dampCoef * vel) * dt;
+    pos += vel * dt;
+    if(Math.abs(pos - target) < 0.5 && Math.abs(vel) < 20){
+      handle.value = target; onUpdate(target);
+      activeSprings.delete(el);
+      if(onComplete) onComplete();
+      return;
+    }
+    handle.value = pos; onUpdate(pos);
+    raf = requestAnimationFrame(step);
+  }
+  activeSprings.set(el, handle);
+  raf = requestAnimationFrame(step);
+  return handle;
+}
+// Proyecta hasta dónde llegaría el sheet si se lo soltara y siguiera frenando solo,
+// igual que la desaceleración de un scroll nativo -- así un tirón rápido pero corto
+// alcanza igual el cierre, en vez de exigir arrastrarlo físicamente hasta el borde.
+function projectMomentum(velocity, decel = 0.998){
+  return (velocity / 1000) * decel / (1 - decel);
+}
+function prefersReducedMotion(){
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
 /* ---- Overlays "hoja" de Perfil/Logros: arrastrar hacia abajo para cerrar -----
    Antes estos overlays (Datos personales, Objetivos, Zapatillas, Evento, Idioma, Días,
    Zonas, Molestias, Logros) aparecían y desaparecían de un salto y solo se podían cerrar
    tocando la flecha de arriba a la izquierda. Ahora entran/salen con un deslizamiento +
-   fade (ver .overlay-sheet en el CSS) y además se pueden cerrar arrastrando el dedo hacia
-   abajo, como una hoja modal nativa -- pero solo si ya se llegó al tope del scroll interno
-   del overlay, para no interferir con el scroll normal de su contenido. Un solo listener
+   fade (ver .overlay-sheet en el CSS) y además se pueden cerrar arrastrando hacia abajo,
+   como una hoja modal nativa -- con velocidad real: un tirón corto y rápido cierra igual
+   que uno largo y lento (ver projectMomentum arriba), y soltar lo entrega a un resorte en
+   vez de a un CSS transition de duración fija, así se puede volver a agarrar a mitad de
+   camino sin que salte. Pointer Events en vez de solo touch: funciona también con mouse,
+   útil para probarlo en desktop. Solo si ya se llegó al tope del scroll interno del
+   overlay, para no interferir con el scroll normal de su contenido. Un solo listener
    delegado en document sirve para los nueve overlays: todos comparten la clase
    .overlay-sheet y el mismo criterio de "cerrar" (sacar la clase overlay-open), así que no
    hace falta cablear el gesto overlay por overlay. */
 (function wireOverlaySheetSwipe(){
-  let dragEl = null, startY = 0, lastDy = 0, dragging = false;
-  const CLOSE_THRESHOLD = 90;
-  document.addEventListener('touchstart', e=>{
+  let dragEl = null, grabStartY = 0, grabStartPos = 0, history = [];
+  document.addEventListener('pointerdown', e=>{
     const sheet = e.target.closest('.overlay-sheet.overlay-open');
-    if(!sheet || sheet.scrollTop > 0){ dragEl = null; return; }
-    dragEl = sheet; startY = e.touches[0].clientY; lastDy = 0; dragging = false;
-  }, {passive:true});
-  document.addEventListener('touchmove', e=>{
+    if(!sheet || sheet.scrollTop > 0) return;
+    const spring = activeSprings.get(sheet);
+    grabStartPos = spring ? spring.value : 0;
+    if(spring) spring.cancel();
+    dragEl = sheet;
+    grabStartY = e.clientY;
+    history = [{y: e.clientY, t: e.timeStamp}];
+    sheet.style.transition = 'none';
+    try{ sheet.setPointerCapture(e.pointerId); }catch(err){ /* el navegador ya soltó ese pointer -- el listener en document sigue el gesto igual */ }
+  });
+  document.addEventListener('pointermove', e=>{
     if(!dragEl) return;
     if(dragEl.scrollTop > 0){ dragEl.style.transition = ''; dragEl.style.transform = ''; dragEl = null; return; }
-    const dy = e.touches[0].clientY - startY;
-    if(dy <= 0){ lastDy = 0; dragEl.style.transition = ''; dragEl.style.transform = ''; return; }
-    dragging = true; lastDy = dy;
-    dragEl.style.transition = 'none';
+    const dy = grabStartPos + (e.clientY - grabStartY);
+    if(dy <= 0){ dragEl.style.transform = ''; return; }
     dragEl.style.transform = `translateY(${dy}px)`;
-  }, {passive:true});
-  document.addEventListener('touchend', ()=>{
+    history.push({y: e.clientY, t: e.timeStamp});
+    if(history.length > 5) history.shift();
+  });
+  function endDrag(e){
     if(!dragEl) return;
-    const el = dragEl, dy = lastDy; dragEl = null;
-    el.style.transition = '';
-    el.style.transform = '';
-    if(dragging && dy > CLOSE_THRESHOLD) el.classList.remove('overlay-open');
-    dragging = false;
-  }, {passive:true});
+    const sheet = dragEl; dragEl = null;
+    const current = Math.max(0, grabStartPos + (e.clientY - grabStartY));
+    let velocity = 0;
+    if(history.length >= 2){
+      const a = history[0], b = history[history.length - 1], dt = b.t - a.t;
+      if(dt > 0) velocity = (b.y - a.y) / dt * 1000;
+    }
+    const reduced = prefersReducedMotion();
+    const projected = current + (reduced ? 0 : projectMomentum(velocity));
+    const sheetHeight = sheet.getBoundingClientRect().height || 300;
+    if(projected > sheetHeight * 0.35){
+      springTo(sheet, sheetHeight + 60, {from: current, velocity, damping: reduced ? 1 : 0.86, response: reduced ? 0.22 : 0.34,
+        onUpdate: v => { sheet.style.transform = `translateY(${v}px)`; },
+        onComplete: () => { sheet.classList.remove('overlay-open'); sheet.style.transform = ''; sheet.style.transition = ''; }
+      });
+    } else {
+      springTo(sheet, 0, {from: current, velocity, damping: 1, response: reduced ? 0.22 : 0.32,
+        onUpdate: v => { sheet.style.transform = v <= 0 ? '' : `translateY(${v}px)`; },
+        onComplete: () => { sheet.style.transform = ''; sheet.style.transition = ''; }
+      });
+    }
+  }
+  document.addEventListener('pointerup', endDrag);
+  document.addEventListener('pointercancel', endDrag);
 })();
 // El bloque "Recordá que..." de la sección de Strava era una lista siempre visible --
 // ahora arranca colapsada detrás de este botón, para no abrumar la tarjeta de Strava con
