@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-09T20:25:00Z';
+const APP_VERSION = '2026-09-09T21:10:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -2598,7 +2598,7 @@ function renderHome(){
     // como el momento puntual de "recién terminaste".
     const justRevealed = doneBlock.style.display !== 'block';
     doneBlock.style.display = 'block';
-    doneBlock.style.animation = justRevealed ? 'confirmPop .25s ease' : 'none';
+    doneBlock.style.animation = justRevealed ? 'confirmPop .32s var(--ease-spring)' : 'none';
     const paceMin = todayRun.distanceKm>0.02 ? (todayRun.durationSec/60)/todayRun.distanceKm : 0;
     document.getElementById('home-session-done-sub').textContent = t('home_session_done_sub', {type: lbl.type});
     document.getElementById('home-done-dist').textContent = fmtDist(todayRun.distanceKm);

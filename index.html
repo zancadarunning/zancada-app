@@ -73,6 +73,12 @@
     --danger:#FF3B30; --danger-dim:rgba(255,59,48,.16);
     --radius:26px; --radius-sm:18px;
     --press:rgba(255,255,255,.045); --overlay-hairline:rgba(255,255,255,.045);
+    /* Curva con leve rebote (spring), para el puñado de momentos que se benefician
+       de sentirse "vivos" en vez de mecánicos -- botones primarios, el tab activo,
+       el pop de confirmación. La transición estándar (ease/cubic-bezier(.22,1,.36,1))
+       sigue siendo la base para todo lo demás; esto es la excepción deliberada, no
+       el reemplazo general. */
+    --ease-spring:cubic-bezier(.34,1.56,.64,1);
     --tabbar-bg:rgba(24,24,27,.92);
     --toast-error-bg:#3a1f1c; --toast-error-fg:#FF9A8D;
     --shadow-card:0 8px 22px rgba(0,0,0,.4); --shadow-lg:0 16px 48px rgba(0,0,0,.55);
@@ -242,8 +248,10 @@
 
   .confirm-backdrop{position:fixed; inset:0; z-index:90; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; padding:24px;}
   .confirm-backdrop.show{display:flex;}
-  .confirm-card{background:var(--asphalt-2); border-radius:var(--radius); padding:22px; max-width:320px; width:100%;
-    box-shadow:var(--shadow-lg); border:1px solid var(--overlay-hairline); animation:confirmPop .18s ease;}
+  .confirm-card{background:linear-gradient(160deg, rgba(255,255,255,.06), rgba(24,24,27,.7) 55%);
+    -webkit-backdrop-filter:blur(24px) saturate(1.3); backdrop-filter:blur(24px) saturate(1.3);
+    border-radius:var(--radius); padding:22px; max-width:320px; width:100%;
+    box-shadow:var(--shadow-lg); border:1px solid var(--overlay-hairline); animation:confirmPop .32s var(--ease-spring);}
   .confirm-card p{margin:0 0 20px; font-size:14.5px; line-height:1.5; color:var(--chalk); font-weight:600;}
   .confirm-actions{display:flex; gap:10px;}
   .confirm-actions .btn{flex:1; width:auto;}
@@ -329,7 +337,7 @@
   .err-text{color:var(--danger); font-size:12.5px; margin-top:8px; display:none;}
 
   header.top{padding:calc(16px + var(--safe-top)) 20px 14px; display:flex; align-items:center; justify-content:space-between;
-    position:sticky; top:0; z-index:5; background:linear-gradient(180deg, var(--tabbar-bg) 55%, transparent); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+    position:sticky; top:0; z-index:5; background:linear-gradient(180deg, var(--tabbar-bg) 55%, transparent); backdrop-filter:blur(16px) saturate(1.5); -webkit-backdrop-filter:blur(16px) saturate(1.5);
     flex-shrink:0;}
   header.top .brand{display:flex; align-items:center; gap:9px;}
   header.top .brand .dot{width:9px; height:9px; border-radius:50%; background:var(--hivis); box-shadow:0 0 10px var(--hivis);}
@@ -353,7 +361,7 @@
      (basado en su contenido real -- si el contenido ya es más alto que la pantalla,
      esto no lo achica, así que las vistas largas siguen scrolleando igual que
      siempre). */
-  .view.active{display:block; flex:1 1 auto; animation:viewFadeIn .22s ease;}
+  .view.active{display:block; flex:1 1 auto; animation:viewFadeIn .32s var(--ease-spring);}
   @keyframes viewFadeIn{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
   /* #view-coach usa una animación sin transform (solo opacity): un transform en este
      elemento crearía un "containing block" nuevo para su hijo #coachChatWrap
@@ -367,7 +375,7 @@
      segundo color con transparencia dejaba traslucir ese rojo por debajo,
      incluso en reposo. El highlight de "elevada" se logra solo con el inset,
      que no afecta la opacidad del fondo. */
-  .card{background:var(--asphalt-2); border-radius:var(--radius); padding:22px; margin-bottom:16px; border:1px solid var(--overlay-hairline); box-shadow:var(--shadow-card), inset 0 1px 0 rgba(255,255,255,.03);}
+  .card{background:var(--asphalt-2); border-radius:var(--radius); padding:22px; margin-bottom:20px; border:1px solid var(--overlay-hairline); box-shadow:var(--shadow-card), inset 0 1px 0 rgba(255,255,255,.03);}
   .card[onclick]{cursor:pointer; transition:transform .12s ease;}
   .card[onclick]:active{transform:scale(.98);}
   .card h3{font-size:11.5px; text-transform:uppercase; letter-spacing:.09em; color:var(--mist); font-weight:700; margin-bottom:12px;}
@@ -424,14 +432,26 @@
   /* Tarjeta destacada -- "próxima sesión" es LA acción del día, así que se diferencia
      del resto de las tarjetas con un borde lima tenue y un degradado interno apenas
      insinuado, no con un color de fondo sólido distinto (eso competiría demasiado). */
-  .card-highlight{background:linear-gradient(160deg, rgba(214,255,63,.07), var(--asphalt-2) 55%); border-color:var(--hivis); border-width:1.5px;
-    box-shadow:0 0 0 1px rgba(214,255,63,.25), 0 0 22px rgba(214,255,63,.35), 0 4px 18px rgba(0,0,0,.3);}
-  /* Mismo tratamiento que .card-highlight (borde + degradado interno + glow apenas
-     insinuado) pero en arcilla en vez de lima -- le da identidad propia a la card de
-     conectividad sin inventar un color nuevo: arcilla ya es el color secundario
-     establecido del sistema (mismo que .tag-trail, mismo que el separador de elevación). */
-  .card-strava{background:linear-gradient(160deg, rgba(192,106,46,.09), var(--asphalt-2) 55%); border-color:var(--clay); border-width:1.5px;
-    box-shadow:0 0 0 1px rgba(192,106,46,.25), 0 0 22px rgba(192,106,46,.3), 0 4px 18px rgba(0,0,0,.3);}
+  /* Material de vidrio esmerilado, reservado para las cards "destacadas" (una por
+     pantalla como mucho -- próxima sesión en Inicio, Strava en Perfil) y no para
+     cards comunes: backdrop-filter de verdad sale caro en batería/scroll si se
+     aplica a las 8-15 cards que puede haber en una pantalla a la vez, así que se
+     gasta solo en la única que ya se destaca por color. El resto de las cards
+     siguen opacas (.card sin modificar), que es también como Apple usa vidrio en
+     sus propias apps: en el chrome que flota (barra superior, tabbar, sheets), no
+     en cada item de una lista. */
+  .card-highlight{background:linear-gradient(160deg, rgba(214,255,63,.1), rgba(24,24,27,.55) 55%);
+    -webkit-backdrop-filter:blur(22px) saturate(1.4); backdrop-filter:blur(22px) saturate(1.4);
+    border-color:var(--hivis); border-width:1.5px;
+    box-shadow:0 0 0 1px rgba(214,255,63,.22), 0 0 26px rgba(214,255,63,.28), 0 16px 32px rgba(0,0,0,.4);}
+  /* Mismo tratamiento que .card-highlight pero en arcilla en vez de lima -- le da
+     identidad propia a la card de conectividad sin inventar un color nuevo: arcilla
+     ya es el color secundario establecido del sistema (mismo que .tag-trail, mismo
+     que el separador de elevación). */
+  .card-strava{background:linear-gradient(160deg, rgba(192,106,46,.12), rgba(24,24,27,.55) 55%);
+    -webkit-backdrop-filter:blur(22px) saturate(1.4); backdrop-filter:blur(22px) saturate(1.4);
+    border-color:var(--clay); border-width:1.5px;
+    box-shadow:0 0 0 1px rgba(192,106,46,.22), 0 0 26px rgba(192,106,46,.24), 0 16px 32px rgba(0,0,0,.4);}
   /* Viñetas breves para la descripción de la sesión (entrada en calor / sesión /
      vuelta a la calma vienen como líneas separadas por \n desde planLabel()) -- se
      listan una debajo de otra con una marca chica, en vez de un párrafo corrido. */
@@ -856,7 +876,7 @@
      la caja como con fixed) -- se reemplazan por width+margin para lograr el mismo
      ancho y centrado de antes. */
   nav.tabbar{position:sticky; bottom:var(--safe-bottom); width:calc(100% - 28px); max-width:452px; margin:14px auto 0; background:var(--tabbar-bg);
-    backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); display:flex; padding:9px 6px; flex-shrink:0;
+    backdrop-filter:blur(20px) saturate(1.6); -webkit-backdrop-filter:blur(20px) saturate(1.6); display:flex; padding:9px 6px; flex-shrink:0;
     border-radius:26px; border:1px solid var(--overlay-hairline); box-shadow:var(--shadow-lg); z-index:20;}
   nav.tabbar button{flex:1; background:none; border:none; color:var(--mist); display:flex; flex-direction:column; align-items:center; gap:4px; font-size:10.5px; font-weight:600; cursor:pointer; padding:4px 2px; transition:transform .12s ease, color .12s ease;}
   .nav-icon-wrap{position:relative; display:inline-flex;}
