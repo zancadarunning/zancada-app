@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-10T18:45:00Z';
+const APP_VERSION = '2026-09-10T19:10:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -693,6 +693,26 @@ async function connectStrava(){
     showToast(t('strava_connect_error'),'error');
   }
 }
+// Estado de "hay algún reloj/app conectada" (Strava/Polar/Wahoo -- Health Connect
+// se lee directo de state.healthConnectConnected, no hace falta cachearlo acá) para
+// poder decidir si mostrar el botón "Sincronizar" (y "Enviar a mi reloj", solo Wahoo)
+// en Plan sin tener que volver a consultar Supabase en cada render. Arranca todo en
+// false a propósito: mejor no mostrar el botón un instante y que aparezca cuando se
+// confirme una conexión real, que mostrarlo de entrada y tener que ocultarlo después
+// (ver refreshDeviceConnections(), llamada una vez al entrar a la app).
+let deviceConnections = { strava:false, polar:false, wahoo:false };
+async function refreshDeviceConnections(){
+  if(!currentUserId) return;
+  try{
+    const [s, p, w] = await Promise.all([
+      supabaseClient.from('strava_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
+      supabaseClient.from('polar_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
+      supabaseClient.from('wahoo_connections').select('user_id').eq('user_id', currentUserId).maybeSingle()
+    ]);
+    deviceConnections = { strava: !!s.data, polar: !!p.data, wahoo: !!w.data };
+  }catch(e){ console.error(e); }
+  renderPlan();
+}
 async function updateStravaStatusDisplay(){
   const el = document.getElementById('strava-status');
   const btn = document.getElementById('strava-connect-btn');
@@ -700,6 +720,7 @@ async function updateStravaStatusDisplay(){
   if(!el || !currentUserId) return;
   try{
     const { data } = await supabaseClient.from('strava_connections').select('athlete_id').eq('user_id', currentUserId).maybeSingle();
+    deviceConnections.strava = !!data;
     if(data){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
       if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectStrava; }
@@ -715,6 +736,7 @@ async function updateStravaStatusDisplay(){
       if(btn){ btn.textContent = t('perfil_strava_connect'); btn.onclick = connectStrava; }
       if(note) note.style.display = 'none';
     }
+    renderPlan();
   }catch(e){}
 }
 async function disconnectStrava(){
@@ -786,6 +808,7 @@ async function updatePolarStatusDisplay(){
   if(!el || !currentUserId) return;
   try{
     const { data } = await supabaseClient.from('polar_connections').select('polar_user_id').eq('user_id', currentUserId).maybeSingle();
+    deviceConnections.polar = !!data;
     if(data){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
       if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectPolar; }
@@ -793,6 +816,7 @@ async function updatePolarStatusDisplay(){
       el.textContent = t('perfil_native'); el.className = 'tag tag-asfalto';
       if(btn){ btn.textContent = t('perfil_polar_connect'); btn.onclick = connectPolar; }
     }
+    renderPlan();
   }catch(e){}
 }
 async function disconnectPolar(){
@@ -856,6 +880,7 @@ async function updateWahooStatusDisplay(){
   if(!el || !currentUserId) return;
   try{
     const { data } = await supabaseClient.from('wahoo_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
+    deviceConnections.wahoo = !!data;
     if(data){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
       if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectWahoo; }
@@ -863,6 +888,7 @@ async function updateWahooStatusDisplay(){
       el.textContent = t('perfil_native'); el.className = 'tag tag-asfalto';
       if(btn){ btn.textContent = t('wahoo_connect'); btn.onclick = connectWahoo; }
     }
+    renderPlan();
   }catch(e){}
 }
 async function disconnectWahoo(){
@@ -1784,6 +1810,7 @@ function enterApp(){
   setTimeout(maybeShowInstallBanner, 1200);
   setTimeout(maybeShowWhatsNew, 1800);
   loadMyUsername().then(()=>renderPerfil());
+  refreshDeviceConnections();
 }
 async function logout(){ await supabaseClient.auth.signOut(); location.reload(); }
 async function resetApp(){
@@ -3253,7 +3280,15 @@ function renderPlan(){
     }
     else if(d.status==='skipped') statusBlock = canEdit ? `<p style="color:var(--danger); font-weight:700; margin-top:12px;">${t('plan_status_skipped')} · <button class="small-link" onclick="markSession(${i},null)">${t('plan_undo')}</button></p>` : `<p style="color:var(--danger); font-weight:700; margin-top:12px;">${t('plan_status_skipped')}${isPastDay?' · '+t('plan_locked'):''}</p>`;
     else if(d.dist>0 && canEdit){
-      statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;"><button class="btn btn-outline btn-sm" onclick="markSession(${i},'done')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.check}</span> ${t('plan_mark_done')}</button><button class="btn btn-outline btn-sm" onclick="markSession(${i},'skipped')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.cross}</span> ${t('plan_mark_skipped')}</button>${isToday?`<button class="btn btn-outline btn-sm" id="sync-today-btn" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}${isToday?`<button class="btn btn-outline btn-sm" id="wahoo-push-btn" onclick="pushTodayToWahoo()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.send}</span> ${t('wahoo_push_button')}</button>`:''}</div>`;
+      // El botón "Sincronizar" solo tiene sentido si hay al menos una fuente conectada
+      // (Strava/Polar/Wahoo/Health Connect) -- mostrarlo siempre, aunque no haya nada
+      // conectado, era confuso: tocarlo no traía nada y no explicaba por qué. Mismo
+      // criterio para "Enviar a mi reloj", pero solo mirando Wahoo (es la única que
+      // recibe datos). Ver deviceConnections / refreshDeviceConnections() más arriba.
+      const anyDeviceConnected = deviceConnections.strava || deviceConnections.polar || deviceConnections.wahoo || !!state.healthConnectConnected;
+      const showSyncBtn = isToday && anyDeviceConnected;
+      const showWahooPushBtn = isToday && deviceConnections.wahoo;
+      statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;"><button class="btn btn-outline btn-sm" onclick="markSession(${i},'done')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.check}</span> ${t('plan_mark_done')}</button><button class="btn btn-outline btn-sm" onclick="markSession(${i},'skipped')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.cross}</span> ${t('plan_mark_skipped')}</button>${showSyncBtn?`<button class="btn btn-outline btn-sm" id="sync-today-btn" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}${showWahooPushBtn?`<button class="btn btn-outline btn-sm" id="wahoo-push-btn" onclick="pushTodayToWahoo()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.send}</span> ${t('wahoo_push_button')}</button>`:''}</div>`;
     }
     return `<div>
       <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" onclick="toggleDay(${i})">
