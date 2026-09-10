@@ -1642,11 +1642,6 @@
     <div id="achievements-content"></div>
   </div>
 
-  <div class="overlay" id="social-feed-modal" style="display:none;">
-    <button class="week-nav-btn" onclick="closeSocialFeed()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
-    <div id="social-feed-content"></div>
-  </div>
-
   <div class="overlay overlay-sheet" id="personal-data-overlay">
     <button class="week-nav-btn" onclick="closePersonalDataOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_personal_title"></h2>
@@ -2081,14 +2076,6 @@
         <p class="muted" id="perfil-sub">—</p>
         <p class="muted" id="perfil-remove-photo" style="display:none; font-size:12px; margin-top:2px; text-decoration:underline; cursor:pointer;" onclick="removeAvatarPhoto(event)" data-i18n="perfil_remove_photo"></p>
       </div>
-    </div>
-
-    <!-- Sección social (amigos) oculta por ahora a pedido del usuario -- el markup y la
-         lógica (renderSocialSection, saveUsername, followByUsername, etc.) se dejan intactos
-         para poder reactivarla más adelante sacando este display:none. -->
-    <div class="card" id="social-section-card" style="display:none;">
-      <h3 data-i18n="social_section_title"></h3>
-      <div id="social-section-body"></div>
     </div>
 
     <!-- Las 9 filas de navegación de antes (una por línea, scroll largo) ahora son una

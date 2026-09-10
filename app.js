@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-11T05:00:00Z';
+const APP_VERSION = '2026-09-11T06:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -337,10 +337,6 @@ function showConfirm(message, opts){
 let state = {onboarded:false, profile:{}, plan:[], runs:[], shoes:[], event:null, chat:[], lang:lang, painLog:[], readinessLog:[]};
 let pendingEmail = '';
 let currentUserId = null;
-// Nombre de usuario para la parte social (usernames + seguir amigos + feed + likes).
-// Vive en su propia tabla de Supabase (no adentro de app_state) porque hace falta
-// poder buscarlo entre usuarios sin exponer el resto del perfil -- ver sql/social.sql.
-let myUsername = null;
 /* ---- pantalla de "confirmá tu mail", con reintento automático de login mientras se espera ---- */
 let confirmEmailAddr = '';
 let confirmEmailPw = '';
@@ -1948,7 +1944,6 @@ function enterApp(){
   setTimeout(checkPendingRating, 600);
   setTimeout(maybeShowInstallBanner, 1200);
   setTimeout(maybeShowWhatsNew, 1800);
-  loadMyUsername().then(()=>renderPerfil());
   refreshDeviceConnections();
 }
 async function logout(){ await waitForPendingPersist(); await supabaseClient.auth.signOut(); location.reload(); }
@@ -3614,7 +3609,6 @@ function renderPerfil(){
     const {unlockedCount, totalCount} = getAchievementSections();
     achSummaryEl.textContent = t('ach_unlocked_count', {unlocked:unlockedCount, total:totalCount});
   }
-  renderSocialSection();
 
   updateProfileUnitLabels();
   const editingPersonal = ['perfil-weight','perfil-height','perfil-racedate','perfil-current-km'].includes(document.activeElement && document.activeElement.id);
@@ -5554,177 +5548,6 @@ function closeAchievements(){
   document.getElementById('achievements-modal').classList.remove('overlay-open');
 }
 
-/* ================= SOCIAL: usernames + seguir amigos + feed + likes =================
-   Todo esto vive en tablas nuevas y chicas de Supabase (sql/social.sql), separadas de
-   app_state a propósito: app_state es un blob único por usuario con TODO (perfil, plan,
-   carreras con GPS y frecuencia cardíaca) -- exponerlo a otros usuarios, aunque sea un
-   campo, sería un lío de privacidad. Estas tablas nuevas guardan a propósito lo mínimo
-   para que la parte social funcione: un nombre de usuario, quién sigue a quién, y una
-   versión resumida de cada carrera que el usuario decide compartir (distancia, tiempo,
-   fecha -- nunca la ruta ni la frecuencia cardíaca). Compartir una carrera es una acción
-   explícita (botón "Compartir con amigos" en el detalle de esa carrera) -- no se comparte
-   nada solo, ni automáticamente al agregar una carrera nueva. */
-async function loadMyUsername(){
-  if(!currentUserId) return;
-  try{
-    const { data, error } = await supabaseClient.from('usernames').select('username').eq('user_id', currentUserId).maybeSingle();
-    if(!error && data) myUsername = data.username;
-  }catch(e){ console.error('loadMyUsername error', e); }
-}
-async function saveUsername(){
-  const input = document.getElementById('social-username-input');
-  if(!input) return;
-  const raw = input.value.trim().toLowerCase();
-  if(!/^[a-z0-9_]{3,20}$/.test(raw)){ showToast(t('social_username_invalid'), 'error'); return; }
-  try{
-    const { error } = await supabaseClient.from('usernames').upsert({ user_id: currentUserId, username: raw });
-    if(error){
-      if(error.code === '23505') showToast(t('social_username_taken'), 'error');
-      else{ console.error('saveUsername error', error); showToast(t('social_generic_error'), 'error'); }
-      return;
-    }
-    myUsername = raw;
-    showToast(t('social_username_saved'), 'success');
-    renderSocialSection();
-  }catch(e){
-    console.error('saveUsername error', e);
-    showToast(t('social_generic_error'), 'error');
-  }
-}
-async function followByUsername(){
-  const input = document.getElementById('social-follow-input');
-  if(!input) return;
-  const raw = input.value.trim().toLowerCase();
-  if(!raw) return;
-  try{
-    const { data: found, error: findErr } = await supabaseClient.from('usernames').select('user_id').eq('username', raw).maybeSingle();
-    if(findErr || !found){ showToast(t('social_user_not_found'), 'error'); return; }
-    if(String(found.user_id) === String(currentUserId)){ showToast(t('social_cant_follow_self'), 'error'); return; }
-    const { error: insErr } = await supabaseClient.from('follows').insert({ follower_id: currentUserId, followee_id: found.user_id });
-    if(insErr && insErr.code !== '23505'){ console.error('followByUsername error', insErr); showToast(t('social_generic_error'), 'error'); return; }
-    showToast(insErr ? t('social_already_following') : t('social_now_following', {username: raw}), insErr ? 'info' : 'success');
-    input.value = '';
-    renderSocialFollowingList();
-  }catch(e){
-    console.error('followByUsername error', e);
-    showToast(t('social_generic_error'), 'error');
-  }
-}
-async function unfollowUser(userId){
-  try{
-    await supabaseClient.from('follows').delete().eq('follower_id', currentUserId).eq('followee_id', userId);
-    renderSocialFollowingList();
-  }catch(e){ console.error('unfollowUser error', e); showToast(t('social_generic_error'), 'error'); }
-}
-async function renderSocialFollowingList(){
-  const el = document.getElementById('social-following-list');
-  if(!el) return;
-  try{
-    const { data, error } = await supabaseClient.from('follows').select('followee_id, usernames(username)').eq('follower_id', currentUserId).order('created_at', {ascending:false});
-    if(error || !data || !data.length){
-      el.innerHTML = `<p class="muted" style="margin:10px 0 0; font-size:12.5px;">${t('social_following_empty')}</p>`;
-      return;
-    }
-    el.innerHTML = data.map(f=>`<div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-top:1px solid var(--asphalt-3);"><span>@${escapeHtml(f.usernames ? f.usernames.username : '?')}</span><button class="small-link" onclick="unfollowUser('${f.followee_id}')">${t('social_unfollow')}</button></div>`).join('');
-  }catch(e){ console.error('renderSocialFollowingList error', e); }
-}
-function renderSocialSection(){
-  const el = document.getElementById('social-section-body');
-  if(!el) return;
-  if(!myUsername){
-    el.innerHTML = `
-      <p class="muted" style="margin:0 0 10px; font-size:12.5px;">${t('social_username_intro')}</p>
-      <div class="field" style="margin-top:0;"><input type="text" id="social-username-input" maxlength="20" placeholder="${t('social_username_ph')}"></div>
-      <button class="btn btn-outline btn-sm" style="width:100%; margin-top:8px;" onclick="saveUsername()">${t('social_username_save_btn')}</button>
-    `;
-  }else{
-    el.innerHTML = `
-      <p style="margin:0 0 12px; font-weight:800;">@${escapeHtml(myUsername)}</p>
-      <div class="field" style="margin-top:0;">
-        <label>${t('social_follow_label')}</label>
-        <div style="display:flex; gap:8px;">
-          <input type="text" id="social-follow-input" maxlength="20" placeholder="${t('social_follow_ph')}" style="flex:1;">
-          <button class="btn btn-outline btn-sm" onclick="followByUsername()">${t('social_follow_btn')}</button>
-        </div>
-      </div>
-      <div id="social-following-list"></div>
-      <button class="btn btn-outline btn-sm" style="width:100%; margin-top:14px;" onclick="openSocialFeed()">${t('social_open_feed_btn')}</button>
-    `;
-    renderSocialFollowingList();
-  }
-}
-async function openSocialFeed(){
-  const el = document.getElementById('social-feed-content');
-  const title = `<h2 class="display" style="font-size:20px; margin-bottom:16px;">${t('social_feed_title')}</h2>`;
-  el.innerHTML = title + `<p class="muted">${t('social_feed_loading')}</p>`;
-  document.getElementById('social-feed-modal').style.display = 'block';
-  try{
-    const { data, error } = await supabaseClient.from('run_feed')
-      .select('id, distance_km, duration_sec, run_date, usernames(username), run_likes(user_id)')
-      .order('run_date', {ascending:false}).limit(50);
-    if(error) throw error;
-    if(!data || !data.length){ el.innerHTML = title + `<p class="muted">${t('social_feed_empty')}</p>`; return; }
-    el.innerHTML = title + data.map(r=>{
-      const likedByMe = (r.run_likes||[]).some(l=>String(l.user_id)===String(currentUserId));
-      const likeCount = (r.run_likes||[]).length;
-      const dateStr = new Date(r.run_date+'T00:00:00').toLocaleDateString(LOCALE_MAP[lang], {day:'numeric', month:'short'});
-      const paceMin = r.distance_km>0 ? (r.duration_sec/60)/r.distance_km : 0;
-      return `<div class="card" style="margin-bottom:10px;">
-        <div style="display:flex; justify-content:space-between; align-items:baseline;">
-          <span style="font-weight:800;">@${escapeHtml(r.usernames ? r.usernames.username : '?')}</span>
-          <span class="muted" style="font-size:12px;">${dateStr}</span>
-        </div>
-        <div style="display:flex; gap:20px; margin-top:10px;">
-          <div><div class="mono" style="font-weight:800;">${fmtDist(r.distance_km,2)} ${distUnit()}</div></div>
-          <div><div class="mono" style="font-weight:800;">${fmtTime(r.duration_sec)}</div></div>
-          <div><div class="mono" style="font-weight:800;">${fmtPace(paceMin)}/${distUnit()}</div></div>
-        </div>
-        <button class="small-link" style="margin-top:12px; display:flex; align-items:center; gap:6px; ${likedByMe?'color:var(--hivis-text);':''}" onclick="toggleRunLike('${r.id}', ${likedByMe})">
-          <span class="icon-sq" style="width:15px; height:15px;">${likedByMe ? ICONS.heartFilled : ICONS.heart}</span>${likedByMe ? t('social_liked') : t('social_like')}${likeCount>0 ? ' · '+likeCount : ''}
-        </button>
-      </div>`;
-    }).join('');
-  }catch(e){
-    console.error('openSocialFeed error', e);
-    el.innerHTML = title + `<p class="muted">${t('social_generic_error')}</p>`;
-  }
-}
-function closeSocialFeed(){
-  document.getElementById('social-feed-modal').style.display = 'none';
-}
-async function toggleRunLike(runFeedId, currentlyLiked){
-  try{
-    if(currentlyLiked) await supabaseClient.from('run_likes').delete().eq('run_feed_id', runFeedId).eq('user_id', currentUserId);
-    else await supabaseClient.from('run_likes').insert({ run_feed_id: runFeedId, user_id: currentUserId });
-    openSocialFeed();
-  }catch(e){ console.error('toggleRunLike error', e); showToast(t('social_generic_error'), 'error'); }
-}
-// Compartir una carrera puntual al feed de amigos -- acción explícita desde el detalle
-// de esa carrera (junto al botón de exportar GPX). Solo manda distancia/tiempo/fecha,
-// nunca la ruta GPS ni la frecuencia cardíaca (esas columnas ni existen en run_feed).
-async function shareRunToFeed(runId){
-  if(!myUsername){ showToast(t('social_need_username_first'), 'error'); return; }
-  const r = state.runs.find(x => String(x.id) === String(runId));
-  if(!r || !r.distanceKm || !r.durationSec) return;
-  try{
-    const { error } = await supabaseClient.from('run_feed').insert({
-      user_id: currentUserId,
-      run_id: String(r.id),
-      distance_km: r.distanceKm,
-      duration_sec: r.durationSec,
-      run_date: localDateISO(r.date),
-    });
-    if(error){
-      if(error.code === '23505') showToast(t('social_already_shared'), 'info');
-      else{ console.error('shareRunToFeed error', error); showToast(t('social_generic_error'), 'error'); }
-      return;
-    }
-    showToast(t('social_share_success'), 'success');
-  }catch(e){
-    console.error('shareRunToFeed error', e);
-    showToast(t('social_generic_error'), 'error');
-  }
-}
 function predictRaceTime(targetKm){
   // Estima el tiempo objetivo para `targetKm` con la fórmula de Riegel (T2 = T1 *
   // (D2/D1)^1.06), usando como referencia la marca personal más cercana en distancia
@@ -6486,8 +6309,6 @@ function renderRDDetalles(panel){
     </div>
     ${r.hrLog && r.hrLog.length>1 ? `<div class="hist-hrlist" style="margin-top:12px;">${r.hrLog.map(h=>`<span class="zone-chip zone-${classifyHR(h.bpm)}">${h.bpm} bpm</span>`).join('')}</div>` : ''}
   `;
-  // El botón "Compartir con amigos" queda oculto por ahora (junto con la sección social
-  // de Perfil) -- shareRunToFeed() se deja intacta para poder reactivarlo más adelante.
 }
 async function deleteRun(runId){
   if(!(await showConfirm(t('hist_delete_confirm'), {danger:true, confirmText:t('delete_word')}))) return;
