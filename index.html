@@ -528,6 +528,12 @@
   .next-session-bullet::before{content:''; width:5px; height:5px; margin-top:7px; border-radius:50%; background:var(--hivis); flex-shrink:0;}
   .stat-row{display:flex; gap:10px;}
   .stat-box{flex:1; background:var(--asphalt-3); border-radius:var(--radius-sm); padding:13px 10px; text-align:center; border:1px solid var(--overlay-hairline); box-shadow:0 2px 8px rgba(0,0,0,.14);}
+  /* Cada km recorrido ya se anuncia por voz (ver maybeAnnounceKm) -- es el momento más
+     repetido de toda la carrera y no tenía ningún refuerzo en pantalla para quien corre
+     con el volumen bajo. Un solo pulso de color + escala en el número de distancia, sin
+     mover el layout (el .l de abajo no se anima) para no distraer a media zancada. */
+  .km-pulse{animation:kmPulse .5s var(--ease-out);}
+  @keyframes kmPulse{0%{color:var(--hivis-text); transform:scale(1.16);} 100%{color:inherit; transform:scale(1);}}
   .stat-box .n{font-size:21px; font-weight:800;}
   .hist-card .stat-row-divided .stat-cell .n{font-size:16px;}
   .hist-map{position:relative; isolation:isolate; height:108px; border-radius:var(--radius-sm); overflow:hidden; margin-bottom:10px; background:var(--asphalt-3);}

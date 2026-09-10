@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-10T22:15:00Z';
+const APP_VERSION = '2026-09-10T23:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -35,6 +35,7 @@ const CHANGELOG = [
   {id:'2026-09-reschedule-skip-cancelled', key:'changelog_reschedule_skip_cancelled'},
   {id:'2026-09-run-recovery-duration-fix', key:'changelog_run_recovery_duration_fix'},
   {id:'2026-09-connectivity-box', key:'changelog_connectivity_box'},
+  {id:'2026-09-km-pulse', key:'changelog_km_pulse'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -4693,6 +4694,15 @@ function maybeAnnounceKm(){
     const paceMin = (tracker.elapsedSec/60)/tracker.distanceKm;
     const paceStr = `${Math.floor(paceMin)}:${String(Math.round((paceMin%1)*60)).padStart(2,'0')}`;
     speak(t('voice_km',{km:currentKm, pace:paceStr}));
+    // Antes cada km se anunciaba solo por voz -- sin nada en pantalla, es el momento más
+    // repetido de toda la carrera (varias veces por sesión) y no tenía ningún refuerzo para
+    // quien corre con el volumen bajo o mira el teléfono en vez de escuchar.
+    haptic(20);
+    const distEl = document.getElementById('track-dist');
+    if(distEl){
+      distEl.classList.remove('km-pulse'); void distEl.offsetWidth; // reinicia la animación si dos km caen muy seguidos
+      distEl.classList.add('km-pulse');
+    }
   }
 }
 
