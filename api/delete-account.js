@@ -31,9 +31,11 @@ module.exports = async (req, res) => {
   try {
     const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
-    // Antes de borrar la conexión con Strava, le avisamos a Strava que
-    // revoque el permiso — si no, la autorización queda activa de su lado
-    // aunque acá ya no quede rastro de ella.
+    // Antes de borrar cada conexión, le avisamos al proveedor que revoque el
+    // permiso -- si no, la autorización queda activa de su lado aunque acá
+    // ya no quede rastro de ella (esto un rato NO lo hacíamos para Polar y
+    // Wahoo, solo para Strava; quedaba el mismo problema para los otros dos
+    // relojes, solo que nadie lo había notado todavía).
     try {
       const connRes = await fetch(`${base}/rest/v1/strava_connections?user_id=eq.${userId}&select=access_token`, { headers });
       const connRows = await connRes.json();
@@ -43,9 +45,39 @@ module.exports = async (req, res) => {
       }
     } catch (e) { console.error('delete-account: strava revoke failed', e); }
 
+    try {
+      const connRes = await fetch(`${base}/rest/v1/polar_connections?user_id=eq.${userId}&select=access_token,polar_user_id`, { headers });
+      const connRows = await connRes.json();
+      const conn = connRows && connRows[0];
+      if (conn && conn.access_token) {
+        await fetch(`https://www.polaraccesslink.com/v3/users/${conn.polar_user_id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${conn.access_token}` }
+        });
+      }
+    } catch (e) { console.error('delete-account: polar revoke failed', e); }
+
+    try {
+      const connRes = await fetch(`${base}/rest/v1/wahoo_connections?user_id=eq.${userId}&select=access_token`, { headers });
+      const connRows = await connRes.json();
+      const accessToken = connRows && connRows[0] && connRows[0].access_token;
+      if (accessToken) {
+        await fetch('https://api.wahooligan.com/v1/permissions', {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+      }
+    } catch (e) { console.error('delete-account: wahoo revoke failed', e); }
+
     // Borramos los datos de la app asociados al usuario, tabla por tabla.
     // Cada una se borra de forma tolerante a errores: si una falla, seguimos
     // igual con las demás en vez de frenar todo el proceso a mitad de camino.
+    // (No hace falta listar acá polar_connections/wahoo_connections ni las
+    // tablas sociales -- usernames/follows/run_feed/run_likes -- porque las
+    // 6 tienen su user_id con ON DELETE CASCADE hacia auth.users, así que el
+    // borrado del usuario de auth más abajo ya las limpia solas. Sí hace
+    // falta listar acá las 3 de abajo porque son las únicas que el borrado
+    // del usuario de auth no toca de por sí.)
     const tables = ['app_state', 'push_subscriptions', 'strava_connections'];
     for (const table of tables) {
       try {
