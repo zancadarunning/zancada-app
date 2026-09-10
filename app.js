@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-10T02:15:00Z';
+const APP_VERSION = '2026-09-10T14:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -822,6 +822,115 @@ async function disconnectPolar(){
   }
   await updatePolarStatusDisplay();
 }
+
+/* ---- Health Connect (solo Android nativo) -----
+   A diferencia de Strava/Polar, acá no hay backend ni OAuth: todo el permiso y la
+   lectura pasan en el propio teléfono, vía el plugin local HealthConnectBridge (ver
+   mobile/healthconnect-setup/). Por eso el merge de carreras es en el cliente
+   (agregar a state.runs + persist(), como cualquier edición local) en vez de una
+   función SQL como merge_strava_runs/merge_polar_runs -- no hay condición de carrera
+   posible con un cron de fondo, porque no hay ningún cron: solo sincroniza cuando el
+   usuario lo pide, con la app abierta y state ya cargado en memoria.
+   En la web (y en iOS) window.Capacitor.Plugins.HealthConnectBridge no existe, así
+   que todo esto queda inerte -- mismo patrón que updateHomeWidget()/haptic(). */
+function healthConnectExerciseToRun(ex){
+  return {
+    id: 'healthconnect_' + ex.id,
+    healthConnectId: ex.id,
+    date: ex.startTime,
+    name: null,
+    distanceKm: (ex.distanceMeters || 0) / 1000,
+    durationSec: ex.durationSec || 0,
+    elevationGain: 0,
+    elevationLoss: null,
+    avgHr: ex.avgHr ? Math.round(ex.avgHr) : null,
+    maxHr: ex.maxHr ? Math.round(ex.maxHr) : null,
+    avgCadence: null,
+    calories: null,
+    hrLog: [],
+    points: [],
+    splits: [],
+    splitsV: 3,
+    series: null,
+    shoeId: null,
+    source: 'healthconnect'
+  };
+}
+function getHealthConnectBridge(){
+  return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.HealthConnectBridge;
+}
+async function connectHealthConnect(){
+  const HC = getHealthConnectBridge();
+  if(!HC){ showToast(t('healthconnect_unavailable'),'error'); return; }
+  try{
+    const avail = await HC.checkAvailability();
+    if(!avail.available){ showToast(t('healthconnect_unavailable'),'error'); return; }
+    const perm = await HC.requestPermissions();
+    if(!perm.granted){ showToast(t('healthconnect_permission_denied'),'error'); return; }
+    state.healthConnectConnected = true;
+    await syncHealthConnectNow();
+    persist();
+    updateHealthConnectStatusDisplay();
+  }catch(e){
+    console.error(e);
+    showToast(t('healthconnect_error'),'error');
+  }
+}
+async function syncHealthConnectNow(){
+  const HC = getHealthConnectBridge();
+  if(!HC) return {synced:false};
+  try{
+    const { exercises } = await HC.readExercises();
+    const knownIds = new Set((state.runs||[]).map(r=>r.healthConnectId));
+    const newRuns = (exercises||[]).filter(ex=>!knownIds.has(ex.id)).map(healthConnectExerciseToRun);
+    if(newRuns.length){
+      state.runs = [...(state.runs||[]), ...newRuns];
+      if(state.shoes){
+        state.shoes.forEach(shoe=>{
+          shoe.km = state.runs.filter(r=>String(r.shoeId)===String(shoe.id)).reduce((a,r)=>a+(r.distanceKm||0),0);
+        });
+      }
+      renderHistory(); renderHome(); renderPerfil();
+    }
+    return {synced:newRuns.length>0};
+  }catch(e){
+    console.error(e);
+    return {synced:false, error:e.message};
+  }
+}
+function updateHealthConnectStatusDisplay(){
+  const card = document.getElementById('healthconnect-card');
+  const isAndroid = !!(window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'android');
+  if(card) card.style.display = isAndroid ? '' : 'none';
+  if(!isAndroid) return;
+  const el = document.getElementById('healthconnect-status');
+  const btn = document.getElementById('healthconnect-connect-btn');
+  if(!el) return;
+  if(state.healthConnectConnected){
+    el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
+    if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectHealthConnect; }
+  } else {
+    el.textContent = t('perfil_native'); el.className = 'tag tag-asfalto';
+    if(btn){ btn.textContent = t('healthconnect_connect'); btn.onclick = connectHealthConnect; }
+  }
+}
+async function disconnectHealthConnect(){
+  const HC = getHealthConnectBridge();
+  try{ if(HC) await HC.disconnect(); }catch(e){ console.error(e); }
+  state.healthConnectConnected = false;
+  if(state.runs && state.runs.some(r=>r.source==='healthconnect')){
+    state.runs = state.runs.filter(r=>r.source!=='healthconnect');
+    if(state.shoes){
+      state.shoes.forEach(shoe=>{
+        shoe.km = state.runs.filter(r=>String(r.shoeId)===String(shoe.id)).reduce((a,r)=>a+(r.distanceKm||0),0);
+      });
+    }
+    renderHistory(); renderHome(); renderPerfil();
+  }
+  persist();
+  updateHealthConnectStatusDisplay();
+}
+
 async function handleSignIn(){
   if(document.getElementById('login-submit-btn')?.disabled) return;
   const email = document.getElementById('login-email').value.trim();
@@ -1803,12 +1912,19 @@ async function syncTodayNow(){
     }
   }catch(e){ console.error('sync-now error', e); }
   await refreshStateFromServer();
-  if(relinkTodayRun()) persist();
+  // Health Connect va DESPUÉS de refreshStateFromServer(): es un merge en memoria
+  // (no hay backend de por medio, ver el comentario grande junto a
+  // healthConnectExerciseToRun), así que si corriera antes, el refresh de arriba
+  // pisaría lo que acabamos de agregar sin enterarse. persist() lo manda al server
+  // recién con la carrera de Health Connect ya adentro.
+  let hcResult = null;
+  if(state.healthConnectConnected) hcResult = await syncHealthConnectNow();
+  if(relinkTodayRun() || (hcResult && hcResult.synced)) persist();
   renderPlan(); renderHome(); renderHistory();
-  const bothSynced = (stravaResult && stravaResult.synced) || (polarResult && polarResult.synced);
-  const bothDisconnected = (!stravaResult || stravaResult.reason==='not_connected') && (!polarResult || polarResult.reason==='not_connected');
-  if(!bothSynced){
-    const reasonMsg = bothDisconnected ? 'Tu cuenta no está conectada a Strava ni a Polar.' : (stravaResult && stravaResult.error) || (polarResult && polarResult.error) ? `Error: ${(stravaResult&&stravaResult.error)||(polarResult&&polarResult.error)}` : 'No encontramos actividades nuevas.';
+  const anySynced = (stravaResult && stravaResult.synced) || (polarResult && polarResult.synced) || (hcResult && hcResult.synced);
+  const allDisconnected = (!stravaResult || stravaResult.reason==='not_connected') && (!polarResult || polarResult.reason==='not_connected') && !state.healthConnectConnected;
+  if(!anySynced){
+    const reasonMsg = allDisconnected ? 'Tu cuenta no está conectada a Strava, Polar ni Health Connect.' : (stravaResult && stravaResult.error) || (polarResult && polarResult.error) || (hcResult && hcResult.error) ? `Error: ${(stravaResult&&stravaResult.error)||(polarResult&&polarResult.error)||(hcResult&&hcResult.error)}` : 'No encontramos actividades nuevas.';
     showToast(reasonMsg,'error');
   }
   if(btn){ btn.disabled = false; btn.innerHTML = `<span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}`; }
@@ -4233,7 +4349,7 @@ async function showView(v){
   if(v==='inicio'){ await refreshStateFromServer(); renderHome(); renderPlan(); }
   if(v==='history'){ await refreshStateFromServer(); renderHistory(); }
   if(v==='plan'){ await refreshStateFromServer(); viewingWeekOffset = 0; renderPlan(); }
-  if(v==='perfil'){ renderPerfilDays(); updatePushStatusDisplay(); updateStravaStatusDisplay(); updatePolarStatusDisplay(); }
+  if(v==='perfil'){ renderPerfilDays(); updatePushStatusDisplay(); updateStravaStatusDisplay(); updatePolarStatusDisplay(); updateHealthConnectStatusDisplay(); }
   if(v==='correr'){ renderRunTodayCard(); }
 }
 function goCoachWithPrompt(prefill){
