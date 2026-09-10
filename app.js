@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-11T02:40:00Z';
+const APP_VERSION = '2026-09-11T03:10:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -40,6 +40,7 @@ const CHANGELOG = [
   {id:'2026-09-connectivity-push', key:'changelog_connectivity_push'},
   {id:'2026-09-devices-overlay', key:'changelog_devices_overlay'},
   {id:'2026-09-light-mode-v2', key:'changelog_light_mode_v2'},
+  {id:'2026-09-mountains-chat-polish', key:'changelog_mountains_chat_polish'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -7451,7 +7452,12 @@ function renderChat(){
       groupCls = sameAsPrev && sameAsNext ? 'mid' : sameAsPrev ? 'last' : sameAsNext ? 'first' : '';
     }
     const safeText = m.role==='system' ? m.text : m.role==='coach' ? formatCoachText(m.text) : escapeHtml(m.text);
-    html += `<div class="msg ${m.role} ${groupCls}">${safeText}</div>`;
+    // Cada llamada a renderChat() reconstruye toda la lista, así que "el último mensaje"
+    // es siempre el que genuinamente acaba de aparecer (mensaje propio recién mandado,
+    // respuesta del coach recién llegada, aviso proactivo, etc.) -- se lo anima a él
+    // solo, no a la charla entera (ver el comentario junto a .msg-enter en el CSS).
+    const enterCls = i===msgs.length-1 ? ' msg-enter' : '';
+    html += `<div class="msg ${m.role} ${groupCls}${enterCls}">${safeText}</div>`;
     if(m.role!=='system' && m.ts && !sameAsNext){
       const d = new Date(m.ts);
       const hh = String(d.getHours()).padStart(2,'0');
@@ -7883,7 +7889,7 @@ async function sendChat(){
   input.value='';
   state.chat.push({role:'user', text, ts:Date.now()});
   renderChat();
-  document.getElementById('chatLog').insertAdjacentHTML('beforeend', `<div class="msg coach typing" id="typing"><span></span><span></span><span></span></div>`);
+  document.getElementById('chatLog').insertAdjacentHTML('beforeend', `<div class="msg coach typing msg-enter" id="typing"><span></span><span></span><span></span></div>`);
   scrollChatToBottom();
 
   // Mandamos como máximo los últimos CHAT_HISTORY_LIMIT mensajes: una charla de meses

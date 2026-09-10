@@ -859,6 +859,13 @@
   .coach-disclaimer{flex-shrink:0; margin:0; padding:4px 20px 10px; font-size:11px; color:var(--mist); line-height:1.4;}
   #chatLog{display:flex; flex-direction:column; flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:0 20px 10px; overscroll-behavior:contain;}
   .msg{max-width:82%; padding:11px 14px; border-radius:16px; font-size:14px; line-height:1.5; margin-bottom:10px;}
+  /* renderChat() reconstruye TODO el innerHTML del log en cada llamada (no agrega un
+     nodo suelto por mensaje nuevo) -- animar .msg entero haría que la charla completa
+     "parpadeara" de nuevo cada vez que llega una respuesta. Esta clase se agrega SOLO
+     al último mensaje de la lista en cada render (ver renderChat()), que es siempre el
+     que genuinamente acaba de aparecer -- los anteriores quedan quietos. */
+  @keyframes msgEnter{from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);}}
+  .msg-enter{animation:msgEnter .28s var(--ease-out);}
   .msg.first,.msg.mid{margin-bottom:2px;}
   .msg.coach{background:var(--asphalt-2); align-self:flex-start; border-bottom-left-radius:4px; white-space:pre-wrap;}
   .msg.user{background:var(--hivis); color:var(--ink); align-self:flex-end; border-bottom-right-radius:4px; font-weight:600;}
@@ -1106,9 +1113,9 @@
   <div id="splash">
     <div class="splash-bg" aria-hidden="true">
       <svg viewBox="0 0 400 220" preserveAspectRatio="none">
-        <polygon class="splash-terrain-far" points="0,220 0,150 35,130 70,158 110,110 150,145 185,95 225,135 260,100 300,140 335,105 370,138 400,120 400,220"/>
-        <polygon class="splash-terrain-near" points="0,220 0,190 40,172 85,198 130,160 175,188 215,150 255,182 295,155 335,185 370,165 400,180 400,220"/>
-        <polyline class="splash-terrain-line" points="0,190 40,172 85,198 130,160 175,188 215,150 255,182 295,155 335,185 370,165 400,180"/>
+        <polygon class="splash-terrain-far" points="0,220 0,178 25,122 55,152 90,72 125,158 160,104 195,148 225,88 260,142 295,108 330,152 365,98 400,138 400,220"/>
+        <polygon class="splash-terrain-near" points="0,220 0,196 35,176 75,202 115,164 155,194 190,154 225,190 260,160 300,192 335,168 370,188 400,174 400,220"/>
+        <polyline class="splash-terrain-line" points="0,196 35,176 75,202 115,164 155,194 190,154 225,190 260,160 300,192 335,168 370,188 400,174"/>
       </svg>
     </div>
     <div class="pulse-strip"><svg viewBox="0 0 300 40" preserveAspectRatio="none"><path d="M0 20 H40 L48 6 L58 34 L66 20 H90 L98 8 L108 32 L116 20 H150 H190 L198 6 L208 34 L216 20 H240 L248 8 L258 32 L266 20 H300 L308 6 L318 34 L326 20 H350 H390 L398 6 L408 34 L416 20 H440 L448 8 L458 32 L466 20 H500 L508 6 L518 34 L526 20 H600" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg></div>
@@ -1139,9 +1146,9 @@
   <div class="overlay" id="login">
     <div class="splash-bg" aria-hidden="true">
       <svg viewBox="0 0 400 220" preserveAspectRatio="none">
-        <polygon class="splash-terrain-far" points="0,220 0,150 35,130 70,158 110,110 150,145 185,95 225,135 260,100 300,140 335,105 370,138 400,120 400,220"/>
-        <polygon class="splash-terrain-near" points="0,220 0,190 40,172 85,198 130,160 175,188 215,150 255,182 295,155 335,185 370,165 400,180 400,220"/>
-        <polyline class="splash-terrain-line" points="0,190 40,172 85,198 130,160 175,188 215,150 255,182 295,155 335,185 370,165 400,180"/>
+        <polygon class="splash-terrain-far" points="0,220 0,178 25,122 55,152 90,72 125,158 160,104 195,148 225,88 260,142 295,108 330,152 365,98 400,138 400,220"/>
+        <polygon class="splash-terrain-near" points="0,220 0,196 35,176 75,202 115,164 155,194 190,154 225,190 260,160 300,192 335,168 370,188 400,174 400,220"/>
+        <polyline class="splash-terrain-line" points="0,196 35,176 75,202 115,164 155,194 190,154 225,190 260,160 300,192 335,168 370,188 400,174"/>
       </svg>
     </div>
     <h2 class="display" data-i18n="login_title"></h2>
@@ -1169,9 +1176,9 @@
   <div class="overlay" id="signup" style="display:none;">
     <div class="splash-bg" aria-hidden="true">
       <svg viewBox="0 0 400 220" preserveAspectRatio="none">
-        <polygon class="splash-terrain-far" points="0,220 0,150 35,130 70,158 110,110 150,145 185,95 225,135 260,100 300,140 335,105 370,138 400,120 400,220"/>
-        <polygon class="splash-terrain-near" points="0,220 0,190 40,172 85,198 130,160 175,188 215,150 255,182 295,155 335,185 370,165 400,180 400,220"/>
-        <polyline class="splash-terrain-line" points="0,190 40,172 85,198 130,160 175,188 215,150 255,182 295,155 335,185 370,165 400,180"/>
+        <polygon class="splash-terrain-far" points="0,220 0,178 25,122 55,152 90,72 125,158 160,104 195,148 225,88 260,142 295,108 330,152 365,98 400,138 400,220"/>
+        <polygon class="splash-terrain-near" points="0,220 0,196 35,176 75,202 115,164 155,194 190,154 225,190 260,160 300,192 335,168 370,188 400,174 400,220"/>
+        <polyline class="splash-terrain-line" points="0,196 35,176 75,202 115,164 155,194 190,154 225,190 260,160 300,192 335,168 370,188 400,174"/>
       </svg>
     </div>
     <h2 class="display" data-i18n="signup_title"></h2>
