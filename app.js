@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-10T23:00:00Z';
+const APP_VERSION = '2026-09-11T00:30:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -36,6 +36,8 @@ const CHANGELOG = [
   {id:'2026-09-run-recovery-duration-fix', key:'changelog_run_recovery_duration_fix'},
   {id:'2026-09-connectivity-box', key:'changelog_connectivity_box'},
   {id:'2026-09-km-pulse', key:'changelog_km_pulse'},
+  {id:'2026-09-light-mode', key:'changelog_light_mode'},
+  {id:'2026-09-connectivity-push', key:'changelog_connectivity_push'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -1340,6 +1342,35 @@ document.getElementById('units-toggle').addEventListener('click', e=>{
   state.profile.units = c.dataset.v;
   renderAll(); renderHistory(); persist();
 });
+const THEME_KEY = 'zancada_theme';
+// El tema es una preferencia del dispositivo, no un dato del corredor -- vive en
+// localStorage (mismo lugar que ya lee el script de arranque en el <head>, antes de
+// que cargue este archivo) y nunca pasa por persist()/Supabase: cambiarlo en un
+// celular no debería prender o apagar el tema en los demás dispositivos de la cuenta.
+function currentThemePref(){
+  const v = localStorage.getItem(THEME_KEY);
+  return (v==='light' || v==='dark') ? v : 'system';
+}
+function applyTheme(pref){
+  try{ localStorage.setItem(THEME_KEY, pref); }catch(e){}
+  if(pref==='light' || pref==='dark') document.documentElement.setAttribute('data-theme', pref);
+  else document.documentElement.removeAttribute('data-theme');
+  const isLight = pref==='light' || (pref!=='dark' && window.matchMedia('(prefers-color-scheme: light)').matches);
+  const meta = document.getElementById('theme-color-meta');
+  if(meta) meta.setAttribute('content', isLight ? '#F7F6F2' : '#0A0A0A');
+  [...document.getElementById('theme-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v===pref));
+}
+document.getElementById('theme-toggle').addEventListener('click', e=>{
+  const c=e.target.closest('.choice'); if(!c) return;
+  applyTheme(c.dataset.v);
+});
+// Si el tema está en "system" y el usuario cambia el modo oscuro/claro del sistema
+// operativo mientras la app sigue abierta, el CSS (prefers-color-scheme) ya reacciona
+// solo -- esto solo mantiene el color de la barra de estado (theme-color) sincronizado
+// con lo que el CSS terminó mostrando, ya que esa meta no puede reaccionar sola.
+window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', ()=>{
+  if(currentThemePref()==='system') applyTheme('system');
+});
 document.getElementById('ob-days').addEventListener('click', e=>{
   const c=e.target.closest('.day-pill'); if(!c) return;
   c.classList.toggle('active');
@@ -1891,6 +1922,7 @@ function enterApp(){
   [...document.getElementById('voice-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.voiceEnabled===false?'off':'on')));
   [...document.getElementById('units-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.profile.units==='imperial'?'imperial':'metric')));
   [...document.getElementById('perfil-trainby-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.profile.trainBy==='time'?'time':'distance')));
+  [...document.getElementById('theme-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v===currentThemePref()));
   renderPerfilDays();
   renderAll(); renderHistory(); renderZones();
   showView('inicio');

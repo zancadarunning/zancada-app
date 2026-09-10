@@ -34,7 +34,20 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Zancada">
-<meta name="theme-color" content="#0A0A0A">
+<meta name="theme-color" content="#0A0A0A" id="theme-color-meta">
+<!-- Se aplica el tema (si el usuario forzó uno a mano) ANTES de que se pinte nada --
+     si esto corriera en app.js (que carga al final del body), se vería un flash del
+     tema equivocado apenas abre la app cada vez que el elegido no coincide con el que
+     prefiere el sistema. "system"/sin guardar nada no toca el atributo -- lo resuelve
+     solo el CSS con prefers-color-scheme (ver applyTheme() en app.js para el resto). -->
+<script>(function(){
+  try{
+    var pref = localStorage.getItem('zancada_theme');
+    if(pref === 'light' || pref === 'dark') document.documentElement.setAttribute('data-theme', pref);
+    var isLight = pref === 'light' || (pref !== 'dark' && window.matchMedia('(prefers-color-scheme: light)').matches);
+    document.getElementById('theme-color-meta').setAttribute('content', isLight ? '#F7F6F2' : '#0A0A0A');
+  }catch(e){}
+})();</script>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -44,13 +57,24 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
-  /* ---- Paleta única (modo claro eliminado a pedido del usuario) ----
-     Hubo un modo claro (:root[data-theme="light"]) con toggle en Perfil -- se sacó
-     entero (CSS, el toggle de Perfil, applyTheme()/handleThemeToggle() en app.js, y
-     el script de arranque que leía la preferencia de localStorage) porque el usuario
-     prefirió quedarse solo con este tema oscuro. Todo el resto de la hoja de
-     estilos usa estas variables, así que no queda ningún selector "data-theme" en
-     ningún lado: esto es lo único que hay.
+  /* ---- Tema oscuro (default) + tema claro ----
+     Hubo un modo claro antes, se sacó entero a pedido del usuario, y ahora vuelve a
+     pedido del mismo usuario -- así que esta vez queda armado como un sistema de
+     verdad en vez de un experimento suelto: :root de acá abajo sigue siendo la base
+     oscura sin tocar (nadie pierde el tema que ya tenía), y el claro vive en DOS
+     bloques que redefinen exactamente las mismas variables -- uno reacciona solo a
+     prefers-color-scheme:light (para quien nunca tocó nada), y :root[data-theme="light"]
+     fuerza el claro pase lo que pase el sistema (ver el toggle de 3 vías en Perfil →
+     Preferencias, y applyTheme() en app.js). El atributo se aplica ANTES del primer
+     pintado con un script mínimo al principio de <head> -- si no, se ve un flash del
+     tema equivocado apenas carga la página.
+
+     Los colores del tema claro NO son un negativo automático del oscuro: el lima
+     (--hivis) como RELLENO sólido queda igual en los dos temas (es la marca, no debería
+     cambiar), pero como TEXTO sobre blanco (--hivis-text) se oscurece a un oliva bien
+     saturado -- el lima puro no pasa contraste AA sobre fondo claro. Mismo criterio
+     para clay/danger/zonas: se oscurecen lo justo para seguir siendo el mismo color
+     reconocible, legible sobre blanco en vez de sobre carbón.
 
      --ink y --hivis-text existen separados de --chalk/--hivis porque el verde lima
      (--hivis) cumple dos roles distintos: como RELLENO sólido (fondo de botones,
@@ -100,6 +124,61 @@
     --cs:dark;
     --safe-top:env(safe-area-inset-top); --safe-bottom:env(safe-area-inset-bottom);
   }
+  /* Tema claro "de sistema" -- solo aplica si el usuario no forzó nada a mano
+     (:not([data-theme="dark"]) dentro del media query, ver el bloque explícito de
+     abajo para cuando sí forzó). Misma lista de variables que :root, valores nuevos. */
+  @media (prefers-color-scheme:light){
+    :root:not([data-theme="dark"]){
+      --asphalt:#F7F6F2; --asphalt-2:#FFFFFF; --asphalt-3:#EFEEE9; --asphalt-4:#E3E1D9;
+      --chalk:#181A1B; --mist:#63696D; --mist-dim:#989C9E;
+      --hivis:#D6FF3F; --hivis-dim:rgba(122,153,0,.15); --hivis-text:#5A6800; --ink:#121415;
+      --clay:#A8501E; --clay-dim:rgba(168,80,30,.14);
+      --danger:#D92C1F; --danger-dim:rgba(217,44,31,.12);
+      --press:rgba(0,0,0,.045); --overlay-hairline:rgba(0,0,0,.08);
+      --tabbar-bg:rgba(255,255,255,.85);
+      --toast-error-bg:#FDECEB; --toast-error-fg:#B3261E;
+      --shadow-card:0 8px 22px rgba(30,26,20,.10); --shadow-lg:0 16px 48px rgba(30,26,20,.14);
+      --hivis-glow:rgba(163,199,0,.30);
+      --zone1:#3D5C87; --zone1-bg:rgba(61,92,135,.12); --zone1-bg-live:rgba(61,92,135,.10);
+      --zone2:#2F7D52; --zone2-bg:rgba(47,125,82,.12); --zone2-bg-live:rgba(47,125,82,.10);
+      --zone3:#8C6D1F; --zone3-bg:rgba(140,109,31,.12); --zone3-bg-live:rgba(140,109,31,.10);
+      --zone4:#95562A; --zone4-bg:rgba(149,86,42,.12); --zone4-bg-live:rgba(149,86,42,.10);
+      --zone5:#A33C30; --zone5-bg:rgba(163,60,48,.12); --zone5-bg-live:rgba(163,60,48,.10);
+      --cs:light;
+    }
+    /* .card-highlight y .confirm-card degradan hacia un color de fondo escrito a mano
+       (no una variable) porque necesitan mezclarse con el vidrio esmerilado -- sobre
+       claro tienen que fundirse en blanco, no en el carbón oscuro original. */
+    :root:not([data-theme="dark"]) .card-highlight{
+      background:linear-gradient(160deg, rgba(163,199,0,.10), rgba(255,255,255,.6) 55%);
+      box-shadow:0 0 0 1px rgba(163,199,0,.22), 0 0 26px rgba(163,199,0,.20), 0 16px 32px rgba(30,26,20,.14);}
+    :root:not([data-theme="dark"]) .confirm-card{
+      background:linear-gradient(160deg, rgba(255,255,255,.9), rgba(239,238,233,.85) 55%);}
+  }
+  /* Tema claro forzado a mano (toggle en Perfil) -- gana pase lo que pase el sistema. */
+  :root[data-theme="light"]{
+    --asphalt:#F7F6F2; --asphalt-2:#FFFFFF; --asphalt-3:#EFEEE9; --asphalt-4:#E3E1D9;
+    --chalk:#181A1B; --mist:#63696D; --mist-dim:#989C9E;
+    --hivis:#D6FF3F; --hivis-dim:rgba(122,153,0,.15); --hivis-text:#5A6800; --ink:#121415;
+    --clay:#A8501E; --clay-dim:rgba(168,80,30,.14);
+    --danger:#D92C1F; --danger-dim:rgba(217,44,31,.12);
+    --press:rgba(0,0,0,.045); --overlay-hairline:rgba(0,0,0,.08);
+    --tabbar-bg:rgba(255,255,255,.85);
+    --toast-error-bg:#FDECEB; --toast-error-fg:#B3261E;
+    --shadow-card:0 8px 22px rgba(30,26,20,.10); --shadow-lg:0 16px 48px rgba(30,26,20,.14);
+    --hivis-glow:rgba(163,199,0,.30);
+    --zone1:#3D5C87; --zone1-bg:rgba(61,92,135,.12); --zone1-bg-live:rgba(61,92,135,.10);
+    --zone2:#2F7D52; --zone2-bg:rgba(47,125,82,.12); --zone2-bg-live:rgba(47,125,82,.10);
+    --zone3:#8C6D1F; --zone3-bg:rgba(140,109,31,.12); --zone3-bg-live:rgba(140,109,31,.10);
+    --zone4:#95562A; --zone4-bg:rgba(149,86,42,.12); --zone4-bg-live:rgba(149,86,42,.10);
+    --zone5:#A33C30; --zone5-bg:rgba(163,60,48,.12); --zone5-bg-live:rgba(163,60,48,.10);
+    --cs:light;
+  }
+  :root[data-theme="light"] .card-highlight{
+    background:linear-gradient(160deg, rgba(163,199,0,.10), rgba(255,255,255,.6) 55%);
+    box-shadow:0 0 0 1px rgba(163,199,0,.22), 0 0 26px rgba(163,199,0,.20), 0 16px 32px rgba(30,26,20,.14);}
+  :root[data-theme="light"] .confirm-card{
+    background:linear-gradient(160deg, rgba(255,255,255,.9), rgba(239,238,233,.85) 55%);}
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0; padding:0; background:var(--asphalt); height:100%;}
   body{font-family:'Inter',-apple-system,sans-serif; color:var(--chalk); overscroll-behavior-y:none;}
@@ -490,14 +569,6 @@
     -webkit-backdrop-filter:blur(22px) saturate(1.4); backdrop-filter:blur(22px) saturate(1.4);
     border-color:var(--hivis); border-width:1.5px;
     box-shadow:0 0 0 1px rgba(214,255,63,.22), 0 0 26px rgba(214,255,63,.28), 0 16px 32px rgba(0,0,0,.4);}
-  /* Mismo tratamiento que .card-highlight pero en arcilla en vez de lima -- le da
-     identidad propia a la card de conectividad sin inventar un color nuevo: arcilla
-     ya es el color secundario establecido del sistema (mismo que .tag-trail, mismo
-     que el separador de elevación). */
-  .card-strava{background:linear-gradient(160deg, rgba(192,106,46,.12), rgba(24,24,27,.55) 55%);
-    -webkit-backdrop-filter:blur(22px) saturate(1.4); backdrop-filter:blur(22px) saturate(1.4);
-    border-color:var(--clay); border-width:1.5px;
-    box-shadow:0 0 0 1px rgba(192,106,46,.22), 0 0 26px rgba(192,106,46,.24), 0 16px 32px rgba(0,0,0,.4);}
   /* "Doble bisel": una carcasa fina por fuera de las dos cards destacadas, como si
      el vidrio esmerilado de arriba estuviera calzado en una bandeja -- en vez de la
      tarjeta flotando sola contra el fondo. El radio exterior crece exactamente lo
@@ -1973,6 +2044,22 @@
         <p class="muted" style="margin-bottom:8px;" data-i18n="healthconnect_desc"></p>
         <button class="btn btn-outline btn-sm" id="healthconnect-connect-btn" style="margin-top:10px; width:100%;" onclick="connectHealthConnect()"></button>
       </div>
+
+      <!-- Notificaciones push vivía como card propia más abajo -- es otra forma de
+           "conectar" la app con algo externo (el sistema operativo, en vez de un
+           reloj), así que entra en el mismo recuadro en vez de ser una quinta
+           sección suelta en un Perfil que ya tenía demasiadas. -->
+      <div class="conn-row">
+        <div class="conn-row-head">
+          <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+          <span class="n" style="font-size:14.5px; font-weight:700; flex:1;" data-i18n="perfil_push_title"></span>
+          <label class="switch">
+            <input type="checkbox" id="push-toggle" onchange="handlePushToggle(this.checked)">
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+        <p class="muted" id="push-status" style="font-size:12.5px;" data-i18n="push_disabled"></p>
+      </div>
     </div>
     </div>
 
@@ -2030,19 +2117,6 @@
     </div>
 
     <div class="card">
-      <div style="display:flex; align-items:center; justify-content:space-between;">
-        <div style="flex:1; padding-right:12px;">
-          <h3 style="margin-bottom:2px;" data-i18n="perfil_push_title"></h3>
-          <p class="muted" id="push-status" style="font-size:12.5px;" data-i18n="push_disabled"></p>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="push-toggle" onchange="handlePushToggle(this.checked)">
-          <span class="switch-slider"></span>
-        </label>
-      </div>
-    </div>
-
-    <div class="card">
       <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
         <span class="icon-sq" style="width:22px; height:22px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v11H8l-4 4v-4H4z"/></svg></span>
         <h3 style="margin:0;" data-i18n="perfil_coach_title"></h3>
@@ -2058,6 +2132,15 @@
     </div>
 
     <div class="elev-divider"><svg viewBox="0 0 60 14"><polyline points="0,12 10,12 16,4 22,10 28,2 34,9 40,12 60,12" fill="none" stroke="#C06A2E" stroke-width="1.6"/></svg><span data-i18n="perfil_preferences"></span></div>
+    <div class="card">
+      <h3 data-i18n="perfil_theme_title"></h3>
+      <div class="choice-row segmented" id="theme-toggle">
+        <div class="choice" data-v="system" data-i18n="perfil_theme_system"></div>
+        <div class="choice" data-v="light" data-i18n="perfil_theme_light"></div>
+        <div class="choice" data-v="dark" data-i18n="perfil_theme_dark"></div>
+      </div>
+    </div>
+
     <div class="card">
       <h3 data-i18n="perfil_units"></h3>
       <div class="choice-row segmented" id="units-toggle">
