@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-10T18:15:00Z';
+const APP_VERSION = '2026-09-10T18:45:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -913,13 +913,8 @@ async function pushTodayToWahoo(){
       body: JSON.stringify({ name: lbl.type, startsISO, minutes: durMin })
     });
     const result = await res.json().catch(()=>null);
-    // Temporal, ver el comentario en api/wahoo-push-workout.js: mostramos lo
-    // que Wahoo devolvió con alert() (no toast -- el toast se cierra solo a
-    // los 3.2s, muy poco para leer/sacar captura de un JSON) mientras
-    // confirmamos que la sesión aparece de verdad del lado de Wahoo. Sacar
-    // este alert() una vez confirmado.
-    if(result && result.debug) alert('wahoo-push-workout debug:\n' + JSON.stringify(result.debug, null, 2));
-    if(result && result.pushed){ showToast(t('wahoo_push_success'),'success'); }
+    if(result && result.alreadyExists){ showToast(t('wahoo_push_already'),'success'); }
+    else if(result && result.pushed){ showToast(t('wahoo_push_success'),'success'); }
     else if(result && result.reason==='not_connected'){ showToast(t('wahoo_connect_error'),'error'); }
     else { showToast(t('wahoo_push_error'),'error'); }
   }catch(e){

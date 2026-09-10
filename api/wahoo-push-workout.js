@@ -50,9 +50,23 @@ module.exports = async (req, res) => {
     }
 
     // workout_token identifica la sesión del lado de Wahoo -- usamos la fecha
-    // para que reenviar la sesión del mismo día sea al menos reconocible como
-    // "la misma", aunque Wahoo no documenta si dedupea por este campo.
+    // para que reenviar la sesión del mismo día sea reconocible como "la
+    // misma". Confirmado con una prueba real: Wahoo NO dedupea por este campo
+    // solo -- cada POST crea un workout nuevo, así que tocar "Enviar a mi
+    // reloj" más de una vez el mismo día generaba duplicados en el calendario
+    // del usuario. Por eso ahora primero preguntamos si ya existe uno con
+    // este workout_token entre los últimos creados, y si existe no mandamos
+    // uno nuevo (no hay endpoint documentado de "actualizar" un workout, así
+    // que "no duplicar" es más seguro que adivinar uno).
     const workoutToken = `zancada_${userId}_${startsISO.slice(0, 10)}`;
+    const existingRes = await fetch('https://api.wahooligan.com/v1/workouts?page=1&per_page=10', {
+      headers: { Authorization: `Bearer ${conn.access_token}` }
+    });
+    if (existingRes.ok) {
+      const existingData = await existingRes.json().catch(() => null);
+      const existing = (existingData && existingData.workouts || []).find(w => w.workout_token === workoutToken);
+      if (existing) { res.status(200).json({ pushed: true, alreadyExists: true }); return; }
+    }
     const body = new URLSearchParams({
       'workout[name]': name,
       'workout[workout_token]': workoutToken,
@@ -65,16 +79,13 @@ module.exports = async (req, res) => {
       headers: { Authorization: `Bearer ${conn.access_token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
       body
     });
-    const respBody = await pushRes.text().catch(() => '');
     if (!pushRes.ok) {
-      res.status(200).json({ pushed: false, reason: 'wahoo_error', debug: { httpStatus: pushRes.status, body: respBody } });
+      const text = await pushRes.text().catch(() => '');
+      console.error('wahoo-push-workout: create failed', pushRes.status, text);
+      res.status(200).json({ pushed: false, reason: 'wahoo_error' });
       return;
     }
-    // Temporal: devolvemos lo que Wahoo realmente guardó (incluido el "starts"
-    // que nos haya normalizado) para diagnosticar por qué no aparece del lado
-    // de Wahoo -- ver el pedido de debug en el chat. Sacar el campo debug una
-    // vez confirmado que funciona de punta a punta.
-    res.status(200).json({ pushed: true, debug: { sentStarts: startsISO, wahooResponse: respBody } });
+    res.status(200).json({ pushed: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
