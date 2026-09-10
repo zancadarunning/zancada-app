@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-11T03:10:00Z';
+const APP_VERSION = '2026-09-11T04:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -41,6 +41,7 @@ const CHANGELOG = [
   {id:'2026-09-devices-overlay', key:'changelog_devices_overlay'},
   {id:'2026-09-light-mode-v2', key:'changelog_light_mode_v2'},
   {id:'2026-09-mountains-chat-polish', key:'changelog_mountains_chat_polish'},
+  {id:'2026-09-a11y-perf', key:'changelog_a11y_perf'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -4465,8 +4466,16 @@ async function checkForAppUpdate(){
        app.js, index.html ya no contiene esa constante, así que el regex nunca matcheaba
        y el aviso de actualización dejó de aparecer (en cualquier plataforma, no solo
        en el celular — simplemente nadie lo notó en desktop todavía). Hay que pedir
-       app.js, que es donde vive ahora. */
-    const res = await fetch('/app.js?_v=' + Date.now(), { cache:'no-store' });
+       app.js, que es donde vive ahora.
+       Esto se dispara cada vez que la pestaña/app vuelve a estar visible (ver el
+       visibilitychange de abajo) -- en el celular eso pasa muy seguido (cada vez que
+       se desbloquea o se vuelve de otra app). Pedir el archivo ENTERO cada vez (498KB,
+       ~156KB comprimido) solo para leer una constante de la línea 3 era tirar datos del
+       celular a la basura en cada regreso -- un header Range pide solo los primeros
+       bytes (de sobra para esa constante, que está al principio del archivo a
+       propósito). Si el hosting no respeta Range, cae solo al comportamiento de
+       siempre (200 con el archivo completo) sin romper nada. */
+    const res = await fetch('/app.js?_v=' + Date.now(), { cache:'no-store', headers:{'Range':'bytes=0-300'} });
     if(!res.ok) return false;
     const text = await res.text();
     const m = text.match(/const APP_VERSION\s*=\s*'([^']+)'/);
