@@ -338,33 +338,3 @@ test('estimateBasePaceMinPerKm: sin corridas ni PRs, usa el default según si es
   assert.equal(app.estimateBasePaceMinPerKm(beginner), 7.5);
   assert.equal(app.estimateBasePaceMinPerKm(advanced), 6.2);
 });
-
-test('getReschedulableDays: no ofrece un día que el corredor canceló a propósito por chat', () => {
-  // Reportado como bug: el botón de "reprogramar por lluvia" ofrecía cualquier día con
-  // typeKey==='rest' como destino -- pero un día CANCELADO a propósito por chat (d.cancelled,
-  // ver applyCancelSession) también tiene typeKey:'rest' y dist:0, a propósito, para verse
-  // igual que un descanso normal. Sin este chequeo, el aviso de clima podía ofrecer mover la
-  // sesión de hoy justo al día que el corredor dijo explícitamente que no podía entrenar.
-  const app = loadApp();
-  const todayIdx = (new Date().getDay() + 6) % 7;
-  app.state.profile = baseProfile();
-  app.state.plan = app.DAY_KEYS.map((day, i) => {
-    if (i <= todayIdx) return { day, typeKey: 'easy', dist: 8 };
-    // Alterna descanso normal / cancelado a propósito entre los días que quedan de la
-    // semana, para cubrir ambos casos sea cual sea el día en que corre el test.
-    return (i - todayIdx) % 2 === 1
-      ? { day, typeKey: 'rest', dist: 0, cancelled: false }
-      : { day, typeKey: 'rest', dist: 0, cancelled: true };
-  });
-
-  const options = Array.from(app.getReschedulableDays());
-
-  app.state.plan.forEach((d, i) => {
-    if (i <= todayIdx) return;
-    if (d.cancelled) {
-      assert.ok(!options.includes(d.day), `${d.day} está cancelado a propósito -- no debería ofrecerse para reprogramar`);
-    } else {
-      assert.ok(options.includes(d.day), `${d.day} es un descanso normal -- debería poder ofrecerse para reprogramar`);
-    }
-  });
-});

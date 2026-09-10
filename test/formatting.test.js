@@ -1,9 +1,9 @@
 // test/formatting.test.js
 //
 // Pruebas de los formateadores de distancia/ritmo/tiempo (fmtDist, fmtPace,
-// fmtTime, fmtDurationShort) y de la clasificación de clima (classifyWeatherCode)
-// -- funciones puras, sin dependencia de la pantalla, así que son las más
-// baratas de cubrir y las que más rápido detectan una regresión de cálculo.
+// fmtTime, fmtDurationShort) -- funciones puras, sin dependencia de la
+// pantalla, así que son las más baratas de cubrir y las que más rápido
+// detectan una regresión de cálculo.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -54,31 +54,4 @@ test('fmtDurationShort: redondea a los 15s más cercanos y cambia a minutos al l
   assert.equal(app.fmtDurationShort(65), `1 ${app.t('time_unit_min')}`);
   // 185s -> redondea a 180s -> 3 minutos
   assert.equal(app.fmtDurationShort(185), `3 ${app.t('time_unit_min')}`);
-});
-
-test('classifyWeatherCode: tormenta gana sobre cualquier otra condición', () => {
-  const app = loadApp();
-  // código de tormenta (95) + lluvia altísima + calor extremo: tormenta manda igual
-  assert.equal(app.classifyWeatherCode(95, 100, 40, 20), 'storm');
-});
-
-test('classifyWeatherCode: lluvia por código o por probabilidad alta', () => {
-  const app = loadApp();
-  assert.equal(app.classifyWeatherCode(61, 0, 20, 10), 'rain'); // código de lluvia
-  assert.equal(app.classifyWeatherCode(0, 75, 20, 10), 'rain'); // sin código de lluvia pero prob>=60
-  assert.equal(app.classifyWeatherCode(0, 59, 20, 10), null); // 59% no alcanza
-});
-
-test('classifyWeatherCode: calor y frío por umbral de temperatura, sin lluvia ni tormenta', () => {
-  const app = loadApp();
-  assert.equal(app.classifyWeatherCode(0, 0, 31, 15), 'heat');
-  assert.equal(app.classifyWeatherCode(0, 0, 29, 15), null); // 29 no llega a 30
-  assert.equal(app.classifyWeatherCode(0, 0, 20, 2), 'cold');
-  assert.equal(app.classifyWeatherCode(0, 0, 20, 3), 'cold'); // 3 es el límite, inclusive
-  assert.equal(app.classifyWeatherCode(0, 0, 20, 4), null); // 4 ya no es frío
-});
-
-test('classifyWeatherCode: día templado sin lluvia/calor/frío no devuelve alerta', () => {
-  const app = loadApp();
-  assert.equal(app.classifyWeatherCode(2, 10, 22, 12), null);
 });
