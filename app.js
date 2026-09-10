@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-10T19:45:00Z';
+const APP_VERSION = '2026-09-10T21:30:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -339,12 +339,37 @@ let confirmEmailPollTimer = null;
 let confirmEmailResendCooldown = false;
 const DAY_KEYS = ['mon','tue','wed','thu','fri','sat','sun'];
 const ZONE_COLORS = {1:'#5B9BFF',2:'#4ADE80',3:'#FACC15',4:'#FB923C',5:'#FF6B5D'};
-const MI_PER_KM = 0.621371, KM_PER_MI = 1.609344;
+const MI_PER_KM = 0.621371, KM_PER_MI = 1.609344, LB_PER_KG = 2.20462;
 function isImperial(){ return state.profile && state.profile.units === 'imperial'; }
 function distUnit(){ return isImperial() ? 'mi' : 'km'; }
 function fmtDist(km, decimals=2){
   const val = isImperial() ? km * MI_PER_KM : km;
   return val.toFixed(decimals);
+}
+// stepKm/goalKm llegan siempre en km desde el input (lo que el usuario tipeó, en la unidad
+// que está viendo) -- hay que convertirlos a km ANTES de guardarlos en state.profile, si no
+// se guarda el número tal cual como si fuera km aunque el usuario lo haya escrito en millas.
+function parseDistInput(val){
+  const n = parseFloat(val);
+  if(!(n>0) && n!==0) return 0;
+  return isImperial() ? n * KM_PER_MI : n;
+}
+function fmtWeight(kg){ return Math.round(isImperial() ? kg * LB_PER_KG : kg); }
+function weightUnit(){ return isImperial() ? 'lb' : 'kg'; }
+function parseWeightInput(val){
+  const n = parseFloat(val);
+  if(!(n>0)) return 0;
+  return isImperial() ? n / LB_PER_KG : n;
+}
+function updateProfileUnitLabels(){
+  const weightLbl = document.getElementById('perfil-weight-label');
+  if(weightLbl) weightLbl.textContent = t(isImperial() ? 'ob_weight_label_imperial' : 'ob_weight_label');
+  const kmLbl = document.getElementById('perfil-current-km-label');
+  if(kmLbl) kmLbl.textContent = t(isImperial() ? 'ob_currentkm_label_mi' : 'ob_currentkm_label');
+  const goalLbl = document.getElementById('perfil-weekly-goal-label');
+  if(goalLbl) goalLbl.textContent = t(isImperial() ? 'perfil_weekly_goal_label_mi' : 'perfil_weekly_goal_label');
+  const evDist = document.getElementById('ev-distance');
+  if(evDist) evDist.placeholder = t(isImperial() ? 'perfil_ev_dist_ph_mi' : 'perfil_ev_dist_ph');
 }
 function fmtPace(minPerKm){
   if(!minPerKm || minPerKm<=0) return '—';
@@ -459,6 +484,7 @@ let loadedStateVersion = null;
 // carrera: nunca hay dos pedidos de red compitiendo por llegar último.
 let persistInFlight = false;
 let persistQueued = false;
+let persistSettledResolvers = [];
 async function persist(){
   if(!currentUserId) return;
   if(persistInFlight){ persistQueued = true; return; }
@@ -475,6 +501,22 @@ async function persist(){
   updateSyncBadge();
   persistInFlight = false;
   if(persistQueued){ persistQueued = false; persist(); } // había un pedido más pendiente -- lo mandamos ahora con el `state` más actual
+  else {
+    // Esta era la última llamada de la cadena (no quedó ningún guardado encolado detrás) --
+    // si alguien está esperando a que termine de guardar todo (ver waitForPendingPersist(),
+    // usado antes de cerrar sesión/borrar cuenta/reiniciar la app), lo desbloqueamos acá.
+    const resolvers = persistSettledResolvers; persistSettledResolvers = [];
+    resolvers.forEach(fn=>fn());
+  }
+}
+function waitForPendingPersist(){
+  // logout()/resetApp()/deleteAccount() cierran sesión o borran datos del lado del servidor
+  // justo después de llamar acá -- sin esperar a que un persist() en vuelo (o encolado)
+  // termine, esa escritura podía perderse (el usuario edita algo, cierra sesión al toque, y
+  // el cambio nunca llega a guardarse) o, en el caso de "Borrar mis datos", un persist()
+  // tardío podía llegar DESPUÉS del delete y resucitar la fila que se acababa de borrar.
+  if(!persistInFlight && !persistQueued) return Promise.resolve();
+  return new Promise(resolve=>{ persistSettledResolvers.push(resolve); });
 }
 /* ---- aviso de conflicto entre dispositivos -----
    Antes, el "último que guarda gana" a ciegas: si abrís la app en el celu y la tablet
@@ -496,7 +538,16 @@ async function checkForRemoteConflict(){
       // si el corredor prefiere seguir acá, no le repetimos el mismo aviso mil veces --
       // adoptamos la versión remota como "conocida" para no comparar contra algo viejo,
       // aunque el contenido en pantalla siga siendo el local hasta que guarde de nuevo.
-      loadedStateVersion = data.updated_at;
+      // OJO: mientras el diálogo de arriba estaba abierto (el usuario tardó en responder),
+      // un persist() propio pudo haber corrido igual y ya haber dejado loadedStateVersion
+      // más nuevo que este data.updated_at (capturado ANTES de abrir el diálogo) -- si lo
+      // pisamos a ciegas acá, loadedStateVersion retrocede a una versión vieja y la próxima
+      // comparación detecta un "conflicto" contra el propio guardado que este dispositivo
+      // acaba de hacer. Solo lo adoptamos si de verdad sigue siendo más nuevo que lo que ya
+      // sabemos.
+      if(!loadedStateVersion || new Date(data.updated_at).getTime() > new Date(loadedStateVersion).getTime()){
+        loadedStateVersion = data.updated_at;
+      }
     }
   }catch(e){ console.error('conflict check error', e); }
   finally{ checkingRemoteConflict = false; }
@@ -982,6 +1033,34 @@ function healthConnectExerciseToRun(ex){
     source: 'healthconnect'
   };
 }
+// Antes Historial solo reconocía r.source==='strava' para la insignia y la búsqueda --
+// Polar/Wahoo/Health Connect quedaban con carreras "sin marca" (sin insignia, invisibles
+// para el buscador) aunque llegaran de un reloj sincronizado igual que las de Strava.
+const SOURCE_LABELS = {strava:'Strava', polar:'Polar', wahoo:'Wahoo', healthconnect:'Health Connect'};
+function sourceBadgeHtml(source, withMargin){
+  const label = SOURCE_LABELS[source];
+  if(!label) return '';
+  return `<span class="tag tag-asfalto"${withMargin?' style="margin-right:6px;"':''}>${label}</span>`;
+}
+function isLikelyDuplicateOfExistingRun(startIso, distanceKm, existingRuns){
+  // Compara contra CUALQUIER carrera ya guardada, sin importar la fuente -- si el mismo
+  // reloj manda la actividad tanto por Health Connect (local, en este dispositivo) como
+  // por Strava/Polar/Wahoo (la nube de esa marca), sin este chequeo se guardaban las dos
+  // como carreras distintas, porque cada sincronización solo se fija en su propio id
+  // (healthConnectId/stravaId/polarId/wahooId). Emparejamos por hora de inicio cercana
+  // (10 min) y distancia parecida (10%, con un piso de 300m para carreras cortas) --
+  // suficiente para reconocer la misma actividad real sin confundir dos carreras
+  // distintas hechas el mismo día.
+  const startMs = new Date(startIso).getTime();
+  if(isNaN(startMs)) return false;
+  return (existingRuns||[]).some(r=>{
+    const rMs = new Date(r.date).getTime();
+    if(isNaN(rMs) || Math.abs(rMs-startMs) > 10*60*1000) return false;
+    const rKm = r.distanceKm || 0;
+    const tol = Math.max(0.3, rKm*0.1);
+    return Math.abs(rKm - distanceKm) <= tol;
+  });
+}
 function getHealthConnectBridge(){
   return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.HealthConnectBridge;
 }
@@ -1008,7 +1087,10 @@ async function syncHealthConnectNow(){
   try{
     const { exercises } = await HC.readExercises();
     const knownIds = new Set((state.runs||[]).map(r=>r.healthConnectId));
-    const newRuns = (exercises||[]).filter(ex=>!knownIds.has(ex.id)).map(healthConnectExerciseToRun);
+    const newRuns = (exercises||[])
+      .filter(ex=>!knownIds.has(ex.id))
+      .filter(ex=>!isLikelyDuplicateOfExistingRun(ex.startTime, (ex.distanceMeters||0)/1000, state.runs))
+      .map(healthConnectExerciseToRun);
     if(newRuns.length){
       state.runs = [...(state.runs||[]), ...newRuns];
       if(state.shoes){
@@ -1446,7 +1528,11 @@ function finishPersonalDataSave(){
   flashSaved('save-personal-btn');
 }
 function savePersonalData(){
-  const weight = parseFloat(document.getElementById('perfil-weight').value);
+  // El peso y los km actuales se muestran convertidos a la unidad elegida (ver
+  // fmtWeight()/fmtDist() en renderPerfil()) -- hay que reconvertirlos a kg/km ANTES de
+  // guardarlos, si no un usuario en modo imperial que tipea "150" (lb) queda con 150kg
+  // guardados tal cual.
+  const weight = parseWeightInput(document.getElementById('perfil-weight').value);
   const height = parseFloat(document.getElementById('perfil-height').value);
   const terrainChoice = document.querySelector('#perfil-terrain-choice .choice.active');
   const goal = document.getElementById('perfil-goal').value;
@@ -1458,7 +1544,7 @@ function savePersonalData(){
   if(goal) state.profile.goal = goal;
   state.profile.raceDate = raceDate;
   if(currentKmInput && currentKmInput.value !== ''){
-    state.profile.currentWeeklyKm = parseFloat(currentKmInput.value) || 0;
+    state.profile.currentWeeklyKm = parseDistInput(currentKmInput.value);
     state.profile.runnerType = 'active';
   }
   state.profile.weeklyKm = calcWeeklyKm(state.profile);
@@ -1471,7 +1557,7 @@ function applyGoalsChangeNow(){
   // el plan de la semana y avisarle al coach para que quede todo conectado
   state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
   if(state.profile.weeklyGoalKm > 0){
-    state.chat.push({role:'coach', text: t('coach_weekly_goal_updated', {km: state.profile.weeklyGoalKm}), ts:Date.now()});
+    state.chat.push({role:'coach', text: t('coach_weekly_goal_updated', {km: fmtDist(state.profile.weeklyGoalKm,1), unit: distUnit()}), ts:Date.now()});
     renderChat();
   }
 }
@@ -1480,7 +1566,7 @@ function applyGoalsChangeNextWeek(){
   // Igual que en datos personales: no tocamos el plan de esta semana, la que viene ya
   // se calcula sola con el perfil actualizado.
   if(state.profile.weeklyGoalKm > 0){
-    state.chat.push({role:'coach', text: t('coach_weekly_goal_updated_next_week', {km: state.profile.weeklyGoalKm}), ts:Date.now()});
+    state.chat.push({role:'coach', text: t('coach_weekly_goal_updated_next_week', {km: fmtDist(state.profile.weeklyGoalKm,1), unit: distUnit()}), ts:Date.now()});
     renderChat();
   }
 }
@@ -1489,7 +1575,7 @@ function finishGoalsSave(){
   flashSaved('save-goals-btn');
 }
 function saveGoals(){
-  const weeklyGoal = parseFloat(document.getElementById('perfil-weekly-goal').value) || 0;
+  const weeklyGoal = parseDistInput(document.getElementById('perfil-weekly-goal').value);
   const goalNote = document.getElementById('perfil-goal-note').value.trim();
   const goalChanged = (state.profile.weeklyGoalKm||0) !== weeklyGoal;
   state.profile.weeklyGoalKm = weeklyGoal;
@@ -1812,9 +1898,10 @@ function enterApp(){
   loadMyUsername().then(()=>renderPerfil());
   refreshDeviceConnections();
 }
-async function logout(){ await supabaseClient.auth.signOut(); location.reload(); }
+async function logout(){ await waitForPendingPersist(); await supabaseClient.auth.signOut(); location.reload(); }
 async function resetApp(){
   if(!(await showConfirm(t('reset_confirm_text'), {danger:true, confirmText:t('delete_word')}))) return;
+  await waitForPendingPersist();
   if(currentUserId){
     try{ await supabaseClient.from('app_state').delete().eq('user_id', currentUserId); }catch(e){}
   }
@@ -1824,6 +1911,7 @@ async function resetApp(){
 async function deleteAccount(){
   if(!(await showConfirm(t('delete_account_confirm_text'), {danger:true, confirmText:t('delete_account_confirm_btn')}))) return;
   try{
+    await waitForPendingPersist();
     const { data: { session } } = await supabaseClient.auth.getSession();
     if(!session){ showToast(t('delete_account_error'),'error'); return; }
     const res = await fetch(apiUrl('/api/delete-account'), {
@@ -1868,6 +1956,18 @@ function getMondayISO(d){
   const dt = new Date(d);
   const day = dt.getDay();
   dt.setDate(dt.getDate() + (day===0 ? -6 : 1-day));
+  return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+}
+function addDaysToIsoLocal(iso, days){
+  // Mismo motivo que getMondayISO()/todayLocalISO() de arriba: `new Date(iso)` con un string
+  // "YYYY-MM-DD" lo parsea como medianoche UTC (no local), y toISOString() vuelve a pasar por
+  // UTC al serializar -- las dos conversiones juntas pueden correr la fecha resultante un día
+  // para el lado equivocado según el huso horario, y justo alrededor de un cambio de horario
+  // de verano. Acá se arma el Date con los componentes locales desde el arranque y se vuelve
+  // a armar el string a mano, sin tocar UTC en ningún paso.
+  const [y,m,d] = iso.split('-').map(Number);
+  const dt = new Date(y, m-1, d);
+  dt.setDate(dt.getDate() + days);
   return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
 }
 function isCutbackWeek(n){ return n % 4 === 0; }
@@ -2082,9 +2182,7 @@ function getNextWeekPlan(){
   // mostrarla en Plan, dársela de contexto al coach, o promoverla al cambiar de semana) y da
   // siempre el mismo resultado mientras no cambien tus calificaciones o tu perfil.
   const wn = (state.weekNumber||1) + 1;
-  const nextStart = new Date(state.weekStart || getMondayISO(new Date()));
-  nextStart.setDate(nextStart.getDate() + 7);
-  const nextStartIso = nextStart.toISOString().slice(0,10);
+  const nextStartIso = addDaysToIsoLocal(state.weekStart || getMondayISO(new Date()), 7);
   const adj = computeWeekAdjustment(state.plan);
   const previewProfile = Object.assign({}, state.profile, {weeklyKm: Math.max(5, (state.profile.weeklyKm||0) * adj.factor)});
   const base = generatePlan(previewProfile, wn, nextStartIso);
@@ -2139,12 +2237,23 @@ function checkGoalUpsell(){
   state.goalUpsellShown = true;
   return t('coach_goal_upsell');
 }
-function detectTrainingGapWeeks(){
+function detectTrainingGapWeeks(fallbackSinceIso){
   // Hace cuántas semanas fue la última carrera REGISTRADA -- a diferencia de diffWeeks
   // (que solo mide cuánto tiempo de calendario pasó desde que se abrió la app la última
   // vez), esto mide si el corredor realmente dejó de entrenar. Alguien puede entrenar
   // puntual sin abrir la app todos los días -> eso no es una pausa real.
-  if(!state.runs || !state.runs.length) return 0;
+  if(!state.runs || !state.runs.length){
+    // Sin ninguna carrera cargada nunca (ej. alguien que se registró y no volvió a abrir
+    // la app en semanas) no hay una última fecha real de la cual partir -- antes esto
+    // devolvía 0 siempre, como si "nunca hubo pausa", y un usuario que vuelve después de
+    // varias semanas sin entrenar nada se encontraba con un plan promovido de golpe a un
+    // volumen que nunca sostuvo. Si nos pasan una referencia (el inicio de la semana que
+    // veníamos mostrando), calculamos la pausa desde ahí en vez de asumir que no hubo.
+    if(!fallbackSinceIso) return 0;
+    const sinceMs = new Date(fallbackSinceIso+'T00:00:00').getTime();
+    if(isNaN(sinceMs)) return 0;
+    return Math.max(0, Math.floor((Date.now() - sinceMs) / (7*86400000)));
+  }
   let lastRunMs = 0;
   state.runs.forEach(r=>{ const d = new Date(r.date).getTime(); if(!isNaN(d) && d>lastRunMs) lastRunMs = d; });
   if(!lastRunMs) return 0;
@@ -2171,7 +2280,7 @@ function checkWeekRollover(){
     const diffWeeks = Math.max(1, Math.round((new Date(currentMonday) - prevMonday)/(7*86400000)));
     let adjustNote = null, recapMsg = null, goalUpsellMsg = null, breakMsg = null;
     let promotedPlan = null, promotedWeekNumber = (state.weekNumber||1) + diffWeeks, promotedWeekStart = currentMonday;
-    const breakAdj = computeReturnFromBreakAdjustment(detectTrainingGapWeeks());
+    const breakAdj = computeReturnFromBreakAdjustment(detectTrainingGapWeeks(state.weekStart));
     if(state.weekStart && state.plan && state.plan.length){
       state.planHistory.push({weekNumber: state.weekNumber||1, weekStart: state.weekStart, plan: state.plan});
       recapMsg = buildWeeklyRecapMessage(state.plan, state.weekStart);
@@ -2990,9 +3099,7 @@ function getWeekData(offset){
     const nw = getNextWeekPlan();
     return { plan: nw.plan, weekNumber: nw.weekNumber, editable: false, exists: true, mode:'next', weekStart: nw.weekStart };
   }
-  const futureStart = new Date(state.weekStart);
-  futureStart.setDate(futureStart.getDate() + offset*7);
-  const futureStartIso = futureStart.toISOString().slice(0,10);
+  const futureStartIso = addDaysToIsoLocal(state.weekStart, offset*7);
   if(offset > 12) return { plan: [], weekNumber: wn, editable: false, exists: false, mode:'future', weekStart: futureStartIso };
   return { plan: generatePlan(state.profile, wn, futureStartIso), weekNumber: wn, editable: false, exists: true, mode:'future', weekStart: futureStartIso };
 }
@@ -3210,7 +3317,18 @@ function saveCustomZones(){
       max: parseInt(document.getElementById(`zone-${n}-max`).value) || 0
     };
   }
+  // classifyHR() recorre las zonas 1→5 en orden y devuelve la primera cuyo máximo no
+  // se supere -- si no exigimos min<max por zona y máximos estrictamente ascendentes,
+  // una carga a mano invertida (ej. zona 1 con max 190) hace que TODAS las pulsaciones
+  // caigan en zona 1 y las zonas 2-5 queden inalcanzables sin que nadie se entere.
+  for(let n=1;n<=5;n++){
+    if(newZones[n].min >= newZones[n].max || (n>1 && newZones[n].max <= newZones[n-1].max)){
+      showToast(t('zones_invalid_error'), 'error');
+      return;
+    }
+  }
   state.profile.hrZones = newZones;
+  state.profile.hrKnown = true;
   renderZones(); renderPlan(); persist();
   flashSaved('save-zones-btn');
 }
@@ -3434,13 +3552,14 @@ function renderPerfil(){
   }
   renderSocialSection();
 
+  updateProfileUnitLabels();
   const editingPersonal = ['perfil-weight','perfil-height','perfil-racedate','perfil-current-km'].includes(document.activeElement && document.activeElement.id);
   if(!editingPersonal){
-    document.getElementById('perfil-weight').value = p.weight || '';
+    document.getElementById('perfil-weight').value = p.weight ? fmtWeight(p.weight) : '';
     document.getElementById('perfil-height').value = p.height || '';
     // 0 es un valor real y guardado a propósito (alguien nuevo que arranca desde cero) --
     // "|| ''" lo mostraba como campo vacío, indistinguible de "todavía no se cargó nada".
-    document.getElementById('perfil-current-km').value = (p.currentWeeklyKm===0 || p.currentWeeklyKm) ? p.currentWeeklyKm : '';
+    document.getElementById('perfil-current-km').value = (p.currentWeeklyKm===0 || p.currentWeeklyKm) ? fmtDist(p.currentWeeklyKm,1) : '';
     document.getElementById('perfil-goal').value = p.goal || 'start';
     document.getElementById('perfil-racedate').value = p.raceDate || '';
     dateBoxUpdaters['perfil-racedate'] && dateBoxUpdaters['perfil-racedate']();
@@ -3448,7 +3567,7 @@ function renderPerfil(){
   }
   const editingGoals = ['perfil-weekly-goal','perfil-goal-note'].includes(document.activeElement && document.activeElement.id);
   if(!editingGoals){
-    document.getElementById('perfil-weekly-goal').value = p.weeklyGoalKm || '';
+    document.getElementById('perfil-weekly-goal').value = p.weeklyGoalKm ? fmtDist(p.weeklyGoalKm,1) : '';
     document.getElementById('perfil-goal-note').value = p.goalNote || '';
   }
 
@@ -3479,7 +3598,7 @@ function renderPerfil(){
         <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" onclick="deleteShoe(${s.id})"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
         <div class="swipe-content"><div class="shoe-info">
           <div class="n">${escapeHtml(s.name)} <span class="tag tag-${s.terrain}" style="margin-left:4px;">${t('ob_terrain_'+s.terrain)}</span></div>
-          <div class="muted mono" style="font-size:11.5px; margin-top:2px;">${s.km.toFixed(0)} / ${threshold} km</div>
+          <div class="muted mono" style="font-size:11.5px; margin-top:2px;">${fmtDist(s.km,0)} / ${fmtDist(threshold,0)} ${distUnit()}</div>
           <div class="wearbar ${pct>80?'warn':''}"><div style="width:${pct}%;"></div></div></div>
           <button class="small-link" style="display:inline-flex;" aria-label="${t('aria_edit')}" onclick="startEditShoe(${s.id})"><span class="icon-sq" style="width:15px; height:15px;">${ICONS.edit}</span></button>
         </div>
@@ -3510,7 +3629,7 @@ function renderPerfil(){
       </div>
       ${paceBlock}`;
     document.getElementById('ev-name').value = state.event.name;
-    document.getElementById('ev-distance').value = state.event.distanceKm || '';
+    document.getElementById('ev-distance').value = state.event.distanceKm>0 ? fmtDist(state.event.distanceKm,2) : '';
     document.getElementById('ev-date').value = state.event.date;
     dateBoxUpdaters['ev-date'] && dateBoxUpdaters['ev-date']();
     document.getElementById('ev-type').value = state.event.type;
@@ -4359,6 +4478,10 @@ function saveEditShoe(id){
   const shoe = state.shoes.find(s=>s.id===id);
   shoe.name = name; shoe.terrain = document.getElementById('edit-shoe-terrain-'+id).value;
   editingShoeId = null;
+  // Cambiar el terreno cambia el umbral de desgaste (600/500/400 km) -- sin este chequeo,
+  // una zapatilla que cruza el 80% solo por el cambio de terreno (sin correr un km más)
+  // se queda con la barra en rojo pero sin haber disparado nunca el aviso de reemplazo.
+  checkShoeWearAlerts();
   renderPerfil(); persist();
 }
 async function deleteShoe(id){
@@ -4415,7 +4538,7 @@ function checkHrMaxFromRuns(){
 function setEvent(){
   const name = document.getElementById('ev-name').value.trim(); const date = document.getElementById('ev-date').value;
   if(!name || !date) return;
-  const distanceKm = parseFloat(document.getElementById('ev-distance').value);
+  const distanceKm = parseDistInput(document.getElementById('ev-distance').value);
   state.event = {name, date, type:document.getElementById('ev-type').value, distanceKm: distanceKm>0 ? distanceKm : null};
   // el evento (fecha, tipo de terreno) influye en el plan (taper, día de descanso el día
   // de la carrera, terreno del rodaje largo) -- si no se regenera acá, esos efectos
@@ -4540,7 +4663,7 @@ document.addEventListener('visibilitychange', async ()=>{ if(document.visibility
    recuperar lo ya recorrido en vez de perder el entrenamiento entero. Se
    guarda en el almacenamiento local del teléfono, no en el servidor. */
 const RUN_PROGRESS_KEY = 'zancada_run_in_progress';
-function saveRunProgress(){
+function saveRunProgress(finished){
   if(!tracker || !tracker.startedAt) return;
   try{
     localStorage.setItem(RUN_PROGRESS_KEY, JSON.stringify({
@@ -4549,7 +4672,8 @@ function saveRunProgress(){
       distanceKm: tracker.distanceKm,
       hrLog: tracker.hrLog,
       lastAnnouncedKm: tracker.lastAnnouncedKm,
-      elapsedSec: tracker.elapsedSec
+      elapsedSec: tracker.elapsedSec,
+      finished: !!finished
     }));
   }catch(e){}
 }
@@ -4855,6 +4979,14 @@ function startRun(){
   if(!navigator.geolocation){ document.getElementById('geo-warning').style.display='block'; document.getElementById('geo-warning').textContent=t('geo_err_support'); return; }
   const saved = readRunProgress();
   if(saved && saved.startedAt && (Date.now()-saved.startedAt) < 6*3600*1000 && (saved.points||[]).length){
+    if(saved.finished){
+      // el usuario ya había tocado "Finalizar" y la app se cerró antes de que confirmara
+      // el resumen (batería, la mató el sistema) -- restauramos el resumen ya calculado
+      // en vez de perder la carrera por completo o reabrir el GPS como si siguiera corriendo
+      restoreTrackerFromSaved(saved);
+      showRunSummaryUI();
+      return;
+    }
     // hay una carrera sin terminar de hace menos de 6 horas (por ejemplo, la app
     // se cerró sola a mitad de un entrenamiento) -> ofrecemos recuperarla en vez
     // de arrancar una nueva y perder lo ya corrido
@@ -4865,6 +4997,9 @@ function startRun(){
     return;
   }
   actuallyStartRun(null);
+}
+function restoreTrackerFromSaved(saved){
+  tracker = {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:saved.elapsedSec||0, running:false, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt, autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null};
 }
 function actuallyStartRun(saved){
   // Ojo con elapsedSec al recuperar una carrera guardada: ANTES se recalculaba como
@@ -4899,14 +5034,21 @@ function actuallyStartRun(saved){
 }
 function onPosition(pos){
   const {latitude:lat, longitude:lon, accuracy, altitude} = pos.coords;
-  if(accuracy && accuracy>50) return;
-  const last = tracker.points[tracker.points.length-1];
+  const nowMs = pos.timestamp || Date.now();
+  if(accuracy && accuracy>50){
+    // Igual actualizamos la referencia de tiempo del último fix aceptado -- si no, el
+    // próximo fix bueno calcula la velocidad sobre TODO el hueco de fixes filtrados
+    // (túnel, arboleda, edificios altos) en vez de solo su propio intervalo, y eso puede
+    // disparar una auto-pausa falsa por "quietud" que en realidad nunca existió.
+    tracker.lastFixMs = nowMs;
+    return;
+  }
+  const last = tracker.lastRawPoint || tracker.points[tracker.points.length-1];
   const stepKm = last ? haversine(last.lat,last.lon,lat,lon) : 0;
 
   // Auto-pausa: la velocidad instantánea sale del propio timestamp del fix del GPS
   // (pos.timestamp), no de tracker.elapsedSec -- porque elapsedSec es justo lo que
   // queremos poder congelar sin perder la referencia de tiempo real para el cálculo.
-  const nowMs = pos.timestamp || Date.now();
   const dtSec = tracker.lastFixMs!=null ? Math.max(0.001, (nowMs-tracker.lastFixMs)/1000) : null;
   const speedMps = dtSec!=null ? (stepKm*1000)/dtSec : null;
   tracker.lastFixMs = nowMs;
@@ -4922,17 +5064,35 @@ function onPosition(pos){
   }
 
   const active = isTrackingActive();
-  if(active && stepKm>0.002) tracker.distanceKm += stepKm;
-  // t = segundos desde el arranque de la carrera, alt = altitud del GPS si el
-  // dispositivo la da (no todos la reportan, y aun cuando la dan puede faltar
-  // en puntos sueltos -- por eso el resto del código nunca asume que todos
-  // los puntos la tienen). Con esto podemos calcular ritmo real por tramo y
-  // ascenso/descenso para carreras trackeadas desde el celular, algo que
-  // antes solo teníamos para las carreras sincronizadas de Strava.
-  tracker.points.push({lat, lon, t:tracker.elapsedSec, alt:(typeof altitude==='number' && !isNaN(altitude)) ? altitude : null});
-  updateLiveMap(lat,lon);
+  // Guardamos siempre la última posición cruda (se grabe o no el punto) para que el
+  // próximo fix mida el paso desde acá -- si no, al reanudar de una pausa el primer
+  // stepKm se mediría contra el último punto grabado ANTES de pausar, sumando de golpe
+  // a distanceKm todo lo caminado/manejado durante la pausa.
+  tracker.lastRawPoint = {lat, lon};
+  if(active){
+    // Antes cualquier paso menor a 2m se descartaba directo -- a paso de caminata o
+    // entrada en calor (~1 m/s) los fixes seguidos suelen quedar por debajo de esos 2m,
+    // y ese movimiento real se perdía para siempre en vez de acumularse. Ahora se guarda
+    // en un remanente y se suma a distanceKm apenas el acumulado cruza el umbral.
+    tracker.pendingStepKm = (tracker.pendingStepKm||0) + stepKm;
+    if(tracker.pendingStepKm > 0.002){
+      tracker.distanceKm += tracker.pendingStepKm;
+      tracker.pendingStepKm = 0;
+    }
+    // t = segundos desde el arranque de la carrera, alt = altitud del GPS si el
+    // dispositivo la da (no todos la reportan, y aun cuando la dan puede faltar
+    // en puntos sueltos -- por eso el resto del código nunca asume que todos
+    // los puntos la tienen). Con esto podemos calcular ritmo real por tramo y
+    // ascenso/descenso para carreras trackeadas desde el celular, algo que
+    // antes solo teníamos para las carreras sincronizadas de Strava.
+    // Solo se graba el punto (mapa + splits) mientras la carrera está activa -- si no,
+    // una pausa manual o automática (semáforo, descanso) seguía dibujando el recorrido
+    // y esos puntos quedaban para siempre en la ruta guardada.
+    tracker.points.push({lat, lon, t:tracker.elapsedSec, alt:(typeof altitude==='number' && !isNaN(altitude)) ? altitude : null});
+    updateLiveMap(lat,lon);
+    maybeAnnounceKm(); tickWorkoutGuide();
+  }
   updateLiveStats();
-  if(active){ maybeAnnounceKm(); tickWorkoutGuide(); }
   // Se sacó el saveRunProgress() de acá -- se llamaba en cada fix de GPS (varias veces
   // por minuto durante toda la carrera), reserializando y regrabando en localStorage el
   // array de puntos COMPLETO cada vez, que no para de crecer -- una carrera larga hacía
@@ -4976,7 +5136,16 @@ function stopRun(){
   if(tracker.watchId!==null) navigator.geolocation.clearWatch(tracker.watchId);
   releaseWakeLock();
   tracker.workout = null;
+  // Guardamos el progreso final ANTES de mostrar el resumen -- si la app se cierra
+  // entre este momento y que el usuario confirme el resumen (se queda sin batería, la
+  // mata el sistema operativo), la próxima apertura recupera el resumen ya calculado
+  // en vez de perder la carrera por completo (ver saved.finished en startRun()).
+  saveRunProgress(true);
+  showRunSummaryUI();
+}
+function showRunSummaryUI(){
   document.getElementById('workout-guide-card').style.display = 'none';
+  document.getElementById('runIdle').style.display='none';
   document.getElementById('runActive').style.display='none';
   document.getElementById('runSummary').style.display='block';
   const paceMin = tracker.distanceKm>0.02 ? (tracker.elapsedSec/60)/tracker.distanceKm : 0;
@@ -5718,7 +5887,7 @@ function renderHistory(){
   const filteredRuns = !query ? allRunsDesc : allRunsDesc.filter(r=>{
     const shoe = state.shoes.find(s=>String(s.id)===String(r.shoeId));
     const longDateStr = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long', year:'numeric'});
-    const haystack = [longDateStr, shoe?shoe.name:'', r.manual?t('hist_manual_tag'):'', r.source==='strava'?'strava':''].join(' ').toLowerCase();
+    const haystack = [longDateStr, shoe?shoe.name:'', r.manual?t('hist_manual_tag'):'', SOURCE_LABELS[r.source]||''].join(' ').toLowerCase();
     return haystack.includes(query);
   });
   if(query && !filteredRuns.length){
@@ -5743,8 +5912,8 @@ function renderHistory(){
     return `${monthHeader}<div class="swipe-item" data-swipe-id="${r.id}">
       <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" onclick="deleteRun('${r.id}')"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
       <div class="card hist-card swipe-content" onclick="openRunDetail('${r.id}')" style="cursor:pointer;">
-        <div class="hist-top"><span style="font-weight:700;">${dateStr}</span>${hasMap ? '' : `<span class="hist-date">${r.manual? `<span class="tag tag-asfalto" style="margin-right:6px;">${t('hist_manual_tag')}</span>`:''}${r.source==='strava'? `<span class="tag tag-asfalto" style="margin-right:6px;">Strava</span>`:''}${fmtTime(r.durationSec)}</span>`}</div>
-        ${hasMap ? `<div class="hist-map" id="hist-map-${r.id}"><div class="hist-map-badge">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${r.source==='strava'? `<span class="tag tag-asfalto">Strava</span>`:''}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
+        <div class="hist-top"><span style="font-weight:700;">${dateStr}</span>${hasMap ? '' : `<span class="hist-date">${r.manual? `<span class="tag tag-asfalto" style="margin-right:6px;">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, true)}${fmtTime(r.durationSec)}</span>`}</div>
+        ${hasMap ? `<div class="hist-map" id="hist-map-${r.id}"><div class="hist-map-badge">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false)}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
         <div class="stat-row-divided">
           <div class="stat-cell"><div class="n">${fmtDist(r.distanceKm)}</div><div class="l">${distUnit()}</div></div>
           <div class="stat-cell"><div class="n">${fmtPace(paceMin)}</div><div class="l">${t('run_pace_word')}</div></div>
@@ -7290,7 +7459,7 @@ function buildContext(){
   }
   if(p.weeklyGoalKm > 0) ctx += ` Meta de km que el corredor se puso para esta semana: ${p.weeklyGoalKm}km (esto ya se usó para ajustar el volumen del plan actual, dentro de márgenes seguros).`;
   if(p.goalNote) ctx += ` Objetivo personal, en sus propias palabras: "${p.goalNote}".`;
-  const gapWeeks = detectTrainingGapWeeks();
+  const gapWeeks = detectTrainingGapWeeks(state.weekStart);
   if(gapWeeks >= 2) ctx += ` Hace ${gapWeeks} semanas que no registra una carrera -- si el volumen del plan actual parece bajo, es porque ya se lo redujo automáticamente por esta pausa.`;
   if(p.coachNotes && p.coachNotes.length) ctx += ` Notas permanentes guardadas sobre el corredor (lesiones, preferencias u otros datos a tener en cuenta siempre): ${p.coachNotes.map(n=>`"${n}"`).join('; ')}.`;
   const activePains = activePainEntries();
@@ -7338,12 +7507,13 @@ const TOOLS = [
       semana:{type:"string", enum:["actual","siguiente"], description:"Si el cambio es para la semana en curso o para la que sigue. Por defecto 'actual'. Ya tenés el plan de ambas semanas en el contexto."},
       dia:{type:"string", enum:DAY_KEYS, description:"Código del día: mon,tue,wed,thu,fri,sat,sun (siempre en estos códigos, sin importar el idioma de la charla)"},
       tipo:{type:"string", description:"Nombre del tipo de sesión en el idioma de la conversación, ej. 'Rodaje suave', 'Easy run'"},
+      tipo_categoria:{type:"string", enum:["easy","intervals","tempo","long","fartlek","hills","progression"], description:"Categoría técnica de la sesión en estos códigos fijos, SIN traducir (independiente de 'tipo', que va en el idioma de la charla). Se usa para las estadísticas de variedad de entrenamientos y para relacionar la carrera registrada con el tipo de sesión que tocaba -- elegí la que mejor corresponda a la sesión nueva."},
       distancia_km:{type:"number"},
       duracion_min:{type:"number", description:"Duración de la sesión en minutos. Usalo en vez de distancia_km si el corredor entrena por tiempo (fijate en el contexto) o si pide la sesión directamente en minutos -- se convierte sola a km internamente."},
       zona:{type:"integer", minimum:1, maximum:5},
       terreno:{type:"string", enum:["asfalto","trail","mixto"]},
       descripcion:{type:"string", description:"Instrucción breve para el corredor, en el idioma de la conversación"}
-    }, required:["dia","tipo","descripcion"]}
+    }, required:["dia","tipo","tipo_categoria","descripcion"]}
   },
   {
     name:"cancelar_sesion",
@@ -7426,13 +7596,21 @@ function applyUndoLastChange(){
   return 'Listo, deshice el último cambio.';
 }
 function applyPlanChange(input){
-  captureUndoSnapshot();
+  // El snapshot de undo se toma DESPUÉS de validar (día encontrado, no bloqueado) -- si
+  // se toma antes, un pedido inválido (día ya pasado, por ejemplo) igual pisa el snapshot
+  // del cambio real anterior con el estado actual sin cambios, y "deshacer" ya no puede
+  // recuperar ese cambio previo aunque el mensaje diga que sí lo deshizo.
   if(input.semana === 'siguiente'){
+    captureUndoSnapshot();
     // la semana que sigue no es un array persistido como state.plan, así que el cambio puntual
     // se guarda como "override" y se aplica encima de lo que genere getNextWeekPlan() cada vez
     // (que sigue reaccionando a cómo termine esta semana) hasta que se promueva a semana actual
     if(!state.nextWeekOverrides) state.nextWeekOverrides = {};
-    const override = { type: input.tipo, desc: input.descripcion };
+    // typeKey en el override (además de type/desc, que son el texto que ve el corredor) es lo
+    // que le permite a getQualitySessionBreakdown()/runBenefitKey() reconocer esta sesión como
+    // lo que realmente es (series, tempo, etc.) en vez de arrastrar el typeKey del día base --
+    // ver applyPlanChange y el comentario en getNextWeekPlan.
+    const override = { type: input.tipo, desc: input.descripcion, typeKey: input.tipo_categoria };
     let effectiveDistKm = typeof input.distancia_km==='number' ? input.distancia_km : null;
     if(effectiveDistKm===null && typeof input.duracion_min==='number'){
       effectiveDistKm = Math.max(0.5, Math.round((input.duracion_min / estimateBasePaceMinPerKm(state.profile))*10)/10);
@@ -7452,9 +7630,14 @@ function applyPlanChange(input){
   // entrenamiento distinto de forma retroactiva. Se lo explicamos al modelo para
   // que se lo cuente al corredor en vez de aplicar el cambio silenciosamente.
   if(isDayLocked(input.dia)) return `No puedo modificar ${input.dia}: ya pasó (o ya se corrió/salteó) esta semana. Puedo ajustar desde hoy en adelante, o la semana que viene.`;
+  captureUndoSnapshot();
   d.custom = true;
   d.cancelled = false; // si venía de cancelar_sesion, esta sesión nueva reemplaza esa cancelación
   d.type = input.tipo; d.desc = input.descripcion;
+  // Sin esto, un día que antes era descanso (u otro tipo) quedaba con el typeKey viejo --
+  // las estadísticas de variedad de sesiones de calidad y el tag de beneficio del entrenamiento
+  // en el historial (que leen d.typeKey, no d.type) seguían viendo el tipo anterior.
+  d.typeKey = input.tipo_categoria;
   if(typeof input.distancia_km==='number'){
     d.dist = input.distancia_km;
   } else if(typeof input.duracion_min==='number'){
@@ -7481,7 +7664,6 @@ function applyMoveSession(input){
   // el modelo tenga que reescribir la descripción de memoria (eso es lo que hacía antes
   // modificar_sesion para estos casos, y por eso el día de destino terminaba con una
   // descripción distinta a la original y, a veces, sin terreno).
-  captureUndoSnapshot();
   if(input.semana === 'siguiente'){
     return 'Por ahora solo puedo mover una sesión ya planificada dentro de la semana ACTUAL. Para la semana que viene, usá modificar_sesion en cada día.';
   }
@@ -7493,6 +7675,9 @@ function applyMoveSession(input){
   if(!origDay || !destDay) return 'Día no encontrado.';
   if(isDayLocked(input.dia_origen)) return `No puedo mover ${input.dia_origen}: ya pasó (o ya se corrió/salteó) esta semana.`;
   if(isDayLocked(input.dia_destino)) return `No puedo mover la sesión a ${input.dia_destino}: ese día ya pasó (o ya se corrió/salteó) esta semana.`;
+  // El snapshot de undo se toma recién acá, después de todas las validaciones -- ver el
+  // comentario equivalente en applyPlanChange.
+  captureUndoSnapshot();
   swapPlanDaySessions(origDay, destDay);
   renderPlan(); renderHome(); renderRunTodayCard(); persist();
   state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+input.dia_origen)+' → '+t('day_'+input.dia_destino)), ts:Date.now()});
@@ -7508,8 +7693,8 @@ function applyCancelSession(input){
   // Sí queda marcado con d.cancelled (ver preserveLivedDays) para que una regeneración
   // posterior no lo "resucite" con una sesión nueva solo porque ese día sigue siendo,
   // en el perfil, un día de entreno normal -- el corredor lo canceló a propósito.
-  captureUndoSnapshot();
   if(input.semana === 'siguiente'){
+    captureUndoSnapshot();
     if(!state.nextWeekOverrides) state.nextWeekOverrides = {};
     // cancelled:true acá (a diferencia de un override de modificar_sesion) es lo que le permite a
     // getNextWeekPlan() distinguir "cancelé este día" de "personalicé este día" al armar el plan de
@@ -7522,6 +7707,7 @@ function applyCancelSession(input){
   const d = state.plan.find(x=>x.day===input.dia);
   if(!d) return "Día no encontrado.";
   if(isDayLocked(input.dia)) return `No puedo modificar ${input.dia}: ya pasó (o ya se corrió/salteó) esta semana. Puedo dejarlo sin sesión desde hoy en adelante, o la semana que viene.`;
+  captureUndoSnapshot();
   d.custom = false;
   d.cancelled = true;
   d.typeKey = 'rest';
@@ -7559,6 +7745,14 @@ function applyVolumeAdjust(input){
   return `OK, ajusté el volumen de esta semana ${pct>0?'+':''}${pct}%.`;
 }
 function applyProfileChange(input){
+  // Detectamos si hay algún cambio real ANTES de tocar state.profile y de tomar el
+  // snapshot de undo -- si no, un input sin ningún campo reconocido (el "no hubo cambios
+  // para aplicar" de abajo) igual pisaba el snapshot del cambio real anterior con el
+  // estado actual sin cambios, y "deshacer" ya no podía recuperarlo. Ver el comentario
+  // equivalente en applyPlanChange.
+  const validDays = Array.isArray(input.dias_entreno) ? DAY_KEYS.filter(d=>input.dias_entreno.includes(d)) : [];
+  const hasAnyChange = !!(input.objetivo || input.fecha_carrera || input.terreno || typeof input.fc_maxima==='number' || typeof input.km_actuales==='number' || validDays.length);
+  if(!hasAnyChange) return 'No hubo cambios para aplicar.';
   captureUndoSnapshot();
   const changes = [];
   let recalc = false;
@@ -7567,19 +7761,15 @@ function applyProfileChange(input){
   if(input.terreno){ state.profile.terrain = input.terreno; changes.push('terreno'); }
   if(typeof input.fc_maxima==='number'){ state.profile.hrMax = input.fc_maxima; state.profile.hrKnown = true; state.profile.hrZones = computeZones(input.fc_maxima); changes.push('FC máxima'); }
   if(typeof input.km_actuales==='number'){ state.profile.currentWeeklyKm = input.km_actuales; state.profile.runnerType = 'active'; changes.push('km actuales'); recalc = true; }
-  if(Array.isArray(input.dias_entreno) && input.dias_entreno.length){
+  if(validDays.length){
     // Cronograma de base nuevo y permanente (no un cambio puntual de una sesión):
     // por esto usamos recalc para forzar una regeneración completa del plan, igual
     // que con objetivo/fecha de carrera. preserveLivedDays sigue protegiendo los
     // días ya vividos y los personalizados/cancelados a propósito (d.custom/d.cancelled).
-    const validDays = DAY_KEYS.filter(d=>input.dias_entreno.includes(d));
-    if(validDays.length){
-      state.profile.trainingDays = validDays;
-      changes.push('días de entreno');
-      recalc = true;
-    }
+    state.profile.trainingDays = validDays;
+    changes.push('días de entreno');
+    recalc = true;
   }
-  if(!changes.length) return 'No hubo cambios para aplicar.';
   if(recalc){
     state.profile.weeklyKm = calcWeeklyKm(state.profile);
     state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
