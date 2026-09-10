@@ -1789,6 +1789,17 @@
         <button class="btn btn-outline btn-sm" id="wahoo-connect-btn" style="margin-top:10px; width:100%;" onclick="connectWahoo()"></button>
       </div>
 
+      <div class="conn-row">
+        <div class="conn-row-head">
+          <span class="brand-logo-chip">
+            <span style="font-weight:800; font-size:14.5px; letter-spacing:.01em; color:var(--chalk);">COROS</span>
+          </span>
+          <span id="coros-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
+        </div>
+        <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_coros_desc"></p>
+        <button class="btn btn-outline btn-sm" id="coros-connect-btn" style="margin-top:10px; width:100%;" onclick="connectCoros()"></button>
+      </div>
+
       <!-- Health Connect solo tiene sentido en la app nativa de Android (no existe en
            la web ni en iOS) -- arranca oculta y JS la muestra si corresponde, ver el
            chequeo de window.Capacitor.getPlatform() al final de showView(). Cubre

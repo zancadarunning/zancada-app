@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-11T06:00:00Z';
+const APP_VERSION = '2026-09-11T07:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -43,6 +43,7 @@ const CHANGELOG = [
   {id:'2026-09-mountains-chat-polish', key:'changelog_mountains_chat_polish'},
   {id:'2026-09-a11y-perf', key:'changelog_a11y_perf'},
   {id:'2026-09-race-day-plan', key:'changelog_race_day_plan'},
+  {id:'2026-09-coros-connect', key:'changelog_coros_connect'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -756,16 +757,17 @@ async function connectStrava(){
 // false a propósito: mejor no mostrar el botón un instante y que aparezca cuando se
 // confirme una conexión real, que mostrarlo de entrada y tener que ocultarlo después
 // (ver refreshDeviceConnections(), llamada una vez al entrar a la app).
-let deviceConnections = { strava:false, polar:false, wahoo:false };
+let deviceConnections = { strava:false, polar:false, wahoo:false, coros:false };
 async function refreshDeviceConnections(){
   if(!currentUserId) return;
   try{
-    const [s, p, w] = await Promise.all([
+    const [s, p, w, c] = await Promise.all([
       supabaseClient.from('strava_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
       supabaseClient.from('polar_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
-      supabaseClient.from('wahoo_connections').select('user_id').eq('user_id', currentUserId).maybeSingle()
+      supabaseClient.from('wahoo_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
+      supabaseClient.from('coros_connections').select('user_id').eq('user_id', currentUserId).maybeSingle()
     ]);
-    deviceConnections = { strava: !!s.data, polar: !!p.data, wahoo: !!w.data };
+    deviceConnections = { strava: !!s.data, polar: !!p.data, wahoo: !!w.data, coros: !!c.data };
   }catch(e){ console.error(e); }
   renderPlan();
   if(document.getElementById('perfil-devices-summary')) renderPerfil();
@@ -1004,6 +1006,77 @@ async function pushTodayToWahoo(){
     console.error(e);
     showToast(t('wahoo_push_error'),'error');
   }
+}
+
+// A diferencia de Strava/Polar/Wahoo (OAuth clásico con un client_id/secret creados
+// en un panel de developers), COROS usa OAuth 2.1 + PKCE contra su servidor MCP, con
+// registro dinámico de cliente -- ver el comentario grande en api/coros-init.js. El
+// client_id de acá abajo no es un secreto (igual que STRAVA/POLAR/WAHOO_CLIENT_ID):
+// se registró una sola vez para "Zancada" contra el servidor de la región Americas.
+const COROS_CLIENT_ID = '8df2bc64-ed53-41f6-a04f-d4d9bf4bb929';
+async function connectCoros(){
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session){ showToast(t('coros_connect_error'),'error'); return; }
+    const res = await fetch(apiUrl('/api/coros-init'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
+    });
+    if(!res.ok) throw new Error('coros-init failed');
+    const { state, codeChallenge } = await res.json();
+    const redirectUri = 'https://zancada.org/api/coros-auth';
+    const scope = encodeURIComponent('openid mcp.tools offline_access');
+    const url = `https://mcpus.coros.com/oauth2/authorize?response_type=code&client_id=${COROS_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&state=${encodeURIComponent(state)}&code_challenge=${encodeURIComponent(codeChallenge)}&code_challenge_method=S256`;
+    window.location.href = url;
+  }catch(e){
+    console.error(e);
+    showToast(t('coros_connect_error'),'error');
+  }
+}
+async function updateCorosStatusDisplay(){
+  const el = document.getElementById('coros-status');
+  const btn = document.getElementById('coros-connect-btn');
+  if(!el || !currentUserId) return;
+  try{
+    const { data } = await supabaseClient.from('coros_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
+    deviceConnections.coros = !!data;
+    if(data){
+      el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
+      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectCoros; }
+    } else {
+      el.textContent = t('perfil_native'); el.className = 'tag tag-asfalto';
+      if(btn){ btn.textContent = t('coros_connect'); btn.onclick = connectCoros; }
+    }
+    renderPlan();
+  }catch(e){}
+}
+async function disconnectCoros(){
+  if(!currentUserId) return;
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(session){
+      const res = await fetch(apiUrl('/api/coros-disconnect'), {
+        method:'POST',
+        headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
+      });
+      if(!res.ok) throw new Error('coros-disconnect failed');
+    } else {
+      await supabaseClient.from('coros_connections').delete().eq('user_id', currentUserId);
+    }
+  }catch(e){
+    console.error(e);
+    try{ await supabaseClient.from('coros_connections').delete().eq('user_id', currentUserId); }catch(e2){}
+  }
+  if(state.runs && state.runs.some(r=>r.source==='coros')){
+    state.runs = state.runs.filter(r=>r.source!=='coros');
+    if(state.shoes){
+      state.shoes.forEach(shoe=>{
+        shoe.km = state.runs.filter(r=>String(r.shoeId)===String(shoe.id)).reduce((a,r)=>a+(r.distanceKm||0),0);
+      });
+    }
+    renderHistory(); renderHome(); renderPerfil(); persist();
+  }
+  await updateCorosStatusDisplay();
 }
 
 /* ---- Health Connect (solo Android nativo) -----
@@ -2176,14 +2249,15 @@ async function callSyncEndpoint(path, session){
 async function syncTodayNow(){
   const btn = document.getElementById('sync-today-btn');
   if(btn){ btn.disabled = true; btn.innerHTML = `<span class="icon-sq spin-icon" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_syncing')}`; }
-  let stravaResult = null, polarResult = null, wahooResult = null;
+  let stravaResult = null, polarResult = null, wahooResult = null, corosResult = null;
   try{
     const { data: { session } } = await supabaseClient.auth.getSession();
     if(session && session.access_token){
-      [stravaResult, polarResult, wahooResult] = await Promise.all([
+      [stravaResult, polarResult, wahooResult, corosResult] = await Promise.all([
         callSyncEndpoint('/api/strava-sync-now', session),
         callSyncEndpoint('/api/polar-sync-now', session),
-        callSyncEndpoint('/api/wahoo-sync-now', session)
+        callSyncEndpoint('/api/wahoo-sync-now', session),
+        callSyncEndpoint('/api/coros-sync-now', session)
       ]);
     }
   }catch(e){ console.error('sync-now error', e); }
@@ -2197,11 +2271,11 @@ async function syncTodayNow(){
   if(state.healthConnectConnected) hcResult = await syncHealthConnectNow();
   if(relinkTodayRun() || (hcResult && hcResult.synced)) persist();
   renderPlan(); renderHome(); renderHistory();
-  const anySynced = (stravaResult && stravaResult.synced) || (polarResult && polarResult.synced) || (wahooResult && wahooResult.synced) || (hcResult && hcResult.synced);
-  const allDisconnected = (!stravaResult || stravaResult.reason==='not_connected') && (!polarResult || polarResult.reason==='not_connected') && (!wahooResult || wahooResult.reason==='not_connected') && !state.healthConnectConnected;
+  const anySynced = (stravaResult && stravaResult.synced) || (polarResult && polarResult.synced) || (wahooResult && wahooResult.synced) || (corosResult && corosResult.synced) || (hcResult && hcResult.synced);
+  const allDisconnected = (!stravaResult || stravaResult.reason==='not_connected') && (!polarResult || polarResult.reason==='not_connected') && (!wahooResult || wahooResult.reason==='not_connected') && (!corosResult || corosResult.reason==='not_connected') && !state.healthConnectConnected;
   if(!anySynced){
-    const anyError = (stravaResult && stravaResult.error) || (polarResult && polarResult.error) || (wahooResult && wahooResult.error) || (hcResult && hcResult.error);
-    const reasonMsg = allDisconnected ? 'Tu cuenta no está conectada a Strava, Polar, Wahoo ni Health Connect.' : anyError ? `Error: ${anyError}` : 'No encontramos actividades nuevas.';
+    const anyError = (stravaResult && stravaResult.error) || (polarResult && polarResult.error) || (wahooResult && wahooResult.error) || (corosResult && corosResult.error) || (hcResult && hcResult.error);
+    const reasonMsg = allDisconnected ? 'Tu cuenta no está conectada a Strava, Polar, Wahoo, COROS ni Health Connect.' : anyError ? `Error: ${anyError}` : 'No encontramos actividades nuevas.';
     showToast(reasonMsg,'error');
   }
   if(btn){ btn.disabled = false; btn.innerHTML = `<span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}`; }
@@ -3300,7 +3374,7 @@ function renderPlan(){
       // conectado, era confuso: tocarlo no traía nada y no explicaba por qué. Mismo
       // criterio para "Enviar a mi reloj", pero solo mirando Wahoo (es la única que
       // recibe datos). Ver deviceConnections / refreshDeviceConnections() más arriba.
-      const anyDeviceConnected = deviceConnections.strava || deviceConnections.polar || deviceConnections.wahoo || !!state.healthConnectConnected;
+      const anyDeviceConnected = deviceConnections.strava || deviceConnections.polar || deviceConnections.wahoo || deviceConnections.coros || !!state.healthConnectConnected;
       const showSyncBtn = isToday && anyDeviceConnected;
       const showWahooPushBtn = isToday && deviceConnections.wahoo;
       statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;"><button class="btn btn-outline btn-sm" onclick="markSession(${i},'done')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.check}</span> ${t('plan_mark_done')}</button><button class="btn btn-outline btn-sm" onclick="markSession(${i},'skipped')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.cross}</span> ${t('plan_mark_skipped')}</button>${showSyncBtn?`<button class="btn btn-outline btn-sm" id="sync-today-btn" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}${showWahooPushBtn?`<button class="btn btn-outline btn-sm" id="wahoo-push-btn" onclick="pushTodayToWahoo()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.send}</span> ${t('wahoo_push_button')}</button>`:''}</div>`;
@@ -3702,6 +3776,7 @@ function renderPerfil(){
     if(deviceConnections.strava) connectedNames.push('Strava');
     if(deviceConnections.polar) connectedNames.push('Polar');
     if(deviceConnections.wahoo) connectedNames.push('Wahoo');
+    if(deviceConnections.coros) connectedNames.push('COROS');
     if(state.healthConnectConnected) connectedNames.push('Health Connect');
     devicesSummaryEl.textContent = connectedNames.length ? connectedNames.join(', ') : t('perfil_devices_none');
   }
@@ -4532,7 +4607,7 @@ async function showView(v){
   if(v==='inicio'){ await refreshStateFromServer(); renderHome(); renderPlan(); }
   if(v==='history'){ await refreshStateFromServer(); renderHistory(); }
   if(v==='plan'){ await refreshStateFromServer(); viewingWeekOffset = 0; renderPlan(); }
-  if(v==='perfil'){ renderPerfilDays(); updatePushStatusDisplay(); updateStravaStatusDisplay(); updatePolarStatusDisplay(); updateWahooStatusDisplay(); updateHealthConnectStatusDisplay(); }
+  if(v==='perfil'){ renderPerfilDays(); updatePushStatusDisplay(); updateStravaStatusDisplay(); updatePolarStatusDisplay(); updateWahooStatusDisplay(); updateCorosStatusDisplay(); updateHealthConnectStatusDisplay(); }
   if(v==='correr'){ renderRunTodayCard(); }
 }
 function goCoachWithPrompt(prefill){
