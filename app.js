@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-10T19:10:00Z';
+const APP_VERSION = '2026-09-10T19:45:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -2677,95 +2677,6 @@ function openRaceTipsInfo(){
 }
 function closeRaceTipsInfo(){ document.getElementById('race-tips-info-modal').style.display = 'none'; }
 
-/* ================= CLIMA: aviso antes de entrenar =====================
-   Antes de una sesión con distancia (en Inicio y en Correr), avisamos si el pronóstico
-   de HOY trae lluvia/tormenta, mucho calor o mucho frío -- para que el corredor decida
-   si reprograma o se prepara distinto (hidratación, abrigo, paraguas). Es 100% opcional
-   y silencioso: si no hay geolocalización, se niega el permiso, o falla la consulta,
-   la app sigue funcionando exactamente igual, sin mostrar nada y sin insistir en el
-   permiso más de una vez por sesión de uso. Usamos Open-Meteo (gratis, sin API key,
-   ver https://open-meteo.com/en/docs) directo desde el navegador del corredor -- no
-   pasa por nuestro backend. El resultado se cachea en localStorage por día calendario
-   para no repetir la consulta en cada render ni cada vez que se abre la app.
-*/
-let weatherFetchInFlight = false;
-function weatherCacheKey(){ return 'zancada_weather_'+todayLocalISO(); }
-function getCachedWeatherWarning(){
-  try{
-    const raw = localStorage.getItem(weatherCacheKey());
-    return raw ? JSON.parse(raw) : null;
-  }catch(e){ return null; }
-}
-function setCachedWeatherWarning(data){
-  try{ localStorage.setItem(weatherCacheKey(), JSON.stringify(data)); }catch(e){}
-}
-function classifyWeatherCode(code, precipProb, tempMax, tempMin){
-  const stormCodes = [95,96,99];
-  const rainCodes = [51,53,55,56,57,61,63,65,66,67,80,81,82];
-  if(stormCodes.includes(code)) return 'storm';
-  if(rainCodes.includes(code) || precipProb>=60) return 'rain';
-  if(tempMax>=30) return 'heat';
-  if(tempMin<=3) return 'cold';
-  return null;
-}
-function fmtWeatherTemp(celsius){
-  const val = isImperial() ? Math.round(celsius*9/5+32) : Math.round(celsius);
-  return `${val}°${isImperial()?'F':'C'}`;
-}
-function getCachedGeo(){
-  try{
-    const raw = localStorage.getItem('zancada_geo');
-    if(!raw) return null;
-    const geo = JSON.parse(raw);
-    if(geo.denied) return geo;
-    if(Date.now() - geo.ts > 6*3600000) return null; // refrescar la ubicación cada 6hs
-    return geo;
-  }catch(e){ return null; }
-}
-function ensureWeatherFetched(){
-  if(weatherFetchInFlight || getCachedWeatherWarning()) return;
-  const geo = getCachedGeo();
-  if(geo && geo.denied) return; // ya dijo que no antes -- no insistimos
-  if(geo){ weatherFetchInFlight = true; fetchWeatherForecast(geo.lat, geo.lon); return; }
-  if(!navigator.geolocation) return;
-  weatherFetchInFlight = true;
-  navigator.geolocation.getCurrentPosition(
-    pos => {
-      try{ localStorage.setItem('zancada_geo', JSON.stringify({lat:pos.coords.latitude, lon:pos.coords.longitude, ts:Date.now()})); }catch(e){}
-      fetchWeatherForecast(pos.coords.latitude, pos.coords.longitude);
-    },
-    () => {
-      weatherFetchInFlight = false;
-      try{ localStorage.setItem('zancada_geo', JSON.stringify({denied:true, ts:Date.now()})); }catch(e){}
-    },
-    {timeout:8000, maximumAge:3600000}
-  );
-}
-async function fetchWeatherForecast(lat, lon){
-  try{
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=auto&forecast_days=1`;
-    const res = await fetch(url);
-    if(!res.ok) throw new Error('weather http '+res.status);
-    const json = await res.json();
-    const d = json.daily;
-    if(!d || !d.time || !d.time.length) throw new Error('sin datos de clima');
-    const tempMax = d.temperature_2m_max[0], tempMin = d.temperature_2m_min[0];
-    const precipProb = d.precipitation_probability_max ? d.precipitation_probability_max[0] : 0;
-    const level = classifyWeatherCode(d.weather_code[0], precipProb, tempMax, tempMin);
-    const vars = level==='rain' ? {prob: Math.round(precipProb)}
-      : level==='heat' ? {temp: fmtWeatherTemp(tempMax)}
-      : level==='cold' ? {temp: fmtWeatherTemp(tempMin)}
-      : {};
-    setCachedWeatherWarning({level, vars});
-  }catch(e){
-    console.error('fetchWeatherForecast error', e);
-    setCachedWeatherWarning({level:null}); // no insistir el resto del día si falló
-  }finally{
-    weatherFetchInFlight = false;
-    renderHome();
-    renderRunTodayCard();
-  }
-}
 /* ================= WIDGET de pantalla de inicio (iOS/Android) =====================
    Le pasa a un plugin nativo LOCAL (WidgetBridge -- no es un plugin de npm, vive
    directo en el proyecto de Xcode/Android Studio, ver mobile/widget-setup/) un
@@ -2785,77 +2696,18 @@ function updateHomeWidget(day, lbl){
     });
   }catch(e){}
 }
-function renderWeatherWarning(elId, day, alreadyDone){
-  const el = document.getElementById(elId);
-  if(!el) return;
-  if(alreadyDone || !(day && day.dist>0)){ el.style.display = 'none'; return; }
-  const cached = getCachedWeatherWarning();
-  if(!cached){ el.style.display = 'none'; ensureWeatherFetched(); return; }
-  if(!cached.level){ el.style.display = 'none'; return; }
-  el.className = 'weather-chip weather-'+cached.level;
-  el.style.display = 'flex';
-  el.innerHTML = `<div class="weather-chip-row"><span class="icon-sq" style="width:15px; height:15px; flex-shrink:0;">${ICONS.warn}</span><span>${t('weather_'+cached.level+'_warning', cached.vars)}</span></div><button class="weather-chip-action" onclick="openRescheduleModal()">${t('weather_reschedule_btn')}</button>`;
-}
-/* ---- Reprogramar la sesión de hoy por mal clima ----
-   Botón directo en el aviso de clima (renderWeatherWarning) para mover la sesión de HOY a
-   otro día LIBRE de la misma semana, sin tener que ir manualmente a la pestaña Plan. Un
-   "día libre" es un día de descanso (typeKey==='rest', sin distancia) que todavía no pasó
-   ni está bloqueado (ver isDayLocked) y que no es el día de una carrera cargada
-   (raceDay) -- ahí no tiene sentido meterle un entrenamiento encima. Tampoco puede ser un
-   día que el corredor canceló a propósito por chat (d.cancelled): a simple vista es
-   indistinguible de un descanso normal (mismo typeKey:'rest', sin distancia -- ver
-   applyCancelSession), pero significa "no puedo entrenar este día", así que ofrecerlo acá
-   para meterle la sesión de hoy que se movió por lluvia contradiría justo lo que el
-   corredor pidió. Si no hay ningún día así en lo que queda de la semana, el modal lo dice
-   en vez de mostrar una lista vacía.
-*/
-function getReschedulableDays(){
-  const todayIdx = (new Date().getDay()+6)%7;
-  const options = [];
-  for(let i=todayIdx+1; i<7; i++){
-    const d = state.plan[i];
-    if(d && d.typeKey==='rest' && !d.raceDay && !d.cancelled && !isDayLocked(d.day)) options.push(d.day);
-  }
-  return options;
-}
-function openRescheduleModal(){
-  const listEl = document.getElementById('reschedule-day-list');
-  const options = getReschedulableDays();
-  listEl.innerHTML = options.length ? options.map(dayKey=>
-    `<button class="btn btn-outline" style="width:100%;" onclick="rescheduleToday('${dayKey}')">${t('day_'+dayKey)}</button>`
-  ).join('') : `<p class="muted" style="margin:0;">${t('reschedule_no_days')}</p>`;
-  document.getElementById('reschedule-modal').style.display = 'block';
-}
-function closeRescheduleModal(){ document.getElementById('reschedule-modal').style.display = 'none'; }
 // Intercambia el CONTENIDO de la sesión (tipo, distancia, terreno, zona, estructura de
 // series, y también si es una sesión "custom" escrita por el coach vía chat) entre dos
 // días del plan -- cada objeto conserva su propio "day" (la clave del día de la semana no
-// se mueve, lo que se mueve es qué entrenamiento le toca a cada uno). La usan tanto
-// rescheduleToday (botón del aviso de clima) como applyMoveSession (herramienta
-// mover_sesion del coach) -- antes cada una reimplementaba el intercambio por su cuenta,
-// y quedaban chances de que una de las dos se olvidara de algún campo (fue justo lo que
-// pasó con el coach: modificar_sesion arrastraba tipo/distancia/zona pero no terreno).
+// se mueve, lo que se mueve es qué entrenamiento le toca a cada uno). La usa
+// applyMoveSession (herramienta mover_sesion del coach); también la usaba el botón
+// "reprogramar por lluvia" del aviso de clima, ya sacado de la app.
 function swapPlanDaySessions(dayA, dayB){
   const fields = ['typeKey','dist','terrain','zone','interval','custom','cancelled','type','desc'];
   const aCopy = {};
   fields.forEach(f=>{ aCopy[f] = dayA[f]; });
   fields.forEach(f=>{ if(dayB[f]===undefined) delete dayA[f]; else dayA[f] = dayB[f]; });
   fields.forEach(f=>{ if(aCopy[f]===undefined) delete dayB[f]; else dayB[f] = aCopy[f]; });
-}
-function rescheduleToday(targetDayKey){
-  const todayIdx = (new Date().getDay()+6)%7;
-  const targetIdx = DAY_KEYS.indexOf(targetDayKey);
-  if(targetIdx===-1 || targetIdx===todayIdx) return;
-  const todayPlan = state.plan[todayIdx];
-  const targetPlan = state.plan[targetIdx];
-  if(!todayPlan || !targetPlan) return;
-  swapPlanDaySessions(todayPlan, targetPlan);
-  closeRescheduleModal();
-  persist();
-  renderPlan();
-  renderHome();
-  renderRunTodayCard();
-  showToast(t('reschedule_success', {day: t('day_'+targetDayKey)}), 'success');
 }
 function renderHome(){
   renderDailyTip();
@@ -2966,7 +2818,6 @@ function renderHome(){
     nextSessionBlock.style.display = '';
     doneBlock.style.display = 'none';
   }
-  renderWeatherWarning('home-weather-warning', today, !!todayRun);
 
   const weekRuns = (state.runs||[]).filter(r => getMondayISO(new Date(r.date)) === state.weekStart);
   const doneKm = weekRuns.reduce((a,r)=>a+r.distanceKm, 0);
@@ -3067,18 +2918,16 @@ function renderRunTodayCard(){
     // ya se hizo) -- antes esto solo se decía en el comentario de arriba, pero el código
     // nunca llegaba a ocultar `card`, así que quedaban las dos tarjetas apiladas.
     card.style.display = 'none';
-    renderWeatherWarning('run-weather-warning', today, true);
     return;
   }
   doneCard.style.display = 'none';
-  if(!today){ card.style.display = 'none'; renderWeatherWarning('run-weather-warning', today, false); return; }
+  if(!today){ card.style.display = 'none'; return; }
   const lbl = planLabel(today);
   document.getElementById('run-today-title').textContent = lbl.type;
   document.getElementById('run-today-desc').textContent = lbl.desc;
   document.getElementById('run-today-dist').textContent = planAmountText(today);
   document.getElementById('run-today-zone').innerHTML = (today.dist>0 && today.zone) ? `<span class="zone-chip zone-${today.zone}">${t('zone_word')} ${today.zone}</span>` : '';
   card.style.display = 'block';
-  renderWeatherWarning('run-weather-warning', today, false);
 }
 function getPlanStartDate(){
   // la fecha más vieja de weekStart que tengamos registrada (historial de semanas + la semana actual)
