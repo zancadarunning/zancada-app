@@ -607,11 +607,12 @@
   .conn-row-head{display:flex; align-items:center; gap:10px; margin-bottom:12px;}
   /* Polar y Wahoo no tienen logo en ningún set de íconos de marca abierto (a diferencia
      de Strava, que sí -- ver Simple Icons) -- se recrea el wordmark real en vez de usar
-     un glifo genérico, pero como los dos son texto NEGRO, sobre el tema oscuro
-     desaparecerían solos contra la card. Un chip blanco fijo (no depende del tema) los
-     resuelve de una: es además como las propias marcas piden usar su isotipo cuando no
-     hay control sobre el fondo (lockup "sobre blanco"). */
-  .brand-logo-chip{display:inline-flex; align-items:center; gap:6px; background:#fff; border:1px solid rgba(0,0,0,.1); border-radius:8px; padding:5px 10px; flex-shrink:0;}
+     un glifo genérico. Primer intento: un chip blanco fijo detrás del texto (para que
+     no desapareciera sobre el tema oscuro) -- se sacó a pedido del usuario, no le
+     gustaba el parche claro sobre una pantalla oscura. Ahora el texto usa --chalk
+     directo (igual que cualquier otro texto de la app): se adapta solo al tema, sin
+     necesitar ningún fondo de por medio. */
+  .brand-logo-chip{display:inline-flex; align-items:center; gap:7px; flex-shrink:0;}
   /* Viñetas breves para la descripción de la sesión (entrada en calor / sesión /
      vuelta a la calma vienen como líneas separadas por \n desde planLabel()) -- se
      listan una debajo de otra con una marca chica, en vez de un párrafo corrido. */
@@ -1758,7 +1759,7 @@
         <div class="conn-row-head">
           <span class="brand-logo-chip">
             <svg viewBox="0 0 24 24" width="15" height="15" style="flex-shrink:0;" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#EE0000"/><rect x="2" y="10.4" width="20" height="3.2" fill="#fff"/></svg>
-            <span style="font-weight:800; font-size:14.5px; letter-spacing:.01em; color:#111;">POLAR</span>
+            <span style="font-weight:800; font-size:14.5px; letter-spacing:.01em; color:var(--chalk);">POLAR</span>
           </span>
           <span id="polar-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
         </div>
@@ -1771,7 +1772,7 @@
       <div class="conn-row">
         <div class="conn-row-head">
           <span class="brand-logo-chip">
-            <span style="font-weight:800; font-size:14.5px; letter-spacing:-.01em; color:#111;">wahoo</span>
+            <span style="font-weight:800; font-size:14.5px; letter-spacing:-.01em; color:var(--chalk);">wahoo</span>
           </span>
           <span id="wahoo-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
         </div>
