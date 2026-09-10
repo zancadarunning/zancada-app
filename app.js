@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-10T14:00:00Z';
+const APP_VERSION = '2026-09-10T17:30:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -143,6 +143,7 @@ const ICONS = {
   bulb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.45 1 1.2 1 2.1h5c0-.9.4-1.65 1-2.1A6 6 0 0 0 12 3z"/></svg>',
   coach: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5.5h16v11H8l-4 4v-4H4z"/></svg>',
   refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>',
+  send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>',
   faceBad: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M8.5 15.5c1-1.3 2.2-2 3.5-2s2.5.7 3.5 2"/><circle cx="9" cy="9.5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="9.5" r="1" fill="currentColor" stroke="none"/></svg>',
   faceGood: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M8 14c1.2 1.3 2.6 2 4 2s2.8-.7 4-2"/><circle cx="9" cy="9.5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="9.5" r="1" fill="currentColor" stroke="none"/></svg>',
   faceGreat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M7.5 13.5c1.4 2 2.9 3 4.5 3s3.1-1 4.5-3"/><path d="M7.7 9.2a2 2 0 0 1 2.6 0M13.7 9.2a2 2 0 0 1 2.6 0"/></svg>',
@@ -821,6 +822,104 @@ async function disconnectPolar(){
     renderHistory(); renderHome(); renderPerfil(); persist();
   }
   await updatePolarStatusDisplay();
+}
+
+/* ---- Wahoo -----
+   Mismo patrón OAuth que Strava/Polar. A diferencia de Polar, los tokens de
+   Wahoo vencen (2hs) -- el refresh vive del lado del backend (ver
+   refreshWahooToken en api/_lib/wahoo-activity-helpers.js), acá no hace
+   falta manejarlo. Wahoo además soporta mandar entrenamientos AL reloj
+   (workouts_write) -- ver pushTodayToWahoo() más abajo. */
+const WAHOO_CLIENT_ID = 'WH3lkrMmnMc9vrsIzK5ihi2_FxV2W0zB_LaAxl0EZ-Q';
+async function connectWahoo(){
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session){ showToast(t('wahoo_connect_error'),'error'); return; }
+    const res = await fetch(apiUrl('/api/wahoo-init'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
+    });
+    if(!res.ok) throw new Error('wahoo-init failed');
+    const { state } = await res.json();
+    const redirectUri = 'https://zancada.org/api/wahoo-auth';
+    const scope = encodeURIComponent('user_read workouts_read workouts_write plans_write');
+    const url = `https://api.wahooligan.com/oauth/authorize?client_id=${WAHOO_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=code&state=${encodeURIComponent(state)}`;
+    window.location.href = url;
+  }catch(e){
+    console.error(e);
+    showToast(t('wahoo_connect_error'),'error');
+  }
+}
+async function updateWahooStatusDisplay(){
+  const el = document.getElementById('wahoo-status');
+  const btn = document.getElementById('wahoo-connect-btn');
+  if(!el || !currentUserId) return;
+  try{
+    const { data } = await supabaseClient.from('wahoo_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
+    if(data){
+      el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
+      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectWahoo; }
+    } else {
+      el.textContent = t('perfil_native'); el.className = 'tag tag-asfalto';
+      if(btn){ btn.textContent = t('wahoo_connect'); btn.onclick = connectWahoo; }
+    }
+  }catch(e){}
+}
+async function disconnectWahoo(){
+  if(!currentUserId) return;
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(session){
+      const res = await fetch(apiUrl('/api/wahoo-disconnect'), {
+        method:'POST',
+        headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
+      });
+      if(!res.ok) throw new Error('wahoo-disconnect failed');
+    } else {
+      await supabaseClient.from('wahoo_connections').delete().eq('user_id', currentUserId);
+    }
+  }catch(e){
+    console.error(e);
+    try{ await supabaseClient.from('wahoo_connections').delete().eq('user_id', currentUserId); }catch(e2){}
+  }
+  if(state.runs && state.runs.some(r=>r.source==='wahoo')){
+    state.runs = state.runs.filter(r=>r.source!=='wahoo');
+    if(state.shoes){
+      state.shoes.forEach(shoe=>{
+        shoe.km = state.runs.filter(r=>String(r.shoeId)===String(shoe.id)).reduce((a,r)=>a+(r.distanceKm||0),0);
+      });
+    }
+    renderHistory(); renderHome(); renderPerfil(); persist();
+  }
+  await updateWahooStatusDisplay();
+}
+// Manda la sesión de HOY (la misma que ya se ve en Inicio) al calendario de
+// Wahoo del usuario -- ver el comentario grande en api/wahoo-push-workout.js
+// sobre el alcance de esta primera versión (sin intervalos estructurados).
+async function pushTodayToWahoo(){
+  const idx = (new Date().getDay()+6)%7;
+  const today = state.plan[idx];
+  if(!today || !(today.dist>0)){ showToast(t('wahoo_push_nothing'),'error'); return; }
+  const lbl = planLabel(today);
+  const durMin = today.durMin || Math.round((today.dist / 10) * 60); // estimación si no hay duración explícita
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session){ showToast(t('wahoo_connect_error'),'error'); return; }
+    const now = new Date();
+    const startsISO = now.toISOString();
+    const res = await fetch(apiUrl('/api/wahoo-push-workout'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
+      body: JSON.stringify({ name: lbl.type, startsISO, minutes: durMin })
+    });
+    const result = await res.json().catch(()=>null);
+    if(result && result.pushed){ showToast(t('wahoo_push_success'),'success'); }
+    else if(result && result.reason==='not_connected'){ showToast(t('wahoo_connect_error'),'error'); }
+    else { showToast(t('wahoo_push_error'),'error'); }
+  }catch(e){
+    console.error(e);
+    showToast(t('wahoo_push_error'),'error');
+  }
 }
 
 /* ---- Health Connect (solo Android nativo) -----
@@ -1901,13 +2000,14 @@ async function callSyncEndpoint(path, session){
 async function syncTodayNow(){
   const btn = document.getElementById('sync-today-btn');
   if(btn){ btn.disabled = true; btn.innerHTML = `<span class="icon-sq spin-icon" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_syncing')}`; }
-  let stravaResult = null, polarResult = null;
+  let stravaResult = null, polarResult = null, wahooResult = null;
   try{
     const { data: { session } } = await supabaseClient.auth.getSession();
     if(session && session.access_token){
-      [stravaResult, polarResult] = await Promise.all([
+      [stravaResult, polarResult, wahooResult] = await Promise.all([
         callSyncEndpoint('/api/strava-sync-now', session),
-        callSyncEndpoint('/api/polar-sync-now', session)
+        callSyncEndpoint('/api/polar-sync-now', session),
+        callSyncEndpoint('/api/wahoo-sync-now', session)
       ]);
     }
   }catch(e){ console.error('sync-now error', e); }
@@ -1921,10 +2021,11 @@ async function syncTodayNow(){
   if(state.healthConnectConnected) hcResult = await syncHealthConnectNow();
   if(relinkTodayRun() || (hcResult && hcResult.synced)) persist();
   renderPlan(); renderHome(); renderHistory();
-  const anySynced = (stravaResult && stravaResult.synced) || (polarResult && polarResult.synced) || (hcResult && hcResult.synced);
-  const allDisconnected = (!stravaResult || stravaResult.reason==='not_connected') && (!polarResult || polarResult.reason==='not_connected') && !state.healthConnectConnected;
+  const anySynced = (stravaResult && stravaResult.synced) || (polarResult && polarResult.synced) || (wahooResult && wahooResult.synced) || (hcResult && hcResult.synced);
+  const allDisconnected = (!stravaResult || stravaResult.reason==='not_connected') && (!polarResult || polarResult.reason==='not_connected') && (!wahooResult || wahooResult.reason==='not_connected') && !state.healthConnectConnected;
   if(!anySynced){
-    const reasonMsg = allDisconnected ? 'Tu cuenta no está conectada a Strava, Polar ni Health Connect.' : (stravaResult && stravaResult.error) || (polarResult && polarResult.error) || (hcResult && hcResult.error) ? `Error: ${(stravaResult&&stravaResult.error)||(polarResult&&polarResult.error)||(hcResult&&hcResult.error)}` : 'No encontramos actividades nuevas.';
+    const anyError = (stravaResult && stravaResult.error) || (polarResult && polarResult.error) || (wahooResult && wahooResult.error) || (hcResult && hcResult.error);
+    const reasonMsg = allDisconnected ? 'Tu cuenta no está conectada a Strava, Polar, Wahoo ni Health Connect.' : anyError ? `Error: ${anyError}` : 'No encontramos actividades nuevas.';
     showToast(reasonMsg,'error');
   }
   if(btn){ btn.disabled = false; btn.innerHTML = `<span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}`; }
@@ -3151,7 +3252,7 @@ function renderPlan(){
     }
     else if(d.status==='skipped') statusBlock = canEdit ? `<p style="color:var(--danger); font-weight:700; margin-top:12px;">${t('plan_status_skipped')} · <button class="small-link" onclick="markSession(${i},null)">${t('plan_undo')}</button></p>` : `<p style="color:var(--danger); font-weight:700; margin-top:12px;">${t('plan_status_skipped')}${isPastDay?' · '+t('plan_locked'):''}</p>`;
     else if(d.dist>0 && canEdit){
-      statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;"><button class="btn btn-outline btn-sm" onclick="markSession(${i},'done')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.check}</span> ${t('plan_mark_done')}</button><button class="btn btn-outline btn-sm" onclick="markSession(${i},'skipped')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.cross}</span> ${t('plan_mark_skipped')}</button>${isToday?`<button class="btn btn-outline btn-sm" id="sync-today-btn" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}</div>`;
+      statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;"><button class="btn btn-outline btn-sm" onclick="markSession(${i},'done')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.check}</span> ${t('plan_mark_done')}</button><button class="btn btn-outline btn-sm" onclick="markSession(${i},'skipped')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.cross}</span> ${t('plan_mark_skipped')}</button>${isToday?`<button class="btn btn-outline btn-sm" id="sync-today-btn" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}${isToday?`<button class="btn btn-outline btn-sm" id="wahoo-push-btn" onclick="pushTodayToWahoo()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.send}</span> ${t('wahoo_push_button')}</button>`:''}</div>`;
     }
     return `<div>
       <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" onclick="toggleDay(${i})">
@@ -4349,7 +4450,7 @@ async function showView(v){
   if(v==='inicio'){ await refreshStateFromServer(); renderHome(); renderPlan(); }
   if(v==='history'){ await refreshStateFromServer(); renderHistory(); }
   if(v==='plan'){ await refreshStateFromServer(); viewingWeekOffset = 0; renderPlan(); }
-  if(v==='perfil'){ renderPerfilDays(); updatePushStatusDisplay(); updateStravaStatusDisplay(); updatePolarStatusDisplay(); updateHealthConnectStatusDisplay(); }
+  if(v==='perfil'){ renderPerfilDays(); updatePushStatusDisplay(); updateStravaStatusDisplay(); updatePolarStatusDisplay(); updateWahooStatusDisplay(); updateHealthConnectStatusDisplay(); }
   if(v==='correr'){ renderRunTodayCard(); }
 }
 function goCoachWithPrompt(prefill){
