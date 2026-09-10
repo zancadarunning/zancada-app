@@ -605,6 +605,13 @@
   .conn-row{padding-top:18px; margin-top:18px; border-top:1px solid var(--asphalt-3);}
   .conn-row-featured{padding-top:0; margin-top:0; border-top:none;}
   .conn-row-head{display:flex; align-items:center; gap:10px; margin-bottom:12px;}
+  /* Polar y Wahoo no tienen logo en ningún set de íconos de marca abierto (a diferencia
+     de Strava, que sí -- ver Simple Icons) -- se recrea el wordmark real en vez de usar
+     un glifo genérico, pero como los dos son texto NEGRO, sobre el tema oscuro
+     desaparecerían solos contra la card. Un chip blanco fijo (no depende del tema) los
+     resuelve de una: es además como las propias marcas piden usar su isotipo cuando no
+     hay control sobre el fondo (lockup "sobre blanco"). */
+  .brand-logo-chip{display:inline-flex; align-items:center; gap:6px; background:#fff; border:1px solid rgba(0,0,0,.1); border-radius:8px; padding:5px 10px; flex-shrink:0;}
   /* Viñetas breves para la descripción de la sesión (entrada en calor / sesión /
      vuelta a la calma vienen como líneas separadas por \n desde planLabel()) -- se
      listan una debajo de otra con una marca chica, en vez de un párrafo corrido. */
@@ -1749,9 +1756,11 @@
 
       <div class="conn-row">
         <div class="conn-row-head">
-          <span class="icon-sq" style="width:26px; height:26px; color:#E4002B; flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="3"/></svg></span>
-          <span class="n" style="font-size:14.5px; font-weight:700; flex:1;">Polar</span>
-          <span id="polar-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
+          <span class="brand-logo-chip">
+            <svg viewBox="0 0 24 24" width="15" height="15" style="flex-shrink:0;" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#EE0000"/><rect x="2" y="10.4" width="20" height="3.2" fill="#fff"/></svg>
+            <span style="font-weight:800; font-size:14.5px; letter-spacing:.01em; color:#111;">POLAR</span>
+          </span>
+          <span id="polar-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
         </div>
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_polar_desc"></p>
         <button class="btn btn-outline btn-sm" id="polar-connect-btn" style="margin-top:10px; width:100%;" onclick="connectPolar()"></button>
@@ -1761,9 +1770,10 @@
            reloj (ver pushTodayToWahoo() y el botón "Enviar a mi reloj" en Plan). -->
       <div class="conn-row">
         <div class="conn-row-head">
-          <span class="icon-sq" style="width:26px; height:26px; color:#0090D4; flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 4.5 6.3V11c0 5 3.2 8.6 7.5 10.2 4.3-1.6 7.5-5.2 7.5-10.2V6.3L12 3.5z"/></svg></span>
-          <span class="n" style="font-size:14.5px; font-weight:700; flex:1;">Wahoo</span>
-          <span id="wahoo-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
+          <span class="brand-logo-chip">
+            <span style="font-weight:800; font-size:14.5px; letter-spacing:-.01em; color:#111;">wahoo</span>
+          </span>
+          <span id="wahoo-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
         </div>
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_wahoo_desc"></p>
         <button class="btn btn-outline btn-sm" id="wahoo-connect-btn" style="margin-top:10px; width:100%;" onclick="connectWahoo()"></button>
@@ -1782,21 +1792,6 @@
         </div>
         <p class="muted" style="margin-bottom:8px;" data-i18n="healthconnect_desc"></p>
         <button class="btn btn-outline btn-sm" id="healthconnect-connect-btn" style="margin-top:10px; width:100%;" onclick="connectHealthConnect()"></button>
-      </div>
-
-      <!-- Notificaciones push -- otra forma de "conectar" la app con algo externo (el
-           sistema operativo, en vez de un reloj), así que entra en el mismo recuadro en
-           vez de ser una sección suelta más en un Perfil que ya tenía demasiadas. -->
-      <div class="conn-row">
-        <div class="conn-row-head">
-          <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
-          <span class="n" style="font-size:14.5px; font-weight:700; flex:1;" data-i18n="perfil_push_title"></span>
-          <label class="switch">
-            <input type="checkbox" id="push-toggle" onchange="handlePushToggle(this.checked)">
-            <span class="switch-slider"></span>
-          </label>
-        </div>
-        <p class="muted" id="push-status" style="font-size:12.5px;" data-i18n="push_disabled"></p>
       </div>
     </div>
     </div>
@@ -2136,6 +2131,22 @@
         <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M2.5 12h19M12 2.5c2.5 2.6 4 6 4 9.5s-1.5 6.9-4 9.5c-2.5-2.6-4-6-4-9.5s1.5-6.9 4-9.5z"/></svg></span>
         <h3 data-i18n="perfil_lang"></h3>
         <p class="muted" id="perfil-lang-summary"></p>
+      </div>
+    </div>
+
+    <!-- Notificaciones push había pasado a vivir dentro de "Relojes" (mismo recuadro
+         que Strava/Polar/Wahoo) -- pero conceptualmente no es un reloj ni una marca, así
+         que vuelve a ser su propia card acá, donde estaba antes de esa consolidación. -->
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <div style="flex:1; padding-right:12px;">
+          <h3 style="margin-bottom:2px;" data-i18n="perfil_push_title"></h3>
+          <p class="muted" id="push-status" style="font-size:12.5px;" data-i18n="push_disabled"></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="push-toggle" onchange="handlePushToggle(this.checked)">
+          <span class="switch-slider"></span>
+        </label>
       </div>
     </div>
 
