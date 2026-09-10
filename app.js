@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-11T04:00:00Z';
+const APP_VERSION = '2026-09-11T05:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -42,6 +42,7 @@ const CHANGELOG = [
   {id:'2026-09-light-mode-v2', key:'changelog_light_mode_v2'},
   {id:'2026-09-mountains-chat-polish', key:'changelog_mountains_chat_polish'},
   {id:'2026-09-a11y-perf', key:'changelog_a11y_perf'},
+  {id:'2026-09-race-day-plan', key:'changelog_race_day_plan'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -3236,8 +3237,8 @@ function renderPlan(){
     // fijas de las traducciones o el nombre del evento (que ya se escapa en planLabel), acá
     // nunca escapamos antes, así que hay que hacerlo recién en este punto, al insertarlo
     // como HTML, para no habilitar un XSS guardado en el plan.
-    const lblType = d.custom ? escapeHtml(lbl.type) : lbl.type;
-    const lblDesc = d.custom ? escapeHtml(lbl.desc) : lbl.desc;
+    let lblType = d.custom ? escapeHtml(lbl.type) : lbl.type;
+    let lblDesc = d.custom ? escapeHtml(lbl.desc) : lbl.desc;
     let dateLbl = '', dayIso = null;
     if(wd.weekStart){
       const dt = new Date(wd.weekStart+'T00:00:00'); dt.setDate(dt.getDate()+i);
@@ -3263,7 +3264,7 @@ function renderPlan(){
       // Compatibilidad con planes ya generados antes de este cambio, donde ese día todavía
       // quedó fijo en descanso con el flag raceDay -- se van regenerando solos con el tiempo.
       meta = `<span class="tag tag-mixto">${escapeHtml(d.raceEventName)}</span>`;
-    } else {
+    } else if(!isEventDay){
       if(d.dist>0){
         // d.dist>0 acá es a propósito, no solo d.terrain/d.zone: un día de
         // descanso nunca debería mostrar cartel de terreno/zona, ni siquiera
@@ -3271,11 +3272,22 @@ function renderPlan(){
         if(d.terrain) meta += `<span class="tag tag-${d.terrain}">${t('ob_terrain_'+d.terrain)}</span>`;
         if(d.zone) meta += `<span class="zone-chip zone-${d.zone}">${t('zone_word')} ${d.zone}</span>`;
       }
-      if(isEventDay) meta += `<span class="tag tag-mixto">${escapeHtml(state.event.name)}</span>`;
     }
-    const isRestDay = !(d.dist>0) && !d.raceDay;
+    // El día de una carrera de "Próximos eventos" sigue generando y guardando la sesión de
+    // entrenamiento normal por debajo (d.dist/d.typeKey no cambian -- eso es lo que ya
+    // decidimos antes: no le reprograma nada al resto del plan, y marcar "hecho"/sincronizar
+    // ese día sigue funcionando igual). Lo que cambia acá es SOLO la presentación: el corredor
+    // pidió que ese día se vea de una directamente como la carrera que es, con su nombre y su
+    // distancia, en vez de aparecer disfrazado de "Rodaje suave" con una etiqueta chica al
+    // costado que ni mostraba la distancia de la carrera.
+    if(isEventDay){
+      lblType = t('plan_race_day_type')+': '+escapeHtml(state.event.name);
+      lblDesc = t('plan_race_day_desc', {name: escapeHtml(state.event.name)});
+    }
+    const eventAmountText = isEventDay && state.event.distanceKm>0 ? `${fmtDist(state.event.distanceKm,1)} ${distUnit()}` : '';
+    const isRestDay = !(d.dist>0) && !d.raceDay && !isEventDay;
     const statusIcon = d.status==='done' ? `<div class="icon-sq" style="width:16px; height:16px; color:var(--hivis);">${ICONS.check}</div>` : d.status==='skipped' ? `<div class="icon-sq" style="width:16px; height:16px; color:var(--danger);">${ICONS.cross}</div>` : '';
-    const zoneDetail = d.zone ? `<br><br><span class="zone-chip zone-${d.zone}">${t('zone_word')} ${d.zone}</span> <span class="mono muted">${z[d.zone].min}-${z[d.zone].max} bpm</span>` : '';
+    const zoneDetail = (d.zone && !isEventDay) ? `<br><br><span class="zone-chip zone-${d.zone}">${t('zone_word')} ${d.zone}</span> <span class="mono muted">${z[d.zone].min}-${z[d.zone].max} bpm</span>` : '';
     let statusBlock = '';
     if(d.status==='done'){
       const run = d.linkedRunId ? state.runs.find(r=>r.id===d.linkedRunId) : null;
@@ -3302,7 +3314,7 @@ function renderPlan(){
       <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" onclick="toggleDay(${i})">
         <div class="day-badge"><div class="d">${t('day_'+d.day).slice(0,3)}</div>${dateLbl?`<div class="mono muted" style="font-size:10px; margin-top:2px;">${dateLbl}</div>`:''}</div>
         <div class="day-info">
-          <div class="day-info-title-row"><span class="t">${lblType}</span>${d.dist>0?`<span class="day-km-inline">${planAmountText(d)}</span>`:''}</div>
+          <div class="day-info-title-row"><span class="t">${lblType}</span>${isEventDay?(eventAmountText?`<span class="day-km-inline">${eventAmountText}</span>`:''):(d.dist>0?`<span class="day-km-inline">${planAmountText(d)}</span>`:'')}</div>
           ${meta?`<div class="day-row-chips">${meta}</div>`:''}
         </div>
         <div class="day-row-end">${statusIcon}</div>
