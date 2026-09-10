@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-10T21:30:00Z';
+const APP_VERSION = '2026-09-10T22:15:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -34,6 +34,7 @@ const CHANGELOG = [
   {id:'2026-09-coach-schedule-undo', key:'changelog_coach_schedule_undo'},
   {id:'2026-09-reschedule-skip-cancelled', key:'changelog_reschedule_skip_cancelled'},
   {id:'2026-09-run-recovery-duration-fix', key:'changelog_run_recovery_duration_fix'},
+  {id:'2026-09-connectivity-box', key:'changelog_connectivity_box'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;

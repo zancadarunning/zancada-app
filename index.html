@@ -509,6 +509,17 @@
     box-shadow:0 20px 44px -14px rgba(214,255,63,.16);}
   .card-shell-clay{background:rgba(192,106,46,.04); border:1px solid rgba(192,106,46,.16);
     box-shadow:0 20px 44px -14px rgba(192,106,46,.14);}
+  /* Recuadro único de Conectividad (Strava + Polar + Wahoo + Health Connect, ver el
+     comentario grande en el HTML): el aviso de arriba resuelve "no encuentro mi
+     marca" antes de que el corredor tenga que leer las 4 descripciones, y cada fila
+     se separa con un divisor fino en vez de su propia card -- un solo bloque, no
+     cuatro decisiones distintas. */
+  .conn-hint{display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border-radius:var(--radius-sm);
+    background:var(--clay-dim); color:var(--clay); font-size:12.5px; line-height:1.5; margin-bottom:18px; font-weight:600;}
+  .conn-hint .icon-sq{width:16px; height:16px; flex-shrink:0; margin-top:1px;}
+  .conn-row{padding-top:18px; margin-top:18px; border-top:1px solid var(--asphalt-3);}
+  .conn-row-featured{padding-top:0; margin-top:0; border-top:none;}
+  .conn-row-head{display:flex; align-items:center; gap:10px; margin-bottom:12px;}
   /* Viñetas breves para la descripción de la sesión (entrada en calor / sesión /
      vuelta a la calma vienen como líneas separadas por \n desde planLabel()) -- se
      listan una debajo de otra con una marca chica, en vez de un párrafo corrido. */
@@ -1879,77 +1890,84 @@
       <div id="social-section-body"></div>
     </div>
 
-    <!-- Strava sube acá arriba (antes vivía debajo de Preferencias) -- es la única card
-         "destacada" de Perfil y en un rediseño que lidera con lo importante no tiene sentido
-         que quede escondida al final del scroll. -->
+    <!-- Conectividad ahora es UN solo recuadro (antes eran 4 cards separadas apiladas:
+         Strava + Polar + Wahoo + Health Connect) -- el aviso de arriba (.conn-hint)
+         resuelve de entrada la duda más común ("no encuentro mi marca de reloj") sin
+         que el corredor tenga que leer las 4 descripciones para darse cuenta de que
+         Strava cubre casi cualquier reloj del mercado. Cada marca es una fila separada
+         por un divisor fino en vez de su propia card, para que se lea como un solo
+         bloque de "conectá tu reloj", no como cuatro decisiones distintas. -->
     <div class="elev-divider"><svg viewBox="0 0 60 14"><polyline points="0,12 10,12 16,4 22,10 28,2 34,9 40,12 60,12" fill="none" stroke="#C06A2E" stroke-width="1.6"/></svg><span data-i18n="perfil_connectivity"></span></div>
     <div class="card-shell card-shell-clay">
-    <div class="card card-strava">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-        <span class="icon-sq" style="width:26px; height:26px; color:var(--clay); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></span>
-        <span class="n" style="font-size:14.5px; font-weight:700; flex:1;">Strava</span>
-        <span id="strava-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
-      </div>
-      <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_connectivity_desc"></p>
-      <p id="strava-sync-note" class="muted" style="margin:8px 0 0; font-size:12px; display:none;"></p>
-      <button class="btn btn-outline btn-sm" id="strava-connect-btn" style="margin-top:10px; width:100%;" onclick="connectStrava()"></button>
-      <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
-        <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleStravaRemember(event)" aria-expanded="false" aria-controls="strava-remember-list">
-          <span data-i18n="perfil_remember_title"></span>
-          <span class="icon-sq" id="strava-remember-chevron" style="width:13px; height:13px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
-        </button>
-        <ul id="strava-remember-list" style="display:none; margin:10px 0 0; padding-left:18px; color:var(--mist); font-size:13px; line-height:1.7;">
-          <li data-i18n="perfil_remember_1"></li>
-          <li data-i18n="perfil_remember_2"></li>
-          <li data-i18n="perfil_remember_3"></li>
-          <li data-i18n="perfil_remember_4"></li>
-          <li data-i18n="perfil_remember_5"></li>
-          <li data-i18n="perfil_remember_6"></li>
-        </ul>
-      </div>
-    </div>
-    </div>
-
-    <!-- Polar es una segunda vía de conexión además de Strava -- una card
-         normal (no card-shell/vidrio), a propósito: el vidrio esmerilado está
-         reservado para UNA card destacada por pantalla (ver el comentario
-         grande junto a .card-highlight), y esa ya la ocupa Strava. -->
     <div class="card">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="3"/></svg></span>
-        <span class="n" style="font-size:14.5px; font-weight:700; flex:1;">Polar</span>
-        <span id="polar-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
+      <div class="conn-hint">
+        <span class="icon-sq"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.8" r="1"/></svg></span>
+        <span data-i18n="perfil_connectivity_hint"></span>
       </div>
-      <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_polar_desc"></p>
-      <button class="btn btn-outline btn-sm" id="polar-connect-btn" style="margin-top:10px; width:100%;" onclick="connectPolar()"></button>
-    </div>
 
-    <!-- Wahoo, tercera vía de conexión -- a diferencia de Strava/Polar, también
-         puede mandar la sesión de hoy AL reloj (ver pushTodayToWahoo() y el botón
-         "Enviar a mi reloj" en la fila de acciones de Plan). -->
-    <div class="card">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 4.5 6.3V11c0 5 3.2 8.6 7.5 10.2 4.3-1.6 7.5-5.2 7.5-10.2V6.3L12 3.5z"/></svg></span>
-        <span class="n" style="font-size:14.5px; font-weight:700; flex:1;">Wahoo</span>
-        <span id="wahoo-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
+      <div class="conn-row conn-row-featured">
+        <div class="conn-row-head">
+          <span class="icon-sq" style="width:26px; height:26px; color:var(--clay); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></span>
+          <span class="n" style="font-size:14.5px; font-weight:700;">Strava</span>
+          <span class="tag tag-trail" data-i18n="perfil_recommended_badge"></span>
+          <span id="strava-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
+        </div>
+        <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_connectivity_desc"></p>
+        <p id="strava-sync-note" class="muted" style="margin:8px 0 0; font-size:12px; display:none;"></p>
+        <button class="btn btn-outline btn-sm" id="strava-connect-btn" style="margin-top:10px; width:100%;" onclick="connectStrava()"></button>
+        <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
+          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleStravaRemember(event)" aria-expanded="false" aria-controls="strava-remember-list">
+            <span data-i18n="perfil_remember_title"></span>
+            <span class="icon-sq" id="strava-remember-chevron" style="width:13px; height:13px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+          </button>
+          <ul id="strava-remember-list" style="display:none; margin:10px 0 0; padding-left:18px; color:var(--mist); font-size:13px; line-height:1.7;">
+            <li data-i18n="perfil_remember_1"></li>
+            <li data-i18n="perfil_remember_2"></li>
+            <li data-i18n="perfil_remember_3"></li>
+            <li data-i18n="perfil_remember_4"></li>
+            <li data-i18n="perfil_remember_5"></li>
+            <li data-i18n="perfil_remember_6"></li>
+          </ul>
+        </div>
       </div>
-      <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_wahoo_desc"></p>
-      <button class="btn btn-outline btn-sm" id="wahoo-connect-btn" style="margin-top:10px; width:100%;" onclick="connectWahoo()"></button>
-    </div>
 
-    <!-- Health Connect solo tiene sentido en la app nativa de Android (no existe en
-         la web ni en iOS) -- arranca oculta y JS la muestra si corresponde, ver el
-         chequeo de window.Capacitor.getPlatform() al final de showView(). Cubre
-         cualquier reloj que escriba en Health Connect (Huawei, Samsung, etc.) sin
-         necesitar una conexión propia por marca. -->
-    <div class="card" id="healthconnect-card" style="display:none;">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-        <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5 5 0 0 0-7.1 0L12 6.3l-1.7-1.7a5 5 0 0 0-7.1 7.1L12 20.3l8.8-8.6a5 5 0 0 0 0-7.1z"/></svg></span>
-        <span class="n" style="font-size:14.5px; font-weight:700; flex:1;" data-i18n="healthconnect_title"></span>
-        <span id="healthconnect-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
+      <div class="conn-row">
+        <div class="conn-row-head">
+          <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="3"/></svg></span>
+          <span class="n" style="font-size:14.5px; font-weight:700; flex:1;">Polar</span>
+          <span id="polar-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
+        </div>
+        <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_polar_desc"></p>
+        <button class="btn btn-outline btn-sm" id="polar-connect-btn" style="margin-top:10px; width:100%;" onclick="connectPolar()"></button>
       </div>
-      <p class="muted" style="margin-bottom:8px;" data-i18n="healthconnect_desc"></p>
-      <button class="btn btn-outline btn-sm" id="healthconnect-connect-btn" style="margin-top:10px; width:100%;" onclick="connectHealthConnect()"></button>
+
+      <!-- Wahoo, a diferencia de Strava/Polar, también puede mandar la sesión de hoy AL
+           reloj (ver pushTodayToWahoo() y el botón "Enviar a mi reloj" en Plan). -->
+      <div class="conn-row">
+        <div class="conn-row-head">
+          <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 4.5 6.3V11c0 5 3.2 8.6 7.5 10.2 4.3-1.6 7.5-5.2 7.5-10.2V6.3L12 3.5z"/></svg></span>
+          <span class="n" style="font-size:14.5px; font-weight:700; flex:1;">Wahoo</span>
+          <span id="wahoo-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
+        </div>
+        <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_wahoo_desc"></p>
+        <button class="btn btn-outline btn-sm" id="wahoo-connect-btn" style="margin-top:10px; width:100%;" onclick="connectWahoo()"></button>
+      </div>
+
+      <!-- Health Connect solo tiene sentido en la app nativa de Android (no existe en
+           la web ni en iOS) -- arranca oculta y JS la muestra si corresponde, ver el
+           chequeo de window.Capacitor.getPlatform() al final de showView(). Cubre
+           cualquier reloj que escriba en Health Connect (Huawei, Samsung, etc.) sin
+           necesitar una conexión propia por marca. -->
+      <div class="conn-row" id="healthconnect-card" style="display:none;">
+        <div class="conn-row-head">
+          <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5 5 0 0 0-7.1 0L12 6.3l-1.7-1.7a5 5 0 0 0-7.1 7.1L12 20.3l8.8-8.6a5 5 0 0 0 0-7.1z"/></svg></span>
+          <span class="n" style="font-size:14.5px; font-weight:700; flex:1;" data-i18n="healthconnect_title"></span>
+          <span id="healthconnect-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
+        </div>
+        <p class="muted" style="margin-bottom:8px;" data-i18n="healthconnect_desc"></p>
+        <button class="btn btn-outline btn-sm" id="healthconnect-connect-btn" style="margin-top:10px; width:100%;" onclick="connectHealthConnect()"></button>
+      </div>
+    </div>
     </div>
 
     <!-- Las 9 filas de navegación de antes (una por línea, scroll largo) ahora son una
