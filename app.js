@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-11T00:50:00Z';
+const APP_VERSION = '2026-09-11T02:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -38,6 +38,8 @@ const CHANGELOG = [
   {id:'2026-09-km-pulse', key:'changelog_km_pulse'},
   {id:'2026-09-light-mode', key:'changelog_light_mode'},
   {id:'2026-09-connectivity-push', key:'changelog_connectivity_push'},
+  {id:'2026-09-devices-overlay', key:'changelog_devices_overlay'},
+  {id:'2026-09-light-mode-v2', key:'changelog_light_mode_v2'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -767,6 +769,7 @@ async function refreshDeviceConnections(){
     deviceConnections = { strava: !!s.data, polar: !!p.data, wahoo: !!w.data };
   }catch(e){ console.error(e); }
   renderPlan();
+  if(document.getElementById('perfil-devices-summary')) renderPerfil();
 }
 async function updateStravaStatusDisplay(){
   const el = document.getElementById('strava-status');
@@ -1347,9 +1350,14 @@ const THEME_KEY = 'zancada_theme';
 // localStorage (mismo lugar que ya lee el script de arranque en el <head>, antes de
 // que cargue este archivo) y nunca pasa por persist()/Supabase: cambiarlo en un
 // celular no debería prender o apagar el tema en los demás dispositivos de la cuenta.
+// El toggle de Perfil solo ofrece Claro/Oscuro (sin "Sistema") -- pero mientras nadie
+// tocó nada, sigue sin forzar ningún atributo y dejando que decida el propio sistema
+// operativo (ver el script del <head> y el media query en el CSS); esta función solo
+// resuelve esa ambigüedad para saber qué botón marcar activo en el toggle.
 function currentThemePref(){
   const v = localStorage.getItem(THEME_KEY);
-  return (v==='light' || v==='dark') ? v : 'system';
+  if(v==='light' || v==='dark') return v;
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 }
 function applyTheme(pref){
   try{ localStorage.setItem(THEME_KEY, pref); }catch(e){}
@@ -1357,7 +1365,7 @@ function applyTheme(pref){
   else document.documentElement.removeAttribute('data-theme');
   const isLight = pref==='light' || (pref!=='dark' && window.matchMedia('(prefers-color-scheme: light)').matches);
   const meta = document.getElementById('theme-color-meta');
-  if(meta) meta.setAttribute('content', isLight ? '#F7F6F2' : '#0A0A0A');
+  if(meta) meta.setAttribute('content', isLight ? '#F0F1EE' : '#0A0A0A');
   [...document.getElementById('theme-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v===pref));
 }
 document.getElementById('theme-toggle').addEventListener('click', e=>{
@@ -1369,7 +1377,15 @@ document.getElementById('theme-toggle').addEventListener('click', e=>{
 // solo -- esto solo mantiene el color de la barra de estado (theme-color) sincronizado
 // con lo que el CSS terminó mostrando, ya que esa meta no puede reaccionar sola.
 window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', ()=>{
-  if(currentThemePref()==='system') applyTheme('system');
+  // Sin preferencia explícita guardada, el CSS ya se re-renderiza solo (prefers-color-scheme)
+  // apenas cambia el modo del sistema -- esto solo mantiene sincronizado el color de la
+  // barra de estado, que no puede reaccionar sola a un media query.
+  const stored = localStorage.getItem(THEME_KEY);
+  if(stored!=='light' && stored!=='dark'){
+    const meta = document.getElementById('theme-color-meta');
+    if(meta) meta.setAttribute('content', window.matchMedia('(prefers-color-scheme: light)').matches ? '#F0F1EE' : '#0A0A0A');
+    [...document.getElementById('theme-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v===currentThemePref()));
+  }
 });
 document.getElementById('ob-days').addEventListener('click', e=>{
   const c=e.target.closest('.day-pill'); if(!c) return;
@@ -3672,6 +3688,16 @@ function renderPerfil(){
   const shoesSummaryEl = document.getElementById('perfil-shoes-summary');
   if(shoesSummaryEl) shoesSummaryEl.textContent = state.shoes.length ? t('perfil_shoes_count', {n: state.shoes.length}) : t('perfil_no_shoes');
 
+  const devicesSummaryEl = document.getElementById('perfil-devices-summary');
+  if(devicesSummaryEl){
+    const connectedNames = [];
+    if(deviceConnections.strava) connectedNames.push('Strava');
+    if(deviceConnections.polar) connectedNames.push('Polar');
+    if(deviceConnections.wahoo) connectedNames.push('Wahoo');
+    if(state.healthConnectConnected) connectedNames.push('Health Connect');
+    devicesSummaryEl.textContent = connectedNames.length ? connectedNames.join(', ') : t('perfil_devices_none');
+  }
+
   const eventSummaryEl = document.getElementById('perfil-event-summary');
   if(eventSummaryEl){
     if(state.event){
@@ -3690,6 +3716,8 @@ function renderPerfil(){
    que abren un overlay de pantalla completa -- mismo patrón que openAchievements(). No
    hace falta reconstruir el HTML de adentro (a diferencia de logros): los inputs ya
    existen siempre en el DOM y renderPerfil() los mantiene al día estén o no visibles. */
+function openDevicesOverlay(){ document.getElementById('devices-overlay').classList.add('overlay-open'); }
+function closeDevicesOverlay(){ document.getElementById('devices-overlay').classList.remove('overlay-open'); }
 function openPersonalDataOverlay(){ document.getElementById('personal-data-overlay').classList.add('overlay-open'); }
 function closePersonalDataOverlay(){ document.getElementById('personal-data-overlay').classList.remove('overlay-open'); }
 function openGoalsOverlay(){ document.getElementById('goals-overlay').classList.add('overlay-open'); }

@@ -45,7 +45,7 @@
     var pref = localStorage.getItem('zancada_theme');
     if(pref === 'light' || pref === 'dark') document.documentElement.setAttribute('data-theme', pref);
     var isLight = pref === 'light' || (pref !== 'dark' && window.matchMedia('(prefers-color-scheme: light)').matches);
-    document.getElementById('theme-color-meta').setAttribute('content', isLight ? '#F7F6F2' : '#0A0A0A');
+    document.getElementById('theme-color-meta').setAttribute('content', isLight ? '#F0F1EE' : '#0A0A0A');
   }catch(e){}
 })();</script>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -129,16 +129,16 @@
      abajo para cuando sí forzó). Misma lista de variables que :root, valores nuevos. */
   @media (prefers-color-scheme:light){
     :root:not([data-theme="dark"]){
-      --asphalt:#F7F6F2; --asphalt-2:#FFFFFF; --asphalt-3:#EFEEE9; --asphalt-4:#E3E1D9;
-      --chalk:#181A1B; --mist:#63696D; --mist-dim:#989C9E;
-      --hivis:#D6FF3F; --hivis-dim:rgba(122,153,0,.15); --hivis-text:#5A6800; --ink:#121415;
-      --clay:#A8501E; --clay-dim:rgba(168,80,30,.14);
-      --danger:#D92C1F; --danger-dim:rgba(217,44,31,.12);
-      --press:rgba(0,0,0,.045); --overlay-hairline:rgba(0,0,0,.08);
-      --tabbar-bg:rgba(255,255,255,.85);
-      --toast-error-bg:#FDECEB; --toast-error-fg:#B3261E;
-      --shadow-card:0 8px 22px rgba(30,26,20,.10); --shadow-lg:0 16px 48px rgba(30,26,20,.14);
-      --hivis-glow:rgba(163,199,0,.30);
+      --asphalt:#F0F1EE; --asphalt-2:#FFFFFF; --asphalt-3:#E7E8E3; --asphalt-4:#D9DAD3;
+      --chalk:#14161A; --mist:#5C6166; --mist-dim:#94989A;
+      --hivis:#D6FF3F; --hivis-dim:rgba(107,138,0,.16); --hivis-text:#5E7000; --ink:#121415;
+      --clay:#A84E1C; --clay-dim:rgba(168,78,28,.15);
+      --danger:#D6291C; --danger-dim:rgba(214,41,28,.13);
+      --press:rgba(0,0,0,.05); --overlay-hairline:rgba(0,0,0,.10);
+      --tabbar-bg:rgba(255,255,255,.88);
+      --toast-error-bg:#FDEBEA; --toast-error-fg:#B0241A;
+      --shadow-card:0 10px 24px rgba(20,22,18,.10); --shadow-lg:0 18px 50px rgba(20,22,18,.15);
+      --hivis-glow:rgba(150,186,0,.32);
       --zone1:#1D4ED8; --zone1-bg:rgba(29,78,216,.12); --zone1-bg-live:rgba(29,78,216,.10);
       --zone2:#15803D; --zone2-bg:rgba(21,128,61,.12); --zone2-bg-live:rgba(21,128,61,.10);
       --zone3:#B45309; --zone3-bg:rgba(180,83,9,.12); --zone3-bg-live:rgba(180,83,9,.10);
@@ -146,27 +146,35 @@
       --zone5:#B91C1C; --zone5-bg:rgba(185,28,28,.12); --zone5-bg-live:rgba(185,28,28,.10);
       --cs:light;
     }
-    /* .card-highlight y .confirm-card degradan hacia un color de fondo escrito a mano
-       (no una variable) porque necesitan mezclarse con el vidrio esmerilado -- sobre
-       claro tienen que fundirse en blanco, no en el carbón oscuro original. */
+    /* .card-highlight, .confirm-card y las dos .card-shell-* degradan/tiñen hacia un color
+       escrito a mano (no una variable) porque necesitan mezclarse con el vidrio esmerilado o
+       apenas insinuar un tinte -- los valores pensados para fundirse en el carbón oscuro
+       original (u opacidades de 3-4%, invisibles sobre blanco) se reemplazan acá por
+       equivalentes que sí se notan sobre un fondo claro. */
     :root:not([data-theme="dark"]) .card-highlight{
-      background:linear-gradient(160deg, rgba(163,199,0,.10), rgba(255,255,255,.6) 55%);
-      box-shadow:0 0 0 1px rgba(163,199,0,.22), 0 0 26px rgba(163,199,0,.20), 0 16px 32px rgba(30,26,20,.14);}
+      background:linear-gradient(160deg, rgba(150,186,0,.12), rgba(255,255,255,.65) 55%);
+      box-shadow:0 0 0 1px rgba(150,186,0,.28), 0 0 26px rgba(150,186,0,.22), 0 16px 32px rgba(20,22,18,.12);}
     :root:not([data-theme="dark"]) .confirm-card{
-      background:linear-gradient(160deg, rgba(255,255,255,.9), rgba(239,238,233,.85) 55%);}
+      background:linear-gradient(160deg, rgba(255,255,255,.92), rgba(231,232,227,.9) 55%);}
+    :root:not([data-theme="dark"]) .card-shell-hivis{
+      background:rgba(150,186,0,.08); border-color:rgba(150,186,0,.28);
+      box-shadow:0 16px 36px -14px rgba(150,186,0,.22);}
+    :root:not([data-theme="dark"]) .card-shell-clay{
+      background:rgba(168,78,28,.06); border-color:rgba(168,78,28,.26);
+      box-shadow:0 16px 36px -14px rgba(168,78,28,.18);}
   }
   /* Tema claro forzado a mano (toggle en Perfil) -- gana pase lo que pase el sistema. */
   :root[data-theme="light"]{
-    --asphalt:#F7F6F2; --asphalt-2:#FFFFFF; --asphalt-3:#EFEEE9; --asphalt-4:#E3E1D9;
-    --chalk:#181A1B; --mist:#63696D; --mist-dim:#989C9E;
-    --hivis:#D6FF3F; --hivis-dim:rgba(122,153,0,.15); --hivis-text:#5A6800; --ink:#121415;
-    --clay:#A8501E; --clay-dim:rgba(168,80,30,.14);
-    --danger:#D92C1F; --danger-dim:rgba(217,44,31,.12);
-    --press:rgba(0,0,0,.045); --overlay-hairline:rgba(0,0,0,.08);
-    --tabbar-bg:rgba(255,255,255,.85);
-    --toast-error-bg:#FDECEB; --toast-error-fg:#B3261E;
-    --shadow-card:0 8px 22px rgba(30,26,20,.10); --shadow-lg:0 16px 48px rgba(30,26,20,.14);
-    --hivis-glow:rgba(163,199,0,.30);
+    --asphalt:#F0F1EE; --asphalt-2:#FFFFFF; --asphalt-3:#E7E8E3; --asphalt-4:#D9DAD3;
+    --chalk:#14161A; --mist:#5C6166; --mist-dim:#94989A;
+    --hivis:#D6FF3F; --hivis-dim:rgba(107,138,0,.16); --hivis-text:#5E7000; --ink:#121415;
+    --clay:#A84E1C; --clay-dim:rgba(168,78,28,.15);
+    --danger:#D6291C; --danger-dim:rgba(214,41,28,.13);
+    --press:rgba(0,0,0,.05); --overlay-hairline:rgba(0,0,0,.10);
+    --tabbar-bg:rgba(255,255,255,.88);
+    --toast-error-bg:#FDEBEA; --toast-error-fg:#B0241A;
+    --shadow-card:0 10px 24px rgba(20,22,18,.10); --shadow-lg:0 18px 50px rgba(20,22,18,.15);
+    --hivis-glow:rgba(150,186,0,.32);
     --zone1:#1D4ED8; --zone1-bg:rgba(29,78,216,.12); --zone1-bg-live:rgba(29,78,216,.10);
     --zone2:#15803D; --zone2-bg:rgba(21,128,61,.12); --zone2-bg-live:rgba(21,128,61,.10);
     --zone3:#B45309; --zone3-bg:rgba(180,83,9,.12); --zone3-bg-live:rgba(180,83,9,.10);
@@ -175,10 +183,16 @@
     --cs:light;
   }
   :root[data-theme="light"] .card-highlight{
-    background:linear-gradient(160deg, rgba(163,199,0,.10), rgba(255,255,255,.6) 55%);
-    box-shadow:0 0 0 1px rgba(163,199,0,.22), 0 0 26px rgba(163,199,0,.20), 0 16px 32px rgba(30,26,20,.14);}
+    background:linear-gradient(160deg, rgba(150,186,0,.12), rgba(255,255,255,.65) 55%);
+    box-shadow:0 0 0 1px rgba(150,186,0,.28), 0 0 26px rgba(150,186,0,.22), 0 16px 32px rgba(20,22,18,.12);}
   :root[data-theme="light"] .confirm-card{
-    background:linear-gradient(160deg, rgba(255,255,255,.9), rgba(239,238,233,.85) 55%);}
+    background:linear-gradient(160deg, rgba(255,255,255,.92), rgba(231,232,227,.9) 55%);}
+  :root[data-theme="light"] .card-shell-hivis{
+    background:rgba(150,186,0,.08); border-color:rgba(150,186,0,.28);
+    box-shadow:0 16px 36px -14px rgba(150,186,0,.22);}
+  :root[data-theme="light"] .card-shell-clay{
+    background:rgba(168,78,28,.06); border-color:rgba(168,78,28,.26);
+    box-shadow:0 16px 36px -14px rgba(168,78,28,.18);}
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0; padding:0; background:var(--asphalt); height:100%;}
   body{font-family:'Inter',-apple-system,sans-serif; color:var(--chalk); overscroll-behavior-y:none;}
@@ -1688,6 +1702,106 @@
     </div>
   </div>
 
+  <!-- "Relojes" -- antes Conectividad vivía siempre abierta en el scroll de Perfil (un
+       recuadro grande arriba de todo); ahora es un botón más de la grilla, mismo patrón
+       que Datos personales/Objetivos/Zapatillas. El aviso de arriba (.conn-hint) resuelve
+       de entrada la duda más común ("no encuentro mi marca de reloj") sin que el corredor
+       tenga que leer las 4 descripciones para darse cuenta de que Strava cubre casi
+       cualquier reloj del mercado. Cada marca es una fila con su logo real (o, para las
+       tres que no están en ningún set de íconos de marca abierto, un glifo propio en su
+       color de marca real) separada por un divisor fino, para que se lea como un solo
+       bloque de "conectá tu reloj". -->
+  <div class="overlay overlay-sheet" id="devices-overlay">
+    <button class="week-nav-btn" onclick="closeDevicesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_devices_title"></h2>
+    <div class="card-shell card-shell-clay" style="margin-top:16px;">
+    <div class="card">
+      <div class="conn-hint">
+        <span class="icon-sq"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.8" r="1"/></svg></span>
+        <span data-i18n="perfil_connectivity_hint"></span>
+      </div>
+
+      <div class="conn-row conn-row-featured">
+        <div class="conn-row-head">
+          <span class="icon-sq" style="width:26px; height:26px; color:#FC4C02; flex-shrink:0;"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg></span>
+          <span class="n" style="font-size:14.5px; font-weight:700;">Strava</span>
+          <span class="tag tag-trail" data-i18n="perfil_recommended_badge"></span>
+          <span id="strava-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
+        </div>
+        <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_connectivity_desc"></p>
+        <p id="strava-sync-note" class="muted" style="margin:8px 0 0; font-size:12px; display:none;"></p>
+        <button class="btn btn-outline btn-sm" id="strava-connect-btn" style="margin-top:10px; width:100%;" onclick="connectStrava()"></button>
+        <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
+          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleStravaRemember(event)" aria-expanded="false" aria-controls="strava-remember-list">
+            <span data-i18n="perfil_remember_title"></span>
+            <span class="icon-sq" id="strava-remember-chevron" style="width:13px; height:13px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+          </button>
+          <ul id="strava-remember-list" style="display:none; margin:10px 0 0; padding-left:18px; color:var(--mist); font-size:13px; line-height:1.7;">
+            <li data-i18n="perfil_remember_1"></li>
+            <li data-i18n="perfil_remember_2"></li>
+            <li data-i18n="perfil_remember_3"></li>
+            <li data-i18n="perfil_remember_4"></li>
+            <li data-i18n="perfil_remember_5"></li>
+            <li data-i18n="perfil_remember_6"></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="conn-row">
+        <div class="conn-row-head">
+          <span class="icon-sq" style="width:26px; height:26px; color:#E4002B; flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="3"/></svg></span>
+          <span class="n" style="font-size:14.5px; font-weight:700; flex:1;">Polar</span>
+          <span id="polar-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
+        </div>
+        <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_polar_desc"></p>
+        <button class="btn btn-outline btn-sm" id="polar-connect-btn" style="margin-top:10px; width:100%;" onclick="connectPolar()"></button>
+      </div>
+
+      <!-- Wahoo, a diferencia de Strava/Polar, también puede mandar la sesión de hoy AL
+           reloj (ver pushTodayToWahoo() y el botón "Enviar a mi reloj" en Plan). -->
+      <div class="conn-row">
+        <div class="conn-row-head">
+          <span class="icon-sq" style="width:26px; height:26px; color:#0090D4; flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 4.5 6.3V11c0 5 3.2 8.6 7.5 10.2 4.3-1.6 7.5-5.2 7.5-10.2V6.3L12 3.5z"/></svg></span>
+          <span class="n" style="font-size:14.5px; font-weight:700; flex:1;">Wahoo</span>
+          <span id="wahoo-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
+        </div>
+        <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_wahoo_desc"></p>
+        <button class="btn btn-outline btn-sm" id="wahoo-connect-btn" style="margin-top:10px; width:100%;" onclick="connectWahoo()"></button>
+      </div>
+
+      <!-- Health Connect solo tiene sentido en la app nativa de Android (no existe en
+           la web ni en iOS) -- arranca oculta y JS la muestra si corresponde, ver el
+           chequeo de window.Capacitor.getPlatform() al final de showView(). Cubre
+           cualquier reloj que escriba en Health Connect (Huawei, Samsung, etc.) sin
+           necesitar una conexión propia por marca. -->
+      <div class="conn-row" id="healthconnect-card" style="display:none;">
+        <div class="conn-row-head">
+          <span class="icon-sq" style="width:26px; height:26px; color:#E8465C; flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5 5 0 0 0-7.1 0L12 6.3l-1.7-1.7a5 5 0 0 0-7.1 7.1L12 20.3l8.8-8.6a5 5 0 0 0 0-7.1z"/></svg></span>
+          <span class="n" style="font-size:14.5px; font-weight:700; flex:1;" data-i18n="healthconnect_title"></span>
+          <span id="healthconnect-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
+        </div>
+        <p class="muted" style="margin-bottom:8px;" data-i18n="healthconnect_desc"></p>
+        <button class="btn btn-outline btn-sm" id="healthconnect-connect-btn" style="margin-top:10px; width:100%;" onclick="connectHealthConnect()"></button>
+      </div>
+
+      <!-- Notificaciones push -- otra forma de "conectar" la app con algo externo (el
+           sistema operativo, en vez de un reloj), así que entra en el mismo recuadro en
+           vez de ser una sección suelta más en un Perfil que ya tenía demasiadas. -->
+      <div class="conn-row">
+        <div class="conn-row-head">
+          <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+          <span class="n" style="font-size:14.5px; font-weight:700; flex:1;" data-i18n="perfil_push_title"></span>
+          <label class="switch">
+            <input type="checkbox" id="push-toggle" onchange="handlePushToggle(this.checked)">
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+        <p class="muted" id="push-status" style="font-size:12.5px;" data-i18n="push_disabled"></p>
+      </div>
+    </div>
+    </div>
+  </div>
+
   <div class="overlay overlay-sheet" id="event-overlay">
     <button class="week-nav-btn" onclick="closeEventOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_event"></h2>
@@ -1967,108 +2081,17 @@
       <div id="social-section-body"></div>
     </div>
 
-    <!-- Conectividad ahora es UN solo recuadro (antes eran 4 cards separadas apiladas:
-         Strava + Polar + Wahoo + Health Connect) -- el aviso de arriba (.conn-hint)
-         resuelve de entrada la duda más común ("no encuentro mi marca de reloj") sin
-         que el corredor tenga que leer las 4 descripciones para darse cuenta de que
-         Strava cubre casi cualquier reloj del mercado. Cada marca es una fila separada
-         por un divisor fino en vez de su propia card, para que se lea como un solo
-         bloque de "conectá tu reloj", no como cuatro decisiones distintas. -->
-    <div class="elev-divider"><svg viewBox="0 0 60 14"><polyline points="0,12 10,12 16,4 22,10 28,2 34,9 40,12 60,12" fill="none" stroke="#C06A2E" stroke-width="1.6"/></svg><span data-i18n="perfil_connectivity"></span></div>
-    <div class="card-shell card-shell-clay">
-    <div class="card">
-      <div class="conn-hint">
-        <span class="icon-sq"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.8" r="1"/></svg></span>
-        <span data-i18n="perfil_connectivity_hint"></span>
-      </div>
-
-      <div class="conn-row conn-row-featured">
-        <div class="conn-row-head">
-          <span class="icon-sq" style="width:26px; height:26px; color:var(--clay); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></span>
-          <span class="n" style="font-size:14.5px; font-weight:700;">Strava</span>
-          <span class="tag tag-trail" data-i18n="perfil_recommended_badge"></span>
-          <span id="strava-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
-        </div>
-        <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_connectivity_desc"></p>
-        <p id="strava-sync-note" class="muted" style="margin:8px 0 0; font-size:12px; display:none;"></p>
-        <button class="btn btn-outline btn-sm" id="strava-connect-btn" style="margin-top:10px; width:100%;" onclick="connectStrava()"></button>
-        <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
-          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleStravaRemember(event)" aria-expanded="false" aria-controls="strava-remember-list">
-            <span data-i18n="perfil_remember_title"></span>
-            <span class="icon-sq" id="strava-remember-chevron" style="width:13px; height:13px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
-          </button>
-          <ul id="strava-remember-list" style="display:none; margin:10px 0 0; padding-left:18px; color:var(--mist); font-size:13px; line-height:1.7;">
-            <li data-i18n="perfil_remember_1"></li>
-            <li data-i18n="perfil_remember_2"></li>
-            <li data-i18n="perfil_remember_3"></li>
-            <li data-i18n="perfil_remember_4"></li>
-            <li data-i18n="perfil_remember_5"></li>
-            <li data-i18n="perfil_remember_6"></li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="conn-row">
-        <div class="conn-row-head">
-          <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="3"/></svg></span>
-          <span class="n" style="font-size:14.5px; font-weight:700; flex:1;">Polar</span>
-          <span id="polar-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
-        </div>
-        <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_polar_desc"></p>
-        <button class="btn btn-outline btn-sm" id="polar-connect-btn" style="margin-top:10px; width:100%;" onclick="connectPolar()"></button>
-      </div>
-
-      <!-- Wahoo, a diferencia de Strava/Polar, también puede mandar la sesión de hoy AL
-           reloj (ver pushTodayToWahoo() y el botón "Enviar a mi reloj" en Plan). -->
-      <div class="conn-row">
-        <div class="conn-row-head">
-          <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 4.5 6.3V11c0 5 3.2 8.6 7.5 10.2 4.3-1.6 7.5-5.2 7.5-10.2V6.3L12 3.5z"/></svg></span>
-          <span class="n" style="font-size:14.5px; font-weight:700; flex:1;">Wahoo</span>
-          <span id="wahoo-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
-        </div>
-        <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_wahoo_desc"></p>
-        <button class="btn btn-outline btn-sm" id="wahoo-connect-btn" style="margin-top:10px; width:100%;" onclick="connectWahoo()"></button>
-      </div>
-
-      <!-- Health Connect solo tiene sentido en la app nativa de Android (no existe en
-           la web ni en iOS) -- arranca oculta y JS la muestra si corresponde, ver el
-           chequeo de window.Capacitor.getPlatform() al final de showView(). Cubre
-           cualquier reloj que escriba en Health Connect (Huawei, Samsung, etc.) sin
-           necesitar una conexión propia por marca. -->
-      <div class="conn-row" id="healthconnect-card" style="display:none;">
-        <div class="conn-row-head">
-          <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5 5 0 0 0-7.1 0L12 6.3l-1.7-1.7a5 5 0 0 0-7.1 7.1L12 20.3l8.8-8.6a5 5 0 0 0 0-7.1z"/></svg></span>
-          <span class="n" style="font-size:14.5px; font-weight:700; flex:1;" data-i18n="healthconnect_title"></span>
-          <span id="healthconnect-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
-        </div>
-        <p class="muted" style="margin-bottom:8px;" data-i18n="healthconnect_desc"></p>
-        <button class="btn btn-outline btn-sm" id="healthconnect-connect-btn" style="margin-top:10px; width:100%;" onclick="connectHealthConnect()"></button>
-      </div>
-
-      <!-- Notificaciones push vivía como card propia más abajo -- es otra forma de
-           "conectar" la app con algo externo (el sistema operativo, en vez de un
-           reloj), así que entra en el mismo recuadro en vez de ser una quinta
-           sección suelta en un Perfil que ya tenía demasiadas. -->
-      <div class="conn-row">
-        <div class="conn-row-head">
-          <span class="icon-sq" style="width:26px; height:26px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
-          <span class="n" style="font-size:14.5px; font-weight:700; flex:1;" data-i18n="perfil_push_title"></span>
-          <label class="switch">
-            <input type="checkbox" id="push-toggle" onchange="handlePushToggle(this.checked)">
-            <span class="switch-slider"></span>
-          </label>
-        </div>
-        <p class="muted" id="push-status" style="font-size:12.5px;" data-i18n="push_disabled"></p>
-      </div>
-    </div>
-    </div>
-
     <!-- Las 9 filas de navegación de antes (una por línea, scroll largo) ahora son una
          grilla de 2 columnas: se escanean de un vistazo. Mismos onclick, mismos ids de
          resumen dinámico (renderPerfilDays() y compañía siguen escribiendo en los mismos
          ids de siempre) -- lo único que cambió es cómo se acomodan. -->
     <div class="home-section-label" data-i18n="perfil_grid_title"></div>
     <div class="settings-grid">
+      <div class="card settile" role="button" tabindex="0" onclick="openDevicesOverlay()">
+        <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.3 1.6M9 3h6M9.5 5.5h5"/></svg></span>
+        <h3 data-i18n="perfil_devices_title"></h3>
+        <p class="muted" id="perfil-devices-summary"></p>
+      </div>
       <div class="card settile" role="button" tabindex="0" onclick="openAchievements()">
         <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 2.5 10.5 8M15.5 2.5 13.5 8"/><circle cx="12" cy="14.5" r="6.5"/><path d="M12 11.2l1.1 2.2 2.4.35-1.75 1.7.4 2.4-2.15-1.15-2.15 1.15.4-2.4-1.75-1.7 2.4-.35z" fill="currentColor" stroke="none"/></svg></span>
         <h3 data-i18n="ach_open_title"></h3>
@@ -2135,7 +2158,6 @@
     <div class="card">
       <h3 data-i18n="perfil_theme_title"></h3>
       <div class="choice-row segmented" id="theme-toggle">
-        <div class="choice" data-v="system" data-i18n="perfil_theme_system"></div>
         <div class="choice" data-v="light" data-i18n="perfil_theme_light"></div>
         <div class="choice" data-v="dark" data-i18n="perfil_theme_dark"></div>
       </div>
