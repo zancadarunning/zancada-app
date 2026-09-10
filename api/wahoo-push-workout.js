@@ -65,12 +65,16 @@ module.exports = async (req, res) => {
       headers: { Authorization: `Bearer ${conn.access_token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
       body
     });
+    const respBody = await pushRes.text().catch(() => '');
     if (!pushRes.ok) {
-      const text = await pushRes.text().catch(() => '');
-      res.status(200).json({ pushed: false, reason: 'wahoo_error', debug: { httpStatus: pushRes.status, body: text } });
+      res.status(200).json({ pushed: false, reason: 'wahoo_error', debug: { httpStatus: pushRes.status, body: respBody } });
       return;
     }
-    res.status(200).json({ pushed: true });
+    // Temporal: devolvemos lo que Wahoo realmente guardó (incluido el "starts"
+    // que nos haya normalizado) para diagnosticar por qué no aparece del lado
+    // de Wahoo -- ver el pedido de debug en el chat. Sacar el campo debug una
+    // vez confirmado que funciona de punta a punta.
+    res.status(200).json({ pushed: true, debug: { sentStarts: startsISO, wahooResponse: respBody } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
