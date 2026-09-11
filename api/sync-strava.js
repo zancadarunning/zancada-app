@@ -1,7 +1,9 @@
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { activityToRun, mergeStravaRuns, setStravaSyncStatus } = require('./_lib/strava-activity-helpers');
 
-module.exports = async (req, res) => {
+const { withSentry, reportError } = require('./_lib/sentry');
+
+module.exports = withSentry(async (req, res) => {
   if (!requireCronSecret(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -64,6 +66,8 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ synced, errors, total: Array.isArray(conns) ? conns.length : 0 });
   } catch (err) {
+    console.error('sync-strava error', err);
+    await reportError(err, { endpoint: 'sync-strava' });
     res.status(500).json({ error: err.message });
   }
-};
+});

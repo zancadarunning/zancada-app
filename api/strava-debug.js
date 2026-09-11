@@ -1,6 +1,8 @@
 const requireCronSecret = require('./_lib/require-cron-secret');
 
-module.exports = async (req, res) => {
+const { withSentry, reportError } = require('./_lib/sentry');
+
+module.exports = withSentry(async (req, res) => {
   // Antes este secreto se mandaba por query string (?secret=...); ahora va
   // por el header Authorization, igual que el resto de los endpoints de
   // cron/debug (ver api/_lib/require-cron-secret.js para el por qué).
@@ -48,6 +50,8 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ totalConnections: Array.isArray(conns) ? conns.length : 0, results });
   } catch (err) {
+    console.error('strava-debug error', err);
+    await reportError(err, { endpoint: 'strava-debug' });
     res.status(500).json({ error: err.message });
   }
-};
+});

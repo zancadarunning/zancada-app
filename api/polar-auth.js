@@ -36,7 +36,9 @@ function verifyState(state) {
   return userId;
 }
 
-module.exports = async (req, res) => {
+const { withSentry, reportError } = require('./_lib/sentry');
+
+module.exports = withSentry(async (req, res) => {
   const { code, state: rawState } = req.query;
   if (!code || !rawState) { res.status(400).send('Falta code o state'); return; }
   const userId = verifyState(rawState);
@@ -101,6 +103,7 @@ module.exports = async (req, res) => {
     res.end();
   } catch (err) {
     console.error('polar-auth error', err);
+    await reportError(err, { endpoint: 'polar-auth' });
     res.status(500).send('Error: ' + err.message);
   }
-};
+});

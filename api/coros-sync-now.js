@@ -9,7 +9,9 @@ const verifyUser = require('./_lib/verify-user');
 const { activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool } = require('./_lib/coros-activity-helpers');
 const { applyCors, isPreflight } = require('./_lib/cors');
 
-module.exports = async (req, res) => {
+const { withSentry, reportError } = require('./_lib/sentry');
+
+module.exports = withSentry(async (req, res) => {
   applyCors(req, res);
   if (isPreflight(req, res)) return;
   const auth = await verifyUser(req);
@@ -72,6 +74,8 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ synced: newRuns.length > 0 });
   } catch (err) {
+    console.error('coros-sync-now error', err);
+    await reportError(err, { endpoint: 'coros-sync-now' });
     res.status(500).json({ error: err.message });
   }
-};
+});

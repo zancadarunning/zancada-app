@@ -36,7 +36,9 @@ function base64url(buf) {
   return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-module.exports = async (req, res) => {
+const { withSentry, reportError } = require('./_lib/sentry');
+
+module.exports = withSentry(async (req, res) => {
   applyCors(req, res);
   if (isPreflight(req, res)) return;
   if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return; }
@@ -60,6 +62,7 @@ module.exports = async (req, res) => {
     res.status(200).json({ state, codeChallenge });
   } catch (err) {
     console.error('coros-init error', err);
+    await reportError(err, { endpoint: 'coros-init' });
     res.status(500).json({ error: 'Error: ' + err.message });
   }
-};
+});

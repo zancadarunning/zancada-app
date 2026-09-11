@@ -1,7 +1,9 @@
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { decodePolyline, fetchStreams } = require('./_lib/strava-activity-helpers');
 
-module.exports = async (req, res) => {
+const { withSentry, reportError } = require('./_lib/sentry');
+
+module.exports = withSentry(async (req, res) => {
   // Antes este secreto se mandaba por query string (?secret=...), lo que lo
   // deja mucho más expuesto a quedar guardado en logs del hosting o de
   // proxies intermedios que un header. Ahora, como el resto de los
@@ -86,6 +88,8 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ usersUpdated, runsUpdated, errors, totalConnections: Array.isArray(conns) ? conns.length : 0 });
   } catch (err) {
+    console.error('strava-resync error', err);
+    await reportError(err, { endpoint: 'strava-resync' });
     res.status(500).json({ error: err.message });
   }
-};
+});

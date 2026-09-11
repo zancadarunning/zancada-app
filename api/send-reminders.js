@@ -53,7 +53,9 @@ const MSGS = {
   de: { types:{easy:'Lockerer Lauf',intervals:'Intervalle',tempo:'Tempolauf',long:'Langer Lauf'}, body:(type,km)=>`Heute: ${type} · ${km}km` }
 };
 
-module.exports = async (req, res) => {
+const { withSentry, reportError } = require('./_lib/sentry');
+
+module.exports = withSentry(async (req, res) => {
   if (!requireCronSecret(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -109,6 +111,8 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ sent, skipped, failed });
   } catch (err) {
+    console.error('send-reminders error', err);
+    await reportError(err, { endpoint: 'send-reminders' });
     res.status(500).json({ error: err.message });
   }
-};
+});

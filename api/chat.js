@@ -48,7 +48,9 @@ const LIMIT_MSG = {
   de: 'Du hast das heutige Limit an Nachrichten an den Coach erreicht. Versuch es morgen noch mal.'
 };
 
-module.exports = async (req, res) => {
+const { withSentry, reportError } = require('./_lib/sentry');
+
+module.exports = withSentry(async (req, res) => {
   applyCors(req, res);
   if (isPreflight(req, res)) return;
   if (req.method !== 'POST') {
@@ -204,6 +206,7 @@ module.exports = async (req, res) => {
     res.status(200).json({ content });
   } catch (err) {
     console.error('chat: excepción no manejada —', err);
+    await reportError(err, { endpoint: 'chat' });
     res.status(500).json({ error: { message: GENERIC_ERROR_MSG[lang] || GENERIC_ERROR_MSG.es } });
   }
-};
+});

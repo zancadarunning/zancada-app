@@ -24,7 +24,9 @@ function verifyState(state) {
   return userId;
 }
 
-module.exports = async (req, res) => {
+const { withSentry, reportError } = require('./_lib/sentry');
+
+module.exports = withSentry(async (req, res) => {
   const { code, state: rawState } = req.query;
   if (!code || !rawState) { res.status(400).send('Falta code o state'); return; }
   const userId = verifyState(rawState);
@@ -80,6 +82,8 @@ module.exports = async (req, res) => {
     res.writeHead(302, { Location: '/' });
     res.end();
   } catch (err) {
+    console.error('strava-auth error', err);
+    await reportError(err, { endpoint: 'strava-auth' });
     res.status(500).send('Error: ' + err.message);
   }
-};
+});

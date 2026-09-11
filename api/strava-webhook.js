@@ -63,7 +63,9 @@ async function deauthorizeAthlete(athleteId) {
   await purgeStravaRunsForUser(base, headers, userId);
 }
 
-module.exports = async (req, res) => {
+const { withSentry, reportError } = require('./_lib/sentry');
+
+module.exports = withSentry(async (req, res) => {
   if (req.method === 'GET') {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -85,9 +87,9 @@ module.exports = async (req, res) => {
       } else if (event && event.object_type === 'athlete' && event.updates && event.updates.authorized === 'false') {
         await deauthorizeAthlete(event.object_id);
       }
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); await reportError(e, { endpoint: 'strava-webhook' }); }
     return;
   }
 
   res.status(405).send('Method not allowed');
-};
+});

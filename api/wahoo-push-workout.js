@@ -21,7 +21,9 @@ const verifyUser = require('./_lib/verify-user');
 const { refreshWahooToken } = require('./_lib/wahoo-activity-helpers');
 const { applyCors, isPreflight } = require('./_lib/cors');
 
-module.exports = async (req, res) => {
+const { withSentry, reportError } = require('./_lib/sentry');
+
+module.exports = withSentry(async (req, res) => {
   applyCors(req, res);
   if (isPreflight(req, res)) return;
   if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return; }
@@ -87,6 +89,8 @@ module.exports = async (req, res) => {
     }
     res.status(200).json({ pushed: true });
   } catch (err) {
+    console.error('wahoo-push-workout error', err);
+    await reportError(err, { endpoint: 'wahoo-push-workout' });
     res.status(500).json({ error: err.message });
   }
-};
+});

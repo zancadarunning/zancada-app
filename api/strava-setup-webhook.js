@@ -7,7 +7,9 @@ const requireCronSecret = require('./_lib/require-cron-secret');
 // lado, pero sí de generar llamadas de más contra la API de Strava sin que
 // vos te enteraras. Ahora requiere el mismo secreto que el resto de los
 // endpoints de administración.
-module.exports = async (req, res) => {
+const { withSentry, reportError } = require('./_lib/sentry');
+
+module.exports = withSentry(async (req, res) => {
   if (!requireCronSecret(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -25,6 +27,8 @@ module.exports = async (req, res) => {
     const data = await response.json();
     res.status(200).json(data);
   } catch (err) {
+    console.error('strava-setup-webhook error', err);
+    await reportError(err, { endpoint: 'strava-setup-webhook' });
     res.status(500).json({ error: err.message });
   }
-};
+});

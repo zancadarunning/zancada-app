@@ -16,3 +16,7 @@ scratch/
 # detecta como "cambios" pero no hay nada real para commitear ahi, y se borran solas
 # cuando la tarea que las creo termina.
 .claude/worktrees/
+
+# Dependencias de Node -- Vercel las instala solas en cada deploy a partir de
+# package.json/package-lock.json, no hace falta (ni conviene) versionarlas.
+node_modules/

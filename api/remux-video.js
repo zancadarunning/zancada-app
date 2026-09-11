@@ -62,7 +62,9 @@ function runFfmpeg(args){
   });
 }
 
-module.exports = async (req, res) => {
+const { withSentry, reportError } = require('./_lib/sentry');
+
+module.exports = withSentry(async (req, res) => {
   applyCors(req, res);
   if(isPreflight(req, res)) return;
   if(req.method !== 'POST'){ res.status(405).json({error:'Method not allowed'}); return; }
@@ -89,9 +91,10 @@ module.exports = async (req, res) => {
     res.status(200).send(output);
   }catch(err){
     console.error('remux-video: fallo al reprocesar el video —', err);
+    await reportError(err, { endpoint: 'remux-video' });
     res.status(500).json({error:'Remux failed'});
   }finally{
     try{ if(inPath && fs.existsSync(inPath)) fs.unlinkSync(inPath); }catch(e){}
     try{ if(outPath && fs.existsSync(outPath)) fs.unlinkSync(outPath); }catch(e){}
   }
-};
+});

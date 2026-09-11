@@ -35,7 +35,9 @@ function verifyState(state) {
   return { userId, codeVerifier };
 }
 
-module.exports = async (req, res) => {
+const { withSentry, reportError } = require('./_lib/sentry');
+
+module.exports = withSentry(async (req, res) => {
   const { code, state: rawState } = req.query;
   if (!code || !rawState) { res.status(400).send('Falta code o state'); return; }
   const verified = verifyState(rawState);
@@ -115,6 +117,7 @@ module.exports = async (req, res) => {
     res.end();
   } catch (err) {
     console.error('coros-auth error', err);
+    await reportError(err, { endpoint: 'coros-auth' });
     res.status(500).send('Error: ' + err.message);
   }
-};
+});

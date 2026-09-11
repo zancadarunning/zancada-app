@@ -10,7 +10,9 @@ const { purgeCorosRunsForUser } = require('./_lib/coros-activity-helpers');
 
 const REGION_HOST = 'mcpus.coros.com'; // ver el comentario sobre región en coros-auth.js
 
-module.exports = async (req, res) => {
+const { withSentry, reportError } = require('./_lib/sentry');
+
+module.exports = withSentry(async (req, res) => {
   applyCors(req, res);
   if (isPreflight(req, res)) return;
   if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return; }
@@ -56,6 +58,7 @@ module.exports = async (req, res) => {
     res.status(200).json({ ok: true });
   } catch (err) {
     console.error('coros-disconnect error', err);
+    await reportError(err, { endpoint: 'coros-disconnect' });
     res.status(500).json({ error: 'Error: ' + err.message });
   }
-};
+});
