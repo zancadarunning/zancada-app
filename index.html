@@ -1749,7 +1749,7 @@
         <p id="strava-sync-note" class="muted" style="margin:8px 0 0; font-size:12px; display:none;"></p>
         <button class="btn btn-outline btn-sm" id="strava-connect-btn" style="margin-top:10px; width:100%;" onclick="connectStrava()"></button>
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
-          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleStravaRemember(event)" aria-expanded="false" aria-controls="strava-remember-list">
+          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleRememberList(event,'strava')" aria-expanded="false" aria-controls="strava-remember-list">
             <span data-i18n="perfil_remember_title"></span>
             <span class="icon-sq" id="strava-remember-chevron" style="width:13px; height:13px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
           </button>
@@ -1774,6 +1774,16 @@
         </div>
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_coros_desc"></p>
         <button class="btn btn-outline btn-sm" id="coros-connect-btn" style="margin-top:10px; width:100%;" onclick="connectCoros()"></button>
+        <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
+          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleRememberList(event,'coros')" aria-expanded="false" aria-controls="coros-remember-list">
+            <span data-i18n="perfil_remember_title"></span>
+            <span class="icon-sq" id="coros-remember-chevron" style="width:13px; height:13px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+          </button>
+          <ul id="coros-remember-list" style="display:none; margin:10px 0 0; padding-left:18px; color:var(--mist); font-size:13px; line-height:1.7;">
+            <li data-i18n="perfil_remember_4"></li>
+            <li data-i18n="perfil_remember_generic_check_app"></li>
+          </ul>
+        </div>
       </div>
 
       <div class="conn-row">
@@ -1786,6 +1796,16 @@
         </div>
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_polar_desc"></p>
         <button class="btn btn-outline btn-sm" id="polar-connect-btn" style="margin-top:10px; width:100%;" onclick="connectPolar()"></button>
+        <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
+          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleRememberList(event,'polar')" aria-expanded="false" aria-controls="polar-remember-list">
+            <span data-i18n="perfil_remember_title"></span>
+            <span class="icon-sq" id="polar-remember-chevron" style="width:13px; height:13px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+          </button>
+          <ul id="polar-remember-list" style="display:none; margin:10px 0 0; padding-left:18px; color:var(--mist); font-size:13px; line-height:1.7;">
+            <li data-i18n="perfil_remember_4"></li>
+            <li data-i18n="perfil_remember_generic_check_app"></li>
+          </ul>
+        </div>
       </div>
 
       <!-- Wahoo, a diferencia de Strava/Polar, también puede mandar la sesión de hoy AL
@@ -1799,6 +1819,16 @@
         </div>
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_wahoo_desc"></p>
         <button class="btn btn-outline btn-sm" id="wahoo-connect-btn" style="margin-top:10px; width:100%;" onclick="connectWahoo()"></button>
+        <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
+          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleRememberList(event,'wahoo')" aria-expanded="false" aria-controls="wahoo-remember-list">
+            <span data-i18n="perfil_remember_title"></span>
+            <span class="icon-sq" id="wahoo-remember-chevron" style="width:13px; height:13px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+          </button>
+          <ul id="wahoo-remember-list" style="display:none; margin:10px 0 0; padding-left:18px; color:var(--mist); font-size:13px; line-height:1.7;">
+            <li data-i18n="perfil_remember_4"></li>
+            <li data-i18n="perfil_remember_generic_check_app"></li>
+          </ul>
+        </div>
       </div>
 
       <!-- Health Connect solo tiene sentido en la app nativa de Android (no existe en

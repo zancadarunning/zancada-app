@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-14T14:00:00Z';
+const APP_VERSION = '2026-09-14T16:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -46,6 +46,7 @@ const CHANGELOG = [
   {id:'2026-09-coros-connect', key:'changelog_coros_connect'},
   {id:'2026-09-multi-device-warning', key:'changelog_multi_device_warning'},
   {id:'2026-09-keep-data-on-disconnect', key:'changelog_keep_data_on_disconnect'},
+  {id:'2026-09-week-rollover-fix', key:'changelog_week_rollover_fix'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -2064,6 +2065,22 @@ function enterApp(){
   setTimeout(maybeShowWhatsNew, 1800);
   refreshDeviceConnections();
 }
+// checkWeekRollover/autoSkipPastDays/autoClearPastEvent dependen de la fecha real, y antes
+// solo corrían una vez, al entrar a la app (dentro de enterApp()). El problema: una PWA que
+// queda "viva" en segundo plano (común en Android/iOS si no se la cierra del todo) puede
+// volver a primer plano días después SIN que la página se recargue -- enterApp() nunca se
+// vuelve a llamar, y el plan se queda mostrando una semana vieja hasta que en algún momento
+// SÍ haya una recarga de verdad (ej. una actualización de versión). Reportado por el usuario:
+// la app le mostraba "semana del lunes 7" siendo ya lunes 14. Enganchar esto también a
+// visibilitychange hace que, apenas la app vuelve a primer plano, se re-chequee contra la
+// fecha real -- sin esperar a una recarga completa.
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden || !currentUserId || !state.onboarded) return;
+  checkWeekRollover();
+  autoSkipPastDays();
+  autoClearPastEvent();
+  renderAll(); renderHistory(); renderZones();
+});
 async function logout(){ await waitForPendingPersist(); await supabaseClient.auth.signOut(); location.reload(); }
 async function resetApp(){
   if(!(await showConfirm(t('reset_confirm_text'), {danger:true, confirmText:t('delete_word')}))) return;
@@ -3969,9 +3986,12 @@ function prefersReducedMotion(){
 // El bloque "Recordá que..." de la sección de Strava era una lista siempre visible --
 // ahora arranca colapsada detrás de este botón, para no abrumar la tarjeta de Strava con
 // texto largo apenas se entra a Perfil. Nada de esto se persiste: siempre arranca cerrado.
-function toggleStravaRemember(e){
-  const list = document.getElementById('strava-remember-list');
-  const chevron = document.getElementById('strava-remember-chevron');
+// Antes solo existía para Strava (única marca con un "Recordá que..." con tips propios).
+// Ahora Polar/Wahoo/COROS también tienen su versión, más corta y genérica (ver
+// perfil_remember_generic_check_app) -- prefix identifica qué lista/chevron tocar.
+function toggleRememberList(e, prefix){
+  const list = document.getElementById(prefix+'-remember-list');
+  const chevron = document.getElementById(prefix+'-remember-chevron');
   if(!list) return;
   const show = list.style.display === 'none';
   list.style.display = show ? 'block' : 'none';

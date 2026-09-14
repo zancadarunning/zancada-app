@@ -87,6 +87,18 @@ module.exports = withSentry(async (req, res) => {
       const plan = data.plan;
       if (!plan || !plan.length) { skipped++; continue; }
 
+      // El plan guardado se actualiza a la semana real desde el cliente (checkWeekRollover()
+      // en app.js), no acá -- si alguien no abrió la app en mucho tiempo (o la dejó "viva" en
+      // segundo plano sin que se re-ejecute ese chequeo, bug reportado por un usuario), lo que
+      // tenemos guardado puede seguir siendo el plan de una semana vieja. plan[dayIdx] seguiría
+      // devolviendo ALGO, pero podría ser un descanso donde hoy en realidad toca entrenar, o
+      // al revés -- mejor no mandar nada antes que mandar un aviso equivocado. 10 días de
+      // margen (no 7 justos) para no cortar por un caso límite de huso horario.
+      if (data.weekStart) {
+        const staleMs = Date.now() - new Date(data.weekStart + 'T00:00:00Z').getTime();
+        if (staleMs > 10 * 86400000) { skipped++; continue; }
+      }
+
       const tz = (data.profile && data.profile.tz) || DEFAULT_TZ;
       const { hour, dayIdx } = localHourAndDayIdx(tz);
       if (hour !== REMINDER_HOUR) { skipped++; continue; } // todavía no son las 8am en el huso de ESTE usuario

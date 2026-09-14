@@ -1,5 +1,18 @@
 const { activityToRun, mergeStravaRuns, purgeStravaRunsForUser } = require('./_lib/strava-activity-helpers');
 
+// Mensajes cortos por idioma para el aviso que le queda al usuario en el chat del coach
+// cuando revocó el acceso desde la propia Strava (ver deauthorizeAthlete más abajo) -- no
+// tiene acceso al diccionario completo de la app (eso vive en app.js, del lado del
+// cliente), así que van hardcodeados acá, mismo estilo que MSGS en send-reminders.js.
+const REVOKED_MSGS = {
+  es: n => `Vi que revocaste el acceso a Strava desde su propia web o app. Por sus políticas, tuve que borrar de tu Historial ${n} carrera${n===1?'':'s'} que habían llegado por ahí — no de Strava, solo de acá. Si fue sin querer, la podés volver a conectar desde Perfil → Relojes.`,
+  en: n => `I saw you revoked Strava's access from their own site or app. Because of their policy, I had to remove ${n} run${n===1?'':'s'} that came from there from your History — not from Strava, just from here. If that was by mistake, you can reconnect it from Profile → Watches.`,
+  pt: n => `Vi que você revogou o acesso ao Strava pelo próprio site ou app deles. Pelas políticas deles, tive que remover ${n} corrida${n===1?'':'s'} que tinham vindo de lá do seu Histórico — não do Strava, só daqui. Se foi sem querer, dá pra reconectar em Perfil → Relógios.`,
+  fr: n => `J'ai vu que tu as révoqué l'accès à Strava depuis leur propre site ou appli. À cause de leur politique, j'ai dû retirer ${n} course${n===1?'':'s'} venue${n===1?'':'s'} de là de ton historique — pas de Strava, juste d'ici. Si c'était involontaire, tu peux le reconnecter depuis Profil → Montres.`,
+  it: n => `Ho visto che hai revocato l'accesso a Strava dal loro sito o app. Per le loro politiche, ho dovuto rimuovere dalla tua Cronologia ${n} cors${n===1?'a':'e'} arrivat${n===1?'a':'e'} da lì — non da Strava, solo da qui. Se è stato involontario, puoi ricollegarlo da Profilo → Orologi.`,
+  de: n => `Ich habe gesehen, dass du den Zugriff auf Strava über deren eigene Website oder App widerrufen hast. Wegen deren Richtlinien musste ich ${n} Lauf${n===1?'':' läufe'}, die von dort kamen, aus deinem Verlauf entfernen — nicht von Strava, nur von hier. Falls das aus Versehen war, kannst du es unter Profil → Uhren wieder verbinden.`
+};
+
 async function syncActivity(athleteId, activityId) {
   const base = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_KEY;
@@ -60,7 +73,7 @@ async function deauthorizeAthlete(athleteId) {
   const userId = conns[0].user_id;
 
   await fetch(`${base}/rest/v1/strava_connections?athlete_id=eq.${athleteId}`, { method: 'DELETE', headers });
-  await purgeStravaRunsForUser(base, headers, userId);
+  await purgeStravaRunsForUser(base, headers, userId, (count, lang) => (REVOKED_MSGS[lang] || REVOKED_MSGS.es)(count));
 }
 
 const { withSentry, reportError } = require('./_lib/sentry');

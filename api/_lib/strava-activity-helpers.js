@@ -228,7 +228,15 @@ async function mergeStravaRuns(base, headers, userId, newRuns, mode) {
 // sincronización con Strava falló/está desactualizada" de la conexión
 // VIEJA, que ya no tiene nada que ver con la nueva. No hace nada si no hay
 // ni carreras de Strava ni un estado de sincronización guardado.
-async function purgeStravaRunsForUser(base, headers, userId) {
+// buildNotifyMessage(count, lang) -- opcional. Cuando el usuario desconecta desde ADENTRO
+// de Zancada (strava-disconnect.js), ya vio y eligió en el momento (ver
+// confirmKeepDataBeforeDisconnect en app.js), así que no hace falta avisarle nada más. Pero
+// cuando revoca el acceso desde la propia web/app de Strava, nos enteramos recién acá, por
+// el webhook (deauthorizeAthlete en strava-webhook.js) -- sin ninguna pantalla de Zancada
+// abierta para preguntarle nada. Como ese borrado es un requisito real del acuerdo de
+// desarrollador de Strava (no se puede evitar), lo mínimo es que no sea una sorpresa: se le
+// deja un mensaje del coach contándole qué pasó, para la próxima vez que abra la app.
+async function purgeStravaRunsForUser(base, headers, userId, buildNotifyMessage) {
   const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${userId}&select=data`, { headers });
   const stateRows = await stateRes.json();
   const data = stateRows && stateRows[0] && stateRows[0].data;
@@ -237,12 +245,17 @@ async function purgeStravaRunsForUser(base, headers, userId) {
   if (!data || (!hasStravaRuns && !hasSyncStatus)) return;
 
   if (hasStravaRuns) {
+    const removedCount = data.runs.filter(r => r.source === 'strava').length;
     data.runs = data.runs.filter(r => r.source !== 'strava');
     if (Array.isArray(data.shoes)) {
       data.shoes = data.shoes.map(shoe => ({
         ...shoe,
         km: data.runs.filter(r => String(r.shoeId) === String(shoe.id)).reduce((a, r) => a + (r.distanceKm || 0), 0)
       }));
+    }
+    if (buildNotifyMessage) {
+      if (!Array.isArray(data.chat)) data.chat = [];
+      data.chat.push({ role: 'coach', text: buildNotifyMessage(removedCount, data.lang), ts: Date.now() });
     }
   }
   if (hasSyncStatus) delete data.stravaSync;
