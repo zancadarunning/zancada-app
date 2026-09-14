@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-14T13:00:00Z';
+const APP_VERSION = '2026-09-14T14:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -45,6 +45,7 @@ const CHANGELOG = [
   {id:'2026-09-race-day-plan', key:'changelog_race_day_plan'},
   {id:'2026-09-coros-connect', key:'changelog_coros_connect'},
   {id:'2026-09-multi-device-warning', key:'changelog_multi_device_warning'},
+  {id:'2026-09-keep-data-on-disconnect', key:'changelog_keep_data_on_disconnect'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -736,6 +737,24 @@ async function confirmMultiDeviceConnect(newBrand){
   if(!others.length) return true;
   return showConfirm(t('device_multi_connect_confirm', {brands: others.join(', ')}), {confirmText: t('device_multi_connect_proceed')});
 }
+// Al desconectar una marca, el backend borra de Historial las carreras que había
+// importado de ahí (ver el comentario grande en strava-disconnect.js sobre por qué --
+// en el caso de Strava, es un requisito de su acuerdo de desarrollador). Si el usuario
+// no quiere perder esos datos, le ofrecemos convertirlas a carreras "manuales" ANTES de
+// desconectar: les sacamos el source y el id propio de la marca (stravaId/polarId/etc.),
+// todo lo demás (distancia, duración, fecha, FC, ruta) queda igual -- así, para cuando el
+// backend hace el borrado, esas carreras ya no están marcadas como de esa marca y no las
+// toca. persist() tiene que terminar ANTES de llamar al endpoint de desconexión, si no el
+// backend puede leer los datos viejos todavía.
+async function confirmKeepDataBeforeDisconnect(brand, sourceKey, idField){
+  const matching = (state.runs||[]).filter(r=>r.source===sourceKey);
+  if(!matching.length) return true;
+  const keep = await showConfirm(t('device_disconnect_keep_confirm', {brand, count: matching.length}), {confirmText: t('device_disconnect_keep_btn')});
+  if(!keep) return false;
+  matching.forEach(r=>{ delete r.source; delete r[idField]; });
+  await persist();
+  return true;
+}
 async function connectStrava(){
   if(!(await confirmMultiDeviceConnect('Strava'))) return;
   // Pedimos un "state" firmado por el backend antes de mandar al usuario a
@@ -819,6 +838,7 @@ async function updateStravaStatusDisplay(){
 }
 async function disconnectStrava(){
   if(!currentUserId) return;
+  if(!(await confirmKeepDataBeforeDisconnect('Strava', 'strava', 'stravaId'))) return;
   try{
     const { data: { session } } = await supabaseClient.auth.getSession();
     if(session){
@@ -900,6 +920,7 @@ async function updatePolarStatusDisplay(){
 }
 async function disconnectPolar(){
   if(!currentUserId) return;
+  if(!(await confirmKeepDataBeforeDisconnect('Polar', 'polar', 'polarId'))) return;
   try{
     const { data: { session } } = await supabaseClient.auth.getSession();
     if(session){
@@ -973,6 +994,7 @@ async function updateWahooStatusDisplay(){
 }
 async function disconnectWahoo(){
   if(!currentUserId) return;
+  if(!(await confirmKeepDataBeforeDisconnect('Wahoo', 'wahoo', 'wahooId'))) return;
   try{
     const { data: { session } } = await supabaseClient.auth.getSession();
     if(session){
@@ -1074,6 +1096,7 @@ async function updateCorosStatusDisplay(){
 }
 async function disconnectCoros(){
   if(!currentUserId) return;
+  if(!(await confirmKeepDataBeforeDisconnect('COROS', 'coros', 'corosId'))) return;
   try{
     const { data: { session } } = await supabaseClient.auth.getSession();
     if(session){
