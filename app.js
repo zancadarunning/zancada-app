@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-11T07:00:00Z';
+const APP_VERSION = '2026-09-14T13:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -44,6 +44,7 @@ const CHANGELOG = [
   {id:'2026-09-a11y-perf', key:'changelog_a11y_perf'},
   {id:'2026-09-race-day-plan', key:'changelog_race_day_plan'},
   {id:'2026-09-coros-connect', key:'changelog_coros_connect'},
+  {id:'2026-09-multi-device-warning', key:'changelog_multi_device_warning'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -718,7 +719,25 @@ async function handleAppleSignIn(btnId){
 
 /* ---- Strava ---- */
 const STRAVA_CLIENT_ID = '276715';
+// Conectar más de un reloj a la vez (ej. Strava + COROS) hace que la misma carrera
+// entre dos veces a Historial -- cada integración sincroniza contra su propia fuente,
+// sin enterarse de que la otra ya trajo esa carrera (el chequeo de duplicados es por
+// stravaId/polarId/wahooId/corosId, no cruza entre marcas). Antes de mandar al usuario
+// a autorizar una marca nueva, si ya tiene otra conectada le avisamos y le pedimos
+// que confirme -- no lo bloqueamos del todo porque hay casos legítimos para tener dos
+// a la vez un rato (ej. comparar los datos de un reloj nuevo contra Strava antes de
+// migrar del todo).
+async function confirmMultiDeviceConnect(newBrand){
+  const others = [];
+  if(deviceConnections.strava && newBrand!=='Strava') others.push('Strava');
+  if(deviceConnections.polar && newBrand!=='Polar') others.push('Polar');
+  if(deviceConnections.wahoo && newBrand!=='Wahoo') others.push('Wahoo');
+  if(deviceConnections.coros && newBrand!=='COROS') others.push('COROS');
+  if(!others.length) return true;
+  return showConfirm(t('device_multi_connect_confirm', {brands: others.join(', ')}), {confirmText: t('device_multi_connect_proceed')});
+}
 async function connectStrava(){
+  if(!(await confirmMultiDeviceConnect('Strava'))) return;
   // Pedimos un "state" firmado por el backend antes de mandar al usuario a
   // Strava, en vez de mandar el user_id suelto — así el callback puede
   // verificar que la conexión realmente corresponde a quien inició sesión,
@@ -842,6 +861,7 @@ async function disconnectStrava(){
    prácticamente un calco de connectStrava/disconnectStrava. */
 const POLAR_CLIENT_ID = 'a4236422-03d7-4814-b772-09c51e50ecba';
 async function connectPolar(){
+  if(!(await confirmMultiDeviceConnect('Polar'))) return;
   try{
     const { data: { session } } = await supabaseClient.auth.getSession();
     if(!session){ showToast(t('polar_connect_error'),'error'); return; }
@@ -915,6 +935,7 @@ async function disconnectPolar(){
    (workouts_write) -- ver pushTodayToWahoo() más abajo. */
 const WAHOO_CLIENT_ID = 'WH3lkrMmnMc9vrsIzK5ihi2_FxV2W0zB_LaAxl0EZ-Q';
 async function connectWahoo(){
+  if(!(await confirmMultiDeviceConnect('Wahoo'))) return;
   try{
     const { data: { session } } = await supabaseClient.auth.getSession();
     if(!session){ showToast(t('wahoo_connect_error'),'error'); return; }
@@ -1015,6 +1036,7 @@ async function pushTodayToWahoo(){
 // se registró una sola vez para "Zancada" contra el servidor de la región Americas.
 const COROS_CLIENT_ID = '8df2bc64-ed53-41f6-a04f-d4d9bf4bb929';
 async function connectCoros(){
+  if(!(await confirmMultiDeviceConnect('COROS'))) return;
   try{
     const { data: { session } } = await supabaseClient.auth.getSession();
     if(!session){ showToast(t('coros_connect_error'),'error'); return; }
