@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-14T16:30:00Z';
+const APP_VERSION = '2026-09-14T18:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -47,6 +47,7 @@ const CHANGELOG = [
   {id:'2026-09-multi-device-warning', key:'changelog_multi_device_warning'},
   {id:'2026-09-keep-data-on-disconnect', key:'changelog_keep_data_on_disconnect'},
   {id:'2026-09-week-rollover-fix', key:'changelog_week_rollover_fix'},
+  {id:'2026-09-rating-dismiss', key:'changelog_rating_dismiss'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -735,6 +736,10 @@ async function confirmMultiDeviceConnect(newBrand){
   if(deviceConnections.polar && newBrand!=='Polar') others.push('Polar');
   if(deviceConnections.wahoo && newBrand!=='Wahoo') others.push('Wahoo');
   if(deviceConnections.coros && newBrand!=='COROS') others.push('COROS');
+  // Faltaba Health Connect acá -- reportado en una auditoría. No vive en deviceConnections
+  // (ver el comentario grande arriba de esa variable: Health Connect se lee directo de
+  // state.healthConnectConnected, no se cachea ahí), así que había que agregarlo aparte.
+  if(state.healthConnectConnected && newBrand!=='Health Connect') others.push('Health Connect');
   if(!others.length) return true;
   return showConfirm(t('device_multi_connect_confirm', {brands: others.join(', ')}), {confirmText: t('device_multi_connect_proceed')});
 }
@@ -1190,6 +1195,7 @@ function getHealthConnectBridge(){
   return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.HealthConnectBridge;
 }
 async function connectHealthConnect(){
+  if(!(await confirmMultiDeviceConnect('Health Connect'))) return;
   const HC = getHealthConnectBridge();
   if(!HC){ showToast(t('healthconnect_unavailable'),'error'); return; }
   try{
@@ -1248,6 +1254,10 @@ function updateHealthConnectStatusDisplay(){
   }
 }
 async function disconnectHealthConnect(){
+  // Le faltaba el mismo chequeo que ya tienen los otros 4 (confirmMultiDeviceConnect):
+  // borraba las carreras de Health Connect directo, sin ofrecer convertirlas a manuales
+  // primero -- reportado en una auditoría.
+  if(!(await confirmKeepDataBeforeDisconnect('Health Connect', 'healthconnect', 'healthConnectId'))) return;
   const HC = getHealthConnectBridge();
   try{ if(HC) await HC.disconnect(); }catch(e){ console.error(e); }
   state.healthConnectConnected = false;
@@ -1660,14 +1670,31 @@ function flashSaved(btnId){
    respuesta -- cada opción vive en su propia función (aplicar ahora / aplicar desde
    la semana que viene) en vez de una única función con un if genérico adentro. */
 let pendingPlanChangeContext = null; // 'personal' | 'goals'
-function openPlanChangeTimingModal(ctx){
+// savePersonalData()/saveGoals() ya mutan state.profile ANTES de abrir este modal (falta
+// nada más que decidir CUÁNDO aplicarlo) -- así que "cancelar" acá no puede ser solo
+// cerrar la ventana, tiene que devolver esos campos a como estaban, si no el corredor
+// queda con un cambio a medio aplicar en memoria (nunca guardado ni mostrado en pantalla,
+// pero ahí, esperando a la próxima vez que algo vuelva a tocar el perfil). Reportado en
+// una auditoría: antes este modal no tenía ninguna forma de salir sin elegir "ahora" o
+// "semana que viene".
+let pendingPlanChangeBackup = null;
+function openPlanChangeTimingModal(ctx, backup){
   pendingPlanChangeContext = ctx;
+  pendingPlanChangeBackup = backup;
   document.getElementById('plan-change-timing-modal').style.display = 'block';
+}
+function cancelPlanChangeTiming(){
+  document.getElementById('plan-change-timing-modal').style.display = 'none';
+  if(pendingPlanChangeBackup) Object.assign(state.profile, pendingPlanChangeBackup);
+  pendingPlanChangeContext = null;
+  pendingPlanChangeBackup = null;
+  renderPerfil(); // los inputs vuelven a mostrar los valores de verdad guardados, no lo que se había tipeado
 }
 function resolvePlanChangeTiming(choice){
   document.getElementById('plan-change-timing-modal').style.display = 'none';
   const ctx = pendingPlanChangeContext;
   pendingPlanChangeContext = null;
+  pendingPlanChangeBackup = null;
   if(ctx === 'personal'){
     if(choice === 'now') applyPersonalDataChangeNow(); else applyPersonalDataChangeNextWeek();
     finishPersonalDataSave();
@@ -1705,6 +1732,7 @@ function savePersonalData(){
   const goal = document.getElementById('perfil-goal').value;
   const raceDate = document.getElementById('perfil-racedate').value || null;
   const currentKmInput = document.getElementById('perfil-current-km');
+  const backup = { weight: state.profile.weight, height: state.profile.height, terrain: state.profile.terrain, goal: state.profile.goal, raceDate: state.profile.raceDate, currentWeeklyKm: state.profile.currentWeeklyKm, runnerType: state.profile.runnerType, weeklyKm: state.profile.weeklyKm };
   if(weight>0) state.profile.weight = weight;
   if(height>0) state.profile.height = height;
   if(terrainChoice) state.profile.terrain = terrainChoice.dataset.v;
@@ -1715,7 +1743,7 @@ function savePersonalData(){
     state.profile.runnerType = 'active';
   }
   state.profile.weeklyKm = calcWeeklyKm(state.profile);
-  openPlanChangeTimingModal('personal');
+  openPlanChangeTimingModal('personal', backup);
 }
 // --- Objetivo/meta semanal: apartado "a partir de ahora" ---
 function applyGoalsChangeNow(){
@@ -1745,10 +1773,11 @@ function saveGoals(){
   const weeklyGoal = parseDistInput(document.getElementById('perfil-weekly-goal').value);
   const goalNote = document.getElementById('perfil-goal-note').value.trim();
   const goalChanged = (state.profile.weeklyGoalKm||0) !== weeklyGoal;
+  const backup = { weeklyGoalKm: state.profile.weeklyGoalKm, goalNote: state.profile.goalNote };
   state.profile.weeklyGoalKm = weeklyGoal;
   state.profile.goalNote = goalNote;
   if(goalChanged){
-    openPlanChangeTimingModal('goals');
+    openPlanChangeTimingModal('goals', backup);
   } else {
     // la meta no cambió de verdad (guardaron solo la nota, por ejemplo) -- no hay nada
     // que el timing pueda afectar, así que no tiene sentido preguntar
@@ -2074,11 +2103,21 @@ function enterApp(){
 // la app le mostraba "semana del lunes 7" siendo ya lunes 14. Enganchar esto también a
 // visibilitychange hace que, apenas la app vuelve a primer plano, se re-chequee contra la
 // fecha real -- sin esperar a una recarga completa.
+// checkProactiveCoachNudge()/checkPainCheckins() tienen el mismo problema (encontrado en
+// una auditoría posterior): son chequeos de fecha con su propia guarda para no repetirse
+// (proactiveNudgeFor / checkinSent), así que engancharlos acá es seguro -- no van a
+// duplicar ningún mensaje, solo van a poder disparar antes si la app estuvo mucho tiempo
+// de fondo. OJO: checkInactivityCheckin() NO se suma acá a propósito -- pisa
+// state.lastAppOpenTs en cada llamada (es justo lo que mide "cuánto hace que no abrís la
+// app"), así que si corriera en cada visibilitychange (un simple cambio de pestaña, no
+// necesariamente reabrir la app) el contador nunca llegaría a acumular días de verdad.
 document.addEventListener('visibilitychange', ()=>{
   if(document.hidden || !currentUserId || !state.onboarded) return;
   checkWeekRollover();
   autoSkipPastDays();
   autoClearPastEvent();
+  checkProactiveCoachNudge();
+  checkPainCheckins();
   renderAll(); renderHistory(); renderZones();
 });
 async function logout(){ await waitForPendingPersist(); await supabaseClient.auth.signOut(); location.reload(); }
@@ -5211,15 +5250,21 @@ function recenterMap(){
 function startRun(){
   if(!navigator.geolocation){ document.getElementById('geo-warning').style.display='block'; document.getElementById('geo-warning').textContent=t('geo_err_support'); return; }
   const saved = readRunProgress();
+  // Una carrera ya FINALIZADA (el usuario tocó "Finalizar", ver saveRunProgress(true) en
+  // stopRun()) nunca debería descartarse por el paso del tiempo -- no queda tracking en
+  // vivo que pueda quedar "viejo", son datos ya cerrados esperando que el usuario confirme
+  // el resumen. Reportado en una auditoría: esto antes compartía el límite de 6 horas de
+  // abajo (pensado para la recuperación de una carrera INTERRUMPIDA, medido desde que
+  // ARRANCÓ, no desde que terminó) -- una carrera larga (maratón, ultra) o simplemente
+  // reabrir la app varias horas después de tocar "Finalizar" hacía que nunca se llegara a
+  // esta rama, y actuallyStartRun(null) más abajo pisaba en el momento el resumen ya
+  // guardado, perdiendo la carrera entera sin ningún aviso.
+  if(saved && saved.finished && (saved.points||[]).length){
+    restoreTrackerFromSaved(saved);
+    showRunSummaryUI();
+    return;
+  }
   if(saved && saved.startedAt && (Date.now()-saved.startedAt) < 6*3600*1000 && (saved.points||[]).length){
-    if(saved.finished){
-      // el usuario ya había tocado "Finalizar" y la app se cerró antes de que confirmara
-      // el resumen (batería, la mató el sistema) -- restauramos el resumen ya calculado
-      // en vez de perder la carrera por completo o reabrir el GPS como si siguiera corriendo
-      restoreTrackerFromSaved(saved);
-      showRunSummaryUI();
-      return;
-    }
     // hay una carrera sin terminar de hace menos de 6 horas (por ejemplo, la app
     // se cerró sola a mitad de un entrenamiento) -> ofrecemos recuperarla en vez
     // de arrancar una nueva y perder lo ya corrido
@@ -5403,6 +5448,17 @@ function checkPendingRating(){
   document.getElementById('rating-session-desc').textContent = `${t('day_'+d.day)}: ${lbl.type}${d.dist>0?' · '+planAmountText(d):''}`;
   ratingTargetIdx = idx;
   document.getElementById('rating-modal').style.display = 'block';
+}
+// Reportado en una auditoría: rating-modal no tenía ninguna forma de cerrarse sin elegir
+// una calificación -- puede aparecer sin que el usuario lo pida (checkPendingRating() se
+// llama solo, después de loguearse, de sincronizar un reloj, etc.), así que forzarlo a
+// elegir "Mal/Bien/Excelente" para poder seguir usando la app era un mal momento. Cerrar
+// acá sin tocar d.rating simplemente deja ese día como "sin calificar" -- va a volver a
+// aparecer la próxima vez que se dispare checkPendingRating(), como un recordatorio, no
+// como una obligación inmediata.
+function dismissRating(){
+  document.getElementById('rating-modal').style.display = 'none';
+  ratingTargetIdx = null;
 }
 async function submitRating(value){
   if(ratingTargetIdx===null) return;
