@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-14T16:00:00Z';
+const APP_VERSION = '2026-09-14T16:30:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -2394,7 +2394,13 @@ function buildWeeklyRecapMessage(weekPlan, weekStartIso){
   const plannedCount = weekPlan.filter(d=>d.dist>0).length;
   const weekRuns = (state.runs||[]).filter(r => getMondayISO(new Date(r.date)) === weekStartIso);
   const km = weekRuns.reduce((s,r)=>s+r.distanceKm, 0);
-  let msg = t('coach_weekly_recap', {km: km.toFixed(1), done:doneCount, planned:plannedCount});
+  // t('coach_weekly_recap') tiene un {unit} en el texto (ver locales) que nunca se
+  // completaba -- quedaba literalmente "0.0 {unit}" en el chat. De paso, km.toFixed(1)
+  // tampoco convertía a millas para quien usa imperial: mostraba el número en km igual,
+  // aunque el cartel dijera "mi". fmtDist()/distUnit() son las mismas funciones que ya usa
+  // el resto de la app para esto (ver Historial, Plan, etc.), nunca hay que reinventar la
+  // conversión a mano.
+  let msg = t('coach_weekly_recap', {km: fmtDist(km, 1), unit: distUnit(), done:doneCount, planned:plannedCount});
   // Racha de constancia: cuenta semanas seguidas cumpliendo (al menos 70%) lo planeado.
   // Se corta apenas una semana no llega a ese umbral. Solo la mencionamos a partir de
   // la segunda semana seguida, para no sonar como un contador vacío en la primera.
@@ -7416,7 +7422,10 @@ async function saveEditRun(){
 
 /* ================= COACH CHAT (con tool-use real para editar el plan) ================= */
 function seedCoachGreeting(){
-  state.chat = [{role:'coach', text: t('coach_greeting', {name:state.profile.name, km:state.profile.weeklyKm, goal:t('ob_goal_'+state.profile.goal)}), ts:Date.now()}];
+  // Mismo bug que había en buildWeeklyRecapMessage: faltaba pasar {unit} (quedaba literal
+  // en el primer mensaje que ve un usuario nuevo) y el km no se convertía a millas para
+  // quien entrena en imperial.
+  state.chat = [{role:'coach', text: t('coach_greeting', {name:state.profile.name, km:fmtDist(state.profile.weeklyKm,1), unit:distUnit(), goal:t('ob_goal_'+state.profile.goal)}), ts:Date.now()}];
   renderChat();
 }
 function renderChat(){
