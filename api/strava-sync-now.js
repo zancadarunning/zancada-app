@@ -42,6 +42,15 @@ module.exports = withSentry(async (req, res) => {
     const actsRes = await fetch(`https://www.strava.com/api/v3/athlete/activities?after=${after}&per_page=10`, {
       headers: { Authorization: `Bearer ${conn.access_token}` }
     });
+    // Mismo bug que ya se había arreglado en polar-sync-now.js/wahoo-sync-now.js: sin
+    // chequear actsRes.ok, un 401/429/lo que sea de Strava devuelve un objeto de error en
+    // vez de un array, Array.isArray da false, runs queda [] y esto se leía como "sync
+    // exitoso, sin carreras nuevas" -- marcando ok:true (línea de abajo) y ocultando para
+    // siempre que la sincronización real está rota.
+    if (!actsRes.ok) {
+      const body = await actsRes.text().catch(() => '');
+      throw new Error(`strava activities fetch failed: ${actsRes.status} ${body.slice(0, 300)}`);
+    }
     const acts = await actsRes.json();
     const runs = Array.isArray(acts) ? acts.filter(a => ((a.sport_type || a.type || '').includes('Run'))) : [];
 

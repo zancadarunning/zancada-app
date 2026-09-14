@@ -45,8 +45,25 @@ async function callCorosMcpTool(accessToken, toolName, args) {
     throw new Error(`coros mcp ${toolName}: HTTP ${res.status} -- ${text.slice(0, 500)}`);
   }
 
+  // Mandamos "Accept: text/event-stream" (lo pide el transporte "Streamable HTTP" de MCP
+  // para pedidos que puedan tardar), pero el servidor decide solo con qué formato contesta
+  // -- puede ser JSON plano de una, o un stream de eventos SSE ("event: message\ndata:
+  // {...}\n\n"). Antes acá se asumía siempre JSON plano y se rompía apenas COROS mandara
+  // SSE en cualquier respuesta (nunca probado contra una cuenta real, ver el comentario
+  // grande al principio del archivo). Si el content-type dice event-stream, primero
+  // sacamos el JSON de adentro de las líneas "data: ".
+  let jsonText = text;
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('text/event-stream')) {
+    const dataLines = text.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trim());
+    if (!dataLines.length) {
+      throw new Error(`coros mcp ${toolName}: stream SSE sin ninguna línea "data:" -- ${text.slice(0, 500)}`);
+    }
+    jsonText = dataLines.join('');
+  }
+
   let body;
-  try { body = JSON.parse(text); } catch (e) {
+  try { body = JSON.parse(jsonText); } catch (e) {
     throw new Error(`coros mcp ${toolName}: respuesta no es JSON -- ${text.slice(0, 500)}`);
   }
 

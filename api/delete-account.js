@@ -71,6 +71,24 @@ module.exports = withSentry(async (req, res) => {
       }
     } catch (e) { console.error('delete-account: wahoo revoke failed', e); }
 
+    // COROS se sumó después de que se hiciera este mismo arreglo para Polar/Wahoo (ver el
+    // comentario de arriba) y quedó afuera -- mismo problema: sin este bloque, el borrado
+    // de cuenta borraba coros_connections de nuestra base (por el ON DELETE CASCADE hacia
+    // auth.users) pero nunca le avisaba a COROS, así que el permiso de Zancada seguía
+    // apareciendo activo del lado de la cuenta de COROS del usuario para siempre.
+    try {
+      const connRes = await fetch(`${base}/rest/v1/coros_connections?user_id=eq.${userId}&select=access_token`, { headers });
+      const connRows = await connRes.json();
+      const accessToken = connRows && connRows[0] && connRows[0].access_token;
+      if (accessToken) {
+        await fetch('https://mcpus.coros.com/oauth2/revoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ token: accessToken, client_id: process.env.COROS_CLIENT_ID })
+        });
+      }
+    } catch (e) { console.error('delete-account: coros revoke failed', e); }
+
     // Borramos los datos de la app asociados al usuario, tabla por tabla.
     // Cada una se borra de forma tolerante a errores: si una falla, seguimos
     // igual con las demás en vez de frenar todo el proceso a mitad de camino.
