@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-15T02:00:00Z';
+const APP_VERSION = '2026-09-15T03:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -51,6 +51,7 @@ const CHANGELOG = [
   {id:'2026-09-push-stale-fix', key:'changelog_push_stale_fix'},
   {id:'2026-09-calendar-bounds-fix', key:'changelog_calendar_bounds_fix'},
   {id:'2026-09-race-week-double-discount-fix', key:'changelog_race_week_double_discount_fix'},
+  {id:'2026-09-rest-cap-fix', key:'changelog_rest_cap_fix'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -2773,7 +2774,7 @@ function buildIntervalStructure(qualityKm, caution, weekNumber){
   if(qualityKm <= 3) options = [{repMeters:300, recoveryMin:1}, {repMeters:200, recoveryMin:1}];
   else if(qualityKm <= 5) options = [{repMeters:400, recoveryMin:2}, {repMeters:300, recoveryMin:1}];
   else if(qualityKm <= 7) options = [{repMeters:600, recoveryMin:2}, {repMeters:400, recoveryMin:2}];
-  else options = [{repMeters:1000, recoveryMin:3}, {repMeters:800, recoveryMin:2}];
+  else options = [{repMeters:1000, recoveryMin:2}, {repMeters:800, recoveryMin:2}];
   const wn = weekNumber || 1;
   const { repMeters, recoveryMin } = options[(wn-1) % options.length];
   // con más edad o más masa corporal, el impacto de cada repetición pesa más sobre
