@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-15T03:00:00Z';
+const APP_VERSION = '2026-09-15T04:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -52,6 +52,7 @@ const CHANGELOG = [
   {id:'2026-09-calendar-bounds-fix', key:'changelog_calendar_bounds_fix'},
   {id:'2026-09-race-week-double-discount-fix', key:'changelog_race_week_double_discount_fix'},
   {id:'2026-09-rest-cap-fix', key:'changelog_rest_cap_fix'},
+  {id:'2026-09-no-past-days-onboarding', key:'changelog_no_past_days_onboarding'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -2053,6 +2054,22 @@ async function finishOnboard(){
   state.weekNumber = 1;
   state.weekStart = getMondayISO(new Date());
   state.plan = generatePlan(state.profile, state.weekNumber);
+  // generatePlan() arma sesiones para toda la semana (lunes a domingo) sin importar qué día
+  // de la semana es hoy -- si alguien termina el onboarding un miércoles, antes igual
+  // aparecían entrenamientos armados para el lunes y el martes, días en los que la cuenta
+  // ni existía. autoSkipPastDays() ya evitaba marcarlos como "sesión perdida", pero la
+  // sesión en sí seguía ahí, mostrando un entrenamiento para un día que ya pasó. Acá los
+  // convertimos directamente en descanso, así el plan arranca de verdad desde hoy.
+  {
+    const weekStartDate = new Date(state.weekStart+'T00:00:00');
+    state.plan.forEach((d,i)=>{
+      const dayDate = new Date(weekStartDate); dayDate.setDate(dayDate.getDate()+i);
+      const dayIso = `${dayDate.getFullYear()}-${String(dayDate.getMonth()+1).padStart(2,'0')}-${String(dayDate.getDate()).padStart(2,'0')}`;
+      if(dayIso < state.profile.createdAt){
+        state.plan[i] = {day:d.day, typeKey:'rest', dist:0, terrain:null, zone:null, beginner:d.beginner};
+      }
+    });
+  }
   state.onboarded = true;
   state.lang = lang;
   state.voiceEnabled = true;
