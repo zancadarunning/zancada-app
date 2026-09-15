@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-15T05:00:00Z';
+const APP_VERSION = '2026-09-15T06:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -54,6 +54,7 @@ const CHANGELOG = [
   {id:'2026-09-rest-cap-fix', key:'changelog_rest_cap_fix'},
   {id:'2026-09-no-past-days-onboarding', key:'changelog_no_past_days_onboarding'},
   {id:'2026-09-hist-info-generic-watch', key:'changelog_hist_info_generic_watch'},
+  {id:'2026-09-manual-save-flash-close', key:'changelog_manual_save_flash_close'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -5644,8 +5645,12 @@ function saveManualRun(){
   checkShoeWearAlerts();
   autoMarkSessionDone(isoDate, runId);
   document.getElementById('man-dist').value=''; document.getElementById('man-dur').value=''; document.getElementById('man-hr').value='';
-  toggleManualForm();
   renderAll(); renderHistory(); persist();
+  // Antes la tarjeta se cerraba de golpe apenas guardado, sin ninguna señal de que el
+  // entrenamiento efectivamente se había guardado -- ahora el botón muestra "Guardado" un
+  // instante (mismo flashSaved() que ya usan Perfil/Metas/Zonas) y recién ahí se cierra.
+  flashSaved('man-save-btn');
+  setTimeout(toggleManualForm, 700);
 }
 
 /* ================= HISTORY ================= */
