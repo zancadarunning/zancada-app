@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-15T04:00:00Z';
+const APP_VERSION = '2026-09-15T05:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -53,6 +53,7 @@ const CHANGELOG = [
   {id:'2026-09-race-week-double-discount-fix', key:'changelog_race_week_double_discount_fix'},
   {id:'2026-09-rest-cap-fix', key:'changelog_rest_cap_fix'},
   {id:'2026-09-no-past-days-onboarding', key:'changelog_no_past_days_onboarding'},
+  {id:'2026-09-hist-info-generic-watch', key:'changelog_hist_info_generic_watch'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
