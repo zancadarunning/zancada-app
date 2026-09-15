@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-14T18:00:00Z';
+const APP_VERSION = '2026-09-15T00:30:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -594,7 +594,17 @@ async function loadUserAndEnter(user, isRetry){
       state = data.data; lang = state.lang || 'es';
       loadedStateVersion = data.updated_at || null;
       const pending = readPendingBackup(user.id);
-      if(pending && pending.data && (pending.data.runs||[]).length > (state.runs||[]).length){
+      // El chequeo de "más carreras que en el servidor" solo (sin mirar cuándo se guardó cada
+      // cosa) podía dispararse al revés de lo que busca: si este backup local quedó viejo
+      // (por ejemplo, se guardaron carreras nuevas desde OTRO dispositivo, y después alguna se
+      // borró del todo desde ahí, dejando al servidor con MENOS carreras que las que había acá
+      // hace rato), esto pisaba el estado ya actualizado del servidor con datos de este
+      // teléfono que en realidad son más viejos -- perdiendo cualquier cambio de perfil/plan
+      // hecho desde el otro dispositivo mientras tanto. Reportado en una auditoría. Ahora
+      // también exige que el backup local sea más NUEVO que la última versión conocida del
+      // servidor, no solo que tenga más carreras.
+      const remoteTs = loadedStateVersion ? new Date(loadedStateVersion).getTime() : 0;
+      if(pending && pending.data && pending.ts > remoteTs && (pending.data.runs||[]).length > (state.runs||[]).length){
         // había una carrera guardada en el teléfono que no llegó a subirse la última vez -> la recuperamos
         state = pending.data; lang = state.lang || lang;
         persist();
@@ -1957,8 +1967,17 @@ function obPrevStep(){
 }
 async function finishOnboard(){
   const name = document.getElementById('ob-name').value.trim() || 'Runner';
-  const weight = parseFloat(document.getElementById('ob-weight').value) || 70;
-  const height = parseFloat(document.getElementById('ob-height').value) || 170;
+  // "|| 70"/"|| 170" (como estaba antes) solo cubre NaN/0 -- un valor negativo (typo, un
+  // signo de menos que se cuela) es truthy en JS y pasaba derecho, guardando un peso/altura
+  // negativos para siempre. savePersonalData() (el mismo campo, pero editado después desde
+  // Perfil) ya se protegía de esto con "if(weight>0)"; acá en el onboarding faltaba el mismo
+  // chequeo. Reportado en una auditoría: un peso negativo hace que las calorías de cada
+  // carrera se calculen y se muestren en negativo, siempre, hasta que alguien lo note y lo
+  // corrija a mano desde Perfil.
+  const weightRaw = parseFloat(document.getElementById('ob-weight').value);
+  const weight = weightRaw>0 ? weightRaw : 70;
+  const heightRaw = parseFloat(document.getElementById('ob-height').value);
+  const height = heightRaw>0 ? heightRaw : 170;
   const birth = document.getElementById('ob-birth').value || '1995-01-01';
   // Con guarda + default, igual que el mismo patrón en savePersonalData: hoy siempre hay
   // una opción marcada "active" de entrada en el HTML y los handlers de click nunca la
@@ -4097,7 +4116,7 @@ document.getElementById('perfil-name').addEventListener('change', ()=>{
 async function refreshStateFromServer(){
   if(!currentUserId) return;
   try{
-    const { data } = await supabaseClient.from('app_state').select('data').eq('user_id', currentUserId).maybeSingle();
+    const { data } = await supabaseClient.from('app_state').select('data, updated_at').eq('user_id', currentUserId).maybeSingle();
     if(data && data.data && Object.keys(data.data).length){
       const incomingRuns = (data.data.runs||[]).length;
       const currentRuns = (state.runs||[]).length;
@@ -4108,6 +4127,16 @@ async function refreshStateFromServer(){
       } else {
         const prevRunIds = new Set((state.runs||[]).map(r=>String(r.id)));
         state = data.data;
+        // Reportado en una auditoría: esto pisaba state con lo que acaba de llegar del servidor
+        // pero nunca actualizaba loadedStateVersion -- checkForRemoteConflict() (más arriba en
+        // este archivo) compara justo esta variable contra el updated_at real del servidor para
+        // decidir si avisar "guardaste desde otro dispositivo". Sin este ajuste, cualquier
+        // refresco (cambiar de pestaña Inicio/Historial/Plan, o "Sincronizar ahora") dejaba
+        // loadedStateVersion vieja, y el próximo chequeo de conflicto disparaba una falsa alarma
+        // -- avisando de un "conflicto" contra datos que ya están al día, incluso sin haber
+        // ningún otro dispositivo involucrado (alcanza con que el cron de Strava/Polar/COROS
+        // haya tocado app_state de fondo).
+        if(data.updated_at) loadedStateVersion = data.updated_at;
         checkShoeWearAlerts();
         checkHrMaxFromRuns();
         // Las carreras que llegan nuevas por la sincronización con Strava también pueden ser récord.

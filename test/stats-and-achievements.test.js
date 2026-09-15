@@ -17,6 +17,21 @@ const { loadApp } = require('./support/load-app');
 function daysAgoISO(days) {
   return new Date(Date.now() - days * 86400000).toISOString();
 }
+// Para pasarle un string "YYYY-MM-DD" (fecha sola, sin hora) a detectTrainingGapWeeks(), que
+// lo reinterpreta como MEDIANOCHE LOCAL (new Date(str+'T00:00:00'), sin 'Z' -- ver esa
+// función). daysAgoISO(21).slice(0,10) parecía alcanzar para esto, pero saca la fecha del
+// ISO en UTC y después se reinterpreta en hora local -- según la hora UTC en que corra el
+// test y el huso horario de la máquina, el "medianoche local" resultante puede terminar
+// unas horas para adelante o para atrás del punto real "21 días atrás", empujando el
+// resultado a la semana de al lado (flaky, no depende del código de la app). Esta versión
+// resta días de calendario en hora LOCAL desde el vamos, así los dos lados (cómo se arma el
+// string acá, cómo se reinterpreta allá) usan siempre el mismo huso.
+function daysAgoLocalDateStr(days) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
 
 test('classifyHR: clasifica por los límites de cada zona (190 de FC máx)', () => {
   const app = loadApp();
@@ -125,7 +140,7 @@ test('detectTrainingGapWeeks: sin carreras nunca cargadas y sin referencia devue
 test('detectTrainingGapWeeks: sin carreras pero con una fecha de referencia, cuenta desde ahí', () => {
   const app = loadApp();
   app.state.runs = [];
-  const gap = app.detectTrainingGapWeeks(daysAgoISO(21).slice(0, 10));
+  const gap = app.detectTrainingGapWeeks(daysAgoLocalDateStr(21));
   assert.equal(gap, 3);
 });
 
