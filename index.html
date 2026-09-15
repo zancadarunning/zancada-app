@@ -410,7 +410,7 @@
   .cal-weekdays{display:grid; grid-template-columns:repeat(7,1fr); text-align:center; font-size:11px; color:var(--mist); margin-bottom:8px; text-transform:uppercase; letter-spacing:.04em;}
   .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:4px;}
   .cal-day{aspect-ratio:1; display:flex; align-items:center; justify-content:center; border-radius:50%; font-size:15px; cursor:pointer; color:var(--chalk);}
-  .cal-day.other-month{color:var(--mist-dim); opacity:.35; pointer-events:none;}
+  .cal-day.other-month, .cal-day.disabled{color:var(--mist-dim); opacity:.35; pointer-events:none;}
   .cal-day.today{border:1.5px solid var(--mist-dim);}
   .cal-day.selected{background:var(--hivis); color:var(--ink); font-weight:800;}
   .cal-months-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}

@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-15T00:30:00Z';
+const APP_VERSION = '2026-09-15T02:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -48,6 +48,9 @@ const CHANGELOG = [
   {id:'2026-09-keep-data-on-disconnect', key:'changelog_keep_data_on_disconnect'},
   {id:'2026-09-week-rollover-fix', key:'changelog_week_rollover_fix'},
   {id:'2026-09-rating-dismiss', key:'changelog_rating_dismiss'},
+  {id:'2026-09-push-stale-fix', key:'changelog_push_stale_fix'},
+  {id:'2026-09-calendar-bounds-fix', key:'changelog_calendar_bounds_fix'},
+  {id:'2026-09-race-week-double-discount-fix', key:'changelog_race_week_double_discount_fix'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -417,6 +420,19 @@ async function updatePushStatusDisplay(){
   try{
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
+    // El usuario puede revocar el permiso de notificaciones desde la configuración del
+    // navegador/SO sin pasar nunca por este toggle -- ahí la suscripción del browser puede
+    // seguir "viva" (sub no es null) pero Notification.permission ya no es 'granted', así
+    // que ningún push va a llegar de verdad aunque el toggle siguiera mostrando "activadas".
+    // Detectamos ese estado y lo mostramos como apagado, y de paso limpiamos la suscripción
+    // vieja (browser + push_subscriptions) para no seguir intentando mandarle pushes a un
+    // endpoint que el usuario ya cortó del otro lado.
+    if(sub && Notification.permission !== 'granted'){
+      try{ await sub.unsubscribe(); }catch(e){}
+      if(currentUserId){ try{ await supabaseClient.from('push_subscriptions').delete().eq('user_id', currentUserId); }catch(e){} }
+      el.textContent = t('push_disabled'); if(toggle) toggle.checked = false;
+      return;
+    }
     el.textContent = sub ? t('push_enabled') : t('push_disabled');
     if(toggle) toggle.checked = !!sub;
   }catch(e){ el.textContent = t('push_disabled'); if(toggle) toggle.checked = false; }
@@ -884,6 +900,7 @@ async function disconnectStrava(){
       state.shoes.forEach(shoe=>{
         shoe.km = state.runs.filter(r=>String(r.shoeId)===String(shoe.id)).reduce((a,r)=>a+(r.distanceKm||0),0);
       });
+      checkShoeWearAlerts(); // si el km bajó del umbral, hay que soltar wearAlerted para que pueda re-avisar más adelante
     }
     renderHistory(); renderHome(); renderPerfil(); persist();
   }
@@ -958,6 +975,7 @@ async function disconnectPolar(){
       state.shoes.forEach(shoe=>{
         shoe.km = state.runs.filter(r=>String(r.shoeId)===String(shoe.id)).reduce((a,r)=>a+(r.distanceKm||0),0);
       });
+      checkShoeWearAlerts();
     }
     renderHistory(); renderHome(); renderPerfil(); persist();
   }
@@ -1032,6 +1050,7 @@ async function disconnectWahoo(){
       state.shoes.forEach(shoe=>{
         shoe.km = state.runs.filter(r=>String(r.shoeId)===String(shoe.id)).reduce((a,r)=>a+(r.distanceKm||0),0);
       });
+      checkShoeWearAlerts();
     }
     renderHistory(); renderHome(); renderPerfil(); persist();
   }
@@ -1134,6 +1153,7 @@ async function disconnectCoros(){
       state.shoes.forEach(shoe=>{
         shoe.km = state.runs.filter(r=>String(r.shoeId)===String(shoe.id)).reduce((a,r)=>a+(r.distanceKm||0),0);
       });
+      checkShoeWearAlerts();
     }
     renderHistory(); renderHome(); renderPerfil(); persist();
   }
@@ -1277,6 +1297,7 @@ async function disconnectHealthConnect(){
       state.shoes.forEach(shoe=>{
         shoe.km = state.runs.filter(r=>String(r.shoeId)===String(shoe.id)).reduce((a,r)=>a+(r.distanceKm||0),0);
       });
+      checkShoeWearAlerts();
     }
     renderHistory(); renderHome(); renderPerfil();
   }
@@ -1820,6 +1841,23 @@ function setupDateBox(inputId, textId, placeholderKey){
 }
 let calTargetInputId = null, calViewDate = new Date(), calSelectedDate = null;
 let calViewMode = 'days', calYearsRangeStart = 1995;
+// El calendario es un único widget compartido por 6 inputs con reglas muy distintas de qué
+// fecha tiene sentido -- sin límites, por ejemplo ob-birth (nacimiento) aceptaba una fecha en
+// el futuro, y ageFromBirth() la convertía silenciosamente en "10 años" (su piso de Math.max),
+// lo que desactivaba sin aviso la cautela extra por edad (trainingCaution) y la estimación de
+// FC máxima real. Cada entrada acá define, como mucho, un mínimo y/o máximo (YYYY-MM-DD).
+function calBoundsFor(inputId){
+  const today = todayLocalISO();
+  if(inputId === 'ob-birth') return { max: today }; // nadie nace en el futuro
+  if(inputId === 'ob-racedate' || inputId === 'perfil-racedate' || inputId === 'ev-date') return { min: today }; // una carrera objetivo/próxima ya pasada no tiene sentido cargarla como futura
+  if(inputId === 'man-date' || inputId === 'edit-run-date') return { max: today }; // no se puede cargar una carrera que todavía no corriste
+  return {};
+}
+function calDateAllowed(dateStr, bounds){
+  if(bounds.min && dateStr < bounds.min) return false;
+  if(bounds.max && dateStr > bounds.max) return false;
+  return true;
+}
 function openCalendar(inputId){
   calTargetInputId = inputId;
   const input = document.getElementById(inputId);
@@ -1904,6 +1942,7 @@ function renderCalendar(){
   const daysInPrevMonth = new Date(y, m, 0).getDate();
   const today = new Date(); today.setHours(0,0,0,0);
   const selectedTime = calSelectedDate ? new Date(calSelectedDate.getFullYear(), calSelectedDate.getMonth(), calSelectedDate.getDate()).getTime() : null;
+  const bounds = calBoundsFor(calTargetInputId);
 
   let cells = [];
   for(let i=startOffset; i>0; i--) cells.push({day: daysInPrevMonth-i+1, other:true});
@@ -1915,12 +1954,15 @@ function renderCalendar(){
     const cellDate = new Date(y,m,c.day);
     const isToday = cellDate.getTime()===today.getTime();
     const isSelected = selectedTime!==null && cellDate.getTime()===selectedTime;
-    return `<div class="cal-day ${isToday?'today':''} ${isSelected?'selected':''}" onclick="calSelectDay(${c.day})">${c.day}</div>`;
+    const cellDateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(c.day).padStart(2,'0')}`;
+    const isDisabled = !calDateAllowed(cellDateStr, bounds);
+    return `<div class="cal-day ${isToday?'today':''} ${isSelected?'selected':''} ${isDisabled?'disabled':''}" ${isDisabled?'':`onclick="calSelectDay(${c.day})"`}>${c.day}</div>`;
   }).join('');
 }
 function calSelectDay(day){
   const y = calViewDate.getFullYear(), m = calViewDate.getMonth();
   const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  if(!calDateAllowed(dateStr, calBoundsFor(calTargetInputId))) return; // defensivo, por si algo dispara este click igual
   const input = document.getElementById(calTargetInputId);
   input.value = dateStr;
   dateBoxUpdaters[calTargetInputId] && dateBoxUpdaters[calTargetInputId]();
@@ -2301,8 +2343,16 @@ function isEventRaceWeek(weekStartDate){
   const diffDays = Math.round((raceDate - start) / 86400000);
   return diffDays >= 0 && diffDays <= 6;
 }
-function eventRaceWeekMultiplier(weekStartDate){
-  return isEventRaceWeek(weekStartDate) ? 0.75 : 1;
+function eventRaceWeekMultiplier(weekStartDate, p){
+  if(!isEventRaceWeek(weekStartDate)) return 1;
+  // Si la carrera cargada en "Próximos eventos" es LA MISMA que la carrera objetivo de
+  // Perfil > Metas (mismo raceDate), taperMultiplier ya le aplica su propio recorte a esa
+  // semana (0.55, más fuerte que este 0.75) -- sin este chequeo, generatePlan multiplicaba
+  // los dos descuentos entre sí (0.55 * 0.75 = 0.4125) por cargar la misma carrera real en
+  // los dos lugares de la app, dejando el volumen de la semana de carrera mucho más bajo de
+  // lo que cualquiera de los dos mecanismos buscaba por separado.
+  if(p && p.raceDate && state.event && state.event.date === p.raceDate) return 1;
+  return 0.75;
 }
 function autoSkipPastDays(){
   if(!state.onboarded || !state.weekStart) return;
@@ -2783,7 +2833,7 @@ function generatePlan(p, weekNumber, weekStartDate){
   weekStartDate = weekStartDate || state.weekStart;
   const caution = trainingCaution(p);
   const isRecovery = isRecoveryWeek(weekStartDate);
-  const mult = weekMultiplier(weekNumber, caution) * taperMultiplier(p, weekStartDate) * recoveryMultiplier(weekStartDate) * eventRaceWeekMultiplier(weekStartDate);
+  const mult = weekMultiplier(weekNumber, caution) * taperMultiplier(p, weekStartDate) * recoveryMultiplier(weekStartDate) * eventRaceWeekMultiplier(weekStartDate, p);
   const beginner = p.weeklyKm === 0 || p.goal === 'start' || p.runnerType === 'new';
   // si el corredor puso una meta semanal propia, la usamos como referencia de volumen en vez
   // del cálculo genérico -- pero acotada para no saltar de golpe a algo que podría lesionarlo
@@ -7496,6 +7546,7 @@ async function saveEditRun(){
   const newShoe = state.shoes.find(s => String(s.id) === String(newShoeId));
   if(newShoe) newShoe.km += dist;
   checkShoeWearAlerts();
+  checkNewPR(r); // editar una carrera también puede convertirla en récord nuevo
 
   const savedRunId = r.id;
   closeEditRun();
