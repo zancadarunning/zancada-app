@@ -71,9 +71,24 @@ module.exports = withSentry(async (req, res) => {
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
   try {
+    // Sin este chequeo, cuando Supabase devuelve un error (rate limit, timeout, etc.) la
+    // REST API responde con un OBJETO ({code, message, ...}) en vez del array esperado --
+    // (subs || []) no lo detecta porque ese objeto es truthy, así que .forEach/for...of
+    // reventaban más abajo con un TypeError que no decía nada del problema real (Sentry
+    // reportó justamente eso: "forEach is not a function" / "is not iterable", dos veces,
+    // sin ninguna pista de qué había fallado). Mismo chequeo que ya tienen sync-strava.js/
+    // strava-sync-now.js/polar-sync-now.js/wahoo-sync-now.js.
     const statesRes = await fetch(`${base}/rest/v1/app_state?select=user_id,data`, { headers });
+    if (!statesRes.ok) {
+      const body = await statesRes.text().catch(() => '');
+      throw new Error(`app_state fetch failed: ${statesRes.status} ${body}`);
+    }
     const states = await statesRes.json();
     const subsRes = await fetch(`${base}/rest/v1/push_subscriptions?select=user_id,subscription`, { headers });
+    if (!subsRes.ok) {
+      const body = await subsRes.text().catch(() => '');
+      throw new Error(`push_subscriptions fetch failed: ${subsRes.status} ${body}`);
+    }
     const subs = await subsRes.json();
 
     const subsByUser = {};
