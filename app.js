@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-16T17:00:00Z';
+const APP_VERSION = '2026-09-16T18:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -56,6 +56,7 @@ const CHANGELOG = [
   {id:'2026-09-manual-save-flash-close', key:'changelog_manual_save_flash_close'},
   {id:'2026-09-android-back-button', key:'changelog_android_back_button'},
   {id:'2026-09-coach-today-fix', key:'changelog_coach_today_fix'},
+  {id:'2026-09-coach-week-mixup-fix', key:'changelog_coach_week_mixup_fix'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -7813,9 +7814,17 @@ function buildContext(){
   ctx += isTimeMode()
     ? ` Este corredor entrena POR TIEMPO, no por distancia: todas las sesiones, series/pasadas y descansos que le describas o modifiques tienen que estar en minutos (o segundos si son cortos), nunca en km/metros.`
     : ` Este corredor entrena por distancia (km), como es el modo por defecto.`;
-  ctx += ` Plan actual: ${state.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)${d.status?'/'+d.status:''}${d.rating?'/calificó:'+d.rating:''}`).join(', ')}.`;
+  // Antes estos dos planes iban uno pegado al otro, en el mismo párrafo, con el mismo
+  // formato denso -- reportado por un usuario: el coach terminaba mezclando los km de la
+  // semana que viene con los de esta semana (le decía "hoy te toca 6km" cuando ese 6km en
+  // realidad era de martes/jueves de LA SEMANA QUE VIENE, no de hoy). Separarlos en
+  // bloques bien marcados, con su propio título en mayúsculas y una instrucción explícita
+  // de cuándo usar cada uno, hace mucho más difícil que el modelo los confunda -- sobre
+  // todo con un modelo más chico (Haiku), que sigue mejor una estructura clara que un
+  // párrafo largo y denso.
+  ctx += `\n\n=== PLAN DE ESTA SEMANA (semana ${state.weekNumber}, la semana ACTUAL -- usá SIEMPRE este bloque para responder sobre "hoy", "mañana", "ayer" o "esta semana") ===\n${state.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)${d.status?'/'+d.status:''}${d.rating?'/calificó:'+d.rating:''}`).join(', ')}.\n=== FIN plan de esta semana ===`;
   const nw = getNextWeekPlan();
-  ctx += ` Plan de la semana que sigue (semana ${nw.weekNumber}, ya calculado y puede ajustarse un poco según cómo termine esta semana): ${nw.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)`).join(', ')}.`;
+  ctx += `\n\n=== PLAN DE LA SEMANA QUE VIENE (semana ${nw.weekNumber}, todavía NO empezó -- es DISTINTA a la de arriba, ya calculada pero puede ajustarse según cómo termine esta semana. NUNCA uses estos km para responder sobre "hoy" o "mañana", esos están en el bloque de arriba) ===\n${nw.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)`).join(', ')}.\n=== FIN plan de la semana que viene ===\n`;
   return ctx;
 }
 const TOOLS = [
