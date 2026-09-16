@@ -4,7 +4,7 @@ const { applyCors, isPreflight } = require('./_lib/cors');
 
 // Mensajes que sí le mostramos al corredor tal cual, en su idioma. Antes, cualquier error
 // que no fuera "muy solicitado" (token de sesión faltante/vencido, un error interno de la
-// API de Gemini, una excepción de red, la falta de configuración de GEMINI_API_KEY) se le
+// API de Claude, una excepción de red, la falta de configuración de ANTHROPIC_API_KEY) se le
 // mandaba al chat como texto plano y en inglés/técnico -- un amigo probando la app llegó a
 // ver literalmente "Missing token" como si fuera la respuesta del coach. El detalle técnico
 // real ahora se loguea acá (console.error, visible en los logs de Vercel) para que lo
@@ -36,7 +36,7 @@ const GENERIC_ERROR_MSG = {
 // Tope de mensajes por día por usuario -- ver sql/chat_usage.sql para el
 // porqué. 60 es generoso para una conversación normal con el coach (varias
 // idas y vueltas por sesión, todos los días) pero corta un uso en loop o
-// una cuenta comprometida antes de que la cuota de Gemini se dispare.
+// una cuenta comprometida antes de que la cuota de Claude se dispare.
 // Ajustable sin tocar código con la variable de entorno CHAT_DAILY_LIMIT.
 const CHAT_DAILY_LIMIT = parseInt(process.env.CHAT_DAILY_LIMIT, 10) || 60;
 const LIMIT_MSG = {
@@ -61,7 +61,7 @@ module.exports = withSentry(async (req, res) => {
   const { lang } = req.body || {};
 
   // Verificamos que quien llama esté realmente logueado en la app, antes de
-  // gastar la cuota de Gemini en el pedido. Sin esto, cualquiera en internet
+  // gastar la cuota de Claude en el pedido. Sin esto, cualquiera en internet
   // podía pegarle directo a esta URL (sin pasar por la app ni tener cuenta)
   // con su propio "system" y "messages", y la respuesta la pagábamos
   // nosotros — un uso gratis e ilimitado de la API a costa nuestra.
@@ -72,14 +72,14 @@ module.exports = withSentry(async (req, res) => {
     return;
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    console.error('chat: falta configurar GEMINI_API_KEY en las variables de entorno de Vercel.');
+    console.error('chat: falta configurar ANTHROPIC_API_KEY en las variables de entorno de Vercel.');
     res.status(500).json({ error: { message: GENERIC_ERROR_MSG[lang] || GENERIC_ERROR_MSG.es } });
     return;
   }
 
-  // Cortamos ACÁ, antes de gastar nada en Gemini, si el usuario ya mandó
+  // Cortamos ACÁ, antes de gastar nada en Claude, si el usuario ya mandó
   // demasiados mensajes hoy (ver sql/chat_usage.sql). Si por lo que sea la
   // función de Supabase falla (tabla no creada todavía, RPC caída, etc.), lo
   // logueamos pero dejamos pasar el mensaje -- preferimos arriesgarnos a
@@ -110,100 +110,65 @@ module.exports = withSentry(async (req, res) => {
     const { system, tools, messages } = req.body || {};
     const busyMessage = BUSY_MSG[lang] || BUSY_MSG.es;
 
-    const idToName = {};
-    (messages || []).forEach(m => {
-      if (Array.isArray(m.content)) {
-        m.content.forEach(b => { if (b.type === 'tool_use') idToName[b.id] = b.name; });
-      }
-    });
-
-    const contents = (messages || []).map(m => {
-      const role = m.role === 'assistant' ? 'model' : 'user';
-      if (typeof m.content === 'string') return { role, parts: [{ text: m.content }] };
-      const parts = (m.content || []).map(b => {
-        if (b.type === 'text') {
-          const part = { text: b.text };
-          if (b._ts) part.thoughtSignature = b._ts;
-          return part;
-        }
-        if (b.type === 'tool_use') {
-          const part = { functionCall: { name: b.name, args: b.input || {} } };
-          if (b._ts) part.thoughtSignature = b._ts;
-          return part;
-        }
-        if (b.type === 'tool_result') {
-          const name = idToName[b.tool_use_id] || 'resultado';
-          return { functionResponse: { name, response: { content: String(b.content) } } };
-        }
-        return { text: '' };
-      });
-      return { role, parts };
-    });
-
-    const functionDeclarations = (tools || []).map(t => ({
-      name: t.name,
-      description: t.description,
-      parameters: t.input_schema
-    }));
-
-    const model = 'gemini-3.6-flash';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    // A diferencia de Gemini (ver historial de este archivo), acá NO hace falta traducir
+    // nada: el chat en app.js ya arma system/tools/messages directo en el formato nativo
+    // de la API de Anthropic (content blocks type:'text'/'tool_use'/'tool_result',
+    // tools con input_schema) -- de hecho por eso se armó así desde el principio, aunque
+    // hasta ahora esto le pegaba a Gemini con una capa de traducción en el medio. Se los
+    // mandamos prácticamente tal cual.
+    const model = 'claude-haiku-4-5-20251001';
+    const url = 'https://api.anthropic.com/v1/messages';
     const body = JSON.stringify({
-      system_instruction: { parts: [{ text: system }] },
-      contents,
-      tools: functionDeclarations.length ? [{ functionDeclarations }] : undefined
+      model,
+      max_tokens: 1024,
+      system,
+      messages,
+      tools: (tools && tools.length) ? tools : undefined
     });
 
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-    let data, lastError;
+    let data, lastError, lastStatus;
     const delays = [4000, 8000]; // reintenta a los 4s y a los 8s si está saturado
 
-    const isRetryable = (err) => {
+    // Códigos/tipos de error transitorios de la API de Anthropic (ver
+    // https://docs.anthropic.com/en/api/errors): 429 (rate_limit_error) y 529
+    // (overloaded_error) son los que de verdad conviene reintentar -- un error 4xx de
+    // "invalid_request" o "authentication" va a fallar exactamente igual en el reintento,
+    // así que ahí cortamos directo en vez de hacer esperar al corredor 12 segundos de más
+    // para nada.
+    const isRetryable = (status, err) => {
+      if (status === 429 || status === 529 || status === 500 || status === 503) return true;
       if (!err) return false;
-      const text = `${err.status || ''} ${err.message || ''}`;
-      return err.code === 429 || err.code === 503 || /quota|RESOURCE_EXHAUSTED|UNAVAILABLE|overloaded|high demand/i.test(text);
+      return /rate_limit|overloaded|api_error/i.test(err.type || '');
     };
 
     for (let attempt = 0; attempt <= delays.length; attempt++) {
-      const geminiRes = await fetch(url, {
+      const claudeRes = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
         body
       });
-      data = await geminiRes.json();
+      lastStatus = claudeRes.status;
+      data = await claudeRes.json();
 
-      if (!isRetryable(data.error)) break;
+      if (!isRetryable(lastStatus, data.error)) break;
 
       lastError = data.error;
       if (attempt < delays.length) await sleep(delays[attempt]);
     }
 
     if (data.error) {
-      const retryable = isRetryable(lastError || data.error);
-      if (!retryable) console.error('chat: error no reintentable de Gemini —', data.error);
+      const retryable = isRetryable(lastStatus, lastError || data.error);
+      if (!retryable) console.error('chat: error no reintentable de Claude —', lastStatus, data.error);
       const friendlyMessage = retryable ? busyMessage : (GENERIC_ERROR_MSG[lang] || GENERIC_ERROR_MSG.es);
       res.status(200).json({ error: { message: friendlyMessage } });
       return;
     }
 
-    const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
-    let fcCounter = 0;
-    const content = parts.map(p => {
-      if (p.functionCall) {
-        fcCounter++;
-        const block = { type: 'tool_use', id: 'call_' + Date.now() + '_' + fcCounter, name: p.functionCall.name, input: p.functionCall.args || {} };
-        if (p.thoughtSignature) block._ts = p.thoughtSignature;
-        return block;
-      }
-      if (p.text) {
-        const block = { type: 'text', text: p.text };
-        if (p.thoughtSignature) block._ts = p.thoughtSignature;
-        return block;
-      }
-      return null;
-    }).filter(Boolean);
-
-    res.status(200).json({ content });
+    // La respuesta de Anthropic ya trae content: [{type:'text',...}, {type:'tool_use',...}]
+    // en el mismo formato que app.js espera y vuelve a mandar como parte del historial en
+    // el próximo mensaje -- no hace falta reconstruir nada acá, a diferencia de Gemini.
+    res.status(200).json({ content: data.content || [] });
   } catch (err) {
     console.error('chat: excepción no manejada —', err);
     await reportError(err, { endpoint: 'chat' });
