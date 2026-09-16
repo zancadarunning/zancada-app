@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-16T16:00:00Z';
+const APP_VERSION = '2026-09-16T17:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -55,6 +55,7 @@ const CHANGELOG = [
   {id:'2026-09-hist-info-generic-watch', key:'changelog_hist_info_generic_watch'},
   {id:'2026-09-manual-save-flash-close', key:'changelog_manual_save_flash_close'},
   {id:'2026-09-android-back-button', key:'changelog_android_back_button'},
+  {id:'2026-09-coach-today-fix', key:'changelog_coach_today_fix'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -7757,7 +7758,19 @@ function paceMinPerKmOf(r){
 }
 function buildContext(){
   const p = state.profile;
-  let ctx = `Nombre: ${p.name}. Edad aprox: ${ageFromBirth(p.birth)}. Peso: ${p.weight}kg. Altura: ${p.height}cm. Corre ${p.weeklyKm}km/semana (calculado automáticamente según objetivo y fecha de carrera). Terreno: ${p.terrain}. Objetivo: ${t('ob_goal_'+p.goal)}. Zonas de FC (bpm): ${JSON.stringify(p.hrZones)}.`;
+  // Sin esto, el coach no tenía NINGÚN dato explícito de qué día es hoy -- tenía que
+  // adivinarlo mirando qué días del plan ya tienen status (done/skipped), algo frágil
+  // que fallaba apenas la semana recién empezaba o el corredor no había entrenado
+  // todavía esa semana. Reportado por un usuario: le pidió al coach mover el entrenamiento
+  // de "hoy" (un martes) para "mañana", y el coach movió domingo→lunes -- confundió
+  // completamente qué día era. Se lo decimos siempre, explícito y primero, con el
+  // código de DAY_KEYS de hoy y de mañana para que mover_sesion/modificar_sesion/
+  // cancelar_sesion reciban el día correcto sin que el modelo tenga que inferirlo.
+  const todayIdx = (new Date().getDay()+6)%7;
+  const tomorrowIdx = (todayIdx+1)%7;
+  const todayLabel = new Date().toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
+  let ctx = `HOY es ${todayLabel} (código de día: ${DAY_KEYS[todayIdx]}). Mañana es ${t('day_'+DAY_KEYS[tomorrowIdx])} (código: ${DAY_KEYS[tomorrowIdx]}). Usá esto como la referencia exacta para cualquier pedido con "hoy", "mañana", "ayer" u otro día relativo -- nunca lo adivines mirando el estado del plan. `;
+  ctx += `Nombre: ${p.name}. Edad aprox: ${ageFromBirth(p.birth)}. Peso: ${p.weight}kg. Altura: ${p.height}cm. Corre ${p.weeklyKm}km/semana (calculado automáticamente según objetivo y fecha de carrera). Terreno: ${p.terrain}. Objetivo: ${t('ob_goal_'+p.goal)}. Zonas de FC (bpm): ${JSON.stringify(p.hrZones)}.`;
   if(p.trainingDays && p.trainingDays.length) ctx += ` Días de entreno habituales (cronograma de base, permanente): ${p.trainingDays.map(d=>t('day_'+d)).join(', ')}. Si el corredor pide cambiar este cronograma de forma permanente (no solo esta semana), usá modificar_perfil con dias_entreno.`;
   if(p.raceDate){
     const weeksLeft = Math.round((new Date(p.raceDate) - new Date()) / (7*86400000));
