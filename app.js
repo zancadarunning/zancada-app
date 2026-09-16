@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-16T20:00:00Z';
+const APP_VERSION = '2026-09-16T21:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -58,6 +58,7 @@ const CHANGELOG = [
   {id:'2026-09-coach-today-fix', key:'changelog_coach_today_fix'},
   {id:'2026-09-coach-week-mixup-fix', key:'changelog_coach_week_mixup_fix'},
   {id:'2026-09-coach-sunday-taper-fix', key:'changelog_coach_sunday_taper_fix'},
+  {id:'2026-09-skipped-day-repair', key:'changelog_skipped_day_repair'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -2157,6 +2158,7 @@ function enterApp(){
   document.getElementById('perfil-name').value = state.profile.name;
   checkWeekRollover();
   autoSkipPastDays();
+  repairSkippedDaysWithMatchingRuns();
   autoClearPastEvent();
   repairCorruptedCustomDays();
   checkProactiveCoachNudge();
@@ -2199,6 +2201,7 @@ document.addEventListener('visibilitychange', ()=>{
   if(document.hidden || !currentUserId || !state.onboarded) return;
   checkWeekRollover();
   autoSkipPastDays();
+  repairSkippedDaysWithMatchingRuns();
   autoClearPastEvent();
   checkProactiveCoachNudge();
   checkPainCheckins();
@@ -2474,6 +2477,29 @@ function autoSkipPastDays(){
       if(dayIso < createdAt) return; // la cuenta todavía no existía ese día -- no cuenta como perdida
     }
     d.status = 'skipped'; changed = true;
+  });
+  if(changed) persist();
+}
+// Repara días de ESTA semana que quedaron marcados 'skipped' pero en realidad tienen una
+// carrera real ese mismo día local -- típicamente por una sincronización que llegó después
+// de que autoSkipPastDays() ya diera el día por perdido, o por el bug de fecha de
+// Strava/Polar (ya arreglado, ver esos archivos) que atribuía una carrera nocturna al día
+// siguiente y dejaba el día real "salteado" para siempre en el Plan aunque Historial sí
+// tuviera la carrera. autoMarkSessionDone() no alcanza para estos casos porque los runs
+// sincronizados se linkean del lado del servidor (merge_strava_runs.sql y equivalentes), no
+// llamando a esa función -- este repaso corre del lado del cliente, sobre el estado ya
+// fusionado, cada vez que puede haber cambiado (entrar a la app, volver de segundo plano,
+// pull-to-refresh).
+function repairSkippedDaysWithMatchingRuns(){
+  if(!state.onboarded || !state.weekStart || !state.runs.length) return;
+  const weekStartDate = new Date(state.weekStart+'T00:00:00');
+  let changed = false;
+  state.plan.forEach((d,i)=>{
+    if(d.status !== 'skipped' || d.linkedRunId) return;
+    const dayDate = new Date(weekStartDate); dayDate.setDate(dayDate.getDate()+i);
+    const dayIso = `${dayDate.getFullYear()}-${String(dayDate.getMonth()+1).padStart(2,'0')}-${String(dayDate.getDate()).padStart(2,'0')}`;
+    const match = state.runs.find(r => localDateISO(r.date) === dayIso);
+    if(match){ d.status = 'done'; d.linkedRunId = match.id; changed = true; }
   });
   if(changed) persist();
 }
@@ -4874,6 +4900,7 @@ async function doPullRefresh(){
   if(updating) return;
   await refreshStateFromServer();
   autoSkipPastDays();
+  repairSkippedDaysWithMatchingRuns();
   autoClearPastEvent();
   renderAll(); renderHistory();
   if(indicator) setTimeout(()=>{ indicator.style.display='none'; }, 500);
@@ -5693,7 +5720,14 @@ function autoMarkSessionDone(dateIso, runId){
   const monday = getMondayISO(new Date(dateIso));
   if(monday !== state.weekStart) return;
   const idx = (new Date(dateIso).getDay()+6)%7;
-  if(state.plan[idx] && !state.plan[idx].status){ state.plan[idx].status = 'done'; state.plan[idx].linkedRunId = runId; }
+  // 'skipped' además de sin status: un día que autoSkipPastDays() ya había dado por
+  // perdido (por ejemplo por el bug de fecha de Strava/Polar que atribuía una carrera
+  // nocturna al día siguiente -- ver strava/polar-activity-helpers.js) tiene que poder
+  // reclamarse apenas aparece la carrera real de ese día, en vez de quedar "salteado" para
+  // siempre aunque la carrera ya esté en Historial. Un día ya 'done' sí se respeta tal cual
+  // -- no le robamos el link a un run distinto que ya cuenta para ese día.
+  const d = state.plan[idx];
+  if(d && (!d.status || d.status === 'skipped')){ d.status = 'done'; d.linkedRunId = runId; }
 }
 function toggleManualForm(){
   const el = document.getElementById('manual-run-card');
@@ -7647,6 +7681,10 @@ async function saveEditRun(){
   r.durationSec = Math.round(durMin*60);
   if(hr>0){ r.avgHr = hr; if(!r.hrLog || r.hrLog.length<=1) r.hrLog = [{t:0,bpm:hr}]; }
   r.shoeId = newShoeId;
+  // Reclama el día NUEVO si corresponde a esta semana -- antes solo se desvinculaba el día
+  // viejo (arriba) y quedaba huérfano para siempre, incluso si el motivo de editar la fecha
+  // era justamente corregir a qué día pertenecía de verdad la carrera.
+  autoMarkSessionDone(r.date, r.id);
 
   const newShoe = state.shoes.find(s => String(s.id) === String(newShoeId));
   if(newShoe) newShoe.km += dist;
