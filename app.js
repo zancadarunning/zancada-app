@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-16T22:00:00Z';
+const APP_VERSION = '2026-09-16T23:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -63,6 +63,7 @@ const CHANGELOG = [
   {id:'2026-09-reminder-already-done-fix', key:'changelog_reminder_already_done_fix'},
   {id:'2026-09-run-date-confirm-fix', key:'changelog_run_date_confirm_fix'},
   {id:'2026-09-hrmax-spurious-fix', key:'changelog_hrmax_spurious_fix'},
+  {id:'2026-09-route-map-zoom-fix', key:'changelog_route_map_zoom_fix'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -6516,8 +6517,18 @@ function toggleRDMapExpanded(){
   rdSetMapExpanded(!rdMapExpanded);
 }
 document.addEventListener('touchstart', e=>{
-  const mapEl = e.target.closest ? e.target.closest('#rd-map-full') : null;
-  if(!mapEl || e.target.closest('.rd-map-controls')){ rdMapDragging = false; return; }
+  // Antes esto arrancaba con CUALQUIER toque dentro de #rd-map-full (toda la tarjeta del
+  // mapa), no solo la agarradera -- un toque para hacer pinch-zoom en el mapa de Leaflet
+  // (que vive adentro, en #rd-route-map) también contaba como el arranque de "arrastrar
+  // para agrandar/achicar", y el primer temblor del dedo (>8px, algo normal al pellizcar)
+  // disparaba rdRecenterMap() en touchmove -- el mapa volvía solo al encuadre completo de
+  // la ruta, cancelando el zoom que el corredor estaba haciendo. Restringir el arranque a
+  // la agarradera (#rd-map-handle, la única con touch-action:none en el CSS) deja que
+  // Leaflet maneje sus propios gestos de pan/zoom sin que este código se meta.
+  const onHandle = e.target.closest ? e.target.closest('#rd-map-handle') : null;
+  if(!onHandle){ rdMapDragging = false; return; }
+  const mapEl = document.getElementById('rd-map-full');
+  if(!mapEl) return;
   rdMapDragStartY = e.touches[0].clientY;
   rdMapDragStartH = mapEl.getBoundingClientRect().height;
   rdMapDragAxisLocked = false;
