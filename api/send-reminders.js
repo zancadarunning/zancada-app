@@ -119,7 +119,11 @@ module.exports = withSentry(async (req, res) => {
       if (hour !== REMINDER_HOUR) { skipped++; continue; } // todavía no son las 8am en el huso de ESTE usuario
 
       const today = plan[dayIdx];
-      if (!today || !today.dist) { skipped++; continue; } // día de descanso, no molestamos
+      // today.dist sigue siendo el km planeado aunque la sesión ya se haya marcado 'done'
+      // (autoMarkSessionDone en app.js no toca d.dist) -- sin chequear status, alguien que
+      // entrena temprano y ya terminó su sesión antes de las 8am igual recibía el recordatorio
+      // "Hoy toca: ..." como si no hubiera corrido todavía.
+      if (!today || !today.dist || today.status) { skipped++; continue; } // día de descanso o sesión ya resuelta, no molestamos
 
       const lang = MSGS[data.lang] ? data.lang : 'es';
       const typeLabel = today.custom ? today.type : (MSGS[lang].types[today.typeKey] || today.typeKey);

@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-16T21:00:00Z';
+const APP_VERSION = '2026-09-16T22:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -15,7 +15,7 @@ const APP_VERSION = '2026-09-16T21:00:00Z';
 const CHANGELOG = [
   {id:'2026-09-pace-calc', key:'changelog_pace_calc'},
   {id:'2026-09-achievements', key:'changelog_achievements'},
-  {id:'2026-09-social', key:'changelog_social'},
+  {id:'2026-09-social', key:'changelog_social', hidden:true}, // anunciaba una función social que nunca se llegó a construir del lado del cliente (ver auditoría) -- se deja el id para no romper el índice de "ya vistas" de nadie, pero se oculta (ver maybeShowWhatsNew)
   {id:'2026-09-redesign', key:'changelog_redesign'},
   {id:'2026-09-profile-redesign', key:'changelog_profile_redesign'},
   {id:'2026-09-achievements-pr', key:'changelog_achievements_pr'},
@@ -59,6 +59,10 @@ const CHANGELOG = [
   {id:'2026-09-coach-week-mixup-fix', key:'changelog_coach_week_mixup_fix'},
   {id:'2026-09-coach-sunday-taper-fix', key:'changelog_coach_sunday_taper_fix'},
   {id:'2026-09-skipped-day-repair', key:'changelog_skipped_day_repair'},
+  {id:'2026-09-race-phase-event-fix', key:'changelog_race_phase_event_fix'},
+  {id:'2026-09-reminder-already-done-fix', key:'changelog_reminder_already_done_fix'},
+  {id:'2026-09-run-date-confirm-fix', key:'changelog_run_date_confirm_fix'},
+  {id:'2026-09-hrmax-spurious-fix', key:'changelog_hrmax_spurious_fix'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -74,7 +78,11 @@ function maybeShowWhatsNew(){
     return;
   }
   const lastSeenIdx = CHANGELOG.findIndex(c=>c.id===lastSeen);
-  const unseen = lastSeenIdx>=0 ? CHANGELOG.slice(lastSeenIdx+1) : CHANGELOG;
+  // hidden: una entrada que se anunció pero después se decidió no mostrar más (ver el
+  // comentario en la entrada 'social' de CHANGELOG) -- se filtra acá, no se borra del
+  // array, para no correr el índice de nadie que tenga guardado justo ese id como
+  // "última vista".
+  const unseen = (lastSeenIdx>=0 ? CHANGELOG.slice(lastSeenIdx+1) : CHANGELOG).filter(c=>!c.hidden);
   if(!unseen.length) return;
   document.getElementById('whats-new-list').innerHTML = unseen.map(c=>`<li>${t(c.key)}</li>`).join('');
   document.getElementById('whats-new-modal').style.display = 'block';
@@ -3280,16 +3288,28 @@ function renderHome(){
     const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
     const daysToRace = Math.round((new Date(state.event.date+'T00:00:00') - todayMidnight) / 86400000);
     document.getElementById('home-race-days').textContent = Math.max(0, daysToRace);
-    // Fase de entrenamiento respecto a esta carrera -- mismos cortes que usa taperMultiplier()
-    // (menos de 1 semana = puesta a punto final, menos de 3 semanas = puesta a punto ya en
-    // marcha, el resto = fase de carga normal) para que lo que se ve acá en Inicio sea
-    // siempre coherente con el volumen que el plan realmente le está aplicando esta semana.
+    // Fase de entrenamiento respecto a esta carrera. OJO: taperMultiplier() (el recorte
+    // gradual de 3 semanas) solo mira p.raceDate (la carrera OBJETIVO de Perfil > Metas) --
+    // si esta carrera de "Próximos Eventos" es una carrera de PRÁCTICA distinta, el plan NO
+    // baja volumen semanas antes (a propósito, ver changelog_event_plan_decouple), solo la
+    // semana puntual en la que cae (eventRaceWeekMultiplier/isEventRaceWeek). Antes acá se
+    // usaban los mismos cortes de 7/21 días sin importar cuál de los dos casos era, así que
+    // un corredor con su carrera objetivo real recién en meses, pero con una carrera de
+    // práctica cargada para la semana que viene, veía "puesta a punto" en Inicio 3 semanas
+    // seguidas aunque el plan siguiera en carga normal hasta esa semana puntual.
     const phaseTag = document.getElementById('home-race-phase-tag');
     const phaseNote = document.getElementById('home-race-phase-note');
+    const isGoalRace = state.profile.raceDate && state.event.date === state.profile.raceDate;
     let phaseKey, noteKey;
-    if(daysToRace < 7){ phaseKey = 'home_race_phase_taper_final'; noteKey = 'home_race_phase_taper_final_note'; }
-    else if(daysToRace < 21){ phaseKey = 'home_race_phase_taper'; noteKey = 'home_race_phase_taper_note'; }
-    else { phaseKey = 'home_race_phase_build'; noteKey = null; }
+    if(isGoalRace){
+      if(daysToRace < 7){ phaseKey = 'home_race_phase_taper_final'; noteKey = 'home_race_phase_taper_final_note'; }
+      else if(daysToRace < 21){ phaseKey = 'home_race_phase_taper'; noteKey = 'home_race_phase_taper_note'; }
+      else { phaseKey = 'home_race_phase_build'; noteKey = null; }
+    } else if(isEventRaceWeek(state.weekStart)){
+      phaseKey = 'home_race_phase_taper_final'; noteKey = 'home_race_phase_taper_final_note';
+    } else {
+      phaseKey = 'home_race_phase_build'; noteKey = null;
+    }
     phaseTag.textContent = t(phaseKey);
     phaseTag.style.display = 'inline-block';
     if(noteKey){ phaseNote.textContent = t(noteKey); phaseNote.style.display = 'block'; }
@@ -4994,9 +5014,15 @@ function checkHrMaxFromRuns(){
      confiable que la estimación por edad -- si superó lo que tenemos guardado, lo tomamos
      como la nueva FC máxima real, sin esperar a que el corredor se lo cuente a mano al coach
      por chat (que hasta ahora era la única forma de que hrKnown pasara a true). Un tope de
-     220 evita que un pico raro de sensor (glitch del reloj) rompa las zonas. */
-  const observedMax = (state.runs||[]).reduce((max,r)=> (typeof r.maxHr==='number' && r.maxHr>max) ? r.maxHr : max, 0);
-  if(observedMax && observedMax<=220 && observedMax > (state.profile.hrMax||0)){
+     220 evita que un pico raro de sensor (glitch del reloj) rompa las zonas.
+     Exigimos además que el pico se alcance en al menos 2 carreras (no necesariamente
+     consecutivas) antes de adoptarlo -- antes bastaba UN solo run con un pico espurio
+     (glitch del sensor óptico de muñeca, correa floja) para fijar una FC máxima falsa para
+     siempre, descalibrando las zonas de entrenamiento hasta que el corredor lo notara y lo
+     corrigiera a mano. Tomar el 2do valor más alto entre todos los runs (en vez del máximo
+     histórico) exige que al menos dos carreras hayan llegado a esa marca o más. */
+  const observedMax = (state.runs||[]).map(r=>r.maxHr).filter(v=>typeof v==='number' && v<=220).sort((a,b)=>b-a)[1];
+  if(observedMax && observedMax > (state.profile.hrMax||0)){
     state.profile.hrMax = observedMax;
     state.profile.hrKnown = true;
     state.profile.hrZones = computeZones(observedMax);
@@ -5693,7 +5719,12 @@ async function closeSummary(){
   const shoe = state.shoes.find(s=>s.id===shoeId);
   if(shoe) shoe.km += tracker.distanceKm;
   checkShoeWearAlerts();
-  const runDate = new Date().toISOString();
+  // tracker.startedAt (no el reloj actual): si el corredor terminó de correr, tocó
+  // "Finalizar" y recién confirma este resumen más tarde (reabre la app después de medianoche,
+  // por ejemplo, ver el comentario en startRun sobre por qué saved.finished no expira),
+  // usar Date.now() acá le pone a la carrera la fecha del momento de confirmar, no la del
+  // momento real en que corrió -- termina marcando "hecho" el día equivocado del plan.
+  const runDate = new Date(tracker.startedAt || Date.now()).toISOString();
   const runId = Date.now();
   const elev = computeElevationFromPoints(tracker.points);
   const paceSeries = computePaceSeriesFromPoints(tracker.points);
