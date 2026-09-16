@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-16T15:00:00Z';
+const APP_VERSION = '2026-09-16T16:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -54,6 +54,7 @@ const CHANGELOG = [
   {id:'2026-09-no-past-days-onboarding', key:'changelog_no_past_days_onboarding'},
   {id:'2026-09-hist-info-generic-watch', key:'changelog_hist_info_generic_watch'},
   {id:'2026-09-manual-save-flash-close', key:'changelog_manual_save_flash_close'},
+  {id:'2026-09-android-back-button', key:'changelog_android_back_button'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -2200,6 +2201,84 @@ document.addEventListener('visibilitychange', ()=>{
   checkPainCheckins();
   renderAll(); renderHistory(); renderZones();
 });
+/* ================= BOTÓN FÍSICO DE ATRÁS (Android / gesto "atrás" del navegador) =========
+   En una PWA instalada en Android, el botón físico de atrás dispara un evento 'popstate' --
+   como esta es una SPA de una sola página (sin rutas ni más entradas de historial), sin
+   nada de esto ese botón cerraba la APP ENTERA de una, aunque hubiera una pantalla
+   superpuesta abierta (Perfil > Datos personales, el calendario, el detalle de una carrera,
+   etc.) -- reportado en una auditoría. Ahora, cada vez que se abre CUALQUIER overlay/modal
+   (todos comparten la clase .overlay, salvo el reproductor de video de detalle de carrera
+   que usa su propia clase rd-video-overlay), empujamos una entrada al historial del
+   navegador; el botón de atrás la consume y cierra solo esa pantalla en vez de salir de la
+   app. Si no hay ningún overlay abierto, atrás sigue su comportamiento normal (salir de la
+   app / página anterior) -- no interceptamos nada en ese caso.
+
+   Un solo MutationObserver sobre body detecta las aperturas/cierres (mirando la clase
+   overlay-open o el style.display, según el tipo de overlay) en vez de tener que tocar
+   cada una de las ~28 funciones openX()/closeX() de la app -- así ningún cambio futuro en
+   esas funciones puede romper esto sin querer, y viceversa.
+
+   A propósito esto NO cubre el diálogo genérico showConfirm() (el Sí/No para confirmar
+   acciones): ese usa su propia Promise, y esconderle el DOM "desde afuera" la dejaría
+   colgada para siempre en vez de resolverla -- conectarlo bien requiere tocar showConfirm()
+   directamente, no alcanza con el mismo mecanismo genérico de acá. Queda afuera a propósito,
+   como una mejora aparte a futuro si hace falta. */
+const openOverlayStack = [];
+let ignoreNextPopstate = false;
+let closingOverlayFromBackButton = false;
+function isBackHandledOverlay(el){
+  return el instanceof HTMLElement && (el.classList.contains('overlay') || el.id === 'rd-video-overlay');
+}
+function isOverlayCurrentlyVisible(el){
+  if(el.classList.contains('overlay-sheet')) return el.classList.contains('overlay-open');
+  return !!(el.style.display && el.style.display !== 'none');
+}
+function hideOverlayForBack(el){
+  if(el.classList.contains('overlay-sheet')) el.classList.remove('overlay-open');
+  else el.style.display = 'none';
+}
+// typeof MutationObserver !== 'undefined': el harness de tests (test/support/load-app.js)
+// corre app.js en una sandbox de Node con un DOM mínimo simulado, sin MutationObserver ni
+// document.body reales -- sin esta guarda, cargar app.js ahí reventaba directo con
+// "MutationObserver is not defined" y tiraba abajo los 61 tests, no solo los que tocan
+// overlays. En un navegador de verdad esto siempre está disponible.
+if(typeof MutationObserver !== 'undefined' && typeof document !== 'undefined' && document.body){
+  new MutationObserver(muts=>{
+    muts.forEach(m=>{
+      const el = m.target;
+      if(!isBackHandledOverlay(el)) return;
+      const visible = isOverlayCurrentlyVisible(el);
+      const idx = openOverlayStack.indexOf(el);
+      if(visible && idx===-1){
+        openOverlayStack.push(el);
+        history.pushState({zancadaOverlay:true}, '', location.href);
+      } else if(!visible && idx!==-1){
+        openOverlayStack.splice(idx,1);
+        // Si este cierre NO vino de nuestro propio handler de popstate (más abajo), significa
+        // que el usuario lo cerró desde la propia UI (botón X, tocar afuera, etc.) -- hay que
+        // consumir la entrada de historial que habíamos empujado al abrirlo, si no el próximo
+        // atrás no haría nada (la entrada ya "gastada" seguiría ahí).
+        if(!closingOverlayFromBackButton){
+          ignoreNextPopstate = true;
+          history.back();
+        }
+      }
+    });
+  }).observe(document.body, {subtree:true, attributes:true, attributeFilter:['class','style']});
+  window.addEventListener('popstate', ()=>{
+    // Este popstate puede venir de nuestro propio history.back() de arriba (cierre iniciado
+    // por la UI) -- en ese caso no hay que volver a cerrar nada, el DOM ya está escondido.
+    if(ignoreNextPopstate){ ignoreNextPopstate = false; return; }
+    if(!openOverlayStack.length) return; // no hay overlay abierto -- se deja el atrás normal
+    const top = openOverlayStack[openOverlayStack.length-1];
+    closingOverlayFromBackButton = true;
+    hideOverlayForBack(top);
+    // El observer de arriba corre en un microtask aparte (después de este mismo handler) --
+    // recién ahí hay que volver a bajar la bandera, si no la bajamos antes de que el
+    // observer llegue a leerla y terminaría llamando a history.back() de más.
+    queueMicrotask(()=>{ closingOverlayFromBackButton = false; });
+  });
+}
 async function logout(){ await waitForPendingPersist(); await supabaseClient.auth.signOut(); location.reload(); }
 async function resetApp(){
   if(!(await showConfirm(t('reset_confirm_text'), {danger:true, confirmText:t('delete_word')}))) return;
