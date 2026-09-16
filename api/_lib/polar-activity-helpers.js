@@ -33,12 +33,27 @@ function getMondayISO(d) {
   dt.setUTCHours(0, 0, 0, 0);
   return dt.toISOString().slice(0, 10);
 }
+// Polar documenta que exercise.start_time viene en ISO 8601 con el offset REAL del
+// dispositivo (ej. "2026-09-15T21:30:00-03:00" para alguien en Argentina) -- distinto
+// del caso de Strava (start_date_local, sin offset real, solo el reloj de pared). Acá
+// el offset SÍ está, pero justamente por eso start_time.getUTCDay() da mal: ese método
+// convierte primero a UTC y ahí lee el día, perdiendo la fecha local que el offset ya
+// te estaba diciendo directamente. Reportado por un usuario con el mismo síntoma en
+// Strava (corrida de noche que se cargaba al día siguiente) -- incluso sin poder
+// probarlo en vivo contra una cuenta de Polar real, es el mismo patrón de bug. La forma
+// correcta de leer el día LOCAL de un string con offset es tomar los primeros 10
+// caracteres tal cual (el año-mes-día antes de la hora ya es el calendario local,
+// cualquiera sea el offset) en vez de dejar que Date lo convierta a UTC primero.
+function localDatePartFromIso(iso) {
+  return String(iso || '').slice(0, 10);
+}
 
 // exercise: un objeto tal cual lo devuelve GET /v3/exercises (ver schema
 // exerciseHashId). "id" acá es el hashed id de Polar -- estable por
 // ejercicio, sirve como clave de dedupe (polarId).
 function exerciseToRun(exercise) {
-  const startDate = new Date(exercise.start_time);
+  const localDate = localDatePartFromIso(exercise.start_time);
+  const startDate = new Date(localDate + 'T00:00:00Z');
   return {
     id: 'polar_' + exercise.id,
     polarId: exercise.id,
@@ -59,7 +74,7 @@ function exerciseToRun(exercise) {
     series: null,
     shoeId: null,
     source: 'polar',
-    planMonday: getMondayISO(exercise.start_time),
+    planMonday: getMondayISO(localDate),
     planDayIndex: (startDate.getUTCDay() + 6) % 7
   };
 }

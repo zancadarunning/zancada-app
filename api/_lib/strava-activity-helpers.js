@@ -162,7 +162,17 @@ function getMondayISO(d) {
 // run definitivo — no quedan guardados en el run final.
 async function activityToRun(act, accessToken) {
   const streams = accessToken ? await fetchStreams(act.id, accessToken) : { splits: [], series: null, elevationGain: null, elevationLoss: null };
-  const startDate = new Date(act.start_date);
+  // planMonday/planDayIndex tienen que reflejar el día de la semana LOCAL del corredor, no
+  // el de UTC -- reportado por un usuario: corrió de noche en Argentina (UTC-3) y la
+  // carrera se le cargó como del día siguiente. act.start_date es la hora real en UTC (para
+  // eso sirve, y por eso r.date más abajo sigue usándolo tal cual -- el cliente ya sabe
+  // convertir un timestamp UTC a su propio día local, ver localDateISO() en app.js). Pero
+  // acá en el servidor no hay forma de saber en qué huso horario está el corredor sin mirar
+  // profile.tz -- así que usamos start_date_local, que Strava ya manda con el reloj de
+  // pared del corredor en el momento de correr (con formato de timestamp UTC, pero los
+  // números son la hora local -- por eso alcanza con leerla con getUTCDay()/getUTCDate(),
+  // sin necesidad de saber el huso horario real).
+  const startDate = new Date(act.start_date_local || act.start_date);
   return {
     id: 'strava_' + act.id,
     stravaId: act.id,
@@ -187,8 +197,8 @@ async function activityToRun(act, accessToken) {
     series: streams.series,
     shoeId: null,
     source: 'strava',
-    // campos de paso, ver comentario de arriba:
-    planMonday: getMondayISO(act.start_date),
+    // campos de paso, ver comentario de arriba (start_date_local, no start_date):
+    planMonday: getMondayISO(act.start_date_local || act.start_date),
     planDayIndex: (startDate.getUTCDay() + 6) % 7
   };
 }
