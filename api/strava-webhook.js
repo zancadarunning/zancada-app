@@ -95,6 +95,21 @@ module.exports = withSentry(async (req, res) => {
     res.status(200).send('EVENT_RECEIVED');
     try {
       const event = req.body;
+      // Strava, a diferencia de Stripe/GitHub, NO firma sus webhooks -- no hay ningún
+      // secreto ni header para confirmar que un POST acá vino de verdad de ellos. Sin
+      // este chequeo, cualquiera en internet podía forjar un POST tipo
+      // {"object_type":"athlete","object_id":<athlete_id>,"updates":{"authorized":"false"}}
+      // con el athlete_id (público, un entero chico y adivinable) de otra persona y
+      // disparar deauthorizeAthlete() sin ningún acceso -- le borraba la conexión de
+      // Strava y purgaba las carreras sincronizadas a la víctima. La mitigación que
+      // Strava mismo documenta para esto es validar el subscription_id que trae cada
+      // evento contra el de TU suscripción (uno solo, fijo) -- ver STRAVA_SUBSCRIPTION_ID
+      // en las variables de entorno (lo devuelve GET /api/strava-check-subscription).
+      const expectedSubId = process.env.STRAVA_SUBSCRIPTION_ID;
+      if (!expectedSubId || String(event && event.subscription_id) !== String(expectedSubId)) {
+        console.error('strava-webhook: subscription_id no coincide, se ignora el evento', event && event.subscription_id);
+        return;
+      }
       if (event && event.object_type === 'activity' && (event.aspect_type === 'create' || event.aspect_type === 'update')) {
         await syncActivity(event.owner_id, event.object_id);
       } else if (event && event.object_type === 'athlete' && event.updates && event.updates.authorized === 'false') {
