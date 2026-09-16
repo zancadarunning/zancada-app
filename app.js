@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-16T18:00:00Z';
+const APP_VERSION = '2026-09-16T20:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -57,6 +57,7 @@ const CHANGELOG = [
   {id:'2026-09-android-back-button', key:'changelog_android_back_button'},
   {id:'2026-09-coach-today-fix', key:'changelog_coach_today_fix'},
   {id:'2026-09-coach-week-mixup-fix', key:'changelog_coach_week_mixup_fix'},
+  {id:'2026-09-coach-sunday-taper-fix', key:'changelog_coach_sunday_taper_fix'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -7770,7 +7771,16 @@ function buildContext(){
   const todayIdx = (new Date().getDay()+6)%7;
   const tomorrowIdx = (todayIdx+1)%7;
   const todayLabel = new Date().toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
-  let ctx = `HOY es ${todayLabel} (código de día: ${DAY_KEYS[todayIdx]}). Mañana es ${t('day_'+DAY_KEYS[tomorrowIdx])} (código: ${DAY_KEYS[tomorrowIdx]}). Usá esto como la referencia exacta para cualquier pedido con "hoy", "mañana", "ayer" u otro día relativo -- nunca lo adivines mirando el estado del plan. `;
+  // Cuando hoy es domingo (todayIdx=6), "mañana" (lunes, tomorrowIdx=0) es en realidad el
+  // lunes de LA SEMANA QUE VIENE, no el de esta semana -- state.plan solo tiene la semana
+  // actual, así que ese "mon" ya cuenta como pasado para isDayLocked. Sin este aviso, un
+  // pedido de domingo como "movéme lo de hoy para mañana" terminaba rechazado con "ese día
+  // ya pasó", que es confuso: mañana obviamente no pasó todavía.
+  const tomorrowIsNextWeek = todayIdx === 6;
+  const tomorrowNote = tomorrowIsNextWeek
+    ? `, pero OJO: es el ${t('day_'+DAY_KEYS[tomorrowIdx])} de LA SEMANA QUE VIENE, no el de esta semana (hoy es domingo, el último día de la semana actual). Para un pedido sobre "mañana" en este caso: con modificar_sesion o cancelar_sesion usá semana:'siguiente'; mover_sesion NO sirve porque no puede cruzar de una semana a la otra -- si piden mover la sesión de hoy para mañana, usá cancelar_sesion en el día de hoy (dia:'sun') y modificar_sesion con semana:'siguiente' en el lunes que viene, repitiendo el mismo tipo/distancia/zona/terreno que tenía la sesión de hoy`
+    : '';
+  let ctx = `HOY es ${todayLabel} (código de día: ${DAY_KEYS[todayIdx]}). Mañana es ${t('day_'+DAY_KEYS[tomorrowIdx])} (código: ${DAY_KEYS[tomorrowIdx]})${tomorrowNote}. Usá esto como la referencia exacta para cualquier pedido con "hoy", "mañana", "ayer" u otro día relativo -- nunca lo adivines mirando el estado del plan. `;
   ctx += `Nombre: ${p.name}. Edad aprox: ${ageFromBirth(p.birth)}. Peso: ${p.weight}kg. Altura: ${p.height}cm. Corre ${p.weeklyKm}km/semana (calculado automáticamente según objetivo y fecha de carrera). Terreno: ${p.terrain}. Objetivo: ${t('ob_goal_'+p.goal)}. Zonas de FC (bpm): ${JSON.stringify(p.hrZones)}.`;
   if(p.trainingDays && p.trainingDays.length) ctx += ` Días de entreno habituales (cronograma de base, permanente): ${p.trainingDays.map(d=>t('day_'+d)).join(', ')}. Si el corredor pide cambiar este cronograma de forma permanente (no solo esta semana), usá modificar_perfil con dias_entreno.`;
   if(p.raceDate){
@@ -7781,6 +7791,14 @@ function buildContext(){
   if(p.goalNote) ctx += ` Objetivo personal, en sus propias palabras: "${p.goalNote}".`;
   const gapWeeks = detectTrainingGapWeeks(state.weekStart);
   if(gapWeeks >= 2) ctx += ` Hace ${gapWeeks} semanas que no registra una carrera -- si el volumen del plan actual parece bajo, es porque ya se lo redujo automáticamente por esta pausa.`;
+  // Mismo problema que gapWeeks de arriba: generatePlan multiplica el volumen real de esta
+  // semana por taperMultiplier/recoveryMultiplier/eventRaceWeekMultiplier, pero antes el
+  // coach no tenía ningún aviso de cuál de estos aplicaba -- solo veía el plan.weeklyKm
+  // "de crucero" (arriba) contra el plan real (más abajo) sin saber por qué no coinciden,
+  // y podía dar una explicación inventada si le preguntaban por qué bajó el volumen.
+  if(taperMultiplier(p, state.weekStart) < 1) ctx += ` Esta semana el corredor está en la puesta a punto (tapering) antes de su carrera OBJETIVO del ${p.raceDate} -- el volumen de esta semana ya bajó a propósito por eso, es normal y esperable que sea menor a los ${p.weeklyKm}km/semana de crucero.`;
+  if(recoveryMultiplier(state.weekStart) < 1) ctx += ` Esta semana es de recuperación, la que sigue a la carrera que corrió (cargada en "Próximos eventos") -- el volumen bajó a propósito por eso.`;
+  if(eventRaceWeekMultiplier(state.weekStart, p) < 1) ctx += ` Esta semana cae la carrera cargada en "Próximos eventos" -- el volumen de esta semana bajó a propósito, como una semana de descarga más, para no llegar reventado a correrla.`;
   if(p.coachNotes && p.coachNotes.length) ctx += ` Notas permanentes guardadas sobre el corredor (lesiones, preferencias u otros datos a tener en cuenta siempre): ${p.coachNotes.map(n=>`"${n}"`).join('; ')}.`;
   const activePains = activePainEntries();
   if(activePains.length) ctx += ` Molestias activas registradas por el corredor: ${activePains.map(pa=>`${t('pain_body_'+pa.bodyPart)} (desde ${pa.date}${pa.note?', nota: "'+pa.note+'"':''})`).join('; ')}. Tenelas en cuenta al sugerir ejercicios y preguntá cómo siguen si corresponde.`;
@@ -7830,7 +7848,7 @@ function buildContext(){
 const TOOLS = [
   {
     name:"modificar_sesion",
-    description:"Modifica UNA sesión puntual del plan semanal: tipo, distancia, zona de frecuencia cardíaca objetivo, terreno y descripción. Usala cuando el corredor pida un cambio en un día específico, de esta semana o de la que sigue. Si semana es 'actual' y el día pedido ya pasó (o ya se corrió/salteó), la herramienta va a rechazar el cambio -- avisale al corredor que ese día ya cerró y ofrecele ajustar desde hoy en adelante, o la semana que viene.",
+    description:"Modifica UNA sesión puntual del plan semanal: tipo, distancia, zona de frecuencia cardíaca objetivo, terreno y descripción. Usala cuando el corredor pida un cambio en un día específico, de esta semana o de la que sigue. Si semana es 'actual' y el día pedido ya pasó (o ya se corrió/salteó), la herramienta va a rechazar el cambio -- avisale al corredor que ese día ya cerró y ofrecele ajustar desde hoy en adelante, o la semana que viene. IMPORTANTE: incluí siempre distancia_km (o duracion_min) con un valor apropiado para el tipo de sesión NUEVA -- si lo omitís, la sesión se queda con la distancia que tenía ese día ANTES del cambio, que casi nunca tiene sentido para un tipo distinto (ej. no dejes una sesión de 'series' con los 20km que tenía la tirada larga que reemplaza).",
     input_schema:{type:"object", properties:{
       semana:{type:"string", enum:["actual","siguiente"], description:"Si el cambio es para la semana en curso o para la que sigue. Por defecto 'actual'. Ya tenés el plan de ambas semanas en el contexto."},
       dia:{type:"string", enum:DAY_KEYS, description:"Código del día: mon,tue,wed,thu,fri,sat,sun (siempre en estos códigos, sin importar el idioma de la charla)"},

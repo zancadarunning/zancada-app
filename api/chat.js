@@ -120,7 +120,7 @@ module.exports = withSentry(async (req, res) => {
     const url = 'https://api.anthropic.com/v1/messages';
     const body = JSON.stringify({
       model,
-      max_tokens: 1024,
+      max_tokens: 2048,
       system,
       messages,
       tools: (tools && tools.length) ? tools : undefined
@@ -143,13 +143,24 @@ module.exports = withSentry(async (req, res) => {
     };
 
     for (let attempt = 0; attempt <= delays.length; attempt++) {
-      const claudeRes = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-        body
-      });
-      lastStatus = claudeRes.status;
-      data = await claudeRes.json();
+      // fetch() en sí puede tirar (DNS, timeout, conexión cortada entre Vercel y Anthropic) sin
+      // que eso tenga nada que ver con un error que Claude haya devuelto -- antes esto se colaba
+      // directo a la excepción de más abajo y cortaba los reintentos, aunque fuera exactamente
+      // el mismo tipo de falla transitoria que un 429/529 sí reintentaba.
+      try {
+        const claudeRes = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+          body
+        });
+        lastStatus = claudeRes.status;
+        data = await claudeRes.json();
+      } catch (fetchErr) {
+        data = null;
+        lastError = { type: 'network_error', message: String((fetchErr && fetchErr.message) || fetchErr) };
+        if (attempt < delays.length) { await sleep(delays[attempt]); continue; }
+        break;
+      }
 
       if (!isRetryable(lastStatus, data.error)) break;
 
@@ -157,9 +168,10 @@ module.exports = withSentry(async (req, res) => {
       if (attempt < delays.length) await sleep(delays[attempt]);
     }
 
-    if (data.error) {
-      const retryable = isRetryable(lastStatus, lastError || data.error);
-      if (!retryable) console.error('chat: error no reintentable de Claude —', lastStatus, data.error);
+    if (!data || data.error) {
+      const retryable = data ? isRetryable(lastStatus, lastError || data.error) : true;
+      if (!data) console.error('chat: fetch a Claude falló después de reintentos —', lastError);
+      else if (!retryable) console.error('chat: error no reintentable de Claude —', lastStatus, data.error);
       const friendlyMessage = retryable ? busyMessage : (GENERIC_ERROR_MSG[lang] || GENERIC_ERROR_MSG.es);
       res.status(200).json({ error: { message: friendlyMessage } });
       return;
