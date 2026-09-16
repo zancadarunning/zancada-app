@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-15T06:00:00Z';
+const APP_VERSION = '2026-09-16T15:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -13,7 +13,6 @@ const APP_VERSION = '2026-09-15T06:00:00Z';
    texto en sí vive en los locales (changelog_<algo> en cada idioma), como el
    resto de los textos de la app. */
 const CHANGELOG = [
-  {id:'2026-09-gpx-export', key:'changelog_gpx_export'},
   {id:'2026-09-pace-calc', key:'changelog_pace_calc'},
   {id:'2026-09-achievements', key:'changelog_achievements'},
   {id:'2026-09-social', key:'changelog_social'},
