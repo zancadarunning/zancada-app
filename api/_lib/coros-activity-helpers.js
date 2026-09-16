@@ -95,6 +95,16 @@ function isRunningSportCode(sportType) {
   return s.includes('run');
 }
 
+// OJO -- BUG SOSPECHADO, NO CONFIRMADO: getUTCDay() de más abajo (planDayIndex) le da el
+// día de la semana en UTC a partir de startTime. Para Strava y Polar esto causaba que una
+// corrida de noche (pasadas las ~21hs en Argentina, UTC-3) se cargara con la fecha del
+// día SIGUIENTE -- ya arreglado en strava-activity-helpers.js/polar-activity-helpers.js,
+// ver esos comentarios para el detalle de cada arreglo. No se tocó acá todavía porque,
+// además de que el nombre del campo de fecha ya es incierto (ver el comentario grande de
+// activityToRun más abajo), tampoco hay confirmación de si ese valor viene en UTC puro o
+// ya en la hora local del reloj -- no hay forma de confirmarlo sin probarlo contra una
+// cuenta de COROS real conectada. Si un usuario reporta el mismo síntoma con un reloj
+// COROS, este es el primer lugar a revisar.
 function getMondayISO(d) {
   const dt = new Date(d);
   const day = dt.getUTCDay();

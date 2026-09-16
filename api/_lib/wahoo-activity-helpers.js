@@ -14,6 +14,16 @@ function isRunningWorkoutType(workoutTypeId){
   return RUNNING_WORKOUT_TYPE_IDS.has(Number(workoutTypeId));
 }
 
+// OJO -- BUG SOSPECHADO, NO CONFIRMADO: getUTCDay() de más abajo (planDayIndex) le da el
+// día de la semana en UTC a partir de workout.starts. Para Strava y Polar esto causaba
+// que una corrida de noche (pasadas las ~21hs en Argentina, UTC-3) se cargara con la
+// fecha del día SIGUIENTE -- ya arreglado en strava-activity-helpers.js/
+// polar-activity-helpers.js, ver esos comentarios para el detalle de cada arreglo.
+// No se tocó acá todavía porque no hay confirmación de si workout.starts de Wahoo viene
+// en UTC puro o ya en la hora local del dispositivo (la documentación de Wahoo menciona
+// un campo separado "time_zone" en algunos endpoints, pero no hay forma de confirmarlo
+// sin probarlo contra una cuenta real conectada). Si un usuario reporta el mismo síntoma
+// con un reloj Wahoo, este es el primer lugar a revisar.
 function getMondayISO(d){
   const dt = new Date(d);
   const day = dt.getUTCDay();
