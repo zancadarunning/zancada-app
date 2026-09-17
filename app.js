@@ -7992,6 +7992,13 @@ function buildContext(){
   const todayIdx = (new Date().getDay()+6)%7;
   const tomorrowIdx = (todayIdx+1)%7;
   const todayLabel = new Date().toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
+  // Hora actual y huso horario del corredor (p.tz ya se guarda desde el onboarding, hoy solo
+  // se usaba para programar el recordatorio push del lado del servidor -- nunca había llegado
+  // al contexto del coach). Sirve para dos cosas: saber si es de mañana/tarde/noche (para no
+  // sugerir, por ejemplo, salir a correr "ahora mismo" si son las 23hs), y para inferir de qué
+  // parte del mundo es el corredor -- importante para hemisferio (estación del año/clima) y
+  // para no asumir que todos entrenan en el huso horario de Argentina.
+  const nowTimeLabel = new Date().toLocaleTimeString(LOCALE_MAP[lang], {hour:'2-digit', minute:'2-digit', hour12:false});
   // Cuando hoy es domingo (todayIdx=6), "mañana" (lunes, tomorrowIdx=0) es en realidad el
   // lunes de LA SEMANA QUE VIENE, no el de esta semana -- state.plan solo tiene la semana
   // actual, así que ese "mon" ya cuenta como pasado para isDayLocked. Sin este aviso, un
@@ -8001,7 +8008,7 @@ function buildContext(){
   const tomorrowNote = tomorrowIsNextWeek
     ? `, pero OJO: es el ${t('day_'+DAY_KEYS[tomorrowIdx])} de LA SEMANA QUE VIENE, no el de esta semana (hoy es domingo, el último día de la semana actual). Para un pedido sobre "mañana" en este caso: con modificar_sesion o cancelar_sesion usá semana:'siguiente'; mover_sesion NO sirve porque no puede cruzar de una semana a la otra -- si piden mover la sesión de hoy para mañana, usá cancelar_sesion en el día de hoy (dia:'sun') y modificar_sesion con semana:'siguiente' en el lunes que viene, repitiendo el mismo tipo/distancia/zona/terreno que tenía la sesión de hoy`
     : '';
-  let ctx = `HOY es ${todayLabel} (código de día: ${DAY_KEYS[todayIdx]}). Mañana es ${t('day_'+DAY_KEYS[tomorrowIdx])} (código: ${DAY_KEYS[tomorrowIdx]})${tomorrowNote}. Usá esto como la referencia exacta para cualquier pedido con "hoy", "mañana", "ayer" u otro día relativo -- nunca lo adivines mirando el estado del plan. `;
+  let ctx = `HOY es ${todayLabel}, ${nowTimeLabel} hs (código de día: ${DAY_KEYS[todayIdx]}). Mañana es ${t('day_'+DAY_KEYS[tomorrowIdx])} (código: ${DAY_KEYS[tomorrowIdx]})${tomorrowNote}. Usá esto como la referencia exacta para cualquier pedido con "hoy", "mañana", "ayer" u otro día relativo, y para saber si es de mañana/tarde/noche -- nunca lo adivines mirando el estado del plan NI un "hoy es..." que vos mismo hayas dicho en un mensaje anterior de esta charla: los mensajes viejos pueden ser de otro día, así que este dato (el de ESTE mensaje) manda siempre, incluso si contradice algo que dijiste antes.${p.tz ? ` Zona horaria del corredor: ${p.tz} (usala para inferir de qué país/región es -- por ejemplo para saber si está en el hemisferio sur o norte a la hora de hablar de estaciones del año, clima o época de carreras).` : ''} `;
   ctx += `Nombre: ${p.name}. Edad aprox: ${ageFromBirth(p.birth)}. Peso: ${p.weight}kg. Altura: ${p.height}cm. Corre ${p.weeklyKm}km/semana (calculado automáticamente según objetivo y fecha de carrera). Terreno: ${p.terrain}. Objetivo: ${t('ob_goal_'+p.goal)}. Zonas de FC (bpm): ${JSON.stringify(p.hrZones)}.`;
   if(p.trainingDays && p.trainingDays.length) ctx += ` Días de entreno habituales (cronograma de base, permanente): ${p.trainingDays.map(d=>t('day_'+d)).join(', ')}. Si el corredor pide cambiar este cronograma de forma permanente (no solo esta semana), usá modificar_perfil con dias_entreno.`;
   if(p.raceDate){
