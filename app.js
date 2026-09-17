@@ -1803,13 +1803,15 @@ function savePersonalData(){
   const weight = parseWeightInput(document.getElementById('perfil-weight').value);
   const height = parseFloat(document.getElementById('perfil-height').value);
   const terrainChoice = document.querySelector('#perfil-terrain-choice .choice.active');
+  const genderChoice = document.querySelector('#perfil-gender-choice .choice.active');
   const goal = document.getElementById('perfil-goal').value;
   const raceDate = document.getElementById('perfil-racedate').value || null;
   const currentKmInput = document.getElementById('perfil-current-km');
-  const backup = { weight: state.profile.weight, height: state.profile.height, terrain: state.profile.terrain, goal: state.profile.goal, raceDate: state.profile.raceDate, currentWeeklyKm: state.profile.currentWeeklyKm, runnerType: state.profile.runnerType, weeklyKm: state.profile.weeklyKm };
+  const backup = { weight: state.profile.weight, height: state.profile.height, terrain: state.profile.terrain, gender: state.profile.gender, goal: state.profile.goal, raceDate: state.profile.raceDate, currentWeeklyKm: state.profile.currentWeeklyKm, runnerType: state.profile.runnerType, weeklyKm: state.profile.weeklyKm };
   if(weight>0) state.profile.weight = weight;
   if(height>0) state.profile.height = height;
   if(terrainChoice) state.profile.terrain = terrainChoice.dataset.v;
+  if(genderChoice) state.profile.gender = genderChoice.dataset.v;
   if(goal) state.profile.goal = goal;
   state.profile.raceDate = raceDate;
   if(currentKmInput && currentKmInput.value !== ''){
@@ -1862,6 +1864,11 @@ document.getElementById('perfil-terrain-choice').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('perfil-terrain-choice').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
   markPerfilDirty('personal'); // toggle de clase, no dispara 'change' -- hay que marcarlo a mano
+});
+document.getElementById('perfil-gender-choice').addEventListener('click', e=>{
+  const c=e.target.closest('.choice'); if(!c) return;
+  [...document.getElementById('perfil-gender-choice').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
+  markPerfilDirty('personal');
 });
 function ageFromBirth(dateStr){ const b=new Date(dateStr); return Math.max(10, Math.floor((Date.now()-b.getTime())/(365.25*24*3600*1000))); }
 const dateBoxUpdaters = {};
@@ -4082,6 +4089,10 @@ function renderPerfil(){
     document.getElementById('perfil-racedate').value = p.raceDate || '';
     dateBoxUpdaters['perfil-racedate'] && dateBoxUpdaters['perfil-racedate']();
     [...document.getElementById('perfil-terrain-choice').children].forEach(c=>c.classList.toggle('active', c.dataset.v===p.terrain));
+    // Sin género guardado todavía (cuentas de antes de este campo, o quien lo dejó sin
+    // elegir en el onboarding) no marcamos ninguna opción -- forzar "x" acá pisaría el
+    // guardado con un valor que la persona nunca eligió, apenas abra este panel.
+    [...document.getElementById('perfil-gender-choice').children].forEach(c=>c.classList.toggle('active', c.dataset.v===p.gender));
   }
   const editingGoals = ['perfil-weekly-goal','perfil-goal-note'].includes(document.activeElement && document.activeElement.id);
   if(!editingGoals){
