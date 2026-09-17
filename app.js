@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-17T03:00:00Z';
+const APP_VERSION = '2026-09-17T03:15:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -68,6 +68,7 @@ const CHANGELOG = [
   {id:'2026-09-live-map-follow-fix', key:'changelog_live_map_follow_fix'},
   {id:'2026-09-rd-map-recenter-visibility', key:'changelog_rd_map_recenter_visibility'},
   {id:'2026-09-coros-auto-sync', key:'changelog_coros_auto_sync'},
+  {id:'2026-09-wahoo-polar-auto-sync', key:'changelog_wahoo_polar_auto_sync'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
