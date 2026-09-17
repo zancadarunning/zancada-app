@@ -1476,6 +1476,27 @@ document.getElementById('ob-trainby').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('ob-trainby').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
 });
+document.getElementById('ob-returning').addEventListener('click', e=>{
+  const c=e.target.closest('.choice'); if(!c) return;
+  [...document.getElementById('ob-returning').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
+});
+document.getElementById('ob-pregnancy').addEventListener('click', e=>{
+  const c=e.target.closest('.choice'); if(!c) return;
+  [...document.getElementById('ob-pregnancy').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
+});
+document.getElementById('ob-gender').addEventListener('click', e=>{
+  const c=e.target.closest('.choice'); if(!c) return;
+  [...document.getElementById('ob-gender').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
+  // El toggle de embarazo/postparto solo tiene sentido si eligió "femenino" -- para
+  // cualquier otra opción lo ocultamos y lo dejamos en "no" por las dudas, así un
+  // corredor que cambia de género después de haberlo tildado por error no deja
+  // ese dato viejo sin que se vea.
+  const isF = c.dataset.v==='f';
+  document.getElementById('ob-pregnancy-wrap').style.display = isF?'block':'none';
+  if(!isF){
+    [...document.getElementById('ob-pregnancy').children].forEach(x=>x.classList.toggle('active', x.dataset.v==='no'));
+  }
+});
 document.getElementById('perfil-trainby-toggle').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('perfil-trainby-toggle').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
@@ -2057,6 +2078,23 @@ async function finishOnboard(){
   const age = ageFromBirth(birth);
   const hrMax = estimateHrMax(age);
   const hrKnown = false;
+  const gender = document.querySelector('#ob-gender .choice.active')?.dataset.v || 'x';
+  // El toggle de embarazo/postparto solo se lee si eligió "femenino" -- si cambió de
+  // género después de haberlo tildado, el wrap queda oculto y en "no" (ver el handler de
+  // #ob-gender más arriba), así que leer el valor tal cual está en el DOM ya alcanza.
+  const pregnancyPostpartum = gender==='f' && document.querySelector('#ob-pregnancy .choice.active')?.dataset.v === 'yes';
+  const healthNotes = document.getElementById('ob-healthnotes').value.trim().slice(0,200);
+  const returningFromBreak = runnerType==='active' && document.querySelector('#ob-returning .choice.active')?.dataset.v === 'yes';
+  // Marca de referencia reciente (opcional): si la carga, sirve para calibrar el ritmo
+  // base desde el día 1 en vez de depender del valor genérico (ver estimateBasePaceMinPerKm)
+  // hasta que tenga 3+ carreras registradas.
+  const refRaceDistRaw = parseFloat(document.getElementById('ob-refrace-dist').value);
+  const refRaceMinRaw = parseFloat(document.getElementById('ob-refrace-min').value);
+  const refRace = (runnerType==='active' && refRaceDistRaw>0 && refRaceMinRaw>0)
+    ? { distanceKm: refRaceDistRaw, durationSec: Math.round(refRaceMinRaw*60), date: todayLocalISO() }
+    : null;
+  const availableMinRaw = parseFloat(document.getElementById('ob-availmin').value);
+  const availableMinPerSession = availableMinRaw>0 ? Math.round(availableMinRaw) : null;
 
   // profile.tz guarda el huso horario del CELULAR del corredor (ej. "America/New_York"
   // para un amigo en Estados Unidos, distinto al nuestro en Argentina) -- lo usa el
@@ -2069,7 +2107,7 @@ async function finishOnboard(){
   // esto, alguien que se sumaba un martes con lunes/miércoles/viernes como días de
   // entrenamiento veía el lunes (e incluso el domingo previo) ya marcado como sesión
   // perdida, cuando en realidad todavía ni tenía cuenta esos días.
-  state.profile = {email:pendingEmail, name, weight, height, birth, terrain, trainBy, trainingDays: trainingDays.length?trainingDays:['tue','thu','sun'], goal, raceDate, runnerType, currentWeeklyKm, hrMax, hrKnown, hrZones:computeZones(hrMax), tz:detectDeviceTz(), createdAt: todayLocalISO()};
+  state.profile = {email:pendingEmail, name, weight, height, birth, gender, pregnancyPostpartum, hasInjuryNote: !!healthNotes, coachNotes: healthNotes ? [healthNotes] : [], terrain, trainBy, trainingDays: trainingDays.length?trainingDays:['tue','thu','sun'], goal, raceDate, runnerType, currentWeeklyKm, returningFromBreak, refRace, availableMinPerSession, hrMax, hrKnown, hrZones:computeZones(hrMax), tz:detectDeviceTz(), createdAt: todayLocalISO()};
   state.profile.weeklyKm = calcWeeklyKm(state.profile);
   state.weekNumber = 1;
   state.weekStart = getMondayISO(new Date());
@@ -2376,7 +2414,13 @@ const GOAL_PEAK_KM = {start:18, '5k':25, '10k':35, '15k':42, '21k':50, '42k':65,
 function calcWeeklyKm(profile){
   const peak = GOAL_PEAK_KM[profile.goal] || 20;
   if(profile.runnerType==='active' && profile.currentWeeklyKm>0){
-    return Math.round(profile.currentWeeklyKm); // arranca desde su realidad actual, no de una fórmula genérica
+    const base = Math.round(profile.currentWeeklyKm); // arranca desde su realidad actual, no de una fórmula genérica
+    // Si viene de una pausa larga, ese volumen "actual" declarado es en realidad el que
+    // tenía ANTES de parar -- arrancar ahí de nuevo, de golpe, es un patrón clásico de
+    // lesión por sobrecarga. Empezamos más abajo y dejamos que weekMultiplier (con la
+    // progresión más lenta que ya le da el caution.level>=1 de este perfil) lo vaya
+    // recuperando de a poco en las semanas siguientes.
+    return profile.returningFromBreak ? Math.round(base*0.6) : base;
   }
   const base = peak / 1.8; // punto de partida que, con la progresión normal, llega al pico
   if(profile.raceDate){
@@ -2967,6 +3011,13 @@ function trainingCaution(p){
   // hardSessionRotation) y una progresión de volumen más lenta (ver weekMultiplier),
   // hasta que el corredor la marque como resuelta desde Perfil.
   if(activePainEntries(21).length) level = Math.max(level, 1);
+  // Embarazo/postparto reciente, una lesión o condición médica declarada en el
+  // onboarding, o volver de una pausa larga: mismo criterio conservador que la edad/IMC,
+  // se combinan con Math.max en vez de sumarse, así ningún combo de señales empuja el
+  // nivel más allá de 2 (el techo que ya define weekMultiplier/hardSessionRotation).
+  if(p.pregnancyPostpartum) level = Math.max(level, 2);
+  if(p.hasInjuryNote) level = Math.max(level, 1);
+  if(p.returningFromBreak) level = Math.max(level, 1);
   return { age, bmi, level };
 }
 function generatePlan(p, weekNumber, weekStartDate){
@@ -3051,7 +3102,13 @@ function estimateBasePaceMinPerKm(profile){
     const paces = recent.map(r=>(r.durationSec/60)/r.distanceKm);
     return paces.reduce((a,b)=>a+b,0)/paces.length;
   }
-  const anyPR = Object.values(getPersonalRecords())[0];
+  // Sin carreras registradas todavía, usamos la marca de referencia que haya cargado en
+  // el onboarding (ob-refrace-dist/min) antes de caer al valor genérico por perfil -- así
+  // alguien con una marca real conocida arranca con ritmos calibrados desde el día 1, en
+  // vez de esperar a acumular 3 carreras para que este cálculo deje de ser un promedio
+  // fijo por perfil (7.5/6.2).
+  const anyPR = Object.values(getPersonalRecords())[0]
+    || (profile.refRace && profile.refRace.distanceKm>0 && profile.refRace.durationSec>0 ? profile.refRace : null);
   if(anyPR && anyPR.distanceKm>0 && anyPR.durationSec>0){
     return (anyPR.durationSec/60)/anyPR.distanceKm + 1.3;
   }
@@ -6053,6 +6110,11 @@ function predictRaceTime(targetKm){
   // (D2/D1)^1.06), usando como referencia la marca personal más cercana en distancia
   // (cuanto más parecidas son las distancias, más confiable es la proyección).
   const records = Object.values(getPersonalRecords());
+  // Misma lógica que estimateBasePaceMinPerKm: si todavía no hay carreras registradas
+  // como para tener una PR real, la marca de referencia del onboarding sirve igual de
+  // base para la proyección de Riegel.
+  const refRace = state.profile && state.profile.refRace;
+  if(refRace && refRace.distanceKm>0 && refRace.durationSec>0) records.push(refRace);
   if(!records.length) return null;
   let best = null, bestDiff = Infinity;
   records.forEach(rec=>{
@@ -7948,6 +8010,8 @@ function buildContext(){
   if(recoveryMultiplier(state.weekStart) < 1) ctx += ` Esta semana es de recuperación, la que sigue a la carrera que corrió (cargada en "Próximos eventos") -- el volumen bajó a propósito por eso.`;
   if(eventRaceWeekMultiplier(state.weekStart, p) < 1) ctx += ` Esta semana cae la carrera cargada en "Próximos eventos" -- el volumen de esta semana bajó a propósito, como una semana de descarga más, para no llegar reventado a correrla.`;
   if(p.coachNotes && p.coachNotes.length) ctx += ` Notas permanentes guardadas sobre el corredor (lesiones, preferencias u otros datos a tener en cuenta siempre): ${p.coachNotes.map(n=>`"${n}"`).join('; ')}.`;
+  if(p.pregnancyPostpartum) ctx += ` El corredor indicó en el onboarding que está embarazada o dio a luz en los últimos 6 meses -- el plan ya se generó con volumen e intensidad reducidos por precaución. Si pregunta por esto, recordale que consulte con su médico/a antes de cualquier cambio de intensidad; no le des indicaciones médicas específicas vos.`;
+  if(p.availableMinPerSession) ctx += ` Dispone de unos ${p.availableMinPerSession} minutos en promedio por sesión entre semana -- si una sesión calculada se pasa bastante de ese tiempo, comentáselo y ofrecé ajustarla.`;
   const activePains = activePainEntries();
   if(activePains.length) ctx += ` Molestias activas registradas por el corredor: ${activePains.map(pa=>`${t('pain_body_'+pa.bodyPart)} (desde ${pa.date}${pa.note?', nota: "'+pa.note+'"':''})`).join('; ')}. Tenelas en cuenta al sugerir ejercicios y preguntá cómo siguen si corresponde.`;
   const todayReadiness = todayReadinessEntry();

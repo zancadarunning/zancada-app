@@ -1272,6 +1272,25 @@
         <div class="date-box" role="button" tabindex="0" data-i18n-aria="ob_birth_label" onclick="openCalendar('ob-birth','ob-birth-text')"><span class="date-box-text" id="ob-birth-text"></span></div>
         <input type="hidden" id="ob-birth">
       </div>
+      <div class="field">
+        <label id="ob-gender-label" data-i18n="ob_gender_label"></label>
+        <div class="choice-row" id="ob-gender" role="group" aria-labelledby="ob-gender-label">
+          <div class="choice" data-v="f" data-i18n="ob_gender_f"></div>
+          <div class="choice" data-v="m" data-i18n="ob_gender_m"></div>
+          <div class="choice active" data-v="x" data-i18n="ob_gender_x"></div>
+        </div>
+        <div id="ob-pregnancy-wrap" style="margin-top:14px; display:none;">
+          <label id="ob-pregnancy-label" data-i18n="ob_pregnancy_label"></label>
+          <div class="choice-row segmented" id="ob-pregnancy" role="group" aria-labelledby="ob-pregnancy-label">
+            <div class="choice" data-v="yes" data-i18n="ob_pregnancy_yes"></div>
+            <div class="choice active" data-v="no" data-i18n="ob_pregnancy_no"></div>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="ob-healthnotes" data-i18n="ob_healthnotes_label"></label>
+        <textarea id="ob-healthnotes" rows="2" data-i18n-ph="ob_healthnotes_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+      </div>
       <p class="muted" style="margin-top:10px; font-size:12px;" data-i18n="ob_step2_hint"></p>
       <div class="field"><button class="btn btn-primary" data-i18n="login_continue" onclick="obNextStep()"></button></div>
     </div>
@@ -1287,6 +1306,32 @@
         <div id="ob-currentkm-wrap" style="margin-top:14px; display:none;">
           <label for="ob-currentkm" data-i18n="ob_currentkm_label"></label>
           <input type="number" id="ob-currentkm" placeholder="20" min="0" max="200">
+          <div style="margin-top:14px;">
+            <label id="ob-returning-label" data-i18n="ob_returning_label"></label>
+            <div class="choice-row segmented" id="ob-returning" role="group" aria-labelledby="ob-returning-label">
+              <div class="choice" data-v="yes" data-i18n="ob_returning_yes"></div>
+              <div class="choice active" data-v="no" data-i18n="ob_returning_no"></div>
+            </div>
+          </div>
+          <div style="margin-top:14px;">
+            <label data-i18n="ob_refrace_label"></label>
+            <p class="muted" style="font-size:12px; margin:2px 0 8px;" data-i18n="ob_refrace_hint"></p>
+            <div class="two-col">
+              <div class="field" style="margin:0;">
+                <select id="ob-refrace-dist">
+                  <option value="" data-i18n="ob_refrace_none"></option>
+                  <option value="5">5K</option>
+                  <option value="10">10K</option>
+                  <option value="15">15K</option>
+                  <option value="21.0975">21K</option>
+                  <option value="42.195">42K</option>
+                </select>
+              </div>
+              <div class="field" style="margin:0;">
+                <input type="number" id="ob-refrace-min" min="0" data-i18n-ph="ob_refrace_min_ph">
+              </div>
+            </div>
+          </div>
         </div>
         <p class="muted" id="ob-newrunner-note" style="margin-top:8px;" data-i18n="ob_newrunner_note"></p>
       </div>
@@ -1321,6 +1366,10 @@
           <div class="day-pill" data-v="sat"></div>
           <div class="day-pill active" data-v="sun"></div>
         </div>
+      </div>
+      <div class="field">
+        <label for="ob-availmin" data-i18n="ob_availmin_label"></label>
+        <input type="number" id="ob-availmin" placeholder="45" min="10" max="240">
       </div>
       <div class="field"><button class="btn btn-primary" data-i18n="login_continue" onclick="obNextStep()"></button></div>
     </div>
