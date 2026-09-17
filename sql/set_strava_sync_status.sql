@@ -68,3 +68,8 @@ BEGIN
   UPDATE public.app_state SET data = v_data WHERE user_id = p_user_id;
 END;
 $$;
+
+-- Sin esto, cualquiera con la clave pública podría llamar esta función
+-- directo por /rest/v1/rpc/set_strava_sync_status con el p_user_id de OTRO
+-- usuario y pisarle el estado de sincronización -- ver revoke_merge_runs_execute.sql.
+REVOKE EXECUTE ON FUNCTION public.set_strava_sync_status(uuid, jsonb) FROM PUBLIC, anon, authenticated;

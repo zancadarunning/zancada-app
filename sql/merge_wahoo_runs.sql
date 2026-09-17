@@ -100,3 +100,8 @@ BEGIN
   WHERE user_id = p_user_id;
 END;
 $$;
+
+-- Sin esto, cualquiera con la clave pública podría llamar esta función
+-- directo por /rest/v1/rpc/merge_wahoo_runs con el p_user_id de OTRO
+-- usuario y pisarle las carreras -- ver revoke_merge_runs_execute.sql.
+REVOKE EXECUTE ON FUNCTION public.merge_wahoo_runs(uuid, jsonb, text) FROM PUBLIC, anon, authenticated;
