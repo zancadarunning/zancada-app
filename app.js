@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-17T01:30:00Z';
+const APP_VERSION = '2026-09-17T02:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -5156,6 +5156,11 @@ let liveMap, liveMarker, startMarker, livePolyline;
 // solo a la posición actual apenas el dedo se despegaba de la pantalla, deshaciendo
 // cualquier intento de mirar otra parte del mapa mientras corre.
 let liveMapFollowing = true;
+// Ventana chica para distinguir un setView() NUESTRO (updateLiveMap/recenterMap) de un
+// zoom/arrastre real del corredor -- dragstart/zoomstart de Leaflet no traen esa
+// información, así que marcamos el instante justo antes de cada setView propio y, si el
+// evento llega dentro de esta ventana, lo ignoramos.
+let liveMapProgrammaticMoveAt = 0;
 let wakeLockSentinel = null;
 
 async function requestWakeLock(){ try{ if('wakeLock' in navigator) wakeLockSentinel = await navigator.wakeLock.request('screen'); }catch(e){} }
@@ -5486,10 +5491,13 @@ function initLiveMap(){
   liveMarker = null; startMarker = null;
   liveMapFollowing = true;
   document.querySelector('.map-recenter-btn')?.classList.remove('visible');
-  // dragstart de Leaflet solo dispara con una interacción real del usuario (arrastre táctil o
-  // de mouse), no con los setView() automáticos de acá abajo -- es la señal correcta para
-  // "el corredor quiere mirar otra parte del mapa, dejá de perseguirlo".
-  liveMap.on('dragstart', ()=>{
+  // dragstart/zoomstart de Leaflet también disparan con nuestros propios setView() de acá
+  // abajo (no solo con un gesto real del corredor) -- liveMapProgrammaticMoveAt filtra esos
+  // casos. Antes solo escuchaba 'dragstart', así que hacer zoom (pellizcar, doble tap) sin
+  // mover el mapa no mostraba el botón de recentrar, y el siguiente punto GPS lo deshacía
+  // igual que antes de este arreglo.
+  liveMap.on('dragstart zoomstart', ()=>{
+    if(Date.now() - liveMapProgrammaticMoveAt < 50) return;
     liveMapFollowing = false;
     document.querySelector('.map-recenter-btn')?.classList.add('visible');
   });
@@ -5506,12 +5514,16 @@ function updateLiveMap(lat, lon){
   // más liviana y el resultado visual es idéntico.
   if(liveMarker){ liveMarker.setLatLng([lat,lon]); }
   else{ liveMarker = L.circleMarker([lat,lon], {radius:8, color:'#121415', weight:3, fillColor:'#D6FF3F', fillOpacity:1}).addTo(liveMap); }
-  if(liveMapFollowing) liveMap.setView([lat,lon], Math.max(liveMap.getZoom(),16));
+  if(liveMapFollowing){
+    liveMapProgrammaticMoveAt = Date.now();
+    liveMap.setView([lat,lon], Math.max(liveMap.getZoom(),16));
+  }
 }
 function recenterMap(){
   if(!liveMap || !liveMarker) return;
   liveMapFollowing = true;
   document.querySelector('.map-recenter-btn')?.classList.remove('visible');
+  liveMapProgrammaticMoveAt = Date.now();
   liveMap.setView(liveMarker.getLatLng(), 17);
 }
 function startRun(){
