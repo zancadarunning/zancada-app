@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-16T23:00:00Z';
+const APP_VERSION = '2026-09-17T01:00:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -64,6 +64,8 @@ const CHANGELOG = [
   {id:'2026-09-run-date-confirm-fix', key:'changelog_run_date_confirm_fix'},
   {id:'2026-09-hrmax-spurious-fix', key:'changelog_hrmax_spurious_fix'},
   {id:'2026-09-route-map-zoom-fix', key:'changelog_route_map_zoom_fix'},
+  {id:'2026-09-mapbox-switch', key:'changelog_mapbox_switch'},
+  {id:'2026-09-live-map-follow-fix', key:'changelog_live_map_follow_fix'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -5148,6 +5150,12 @@ function updateRecordingLabel(){
   }
 }
 let liveMap, liveMarker, startMarker, livePolyline;
+// true mientras el mapa en vivo sigue solo la posición del corredor. Se apaga apenas el
+// corredor arrastra el mapa a mano (para mirar algo alrededor) -- sin esto, cada punto GPS
+// nuevo (varias veces por minuto) llamaba a setView() sin importar nada, y el mapa volvía
+// solo a la posición actual apenas el dedo se despegaba de la pantalla, deshaciendo
+// cualquier intento de mirar otra parte del mapa mientras corre.
+let liveMapFollowing = true;
 let wakeLockSentinel = null;
 
 async function requestWakeLock(){ try{ if('wakeLock' in navigator) wakeLockSentinel = await navigator.wakeLock.request('screen'); }catch(e){} }
@@ -5457,12 +5465,31 @@ function computePaceSeriesFromPoints(points){
   }
   return out.t.length>=2 ? out : null;
 }
+// Token público de Mapbox (pensado para vivir en el cliente, a diferencia de la clave de
+// Anthropic -- restringido en el dashboard de Mapbox a zancada.org/localhost, así que aunque
+// cualquiera lo vea en el código no sirve desde otro dominio). Estilo "streets-v12": el
+// equivalente de Mapbox al look tipo Google Maps que ya buscaba Voyager, con mejor
+// tipografía/detalle. 256px fijo (sin @2x) porque MAP_TILE_SIZE de más abajo asume ese
+// tamaño para el mosaico de la cámara dinámica del video de carrera.
+const MAPBOX_TOKEN = 'pk.eyJ1IjoiemFuY2FkYSIsImEiOiJjbXU0cm9sbGEwM2tzMndwczE4emExdzVnIn0.kzrV4ltOY_PjTd_YIuh1vQ';
+const MAPBOX_STYLE = 'streets-v12';
+const MAPBOX_TILE_URL = `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/tiles/256/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
+const MAPBOX_ATTRIBUTION = '&copy; <a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noopener">Mapbox</a> &copy; OpenStreetMap contributors';
 function initLiveMap(){
   if(liveMap){ liveMap.remove(); liveMap=null; }
   liveMap = L.map('liveMap', {zoomControl:false, attributionControl:true}).setView([0,0], 15);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=cb1_2i8k_1_882919874396f1a734cae151', {maxZoom:20, attribution:'&copy; OpenStreetMap contributors &copy; CARTO'}).addTo(liveMap);
+  L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20, attribution:MAPBOX_ATTRIBUTION}).addTo(liveMap);
   livePolyline = L.polyline([], {color:'#0B5D2E', weight:5, lineCap:'round', lineJoin:'round'}).addTo(liveMap);
   liveMarker = null; startMarker = null;
+  liveMapFollowing = true;
+  document.querySelector('.map-recenter-btn')?.classList.remove('visible');
+  // dragstart de Leaflet solo dispara con una interacción real del usuario (arrastre táctil o
+  // de mouse), no con los setView() automáticos de acá abajo -- es la señal correcta para
+  // "el corredor quiere mirar otra parte del mapa, dejá de perseguirlo".
+  liveMap.on('dragstart', ()=>{
+    liveMapFollowing = false;
+    document.querySelector('.map-recenter-btn')?.classList.add('visible');
+  });
   setTimeout(()=>{ if(liveMap) liveMap.invalidateSize(); }, 250);
 }
 function updateLiveMap(lat, lon){
@@ -5476,10 +5503,13 @@ function updateLiveMap(lat, lon){
   // más liviana y el resultado visual es idéntico.
   if(liveMarker){ liveMarker.setLatLng([lat,lon]); }
   else{ liveMarker = L.circleMarker([lat,lon], {radius:8, color:'#121415', weight:3, fillColor:'#D6FF3F', fillOpacity:1}).addTo(liveMap); }
-  liveMap.setView([lat,lon], Math.max(liveMap.getZoom(),16));
+  if(liveMapFollowing) liveMap.setView([lat,lon], Math.max(liveMap.getZoom(),16));
 }
 function recenterMap(){
-  if(liveMap && liveMarker) liveMap.setView(liveMarker.getLatLng(), 17);
+  if(!liveMap || !liveMarker) return;
+  liveMapFollowing = true;
+  document.querySelector('.map-recenter-btn')?.classList.remove('visible');
+  liveMap.setView(liveMarker.getLatLng(), 17);
 }
 function startRun(){
   if(!navigator.geolocation){ document.getElementById('geo-warning').style.display='block'; document.getElementById('geo-warning').textContent=t('geo_err_support'); return; }
@@ -6302,7 +6332,7 @@ function renderHistory(){
     const el = document.getElementById('hist-map-'+r.id);
     if(!el) return;
     const map = L.map(el, {zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, touchZoom:false, boxZoom:false, keyboard:false});
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=cb1_2i8k_1_882919874396f1a734cae151', {maxZoom:20}).addTo(map);
+    L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20}).addTo(map);
     const latlngs = r.points.map(p=>[p.lat,p.lon]);
     const poly = L.polyline(latlngs, {color:'#0B5D2E', weight:3, lineCap:'round', lineJoin:'round'}).addTo(map);
     map.fitBounds(poly.getBounds(), {padding:[10,10]});
@@ -6476,7 +6506,7 @@ function renderRDRuta(panel){
   setTimeout(()=>{
     if(detailMap){ detailMap.remove(); detailMap=null; }
     detailMap = L.map('rd-route-map', {zoomControl:false, attributionControl:true});
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=cb1_2i8k_1_882919874396f1a734cae151', {maxZoom:20, attribution:'&copy; OpenStreetMap contributors &copy; CARTO'}).addTo(detailMap);
+    L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20, attribution:MAPBOX_ATTRIBUTION}).addTo(detailMap);
     const segs = buildColoredRouteSegments(r);
     const allLatLngs = [];
     segs.forEach(seg=>{ L.polyline(seg.latlngs, {color:seg.color, weight:5, lineCap:'round', lineJoin:'round'}).addTo(detailMap); allLatLngs.push(...seg.latlngs); });
@@ -7090,8 +7120,12 @@ const FOLLOW_MAX_TILES = 220;
 // propósito: así un test puede redirigirla a un servidor local para poder
 // probar la carga y el armado del mosaico de punta a punta sin depender de
 // la red real (bloqueada en este entorno de pruebas).
-let cartoTileUrl = function(subdomain, zoom, x, y){
-  return `https://${subdomain}.basemaps.cartocdn.com/rastertiles/voyager/${zoom}/${x}/${y}.png?key=cb1_2i8k_1_882919874396f1a734cae151`;
+// subdomain ya no se usa (Mapbox sirve todo desde api.mapbox.com, sin el
+// esquema de subdominios en paralelo que sí usaba CartoDB) -- se deja el
+// parámetro para no tener que tocar el round-robin de subdominios del
+// llamador de más abajo.
+let routeTileUrl = function(subdomain, zoom, x, y){
+  return `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/tiles/256/${zoom}/${x}/${y}?access_token=${MAPBOX_TOKEN}`;
 };
 
 // Proyección Web Mercator estándar (la misma matemática que usan los mapas
@@ -7226,7 +7260,7 @@ async function loadFollowMapForVideo(routeData){
       const timer = setTimeout(()=>finish(null), 6000);
       img.onload = ()=>{ clearTimeout(timer); finish(img); };
       img.onerror = ()=>{ clearTimeout(timer); finish(null); };
-      img.src = cartoTileUrl(s, zoom, wrappedX, ty);
+      img.src = routeTileUrl(s, zoom, wrappedX, ty);
     });
 
     const results = await Promise.all(tiles.map(tl => loadTile(tl.tx, tl.ty)));
