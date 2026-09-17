@@ -40,10 +40,24 @@ module.exports = withSentry(async (req, res) => {
 
     const records = await callCorosMcpTool(conn.access_token, 'querySportRecords', { limit: 10 });
     const list = Array.isArray(records) ? records : (records && records.records) || [];
+    // OJO -- diagnóstico temporal: nunca se probó este endpoint contra una cuenta de COROS
+    // real (ver el comentario grande al principio de coros-activity-helpers.js), así que si
+    // querySportRecords devuelve algo con una forma distinta a la esperada (records: [...])
+    // o los campos de sportType/sport_type/sportName no existen de verdad, esto fallaba en
+    // silencio -- 'no hay actividad nueva' sin ningún rastro en los logs para poder
+    // diagnosticarlo. Buscar "coros-sync-now: diagnóstico" en los logs de Vercel para ver la
+    // forma real de la respuesta apenas alguien reporte este síntoma.
+    if (!list.length) {
+      console.error('coros-sync-now: diagnóstico -- querySportRecords no devolvió una lista utilizable. Respuesta cruda:', JSON.stringify(records).slice(0, 2000));
+    }
     const runRecords = list.filter(r => {
       const sport = r.sportType ?? r.sport_type ?? r.sportName ?? '';
       return String(sport).toLowerCase().includes('run');
     });
+
+    if (list.length && !runRecords.length) {
+      console.error('coros-sync-now: diagnóstico -- hay registros pero ninguno matcheó como running. Primer registro crudo:', JSON.stringify(list[0]).slice(0, 2000));
+    }
 
     if (!runRecords.length) {
       return res.status(200).json({ synced: false, reason: 'no_new_activity' });
