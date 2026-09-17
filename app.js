@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-17T02:00:00Z';
+const APP_VERSION = '2026-09-17T02:30:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -66,6 +66,7 @@ const CHANGELOG = [
   {id:'2026-09-route-map-zoom-fix', key:'changelog_route_map_zoom_fix'},
   {id:'2026-09-mapbox-switch', key:'changelog_mapbox_switch'},
   {id:'2026-09-live-map-follow-fix', key:'changelog_live_map_follow_fix'},
+  {id:'2026-09-rd-map-recenter-visibility', key:'changelog_rd_map_recenter_visibility'},
 ];
 function maybeShowWhatsNew(){
   if(!state.onboarded) return;
@@ -6518,6 +6519,7 @@ function renderRDRuta(panel){
     </div>
   `;
   rdMapExpanded = false;
+  document.querySelector('.rd-map-controls button')?.classList.remove('visible');
   setTimeout(()=>{
     if(detailMap){ detailMap.remove(); detailMap=null; }
     detailMap = L.map('rd-route-map', {zoomControl:false, attributionControl:true});
@@ -6525,7 +6527,15 @@ function renderRDRuta(panel){
     const segs = buildColoredRouteSegments(r);
     const allLatLngs = [];
     segs.forEach(seg=>{ L.polyline(seg.latlngs, {color:seg.color, weight:5, lineCap:'round', lineJoin:'round'}).addTo(detailMap); allLatLngs.push(...seg.latlngs); });
+    rdMapProgrammaticMoveAt = Date.now();
     if(allLatLngs.length) detailMap.fitBounds(L.latLngBounds(allLatLngs), {padding:[20,20]});
+    // dragstart/zoomstart también disparan con nuestros propios fitBounds() (acá arriba,
+    // en rdRecenterMap() y al expandir/achicar el mapa) -- rdMapProgrammaticMoveAt filtra
+    // esos casos, igual que el mismo mecanismo en el mapa en vivo (ver recenterMap()).
+    detailMap.on('dragstart zoomstart', ()=>{
+      if(Date.now() - rdMapProgrammaticMoveAt < 50) return;
+      document.querySelector('.rd-map-controls button')?.classList.add('visible');
+    });
     applyStaticTranslations();
   }, 60);
 }
@@ -6540,6 +6550,9 @@ function renderRDRuta(panel){
 let rdMapExpanded = false;
 let rdMapDragging = false, rdMapDragStartY = 0, rdMapDragStartH = 0, rdMapDragAxisLocked = false;
 let rdMapInvalidateRaf = false;
+// Mismo mecanismo que liveMapProgrammaticMoveAt: distingue un fitBounds() nuestro de un
+// zoom/arrastre real del corredor sobre el mapa de detalle de carrera.
+let rdMapProgrammaticMoveAt = 0;
 const RD_MAP_COLLAPSED_H = 340;
 function rdMapExpandedH(){ return Math.round(window.innerHeight * 0.72); }
 function rdSetMapExpanded(expand, animate){
@@ -6619,8 +6632,12 @@ document.addEventListener('touchend', ()=>{
 }, {passive:true});
 function rdRecenterMap(){
   if(!detailMap || !rdCurrent) return;
+  document.querySelector('.rd-map-controls button')?.classList.remove('visible');
   const pts = rdCurrent.r.points;
-  if(pts && pts.length) detailMap.fitBounds(L.latLngBounds(pts.map(p=>[p.lat,p.lon])), {padding:[20,20]});
+  if(pts && pts.length){
+    rdMapProgrammaticMoveAt = Date.now();
+    detailMap.fitBounds(L.latLngBounds(pts.map(p=>[p.lat,p.lon])), {padding:[20,20]});
+  }
 }
 function renderRDRitmo(panel){
   const {r, paceMin} = rdCurrent;
