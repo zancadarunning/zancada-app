@@ -95,6 +95,68 @@ function isRunningSportCode(sportType) {
   return s.includes('run');
 }
 
+// CONFIRMADO en producción (2026-09-17, logs de Vercel): querySportRecords NO devuelve JSON
+// cuando SÍ hay actividades -- devuelve un reporte de texto para humanos con esta forma:
+//
+//   Sport Records — 2026-08-18 to 2026-09-17 (1 records)
+//   ========================
+//
+//   1. Trail Run — 2026-09-06
+//      Location: Trail
+//      Time Window: startTimestamp=1788732961 | endTimestamp=1788735434
+//      Duration: 40:54 | Distance: 3.08 km
+//      Average Pace: 13:18 /km | Avg HR: 125 bpm | Calories: 374 kcal
+//      LabelId: 480160020539933272 | SportType: 102
+//
+// callCorosMcpTool() ya intenta JSON.parse() y, si falla (como acá), devuelve el texto tal
+// cual -- este parser saca de ahí una lista de actividades. El "SportType" numérico (102) NO
+// coincide con ninguna tabla mode/subMode de la API REST oficial de COROS (esta herramienta
+// "MCP" tiene su propia numeración interna, sin documentar) -- por eso para decidir si es una
+// corrida usamos el título ("Trail Run"), que alcanza con que contenga "run".
+function parseCorosSportRecordsText(text) {
+  const chunks = String(text).split(/\n(?=\d+\.\s)/).filter(c => /^\d+\.\s/.test(c.trim()));
+  const toSeconds = (mmss) => String(mmss).split(':').map(Number).reduce((acc, v) => acc * 60 + v, 0);
+  return chunks.map(chunk => {
+    const header = chunk.match(/^\d+\.\s+(.+?)\s+—\s+(\d{4}-\d{2}-\d{2})/);
+    const time = chunk.match(/startTimestamp=(\d+)\s*\|\s*endTimestamp=(\d+)/);
+    const durDist = chunk.match(/Duration:\s*([\d:]+)\s*\|\s*Distance:\s*([\d.]+)\s*km/);
+    const hr = chunk.match(/Avg HR:\s*(\d+)\s*bpm/);
+    const cal = chunk.match(/Calories:\s*(\d+)\s*kcal/);
+    const id = chunk.match(/LabelId:\s*(\d+)/);
+    if (!header || !time || !id) return null;
+    return {
+      title: header[1].trim(),
+      dateStr: header[2],
+      startTimestamp: Number(time[1]),
+      endTimestamp: Number(time[2]),
+      durationSec: durDist ? toSeconds(durDist[1]) : (Number(time[2]) - Number(time[1])),
+      distanceKm: durDist ? Number(durDist[2]) : 0,
+      avgHr: hr ? Number(hr[1]) : null,
+      calories: cal ? Number(cal[1]) : null,
+      labelId: id[1]
+    };
+  }).filter(Boolean);
+}
+function isRunningTitle(title) {
+  return /run/i.test(String(title || ''));
+}
+// Normaliza la respuesta cruda de querySportRecords (el reporte de texto real de arriba, o
+// por si algún día cambia a JSON estructurado) a una lista de actividades de running -- así
+// coros-auth.js/coros-sync-now.js/coros-sync.js no repiten la misma lógica de filtrado 3 veces.
+function getCorosRunRecords(rawResponse) {
+  if (typeof rawResponse === 'string') {
+    return parseCorosSportRecordsText(rawResponse).filter(r => isRunningTitle(r.title));
+  }
+  const list = Array.isArray(rawResponse) ? rawResponse : (rawResponse && rawResponse.records) || [];
+  return list.filter(r => {
+    const sport = r.sportType ?? r.sport_type ?? r.sportName ?? '';
+    return String(sport).toLowerCase().includes('run');
+  });
+}
+function getCorosRecordId(record) {
+  return record.labelId ?? record.id ?? record.activityId;
+}
+
 // El PDF oficial "COROS API Reference" (sección 4.2) confirma que querySportRecords espera
 // startDate/endDate en formato YYYYMMDD (entero), con un rango máximo de 30 días por pedido --
 // antes se mandaba {limit:10}, un parámetro que la herramienta ignoraba en silencio, cayendo
@@ -109,16 +171,6 @@ function corosDateRangeArgs(days) {
   return { startDate: Number(fmt(start)), endDate: Number(fmt(end)) };
 }
 
-// OJO -- BUG SOSPECHADO, NO CONFIRMADO: getUTCDay() de más abajo (planDayIndex) le da el
-// día de la semana en UTC a partir de startTime. Para Strava y Polar esto causaba que una
-// corrida de noche (pasadas las ~21hs en Argentina, UTC-3) se cargara con la fecha del
-// día SIGUIENTE -- ya arreglado en strava-activity-helpers.js/polar-activity-helpers.js,
-// ver esos comentarios para el detalle de cada arreglo. No se tocó acá todavía porque,
-// además de que el nombre del campo de fecha ya es incierto (ver el comentario grande de
-// activityToRun más abajo), tampoco hay confirmación de si ese valor viene en UTC puro o
-// ya en la hora local del reloj -- no hay forma de confirmarlo sin probarlo contra una
-// cuenta de COROS real conectada. Si un usuario reporta el mismo síntoma con un reloj
-// COROS, este es el primer lugar a revisar.
 function getMondayISO(d) {
   const dt = new Date(d);
   const day = dt.getUTCDay();
@@ -127,18 +179,51 @@ function getMondayISO(d) {
   return dt.toISOString().slice(0, 10);
 }
 
-// record: un elemento de lo que devuelva querySportRecords (resumen). detail: lo que
-// devuelva getActivityDetail para ese mismo id (puede ser null si esa llamada falla --
-// preferimos guardar la carrera con menos detalle antes que no guardarla).
-// Los nombres de campo (startTime/start_time, distance/totalDistance, etc.) son la
-// parte más incierta de este archivo -- ver el comentario grande arriba del todo.
+// record: una actividad ya normalizada por getCorosRunRecords() -- en el caso real y
+// confirmado (el reporte de texto de querySportRecords, ver parseCorosSportRecordsText),
+// trae dateStr/startTimestamp/endTimestamp/durationSec/distanceKm/avgHr/calories/labelId.
+// dateStr ("2026-09-06") es la fecha que el propio reporte de COROS ya da como texto -- la
+// usamos directo para planMonday/planDayIndex (mismo criterio que localDatePartFromIso en
+// polar-activity-helpers.js: confiar en el campo de fecha ya resuelto por el proveedor en
+// vez de recalcularlo nosotros con getUTCDay() sobre el timestamp crudo, que perdería
+// cualquier ajuste de zona horaria que el reporte ya haya hecho). startTimestamp SÍ es un
+// instante UTC genuino y sirve tal cual para el campo `date` (mismo rol que en Strava/Polar).
+// Fallback: si algún día querySportRecords empieza a devolver JSON estructurado en vez del
+// reporte de texto, record no va a tener dateStr -- ahí se usan los nombres de campo viejos
+// (adivinados, nunca confirmados) como mejor esfuerzo.
 function activityToRun(record, detail) {
   const d = detail || {};
+  if (record && record.dateStr) {
+    const startDate = new Date(record.dateStr + 'T00:00:00Z');
+    return {
+      id: 'coros_' + record.labelId,
+      corosId: record.labelId,
+      date: new Date(record.startTimestamp * 1000).toISOString(),
+      name: record.title || null,
+      distanceKm: Number(record.distanceKm) || 0,
+      durationSec: Math.round(Number(record.durationSec) || 0),
+      elevationGain: 0,
+      elevationLoss: null,
+      avgHr: record.avgHr || null,
+      maxHr: null,
+      avgCadence: null,
+      calories: record.calories || null,
+      hrLog: [],
+      points: [],
+      splits: [],
+      splitsV: 3,
+      series: null,
+      shoeId: null,
+      source: 'coros',
+      planMonday: getMondayISO(record.dateStr),
+      planDayIndex: (startDate.getUTCDay() + 6) % 7
+    };
+  }
   const startTime = record.startTime || record.start_time || record.date || d.startTime || d.start_time;
   const startDate = new Date(startTime);
   const distanceM = record.distance ?? record.totalDistance ?? d.distance ?? d.totalDistance ?? 0;
   const durationSec = record.duration ?? record.totalDuration ?? record.movingDuration ?? d.duration ?? d.totalDuration ?? 0;
-  const id = record.id ?? record.activityId ?? record.labelId;
+  const id = getCorosRecordId(record);
   return {
     id: 'coros_' + id,
     corosId: id,
@@ -235,6 +320,8 @@ module.exports = {
   callCorosMcpTool,
   isRunningSportCode,
   corosDateRangeArgs,
+  getCorosRunRecords,
+  getCorosRecordId,
   activityToRun,
   mergeCorosRuns,
   purgeCorosRunsForUser,

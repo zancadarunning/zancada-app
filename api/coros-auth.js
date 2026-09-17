@@ -14,7 +14,7 @@
 // eligiendo el host según de dónde sea el usuario (no hay forma de saberlo
 // de antemano, antes de que intente conectar).
 const crypto = require('crypto');
-const { activityToRun, mergeCorosRuns, callCorosMcpTool, corosDateRangeArgs } = require('./_lib/coros-activity-helpers');
+const { activityToRun, mergeCorosRuns, callCorosMcpTool, corosDateRangeArgs, getCorosRunRecords, getCorosRecordId } = require('./_lib/coros-activity-helpers');
 
 const REDIRECT_URI = 'https://zancada.org/api/coros-auth';
 const REGION_HOST = 'mcpus.coros.com';
@@ -75,35 +75,19 @@ module.exports = withSentry(async (req, res) => {
     });
 
     // Traer las carreras recientes como punto de partida, igual que al conectar
-    // Strava/Polar/Wahoo. querySportRecords/getActivityDetail son nombres de tool
-    // documentados por COROS -- los argumentos exactos (rango de fechas, filtro por
-    // deporte) no están publicados, así que esto puede necesitar un ajuste la
-    // primera vez que se pruebe con una cuenta real (ver el comentario grande en
-    // _lib/coros-activity-helpers.js).
+    // Strava/Polar/Wahoo. querySportRecords devuelve un reporte de texto (no JSON) cuando
+    // hay actividades -- confirmado en producción, ver parseCorosSportRecordsText en
+    // _lib/coros-activity-helpers.js.
     try {
       const records = await callCorosMcpTool(tokenData.access_token, 'querySportRecords', corosDateRangeArgs(30));
-      const list = Array.isArray(records) ? records : (records && records.records) || [];
-      const runRecords = list.filter(r => {
-        const sport = r.sportType ?? r.sport_type ?? r.sportName ?? '';
-        return String(sport).toLowerCase().includes('run');
-      });
+      const runRecords = getCorosRunRecords(records);
       if (runRecords.length) {
         const plainHeaders = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
         const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${userId}&select=data`, { headers: plainHeaders });
         const stateRows = await stateRes.json();
         if (stateRows && stateRows.length) {
           const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.corosId));
-          const newRunRecords = runRecords.filter(r => !knownIds.has(r.id ?? r.activityId ?? r.labelId));
-          const newRuns = [];
-          for (const record of newRunRecords) {
-            let detail = null;
-            try {
-              detail = await callCorosMcpTool(tokenData.access_token, 'getActivityDetail', { id: record.id ?? record.activityId ?? record.labelId });
-            } catch (e) {
-              console.error('coros-auth: getActivityDetail failed for', record.id, e);
-            }
-            newRuns.push(activityToRun(record, detail));
-          }
+          const newRuns = runRecords.filter(r => !knownIds.has(getCorosRecordId(r))).map(record => activityToRun(record));
           if (newRuns.length) await mergeCorosRuns(base, plainHeaders, userId, newRuns, 'skip');
         }
       }

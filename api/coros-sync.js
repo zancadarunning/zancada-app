@@ -8,7 +8,7 @@
 // usuario que nunca tocó ese botón -- no hay forma de que alguien nuevo sepa que existe.
 
 const requireCronSecret = require('./_lib/require-cron-secret');
-const { activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool, corosDateRangeArgs } = require('./_lib/coros-activity-helpers');
+const { activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool, corosDateRangeArgs, getCorosRunRecords, getCorosRecordId } = require('./_lib/coros-activity-helpers');
 const { withSentry, reportError } = require('./_lib/sentry');
 
 module.exports = withSentry(async (req, res) => {
@@ -35,39 +35,16 @@ module.exports = withSentry(async (req, res) => {
         }
 
         const records = await callCorosMcpTool(accessToken, 'querySportRecords', corosDateRangeArgs(30));
-        const list = Array.isArray(records) ? records : (records && records.records) || [];
-        // OJO -- diagnóstico temporal, ver el mismo comentario en coros-sync-now.js: esta
-        // integración nunca se probó contra una cuenta de COROS real, así que si la forma
-        // de la respuesta no es la esperada, mejor dejar rastro en los logs de Vercel que
-        // fallar en silencio otra vez.
-        if (!list.length) {
-          console.error('coros-sync (cron): diagnóstico -- querySportRecords sin lista utilizable, user', conn.user_id, JSON.stringify(records).slice(0, 2000));
-        }
-        const runRecords = list.filter(r => {
-          const sport = r.sportType ?? r.sport_type ?? r.sportName ?? '';
-          return String(sport).toLowerCase().includes('run');
-        });
-        if (list.length && !runRecords.length) {
-          console.error('coros-sync (cron): diagnóstico -- ningún registro matcheó como running, user', conn.user_id, JSON.stringify(list[0]).slice(0, 2000));
-        }
+        // querySportRecords devuelve un reporte de texto (no JSON) cuando hay actividades --
+        // confirmado en producción, ver parseCorosSportRecordsText en coros-activity-helpers.js.
+        const runRecords = getCorosRunRecords(records);
 
         if (runRecords.length) {
           const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${conn.user_id}&select=data`, { headers });
           const stateRows = await stateRes.json();
           if (stateRows && stateRows.length) {
             const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.corosId));
-            const newRuns = [];
-            for (const record of runRecords) {
-              const recId = record.id ?? record.activityId ?? record.labelId;
-              if (knownIds.has(recId)) continue;
-              let detail = null;
-              try {
-                detail = await callCorosMcpTool(accessToken, 'getActivityDetail', { id: recId });
-              } catch (e) {
-                console.error('coros-sync (cron): getActivityDetail failed for', recId, e);
-              }
-              newRuns.push(activityToRun(record, detail));
-            }
+            const newRuns = runRecords.filter(r => !knownIds.has(getCorosRecordId(r))).map(record => activityToRun(record));
             if (newRuns.length) await mergeCorosRuns(base, headers, conn.user_id, newRuns, 'skip');
           }
         }

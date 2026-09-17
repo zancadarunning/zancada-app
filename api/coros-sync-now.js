@@ -6,7 +6,7 @@
 // falta, igual que Wahoo.
 
 const verifyUser = require('./_lib/verify-user');
-const { activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool, corosDateRangeArgs } = require('./_lib/coros-activity-helpers');
+const { activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool, corosDateRangeArgs, getCorosRunRecords, getCorosRecordId } = require('./_lib/coros-activity-helpers');
 const { applyCors, isPreflight } = require('./_lib/cors');
 
 const { withSentry, reportError } = require('./_lib/sentry');
@@ -39,26 +39,10 @@ module.exports = withSentry(async (req, res) => {
     }
 
     const records = await callCorosMcpTool(conn.access_token, 'querySportRecords', corosDateRangeArgs(30));
-    const list = Array.isArray(records) ? records : (records && records.records) || [];
-    // OJO -- diagnóstico temporal: nunca se probó este endpoint contra una cuenta de COROS
-    // real (ver el comentario grande al principio de coros-activity-helpers.js), así que si
-    // querySportRecords devuelve algo con una forma distinta a la esperada (records: [...])
-    // o los campos de sportType/sport_type/sportName no existen de verdad, esto fallaba en
-    // silencio -- 'no hay actividad nueva' sin ningún rastro en los logs para poder
-    // diagnosticarlo. Buscar "coros-sync-now: diagnóstico" en los logs de Vercel para ver la
-    // forma real de la respuesta apenas alguien reporte este síntoma.
-    if (!list.length) {
-      console.error('coros-sync-now: diagnóstico -- querySportRecords no devolvió una lista utilizable. Respuesta cruda:', JSON.stringify(records).slice(0, 2000));
-    }
-    const runRecords = list.filter(r => {
-      const sport = r.sportType ?? r.sport_type ?? r.sportName ?? '';
-      return String(sport).toLowerCase().includes('run');
-    });
-
-    if (list.length && !runRecords.length) {
-      console.error('coros-sync-now: diagnóstico -- hay registros pero ninguno matcheó como running. Primer registro crudo:', JSON.stringify(list[0]).slice(0, 2000));
-    }
-
+    // querySportRecords devuelve un reporte de texto (no JSON) cuando hay actividades --
+    // confirmado en producción, ver el comentario grande junto a parseCorosSportRecordsText
+    // en coros-activity-helpers.js. getCorosRunRecords ya sabe parsearlo y filtrar running.
+    const runRecords = getCorosRunRecords(records);
     if (!runRecords.length) {
       return res.status(200).json({ synced: false, reason: 'no_new_activity' });
     }
@@ -69,18 +53,11 @@ module.exports = withSentry(async (req, res) => {
       return res.status(200).json({ synced: false });
     }
     const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.corosId));
-    const newRecords = runRecords.filter(r => !knownIds.has(r.id ?? r.activityId ?? r.labelId));
+    const newRecords = runRecords.filter(r => !knownIds.has(getCorosRecordId(r)));
 
-    const newRuns = [];
-    for (const record of newRecords) {
-      let detail = null;
-      try {
-        detail = await callCorosMcpTool(conn.access_token, 'getActivityDetail', { id: record.id ?? record.activityId ?? record.labelId });
-      } catch (e) {
-        console.error('coros-sync-now: getActivityDetail failed for', record.id, e);
-      }
-      newRuns.push(activityToRun(record, detail));
-    }
+    // El reporte de querySportRecords ya trae todo lo necesario (distancia, duración, FC
+    // promedio, calorías) -- no hace falta getActivityDetail para armar un run decente.
+    const newRuns = newRecords.map(record => activityToRun(record));
 
     if (newRuns.length) {
       await mergeCorosRuns(base, headers, userId, newRuns, 'skip');
