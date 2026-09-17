@@ -95,6 +95,20 @@ function isRunningSportCode(sportType) {
   return s.includes('run');
 }
 
+// El PDF oficial "COROS API Reference" (sección 4.2) confirma que querySportRecords espera
+// startDate/endDate en formato YYYYMMDD (entero), con un rango máximo de 30 días por pedido --
+// antes se mandaba {limit:10}, un parámetro que la herramienta ignoraba en silencio, cayendo
+// en su propio default (una semana hacia atrás desde hoy). Un usuario que corrió hace más de
+// una semana nunca iba a aparecer con eso, aunque la corrida ya estuviera sincronizada en la
+// nube de COROS. Pedir siempre los últimos 30 días (el máximo permitido por pedido) es la
+// ventana más ancha posible sin necesitar paginar.
+function corosDateRangeArgs(days) {
+  const fmt = (d) => `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`;
+  const end = new Date();
+  const start = new Date(end.getTime() - (days || 30) * 86400000);
+  return { startDate: Number(fmt(start)), endDate: Number(fmt(end)) };
+}
+
 // OJO -- BUG SOSPECHADO, NO CONFIRMADO: getUTCDay() de más abajo (planDayIndex) le da el
 // día de la semana en UTC a partir de startTime. Para Strava y Polar esto causaba que una
 // corrida de noche (pasadas las ~21hs en Argentina, UTC-3) se cargara con la fecha del
@@ -220,6 +234,7 @@ async function refreshCorosToken(base, headers, userId, refreshToken) {
 module.exports = {
   callCorosMcpTool,
   isRunningSportCode,
+  corosDateRangeArgs,
   activityToRun,
   mergeCorosRuns,
   purgeCorosRunsForUser,

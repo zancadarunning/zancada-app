@@ -8,7 +8,7 @@
 // usuario que nunca tocó ese botón -- no hay forma de que alguien nuevo sepa que existe.
 
 const requireCronSecret = require('./_lib/require-cron-secret');
-const { activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool } = require('./_lib/coros-activity-helpers');
+const { activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool, corosDateRangeArgs } = require('./_lib/coros-activity-helpers');
 const { withSentry, reportError } = require('./_lib/sentry');
 
 module.exports = withSentry(async (req, res) => {
@@ -34,7 +34,7 @@ module.exports = withSentry(async (req, res) => {
           accessToken = refreshed.accessToken;
         }
 
-        const records = await callCorosMcpTool(accessToken, 'querySportRecords', { limit: 10 });
+        const records = await callCorosMcpTool(accessToken, 'querySportRecords', corosDateRangeArgs(30));
         const list = Array.isArray(records) ? records : (records && records.records) || [];
         // OJO -- diagnóstico temporal, ver el mismo comentario en coros-sync-now.js: esta
         // integración nunca se probó contra una cuenta de COROS real, así que si la forma

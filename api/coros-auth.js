@@ -14,7 +14,7 @@
 // eligiendo el host según de dónde sea el usuario (no hay forma de saberlo
 // de antemano, antes de que intente conectar).
 const crypto = require('crypto');
-const { activityToRun, mergeCorosRuns, callCorosMcpTool } = require('./_lib/coros-activity-helpers');
+const { activityToRun, mergeCorosRuns, callCorosMcpTool, corosDateRangeArgs } = require('./_lib/coros-activity-helpers');
 
 const REDIRECT_URI = 'https://zancada.org/api/coros-auth';
 const REGION_HOST = 'mcpus.coros.com';
@@ -81,7 +81,7 @@ module.exports = withSentry(async (req, res) => {
     // primera vez que se pruebe con una cuenta real (ver el comentario grande en
     // _lib/coros-activity-helpers.js).
     try {
-      const records = await callCorosMcpTool(tokenData.access_token, 'querySportRecords', { limit: 30 });
+      const records = await callCorosMcpTool(tokenData.access_token, 'querySportRecords', corosDateRangeArgs(30));
       const list = Array.isArray(records) ? records : (records && records.records) || [];
       const runRecords = list.filter(r => {
         const sport = r.sportType ?? r.sport_type ?? r.sportName ?? '';

@@ -6,7 +6,7 @@
 // falta, igual que Wahoo.
 
 const verifyUser = require('./_lib/verify-user');
-const { activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool } = require('./_lib/coros-activity-helpers');
+const { activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool, corosDateRangeArgs } = require('./_lib/coros-activity-helpers');
 const { applyCors, isPreflight } = require('./_lib/cors');
 
 const { withSentry, reportError } = require('./_lib/sentry');
@@ -38,7 +38,7 @@ module.exports = withSentry(async (req, res) => {
       conn.access_token = refreshed.accessToken;
     }
 
-    const records = await callCorosMcpTool(conn.access_token, 'querySportRecords', { limit: 10 });
+    const records = await callCorosMcpTool(conn.access_token, 'querySportRecords', corosDateRangeArgs(30));
     const list = Array.isArray(records) ? records : (records && records.records) || [];
     // OJO -- diagnóstico temporal: nunca se probó este endpoint contra una cuenta de COROS
     // real (ver el comentario grande al principio de coros-activity-helpers.js), así que si
