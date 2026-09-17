@@ -1,6 +1,6 @@
 /* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
    si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-17T01:00:00Z';
+const APP_VERSION = '2026-09-17T01:30:00Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -5469,16 +5469,19 @@ function computePaceSeriesFromPoints(points){
 // Anthropic -- restringido en el dashboard de Mapbox a zancada.org/localhost, así que aunque
 // cualquiera lo vea en el código no sirve desde otro dominio). Estilo "streets-v12": el
 // equivalente de Mapbox al look tipo Google Maps que ya buscaba Voyager, con mejor
-// tipografía/detalle. 256px fijo (sin @2x) porque MAP_TILE_SIZE de más abajo asume ese
-// tamaño para el mosaico de la cámara dinámica del video de carrera.
+// tipografía/detalle. {r} es el mismo mecanismo que ya usaba CartoDB: Leaflet lo reemplaza
+// solo por "@2x" en pantallas retina (con detectRetina:true en cada tileLayer de acá abajo)
+// o por nada en pantallas normales -- sin esto el mapa se veía pixelado en la mayoría de
+// los celulares actuales, que son retina. El mosaico de la cámara dinámica del video de
+// carrera (más abajo, MAP_TILE_SIZE/routeTileUrl) queda aparte, en 256px fijo sin retina.
 const MAPBOX_TOKEN = 'pk.eyJ1IjoiemFuY2FkYSIsImEiOiJjbXU0cm9sbGEwM2tzMndwczE4emExdzVnIn0.kzrV4ltOY_PjTd_YIuh1vQ';
 const MAPBOX_STYLE = 'streets-v12';
-const MAPBOX_TILE_URL = `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/tiles/256/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
+const MAPBOX_TILE_URL = `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/tiles/256/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`;
 const MAPBOX_ATTRIBUTION = '&copy; <a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noopener">Mapbox</a> &copy; OpenStreetMap contributors';
 function initLiveMap(){
   if(liveMap){ liveMap.remove(); liveMap=null; }
   liveMap = L.map('liveMap', {zoomControl:false, attributionControl:true}).setView([0,0], 15);
-  L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20, attribution:MAPBOX_ATTRIBUTION}).addTo(liveMap);
+  L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20, detectRetina:true, attribution:MAPBOX_ATTRIBUTION}).addTo(liveMap);
   livePolyline = L.polyline([], {color:'#0B5D2E', weight:5, lineCap:'round', lineJoin:'round'}).addTo(liveMap);
   liveMarker = null; startMarker = null;
   liveMapFollowing = true;
@@ -6332,7 +6335,7 @@ function renderHistory(){
     const el = document.getElementById('hist-map-'+r.id);
     if(!el) return;
     const map = L.map(el, {zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, touchZoom:false, boxZoom:false, keyboard:false});
-    L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20}).addTo(map);
+    L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20, detectRetina:true}).addTo(map);
     const latlngs = r.points.map(p=>[p.lat,p.lon]);
     const poly = L.polyline(latlngs, {color:'#0B5D2E', weight:3, lineCap:'round', lineJoin:'round'}).addTo(map);
     map.fitBounds(poly.getBounds(), {padding:[10,10]});
@@ -6506,7 +6509,7 @@ function renderRDRuta(panel){
   setTimeout(()=>{
     if(detailMap){ detailMap.remove(); detailMap=null; }
     detailMap = L.map('rd-route-map', {zoomControl:false, attributionControl:true});
-    L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20, attribution:MAPBOX_ATTRIBUTION}).addTo(detailMap);
+    L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20, detectRetina:true, attribution:MAPBOX_ATTRIBUTION}).addTo(detailMap);
     const segs = buildColoredRouteSegments(r);
     const allLatLngs = [];
     segs.forEach(seg=>{ L.polyline(seg.latlngs, {color:seg.color, weight:5, lineCap:'round', lineJoin:'round'}).addTo(detailMap); allLatLngs.push(...seg.latlngs); });
