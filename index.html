@@ -867,7 +867,7 @@
   #coachChatWrap{position:fixed; left:0; right:0; max-width:480px; margin:0 auto; top:64px; bottom:78px;
     display:flex; flex-direction:column; z-index:15; background:var(--asphalt);}
   #coachChatTitle{font-size:25px; margin:0; padding:14px 20px 0; flex-shrink:0;}
-  .coach-disclaimer{flex-shrink:0; margin:0; padding:4px 20px 10px; font-size:11px; color:var(--mist); line-height:1.4;}
+  .coach-disclaimer{flex-shrink:0; margin:0; padding:4px 20px 10px; font-size:11px; color:var(--mist); line-height:1.4; border-bottom:1px solid var(--asphalt-4);}
   #chatLog{display:flex; flex-direction:column; flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:0 20px 10px; overscroll-behavior:contain;}
   .msg{max-width:82%; padding:11px 14px; border-radius:16px; font-size:14px; line-height:1.5; margin-bottom:10px;}
   /* renderChat() reconstruye TODO el innerHTML del log en cada llamada (no agrega un
@@ -2144,7 +2144,7 @@
          "bottom:0" quedaba tapado por el teclado). Acá el contenedor mide el área
          realmente visible (visualViewport) y el chat interno se scrollea solo. -->
     <div id="coachChatWrap">
-      <h2 class="display" id="coachChatTitle">Zonda <span class="muted" style="font-family:'Inter',-apple-system,sans-serif; font-size:14px; letter-spacing:0; vertical-align:middle;" data-i18n="coach_title"></span></h2>
+      <h2 class="display" id="coachChatTitle">Zonda <span class="muted" style="font-family:'Inter',-apple-system,sans-serif; font-size:12px; letter-spacing:0; vertical-align:middle;" data-i18n="coach_title"></span></h2>
       <p class="coach-disclaimer" data-i18n="coach_disclaimer"></p>
       <div id="chatLog"></div>
       <div class="chat-scroll-btn-wrap" id="chatScrollBtnWrap">
