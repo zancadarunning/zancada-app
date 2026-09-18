@@ -1,7 +1,46 @@
 const requireCronSecret = require('./_lib/require-cron-secret');
-const { activityToRun, mergeStravaRuns, setStravaSyncStatus } = require('./_lib/strava-activity-helpers');
+const { activityToRun, mergeStravaRuns, setStravaSyncStatus, fetchStreams } = require('./_lib/strava-activity-helpers');
 
 const { withSentry, reportError } = require('./_lib/sentry');
+
+// Cuántas carreras sin parciales reales se completan por cuenta en cada corrida del cron
+// -- ver el comentario grande de backfillStravaSplits.
+const BACKFILL_BATCH = 5;
+
+// Completa splits/series/parciales de carreras YA guardadas que quedaron sin streams
+// reales (splitsV !== 3) -- el caso típico es una carrera cargada por el botón
+// "Sincronizar ahora" (strava-sync-now.js) o por la conexión inicial (strava-auth.js),
+// que a propósito no piden los streams ahí para responder rápido. Antes esas carreras
+// quedaban así para siempre: el resto de este cron solo procesa actividades NUEVAS, nunca
+// vuelve a mirar una que ya esté guardada -- y api/strava-resync.js (el endpoint que sí
+// las completaba) es un script de migración de una sola vez, no un cron que se repita.
+// Mismo criterio que backfillPolarSplits/backfillWahooSplits en polar-sync.js/
+// wahoo-sync.js, plegado acá adentro del cron normal en vez de otro cron más.
+async function backfillStravaSplits(base, headers, conn, accessToken) {
+  const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${conn.user_id}&select=data`, { headers });
+  const stateRows = await stateRes.json();
+  if (!stateRows || !stateRows.length) return 0;
+  const data = stateRows[0].data || {};
+  const runs = data.runs || [];
+  const pending = runs.filter(r => r.source === 'strava' && r.stravaId && r.splitsV !== 3).slice(0, BACKFILL_BATCH);
+  if (!pending.length) return 0;
+
+  for (const run of pending) {
+    const streams = await fetchStreams(run.stravaId, accessToken);
+    run.splits = streams.splits;
+    run.series = streams.series;
+    if (streams.elevationGain != null) run.elevationGain = streams.elevationGain;
+    if (streams.elevationLoss != null) run.elevationLoss = streams.elevationLoss;
+    // Se marca completo aunque streams haya venido vacío (mismo criterio que
+    // backfillPolarSplits/backfillWahooSplits) -- si Strava de verdad no tiene streams
+    // para esa actividad, reintentarlo cada 15min para siempre no cambiaría el resultado.
+    run.splitsV = 3;
+  }
+  await fetch(`${base}/rest/v1/app_state?user_id=eq.${conn.user_id}`, {
+    method: 'PATCH', headers, body: JSON.stringify({ data, updated_at: new Date().toISOString() })
+  });
+  return pending.length;
+}
 
 module.exports = withSentry(async (req, res) => {
   if (!requireCronSecret(req)) {
@@ -16,7 +55,7 @@ module.exports = withSentry(async (req, res) => {
     const connsRes = await fetch(`${base}/rest/v1/strava_connections?select=*`, { headers });
     const conns = await connsRes.json();
 
-    let synced = 0, errors = 0;
+    let synced = 0, errors = 0, backfilled = 0;
     for (const conn of (Array.isArray(conns) ? conns : [])) {
       try {
         let accessToken = conn.access_token;
@@ -65,6 +104,7 @@ module.exports = withSentry(async (req, res) => {
           }
         }
 
+        backfilled += await backfillStravaSplits(base, headers, conn, accessToken);
         synced++;
         await setStravaSyncStatus(base, headers, conn.user_id, { ok: true });
       } catch (e) {
@@ -73,7 +113,7 @@ module.exports = withSentry(async (req, res) => {
       }
     }
 
-    res.status(200).json({ synced, errors, total: Array.isArray(conns) ? conns.length : 0 });
+    res.status(200).json({ synced, errors, backfilled, total: Array.isArray(conns) ? conns.length : 0 });
   } catch (err) {
     console.error('sync-strava error', err);
     await reportError(err, { endpoint: 'sync-strava' });

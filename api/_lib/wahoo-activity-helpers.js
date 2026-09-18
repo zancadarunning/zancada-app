@@ -94,7 +94,14 @@ async function workoutToRun(workout, accessToken){
     hrLog: [],
     points: [],
     splits: fit.splits,
-    splitsV: 3,
+    // splitsV:3 significa "ya se buscaron los splits reales de verdad" (ver
+    // api/wahoo-sync.js, que usa esto para saber qué carreras todavía necesitan
+    // completarse) -- antes se ponía siempre, aunque accessToken fuera null y fit
+    // viniera vacío (emptyFitResult), así que una carrera cargada por "Sincronizar
+    // ahora" (que omite el FIT a propósito, ver el comentario de accessToken arriba)
+    // quedaba marcada como "ya completa" para siempre y ningún backfill la volvía a
+    // mirar. Ahora solo se marca cuando de verdad se intentó buscar el FIT.
+    splitsV: accessToken ? 3 : undefined,
     series: fit.series,
     // avgPower/maxPower: del propio FIT (campo "power" del mensaje record, watts) en vez
     // de un campo de workout_summary -- la doc pública de workout_summary namespacea sus
@@ -172,4 +179,4 @@ async function refreshWahooToken(base, headers, userId, refreshToken){
   return { accessToken: tokenData.access_token, expiresAt };
 }
 
-module.exports = { isRunningWorkoutType, workoutToRun, mergeWahooRuns, purgeWahooRunsForUser, refreshWahooToken };
+module.exports = { isRunningWorkoutType, workoutToRun, mergeWahooRuns, purgeWahooRunsForUser, refreshWahooToken, fetchFitSplits };

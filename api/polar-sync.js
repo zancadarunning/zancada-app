@@ -6,8 +6,52 @@
 // no vencen (ver polar-sync-now.js), así que acá no hace falta ningún paso de refresh.
 
 const requireCronSecret = require('./_lib/require-cron-secret');
-const { exerciseToRun, mergePolarRuns } = require('./_lib/polar-activity-helpers');
+const { exerciseToRun, mergePolarRuns, fetchFitSplits } = require('./_lib/polar-activity-helpers');
 const { withSentry, reportError } = require('./_lib/sentry');
+
+// Cuántas carreras sin splits reales se completan por cuenta en cada corrida del cron.
+// Un lote chico en vez de todas de una: la mayoría de las cuentas no van a tener nada
+// pendiente (el cron normal ya trae el FIT de cada carrera nueva, ver más abajo), y esto
+// solo existe para ir vaciando de a poco lo que quedó sin completar por otras vías (ver
+// backfillPolarSplits).
+const BACKFILL_BATCH = 5;
+
+// Completa splits/series/potencia de carreras YA guardadas que quedaron sin el FIT real
+// (splitsV !== 3) -- el caso típico es una carrera cargada por el botón "Sincronizar
+// ahora" (polar-sync-now.js) o por la conexión inicial (polar-auth.js), que a propósito
+// no piden el FIT ahí para responder rápido. Antes esas carreras quedaban así para
+// siempre: el resto de este cron solo procesa ejercicios NUEVOS (ver más abajo), nunca
+// vuelve a mirar uno que ya esté guardado. Mismo criterio que api/strava-resync.js, pero
+// plegado acá adentro del cron normal en vez de un endpoint aparte -- así no hace falta
+// registrar un cron más (Vercel limita la cantidad de crons según el plan).
+async function backfillPolarSplits(base, headers, conn) {
+  const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${conn.user_id}&select=data`, { headers });
+  const stateRows = await stateRes.json();
+  if (!stateRows || !stateRows.length) return 0;
+  const data = stateRows[0].data || {};
+  const runs = data.runs || [];
+  const pending = runs.filter(r => r.source === 'polar' && r.polarId && r.splitsV !== 3).slice(0, BACKFILL_BATCH);
+  if (!pending.length) return 0;
+
+  for (const run of pending) {
+    const fit = await fetchFitSplits(run.polarId, conn.access_token);
+    run.splits = fit.splits;
+    run.series = fit.series;
+    if (fit.elevationGain != null) run.elevationGain = fit.elevationGain;
+    if (fit.elevationLoss != null) run.elevationLoss = fit.elevationLoss;
+    if (fit.avgCadence != null) run.avgCadence = fit.avgCadence;
+    if (fit.avgPower != null) run.avgPower = fit.avgPower;
+    if (fit.maxPower != null) run.maxPower = fit.maxPower;
+    // Se marca completo aunque el FIT haya venido vacío (mismo criterio que
+    // strava-resync.js) -- si Polar de verdad no tiene el archivo para ese ejercicio,
+    // reintentarlo cada 15min para siempre no cambiaría el resultado.
+    run.splitsV = 3;
+  }
+  await fetch(`${base}/rest/v1/app_state?user_id=eq.${conn.user_id}`, {
+    method: 'PATCH', headers, body: JSON.stringify({ data, updated_at: new Date().toISOString() })
+  });
+  return pending.length;
+}
 
 module.exports = withSentry(async (req, res) => {
   if (!requireCronSecret(req)) {
@@ -22,7 +66,7 @@ module.exports = withSentry(async (req, res) => {
     const connsRes = await fetch(`${base}/rest/v1/polar_connections?select=*`, { headers });
     const conns = await connsRes.json();
 
-    let synced = 0, errors = 0;
+    let synced = 0, errors = 0, backfilled = 0;
     for (const conn of (Array.isArray(conns) ? conns : [])) {
       try {
         const exsRes = await fetch('https://www.polaraccesslink.com/v3/exercises', {
@@ -53,6 +97,7 @@ module.exports = withSentry(async (req, res) => {
           }
         }
 
+        backfilled += await backfillPolarSplits(base, headers, conn);
         synced++;
       } catch (e) {
         errors++;
@@ -60,7 +105,7 @@ module.exports = withSentry(async (req, res) => {
       }
     }
 
-    res.status(200).json({ synced, errors, total: Array.isArray(conns) ? conns.length : 0 });
+    res.status(200).json({ synced, errors, backfilled, total: Array.isArray(conns) ? conns.length : 0 });
   } catch (err) {
     console.error('polar-sync error', err);
     await reportError(err, { endpoint: 'polar-sync' });

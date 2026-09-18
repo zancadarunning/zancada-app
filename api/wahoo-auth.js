@@ -84,12 +84,19 @@ module.exports = withSentry(async (req, res) => {
         // devolvía un array de Promises sin resolver (mergeWahooRuns las serializaba como
         // objetos vacíos) y, como Array.prototype.map pasa (elemento, índice, array) al
         // callback, el índice de cada workout se colaba como si fuera el accessToken.
-        // Mismo criterio que ya usa strava-auth.js en esta misma conexión inicial: sí vale
-        // la pena esperar el FIT de cada uno acá (a diferencia del botón "Sincronizar
-        // ahora", esto no tiene a un usuario mirando la pantalla, es un redirect de OAuth).
+        //
+        // accessToken=null a propósito (a diferencia de un primer intento que sí lo
+        // pasaba): alguien conectando Wahoo con muchos workouts (hasta 30) metía acá
+        // adentro una cadena secuencial de descargas+decodificaciones de FIT, todas
+        // DENTRO del redirect de OAuth que el navegador está esperando -- con riesgo real
+        // de timeout de la función serverless en cuentas con historial grande, justo en
+        // el peor momento (el usuario recién intentando conectar el reloj). Ahora el
+        // connect inicial responde rápido siempre, igual que el botón "Sincronizar
+        // ahora", y api/wahoo-sync.js (el cron de cada 15min) completa splits/series/
+        // potencia solo un rato después -- ver el backfill de ese archivo.
         const newRuns = [];
         for (const w of runWorkouts.filter(w => !knownIds.has(w.id))) {
-          newRuns.push(await workoutToRun(w, tokenData.access_token));
+          newRuns.push(await workoutToRun(w, null));
         }
         await mergeWahooRuns(base, plainHeaders, userId, newRuns, 'skip');
       }

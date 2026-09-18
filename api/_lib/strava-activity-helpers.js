@@ -200,7 +200,15 @@ async function activityToRun(act, accessToken) {
     hrLog: act.average_heartrate ? [{ t: 0, bpm: Math.round(act.average_heartrate) }] : [],
     points: act.map ? decodePolyline(act.map.summary_polyline) : [],
     splits: streams.splits,
-    splitsV: 3,
+    // splitsV:3 significa "ya se buscaron los parciales reales de verdad" (ver
+    // api/sync-strava.js, que usa esto para saber qué carreras todavía necesitan
+    // completarse). Antes se ponía siempre, aunque accessToken fuera null y streams
+    // viniera vacío (el fallback de la línea de arriba), así que una carrera cargada por
+    // "Sincronizar ahora" (que omite streams a propósito, ver el comentario de
+    // accessToken más arriba) quedaba marcada como "ya completa" para siempre y el cron
+    // periódico -- que solo mira actividades nuevas, nunca las ya guardadas -- jamás
+    // volvía a completarla. Ahora solo se marca cuando de verdad se intentó pedir streams.
+    splitsV: accessToken ? 3 : undefined,
     series: streams.series,
     shoeId: null,
     source: 'strava',

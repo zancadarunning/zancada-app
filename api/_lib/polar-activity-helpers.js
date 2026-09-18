@@ -104,7 +104,14 @@ async function exerciseToRun(exercise, accessToken) {
     hrLog: [],
     points: [],
     splits: fit.splits,
-    splitsV: 3,
+    // splitsV:3 significa "ya se buscaron los splits reales de verdad" (ver
+    // api/polar-sync.js, que usa esto para saber qué carreras todavía necesitan
+    // completarse) -- antes se ponía siempre, aunque accessToken fuera null y fit
+    // viniera vacío (emptyFitResult), así que una carrera cargada por "Sincronizar
+    // ahora" (que omite el FIT a propósito, ver el comentario de accessToken arriba)
+    // quedaba marcada como "ya completa" para siempre y ningún backfill la volvía a
+    // mirar. Ahora solo se marca cuando de verdad se intentó buscar el FIT.
+    splitsV: accessToken ? 3 : undefined,
     series: fit.series,
     // avgPower/maxPower: null si el reloj no tiene sensor de potencia (ej. sin Stryd
     // emparejado) -- ver buildSplitsAndSeriesFromFitRecords en fit-activity-helpers.js.
@@ -154,4 +161,4 @@ async function purgePolarRunsForUser(base, headers, userId) {
   if (!patchRes.ok) throw new Error(`purgePolarRunsForUser: PATCH failed: ${patchRes.status} ${await patchRes.text().catch(() => '')}`);
 }
 
-module.exports = { isRunningSport, parseIsoDurationToSeconds, exerciseToRun, mergePolarRuns, purgePolarRunsForUser };
+module.exports = { isRunningSport, parseIsoDurationToSeconds, exerciseToRun, mergePolarRuns, purgePolarRunsForUser, fetchFitSplits };
