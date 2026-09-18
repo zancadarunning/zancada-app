@@ -849,7 +849,8 @@
      correrla, en vez de una ilustración fija. Literal al contenido (es una pista),
      no un efecto decorativo suelto. */
   .run-bg-route .rbr-route{fill:none; stroke:var(--hivis); stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; opacity:.55;
-    filter:drop-shadow(0 0 5px var(--hivis-glow)); stroke-dasharray:14 10; animation:rbrFlow 5s linear infinite;}
+    filter:drop-shadow(0 0 5px var(--hivis-glow)); stroke-dasharray:14 10; animation:rbrFlow 5s linear infinite;
+    will-change:stroke-dashoffset;}
   @keyframes rbrFlow{to{stroke-dashoffset:-48;}}
   @media (prefers-reduced-motion:reduce){ .run-bg-route .rbr-route{animation:none;} }
   .run-bg-route .rbr-finish{stroke:var(--mist-dim); stroke-width:1.6; opacity:.5;}
