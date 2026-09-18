@@ -39,6 +39,15 @@ const GENERIC_ERROR_MSG = {
 // una cuenta comprometida antes de que la cuota de Claude se dispare.
 // Ajustable sin tocar código con la variable de entorno CHAT_DAILY_LIMIT.
 const CHAT_DAILY_LIMIT = parseInt(process.env.CHAT_DAILY_LIMIT, 10) || 60;
+// Tope al tamaño de lo que se manda a Claude por pedido -- el chat en app.js arma
+// "system"/"tools"/"messages" del lado del cliente y se los pasamos casi tal cual (ver el
+// comentario más abajo, junto a donde se arma el body), así que sin este chequeo cualquier
+// cuenta logueada podía mandar un system/messages gigante (el único techo real era el
+// límite de body de Vercel, ~4.5MB) y esa entrada la pagábamos nosotros -- CHAT_DAILY_LIMIT
+// acota CUÁNTOS pedidos por día, pero no CUÁNTO puede pesar cada uno. Una conversación real
+// con el coach (perfil + plan de la semana + historial de mensajes) nunca se acerca a esto;
+// es un piso generoso pensado para frenar un abuso deliberado, no para un uso normal.
+const MAX_INPUT_CHARS = 200000;
 const LIMIT_MSG = {
   es: 'Llegaste al límite de mensajes al coach por hoy. Probá de nuevo mañana.',
   en: "You've reached today's limit of messages to the coach. Try again tomorrow.",
@@ -109,6 +118,13 @@ module.exports = withSentry(async (req, res) => {
   try {
     const { system, tools, messages } = req.body || {};
     const busyMessage = BUSY_MSG[lang] || BUSY_MSG.es;
+
+    const inputChars = (typeof system === 'string' ? system.length : 0) + JSON.stringify(messages || []).length + JSON.stringify(tools || []).length;
+    if (inputChars > MAX_INPUT_CHARS) {
+      console.error('chat: pedido rechazado por tamaño —', inputChars, 'chars, usuario', auth.userId);
+      res.status(200).json({ error: { message: GENERIC_ERROR_MSG[lang] || GENERIC_ERROR_MSG.es } });
+      return;
+    }
 
     // A diferencia de Gemini (ver historial de este archivo), acá NO hace falta traducir
     // nada: el chat en app.js ya arma system/tools/messages directo en el formato nativo

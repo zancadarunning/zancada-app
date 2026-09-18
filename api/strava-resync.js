@@ -1,5 +1,5 @@
 const requireCronSecret = require('./_lib/require-cron-secret');
-const { decodePolyline, fetchStreams } = require('./_lib/strava-activity-helpers');
+const { decodePolyline, fetchStreams, mergeStravaRuns } = require('./_lib/strava-activity-helpers');
 
 const { withSentry, reportError } = require('./_lib/sentry');
 
@@ -39,7 +39,7 @@ module.exports = withSentry(async (req, res) => {
         const data = stateRows[0].data || {};
         data.runs = data.runs || [];
 
-        let changed = false;
+        const changedRuns = [];
         for (const run of data.runs) {
           if (run.source !== 'strava' || !run.stravaId) continue;
           const hasBasics = run.elevationGain !== undefined && run.calories !== undefined;
@@ -71,14 +71,18 @@ module.exports = withSentry(async (req, res) => {
             if (streams.elevationLoss != null) run.elevationLoss = streams.elevationLoss;
             run.splitsV = 3;
           }
-          changed = true;
+          changedRuns.push(run);
           runsUpdated++;
         }
 
-        if (changed) {
-          await fetch(`${base}/rest/v1/app_state?user_id=eq.${conn.user_id}`, {
-            method: 'PATCH', headers, body: JSON.stringify({ data })
-          });
+        if (changedRuns.length) {
+          // mergeStravaRuns en modo 'upsert' hace el reemplazo adentro de una transacción
+          // con la fila bloqueada (ver merge_strava_runs.sql), preservando el shoeId que el
+          // usuario haya asignado a mano -- reemplaza al viejo PATCH directo de acá, que
+          // mandaba de vuelta TODO app_state.data tal como se había leído al principio de
+          // esta corrida, potencialmente varias carreras (con sus streams) atrás: si el
+          // usuario guardaba algo (chat, plan, perfil) en el medio, ese guardado se perdía.
+          await mergeStravaRuns(base, headers, conn.user_id, changedRuns, 'upsert');
           usersUpdated++;
         }
       } catch (e) {

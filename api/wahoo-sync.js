@@ -37,7 +37,7 @@ async function backfillWahooSplits(base, headers, conn, accessToken) {
   const pending = runs.filter(r => r.source === 'wahoo' && r.wahooId && r.splitsV !== 3).slice(0, BACKFILL_BATCH);
   if (!pending.length) return 0;
 
-  let changed = false;
+  const updated = [];
   for (const run of pending) {
     try {
       const wRes = await fetch(`https://api.wahooligan.com/v1/workouts/${run.wahooId}`, {
@@ -55,16 +55,19 @@ async function backfillWahooSplits(base, headers, conn, accessToken) {
       if (fit.avgPower != null) run.avgPower = fit.avgPower;
       if (fit.maxPower != null) run.maxPower = fit.maxPower;
       run.splitsV = 3;
-      changed = true;
+      updated.push(run);
     } catch (e) {
       console.error('wahoo-sync (cron): backfill error for run', run.wahooId, e && e.message);
     }
   }
-  if (changed) {
-    await fetch(`${base}/rest/v1/app_state?user_id=eq.${conn.user_id}`, {
-      method: 'PATCH', headers, body: JSON.stringify({ data, updated_at: new Date().toISOString() })
-    });
-  }
+  // mergeWahooRuns en modo 'upsert' hace el reemplazo adentro de una transacción con la
+  // fila bloqueada (ver merge_wahoo_runs.sql), preservando el shoeId que el usuario haya
+  // asignado a mano -- reemplaza al viejo PATCH directo de acá, que mandaba de vuelta TODO
+  // app_state.data tal como se había leído al principio de esta función, minutos antes:
+  // si el usuario guardaba algo (chat, plan, perfil) en el medio, ese guardado se perdía.
+  // Solo se mandan los runs que de verdad se actualizaron (updated), no todo pending --
+  // los que fallaron el fetch del detalle (wRes no ok) no tienen por qué reescribirse.
+  await mergeWahooRuns(base, headers, conn.user_id, updated, 'upsert');
   return pending.length;
 }
 

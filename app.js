@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-18T16:50:21Z';
+const APP_VERSION = '2026-09-18T20:38:12Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8211,7 +8211,7 @@ const TOOLS = [
       tipo_categoria:{type:"string", enum:["easy","intervals","tempo","long","fartlek","hills","progression"], description:"Categoría técnica de la sesión en estos códigos fijos, SIN traducir (independiente de 'tipo', que va en el idioma de la charla). Se usa para las estadísticas de variedad de entrenamientos y para relacionar la carrera registrada con el tipo de sesión que tocaba -- elegí la que mejor corresponda a la sesión nueva."},
       distancia_km:{type:"number"},
       duracion_min:{type:"number", description:"Duración de la sesión en minutos. Usalo en vez de distancia_km si el corredor entrena por tiempo (fijate en el contexto) o si pide la sesión directamente en minutos -- se convierte sola a km internamente."},
-      zona:{type:"integer", minimum:1, maximum:5},
+      zona:{type:"integer", minimum:1, maximum:5, description:"Zona de frecuencia cardíaca objetivo para la sesión NUEVA, no un dato libre: 1-2 para rodaje suave y tirada larga, 3 para tempo/progresivo/fartlek, 4-5 para series/cuestas. No le pongas una zona alta a una sesión suave ni una zona baja a una sesión fuerte -- tiene que ser coherente con tipo_categoria."},
       terreno:{type:"string", enum:["asfalto","trail","mixto"]},
       descripcion:{type:"string", description:"Instrucción breve para el corredor, en el idioma de la conversación"}
     }, required:["dia","tipo","tipo_categoria","descripcion"]}
@@ -8296,6 +8296,30 @@ function applyUndoLastChange(){
   state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_undo_applied')), ts:Date.now()});
   return 'Listo, deshice el último cambio.';
 }
+// El modelo (Claude Haiku) puede devolver, por error de redondeo de su parte o directamente
+// una alucinación, una distancia absurda (negativa, cero, o algo como "200km" para una
+// sesión puntual) o una zona fuera de 1-5 -- el input_schema de modificar_sesion lo pide así
+// (zona: minimum:1, maximum:5), pero eso es solo una guía para el modelo: la API de tool use
+// no lo hace cumplir de verdad, así que nada impedía que ese valor se guardara tal cual y
+// terminara mostrado en el plan del corredor como si fuera una sesión real y coherente.
+// MAX_SESSION_KM es generoso a propósito (ninguna sesión de ENTRENAMIENTO puntual, a
+// diferencia de una carrera en sí, tiene sentido por encima de esto) para no bloquear
+// pedidos legítimos de fondistas/ultramaratonistas.
+const MAX_SESSION_KM = 100;
+function resolvePlanDistKm(input){
+  const distKm = Number(input.distancia_km);
+  if(Number.isFinite(distKm) && distKm>0) return Math.min(MAX_SESSION_KM, Math.round(distKm*10)/10);
+  const durMin = Number(input.duracion_min);
+  if(Number.isFinite(durMin) && durMin>0){
+    const km = Math.max(0.5, Math.round((durMin / estimateBasePaceMinPerKm(state.profile))*10)/10);
+    return Math.min(MAX_SESSION_KM, km);
+  }
+  return null;
+}
+function resolveZone(zona){
+  const z = Number(zona);
+  return Number.isFinite(z) ? Math.min(5, Math.max(1, Math.round(z))) : null;
+}
 function applyPlanChange(input){
   // El snapshot de undo se toma DESPUÉS de validar (día encontrado, no bloqueado) -- si
   // se toma antes, un pedido inválido (día ya pasado, por ejemplo) igual pisa el snapshot
@@ -8312,18 +8336,16 @@ function applyPlanChange(input){
     // lo que realmente es (series, tempo, etc.) en vez de arrastrar el typeKey del día base --
     // ver applyPlanChange y el comentario en getNextWeekPlan.
     const override = { type: input.tipo, desc: input.descripcion, typeKey: input.tipo_categoria };
-    let effectiveDistKm = typeof input.distancia_km==='number' ? input.distancia_km : null;
-    if(effectiveDistKm===null && typeof input.duracion_min==='number'){
-      effectiveDistKm = Math.max(0.5, Math.round((input.duracion_min / estimateBasePaceMinPerKm(state.profile))*10)/10);
-    }
+    const effectiveDistKm = resolvePlanDistKm(input);
     if(effectiveDistKm!==null) override.dist = effectiveDistKm;
-    if(input.zona) override.zone = input.zona;
+    const zone = resolveZone(input.zona);
+    if(zone!==null) override.zone = zone;
     if(input.terreno) override.terrain = input.terreno;
     state.nextWeekOverrides[input.dia] = override;
     renderPlan(); persist();
     state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+input.dia)), ts:Date.now()});
     const amountTxt = typeof input.duracion_min==='number' ? `${input.duracion_min}min (~${effectiveDistKm}km)` : (effectiveDistKm!==null ? effectiveDistKm+'km' : '');
-    return `OK, actualicé ${input.dia} de la semana que viene: ${input.tipo}${amountTxt?', '+amountTxt:''}${input.zona?', zona '+input.zona:''}.`;
+    return `OK, actualicé ${input.dia} de la semana que viene: ${input.tipo}${amountTxt?', '+amountTxt:''}${zone?', zona '+zone:''}.`;
   }
   const d = state.plan.find(x=>x.day===input.dia);
   if(!d) return "Día no encontrado.";
@@ -8339,12 +8361,10 @@ function applyPlanChange(input){
   // las estadísticas de variedad de sesiones de calidad y el tag de beneficio del entrenamiento
   // en el historial (que leen d.typeKey, no d.type) seguían viendo el tipo anterior.
   d.typeKey = input.tipo_categoria;
-  if(typeof input.distancia_km==='number'){
-    d.dist = input.distancia_km;
-  } else if(typeof input.duracion_min==='number'){
-    d.dist = Math.max(0.5, Math.round((input.duracion_min / estimateBasePaceMinPerKm(state.profile))*10)/10);
-  }
-  if(input.zona) d.zone = input.zona;
+  const effectiveDistKm = resolvePlanDistKm(input);
+  if(effectiveDistKm!==null) d.dist = effectiveDistKm;
+  const zone = resolveZone(input.zona);
+  if(zone!==null) d.zone = zone;
   // Si el modelo no menciona terreno (no es obligatorio en la herramienta), no queremos
   // que el día se quede SIN terreno -- antes pasaba justo eso cuando el día venía de ser
   // descanso (terrain:null) y el pedido era, por ejemplo, "pasá la sesión del martes acá":
@@ -8419,9 +8439,18 @@ function applyCancelSession(input){
   state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+d.day)), ts:Date.now()});
   return `OK, dejé ${d.day} sin sesión (descanso).`;
 }
+// Techo/piso al ajuste que se puede pedir de UNA sola vez por chat -- sin esto, un pedido
+// real mal medido ("dale, subime bastante") o una alucinación del modelo (porcentaje:900 en
+// vez de 90, por ejemplo transcribiendo mal un pedido en minutos) se aplicaba tal cual,
+// pudiendo más que duplicar o casi anular de un saque el volumen de la semana. Un salto así
+// no tiene nada que ver con cómo progresa el plan generado automáticamente (ver
+// weekMultiplier, que sube gradualmente semana a semana con un techo propio) -- ±60% ya es
+// generoso para un pedido puntual real ("quiero sumar más", "bajale bastante esta semana").
+const MAX_VOLUME_ADJUST_PCT = 60;
 function applyVolumeAdjust(input){
-  const pct = input.porcentaje;
-  if(typeof pct !== 'number') return 'Falta el porcentaje.';
+  const rawPct = Number(input.porcentaje);
+  if(!Number.isFinite(rawPct)) return 'Falta el porcentaje.';
+  const pct = Math.min(MAX_VOLUME_ADJUST_PCT, Math.max(-MAX_VOLUME_ADJUST_PCT, rawPct));
   captureUndoSnapshot();
   const factor = 1 + (pct/100);
   if(input.semana === 'siguiente'){

@@ -47,9 +47,12 @@ async function backfillPolarSplits(base, headers, conn) {
     // reintentarlo cada 15min para siempre no cambiaría el resultado.
     run.splitsV = 3;
   }
-  await fetch(`${base}/rest/v1/app_state?user_id=eq.${conn.user_id}`, {
-    method: 'PATCH', headers, body: JSON.stringify({ data, updated_at: new Date().toISOString() })
-  });
+  // mergePolarRuns en modo 'upsert' hace el reemplazo adentro de una transacción con la
+  // fila bloqueada (ver merge_polar_runs.sql), preservando el shoeId que el usuario haya
+  // asignado a mano -- reemplaza al viejo PATCH directo de acá, que mandaba de vuelta TODO
+  // app_state.data tal como se había leído al principio de esta función, minutos antes:
+  // si el usuario guardaba algo (chat, plan, perfil) en el medio, ese guardado se perdía.
+  await mergePolarRuns(base, headers, conn.user_id, pending, 'upsert');
   return pending.length;
 }
 

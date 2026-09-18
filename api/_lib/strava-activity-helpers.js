@@ -261,34 +261,35 @@ async function mergeStravaRuns(base, headers, userId, newRuns, mode) {
 // abierta para preguntarle nada. Como ese borrado es un requisito real del acuerdo de
 // desarrollador de Strava (no se puede evitar), lo mínimo es que no sea una sorpresa: se le
 // deja un mensaje del coach contándole qué pasó, para la próxima vez que abra la app.
+// Llama a la función SQL purge_provider_runs (ver /sql/purge_provider_runs.sql) para hacer
+// todo esto (filtrar runs, recalcular zapatillas, limpiar stravaSync) en una sola
+// transacción con la fila bloqueada -- reemplaza al viejo patrón "GET app_state ->
+// mergear en memoria -> PATCH app_state" que tenía esta función antes, que le podía pisar
+// a un usuario un guardado normal (chat, plan, perfil) hecho justo mientras se procesaba
+// una desconexión o un webhook de "revocaste el acceso" (mismo problema que ya se había
+// arreglado para mergeStravaRuns/merge_strava_runs.sql, pero que se había quedado sin
+// arreglar acá). El mensaje de aviso (si corresponde) se agrega aparte con
+// append_chat_message, ya con el removedCount real que devuelve la función SQL.
 async function purgeStravaRunsForUser(base, headers, userId, buildNotifyMessage) {
-  const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${userId}&select=data`, { headers });
-  const stateRows = await stateRes.json();
-  const data = stateRows && stateRows[0] && stateRows[0].data;
-  const hasStravaRuns = data && Array.isArray(data.runs) && data.runs.some(r => r.source === 'strava');
-  const hasSyncStatus = data && data.stravaSync;
-  if (!data || (!hasStravaRuns && !hasSyncStatus)) return;
-
-  if (hasStravaRuns) {
-    const removedCount = data.runs.filter(r => r.source === 'strava').length;
-    data.runs = data.runs.filter(r => r.source !== 'strava');
-    if (Array.isArray(data.shoes)) {
-      data.shoes = data.shoes.map(shoe => ({
-        ...shoe,
-        km: data.runs.filter(r => String(r.shoeId) === String(shoe.id)).reduce((a, r) => a + (r.distanceKm || 0), 0)
-      }));
-    }
-    if (buildNotifyMessage) {
-      if (!Array.isArray(data.chat)) data.chat = [];
-      data.chat.push({ role: 'coach', text: buildNotifyMessage(removedCount, data.lang), ts: Date.now() });
-    }
-  }
-  if (hasSyncStatus) delete data.stravaSync;
-  const patchRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${userId}`, {
-    method: 'PATCH', headers,
-    body: JSON.stringify({ data, updated_at: new Date().toISOString() })
+  const res = await fetch(`${base}/rest/v1/rpc/purge_provider_runs`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ p_user_id: userId, p_source: 'strava', p_clear_strava_sync: true })
   });
-  if (!patchRes.ok) throw new Error(`purgeStravaRunsForUser: PATCH failed: ${patchRes.status} ${await patchRes.text().catch(() => '')}`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`purge_provider_runs rpc failed: ${res.status} ${text}`);
+  }
+  const rows = await res.json();
+  const removedCount = (rows && rows[0] && rows[0].removed_count) || 0;
+  const lang = rows && rows[0] && rows[0].lang;
+  if (removedCount > 0 && buildNotifyMessage) {
+    await fetch(`${base}/rest/v1/rpc/append_chat_message`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ p_user_id: userId, p_role: 'coach', p_text: buildNotifyMessage(removedCount, lang) })
+    });
+  }
 }
 
 // Llama a la función SQL set_strava_sync_status (ver

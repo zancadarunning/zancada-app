@@ -283,26 +283,22 @@ async function mergeCorosRuns(base, headers, userId, newRuns, mode) {
 
 // Mismo rol que purgeStravaRunsForUser/purgePolarRunsForUser/purgeWahooRunsForUser --
 // se llama al desconectar, para no dejar guardados datos que ya no estamos
-// autorizados a conservar.
+// autorizados a conservar. Llama a purge_provider_runs (ver
+// /sql/purge_provider_runs.sql), que hace el filtrado y el recálculo de
+// zapatillas en una sola transacción con la fila bloqueada -- antes esto era
+// un GET app_state -> mergear en memoria -> PATCH app_state que le podía
+// pisar a un usuario un guardado normal hecho justo en el medio (mismo
+// problema que ya se había arreglado para mergeCorosRuns).
 async function purgeCorosRunsForUser(base, headers, userId) {
-  const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${userId}&select=data`, { headers });
-  const stateRows = await stateRes.json();
-  const data = stateRows && stateRows[0] && stateRows[0].data;
-  const hasCorosRuns = data && Array.isArray(data.runs) && data.runs.some(r => r.source === 'coros');
-  if (!data || !hasCorosRuns) return;
-
-  data.runs = data.runs.filter(r => r.source !== 'coros');
-  if (Array.isArray(data.shoes)) {
-    data.shoes = data.shoes.map(shoe => ({
-      ...shoe,
-      km: data.runs.filter(r => String(r.shoeId) === String(shoe.id)).reduce((a, r) => a + (r.distanceKm || 0), 0)
-    }));
-  }
-  const patchRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${userId}`, {
-    method: 'PATCH', headers,
-    body: JSON.stringify({ data, updated_at: new Date().toISOString() })
+  const res = await fetch(`${base}/rest/v1/rpc/purge_provider_runs`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ p_user_id: userId, p_source: 'coros' })
   });
-  if (!patchRes.ok) throw new Error(`purgeCorosRunsForUser: PATCH failed: ${patchRes.status} ${await patchRes.text().catch(() => '')}`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`purge_provider_runs rpc failed: ${res.status} ${text}`);
+  }
 }
 
 // Renueva el access_token con el refresh_token guardado. A diferencia de
