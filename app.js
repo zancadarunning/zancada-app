@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-18T16:38:53Z';
+const APP_VERSION = '2026-09-18T16:50:21Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6556,8 +6556,14 @@ function analyzeSplitPacing(splits){
    no las cinco de una -- así abrir el detalle de una carrera no arma de entrada un
    mapa Leaflet + dos gráficos que la mayoría de las veces la persona ni va a mirar. */
 let rdCurrent = null;
+// --zoneN-fill (no --zoneN a secas): esto pinta fondos sólidos con texto --ink encima
+// (barras de ritmo, gráfico de rosquilla, línea de ruta en el mapa) -- --zoneN es la
+// variante pensada para TEXTO sobre un fondo claro (los chips zone-N de index.html), que
+// en el tema claro es demasiado oscura para servir de fondo con --ink (igual de oscuro)
+// encima. --zoneN-fill son las mismas 5 tonalidades vívidas del tema oscuro en los dos
+// temas -- ver el comentario grande junto a --zone1-fill en el <style> de index.html.
 function zoneColorVar(n){
-  return (getComputedStyle(document.documentElement).getPropertyValue('--zone'+n) || '').trim() || '#8B9296';
+  return (getComputedStyle(document.documentElement).getPropertyValue('--zone'+n+'-fill') || '').trim() || '#8B9296';
 }
 function openRunDetail(runId){
   if(swipeSuppressClick) return;

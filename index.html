@@ -129,6 +129,15 @@
     --zone3:#D4B356; --zone3-bg:rgba(212,179,86,.18); --zone3-bg-live:rgba(212,179,86,.15);
     --zone4:#CC8A56; --zone4-bg:rgba(204,138,86,.18); --zone4-bg-live:rgba(204,138,86,.15);
     --zone5:#C9695C; --zone5-bg:rgba(201,105,92,.18); --zone5-bg-live:rgba(201,105,92,.15);
+    /* --zoneN-fill: la versión "para pintar de fondo sólido con texto --ink encima" (barras
+       de ritmo por km, gráfico de rosquilla de zonas, la línea de la ruta en el mapa, ver
+       zoneColorVar() en app.js) -- en oscuro es exactamente el mismo valor que --zoneN de
+       arriba (ya funciona para las dos cosas ahí), pero en claro hace falta un valor
+       DISTINTO del que usan los chips de texto (ver el comentario grande junto a --zone1 en
+       el tema claro): un tono lo bastante oscuro para leerse como TEXTO sobre blanco no
+       sirve como FONDO con texto --ink encima (casi sin contraste, ambos son oscuros). */
+    --zone1-fill:var(--zone1); --zone2-fill:var(--zone2); --zone3-fill:var(--zone3);
+    --zone4-fill:var(--zone4); --zone5-fill:var(--zone5);
     --cs:dark;
     --safe-top:env(safe-area-inset-top); --safe-bottom:env(safe-area-inset-bottom);
   }
@@ -154,11 +163,30 @@
       --toast-error-bg:#FDEBEA; --toast-error-fg:#B0241A;
       --shadow-card:0 10px 24px rgba(20,22,18,.10); --shadow-lg:0 18px 50px rgba(20,22,18,.15);
       --hivis-glow:rgba(150,186,0,.32);
-      --zone1:#1D4ED8; --zone1-bg:rgba(29,78,216,.12); --zone1-bg-live:rgba(29,78,216,.10);
-      --zone2:#15803D; --zone2-bg:rgba(21,128,61,.12); --zone2-bg-live:rgba(21,128,61,.10);
-      --zone3:#B45309; --zone3-bg:rgba(180,83,9,.12); --zone3-bg-live:rgba(180,83,9,.10);
-      --zone4:#C2410C; --zone4-bg:rgba(194,65,12,.12); --zone4-bg-live:rgba(194,65,12,.10);
-      --zone5:#B91C1C; --zone5-bg:rgba(185,28,28,.12); --zone5-bg-live:rgba(185,28,28,.10);
+      /* Las 5 zonas del modo oscuro (azul pizarra → verde salvia → dorado apagado →
+         terracota → ladrillo apagado, ver el comentario grande junto a --zone1 de :root)
+         son un registro deliberadamente desaturado -- "para que las cinco lean como parte
+         del registro apagado, carbón y arcilla de este sistema, no como una paleta
+         importada de Material" dice ese mismo comentario. La primera versión de este tema
+         claro no respetaba eso: eran azul/verde/ámbar/naranja/rojo bien saturados, casi
+         literal a los tokens de Tailwind (blue-700/green-700/amber-700/orange-700/red-700)
+         -- reconocibles como zona, pero rompiendo la identidad "apagada" que el propio
+         sistema define como marca. Estas son las mismas 5 tonalidades del oscuro,
+         oscurecidas (mismo hue, más lightness abajo, saturación reforzada un poco para
+         que no se laven al bajar la luminosidad) lo necesario para leerse como texto
+         sobre blanco -- 4.8-8.2:1 de contraste según la zona, ver el detalle en cada
+         línea. */
+      --zone1:#2A4F84; --zone1-bg:rgba(42,79,132,.12); --zone1-bg-live:rgba(42,79,132,.10);
+      --zone2:#29653C; --zone2-bg:rgba(41,101,60,.12); --zone2-bg-live:rgba(41,101,60,.10);
+      --zone3:#7B6014; --zone3-bg:rgba(123,96,20,.12); --zone3-bg-live:rgba(123,96,20,.10);
+      --zone4:#8B5023; --zone4-bg:rgba(139,80,35,.12); --zone4-bg-live:rgba(139,80,35,.10);
+      --zone5:#96382C; --zone5-bg:rgba(150,56,44,.12); --zone5-bg-live:rgba(150,56,44,.10);
+      /* --zoneN-fill: las mismas 5 tonalidades vívidas del tema oscuro (ver el comentario
+         junto a --zone1-fill de :root) -- acá SÍ funcionan bien como fondo sólido con
+         --ink encima (4.98-9.13:1 de contraste), a diferencia de las --zoneN oscurecidas
+         de arriba (pensadas para texto, no para ser fondo). */
+      --zone1-fill:#7B9BC9; --zone2-fill:#7CB88F; --zone3-fill:#D4B356;
+      --zone4-fill:#CC8A56; --zone5-fill:#C9695C;
       --cs:light;
     }
     /* .card-highlight, .confirm-card y las dos .card-shell-* degradan/tiñen hacia un color
@@ -197,11 +225,17 @@
     --toast-error-bg:#FDEBEA; --toast-error-fg:#B0241A;
     --shadow-card:0 10px 24px rgba(20,22,18,.10); --shadow-lg:0 18px 50px rgba(20,22,18,.15);
     --hivis-glow:rgba(150,186,0,.32);
-    --zone1:#1D4ED8; --zone1-bg:rgba(29,78,216,.12); --zone1-bg-live:rgba(29,78,216,.10);
-    --zone2:#15803D; --zone2-bg:rgba(21,128,61,.12); --zone2-bg-live:rgba(21,128,61,.10);
-    --zone3:#B45309; --zone3-bg:rgba(180,83,9,.12); --zone3-bg-live:rgba(180,83,9,.10);
-    --zone4:#C2410C; --zone4-bg:rgba(194,65,12,.12); --zone4-bg-live:rgba(194,65,12,.10);
-    --zone5:#B91C1C; --zone5-bg:rgba(185,28,28,.12); --zone5-bg-live:rgba(185,28,28,.10);
+    /* Mismas 5 zonas que en el bloque de arriba (@media prefers-color-scheme:light) --
+       ver ese comentario grande para el porqué de oscurecer estos tonos en vez de usar
+       los saturados tipo Tailwind que tenía antes. */
+    --zone1:#2A4F84; --zone1-bg:rgba(42,79,132,.12); --zone1-bg-live:rgba(42,79,132,.10);
+    --zone2:#29653C; --zone2-bg:rgba(41,101,60,.12); --zone2-bg-live:rgba(41,101,60,.10);
+    --zone3:#7B6014; --zone3-bg:rgba(123,96,20,.12); --zone3-bg-live:rgba(123,96,20,.10);
+    --zone4:#8B5023; --zone4-bg:rgba(139,80,35,.12); --zone4-bg-live:rgba(139,80,35,.10);
+    --zone5:#96382C; --zone5-bg:rgba(150,56,44,.12); --zone5-bg-live:rgba(150,56,44,.10);
+    /* --zoneN-fill: ver el comentario junto a este mismo bloque en @media(prefers-color-scheme:light). */
+    --zone1-fill:#7B9BC9; --zone2-fill:#7CB88F; --zone3-fill:#D4B356;
+    --zone4-fill:#CC8A56; --zone5-fill:#C9695C;
     --cs:light;
   }
   :root[data-theme="light"] .card-highlight{
@@ -932,7 +966,7 @@
   .rd-ruta-below{transition:opacity .26s ease, max-height .3s ease, margin .3s ease; max-height:600px; opacity:1;}
   .rd-ruta-below.rd-collapsed{opacity:0; max-height:0; margin:0; overflow:hidden; pointer-events:none;}
   .rd-big-dist{font-size:44px; font-weight:800; line-height:1;}
-  .rd-legend-bar{height:6px; border-radius:999px; margin:14px 0 6px; background:linear-gradient(90deg, var(--zone2), var(--zone3), var(--zone5));}
+  .rd-legend-bar{height:6px; border-radius:999px; margin:14px 0 6px; background:linear-gradient(90deg, var(--zone2-fill), var(--zone3-fill), var(--zone5-fill));}
   .rd-legend-labels{display:flex; justify-content:space-between; font-size:11.5px; color:var(--mist);}
   .rd-stat-row{display:flex; justify-content:space-around; text-align:center; margin-top:18px; padding-top:16px; border-top:1px solid var(--asphalt-3);}
   .rd-stat-row div span{display:block; font-size:19px; font-weight:800; margin-bottom:2px;}
