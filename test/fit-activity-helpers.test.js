@@ -37,7 +37,7 @@ function buildRecords(n, { speedMs = 4, withHr = false, withCadence = false, wit
 
 test('buildSplitsAndSeriesFromFitRecords: con menos de 2 muestras válidas, devuelve el estado vacío', () => {
   const result = buildSplitsAndSeriesFromFitRecords([{ timestamp: new Date(), distance: 0 }]);
-  assert.deepEqual(result, { splits: [], series: null, elevationGain: null, elevationLoss: null, avgPower: null, maxPower: null });
+  assert.deepEqual(result, { splits: [], series: null, elevationGain: null, elevationLoss: null, avgCadence: null, avgPower: null, maxPower: null });
 });
 
 test('buildSplitsAndSeriesFromFitRecords: ignora registros sin timestamp Date o sin distancia', () => {
@@ -118,6 +118,44 @@ test('buildSplitsAndSeriesFromFitRecords: una carrera corta (menos de 1km) no ge
   const { splits } = buildSplitsAndSeriesFromFitRecords(records);
   assert.equal(splits.length, 1);
   assert.equal(splits[0].km, 0.6);
+});
+
+test('buildSplitsAndSeriesFromFitRecords: un tramo restante de 995-999m no se etiqueta como "1" (colisiona con un split entero real)', () => {
+  // 1996m a 4m/s => 1km completo (km=1) + un resto de 996m, que redondeado a 2 decimales
+  // (996/1000=0.996) da exactamente 1.00 sin el tope -- renderRDSegmentos en app.js usa
+  // Number.isInteger(s.km) para distinguir un split entero de un resto, así que un resto
+  // etiquetado "1" se mostraba como un segundo km completo duplicado.
+  const records = buildRecords(500, { speedMs: 4 }); // dist final = 499*4 = 1996m
+  const { splits } = buildSplitsAndSeriesFromFitRecords(records);
+  assert.equal(splits.length, 2);
+  assert.equal(splits[0].km, 1);
+  assert.ok(splits[1].km < 1, `el resto no debería etiquetarse como un km entero: ${splits[1].km}`);
+  assert.ok(!Number.isInteger(splits[1].km));
+});
+
+test('buildSplitsAndSeriesFromFitRecords: con sensor de cadencia, calcula avgCadence de toda la actividad (no solo por split)', () => {
+  // 200 muestras a 5m/s => 1km exacto, cadence sube de 80 a 279 -- promedio de 0..199 es 99.5.
+  const records = buildRecords(200, { speedMs: 5, withCadence: true });
+  const { avgCadence } = buildSplitsAndSeriesFromFitRecords(records);
+  assert.equal(avgCadence, Math.round(80 + 99.5));
+});
+
+test('buildSplitsAndSeriesFromFitRecords: sin sensor de cadencia, avgCadence queda null', () => {
+  const records = buildRecords(200, { speedMs: 5 });
+  const { avgCadence } = buildSplitsAndSeriesFromFitRecords(records);
+  assert.equal(avgCadence, null);
+});
+
+test('buildSplitsAndSeriesFromFitRecords: calcula maxPower sin RangeError en una actividad muy larga (decenas de miles de muestras)', () => {
+  // Math.max(...array) rompe por encima del límite de argumentos de un spread call
+  // (~125000-131000 en este motor) -- 200000 muestras (~55hs a 1 muestra/seg, un caso
+  // real para un reloj olvidado grabando) confirma que el cálculo por reduce no tiene
+  // ese techo.
+  const n = 200000;
+  const records = buildRecords(n, { speedMs: 3, withPower: true }); // power: 200..200199
+  const { maxPower, avgPower } = buildSplitsAndSeriesFromFitRecords(records);
+  assert.equal(maxPower, 200 + n - 1);
+  assert.ok(avgPower > 200 && avgPower < maxPower);
 });
 
 // Prueba de punta a punta contra el propio @garmin/fitsdk (no solo el bucketeo puro de

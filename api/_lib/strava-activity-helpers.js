@@ -104,7 +104,14 @@ async function fetchStreams(activityId, accessToken) {
       const lastIdx = distArr.length - 1;
       const remainderM = distArr[lastIdx] - distArr[startIdx];
       if (remainderM > 50) {
-        const remainderKmLabel = Math.round((remainderM / 1000) * 100) / 100;
+        // remainderM siempre es < 1000 acá, pero redondeado a 2 decimales un remainder de
+        // 995-999m da exactamente "1.00" -- un número entero igual que la etiqueta del
+        // split anterior. app.js (renderRDSegmentos) usa Number.isInteger(s.km) para saber
+        // si una fila es un km entero de verdad, así que ese "1.00" quedaba mal
+        // clasificado como si fuera 1km completo (duración calculada contra 1.000km en vez
+        // de los ~0.996km reales) Y duplicaba la etiqueta del split anterior en la tabla.
+        // Con el tope en 0.99 el remainder nunca puede caer sobre un número entero.
+        const remainderKmLabel = Math.min(Math.round((remainderM / 1000) * 100) / 100, 0.99);
         splits.push(buildSegment(startIdx, lastIdx, startTime, remainderKmLabel));
       }
     }

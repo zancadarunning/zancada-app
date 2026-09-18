@@ -97,7 +97,9 @@ async function exerciseToRun(exercise, accessToken) {
     elevationLoss: fit.elevationLoss,
     avgHr: exercise.heart_rate && exercise.heart_rate.average ? Math.round(exercise.heart_rate.average) : null,
     maxHr: exercise.heart_rate && exercise.heart_rate.maximum ? Math.round(exercise.heart_rate.maximum) : null,
-    avgCadence: null,
+    // Antes quedaba siempre null -- el resumen de Polar no trae cadencia, pero el FIT sí
+    // (ver buildSplitsAndSeriesFromFitRecords), solo faltaba usarlo acá.
+    avgCadence: fit.avgCadence,
     calories: exercise.calories || null,
     hrLog: [],
     points: [],

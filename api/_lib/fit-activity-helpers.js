@@ -48,7 +48,7 @@ function loadFitSdk() {
 // Estado "sin datos" -- se devuelve una copia nueva en cada llamada (en vez de una
 // constante compartida) para que a nadie se le ocurra mutar el objeto que le devolvimos.
 function emptyFitResult() {
-  return { splits: [], series: null, elevationGain: null, elevationLoss: null, avgPower: null, maxPower: null };
+  return { splits: [], series: null, elevationGain: null, elevationLoss: null, avgCadence: null, avgPower: null, maxPower: null };
 }
 
 // buffer: un Buffer con el contenido crudo del archivo .fit. Devuelve el array de
@@ -142,7 +142,15 @@ function buildSplitsAndSeriesFromFitRecords(records) {
     const lastIdx = distArr.length - 1;
     const remainderM = distArr[lastIdx] - distArr[startIdx];
     if (remainderM > 50) {
-      const remainderKmLabel = Math.round((remainderM / 1000) * 100) / 100;
+      // remainderM siempre es < 1000 acá (startIdx ya cruzó el último km entero), pero
+      // redondeado a 2 decimales un remainder de 995-999m da exactamente "1.00" -- un
+      // número entero igual que la etiqueta del split anterior. app.js (renderRDSegmentos)
+      // usa Number.isInteger(s.km) para saber si una fila es un km entero de verdad, así
+      // que ese "1.00" quedaba mal clasificado como si fuera 1km completo (con la duración
+      // calculada contra 1.000km en vez de los ~0.996km reales) Y duplicaba la etiqueta
+      // del split anterior en la tabla. Con el tope en 0.99 el remainder nunca puede caer
+      // sobre un número entero.
+      const remainderKmLabel = Math.min(Math.round((remainderM / 1000) * 100) / 100, 0.99);
       splits.push(buildSegment(startIdx, lastIdx, startTime, remainderKmLabel));
     }
   }
@@ -184,16 +192,32 @@ function buildSplitsAndSeriesFromFitRecords(records) {
     }
   }
 
+  // avgCadence: mismo criterio que avgHr/avgPower más abajo -- un solo valor para toda la
+  // actividad, a partir de las muestras crudas (no de `series`, que ya viene reducida a
+  // ~120 puntos). Antes esto no se calculaba acá, así que polar-activity-helpers.js dejaba
+  // avgCadence en null siempre, aunque el propio FIT sí trae la cadencia muestra a muestra
+  // (se ve bien en cada fila de `splits`, solo faltaba el total).
+  let avgCadence = null;
+  if (cadArr) {
+    const cleanCad = cadArr.filter(v => v != null);
+    if (cleanCad.length) avgCadence = Math.round(cleanCad.reduce((a, b) => a + b, 0) / cleanCad.length);
+  }
+
   let avgPower = null, maxPower = null;
   if (powerArr) {
     const clean = powerArr.filter(v => v != null);
     if (clean.length) {
       avgPower = Math.round(clean.reduce((a, b) => a + b, 0) / clean.length);
-      maxPower = Math.round(Math.max(...clean));
+      // Math.max(...clean) rompía (RangeError: Maximum call stack size exceeded) en
+      // actividades muy largas grabadas a 1Hz -- clean no está reducido como `series`
+      // (que sí se limita a ~120 puntos más abajo), así que puede tener decenas de miles
+      // de muestras para una actividad de muchas horas, por encima del límite de
+      // argumentos de un spread call. reduce no tiene ese límite.
+      maxPower = Math.round(clean.reduce((a, b) => Math.max(a, b), -Infinity));
     }
   }
 
-  return { splits, series, elevationGain, elevationLoss, avgPower, maxPower };
+  return { splits, series, elevationGain, elevationLoss, avgCadence, avgPower, maxPower };
 }
 
 module.exports = { decodeFitRecords, buildSplitsAndSeriesFromFitRecords, emptyFitResult };
