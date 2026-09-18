@@ -507,6 +507,20 @@
      posicionado (relativo a esta sección en vez de a la pantalla). */
   #view-coach.active{animation:viewFadeInOpacity .22s ease;}
   @keyframes viewFadeInOpacity{from{opacity:0;} to{opacity:1;}}
+  /* Momento de entrada propio de Inicio (la pantalla que abre la app siempre) -- cada
+     bloque entra con un pop escalonado en vez del fade parejo de las demás vistas, así
+     el arranque de la app se siente vivo una vez, sin repetir el mismo truco en cada
+     pestaña (eso dejaría de sentirse especial). */
+  @keyframes homeBlockIn{from{opacity:0; transform:translateY(12px);} to{opacity:1; transform:translateY(0);}}
+  #view-inicio.active > *{animation:homeBlockIn .5s var(--ease-spring) backwards;}
+  #view-inicio.active > *:nth-child(1){animation-delay:.02s;}
+  #view-inicio.active > *:nth-child(2){animation-delay:.06s;}
+  #view-inicio.active > *:nth-child(3){animation-delay:.10s;}
+  #view-inicio.active > *:nth-child(4){animation-delay:.14s;}
+  #view-inicio.active > *:nth-child(5){animation-delay:.18s;}
+  #view-inicio.active > *:nth-child(6){animation-delay:.22s;}
+  #view-inicio.active > *:nth-child(n+7){animation-delay:.26s;}
+  @media (prefers-reduced-motion:reduce){ #view-inicio.active > *{animation:none;} }
 
   /* Nada de alpha acá: las tarjetas tipo "swipe to delete" (history, zapatillas)
      ponen esta misma clase .card ARRIBA de un fondo rojo de "borrar" -- un
@@ -574,7 +588,11 @@
 
   .greeting{font-size:25px; font-weight:600; margin:14px 0 4px; letter-spacing:-.01em;}
   .next-session{display:flex; justify-content:space-between; align-items:flex-start;}
-  .next-session .big{font-size:42px; line-height:.95;}
+  /* Empujado de 42px a 54px -- este es el número que responde "¿qué toca hoy?", la
+     razón de ser de toda la tarjeta destacada; le sobraba aire de sobra en la jerarquía
+     tipográfica (el techo del sistema es 60px, reservado a splash/hero) como para no
+     usarlo acá. */
+  .next-session .big{font-size:54px; line-height:.92; letter-spacing:.01em;}
   /* Tarjeta destacada -- "próxima sesión" es LA acción del día, así que se diferencia
      del resto de las tarjetas con un borde lima tenue y un degradado interno apenas
      insinuado, no con un color de fondo sólido distinto (eso competiría demasiado). */
@@ -647,7 +665,7 @@
   .stat-row-divided .stat-cell:first-child{padding-left:0;}
   .stat-row-divided .stat-cell:last-child{padding-right:0;}
   .stat-row-divided .stat-cell + .stat-cell::before{content:''; position:absolute; left:0; top:8%; bottom:8%; width:1px; background:var(--asphalt-4);}
-  .stat-row-divided .stat-cell .n{font-size:20px; font-weight:800; font-family:'JetBrains Mono',monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .stat-row-divided .stat-cell .n{font-size:26px; font-weight:800; font-family:'JetBrains Mono',monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; letter-spacing:-.01em;}
   .stat-row-divided .stat-cell .l{font-size:10px; color:var(--mist); text-transform:uppercase; letter-spacing:.05em;}
   /* Botón compacto "+" del encabezado de Historial -- reemplaza la barra ancha de
      "+ Agregar carrera manual" de antes; mismo tamaño/tratamiento que los demás
@@ -702,9 +720,13 @@
   .week-days .wd-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:8px; height:100%; min-width:0;}
   .week-days .wd-lbl{font-size:10px; color:var(--mist); text-transform:uppercase; letter-spacing:.04em;}
   .week-days .wd-bar-wrap{flex:1; display:flex; align-items:flex-end;}
-  .week-days .wd-bar{width:7px; border-radius:99px; background:var(--asphalt-4); transition:height .3s cubic-bezier(.22,1,.36,1);}
-  .week-days .wd-col.training .wd-bar{background:var(--chalk);}
-  .week-days .wd-col.today .wd-bar{background:var(--hivis); box-shadow:0 0 8px var(--hivis-glow);}
+  .week-days .wd-bar{width:8px; border-radius:99px; background:var(--asphalt-4); transition:height .3s cubic-bezier(.22,1,.36,1), transform .15s var(--ease-out);}
+  /* Color por zona de esfuerzo (--zc, seteado inline por renderHome en app.js) en vez de
+     un blanco plano para todo entrenamiento -- convierte la tira semanal en un dato real
+     (de un vistazo se ve qué días son suaves vs. exigentes), no solo una barra decorativa. */
+  .week-days .wd-col.training .wd-bar{background:var(--zc, var(--chalk));}
+  .week-days .wd-col.today .wd-bar{background:var(--hivis); box-shadow:0 0 10px var(--hivis-glow), 0 0 22px var(--hivis-glow);}
+  .week-days .wd-col:active .wd-bar{transform:scaleX(1.4);}
   .week-days .wd-col.today .wd-lbl{color:var(--chalk); font-weight:700;}
   .coach-snippet{display:flex; gap:12px; align-items:flex-start;}
   .coach-avatar{width:40px; height:40px; border-radius:14px; background:var(--hivis-dim); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
@@ -1081,6 +1103,13 @@
   nav.tabbar button.nav-btn-primary svg{width:37px; height:37px; padding:0; color:var(--ink); background:none !important;}
   nav.tabbar button.nav-btn-primary.active .nav-primary-circle{box-shadow:0 12px 30px var(--hivis-glow), 0 0 0 3px var(--hivis-dim);}
   nav.tabbar button.nav-btn-primary:active .nav-primary-circle{transform:scale(.92);}
+  /* Respiración lenta y sutil en el círculo de Correr cuando NO es la pestaña activa --
+     "esta es la acción que existe para interrumpirte el día", igual que un botón de
+     grabar que respira antes de que lo toques. Se apaga solo mientras está activo (ahí
+     ya tiene su propio glow fijo, más fuerte) y con reduced-motion. */
+  @keyframes primaryPulse{0%,100%{box-shadow:0 10px 24px var(--hivis-glow);} 50%{box-shadow:0 10px 32px var(--hivis-glow), 0 0 0 7px var(--hivis-dim);}}
+  nav.tabbar button.nav-btn-primary:not(.active) .nav-primary-circle{animation:primaryPulse 2.6s ease-in-out infinite;}
+  @media (prefers-reduced-motion:reduce){ nav.tabbar button.nav-btn-primary .nav-primary-circle{animation:none;} }
   /* Botón flotante del coach: al sacar Coach de la tabbar (para bajar de 6 a 5
      pestañas, menos saturada), la conversación con el coach pasa a un burbuja
      flotante siempre a mano -- mismo destino (showView('coach')) y mismo badge

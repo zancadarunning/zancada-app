@@ -3488,8 +3488,12 @@ function renderHome(){
     const isRest = d.dist===0;
     const isToday = i===todayIdx;
     const h = isRest ? 4 : Math.max(10, Math.round((d.dist/maxPlanDist)*44));
+    // --zc (color de zona) viaja como custom property, no como `background` directo --
+    // así .wd-col.today sigue pudiendo pisarlo por cascada normal (mismo criterio que
+    // ya usaba esta tira: hoy siempre se destaca en lima, sin importar la zona del día).
+    const zc = (!isRest && d.zone) ? `--zc:var(--zone${d.zone})` : '';
     return `<div class="wd-col ${isRest?'rest':'training'} ${isToday?'today':''}">
-      <div class="wd-bar-wrap"><div class="wd-bar" style="height:${h}px"></div></div>
+      <div class="wd-bar-wrap"><div class="wd-bar" style="height:${h}px; ${zc}"></div></div>
       <div class="wd-lbl">${t('day_'+d.day).slice(0,2)}</div>
     </div>`;
   }).join('');
