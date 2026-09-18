@@ -16,6 +16,24 @@
 // probable que haga falta un ajuste puntual la primera vez que se conecte una
 // cuenta de COROS real y se puedan ver las respuestas reales en los logs de Vercel
 // (buscar "coros: respuesta inesperada" en los logs).
+//
+// Splits/series/potencia por km (evaluado, descartado por ahora): el servidor MCP de
+// COROS lista tools llamadas queryActivityLapData y getActivityDetail que en teoría
+// darían justo esto (ver github.com/coroslab/COROS-MCP), pero al igual que
+// callCorosMcpTool/querySportRecords, NINGUNA fuente pública documenta el JSON exacto
+// que devuelven -- y ya hay un caso confirmado en producción (ver el comentario grande
+// de parseCorosSportRecordsText más abajo) de una tool de este mismo servidor que, pese
+// a "sonar" estructurada, en la práctica devuelve un reporte de texto para humanos, no
+// JSON. Escribir un parser para queryActivityLapData/getActivityDetail hoy sería
+// adivinar su formato sin poder confirmarlo contra una respuesta real -- exactamente el
+// patrón "adivinado, nunca confirmado" que este archivo viene arrastrando y que conviene
+// no repetir. Para Wahoo/Polar sí se pudo resolver splits/series/potencia (ver
+// wahoo-activity-helpers.js/polar-activity-helpers.js) porque ahí la fuente es un
+// archivo FIT, un formato binario público y estable con especificación oficial -- COROS
+// no tiene un equivalente entre las tools que expone su MCP. Queda pendiente para
+// cuando se pueda capturar una respuesta real de queryActivityLapData en los logs de
+// Vercel de una cuenta conectada (mismo camino que ya se usó para confirmar el formato
+// de querySportRecords).
 
 const MCP_ENDPOINT = 'https://mcp.coros.com/mcp';
 

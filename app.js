@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-18T03:50:40Z';
+const APP_VERSION = '2026-09-18T04:02:53Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6971,6 +6971,12 @@ function renderRDDetalles(panel){
   if(r.avgCadence) tiles.push([t('hist_cadence'), Math.round(r.avgCadence)+' spm']);
   if(avgHr) tiles.push([t('hist_avg_hr'), avgHr+' bpm']);
   if(r.maxHr) tiles.push([t('hist_max_hr'), r.maxHr+' bpm']);
+  // avgPower/maxPower: solo Wahoo y Polar los traen por ahora (del archivo FIT de la
+  // actividad, ver wahoo-activity-helpers.js/polar-activity-helpers.js) -- si el
+  // dispositivo no tenía sensor de potencia (ej. sin Stryd emparejado), el campo
+  // directamente no está y estas tiles no se muestran, igual que ya pasa con cadencia/FC.
+  if(r.avgPower) tiles.push([t('hist_power'), Math.round(r.avgPower)+' W']);
+  if(r.maxPower) tiles.push([t('hist_max_power'), Math.round(r.maxPower)+' W']);
   if(r.elevationGain!=null) tiles.push([t('rd_ascent'), isImperial() ? Math.round(r.elevationGain*3.28084)+' ft' : Math.round(r.elevationGain)+' m']);
   if(r.elevationLoss!=null) tiles.push([t('rd_descent'), isImperial() ? Math.round(r.elevationLoss*3.28084)+' ft' : Math.round(r.elevationLoss)+' m']);
 

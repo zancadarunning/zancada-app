@@ -95,7 +95,18 @@ module.exports = withSentry(async (req, res) => {
       const stateRows = await stateRes.json();
       if (stateRows && stateRows.length) {
         const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.polarId));
-        const newRuns = runExercises.filter(ex => !knownIds.has(ex.id)).map(exerciseToRun);
+        // exerciseToRun ahora es async (busca el FIT de cada ejercicio, ver
+        // polar-activity-helpers.js) -- .map(exerciseToRun) se rompía en dos frentes:
+        // devolvía un array de Promises sin resolver (mergePolarRuns las serializaba como
+        // objetos vacíos) y, como Array.prototype.map pasa (elemento, índice, array) al
+        // callback, el índice de cada ejercicio se colaba como si fuera el accessToken.
+        // Mismo criterio que ya usa strava-auth.js en esta misma conexión inicial: sí vale
+        // la pena esperar el FIT de cada uno acá (a diferencia del botón "Sincronizar
+        // ahora", esto no tiene a un usuario mirando la pantalla, es un redirect de OAuth).
+        const newRuns = [];
+        for (const ex of runExercises.filter(ex => !knownIds.has(ex.id))) {
+          newRuns.push(await exerciseToRun(ex, accessToken));
+        }
         await mergePolarRuns(base, plainHeaders, userId, newRuns, 'skip');
       }
     }

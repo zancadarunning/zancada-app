@@ -48,7 +48,13 @@ module.exports = withSentry(async (req, res) => {
           const stateRows = await stateRes.json();
           if (stateRows && stateRows.length) {
             const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.wahooId));
-            const newRuns = runWorkouts.filter(w => !knownIds.has(w.id)).map(workoutToRun);
+            // El cron sí busca el FIT de cada workout nuevo (splits/series/potencia) --
+            // a diferencia del botón "Sincronizar ahora" (wahoo-sync-now.js), acá no hay
+            // apuro por responder rápido a un usuario esperando en pantalla.
+            const newRuns = [];
+            for (const w of runWorkouts.filter(w => !knownIds.has(w.id))) {
+              newRuns.push(await workoutToRun(w, accessToken));
+            }
             if (newRuns.length) await mergeWahooRuns(base, headers, conn.user_id, newRuns, 'skip');
           }
         }

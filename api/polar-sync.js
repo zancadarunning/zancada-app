@@ -42,7 +42,13 @@ module.exports = withSentry(async (req, res) => {
           const stateRows = await stateRes.json();
           if (stateRows && stateRows.length) {
             const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.polarId));
-            const newRuns = runExercises.filter(ex => !knownIds.has(ex.id)).map(exerciseToRun);
+            // El cron sí busca el FIT de cada ejercicio nuevo (splits/series/potencia) --
+            // a diferencia del botón "Sincronizar ahora" (polar-sync-now.js), acá no hay
+            // apuro por responder rápido a un usuario esperando en pantalla.
+            const newRuns = [];
+            for (const ex of runExercises.filter(ex => !knownIds.has(ex.id))) {
+              newRuns.push(await exerciseToRun(ex, conn.access_token));
+            }
             if (newRuns.length) await mergePolarRuns(base, headers, conn.user_id, newRuns, 'skip');
           }
         }

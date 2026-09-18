@@ -6,6 +6,7 @@
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
+    "@garmin/fitsdk": "^21.214.0",
     "@sentry/node": "^10.74.0",
     "ffmpeg-static": "^5.2.0",
     "web-push": "^3.6.7"

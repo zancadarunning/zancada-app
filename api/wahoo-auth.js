@@ -79,7 +79,18 @@ module.exports = withSentry(async (req, res) => {
       const stateRows = await stateRes.json();
       if (stateRows && stateRows.length) {
         const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.wahooId));
-        const newRuns = runWorkouts.filter(w => !knownIds.has(w.id)).map(workoutToRun);
+        // workoutToRun ahora es async (busca el FIT de cada workout, ver
+        // wahoo-activity-helpers.js) -- .map(workoutToRun) se rompía en dos frentes:
+        // devolvía un array de Promises sin resolver (mergeWahooRuns las serializaba como
+        // objetos vacíos) y, como Array.prototype.map pasa (elemento, índice, array) al
+        // callback, el índice de cada workout se colaba como si fuera el accessToken.
+        // Mismo criterio que ya usa strava-auth.js en esta misma conexión inicial: sí vale
+        // la pena esperar el FIT de cada uno acá (a diferencia del botón "Sincronizar
+        // ahora", esto no tiene a un usuario mirando la pantalla, es un redirect de OAuth).
+        const newRuns = [];
+        for (const w of runWorkouts.filter(w => !knownIds.has(w.id))) {
+          newRuns.push(await workoutToRun(w, tokenData.access_token));
+        }
         await mergeWahooRuns(base, plainHeaders, userId, newRuns, 'skip');
       }
     }

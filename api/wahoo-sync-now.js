@@ -59,7 +59,14 @@ module.exports = withSentry(async (req, res) => {
       return res.status(200).json({ synced: false });
     }
     const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.wahooId));
-    const newRuns = runWorkouts.filter(w => !knownIds.has(w.id)).map(workoutToRun);
+    // Sin el FIT acá (accessToken=null en workoutToRun) para que el botón "Sincronizar
+    // ahora" responda rápido -- splits/series/potencia se completan solos en el próximo
+    // paso del cron de wahoo-sync.js, mismo criterio que ya usa Strava en
+    // strava-sync-now.js.
+    const newRuns = [];
+    for (const w of runWorkouts.filter(w => !knownIds.has(w.id))) {
+      newRuns.push(await workoutToRun(w, null));
+    }
 
     if (newRuns.length) {
       await mergeWahooRuns(base, headers, userId, newRuns, 'skip');

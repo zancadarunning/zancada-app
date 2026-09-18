@@ -4,6 +4,14 @@
 // Wahoo. Los datos reales de una sesión (distancia, duración, FC) vienen en
 // el objeto anidado "workout_summary" del workout, no en el workout mismo --
 // ver GET /v1/workouts en la referencia de la API de Wahoo.
+//
+// UPDATE: ahora también se traen splits/series/potencia, a partir del archivo FIT que
+// Wahoo deja en workout_summary.file.url -- confirmado en la documentación del Cloud
+// API (workout_summary trae un campo "file" con la url del FIT de esa sesión). A
+// diferencia de Strava/Polar, Wahoo no tiene NINGÚN endpoint de resumen con laps/splits
+// ya calculados -- el archivo FIT binario es la única fuente de detalle punto a punto.
+// Ver fetchFitSplits() más abajo y el comentario grande de
+// api/_lib/fit-activity-helpers.js para cómo se decodifica.
 
 // IDs de workout_type_id relacionados a running, según la tabla de tipos de
 // la API de Wahoo (cloud-api.wahooligan.com): 1 = running (outdoor), 5 =
@@ -32,11 +40,37 @@ function getMondayISO(d){
   return dt.toISOString().slice(0, 10);
 }
 
+const { decodeFitRecords, buildSplitsAndSeriesFromFitRecords, emptyFitResult } = require('./fit-activity-helpers');
+
+// Baja y decodifica el archivo FIT de un workout puntual para sacarle
+// splits/series/potencia. fitUrl es workout.workout_summary.file.url -- no hay
+// confirmación de si esa url ya viene pre-autorizada (ej. un link firmado de S3, que no
+// necesitaría el Bearer) o si hace falta el access_token de Wahoo para poder bajarla; se
+// manda igual por las dudas (no debería romper una url ya firmada) y, sea cual sea el
+// motivo, cualquier error acá se degrada a "sin datos" sin tocar el resto del workout --
+// misma filosofía que el resto de los fetches de este archivo.
+async function fetchFitSplits(fitUrl, accessToken){
+  if (!fitUrl) return emptyFitResult();
+  try {
+    const res = await fetch(fitUrl, { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} });
+    if (!res.ok) return emptyFitResult();
+    const buf = Buffer.from(await res.arrayBuffer());
+    const records = await decodeFitRecords(buf);
+    return buildSplitsAndSeriesFromFitRecords(records);
+  } catch (e) {
+    console.error('wahoo fetchFitSplits: no se pudo leer el FIT de', fitUrl, e && e.message);
+    return emptyFitResult();
+  }
+}
+
 // workout: un objeto tal cual lo devuelve GET /v1/workouts, con su
 // workout_summary anidado. Los campos numéricos de workout_summary vienen
-// como STRING (ej. "24909.71"), hay que parsearlos.
-function workoutToRun(workout){
+// como STRING (ej. "24909.71"), hay que parsearlos. accessToken es opcional
+// (null/undefined = no busca el FIT, más rápido -- mismo criterio que Strava/Polar: el
+// botón "Sincronizar ahora" lo omite, el cron periódico lo pasa).
+async function workoutToRun(workout, accessToken){
   const summary = workout.workout_summary || {};
+  const fit = accessToken ? await fetchFitSplits(summary.file && summary.file.url, accessToken) : emptyFitResult();
   const startDate = new Date(workout.starts);
   const num = (v) => (v != null ? parseFloat(v) : null);
   return {
@@ -46,17 +80,30 @@ function workoutToRun(workout){
     name: workout.name || null,
     distanceKm: (num(summary.distance_accum) || 0) / 1000,
     durationSec: Math.round((num(summary.duration_active_accum) || workout.minutes * 60 || 0)),
-    elevationGain: Math.round(num(summary.ascent_accum) || 0),
-    elevationLoss: null,
+    // Preferimos el ascenso/descenso calculado de la curva de altitud real del FIT
+    // (coherente entre sí) y caemos al ascent_accum del resumen si no hubo FIT
+    // disponible -- mismo criterio que ya usa Strava en activityToRun. elevationLoss
+    // antes quedaba siempre null porque el resumen de Wahoo no lo da -- ahora sale del
+    // FIT cuando está disponible.
+    elevationGain: fit.elevationGain != null ? fit.elevationGain : Math.round(num(summary.ascent_accum) || 0),
+    elevationLoss: fit.elevationLoss,
     avgHr: summary.heart_rate_avg ? Math.round(num(summary.heart_rate_avg)) : null,
     maxHr: null,
     avgCadence: summary.cadence_avg ? Math.round(num(summary.cadence_avg)) : null,
     calories: summary.calories_accum ? Math.round(num(summary.calories_accum)) : null,
     hrLog: [],
     points: [],
-    splits: [],
+    splits: fit.splits,
     splitsV: 3,
-    series: null,
+    series: fit.series,
+    // avgPower/maxPower: del propio FIT (campo "power" del mensaje record, watts) en vez
+    // de un campo de workout_summary -- la doc pública de workout_summary namespacea sus
+    // campos de potencia como "power_bike_*" (ej. power_bike_np_last), lo que sugiere que
+    // son específicos de ciclismo y no confiables para una carrera a pie; el FIT en
+    // cambio trae "power" genérico, que si el dispositivo no tiene sensor de running
+    // power (ej. Stryd) simplemente no aparece -- ver buildSplitsAndSeriesFromFitRecords.
+    avgPower: fit.avgPower,
+    maxPower: fit.maxPower,
     shoeId: null,
     source: 'wahoo',
     planMonday: getMondayISO(workout.starts),

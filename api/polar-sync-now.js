@@ -62,7 +62,14 @@ module.exports = withSentry(async (req, res) => {
       return res.status(200).json({ synced: false });
     }
     const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.polarId));
-    const newRuns = runExercises.filter(ex => !knownIds.has(ex.id)).map(exerciseToRun);
+    // Sin el FIT acá (accessToken=null en exerciseToRun) para que el botón "Sincronizar
+    // ahora" responda rápido -- splits/series/potencia se completan solos en el próximo
+    // paso del cron de polar-sync.js, mismo criterio que ya usa Strava en
+    // strava-sync-now.js.
+    const newRuns = [];
+    for (const ex of runExercises.filter(ex => !knownIds.has(ex.id))) {
+      newRuns.push(await exerciseToRun(ex, null));
+    }
 
     if (newRuns.length) {
       await mergePolarRuns(base, headers, userId, newRuns, 'skip');

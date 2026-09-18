@@ -1,13 +1,15 @@
 // api/_lib/polar-activity-helpers.js
 //
 // Equivalente a strava-activity-helpers.js pero para Polar AccessLink.
-// A diferencia de Strava, para el MVP no traemos streams/splits/series por
-// sesión (la API de Polar expone eso vía /samples con un formato bien
-// distinto) -- se guardan solo los datos de resumen que ya trae el propio
-// endpoint de ejercicios (distancia, duración, FC promedio/máxima,
-// calorías). Alcanza para que la carrera aparezca sola en Historial sin que
-// el usuario la cargue a mano; el detalle de ruta/splits queda para más
-// adelante si hace falta.
+//
+// UPDATE: ahora sí se traen splits/series/potencia por sesión, vía el archivo FIT de
+// cada ejercicio (GET /v3/exercises/{id}/fit -- confirmado en la documentación oficial
+// de AccessLink, "ExercisesApi", como el único sub-recurso de detalle que expone la API
+// "sin transacción" que usa este archivo; la variante vieja basada en transacciones sí
+// tenía /samples y /tcx, pero es un flujo distinto -- crear transacción, listar,
+// confirmar -- que no vale la pena migrar solo por esto). Ver fetchFitSplits() más abajo
+// y el comentario grande de api/_lib/fit-activity-helpers.js para el detalle de cómo se
+// decodifica ese archivo.
 
 function isRunningSport(sport) {
   if (!sport) return false;
@@ -48,10 +50,37 @@ function localDatePartFromIso(iso) {
   return String(iso || '').slice(0, 10);
 }
 
+const { decodeFitRecords, buildSplitsAndSeriesFromFitRecords, emptyFitResult } = require('./fit-activity-helpers');
+
+// Baja y decodifica el archivo FIT de un ejercicio puntual para sacarle
+// splits/series/potencia -- ver el comentario grande al principio del archivo y el de
+// fit-activity-helpers.js. Se degrada a "sin datos" ante CUALQUIER error (FIT vacío,
+// exercise_id inválido, Polar caído, un archivo que el SDK no pueda leer) para que un
+// problema acá nunca tire abajo la sincronización completa -- misma filosofía que ya
+// tenía este archivo con el resto de los fetches.
+async function fetchFitSplits(exerciseId, accessToken) {
+  try {
+    const res = await fetch(`https://www.polaraccesslink.com/v3/exercises/${exerciseId}/fit`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (!res.ok) return emptyFitResult();
+    const buf = Buffer.from(await res.arrayBuffer());
+    const records = await decodeFitRecords(buf);
+    return buildSplitsAndSeriesFromFitRecords(records);
+  } catch (e) {
+    console.error('polar fetchFitSplits: no se pudo leer el FIT de', exerciseId, e && e.message);
+    return emptyFitResult();
+  }
+}
+
 // exercise: un objeto tal cual lo devuelve GET /v3/exercises (ver schema
 // exerciseHashId). "id" acá es el hashed id de Polar -- estable por
-// ejercicio, sirve como clave de dedupe (polarId).
-function exerciseToRun(exercise) {
+// ejercicio, sirve como clave de dedupe (polarId). accessToken es opcional (null/undefined
+// = no busca el FIT, más rápido -- mismo criterio que accessToken en activityToRun de
+// strava-activity-helpers.js: los sync "ahora" lo omiten para responder rápido, y el cron
+// periódico sí lo pasa para completar splits/series/potencia).
+async function exerciseToRun(exercise, accessToken) {
+  const fit = accessToken ? await fetchFitSplits(exercise.id, accessToken) : emptyFitResult();
   const localDate = localDatePartFromIso(exercise.start_time);
   const startDate = new Date(localDate + 'T00:00:00Z');
   return {
@@ -61,17 +90,24 @@ function exerciseToRun(exercise) {
     name: null,
     distanceKm: (exercise.distance || 0) / 1000,
     durationSec: parseIsoDurationToSeconds(exercise.duration),
-    elevationGain: 0,
-    elevationLoss: null,
+    // Preferimos el ascenso/descenso calculado de la curva de altitud real del FIT
+    // (coherente entre sí, ver fit-activity-helpers.js) y caemos al 0 de siempre si no
+    // hubo FIT disponible -- mismo criterio que ya usa Strava en activityToRun.
+    elevationGain: fit.elevationGain != null ? fit.elevationGain : 0,
+    elevationLoss: fit.elevationLoss,
     avgHr: exercise.heart_rate && exercise.heart_rate.average ? Math.round(exercise.heart_rate.average) : null,
     maxHr: exercise.heart_rate && exercise.heart_rate.maximum ? Math.round(exercise.heart_rate.maximum) : null,
     avgCadence: null,
     calories: exercise.calories || null,
     hrLog: [],
     points: [],
-    splits: [],
+    splits: fit.splits,
     splitsV: 3,
-    series: null,
+    series: fit.series,
+    // avgPower/maxPower: null si el reloj no tiene sensor de potencia (ej. sin Stryd
+    // emparejado) -- ver buildSplitsAndSeriesFromFitRecords en fit-activity-helpers.js.
+    avgPower: fit.avgPower,
+    maxPower: fit.maxPower,
     shoeId: null,
     source: 'polar',
     planMonday: getMondayISO(localDate),
