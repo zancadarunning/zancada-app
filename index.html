@@ -311,9 +311,14 @@
   #splash > *:not(.splash-bg){position:relative; z-index:1;}
   #login > *:not(.splash-bg), #signup > *:not(.splash-bg){position:relative; z-index:1;}
   .splash-bg svg{position:absolute; bottom:0; left:0; width:100%; height:42%;}
-  .splash-terrain-far{fill:var(--asphalt-3); opacity:.5;}
-  .splash-terrain-near{fill:var(--asphalt-2); opacity:.85;}
-  .splash-terrain-line{fill:none; stroke:var(--clay); stroke-width:1.6; stroke-linejoin:round; opacity:.4;}
+  .splash-terrain-far{fill:var(--asphalt-3); opacity:.4;}
+  .splash-terrain-near{fill:var(--asphalt-2); opacity:.92;}
+  /* La línea de cresta ya no traza el contorno entero como un marcador resaltador --
+     un brillo cálido y suave, como el horizonte justo antes de que salga el sol (la
+     hora en la que de verdad se corre esta pista nocturna), más fino y con menos
+     protagonismo que antes. */
+  .splash-terrain-line{fill:none; stroke:var(--clay); stroke-width:1.1; stroke-linejoin:round; stroke-linecap:round; opacity:.6;
+    filter:drop-shadow(0 0 6px rgba(192,106,46,.5));}
   /* Un solo gesto de entrada, en opacity+transform nada mas (nunca en alto/margen/padding)
      para no interferir con el ajuste de altura real de #splash que ya es delicado -- ver el
      comentario largo mas arriba junto a la regla de #splash sobre por que 100svh se elige a
@@ -735,7 +740,7 @@
   .day-badge{width:42px; text-align:center; flex-shrink:0; padding:5px 0; border-radius:12px; transition:background .15s var(--ease-out);}
   .day-badge .d{font-size:11px; color:var(--mist); text-transform:uppercase;}
   .day-info{flex:1; min-width:0;}
-  .day-info .t{font-weight:700; font-size:16.5px; letter-spacing:-.005em;}
+  .day-info .t{font-weight:700; font-size:15.5px;}
   .day-info .m{font-size:12px; color:var(--mist); margin-top:4px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
   .day-info-title-row{display:flex; align-items:baseline; gap:9px; flex-wrap:wrap;}
   /* Kilometraje integrado en la misma fila del tipo de sesión, con un divisor fino en
@@ -1174,9 +1179,9 @@
   <div id="splash">
     <div class="splash-bg" aria-hidden="true">
       <svg viewBox="0 0 400 220" preserveAspectRatio="none">
-        <polygon class="splash-terrain-far" points="0,220 0,178 25,122 55,152 90,72 125,158 160,104 195,148 225,88 260,142 295,108 330,152 365,98 400,138 400,220"/>
-        <polygon class="splash-terrain-near" points="0,220 0,196 35,176 75,202 115,164 155,194 190,154 225,190 260,160 300,192 335,168 370,188 400,174 400,220"/>
-        <polyline class="splash-terrain-line" points="0,196 35,176 75,202 115,164 155,194 190,154 225,190 260,160 300,192 335,168 370,188 400,174"/>
+        <polygon class="splash-terrain-far" points="0,220 0,150 45,110 95,145 150,95 210,140 270,100 330,135 400,105 400,220"/>
+        <polygon class="splash-terrain-near" points="0,220 0,185 40,160 85,195 130,120 175,175 220,105 265,165 300,145 345,180 400,150 400,220"/>
+        <polyline class="splash-terrain-line" points="0,185 40,160 85,195 130,120 175,175 220,105 265,165 300,145 345,180 400,150"/>
       </svg>
     </div>
     <div class="pulse-strip"><svg viewBox="0 0 300 40" preserveAspectRatio="none"><path d="M0 20 H40 L48 6 L58 34 L66 20 H90 L98 8 L108 32 L116 20 H150 H190 L198 6 L208 34 L216 20 H240 L248 8 L258 32 L266 20 H300 L308 6 L318 34 L326 20 H350 H390 L398 6 L408 34 L416 20 H440 L448 8 L458 32 L466 20 H500 L508 6 L518 34 L526 20 H600" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg></div>
@@ -1207,9 +1212,9 @@
   <div class="overlay" id="login">
     <div class="splash-bg" aria-hidden="true">
       <svg viewBox="0 0 400 220" preserveAspectRatio="none">
-        <polygon class="splash-terrain-far" points="0,220 0,178 25,122 55,152 90,72 125,158 160,104 195,148 225,88 260,142 295,108 330,152 365,98 400,138 400,220"/>
-        <polygon class="splash-terrain-near" points="0,220 0,196 35,176 75,202 115,164 155,194 190,154 225,190 260,160 300,192 335,168 370,188 400,174 400,220"/>
-        <polyline class="splash-terrain-line" points="0,196 35,176 75,202 115,164 155,194 190,154 225,190 260,160 300,192 335,168 370,188 400,174"/>
+        <polygon class="splash-terrain-far" points="0,220 0,150 45,110 95,145 150,95 210,140 270,100 330,135 400,105 400,220"/>
+        <polygon class="splash-terrain-near" points="0,220 0,185 40,160 85,195 130,120 175,175 220,105 265,165 300,145 345,180 400,150 400,220"/>
+        <polyline class="splash-terrain-line" points="0,185 40,160 85,195 130,120 175,175 220,105 265,165 300,145 345,180 400,150"/>
       </svg>
     </div>
     <h2 class="display" data-i18n="login_title"></h2>
@@ -1237,9 +1242,9 @@
   <div class="overlay" id="signup" style="display:none;">
     <div class="splash-bg" aria-hidden="true">
       <svg viewBox="0 0 400 220" preserveAspectRatio="none">
-        <polygon class="splash-terrain-far" points="0,220 0,178 25,122 55,152 90,72 125,158 160,104 195,148 225,88 260,142 295,108 330,152 365,98 400,138 400,220"/>
-        <polygon class="splash-terrain-near" points="0,220 0,196 35,176 75,202 115,164 155,194 190,154 225,190 260,160 300,192 335,168 370,188 400,174 400,220"/>
-        <polyline class="splash-terrain-line" points="0,196 35,176 75,202 115,164 155,194 190,154 225,190 260,160 300,192 335,168 370,188 400,174"/>
+        <polygon class="splash-terrain-far" points="0,220 0,150 45,110 95,145 150,95 210,140 270,100 330,135 400,105 400,220"/>
+        <polygon class="splash-terrain-near" points="0,220 0,185 40,160 85,195 130,120 175,175 220,105 265,165 300,145 345,180 400,150 400,220"/>
+        <polyline class="splash-terrain-line" points="0,185 40,160 85,195 130,120 175,175 220,105 265,165 300,145 345,180 400,150"/>
       </svg>
     </div>
     <h2 class="display" data-i18n="signup_title"></h2>
