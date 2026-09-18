@@ -588,11 +588,9 @@
 
   .greeting{font-size:25px; font-weight:600; margin:14px 0 4px; letter-spacing:-.01em;}
   .next-session{display:flex; justify-content:space-between; align-items:flex-start;}
-  /* Empujado de 42px a 54px -- este es el número que responde "¿qué toca hoy?", la
-     razón de ser de toda la tarjeta destacada; le sobraba aire de sobra en la jerarquía
-     tipográfica (el techo del sistema es 60px, reservado a splash/hero) como para no
-     usarlo acá. */
-  .next-session .big{font-size:54px; line-height:.92; letter-spacing:.01em;}
+  /* Se probó 54px (empujando el techo tipográfico de 60px) pero quedó demasiado grande
+     en la práctica -- 44px es un empujón más moderado sobre el 42px original. */
+  .next-session .big{font-size:44px; line-height:.94; letter-spacing:.01em;}
   /* Tarjeta destacada -- "próxima sesión" es LA acción del día, así que se diferencia
      del resto de las tarjetas con un borde lima tenue y un degradado interno apenas
      insinuado, no con un color de fondo sólido distinto (eso competiría demasiado). */
@@ -1006,9 +1004,13 @@
   .avatar-big img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover;}
   .avatar-edit-badge{position:absolute; bottom:-4px; right:-4px; width:22px; height:22px; border-radius:50%; background:var(--hivis); color:var(--ink); display:flex; align-items:center; justify-content:center; border:2.5px solid var(--asphalt); pointer-events:none;}
   .pr-medal-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-top:4px;}
-  .pr-medal{display:flex; flex-direction:column; align-items:center; gap:5px; padding:14px 6px; border-radius:var(--radius-sm); background:var(--asphalt-3); text-align:center; transition:background .15s ease;}
-  .pr-medal.achieved{background:var(--hivis-dim);}
-  .pr-medal .icon-sq{width:24px; height:24px; color:var(--mist-dim);}
+  .pr-medal{display:flex; flex-direction:column; align-items:center; gap:5px; padding:14px 6px; border-radius:var(--radius-sm); background:var(--asphalt-3); text-align:center; transition:background .15s ease, transform .15s var(--ease-out);}
+  /* Una medalla ganada de verdad se siente distinta a una fila de datos: fondo tintado
+     COMO YA ESTABA + el mismo glow que el sistema reserva para "esto está encendido"
+     (botón primario, tab activo) -- el vitrina de trofeos no puede sentirse como
+     cualquier otro chip. */
+  .pr-medal.achieved{background:var(--hivis-dim); box-shadow:0 0 0 1px rgba(214,255,63,.18), 0 8px 20px -8px var(--hivis-glow);}
+  .pr-medal .icon-sq{width:24px; height:24px; color:var(--mist-dim); transition:transform .15s var(--ease-spring);}
   .pr-medal.achieved .icon-sq{color:var(--hivis-text);}
   .pr-medal-label{font-size:11.5px; font-weight:800; color:var(--mist);}
   .pr-medal.achieved .pr-medal-label{color:var(--chalk);}
@@ -2020,7 +2022,7 @@
     <button class="week-nav-btn" onclick="closePainOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <div style="display:flex; align-items:center; gap:8px;">
       <h2 class="subtitle" style="font-size:22px; margin:0;" data-i18n="pain_list_title"></h2>
-      <button onclick="openPainInfo()" style="background:none; border:1.5px solid var(--mist-dim); color:var(--mist-dim); width:19px; height:19px; border-radius:50%; font-size:11px; font-weight:800; font-style:italic; font-family:Georgia,serif; display:flex; align-items:center; justify-content:center; padding:0; cursor:pointer; flex-shrink:0; line-height:1;">i</button>
+      <button class="info-btn" onclick="openPainInfo()" data-i18n-aria="pain_info_title"><span class="icon-sq" style="width:19px; height:19px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span></button>
     </div>
     <div class="card" style="margin-top:16px;">
       <div id="pain-log-list"></div>
