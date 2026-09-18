@@ -138,7 +138,13 @@
   @media (prefers-color-scheme:light){
     :root:not([data-theme="dark"]){
       --asphalt:#F0F1EE; --asphalt-2:#FFFFFF; --asphalt-3:#E7E8E3; --asphalt-4:#D9DAD3;
-      --chalk:#14161A; --mist:#5C6166; --mist-dim:#707476;
+      /* --mist-dim más oscuro que el original (#707476 daba 4.16:1 contra el fondo de
+         página, por debajo del 4.5:1 que pide AA para texto chico -- etiquetas como
+         "Preferencias", los encabezados de mes en Historial, y "Sin marca"/"Te faltan
+         X km" en los logros bloqueados quedaban todos por debajo del mínimo, éste último
+         caso el peor porque esas medallas usan --asphalt-3 como fondo, más oscuro que el
+         fondo de página general). #5F6365 da 4.93:1 incluso contra ese fondo más oscuro. */
+      --chalk:#14161A; --mist:#5C6166; --mist-dim:#5F6365;
       --hivis:#D6FF3F; --hivis-dim:rgba(107,138,0,.16); --hivis-text:#5E7000; --ink:#121415;
       --clay:#A84E1C; --clay-dim:rgba(168,78,28,.15);
       --danger:#D6291C; --danger-dim:rgba(214,41,28,.13);
@@ -171,11 +177,17 @@
     :root:not([data-theme="dark"]) .card-shell-clay{
       background:rgba(168,78,28,.06); border-color:rgba(168,78,28,.26);
       box-shadow:0 16px 36px -14px rgba(168,78,28,.18);}
+    /* #offline-banner usa --ink (texto oscuro) sobre --clay como fondo -- funciona bien en
+       oscuro (--clay ahí es más clarito, 4.7:1 con --ink) pero en claro --clay se oscurece
+       a propósito para servir como TEXTO legible en otros lugares (ver el comentario grande
+       del sistema de temas), y ese mismo tono oscuro como FONDO deja a --ink casi sin
+       contraste (3.32:1, por debajo del 4.5:1 mínimo). Blanco encima sí funciona (5.57:1). */
+    :root:not([data-theme="dark"]) #offline-banner{ color:#FFFFFF; }
   }
   /* Tema claro forzado a mano (toggle en Perfil) -- gana pase lo que pase el sistema. */
   :root[data-theme="light"]{
     --asphalt:#F0F1EE; --asphalt-2:#FFFFFF; --asphalt-3:#E7E8E3; --asphalt-4:#D9DAD3;
-    --chalk:#14161A; --mist:#5C6166; --mist-dim:#707476;
+    --chalk:#14161A; --mist:#5C6166; --mist-dim:#5F6365;
     --hivis:#D6FF3F; --hivis-dim:rgba(107,138,0,.16); --hivis-text:#5E7000; --ink:#121415;
     --clay:#A84E1C; --clay-dim:rgba(168,78,28,.15);
     --danger:#D6291C; --danger-dim:rgba(214,41,28,.13);
@@ -203,6 +215,7 @@
   :root[data-theme="light"] .card-shell-clay{
     background:rgba(168,78,28,.06); border-color:rgba(168,78,28,.26);
     box-shadow:0 16px 36px -14px rgba(168,78,28,.18);}
+  :root[data-theme="light"] #offline-banner{ color:#FFFFFF; }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0; padding:0; background:var(--asphalt); height:100%;}
   body{font-family:'Inter',-apple-system,sans-serif; color:var(--chalk); overscroll-behavior-y:none;}

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-18T15:40:26Z';
+const APP_VERSION = '2026-09-18T16:38:53Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3763,7 +3763,13 @@ function renderPlan(){
     }
     const eventAmountText = isEventDay && state.event.distanceKm>0 ? `${fmtDist(state.event.distanceKm,1)} ${distUnit()}` : '';
     const isRestDay = !(d.dist>0) && !d.raceDay && !isEventDay;
-    const statusIcon = d.status==='done' ? `<div class="icon-sq" style="width:16px; height:16px; color:var(--hivis);">${ICONS.check}</div>` : d.status==='skipped' ? `<div class="icon-sq" style="width:16px; height:16px; color:var(--danger);">${ICONS.cross}</div>` : '';
+    // color:var(--hivis-text) acá (no --hivis puro): --hivis es el lima de marca tal cual,
+    // que en modo claro sigue siendo el mismo lima brillante casi sin contraste sobre
+    // blanco -- --hivis-text es la versión oscurecida pensada justo para texto/íconos
+    // legibles (ver el comentario grande del sistema de temas en el <style> de
+    // index.html). Antes este tilde de "hecho" usaba --hivis puro y quedaba casi invisible
+    // en modo claro -- reportado por el usuario.
+    const statusIcon = d.status==='done' ? `<div class="icon-sq" style="width:16px; height:16px; color:var(--hivis-text);">${ICONS.check}</div>` : d.status==='skipped' ? `<div class="icon-sq" style="width:16px; height:16px; color:var(--danger);">${ICONS.cross}</div>` : '';
     const zoneDetail = (d.zone && !isEventDay) ? `<br><br><span class="zone-chip zone-${d.zone}">${t('zone_word')} ${d.zone}</span> <span class="mono muted">${z[d.zone].min}-${z[d.zone].max} bpm</span>` : '';
     let statusBlock = '';
     if(d.status==='done'){
@@ -3773,7 +3779,7 @@ function renderPlan(){
         const pMin = run.distanceKm>0.02 ? (run.durationSec/60)/run.distanceKm : 0;
         doneText += `: ${fmtDist(run.distanceKm)}${distUnit()} · ${fmtPace(pMin)}/${distUnit()}`;
       }
-      statusBlock = canEdit ? `<p style="color:var(--hivis); font-weight:700; margin-top:12px;">${doneText} · <button class="small-link" onclick="markSession(${i},null)">${t('plan_undo')}</button></p>` : `<p style="color:var(--hivis); font-weight:700; margin-top:12px;">${doneText}${isPastDay?' · '+t('plan_locked'):''}</p>`;
+      statusBlock = canEdit ? `<p style="color:var(--hivis-text); font-weight:700; margin-top:12px;">${doneText} · <button class="small-link" onclick="markSession(${i},null)">${t('plan_undo')}</button></p>` : `<p style="color:var(--hivis-text); font-weight:700; margin-top:12px;">${doneText}${isPastDay?' · '+t('plan_locked'):''}</p>`;
     }
     else if(d.status==='skipped') statusBlock = canEdit ? `<p style="color:var(--danger); font-weight:700; margin-top:12px;">${t('plan_status_skipped')} · <button class="small-link" onclick="markSession(${i},null)">${t('plan_undo')}</button></p>` : `<p style="color:var(--danger); font-weight:700; margin-top:12px;">${t('plan_status_skipped')}${isPastDay?' · '+t('plan_locked'):''}</p>`;
     else if(d.dist>0 && canEdit){
@@ -4171,11 +4177,11 @@ function renderPerfil(){
     const prediction = goalKm ? predictRaceTime(goalKm) : null;
     const paceBlock = prediction ? `<div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--asphalt-3);">
       <p class="muted" style="margin:0 0 6px; font-size:12px;">${t('perfil_predicted_pace_label')} · ${fmtDist(goalKm,1)} ${distUnit()}</p>
-      <p class="mono" style="font-size:20px; font-weight:800; color:var(--hivis); margin:0;">${fmtPace((prediction.predictedSec/60)/goalKm)} /${distUnit()}</p>
+      <p class="mono" style="font-size:20px; font-weight:800; color:var(--hivis-text); margin:0;">${fmtPace((prediction.predictedSec/60)/goalKm)} /${distUnit()}</p>
       <p class="muted" style="margin:6px 0 0; font-size:11.5px;">${t('perfil_predicted_pace_note', {ref: fmtDist(prediction.refDistanceKm,1)+' '+distUnit(), time: fmtTime(Math.round(prediction.predictedSec))})}</p>
     </div>` : '';
     evBox.innerHTML = `<p style="font-size:14.5px; font-weight:700;">${escapeHtml(state.event.name)} <span class="tag tag-${state.event.type==='ruta'?'asfalto':state.event.type==='trail'?'trail':'mixto'}">${t('ev_type_'+state.event.type)}</span></p>
-      <p class="display" style="font-size:34px; color:var(--hivis); margin-top:4px;">${Math.max(0,days)} <span style="font-size:13px; font-family:Inter; color:var(--mist);">${t('perfil_event_days')}</span></p>
+      <p class="display" style="font-size:34px; color:var(--hivis-text); margin-top:4px;">${Math.max(0,days)} <span style="font-size:13px; font-family:Inter; color:var(--mist);">${t('perfil_event_days')}</span></p>
       <div style="display:flex; align-items:center; gap:14px; margin-top:6px; flex-wrap:wrap;">
         <button class="small-link" style="display:flex; align-items:center; gap:5px;" onclick="downloadEventIcs()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.calendar}</span>${t('add_to_calendar')}</button>
         <button class="small-link" style="color:var(--danger);" onclick="deleteEvent()">${t('delete_event')}</button>
@@ -6340,7 +6346,7 @@ function renderPaceCalcResults(){
   resultsEl.innerHTML = `
     <div style="margin-top:18px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
       <p class="muted" style="margin:0 0 4px; font-size:12px;">${t('pace_calc_avg_pace_label')}</p>
-      <p class="mono" style="font-size:22px; font-weight:800; color:var(--hivis); margin:0 0 14px;">${fmtPace(avgPaceMin)} /${distUnit()}</p>
+      <p class="mono" style="font-size:22px; font-weight:800; color:var(--hivis-text); margin:0 0 14px;">${fmtPace(avgPaceMin)} /${distUnit()}</p>
       <div style="max-height:260px; overflow-y:auto;">
         <table class="rd-seg-table">
           <thead><tr><th>${t('pace_calc_km_col')}</th><th>${t('pace_calc_cum_col')}</th><th>${t('pace_calc_pace_col')}</th></tr></thead>
@@ -6414,7 +6420,7 @@ function renderHistory(){
   const trendsCard = `<div class="card">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
       <h3 style="margin:0;" data-i18n="hist_trends">${t('hist_trends')}</h3>
-      <button onclick="shareWeeklyRecapImage()" style="background:none; border:1.5px solid var(--asphalt-4); color:var(--hivis); font-size:12px; cursor:pointer; padding:5px 9px; border-radius:6px; display:flex; align-items:center; gap:5px; font-weight:700; flex-shrink:0;">${t('hist_share')}</button>
+      <button onclick="shareWeeklyRecapImage()" style="background:none; border:1.5px solid var(--asphalt-4); color:var(--hivis-text); font-size:12px; cursor:pointer; padding:5px 9px; border-radius:6px; display:flex; align-items:center; gap:5px; font-weight:700; flex-shrink:0;">${t('hist_share')}</button>
     </div>
     <div class="stat-row-divided">
       <div class="stat-cell"><div class="n">${fmtDist(tr.totalKm,0)}</div><div class="l">${t('hist_total_km')} (${distUnit()})</div></div>
@@ -6492,7 +6498,7 @@ function renderHistory(){
         <p class="muted" style="margin-top:10px; font-size:12.5px;">${t('hist_benefit_'+runBenefitKey(r))}</p>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:8px;">
           <p class="muted" style="margin:0;">${t('hist_shoe')}: ${shoe? escapeHtml(shoe.name) : t('hist_no_shoe')}</p>
-          <button onclick="event.stopPropagation(); shareRunImage('${r.id}')" style="background:none; border:1.5px solid var(--asphalt-4); color:var(--hivis); font-size:12px; cursor:pointer; padding:5px 9px; border-radius:6px; display:flex; align-items:center; gap:5px; font-weight:700; flex-shrink:0;">${t('hist_share')}</button>
+          <button onclick="event.stopPropagation(); shareRunImage('${r.id}')" style="background:none; border:1.5px solid var(--asphalt-4); color:var(--hivis-text); font-size:12px; cursor:pointer; padding:5px 9px; border-radius:6px; display:flex; align-items:center; gap:5px; font-weight:700; flex-shrink:0;">${t('hist_share')}</button>
         </div>
       </div>
     </div>`;
