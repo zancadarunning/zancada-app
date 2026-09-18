@@ -1,6 +1,9 @@
-/* Se actualiza a mano cada vez que se sube una versión nueva — se usa para detectar
-   si hay una versión más nueva del index.html publicada y recargar sola la app. */
-const APP_VERSION = '2026-09-17T03:15:00Z';
+/* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
+   (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
+   la actualiza sola a la hora actual en cada commit que toque app.js/index.html -- antes
+   era a mano, y un día entero de commits (2026-09-18) se subió sin nadie acordarse de
+   tocar esta línea, así que la app nunca se enteró de que había versiones nuevas. */
+const APP_VERSION = '2026-09-18T02:09:52Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
