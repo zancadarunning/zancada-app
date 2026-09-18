@@ -835,10 +835,6 @@
   .go-circle:active{transform:scale(.96); box-shadow:0 8px 24px var(--hivis-glow); animation-play-state:paused;}
   @keyframes goCirclePulse{0%,100%{box-shadow:0 16px 40px var(--hivis-glow);} 50%{box-shadow:0 16px 48px var(--hivis-glow), 0 0 0 8px var(--hivis-dim);}}
   @media (prefers-reduced-motion:reduce){ .go-circle{animation:none;} }
-  /* Rebote + leve inclinación alternando hacia adelante/atrás, como el vaivén real de
-     correr -- no solo una figura fija que se desliza por la barra. */
-  @keyframes runnerStride{from{transform:translate(-50%,-95%) translateY(0) rotate(-6deg);} to{transform:translate(-50%,-95%) translateY(-3px) rotate(6deg);}}
-  @media (prefers-reduced-motion:reduce){ #goal-progress-runner{animation:none;} }
   #runActive,#runSummary{display:none;}
   .rec-dot{width:9px; height:9px; border-radius:50%; background:var(--danger); animation:blink 1.4s ease-in-out infinite; display:inline-block; margin-right:7px;}
 
@@ -1016,8 +1012,14 @@
      vez de rojo sobre fondo oscuro.
      El ancho acá pisa el de la regla genérica de arriba: la mitad de la tarjeta (pedido
      del usuario: "que todo el recuadro rojo vaya hasta la mitad... para que parezca que
-     se encuentra detrás del ejercicio"), no un botón angosto de ancho fijo. */
+     se encuentra detrás del ejercicio"), no un botón angosto de ancho fijo. PERO el
+     arrastre real tiene un tope de 100px (swipeRevealPx en app.js) -- el resto de este
+     ancho es fondo que sigue tapado detrás de la tarjeta, nunca se termina de exponer.
+     Por eso el ícono NO se centra en toda esta franja (quedaría perdido en el medio de
+     una franja roja enorme, reportado por el usuario) sino pegado a la derecha, en el
+     mismo lugar donde va a estar una vez que la tarjeta se corrió esos 100px. */
   #history-list .swipe-action-delete{top:-2px; right:-2px; bottom:-2px; width:50%;
+    justify-content:flex-end; padding-right:38px;
     border-radius:0 calc(var(--radius) + 2px) calc(var(--radius) + 2px) 0;}
   .swipe-content{position:relative; touch-action:pan-y; will-change:transform; backface-visibility:hidden;}
   .swipe-content.swipe-anim{transition:transform .25s cubic-bezier(.22,1,.36,1);}
@@ -1597,17 +1599,8 @@
         <h3 style="margin:0;" data-i18n="perfil_goal_progress_label"></h3>
         <span class="mono" id="goal-progress-pct" style="font-weight:800; color:var(--hivis-text);">0%</span>
       </div>
-      <div style="height:10px; background:var(--asphalt-3); border-radius:5px; position:relative; margin-top:16px;">
-        <div id="goal-progress-bar" style="height:100%; background:var(--hivis); width:0%; border-radius:5px; transition:width .5s var(--ease-out);"></div>
-        <!-- Corredor que avanza sobre la barra con el progreso real (pedido del usuario:
-             "que aparezca una persona corriendo, como si estuviera completando la meta").
-             left se calcula en JS a partir del mismo % que ya llena la barra -- nunca un
-             elemento decorativo suelto, es el mismo dato. Sin círculo de fondo (a pedido) --
-             la silueta sola, con un rebote vertical + inclinación que imita la zancada real
-             en vez de quedar parada/estática arriba de la barra. -->
-        <div id="goal-progress-runner" style="position:absolute; top:50%; left:0%; transform:translate(-50%,-95%); transition:left .5s var(--ease-out); width:20px; height:20px; color:var(--hivis-text); filter:drop-shadow(0 2px 3px rgba(0,0,0,.5)); animation:runnerStride .55s ease-in-out infinite alternate;">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/></svg>
-        </div>
+      <div style="height:10px; background:var(--asphalt-3); border-radius:5px; overflow:hidden;">
+        <div id="goal-progress-bar" style="height:100%; background:var(--hivis); width:0%; transition:width .3s;"></div>
       </div>
     </div>
 

@@ -3,7 +3,7 @@
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html -- antes
    era a mano, y un día entero de commits (2026-09-18) se subió sin nadie acordarse de
    tocar esta línea, así que la app nunca se enteró de que había versiones nuevas. */
-const APP_VERSION = '2026-09-18T03:10:12Z';
+const APP_VERSION = '2026-09-18T03:17:39Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -3481,9 +3481,6 @@ function renderHome(){
     const pct = Math.min(100, Math.round(rawPct));
     document.getElementById('goal-progress-pct').textContent = pct + '%';
     document.getElementById('goal-progress-bar').style.width = pct + '%';
-    // El corredor avanza con el mismo % -- acotado a 3-97 para que el círculo (22px) nunca
-    // quede cortado por el borde de la tarjeta en 0% o 100%.
-    document.getElementById('goal-progress-runner').style.left = Math.max(3, Math.min(97, pct)) + '%';
     if(rawPct >= 100 && state.weekStart && state.lastGoalCelebratedWeek !== state.weekStart){
       state.lastGoalCelebratedWeek = state.weekStart;
       haptic([15,40,15,40,25]);
@@ -4496,7 +4493,12 @@ document.addEventListener('touchstart', e=>{
   if(!item){ swipeCloseAll(); swipeContentEl = null; return; }
   swipeContentEl = item.querySelector('.swipe-content');
   const deleteEl = item.querySelector('.swipe-action-delete');
-  swipeRevealPx = deleteEl ? deleteEl.getBoundingClientRect().width : 96;
+  // Tope de 100px en lo que de verdad se arrastra/revela, aunque .swipe-action-delete sea
+  // más ancho (50% de la tarjeta en Historial, a propósito -- ver su CSS): ese ancho extra
+  // es fondo que sigue "detrás" del ejercicio sin exponerse entero, no distancia real de
+  // arrastre. Pedir que el dedo recorra la mitad de la pantalla para llegar al tacho (y
+  // verlo perdido en el medio de una franja roja enorme) era el problema reportado.
+  swipeRevealPx = deleteEl ? Math.min(deleteEl.getBoundingClientRect().width, 100) : 96;
   swipeCloseAll(swipeContentEl);
   swipeStartX = e.touches[0].clientX;
   swipeStartY = e.touches[0].clientY;
