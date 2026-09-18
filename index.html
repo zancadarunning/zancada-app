@@ -750,7 +750,7 @@
      así que la fila completa cambia de alto según el contenido y el ritmo vertical de
      la semana se ve disparejo. Con las 7 filas a la misma altura, el contenido corto
      se centra en vez de pegarse arriba. */
-  .day-row{display:flex; align-items:center; gap:12px; padding:13px 0; min-height:52px; border-bottom:1px solid var(--asphalt-3); cursor:pointer; transition:background .12s ease, opacity .12s ease;}
+  .day-row{display:flex; align-items:center; gap:12px; padding:8px 0; min-height:44px; border-bottom:1px solid var(--asphalt-3); cursor:pointer; transition:background .12s ease, opacity .12s ease;}
   .day-row:active{background:var(--press);}
   .day-row:last-child{border-bottom:none;}
   .day-badge{width:42px; text-align:center; flex-shrink:0; padding:5px 0; border-radius:12px; transition:background .15s var(--ease-out);}
@@ -814,21 +814,20 @@
      decorativo (aria-hidden), muy tenue, para que el espacio vacío alrededor del botón
      dé contexto de "esto registra tu recorrido" antes de arrancar a correr. */
   .run-idle-cta{position:relative; margin-top:8px; min-height:400px; display:flex; align-items:flex-start; justify-content:center; padding-top:28px;}
-  .run-bg-route{position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none;}
-  .run-bg-route svg{width:100%; height:100%;}
-  /* Fondo decorativo detrás del botón START: una pista de atletismo (carriles + línea de
-     llegada) tenue en gris, con el carril interno resaltado en lima -- ocupa el espacio
-     vacío entre el botón y la tabbar en vez de dejarlo en blanco. */
-  .run-bg-route .rbr-contour{fill:none; stroke:var(--asphalt-4); stroke-width:1.4; opacity:.6;}
-  /* El carril lima "fluye" despacio (stroke-dashoffset) -- una pista que invita a
-     correrla, en vez de una ilustración fija. Literal al contenido (es una pista),
-     no un efecto decorativo suelto. */
-  .run-bg-route .rbr-route{fill:none; stroke:var(--hivis); stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; opacity:.55;
-    filter:drop-shadow(0 0 5px var(--hivis-glow)); stroke-dasharray:14 10; animation:rbrFlow 5s linear infinite;}
-  @keyframes rbrFlow{to{stroke-dashoffset:-48;}}
-  @media (prefers-reduced-motion:reduce){ .run-bg-route .rbr-route{animation:none;} }
-  .run-bg-route .rbr-finish{stroke:var(--mist-dim); stroke-width:1.6; opacity:.5;}
-  .run-bg-route .rbr-finish-dim{opacity:.3;}
+  /* Mapa real de fondo (ver initIdleMap en app.js) en vez de la pista decorativa que había
+     antes -- mismo rol de "ocupar el espacio vacío detrás del botón", pero ahora es de
+     verdad el lugar donde estás. z-index:0 para que el botón EMPEZAR (z-index:1) quede
+     siempre arriba y se pueda tocar sin pelear con el mapa. */
+  .idle-map{position:absolute; inset:0; z-index:0; border-radius:var(--radius); overflow:hidden; background:var(--asphalt-3);}
+  .idle-map .leaflet-control-attribution{font-size:8.5px; background:rgba(10,10,10,.5); color:var(--mist-dim);}
+  .idle-map .leaflet-control-attribution a{color:var(--mist);}
+  /* Punto "estás acá" estilo Google Maps: círculo sólido con borde + un anillo translúcido
+     alrededor que respira despacio (la variación real de precisión del GPS, no un adorno
+     al azar). */
+  .idle-map-dot{width:16px; height:16px; border-radius:50%; background:var(--hivis); border:2.5px solid var(--ink); box-shadow:0 0 0 2px rgba(214,255,63,.35);}
+  .idle-map-dot-ring{width:16px; height:16px; border-radius:50%; background:var(--hivis-dim); animation:idleMapPulse 2.4s ease-out infinite;}
+  @keyframes idleMapPulse{0%{transform:scale(1); opacity:.9;} 100%{transform:scale(3.4); opacity:0;}}
+  @media (prefers-reduced-motion:reduce){ .idle-map-dot-ring{animation:none; display:none;} }
   .go-circle{position:relative; z-index:1; width:100%; max-width:220px; height:88px; border-radius:999px; margin:0 auto; background:var(--hivis);
     display:flex; align-items:center; justify-content:center; flex-direction:column; color:var(--ink); border:none; cursor:pointer;
     box-shadow:0 16px 40px var(--hivis-glow); transition:transform .12s ease, box-shadow .12s ease; animation:goCirclePulse 2.6s ease-in-out infinite;}
@@ -836,6 +835,10 @@
   .go-circle:active{transform:scale(.96); box-shadow:0 8px 24px var(--hivis-glow); animation-play-state:paused;}
   @keyframes goCirclePulse{0%,100%{box-shadow:0 16px 40px var(--hivis-glow);} 50%{box-shadow:0 16px 48px var(--hivis-glow), 0 0 0 8px var(--hivis-dim);}}
   @media (prefers-reduced-motion:reduce){ .go-circle{animation:none;} }
+  /* Rebote + leve inclinación alternando hacia adelante/atrás, como el vaivén real de
+     correr -- no solo una figura fija que se desliza por la barra. */
+  @keyframes runnerStride{from{transform:translate(-50%,-95%) translateY(0) rotate(-6deg);} to{transform:translate(-50%,-95%) translateY(-3px) rotate(6deg);}}
+  @media (prefers-reduced-motion:reduce){ #goal-progress-runner{animation:none;} }
   #runActive,#runSummary{display:none;}
   .rec-dot{width:9px; height:9px; border-radius:50%; background:var(--danger); animation:blink 1.4s ease-in-out infinite; display:inline-block; margin-right:7px;}
 
@@ -997,9 +1000,9 @@
   .swipe-item{position:relative; overflow:hidden;}
   #history-list .swipe-item{border-radius:var(--radius); margin-bottom:12px;}
   #history-list .swipe-item .hist-card{margin-bottom:0;}
-  /* Ancho sincronizado a mano con SWIPE_REVEAL en app.js -- ver el comentario ahí sobre
-     por qué el arrastre ya no puede pasarse de este ancho (antes dejaba ver una tira del
-     fondo oscuro más allá del rojo). */
+  /* El ancho de este botón se lee en JS en cada touchstart (swipeRevealPx en app.js), así
+     que el arrastre siempre coincide exacto con lo que sea que declare acá para cada caso
+     -- nunca hay que sincronizar un número a mano en dos archivos. */
   .swipe-action-delete{position:absolute; top:0; right:0; bottom:0; width:96px; background:var(--danger);
     color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer;}
   /* #history-list: antes el rojo se separaba unos px de las esquinas redondeadas de la
@@ -1010,8 +1013,11 @@
      unos px de más por arriba/abajo/derecha -- el overflow:hidden del .swipe-item de
      más arriba lo recorta a la curva exacta de la tarjeta, y como el rojo sobra en vez
      de faltar, un eventual hilito sin antialiasear queda rojo sobre rojo (invisible) en
-     vez de rojo sobre fondo oscuro. */
-  #history-list .swipe-action-delete{top:-2px; right:-2px; bottom:-2px;
+     vez de rojo sobre fondo oscuro.
+     El ancho acá pisa el de la regla genérica de arriba: la mitad de la tarjeta (pedido
+     del usuario: "que todo el recuadro rojo vaya hasta la mitad... para que parezca que
+     se encuentra detrás del ejercicio"), no un botón angosto de ancho fijo. */
+  #history-list .swipe-action-delete{top:-2px; right:-2px; bottom:-2px; width:50%;
     border-radius:0 calc(var(--radius) + 2px) calc(var(--radius) + 2px) 0;}
   .swipe-content{position:relative; touch-action:pan-y; will-change:transform; backface-visibility:hidden;}
   .swipe-content.swipe-anim{transition:transform .25s cubic-bezier(.22,1,.36,1);}
@@ -1515,11 +1521,10 @@
       <h3 id="home-next-card-title" data-i18n="home_next"></h3>
       <div class="next-session" id="home-next-session" role="button" tabindex="0" onclick="toggleHomeNextDetail()">
         <div style="min-width:0;"><div class="big display" id="home-next-title">—</div></div>
-        <div style="text-align:right; flex-shrink:0;"><div class="day-dist" id="home-next-dist" style="font-size:20px;"></div></div>
+        <div style="text-align:right; flex-shrink:0;"><div class="day-dist" id="home-next-dist" style="font-size:20px;"></div><div id="home-next-zone" style="margin-top:6px;"></div></div>
       </div>
       <div class="next-session-detail" id="home-next-detail">
         <div>
-          <div id="home-next-zone" style="margin-bottom:8px;"></div>
           <div class="next-session-bullets" id="home-next-desc"></div>
         </div>
       </div>
@@ -1597,9 +1602,11 @@
         <!-- Corredor que avanza sobre la barra con el progreso real (pedido del usuario:
              "que aparezca una persona corriendo, como si estuviera completando la meta").
              left se calcula en JS a partir del mismo % que ya llena la barra -- nunca un
-             elemento decorativo suelto, es el mismo dato. -->
-        <div id="goal-progress-runner" style="position:absolute; top:50%; left:0%; transform:translate(-50%,-50%); transition:left .5s var(--ease-out); width:22px; height:22px; border-radius:50%; background:var(--hivis); box-shadow:0 3px 8px var(--hivis-glow); display:flex; align-items:center; justify-content:center;">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="var(--ink)"><circle cx="14.5" cy="4" r="2.1"/><path d="M12.8 8.2 9.5 9.6c-.5.2-.8.6-.9 1.1l-.8 3.6 1.9.4.7-3.2 1.6-.6-1 3-3.1 2.8 1.3 1.5 3.4-3 1-3.2 1.1 1.7-.3 3.7 2 .1.4-4.2c0-.4-.1-.8-.4-1.1l-1.9-2.3.6-2.6c1 1 2.3 1.7 3.9 1.9l.2-2c-1.6-.2-2.7-1-3.4-2.1-.5-.8-1.5-1.1-2.3-.7z"/></svg>
+             elemento decorativo suelto, es el mismo dato. Sin círculo de fondo (a pedido) --
+             la silueta sola, con un rebote vertical + inclinación que imita la zancada real
+             en vez de quedar parada/estática arriba de la barra. -->
+        <div id="goal-progress-runner" style="position:absolute; top:50%; left:0%; transform:translate(-50%,-95%); transition:left .5s var(--ease-out); width:20px; height:20px; color:var(--hivis-text); filter:drop-shadow(0 2px 3px rgba(0,0,0,.5)); animation:runnerStride .55s ease-in-out infinite alternate;">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/></svg>
         </div>
       </div>
     </div>
@@ -1675,7 +1682,6 @@
       </div>
       <div class="card" id="run-today-card" style="display:none; text-align:left; margin-top:10px;">
         <h3 id="run-today-title" style="margin:0;"></h3>
-        <p class="muted" id="run-today-desc" style="margin:4px 0 0;"></p>
         <div style="display:flex; gap:10px; align-items:center; margin-top:8px;">
           <span id="run-today-dist" class="mono" style="font-weight:700;"></span>
           <span id="run-today-zone"></span>
@@ -1690,16 +1696,13 @@
         </div>
       </div>
       <div class="run-idle-cta">
-        <div class="run-bg-route" aria-hidden="true"><svg viewBox="0 0 320 400" preserveAspectRatio="xMidYMid slice">
-          <path class="rbr-contour" d="M90,160 A70,70 0 0,1 230,160 L230,300 A70,70 0 0,1 90,300 Z"/>
-          <path class="rbr-contour" d="M101,160 A59,59 0 0,1 219,160 L219,300 A59,59 0 0,1 101,300 Z"/>
-          <path class="rbr-contour" d="M112,160 A48,48 0 0,1 208,160 L208,300 A48,48 0 0,1 112,300 Z"/>
-          <path class="rbr-contour" d="M123,160 A37,37 0 0,1 197,160 L197,300 A37,37 0 0,1 123,300 Z"/>
-          <path class="rbr-contour" d="M134,160 A26,26 0 0,1 186,160 L186,300 A26,26 0 0,1 134,300 Z"/>
-          <path class="rbr-route" d="M145,160 A15,15 0 0,1 175,160 L175,300 A15,15 0 0,1 145,300 Z"/>
-          <line class="rbr-finish" x1="90" y1="262" x2="145" y2="262"/>
-          <line class="rbr-finish rbr-finish-dim" x1="90" y1="254" x2="145" y2="254"/>
-        </svg></div>
+        <!-- Mapa real (Leaflet + los mismos tiles Mapbox que ya usa el mapa en vivo de la
+             carrera, ver initIdleMap en app.js) con un punto tipo Google Maps en la
+             ubicación actual, en vez del trazado decorativo que había antes -- pedido del
+             usuario: "que pongas el mapa... como si fuera Google Maps". Sin controles de
+             zoom/arrastre a propósito: es una vista previa de "dónde estoy", no un mapa
+             para explorar, y así no compite con el botón de arriba al tocar. -->
+        <div id="idleMap" class="idle-map" aria-hidden="true"></div>
         <button class="go-circle" onclick="startRun()"><span class="display" data-i18n="run_start"></span><span style="font-size:12.5px; opacity:.7; margin-top:2px;" data-i18n="run_start_hint"></span></button>
       </div>
       <p class="muted" id="geo-warning" style="display:none; color:var(--danger);"></p>

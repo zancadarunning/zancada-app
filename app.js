@@ -3,7 +3,7 @@
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html -- antes
    era a mano, y un día entero de commits (2026-09-18) se subió sin nadie acordarse de
    tocar esta línea, así que la app nunca se enteró de que había versiones nuevas. */
-const APP_VERSION = '2026-09-18T02:40:06Z';
+const APP_VERSION = '2026-09-18T03:06:39Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -3569,7 +3569,6 @@ function renderRunTodayCard(){
   if(!today){ card.style.display = 'none'; return; }
   const lbl = planLabel(today);
   document.getElementById('run-today-title').textContent = lbl.type;
-  document.getElementById('run-today-desc').textContent = lbl.desc;
   document.getElementById('run-today-dist').textContent = planAmountText(today);
   document.getElementById('run-today-zone').innerHTML = (today.dist>0 && today.zone) ? `<span class="zone-chip zone-${today.zone}">${t('zone_word')} ${today.zone}</span>` : '';
   card.style.display = 'block';
@@ -4475,8 +4474,12 @@ document.addEventListener('touchend', ()=>{ pullActive = false; }, {passive:true
 /* ---- swipe-to-delete (history + shoes list) ---- */
 let swipeStartX = 0, swipeStartY = 0, swipeContentEl = null, swipeDragging = false, swipeBaseX = 0, swipeLastX = 0, swipeSuppressClick = false;
 let swipeRafPending = false;
-// Ancho sincronizado a mano con .swipe-action-delete en index.html.
-const SWIPE_REVEAL = 96;
+// Se mide el ancho REAL de .swipe-action-delete en cada touchstart (ver más abajo) en vez
+// de un ancho fijo a mano acá -- así el arrastre siempre coincide exactamente con lo que
+// el CSS declaró para ese elemento puntual (96px en zapatillas, 50% del ancho de la
+// tarjeta en Historial -- "que el rojo llegue hasta la mitad", pedido del usuario), sin
+// tener que mantener sincronizados un número en JS y otro en CSS a mano.
+let swipeRevealPx = 96;
 function swipeSetX(el, x){
   el.style.transform = `translate3d(${Math.round(x)}px,0,0)`;
 }
@@ -4492,11 +4495,13 @@ document.addEventListener('touchstart', e=>{
   const item = e.target.closest ? e.target.closest('.swipe-item') : null;
   if(!item){ swipeCloseAll(); swipeContentEl = null; return; }
   swipeContentEl = item.querySelector('.swipe-content');
+  const deleteEl = item.querySelector('.swipe-action-delete');
+  swipeRevealPx = deleteEl ? deleteEl.getBoundingClientRect().width : 96;
   swipeCloseAll(swipeContentEl);
   swipeStartX = e.touches[0].clientX;
   swipeStartY = e.touches[0].clientY;
   swipeDragging = false;
-  swipeBaseX = swipeContentEl.classList.contains('swipe-open') ? -SWIPE_REVEAL : 0;
+  swipeBaseX = swipeContentEl.classList.contains('swipe-open') ? -swipeRevealPx : 0;
   swipeLastX = swipeBaseX;
   swipeContentEl.classList.remove('swipe-anim');
 }, {passive:true});
@@ -4518,7 +4523,7 @@ document.addEventListener('touchmove', e=>{
   // que dejaba ver una tira del fondo oscuro de atrás pasado el rojo -- reportado por el
   // usuario ("se ve algo negro"). Ahora el arrastre nunca pasa del ancho real del botón.
   let x = swipeBaseX + dx;
-  x = Math.max(-SWIPE_REVEAL, Math.min(0, x));
+  x = Math.max(-swipeRevealPx, Math.min(0, x));
   swipeLastX = x;
   if(!swipeRafPending){
     swipeRafPending = true;
@@ -4534,8 +4539,8 @@ document.addEventListener('touchend', ()=>{
   if(swipeDragging){
     const el = swipeContentEl;
     el.classList.add('swipe-anim');
-    if(swipeLastX < -SWIPE_REVEAL/2){
-      swipeSetX(el, -SWIPE_REVEAL);
+    if(swipeLastX < -swipeRevealPx/2){
+      swipeSetX(el, -swipeRevealPx);
       el.classList.add('swipe-open');
       haptic(10);
     } else {
@@ -5053,7 +5058,7 @@ async function showView(v){
   if(v==='history'){ await refreshStateFromServer(); renderHistory(); }
   if(v==='plan'){ await refreshStateFromServer(); viewingWeekOffset = 0; renderPlan(); }
   if(v==='perfil'){ renderPerfilDays(); updatePushStatusDisplay(); updateStravaStatusDisplay(); updatePolarStatusDisplay(); updateWahooStatusDisplay(); updateCorosStatusDisplay(); updateHealthConnectStatusDisplay(); }
-  if(v==='correr'){ renderRunTodayCard(); }
+  if(v==='correr'){ renderRunTodayCard(); initIdleMap(); }
 }
 function goCoachWithPrompt(prefill){
   showView('coach');
@@ -5623,6 +5628,43 @@ function updateLiveMap(lat, lon){
     liveMapProgrammaticMoveAt = Date.now();
     liveMap.setView([lat,lon], Math.max(liveMap.getZoom(),16));
   }
+}
+// Mapa de fondo de la pantalla de Correr ANTES de arrancar a correr -- reemplaza el
+// trazado decorativo que había antes por un mapa real (mismos tiles que initLiveMap) con
+// un punto en la ubicación actual, estilo Google Maps. A diferencia del mapa en vivo de la
+// carrera (que sigue moviéndose todo el tiempo), acá alcanza con una sola lectura de
+// posición -- es una vista previa de "dónde estoy", no un tracking continuo -- así que
+// getCurrentPosition (más liviano que watchPosition) con maximumAge alto para poder
+// reusar una lectura reciente del sistema en vez de forzar un fix de GPS nuevo cada vez
+// que se abre la pestaña.
+let idleMap = null;
+function initIdleMap(){
+  const container = document.getElementById('idleMap');
+  // Guarda por si esto se llama alguna vez con la carrera ya arrancada (runIdle oculto) --
+  // no tiene sentido pedir geolocalización ni armar un mapa que nadie va a ver.
+  if(!container || document.getElementById('runIdle').style.display === 'none') return;
+  if(idleMap){ idleMap.remove(); idleMap = null; }
+  if(!('geolocation' in navigator)) return;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      // La pestaña pudo haberse cerrado/cambiado mientras esperábamos el fix de GPS.
+      if(!document.getElementById('idleMap') || document.getElementById('runIdle').style.display === 'none') return;
+      const { latitude, longitude } = pos.coords;
+      idleMap = L.map('idleMap', {zoomControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, touchZoom:false, boxZoom:false, keyboard:false, tap:false, attributionControl:true})
+        .setView([latitude, longitude], 16);
+      L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20, detectRetina:true, attribution:MAPBOX_ATTRIBUTION}).addTo(idleMap);
+      const dotIcon = L.divIcon({
+        className: '',
+        html: '<div class="idle-map-dot-ring" style="position:absolute; inset:0;"></div><div class="idle-map-dot" style="position:absolute; inset:0; margin:auto;"></div>',
+        iconSize: [16,16],
+      });
+      L.marker([latitude, longitude], {icon: dotIcon, interactive:false}).addTo(idleMap);
+      setTimeout(()=>{ if(idleMap) idleMap.invalidateSize(); }, 200);
+    },
+    () => { /* sin permiso, sin señal, lo que sea -- el mapa se queda vacío (el fondo
+              oscuro de .idle-map ya cubre ese caso) en vez de romper la pantalla */ },
+    {enableHighAccuracy:true, timeout:8000, maximumAge:30000}
+  );
 }
 function recenterMap(){
   if(!liveMap || !liveMarker) return;
@@ -7265,8 +7307,13 @@ const FOLLOW_MAX_TILES = 220;
 // esquema de subdominios en paralelo que sí usaba CartoDB) -- se deja el
 // parámetro para no tener que tocar el round-robin de subdominios del
 // llamador de más abajo.
+// @2x -- reportado por un usuario: el mapa Y el texto del video de carrera se veían
+// pixelados. La causa real era el canvas de grabación entero (ver el ctx.scale(dpr,dpr)
+// en startDynamicVideo), pero las tiles en sí también pedían la versión de menor
+// resolución -- @2x le da al drawImage() de abajo el doble de detalle fuente para
+// reducir a MAP_TILE_SIZE, en vez de una tile ya de baja resolución estirada.
 let routeTileUrl = function(subdomain, zoom, x, y){
-  return `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/tiles/256/${zoom}/${x}/${y}?access_token=${MAPBOX_TOKEN}`;
+  return `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/tiles/256/${zoom}/${x}/${y}@2x?access_token=${MAPBOX_TOKEN}`;
 };
 
 // Proyección Web Mercator estándar (la misma matemática que usan los mapas
@@ -7419,7 +7466,10 @@ async function loadFollowMapForVideo(routeData){
     tiles.forEach((tl,i)=>{
       const img = results[i];
       if(!img) return;
-      try{ octx.drawImage(img, (tl.tx-txMin)*MAP_TILE_SIZE, (tl.ty-tyMin)*MAP_TILE_SIZE); }catch(e){}
+      // Tamaño de destino explícito (MAP_TILE_SIZE): la imagen @2x llega al doble de esa
+      // resolución (512px reales para una tile "de 256"), así el navegador la reduce con
+      // buena calidad en vez de estirarla 1:1 como hacía el drawImage de 2 argumentos.
+      try{ octx.drawImage(img, (tl.tx-txMin)*MAP_TILE_SIZE, (tl.ty-tyMin)*MAP_TILE_SIZE, MAP_TILE_SIZE, MAP_TILE_SIZE); }catch(e){}
     });
 
     // Chequeo de "taint": si alguna tile contaminó el canvas (cross-origin
@@ -7470,8 +7520,23 @@ async function startDynamicVideo(runId){
   const video = document.getElementById('rd-video-preview');
   const progressEl = document.getElementById('rd-video-progress');
   const actions = document.getElementById('rd-video-actions');
+  // W/H son el tamaño LÓGICO (720x1280, los atributos fijos del <canvas> en el HTML) --
+  // todo el resto de esta función posiciona con estos números. El canvas en sí se muestra
+  // en pantalla a `max-width:100%; max-height:70vh` (bastante más grande que 720px real en
+  // la mayoría de los celulares), así que sin agrandar también su resolución de verdad
+  // (canvas.width/height) el navegador estira ese buffer chico -- mapa Y texto quedan
+  // pixelados por igual, reportado por un usuario. ctx.scale(dpr,dpr) hace que todos los
+  // dibujos que ya asumen coordenadas de 720x1280 caigan bien en el buffer más grande, sin
+  // tocar ninguna otra cuenta de esta función. Tope en 2x (no el dpr real, que puede ser 3
+  // en algunos celulares) para no disparar el costo de grabar+codificar un video enorme.
   const W = canvas.width, H = canvas.height;
   const ctx = canvas.getContext('2d');
+  const videoDpr = Math.min(window.devicePixelRatio || 1, 2);
+  if(videoDpr > 1){
+    canvas.width = W * videoDpr;
+    canvas.height = H * videoDpr;
+    ctx.scale(videoDpr, videoDpr);
+  }
 
   const mapX=34, mapY=176, mapW=W-68, mapH=640, mapPad=26;
   const routeData = computeVideoRouteData(r, mapX, mapY, mapW, mapH, mapPad);
