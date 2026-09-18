@@ -490,8 +490,11 @@
   .soon-note{font-size:12px; color:var(--mist-dim); text-align:center; margin-top:10px; line-height:1.5;}
   .err-text{color:var(--danger); font-size:12.5px; margin-top:8px; display:none;}
 
+  /* isolation:isolate acá también -- ver el comentario junto a .idle-map-wrap. Subimos
+     z-index de 5 a 50 de paso, para tener margen de sobra contra cualquier otro contenido
+     de una vista que use transform (no solo el mapa de Correr). */
   header.top{padding:calc(16px + var(--safe-top)) 20px 14px; display:flex; align-items:center; justify-content:space-between;
-    position:sticky; top:0; z-index:5; background:linear-gradient(180deg, var(--tabbar-bg) 55%, transparent); backdrop-filter:blur(16px) saturate(1.5); -webkit-backdrop-filter:blur(16px) saturate(1.5);
+    position:sticky; top:0; z-index:50; isolation:isolate; background:linear-gradient(180deg, var(--tabbar-bg) 55%, transparent); backdrop-filter:blur(16px) saturate(1.5); -webkit-backdrop-filter:blur(16px) saturate(1.5);
     flex-shrink:0;}
   header.top .brand{display:flex; align-items:center; gap:9px;}
   header.top .brand .dot{width:9px; height:9px; border-radius:50%; background:var(--hivis); box-shadow:0 0 10px var(--hivis);}
@@ -814,7 +817,14 @@
      en el lugar donde antes iba la ficha del entrenamiento de hoy -- pedido del usuario
      de separar el mapa del botón de arrancar y devolver la pista de atletismo decorativa
      a su lugar original detrás de ese botón. */
-  .idle-map-wrap{position:relative; height:180px; border-radius:var(--radius); overflow:hidden; margin-top:10px; border:1px solid var(--overlay-hairline); background:var(--asphalt-3);}
+  /* isolation:isolate -- Leaflet mueve sus panes internos con transform (translate3d),
+     que arma su propio stacking context; en algunos navegadores mobile eso alcanza a
+     pintarse por encima del header.top (position:sticky) mientras se está scrolleando,
+     tapando el nombre de la app -- reportado por el usuario. overflow:hidden ya recorta
+     el contenido visualmente, pero no alcanza para contener el stacking/compositing;
+     isolation:isolate sí lo encierra del todo, así nada de adentro puede pintarse por
+     encima de hermanos de afuera sin importar qué transform/z-index tenga Leaflet. */
+  .idle-map-wrap{position:relative; z-index:0; isolation:isolate; height:180px; border-radius:var(--radius); overflow:hidden; margin-top:10px; border:1px solid var(--overlay-hairline); background:var(--asphalt-3);}
   .idle-map{height:100%; width:100%;}
   .idle-map .leaflet-control-attribution{font-size:8.5px; background:rgba(10,10,10,.5); color:var(--mist-dim);}
   .idle-map .leaflet-control-attribution a{color:var(--mist);}
@@ -1704,18 +1714,15 @@
         </div>
       </div>
       <div class="run-idle-cta">
-        <!-- Pista horizontal (rectas arriba/abajo, curvas a los costados) en vez de la
-             orientación vertical que tenía antes -- misma fórmula geométrica de siempre
-             (cada carril usa M90,Y A r,r ... L230,Y ... con Y=250±r), solo rotada 90°. -->
         <div class="run-bg-route" aria-hidden="true"><svg viewBox="0 0 320 400" preserveAspectRatio="xMidYMid slice">
-          <path class="rbr-contour" d="M90,180 A70,70 0 0,1 90,320 L230,320 A70,70 0 0,1 230,180 Z"/>
-          <path class="rbr-contour" d="M90,191 A59,59 0 0,1 90,309 L230,309 A59,59 0 0,1 230,191 Z"/>
-          <path class="rbr-contour" d="M90,202 A48,48 0 0,1 90,298 L230,298 A48,48 0 0,1 230,202 Z"/>
-          <path class="rbr-contour" d="M90,213 A37,37 0 0,1 90,287 L230,287 A37,37 0 0,1 230,213 Z"/>
-          <path class="rbr-contour" d="M90,224 A26,26 0 0,1 90,276 L230,276 A26,26 0 0,1 230,224 Z"/>
-          <path class="rbr-route" d="M90,235 A15,15 0 0,1 90,265 L230,265 A15,15 0 0,1 230,235 Z"/>
-          <line class="rbr-finish" x1="192" y1="180" x2="192" y2="235"/>
-          <line class="rbr-finish rbr-finish-dim" x1="184" y1="180" x2="184" y2="235"/>
+          <path class="rbr-contour" d="M90,160 A70,70 0 0,1 230,160 L230,300 A70,70 0 0,1 90,300 Z"/>
+          <path class="rbr-contour" d="M101,160 A59,59 0 0,1 219,160 L219,300 A59,59 0 0,1 101,300 Z"/>
+          <path class="rbr-contour" d="M112,160 A48,48 0 0,1 208,160 L208,300 A48,48 0 0,1 112,300 Z"/>
+          <path class="rbr-contour" d="M123,160 A37,37 0 0,1 197,160 L197,300 A37,37 0 0,1 123,300 Z"/>
+          <path class="rbr-contour" d="M134,160 A26,26 0 0,1 186,160 L186,300 A26,26 0 0,1 134,300 Z"/>
+          <path class="rbr-route" d="M145,160 A15,15 0 0,1 175,160 L175,300 A15,15 0 0,1 145,300 Z"/>
+          <line class="rbr-finish" x1="90" y1="262" x2="145" y2="262"/>
+          <line class="rbr-finish rbr-finish-dim" x1="90" y1="254" x2="145" y2="254"/>
         </svg></div>
         <button class="go-circle" onclick="startRun()"><span class="display" data-i18n="run_start"></span><span style="font-size:12.5px; opacity:.7; margin-top:2px;" data-i18n="run_start_hint"></span></button>
       </div>
