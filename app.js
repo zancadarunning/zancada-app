@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-18T21:02:26Z';
+const APP_VERSION = '2026-09-18T23:57:00Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3061,6 +3061,9 @@ function trainingCaution(p){
   if(p.returningFromBreak) level = Math.max(level, 1);
   return { age, bmi, level };
 }
+// Techo a la porción del volumen semanal que una sola sesión de alto impacto (series o
+// cuestas) puede cargar -- ver el comentario en generatePlan, donde se usa.
+const HIGH_IMPACT_SHARE_CAP = 0.3;
 function generatePlan(p, weekNumber, weekStartDate){
   weekNumber = weekNumber || 1;
   weekStartDate = weekStartDate || state.weekStart;
@@ -3112,6 +3115,36 @@ function generatePlan(p, weekNumber, weekStartDate){
     const perUnit = weightSum>0 ? targetTotal/weightSum : 0;
     distMap = {};
     Object.keys(RATIO).forEach(type=>{ distMap[type] = Math.round(perUnit * RATIO[type]); });
+    // El reparto proporcional de arriba no tiene techo por sí solo -- con pocos días de
+    // entreno (2-3 por semana) le puede tocar a una sola sesión de alto impacto (series o
+    // cuestas) una porción desmedida del total semanal, porque el peso de RATIO se reparte
+    // entre menos "unidades". Reportado por un usuario que corre ~20km/semana: con un plan
+    // de 2 días (tirada larga + cuestas), su única sesión de cuestas (10 subidas de 400m ida
+    // y vuelta) le representaba el 38% de TODO su volumen semanal en un solo esfuerzo de alto
+    // impacto -- muy por encima de lo que cualquier criterio real de entrenamiento
+    // consideraría razonable (la regla 80/20 que ya sigue el resto del generador, ver RATIO,
+    // reserva las sesiones fuertes para una porción chica del total). Achicamos esa sesión a
+    // lo sumo a HIGH_IMPACT_SHARE_CAP del volumen semanal y repartimos lo que sobra entre las
+    // demás sesiones de esa semana, en la misma proporción que ya tenían entre sí -- así el
+    // total semanal sigue coincidiendo con effectiveWeeklyKm*mult (ver el comentario de más
+    // arriba), solo que mejor repartido.
+    const occurrences = {};
+    usedTypes.forEach(type=>{ occurrences[type] = (occurrences[type]||0) + 1; });
+    ['hills','intervals'].forEach(type=>{
+      const occ = occurrences[type] || 0;
+      if(!occ || distMap[type]<=0) return;
+      const cap = Math.max(1, Math.round(targetTotal * HIGH_IMPACT_SHARE_CAP));
+      if(distMap[type] <= cap) return;
+      const totalExcess = (distMap[type] - cap) * occ;
+      distMap[type] = cap;
+      const remainingWeight = weightSum - (RATIO[type]||1) * occ;
+      if(remainingWeight>0){
+        Object.keys(occurrences).forEach(t=>{
+          if(t===type) return;
+          distMap[t] += Math.round(totalExcess * (RATIO[t]||1) / remainingWeight);
+        });
+      }
+    });
   }
   // La carrera cargada en "Próximos eventos" ya NO le saca la sesión propia al día en el que
   // cae (antes ese día quedaba fijo en descanso porque "la carrera era la sesión") -- ahora es
