@@ -109,6 +109,15 @@ module.exports = withSentry(async (req, res) => {
         await setStravaSyncStatus(base, headers, conn.user_id, { ok: true });
       } catch (e) {
         errors++;
+        // Antes esto no se registraba en ningún lado -- setStravaSyncStatus guarda el
+        // mensaje en app_state.data.stravaSync.lastError, pero esa misma función SQL lo
+        // BORRA automáticamente en cuanto el próximo intento (cron o "Sincronizar ahora")
+        // sale bien (ver set_strava_sync_status.sql: `v_sync := v_sync - 'lastError'`) --
+        // así que un error que el usuario alcanzó a ver en el cartel y resolvió tocando
+        // sincronizar quedaba, un minuto después, irrecuperable para siempre: nada lo
+        // había mandado a los logs de Vercel ni a Sentry. polar-sync.js/wahoo-sync.js sí
+        // hacían console.error acá -- este archivo se había quedado atrás.
+        console.error('sync-strava (cron): error syncing user', conn.user_id, e);
         await setStravaSyncStatus(base, headers, conn.user_id, { ok: false, error: e.message });
       }
     }
