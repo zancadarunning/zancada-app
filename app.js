@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-18T20:44:30Z';
+const APP_VERSION = '2026-09-18T21:02:26Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2988,32 +2988,43 @@ function buildHillStructure(qualityKm, caution){
   // Repeticiones en subida, en distancia (no en tiempo): antes esta función fijaba
   // effortSec/baseReps por tiers SIN relación con qualityKm, así que el total
   // mostrado ("9.0 km") podía quedar totalmente desconectado de la sesión descripta
-  // (ej: "10 subidas de 90 segundos" no suma ningún 9km reconocible). Ahora reps sale
-  // de dividir qualityKm por un repMeters fijo por tier -- PERO maxReps de más abajo
-  // puede seguir capando ese cálculo (reportado por un usuario: "10 subidas de 400m"
-  // con un total de "9km" arriba, que en realidad son solo 4km de subida real). El
-  // texto y el total son consistentes DE VERDAD recién en generatePlan, que
-  // recalcula dayObj.dist a partir de reps*repMeters (ver intervalActualKm) en vez
-  // de confiar en qualityKm ciegamente.
+  // (ej: "10 subidas de 90 segundos" no suma ningún 9km reconocible).
   let repMeters;
   if(qualityKm <= 4) repMeters = 150;
   else if(qualityKm <= 7) repMeters = 250;
   else repMeters = 400;
   const maxReps = caution && caution.level>=2 ? 5 : caution && caution.level>=1 ? 7 : 10;
+  // La "recuperación" de una cuesta es volver BAJANDO la misma subida (ver
+  // desc_hills_detail: "bajando trotando suave como recuperación") -- a diferencia de
+  // las series en llano, donde la recuperación se describe en MINUTOS, no en metros (ver
+  // buildIntervalStructure). Cada repetición cubre entonces repMeters de ida MÁS otros
+  // repMeters de vuelta, así que hay que dividir por el doble para que reps*repMeters*2
+  // (ver hillActualKm) se acerque a qualityKm -- reportado por un usuario que hizo la
+  // cuenta a mano: "400m fuertes y 400m volviendo tranquilo, séría 8km" para 10
+  // repeticiones, exactamente el ida y vuelta que había que contar acá (antes se dividía
+  // solo por repMeters, como si la bajada no fuera distancia real recorrida).
   const totalMeters = qualityKm * 1000;
-  const reps = Math.max(4, Math.min(maxReps, Math.round(totalMeters / repMeters)));
+  const reps = Math.max(4, Math.min(maxReps, Math.round(totalMeters / (repMeters * 2))));
   return { reps, repMeters };
 }
-// Distancia REAL de una sesión de series/cuestas, a partir de la estructura ya
-// construida (reps*repMeters) -- ni buildIntervalStructure ni buildHillStructure
-// garantizan que esto coincida con el qualityKm que recibieron como entrada, porque
-// maxReps puede capar la cantidad de repeticiones antes de llegar a esa distancia
-// (ver los comentarios de esas dos funciones). generatePlan usa esto para que el
-// número de km que ve el corredor arriba de la sesión sea siempre el que sale de
-// sumar las repeticiones descriptas, nunca uno más alto que no se corresponde con
-// las instrucciones reales.
+// Distancia REAL de una sesión de series en llano, a partir de la estructura ya
+// construida (reps*repMeters, solo el tramo fuerte) -- ni esto ni qualityKm garantizan
+// coincidir, porque maxReps puede capar la cantidad de repeticiones antes de llegar a esa
+// distancia. La recuperación entre repeticiones NO se suma acá a propósito: se describe en
+// minutos (desc_intervals_detail), no en metros, igual que la entrada en calor/vuelta a la
+// calma -- convención estándar en planes de entrenamiento (la "distancia de la sesión" es
+// el tramo de calidad, el trote de recuperación se indica aparte, no infla el número).
+// generatePlan usa esto para que el km que ve el corredor sea siempre el que sale de sumar
+// las repeticiones descriptas, nunca uno más alto que no se corresponde con las
+// instrucciones reales.
 function intervalActualKm(interval){
   return Math.max(0.1, Math.round(interval.reps * interval.repMeters / 100) / 10);
+}
+// Distancia REAL de una sesión de cuestas: a diferencia de intervalActualKm, acá SÍ se
+// cuenta la vuelta (ver el comentario de buildHillStructure) -- reps repeticiones de
+// repMeters de ida MÁS repMeters de vuelta cada una.
+function hillActualKm(interval){
+  return Math.max(0.1, Math.round(interval.reps * interval.repMeters * 2 / 100) / 10);
 }
 function calcBmi(p){
   if(!p || !p.weight || !p.height) return null;
@@ -3118,7 +3129,7 @@ function generatePlan(p, weekNumber, weekStartDate){
     }
     if(typeKey==='hills' && !beginner){
       dayObj.interval = buildHillStructure(distMap[typeKey], caution);
-      dayObj.dist = intervalActualKm(dayObj.interval);
+      dayObj.dist = hillActualKm(dayObj.interval);
     }
     return dayObj;
   });
