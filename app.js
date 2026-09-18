@@ -1,9 +1,12 @@
+const APP_VERSION = '2026-09-18T03:38:07Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
-   la actualiza sola a la hora actual en cada commit que toque app.js/index.html -- antes
-   era a mano, y un día entero de commits (2026-09-18) se subió sin nadie acordarse de
-   tocar esta línea, así que la app nunca se enteró de que había versiones nuevas. */
-const APP_VERSION = '2026-09-18T03:21:51Z';
+   la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
+   Esta constante tiene que ser literalmente la primera línea del archivo: checkForAppUpdate
+   solo pide los primeros bytes (Range) para no gastar datos, así que si esto se corre más
+   abajo (por ejemplo detrás de este mismo comentario, como estaba antes) el Range nunca
+   llega a incluirla, la regex nunca matchea, y la app deja de darse cuenta de que hay
+   una versión nueva -- exactamente lo que pasó hasta el 2026-09-18. */
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -3542,9 +3545,6 @@ function getTodayRun(){
   return todays.reduce((a,b) => (a.id > b.id ? a : b));
 }
 function renderRunTodayCard(){
-  const idx = (new Date().getDay()+6)%7;
-  const today = state.plan[idx];
-  const card = document.getElementById('run-today-card');
   const doneCard = document.getElementById('run-done-today-card');
   const todayRun = getTodayRun();
   if(todayRun){
@@ -3555,20 +3555,9 @@ function renderRunTodayCard(){
     document.getElementById('run-done-pace').textContent = fmtPace(paceMin);
     document.getElementById('run-done-pace-label').textContent = t('run_pace');
     doneCard.style.display = 'block';
-    // El cartel de "sesión completada" reemplaza al de "tu sesión de hoy" (no tiene
-    // sentido mostrar los dos juntos, uno diciendo lo que tocaba y otro confirmando que
-    // ya se hizo) -- antes esto solo se decía en el comentario de arriba, pero el código
-    // nunca llegaba a ocultar `card`, así que quedaban las dos tarjetas apiladas.
-    card.style.display = 'none';
     return;
   }
   doneCard.style.display = 'none';
-  if(!today){ card.style.display = 'none'; return; }
-  const lbl = planLabel(today);
-  document.getElementById('run-today-title').textContent = lbl.type;
-  document.getElementById('run-today-dist').textContent = planAmountText(today);
-  document.getElementById('run-today-zone').innerHTML = (today.dist>0 && today.zone) ? `<span class="zone-chip zone-${today.zone}">${t('zone_word')} ${today.zone}</span>` : '';
-  card.style.display = 'block';
 }
 function getPlanStartDate(){
   // la fecha más vieja de weekStart que tengamos registrada (historial de semanas + la semana actual)
@@ -5002,21 +4991,16 @@ async function checkForAppUpdate(){
   if(appUpdateChecking) return false;
   appUpdateChecking = true;
   try{
-    /* Antes esto pedía index.html y buscaba `const APP_VERSION` ahí adentro — funcionaba
-       porque todo el JS vivía inline en index.html. Desde que se separó el código a
-       app.js, index.html ya no contiene esa constante, así que el regex nunca matcheaba
-       y el aviso de actualización dejó de aparecer (en cualquier plataforma, no solo
-       en el celular — simplemente nadie lo notó en desktop todavía). Hay que pedir
-       app.js, que es donde vive ahora.
-       Esto se dispara cada vez que la pestaña/app vuelve a estar visible (ver el
-       visibilitychange de abajo) -- en el celular eso pasa muy seguido (cada vez que
-       se desbloquea o se vuelve de otra app). Pedir el archivo ENTERO cada vez (498KB,
-       ~156KB comprimido) solo para leer una constante de la línea 3 era tirar datos del
-       celular a la basura en cada regreso -- un header Range pide solo los primeros
-       bytes (de sobra para esa constante, que está al principio del archivo a
-       propósito). Si el hosting no respeta Range, cae solo al comportamiento de
-       siempre (200 con el archivo completo) sin romper nada. */
-    const res = await fetch('/app.js?_v=' + Date.now(), { cache:'no-store', headers:{'Range':'bytes=0-300'} });
+    /* Pide solo los primeros bytes de app.js (Range) en vez del archivo entero (498KB,
+       ~156KB comprimido) -- esto se dispara cada vez que la pestaña/app vuelve a estar
+       visible (ver visibilitychange más abajo) y en el celular eso pasa muy seguido
+       (cada desbloqueo, cada vuelta de otra app), así que pedir el archivo completo cada
+       vez tira datos del celular a la basura solo para leer una constante. APP_VERSION
+       tiene que seguir siendo literalmente la primera línea del archivo para que este
+       Range chico alcance a incluirla (ver el comentario junto a la constante). Si el
+       hosting no respeta Range, cae solo al comportamiento de siempre (200 con el
+       archivo completo) sin romper nada. */
+    const res = await fetch('/app.js?_v=' + Date.now(), { cache:'no-store', headers:{'Range':'bytes=0-200'} });
     if(!res.ok) return false;
     const text = await res.text();
     const m = text.match(/const APP_VERSION\s*=\s*'([^']+)'/);

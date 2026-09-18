@@ -810,15 +810,12 @@
   .gps-status-title{margin:0 0 6px; font-weight:700; font-size:13.5px; color:var(--chalk);}
   .gps-status-bullet{margin:5px 0 0; font-size:12px; line-height:1.4; color:var(--mist); display:flex; gap:6px;}
   .gps-status-bullet::before{content:'—'; color:var(--mist-dim); flex-shrink:0;}
-  /* Zona del botón de arrancar: el fondo de líneas de ruta/altimetría es puramente
-     decorativo (aria-hidden), muy tenue, para que el espacio vacío alrededor del botón
-     dé contexto de "esto registra tu recorrido" antes de arrancar a correr. */
-  .run-idle-cta{position:relative; margin-top:8px; min-height:400px; display:flex; align-items:flex-start; justify-content:center; padding-top:28px;}
-  /* Mapa real de fondo (ver initIdleMap en app.js) en vez de la pista decorativa que había
-     antes -- mismo rol de "ocupar el espacio vacío detrás del botón", pero ahora es de
-     verdad el lugar donde estás. z-index:0 para que el botón EMPEZAR (z-index:1) quede
-     siempre arriba y se pueda tocar sin pelear con el mapa. */
-  .idle-map{position:absolute; inset:0; z-index:0; border-radius:var(--radius); overflow:hidden; background:var(--asphalt-3);}
+  /* Mapa real de "dónde estoy" (ver initIdleMap en app.js): vive en su propia tarjeta,
+     en el lugar donde antes iba la ficha del entrenamiento de hoy -- pedido del usuario
+     de separar el mapa del botón de arrancar y devolver la pista de atletismo decorativa
+     a su lugar original detrás de ese botón. */
+  .idle-map-wrap{position:relative; height:180px; border-radius:var(--radius); overflow:hidden; margin-top:10px; border:1px solid var(--overlay-hairline); background:var(--asphalt-3);}
+  .idle-map{height:100%; width:100%;}
   .idle-map .leaflet-control-attribution{font-size:8.5px; background:rgba(10,10,10,.5); color:var(--mist-dim);}
   .idle-map .leaflet-control-attribution a{color:var(--mist);}
   /* Punto "estás acá" estilo Google Maps: círculo sólido con borde + un anillo translúcido
@@ -828,6 +825,25 @@
   .idle-map-dot-ring{width:16px; height:16px; border-radius:50%; background:var(--hivis-dim); animation:idleMapPulse 2.4s ease-out infinite;}
   @keyframes idleMapPulse{0%{transform:scale(1); opacity:.9;} 100%{transform:scale(3.4); opacity:0;}}
   @media (prefers-reduced-motion:reduce){ .idle-map-dot-ring{animation:none; display:none;} }
+  /* Zona del botón de arrancar: el fondo de líneas de ruta/altimetría es puramente
+     decorativo (aria-hidden), muy tenue, para que el espacio vacío alrededor del botón
+     dé contexto de "esto registra tu recorrido" antes de arrancar a correr. */
+  .run-idle-cta{position:relative; margin-top:8px; min-height:400px; display:flex; align-items:flex-start; justify-content:center; padding-top:28px;}
+  .run-bg-route{position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none;}
+  .run-bg-route svg{width:100%; height:100%;}
+  /* Fondo decorativo detrás del botón START: una pista de atletismo (carriles + línea de
+     llegada) tenue en gris, con el carril interno resaltado en lima -- ocupa el espacio
+     vacío entre el botón y la tabbar en vez de dejarlo en blanco. */
+  .run-bg-route .rbr-contour{fill:none; stroke:var(--asphalt-4); stroke-width:1.4; opacity:.6;}
+  /* El carril lima "fluye" despacio (stroke-dashoffset) -- una pista que invita a
+     correrla, en vez de una ilustración fija. Literal al contenido (es una pista),
+     no un efecto decorativo suelto. */
+  .run-bg-route .rbr-route{fill:none; stroke:var(--hivis); stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; opacity:.55;
+    filter:drop-shadow(0 0 5px var(--hivis-glow)); stroke-dasharray:14 10; animation:rbrFlow 5s linear infinite;}
+  @keyframes rbrFlow{to{stroke-dashoffset:-48;}}
+  @media (prefers-reduced-motion:reduce){ .run-bg-route .rbr-route{animation:none;} }
+  .run-bg-route .rbr-finish{stroke:var(--mist-dim); stroke-width:1.6; opacity:.5;}
+  .run-bg-route .rbr-finish-dim{opacity:.3;}
   .go-circle{position:relative; z-index:1; width:100%; max-width:220px; height:88px; border-radius:999px; margin:0 auto; background:var(--hivis);
     display:flex; align-items:center; justify-content:center; flex-direction:column; color:var(--ink); border:none; cursor:pointer;
     box-shadow:0 16px 40px var(--hivis-glow); transition:transform .12s ease, box-shadow .12s ease; animation:goCirclePulse 2.6s ease-in-out infinite;}
@@ -1673,12 +1689,11 @@
           <div class="stat-box"><div class="n mono" id="run-done-pace">0</div><div class="l" id="run-done-pace-label"></div></div>
         </div>
       </div>
-      <div class="card" id="run-today-card" style="display:none; text-align:left; margin-top:10px;">
-        <h3 id="run-today-title" style="margin:0;"></h3>
-        <div style="display:flex; gap:10px; align-items:center; margin-top:8px;">
-          <span id="run-today-dist" class="mono" style="font-weight:700;"></span>
-          <span id="run-today-zone"></span>
-        </div>
+      <!-- Mapa real de "dónde estoy" (Leaflet + los mismos tiles Mapbox que ya usa el mapa
+           en vivo de la carrera, ver initIdleMap en app.js), en el lugar donde antes iba
+           la ficha con el entrenamiento de hoy -- pedido del usuario. -->
+      <div class="idle-map-wrap" id="idle-map-wrap">
+        <div id="idleMap" class="idle-map" aria-hidden="true"></div>
       </div>
       <div class="gps-status-card">
         <span class="icon-sq" style="width:20px; height:20px; color:var(--hivis-text); flex-shrink:0;" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="6.5"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21"/></svg></span>
@@ -1689,13 +1704,16 @@
         </div>
       </div>
       <div class="run-idle-cta">
-        <!-- Mapa real (Leaflet + los mismos tiles Mapbox que ya usa el mapa en vivo de la
-             carrera, ver initIdleMap en app.js) con un punto tipo Google Maps en la
-             ubicación actual, en vez del trazado decorativo que había antes -- pedido del
-             usuario: "que pongas el mapa... como si fuera Google Maps". Sin controles de
-             zoom/arrastre a propósito: es una vista previa de "dónde estoy", no un mapa
-             para explorar, y así no compite con el botón de arriba al tocar. -->
-        <div id="idleMap" class="idle-map" aria-hidden="true"></div>
+        <div class="run-bg-route" aria-hidden="true"><svg viewBox="0 0 320 400" preserveAspectRatio="xMidYMid slice">
+          <path class="rbr-contour" d="M90,160 A70,70 0 0,1 230,160 L230,300 A70,70 0 0,1 90,300 Z"/>
+          <path class="rbr-contour" d="M101,160 A59,59 0 0,1 219,160 L219,300 A59,59 0 0,1 101,300 Z"/>
+          <path class="rbr-contour" d="M112,160 A48,48 0 0,1 208,160 L208,300 A48,48 0 0,1 112,300 Z"/>
+          <path class="rbr-contour" d="M123,160 A37,37 0 0,1 197,160 L197,300 A37,37 0 0,1 123,300 Z"/>
+          <path class="rbr-contour" d="M134,160 A26,26 0 0,1 186,160 L186,300 A26,26 0 0,1 134,300 Z"/>
+          <path class="rbr-route" d="M145,160 A15,15 0 0,1 175,160 L175,300 A15,15 0 0,1 145,300 Z"/>
+          <line class="rbr-finish" x1="90" y1="262" x2="145" y2="262"/>
+          <line class="rbr-finish rbr-finish-dim" x1="90" y1="254" x2="145" y2="254"/>
+        </svg></div>
         <button class="go-circle" onclick="startRun()"><span class="display" data-i18n="run_start"></span><span style="font-size:12.5px; opacity:.7; margin-top:2px;" data-i18n="run_start_hint"></span></button>
       </div>
       <p class="muted" id="geo-warning" style="display:none; color:var(--danger);"></p>
