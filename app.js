@@ -3785,7 +3785,7 @@ function renderPlan(){
         </div>
         <div class="day-row-end">${statusIcon}</div>
       </div>
-      <div class="day-detail" id="detail-${i}">${lblDesc}${zoneDetail}${statusBlock}</div>
+      <div class="day-detail" id="detail-${i}"><div>${lblDesc}${zoneDetail}${statusBlock}</div></div>
     </div>`;
   }).join('');
   renderPastWeeks();

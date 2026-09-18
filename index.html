@@ -734,15 +734,19 @@
   .day-row{display:flex; align-items:flex-start; gap:12px; padding:13px 0; border-bottom:1px solid var(--asphalt-3); cursor:pointer; transition:background .12s ease, opacity .12s ease;}
   .day-row:active{background:var(--press);}
   .day-row:last-child{border-bottom:none;}
-  .day-badge{width:42px; text-align:center; flex-shrink:0;}
+  .day-badge{width:42px; text-align:center; flex-shrink:0; padding:5px 0; border-radius:12px; transition:background .15s var(--ease-out);}
   .day-badge .d{font-size:11px; color:var(--mist); text-transform:uppercase;}
   .day-info{flex:1; min-width:0;}
-  .day-info .t{font-weight:700; font-size:15.5px;}
+  .day-info .t{font-weight:700; font-size:16.5px; letter-spacing:-.005em;}
   .day-info .m{font-size:12px; color:var(--mist); margin-top:4px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
   .day-info-title-row{display:flex; align-items:baseline; gap:9px; flex-wrap:wrap;}
   /* Kilometraje integrado en la misma fila del tipo de sesión, con un divisor fino en
      vez de vivir solo en su propia columna a la derecha (que dejaba la fila con mucho
      aire vacío en el medio en pantallas angostas). */
+  /* El día de hoy se nota por una ficha propia (mismo lenguaje que .chip-active/
+     .zone-badge-live: fondo tintado, nunca un borde) en vez de solo cambiarle el
+     color al texto -- es la única fila de las 7 que importa de verdad hoy mismo. */
+  .day-row.day-row-today .day-badge{background:var(--hivis-dim);}
   .day-row.day-row-today .day-badge .d{color:var(--hivis-text); font-weight:800;}
   .day-km-inline{font-family:'JetBrains Mono',monospace; font-size:12.5px; font-weight:700; color:var(--chalk); flex-shrink:0;
     padding-left:9px; border-left:1px solid var(--asphalt-4);}
@@ -754,8 +758,16 @@
   /* Día de descanso: toda la fila baja de opacidad para que los días CON entrenamiento
      salten a la vista de entrada, sin tener que leer cada renglón. */
   .day-row.day-row-rest{opacity:.5;}
-  .day-detail{display:none; padding:0 0 14px 54px; font-size:13px; color:var(--mist); line-height:1.7; white-space:pre-line;}
-  .day-detail.open{display:block;}
+  /* Expandido con grid-template-rows (0fr -> 1fr) en vez de display:none/block --
+     anima a un alto real sin necesidad de medirlo en JS ni animar `height` directo
+     (eso sí trabaría el layout). El wrapper interno (ver renderPlan en app.js) es
+     el que de verdad lleva el padding/tipografía; .day-detail en sí es solo el
+     mecanismo de animación. */
+  .day-detail{display:grid; grid-template-rows:0fr; opacity:0; overflow:hidden;
+    transition:grid-template-rows .32s var(--ease-out), opacity .22s ease;}
+  .day-detail > div{min-height:0; padding:0 0 14px 54px; font-size:13px; color:var(--mist); line-height:1.7; white-space:pre-line;}
+  .day-detail.open{grid-template-rows:1fr; opacity:1;}
+  @media (prefers-reduced-motion:reduce){ .day-detail{transition:opacity .15s ease;} }
 
   #runIdle{text-align:center; padding-top:16px;}
   /* Tarjeta de estado GPS: reemplaza el bloque de dos párrafos de advertencia por una
@@ -776,15 +788,22 @@
      llegada) tenue en gris, con el carril interno resaltado en lima -- ocupa el espacio
      vacío entre el botón y la tabbar en vez de dejarlo en blanco. */
   .run-bg-route .rbr-contour{fill:none; stroke:var(--asphalt-4); stroke-width:1.4; opacity:.6;}
+  /* El carril lima "fluye" despacio (stroke-dashoffset) -- una pista que invita a
+     correrla, en vez de una ilustración fija. Literal al contenido (es una pista),
+     no un efecto decorativo suelto. */
   .run-bg-route .rbr-route{fill:none; stroke:var(--hivis); stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; opacity:.55;
-    filter:drop-shadow(0 0 5px var(--hivis-glow));}
+    filter:drop-shadow(0 0 5px var(--hivis-glow)); stroke-dasharray:14 10; animation:rbrFlow 5s linear infinite;}
+  @keyframes rbrFlow{to{stroke-dashoffset:-48;}}
+  @media (prefers-reduced-motion:reduce){ .run-bg-route .rbr-route{animation:none;} }
   .run-bg-route .rbr-finish{stroke:var(--mist-dim); stroke-width:1.6; opacity:.5;}
   .run-bg-route .rbr-finish-dim{opacity:.3;}
   .go-circle{position:relative; z-index:1; width:100%; max-width:220px; height:88px; border-radius:999px; margin:0 auto; background:var(--hivis);
     display:flex; align-items:center; justify-content:center; flex-direction:column; color:var(--ink); border:none; cursor:pointer;
-    box-shadow:0 16px 40px var(--hivis-glow); transition:transform .12s ease, box-shadow .12s ease;}
+    box-shadow:0 16px 40px var(--hivis-glow); transition:transform .12s ease, box-shadow .12s ease; animation:goCirclePulse 2.6s ease-in-out infinite;}
   .go-circle .display{font-size:25px; letter-spacing:.03em;}
-  .go-circle:active{transform:scale(.96); box-shadow:0 8px 24px var(--hivis-glow);}
+  .go-circle:active{transform:scale(.96); box-shadow:0 8px 24px var(--hivis-glow); animation-play-state:paused;}
+  @keyframes goCirclePulse{0%,100%{box-shadow:0 16px 40px var(--hivis-glow);} 50%{box-shadow:0 16px 48px var(--hivis-glow), 0 0 0 8px var(--hivis-dim);}}
+  @media (prefers-reduced-motion:reduce){ .go-circle{animation:none;} }
   #runActive,#runSummary{display:none;}
   .rec-dot{width:9px; height:9px; border-radius:50%; background:var(--danger); animation:blink 1.4s ease-in-out infinite; display:inline-block; margin-right:7px;}
 
@@ -1689,7 +1708,7 @@
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:10px;">
       <div style="display:flex; align-items:center; gap:8px; min-width:0;">
         <h2 class="display" style="font-size:25px; margin:0;" data-i18n="hist_title"></h2>
-        <button onclick="openHistInfo()" style="background:none; border:1.5px solid var(--mist-dim); color:var(--mist-dim); width:19px; height:19px; border-radius:50%; font-size:11px; font-weight:800; font-style:italic; font-family:Georgia,serif; display:flex; align-items:center; justify-content:center; padding:0; cursor:pointer; flex-shrink:0; line-height:1;">i</button>
+        <button class="info-btn" onclick="openHistInfo()" data-i18n-aria="hist_info_title"><span class="icon-sq" style="width:19px; height:19px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span></button>
       </div>
       <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
         <div style="text-align:right;"><div class="n mono" id="home-runs-count" style="font-size:20px; font-weight:800;">0</div><div class="l" style="font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--mist);" data-i18n="home_logged"></div></div>
