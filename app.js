@@ -3,7 +3,7 @@
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html -- antes
    era a mano, y un día entero de commits (2026-09-18) se subió sin nadie acordarse de
    tocar esta línea, así que la app nunca se enteró de que había versiones nuevas. */
-const APP_VERSION = '2026-09-18T03:17:39Z';
+const APP_VERSION = '2026-09-18T03:21:51Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -3578,6 +3578,15 @@ function getPlanStartDate(){
   if(!starts.length) return null;
   return starts.reduce((min,s)=> (s < min ? s : min), starts[0]);
 }
+// OJO -- acuteKm (más abajo) es una ventana MÓVIL de 7 días terminando ahora mismo, no la
+// semana calendario (esa es state.weekStart, lo que muestra la card de "Esta semana" en
+// Inicio). Es la forma correcta de medir carga aguda:crónica (ACWR) en deportes -- pero
+// puede mostrar "corriste de más" el jueves de una semana calendario en la que todavía no
+// corriste nada, si el finde pasado (todavía dentro de estos 7 días) fue muy exigente.
+// Reportado por un usuario ("a mi amigo le aparece 'corriste de más' pero todavía no
+// corrió esta semana") -- no es un bug de cálculo, era el texto (home_load_hint_caution)
+// el que decía "esta semana" en vez de "los últimos 7 días", dando a entender que
+// contradecía a la card de arriba cuando en realidad miden cosas distintas a propósito.
 function calcTrainingLoad(){
   const runs = state.runs || [];
   if(!runs.length) return null;
