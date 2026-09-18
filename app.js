@@ -3,7 +3,7 @@
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html -- antes
    era a mano, y un día entero de commits (2026-09-18) se subió sin nadie acordarse de
    tocar esta línea, así que la app nunca se enteró de que había versiones nuevas. */
-const APP_VERSION = '2026-09-18T02:09:52Z';
+const APP_VERSION = '2026-09-18T02:40:06Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -3414,6 +3414,11 @@ function renderHome(){
   document.getElementById('home-next-desc').innerHTML = nextDescLines.map(line=>`<div class="next-session-bullet">${line}</div>`).join('');
   document.getElementById('home-next-dist').textContent = planAmountText(today);
   document.getElementById('home-next-zone').innerHTML = (today.dist>0 && today.zone) ? `<span class="zone-chip zone-${today.zone}">${t('zone_word')} ${today.zone}</span>` : '';
+  // Colapsado de nuevo en cada render (cambiar de pestaña y volver, o cualquier otro cambio
+  // de estado) -- no tiene sentido arrastrar "abierto" de una sesión anterior del día de hoy.
+  document.getElementById('home-next-detail').classList.remove('open');
+  document.getElementById('home-next-hint').classList.remove('open');
+  document.getElementById('home-next-hint-label').textContent = t('home_next_see_detail');
   updateHomeWidget(today, lbl);
 
   // Si ya corrimos hoy, mostramos el resumen de esa sesión en lugar del cartel de
@@ -3421,10 +3426,14 @@ function renderHome(){
   const todayRun = getTodayRun();
   const doneBlock = document.getElementById('home-session-done-block');
   const nextSessionBlock = document.getElementById('home-next-session');
+  const nextDetailBlock = document.getElementById('home-next-detail');
+  const nextHintBlock = document.getElementById('home-next-hint');
   const cardTitleEl = document.getElementById('home-next-card-title');
   if(todayRun){
     cardTitleEl.textContent = t('home_session_done_title');
     nextSessionBlock.style.display = 'none';
+    nextDetailBlock.style.display = 'none';
+    nextHintBlock.style.display = 'none';
     // El "pop" de reconocimiento (mismo keyframe que ya usa confirm-card) solo se dispara la
     // primera vez que este bloque pasa de oculto a visible -- renderHome() se re-llama seguido
     // (cambio de pestaña, cualquier cambio de estado) mientras la carrera de hoy sigue cargada,
@@ -3443,6 +3452,8 @@ function renderHome(){
   } else {
     cardTitleEl.textContent = t('home_next');
     nextSessionBlock.style.display = '';
+    nextDetailBlock.style.display = '';
+    nextHintBlock.style.display = '';
     doneBlock.style.display = 'none';
   }
 
@@ -3470,6 +3481,9 @@ function renderHome(){
     const pct = Math.min(100, Math.round(rawPct));
     document.getElementById('goal-progress-pct').textContent = pct + '%';
     document.getElementById('goal-progress-bar').style.width = pct + '%';
+    // El corredor avanza con el mismo % -- acotado a 3-97 para que el círculo (22px) nunca
+    // quede cortado por el borde de la tarjeta en 0% o 100%.
+    document.getElementById('goal-progress-runner').style.left = Math.max(3, Math.min(97, pct)) + '%';
     if(rawPct >= 100 && state.weekStart && state.lastGoalCelebratedWeek !== state.weekStart){
       state.lastGoalCelebratedWeek = state.weekStart;
       haptic([15,40,15,40,25]);
@@ -3809,6 +3823,15 @@ function renderPastWeeks(){
   }).join('');
 }
 function toggleDay(i){ if(planSwipeSuppressClick) return; document.getElementById('detail-'+i).classList.toggle('open'); }
+// Tarjeta de "próxima sesión" en Inicio: colapsada solo muestra tipo + km (pedido del
+// usuario -- antes mostraba siempre la descripción completa, mucho texto para lo que en
+// general es solo un vistazo rápido). "Ver detalle" avisa que hay más para tocar; mismo
+// mecanismo de expandido que los días del Plan (.day-detail), sin el sangrado de 54px.
+function toggleHomeNextDetail(){
+  const isOpen = document.getElementById('home-next-detail').classList.toggle('open');
+  document.getElementById('home-next-hint').classList.toggle('open', isOpen);
+  document.getElementById('home-next-hint-label').textContent = t(isOpen ? 'home_next_hide_detail' : 'home_next_see_detail');
+}
 function markSession(i, status){
   state.plan[i].status = status;
   if(!status) state.plan[i].linkedRunId = null;
@@ -4452,7 +4475,8 @@ document.addEventListener('touchend', ()=>{ pullActive = false; }, {passive:true
 /* ---- swipe-to-delete (history + shoes list) ---- */
 let swipeStartX = 0, swipeStartY = 0, swipeContentEl = null, swipeDragging = false, swipeBaseX = 0, swipeLastX = 0, swipeSuppressClick = false;
 let swipeRafPending = false;
-const SWIPE_REVEAL = 78;
+// Ancho sincronizado a mano con .swipe-action-delete en index.html.
+const SWIPE_REVEAL = 96;
 function swipeSetX(el, x){
   el.style.transform = `translate3d(${Math.round(x)}px,0,0)`;
 }
@@ -4490,8 +4514,11 @@ document.addEventListener('touchmove', e=>{
       return;
     }
   }
+  // Antes se permitía arrastrar 12px más allá del ancho del botón (rebote elástico), lo
+  // que dejaba ver una tira del fondo oscuro de atrás pasado el rojo -- reportado por el
+  // usuario ("se ve algo negro"). Ahora el arrastre nunca pasa del ancho real del botón.
   let x = swipeBaseX + dx;
-  x = Math.max(-SWIPE_REVEAL - 12, Math.min(0, x));
+  x = Math.max(-SWIPE_REVEAL, Math.min(0, x));
   swipeLastX = x;
   if(!swipeRafPending){
     swipeRafPending = true;

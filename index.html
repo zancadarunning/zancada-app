@@ -104,6 +104,7 @@
     --danger:#FF3B30; --danger-dim:rgba(255,59,48,.16);
     --radius:26px; --radius-sm:18px;
     --press:rgba(255,255,255,.045); --overlay-hairline:rgba(255,255,255,.045);
+    --contour-line:rgba(255,255,255,.045);
     /* Curva con leve rebote (spring), para el puñado de momentos que se benefician
        de sentirse "vivos" en vez de mecánicos -- botones primarios, el tab activo,
        el pop de confirmación. La transición estándar (ease/cubic-bezier(.22,1,.36,1))
@@ -142,6 +143,7 @@
       --clay:#A84E1C; --clay-dim:rgba(168,78,28,.15);
       --danger:#D6291C; --danger-dim:rgba(214,41,28,.13);
       --press:rgba(0,0,0,.05); --overlay-hairline:rgba(0,0,0,.10);
+      --contour-line:rgba(0,0,0,.05);
       --tabbar-bg:rgba(255,255,255,.88);
       --toast-error-bg:#FDEBEA; --toast-error-fg:#B0241A;
       --shadow-card:0 10px 24px rgba(20,22,18,.10); --shadow-lg:0 18px 50px rgba(20,22,18,.15);
@@ -178,6 +180,7 @@
     --clay:#A84E1C; --clay-dim:rgba(168,78,28,.15);
     --danger:#D6291C; --danger-dim:rgba(214,41,28,.13);
     --press:rgba(0,0,0,.05); --overlay-hairline:rgba(0,0,0,.10);
+    --contour-line:rgba(0,0,0,.05);
     --tabbar-bg:rgba(255,255,255,.88);
     --toast-error-bg:#FDEBEA; --toast-error-fg:#B0241A;
     --shadow-card:0 10px 24px rgba(20,22,18,.10); --shadow-lg:0 18px 50px rgba(20,22,18,.15);
@@ -245,10 +248,18 @@
      JS todavía no corrió en el primer pintado, o en un navegador que no entienda
      variables CSS -- y recién la última declaración (con la variable) manda una vez
      que app.js corrió. */
+  /* Líneas de contorno (curvas de nivel, como un mapa topográfico) sumadas a los dos
+     radiales de siempre -- misma idea que la maqueta "Mapa de Ruta" que le gustó al
+     usuario, pero mucho más sutil y en los colores del sistema (no reemplaza el carbón +
+     lima, lo texturiza apenas). Dos círculos concéntricos repetidos con distinta fase
+     para que no se lea como un patrón perfectamente regular. */
   #app{max-width:480px; margin:0 auto; min-height:100vh; min-height:100dvh; min-height:100svh;
     min-height:var(--app-min-h, 100svh); position:relative;
     background:radial-gradient(60% 40% at 50% 0%, rgba(214,255,63,.07), transparent 60%),
-      radial-gradient(55% 35% at 100% 12%, rgba(192,106,46,.05), transparent 62%), var(--asphalt);
+      radial-gradient(55% 35% at 100% 12%, rgba(192,106,46,.05), transparent 62%),
+      repeating-radial-gradient(circle at 15% 8%, transparent 0, transparent 64px, var(--contour-line) 65px, var(--contour-line) 66px, transparent 67px),
+      repeating-radial-gradient(circle at 95% 55%, transparent 0, transparent 84px, var(--contour-line) 85px, var(--contour-line) 86px, transparent 87px),
+      var(--asphalt);
     display:flex; flex-direction:column;}
 
   /* Grano sutilísimo sobre el contenido (no sobre el chrome fijo ni los overlays --
@@ -668,7 +679,7 @@
   .stat-row-divided .stat-cell:first-child{padding-left:0;}
   .stat-row-divided .stat-cell:last-child{padding-right:0;}
   .stat-row-divided .stat-cell + .stat-cell::before{content:''; position:absolute; left:0; top:8%; bottom:8%; width:1px; background:var(--asphalt-4);}
-  .stat-row-divided .stat-cell .n{font-size:26px; font-weight:800; font-family:'JetBrains Mono',monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; letter-spacing:-.01em;}
+  .stat-row-divided .stat-cell .n{font-size:20px; font-weight:800; font-family:'JetBrains Mono',monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .stat-row-divided .stat-cell .l{font-size:10px; color:var(--mist); text-transform:uppercase; letter-spacing:.05em;}
   /* Botón compacto "+" del encabezado de Historial -- reemplaza la barra ancha de
      "+ Agregar carrera manual" de antes; mismo tamaño/tratamiento que los demás
@@ -734,7 +745,12 @@
   .coach-snippet{display:flex; gap:12px; align-items:flex-start;}
   .coach-avatar{width:40px; height:40px; border-radius:14px; background:var(--hivis-dim); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
 
-  .day-row{display:flex; align-items:flex-start; gap:12px; padding:13px 0; border-bottom:1px solid var(--asphalt-3); cursor:pointer; transition:background .12s ease, opacity .12s ease;}
+  /* min-height + align-items:center -- sin esto, un día de descanso (una sola línea,
+     "Descanso") queda visiblemente más bajo que un día con chip de zona (dos líneas),
+     así que la fila completa cambia de alto según el contenido y el ritmo vertical de
+     la semana se ve disparejo. Con las 7 filas a la misma altura, el contenido corto
+     se centra en vez de pegarse arriba. */
+  .day-row{display:flex; align-items:center; gap:12px; padding:13px 0; min-height:52px; border-bottom:1px solid var(--asphalt-3); cursor:pointer; transition:background .12s ease, opacity .12s ease;}
   .day-row:active{background:var(--press);}
   .day-row:last-child{border-bottom:none;}
   .day-badge{width:42px; text-align:center; flex-shrink:0; padding:5px 0; border-radius:12px; transition:background .15s var(--ease-out);}
@@ -771,6 +787,19 @@
   .day-detail > div{min-height:0; padding:0 0 14px 54px; font-size:13px; color:var(--mist); line-height:1.7; white-space:pre-line;}
   .day-detail.open{grid-template-rows:1fr; opacity:1;}
   @media (prefers-reduced-motion:reduce){ .day-detail{transition:opacity .15s ease;} }
+
+  /* Mismo mecanismo de expandido que .day-detail (grid-template-rows), acá sin el
+     sangrado de 54px (no hay day-badge al costado en esta tarjeta). */
+  .next-session-detail{display:grid; grid-template-rows:0fr; opacity:0; overflow:hidden;
+    transition:grid-template-rows .32s var(--ease-out), opacity .22s ease;}
+  .next-session-detail > div{min-height:0; padding-top:14px;}
+  .next-session-detail.open{grid-template-rows:1fr; opacity:1;}
+  @media (prefers-reduced-motion:reduce){ .next-session-detail{transition:opacity .15s ease;} }
+  .next-session-hint{display:flex; align-items:center; justify-content:center; gap:4px; margin-top:10px; padding-top:10px;
+    border-top:1px solid var(--overlay-hairline); font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+    color:var(--mist); cursor:pointer;}
+  .next-session-hint .icon-sq{transition:transform .2s var(--ease-out);}
+  .next-session-hint.open .icon-sq{transform:rotate(180deg);}
 
   #runIdle{text-align:center; padding-top:16px;}
   /* Tarjeta de estado GPS: reemplaza el bloque de dos párrafos de advertencia por una
@@ -968,7 +997,10 @@
   .swipe-item{position:relative; overflow:hidden;}
   #history-list .swipe-item{border-radius:var(--radius); margin-bottom:12px;}
   #history-list .swipe-item .hist-card{margin-bottom:0;}
-  .swipe-action-delete{position:absolute; top:0; right:0; bottom:0; width:78px; background:var(--danger);
+  /* Ancho sincronizado a mano con SWIPE_REVEAL en app.js -- ver el comentario ahí sobre
+     por qué el arrastre ya no puede pasarse de este ancho (antes dejaba ver una tira del
+     fondo oscuro más allá del rojo). */
+  .swipe-action-delete{position:absolute; top:0; right:0; bottom:0; width:96px; background:var(--danger);
     color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer;}
   /* #history-list: antes el rojo se separaba unos px de las esquinas redondeadas de la
      tarjeta a propósito, para evitar un hilito sin antialiasear donde las dos curvas
@@ -1481,9 +1513,19 @@
     <div class="card-shell card-shell-hivis">
     <div class="card card-highlight">
       <h3 id="home-next-card-title" data-i18n="home_next"></h3>
-      <div class="next-session" id="home-next-session">
-        <div style="min-width:0;"><div class="big display" id="home-next-title">—</div><div class="next-session-bullets" id="home-next-desc"></div></div>
-        <div style="text-align:right; flex-shrink:0;"><div class="day-dist" id="home-next-dist" style="font-size:20px;"></div><div id="home-next-zone" style="margin-top:6px;"></div></div>
+      <div class="next-session" id="home-next-session" role="button" tabindex="0" onclick="toggleHomeNextDetail()">
+        <div style="min-width:0;"><div class="big display" id="home-next-title">—</div></div>
+        <div style="text-align:right; flex-shrink:0;"><div class="day-dist" id="home-next-dist" style="font-size:20px;"></div></div>
+      </div>
+      <div class="next-session-detail" id="home-next-detail">
+        <div>
+          <div id="home-next-zone" style="margin-bottom:8px;"></div>
+          <div class="next-session-bullets" id="home-next-desc"></div>
+        </div>
+      </div>
+      <div class="next-session-hint" id="home-next-hint" role="button" tabindex="0" onclick="toggleHomeNextDetail()">
+        <span id="home-next-hint-label" data-i18n="home_next_see_detail"></span>
+        <span class="icon-sq" id="home-next-hint-chevron" style="width:13px; height:13px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
       </div>
       <div id="home-session-done-block" style="display:none;">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
@@ -1550,8 +1592,15 @@
         <h3 style="margin:0;" data-i18n="perfil_goal_progress_label"></h3>
         <span class="mono" id="goal-progress-pct" style="font-weight:800; color:var(--hivis-text);">0%</span>
       </div>
-      <div style="height:10px; background:var(--asphalt-3); border-radius:5px; overflow:hidden;">
-        <div id="goal-progress-bar" style="height:100%; background:var(--hivis); width:0%; transition:width .3s;"></div>
+      <div style="height:10px; background:var(--asphalt-3); border-radius:5px; position:relative; margin-top:16px;">
+        <div id="goal-progress-bar" style="height:100%; background:var(--hivis); width:0%; border-radius:5px; transition:width .5s var(--ease-out);"></div>
+        <!-- Corredor que avanza sobre la barra con el progreso real (pedido del usuario:
+             "que aparezca una persona corriendo, como si estuviera completando la meta").
+             left se calcula en JS a partir del mismo % que ya llena la barra -- nunca un
+             elemento decorativo suelto, es el mismo dato. -->
+        <div id="goal-progress-runner" style="position:absolute; top:50%; left:0%; transform:translate(-50%,-50%); transition:left .5s var(--ease-out); width:22px; height:22px; border-radius:50%; background:var(--hivis); box-shadow:0 3px 8px var(--hivis-glow); display:flex; align-items:center; justify-content:center;">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="var(--ink)"><circle cx="14.5" cy="4" r="2.1"/><path d="M12.8 8.2 9.5 9.6c-.5.2-.8.6-.9 1.1l-.8 3.6 1.9.4.7-3.2 1.6-.6-1 3-3.1 2.8 1.3 1.5 3.4-3 1-3.2 1.1 1.7-.3 3.7 2 .1.4-4.2c0-.4-.1-.8-.4-1.1l-1.9-2.3.6-2.6c1 1 2.3 1.7 3.9 1.9l.2-2c-1.6-.2-2.7-1-3.4-2.1-.5-.8-1.5-1.1-2.3-.7z"/></svg>
+        </div>
       </div>
     </div>
 
