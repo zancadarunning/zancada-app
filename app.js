@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-18T20:38:12Z';
+const APP_VERSION = '2026-09-18T20:44:30Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2976,7 +2976,9 @@ function buildIntervalStructure(qualityKm, caution, weekNumber){
   const { repMeters, recoveryMin } = options[(wn-1) % options.length];
   // con más edad o más masa corporal, el impacto de cada repetición pesa más sobre
   // articulaciones y tendones -> capamos la cantidad de repeticiones aunque el volumen
-  // "en papel" pediría más, en vez de tratar a todos los corredores igual
+  // "en papel" pediría más, en vez de tratar a todos los corredores igual. Esto puede
+  // dejar reps*repMeters por debajo de qualityKm -- ver intervalActualKm, que es lo
+  // que generatePlan usa como distancia real de la sesión en vez de qualityKm.
   const maxReps = caution && caution.level>=2 ? 8 : caution && caution.level>=1 ? 10 : 12;
   const totalMeters = qualityKm * 1000;
   const reps = Math.max(4, Math.min(maxReps, Math.round(totalMeters / repMeters)));
@@ -2986,9 +2988,13 @@ function buildHillStructure(qualityKm, caution){
   // Repeticiones en subida, en distancia (no en tiempo): antes esta función fijaba
   // effortSec/baseReps por tiers SIN relación con qualityKm, así que el total
   // mostrado ("9.0 km") podía quedar totalmente desconectado de la sesión descripta
-  // (ej: "10 subidas de 90 segundos" no suma ningún 9km reconocible). Ahora, igual
-  // que buildIntervalStructure, reps sale de dividir qualityKm por un repMeters fijo
-  // por tier, así el texto y el total siempre son consistentes entre sí.
+  // (ej: "10 subidas de 90 segundos" no suma ningún 9km reconocible). Ahora reps sale
+  // de dividir qualityKm por un repMeters fijo por tier -- PERO maxReps de más abajo
+  // puede seguir capando ese cálculo (reportado por un usuario: "10 subidas de 400m"
+  // con un total de "9km" arriba, que en realidad son solo 4km de subida real). El
+  // texto y el total son consistentes DE VERDAD recién en generatePlan, que
+  // recalcula dayObj.dist a partir de reps*repMeters (ver intervalActualKm) en vez
+  // de confiar en qualityKm ciegamente.
   let repMeters;
   if(qualityKm <= 4) repMeters = 150;
   else if(qualityKm <= 7) repMeters = 250;
@@ -2997,6 +3003,17 @@ function buildHillStructure(qualityKm, caution){
   const totalMeters = qualityKm * 1000;
   const reps = Math.max(4, Math.min(maxReps, Math.round(totalMeters / repMeters)));
   return { reps, repMeters };
+}
+// Distancia REAL de una sesión de series/cuestas, a partir de la estructura ya
+// construida (reps*repMeters) -- ni buildIntervalStructure ni buildHillStructure
+// garantizan que esto coincida con el qualityKm que recibieron como entrada, porque
+// maxReps puede capar la cantidad de repeticiones antes de llegar a esa distancia
+// (ver los comentarios de esas dos funciones). generatePlan usa esto para que el
+// número de km que ve el corredor arriba de la sesión sea siempre el que sale de
+// sumar las repeticiones descriptas, nunca uno más alto que no se corresponde con
+// las instrucciones reales.
+function intervalActualKm(interval){
+  return Math.max(0.1, Math.round(interval.reps * interval.repMeters / 100) / 10);
 }
 function calcBmi(p){
   if(!p || !p.weight || !p.height) return null;
@@ -3095,8 +3112,14 @@ function generatePlan(p, weekNumber, weekStartDate){
     if(!typeKey) return {day, typeKey:'rest', dist:0, terrain:null, zone:null, beginner};
     const terrain = typeKey==='intervals' ? 'asfalto' : p.terrain;
     const dayObj = {day, typeKey, dist:distMap[typeKey], terrain, zone:zoneMap[typeKey], beginner};
-    if(typeKey==='intervals' && !beginner) dayObj.interval = buildIntervalStructure(distMap[typeKey], caution, weekNumber);
-    if(typeKey==='hills' && !beginner) dayObj.interval = buildHillStructure(distMap[typeKey], caution);
+    if(typeKey==='intervals' && !beginner){
+      dayObj.interval = buildIntervalStructure(distMap[typeKey], caution, weekNumber);
+      dayObj.dist = intervalActualKm(dayObj.interval);
+    }
+    if(typeKey==='hills' && !beginner){
+      dayObj.interval = buildHillStructure(distMap[typeKey], caution);
+      dayObj.dist = intervalActualKm(dayObj.interval);
+    }
     return dayObj;
   });
 }
