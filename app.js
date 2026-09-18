@@ -3,7 +3,7 @@
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html -- antes
    era a mano, y un día entero de commits (2026-09-18) se subió sin nadie acordarse de
    tocar esta línea, así que la app nunca se enteró de que había versiones nuevas. */
-const APP_VERSION = '2026-09-18T03:06:39Z';
+const APP_VERSION = '2026-09-18T03:10:12Z';
 /* ================= NOVEDADES ("qué hay de nuevo") =================
    APP_VERSION cambia con CADA build (varias veces por día mientras iteramos),
    así que no sirve como versión "de release" para mostrarle algo al usuario --
@@ -5025,6 +5025,15 @@ if(typeof document !== 'undefined'){
   document.addEventListener('visibilitychange', ()=>{
     if(document.visibilityState === 'visible') checkForAppUpdate();
   });
+  // Antes SOLO se chequeaba al volver a la app (visibilitychange) o al hacer
+  // pull-to-refresh a mano -- alguien que la deja abierta en primer plano sin cambiar
+  // nunca de pestaña/app (el caso reportado: "no se me actualiza sola") nunca disparaba
+  // ninguno de los dos. Este intervalo cubre justo ese caso, sin ser agresivo (10 min,
+  // y solo corre mientras la pestaña está visible -- no tiene sentido gastar red de
+  // fondo revisando una pantalla que nadie está mirando).
+  setInterval(()=>{
+    if(document.visibilityState === 'visible') checkForAppUpdate();
+  }, 10*60*1000);
 }
 async function doPullRefresh(){
   const indicator = document.getElementById('pull-refresh-indicator');
