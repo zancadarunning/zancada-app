@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-18T23:57:00Z';
+const APP_VERSION = '2026-09-19T00:14:38Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2649,6 +2649,35 @@ async function syncTodayNow(){
   if(btn){ btn.disabled = false; btn.innerHTML = `<span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}`; }
   setTimeout(checkPendingRating, 300);
 }
+// Promedio real de km corridos en las últimas `weeks` semanas YA CERRADAS (nunca la semana
+// actual, que todavía está en curso y subestimaría el promedio) -- lo usa renderPerfil para
+// mostrar cuánto viene corriendo el corredor de verdad, en vez de solo p.weeklyKm (que es la
+// META que calcula el plan, no un reflejo de lo corrido). Pedido del usuario: quería ver ese
+// promedio en Perfil para saber "cuánto corrió o viene corriendo". Como solo cuenta semanas
+// cerradas, se actualiza solo apenas cierra una semana (lunes) -- no hace falta ningún
+// proceso aparte disparado justo ese día, alcanza con recalcularlo cada vez que se renderiza
+// Perfil. Las semanas sin ninguna carrera suman 0 al promedio, no se excluyen -- así alguien
+// que viene de una pausa ve un promedio bajo de verdad, no uno inflado con carreras viejas.
+function computeActualWeeklyKmAvg(weeks){
+  weeks = weeks || 3;
+  const currentMonday = state.weekStart || getMondayISO(new Date());
+  const byWeek = {};
+  (state.runs||[]).forEach(r=>{
+    if(!r.date) return;
+    const wk = getMondayISO(new Date(r.date));
+    if(wk >= currentMonday) return;
+    byWeek[wk] = (byWeek[wk]||0) + (r.distanceKm||0);
+  });
+  const earliestMonday = state.profile.createdAt ? getMondayISO(new Date(state.profile.createdAt)) : null;
+  let sum = 0, count = 0;
+  for(let i=1; i<=weeks; i++){
+    const wk = addDaysToIsoLocal(currentMonday, -7*i);
+    if(earliestMonday && wk < earliestMonday) break;
+    sum += byWeek[wk] || 0;
+    count++;
+  }
+  return count>0 ? sum/count : null;
+}
 function computeWeekAdjustment(plan){
   // Mismo criterio de siempre (antes vivía adentro de checkWeekRollover): si calificaste mal
   // o saltaste 2+ sesiones, baja un poco el volumen; si calificaste excelente sin ningún "mal",
@@ -4151,7 +4180,14 @@ let editingShoeId = null;
 function renderPerfil(){
   const p = state.profile;
   document.getElementById('perfil-initial').textContent = (p.name[0]||'?').toUpperCase();
-  document.getElementById('perfil-sub').textContent = `${p.weeklyKm}km/sem · ${t('ob_goal_'+p.goal)}`;
+  // Muestra el promedio REAL de las últimas semanas corridas (computeActualWeeklyKmAvg) en vez
+  // de p.weeklyKm (la meta que calcula el plan) -- ver el comentario de esa función. Sin
+  // semanas cerradas todavía (cuenta recién creada) cae al viejo comportamiento (la meta),
+  // que sigue siendo la mejor referencia disponible hasta que haya algo real para promediar.
+  const avgKm = computeActualWeeklyKmAvg(3);
+  document.getElementById('perfil-sub').textContent = avgKm!=null
+    ? `${t('perfil_avg_weekly_label')} ${fmtDist(avgKm,1)}${distUnit()}/sem · ${t('ob_goal_'+p.goal)}`
+    : `${fmtDist(p.weeklyKm,1)}${distUnit()}/sem · ${t('ob_goal_'+p.goal)}`;
   const avatarImg = document.getElementById('perfil-avatar-img');
   const avatarInitial = document.getElementById('perfil-initial');
   const removeBtn = document.getElementById('perfil-remove-photo');
