@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-19T00:21:00Z';
+const APP_VERSION = '2026-09-19T00:27:48Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3923,7 +3923,7 @@ function renderPastWeeks(){
   document.getElementById('past-weeks-list').innerHTML = state.planHistory.slice().reverse().map(w=>{
     const doneCount = w.plan.filter(d=>d.status==='done').length;
     const totalSessions = w.plan.filter(d=>d.dist>0).length;
-    const plannedAmount = isTimeMode() ? `${w.plan.reduce((a,d)=>a+planDurationMin(d),0)} ${t('time_unit_min')}` : `${w.plan.reduce((a,d)=>a+d.dist,0)}km`;
+    const plannedAmount = isTimeMode() ? `${w.plan.reduce((a,d)=>a+planDurationMin(d),0)} ${t('time_unit_min')}` : `${fmtDist(w.plan.reduce((a,d)=>a+d.dist,0),1)}${distUnit()}`;
     const offset = w.weekNumber - (state.weekNumber||1);
     return `<div style="padding:10px 0; border-bottom:1px solid var(--asphalt-3); cursor:pointer;" onclick="viewingWeekOffset=${offset}; renderPlan();">
       <div style="display:flex; justify-content:space-between;"><span style="font-weight:700;">${t('plan_week_label',{n:w.weekNumber})}</span><span class="muted mono" style="font-size:11.5px;">${w.weekStart}</span></div>
@@ -5432,12 +5432,15 @@ function speak(text){
   try{ const u = new SpeechSynthesisUtterance(text); u.lang = LOCALE_MAP[lang]; window.speechSynthesis.speak(u); }catch(e){}
 }
 function maybeAnnounceKm(){
-  const currentKm = Math.floor(tracker.distanceKm);
-  if(currentKm>0 && currentKm>tracker.lastAnnouncedKm){
-    tracker.lastAnnouncedKm = currentKm;
+  // Antes esto anunciaba siempre en km ("Kilómetro 1... Kilómetro 2...") y el ritmo en
+  // min/km, sin importar si el corredor eligió sistema imperial -- mientras que el resto de
+  // esta misma pantalla (track-dist, track-pace) sí se convierte a millas con fmtDist/fmtPace.
+  // Ahora el anuncio por voz respeta la misma unidad que ya se ve en pantalla.
+  const currentUnit = Math.floor(isImperial() ? tracker.distanceKm*MI_PER_KM : tracker.distanceKm);
+  if(currentUnit>0 && currentUnit>tracker.lastAnnouncedKm){
+    tracker.lastAnnouncedKm = currentUnit;
     const paceMin = (tracker.elapsedSec/60)/tracker.distanceKm;
-    const paceStr = `${Math.floor(paceMin)}:${String(Math.round((paceMin%1)*60)).padStart(2,'0')}`;
-    speak(t('voice_km',{km:currentKm, pace:paceStr}));
+    speak(t(isImperial() ? 'voice_mi' : 'voice_km', {km:currentUnit, pace:fmtPace(paceMin)}));
     // Antes cada km se anunciaba solo por voz -- sin nada en pantalla, es el momento más
     // repetido de toda la carrera (varias veces por sesión) y no tenía ningún refuerzo para
     // quien corre con el volumen bajo o mira el teléfono en vez de escuchar.
@@ -6388,11 +6391,18 @@ function getPaceCalcTimeSec(){
   const total = h*3600 + m*60 + s;
   return total>0 ? total : null;
 }
+// El selector de distancias estándar (5k/10k/etc.) se queda en km a propósito -- son nombres
+// de carrera reconocidos así en cualquier país ("un 5K"), no una medida que haga falta
+// traducir a millas. Pero el campo de distancia LIBRE (custom) sí es una medida real que el
+// corredor tipea con sus propios números -- antes se trataba siempre como km sin importar el
+// sistema elegido, así que alguien en modo imperial que tipeaba "8" pensando en 8 millas
+// terminaba con una predicción de ritmo calculada para 8km (casi la mitad de la distancia
+// real). parseDistInput ya sabe convertir según isImperial(), igual que en el resto de la app.
 function paceCalcCurrentKm(){
   const sel = document.getElementById('pc-distance');
   if(!sel) return null;
   if(sel.value==='custom'){
-    const km = parseFloat(document.getElementById('pc-custom-km').value);
+    const km = parseDistInput(document.getElementById('pc-custom-km').value);
     return km>0 ? km : null;
   }
   return parseFloat(sel.value);
@@ -6406,12 +6416,14 @@ function openPaceCalcModal(){
   const goalKm = (state.event && state.event.distanceKm>0) ? state.event.distanceKm : getGoalRaceKm();
   const sel = document.getElementById('pc-distance');
   const knownOptions = ['5','10','15','21.0975','42.195'];
+  const customLbl = document.getElementById('pc-custom-km-label');
+  if(customLbl) customLbl.textContent = t(isImperial() ? 'pace_calc_custom_km_label_mi' : 'pace_calc_custom_km_label');
   if(goalKm && knownOptions.includes(String(goalKm))){
     sel.value = String(goalKm);
     document.getElementById('pc-custom-km-field').style.display = 'none';
   } else if(goalKm){
     sel.value = 'custom';
-    document.getElementById('pc-custom-km').value = goalKm;
+    document.getElementById('pc-custom-km').value = fmtDist(goalKm,1);
     document.getElementById('pc-custom-km-field').style.display = 'block';
   } else {
     sel.value = '10';
@@ -6437,10 +6449,16 @@ function renderPaceCalcResults(){
   }
   const strategy = document.getElementById('pc-strategy').value;
   const avgPaceMin = (totalSec/60)/km;
-  const numFullKm = Math.floor(km);
-  const remainderKm = km - numFullKm;
+  // La tabla de tramos parciales marcaba siempre "1, 2, 3..." en bloques de 1KM, aunque el
+  // corredor estuviera en modo imperial (donde el resto de esta misma pantalla -- ritmo
+  // promedio, ritmo por tramo -- sí se muestra en min/milla) -- alguien viendo "millas" en el
+  // encabezado de arriba pero filas que en realidad son marcas de kilómetro es información
+  // que no se corresponde entre sí. unitStepKm es 1 milla (en km) en modo imperial, 1km si no.
+  const unitStepKm = isImperial() ? KM_PER_MI : 1;
+  const numFullUnits = Math.floor(km/unitStepKm);
+  const remainderKm = km - numFullUnits*unitStepKm;
   const segments = []; // {label, distKm}
-  for(let i=1;i<=numFullKm;i++) segments.push({label:String(i), distKm:1});
+  for(let i=1;i<=numFullUnits;i++) segments.push({label:String(i), distKm:unitStepKm});
   if(remainderKm>0.005) segments.push({label:fmtDist(km,2), distKm:remainderKm});
   // Negative split simple: el ritmo de cada tramo va del +4% al -4% del promedio,
   // de forma lineal a lo largo de la carrera. Con distancias exactas (5, 10, 15km)
@@ -6465,7 +6483,7 @@ function renderPaceCalcResults(){
       <p class="mono" style="font-size:22px; font-weight:800; color:var(--hivis-text); margin:0 0 14px;">${fmtPace(avgPaceMin)} /${distUnit()}</p>
       <div style="max-height:260px; overflow-y:auto;">
         <table class="rd-seg-table">
-          <thead><tr><th>${t('pace_calc_km_col')}</th><th>${t('pace_calc_cum_col')}</th><th>${t('pace_calc_pace_col')}</th></tr></thead>
+          <thead><tr><th>${t(isImperial() ? 'pace_calc_km_col_mi' : 'pace_calc_km_col')}</th><th>${t('pace_calc_cum_col')}</th><th>${t('pace_calc_pace_col')}</th></tr></thead>
           <tbody>${rows.join('')}</tbody>
         </table>
       </div>
@@ -8460,7 +8478,7 @@ function applyPlanChange(input){
     state.nextWeekOverrides[input.dia] = override;
     renderPlan(); persist();
     state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+input.dia)), ts:Date.now()});
-    const amountTxt = typeof input.duracion_min==='number' ? `${input.duracion_min}min (~${effectiveDistKm}km)` : (effectiveDistKm!==null ? effectiveDistKm+'km' : '');
+    const amountTxt = typeof input.duracion_min==='number' ? `${input.duracion_min}min (~${fmtDist(effectiveDistKm,1)}${distUnit()})` : (effectiveDistKm!==null ? fmtDist(effectiveDistKm,1)+distUnit() : '');
     return `OK, actualicé ${input.dia} de la semana que viene: ${input.tipo}${amountTxt?', '+amountTxt:''}${zone?', zona '+zone:''}.`;
   }
   const d = state.plan.find(x=>x.day===input.dia);
@@ -8491,7 +8509,7 @@ function applyPlanChange(input){
   else if(!d.terrain) d.terrain = state.profile.terrain;
   renderPlan(); renderHome(); persist();
   state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+d.day)), ts:Date.now()});
-  const amountTxt = typeof input.duracion_min==='number' ? `${input.duracion_min}min (~${d.dist}km)` : `${d.dist}km`;
+  const amountTxt = typeof input.duracion_min==='number' ? `${input.duracion_min}min (~${fmtDist(d.dist,1)}${distUnit()})` : `${fmtDist(d.dist,1)}${distUnit()}`;
   return `OK, actualizado ${d.day}: ${d.type}, ${amountTxt}${d.zone?', zona '+d.zone:''}.`;
 }
 function applyMoveSession(input){
