@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-19T00:14:38Z';
+const APP_VERSION = '2026-09-19T00:21:00Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -380,7 +380,7 @@ let confirmEmailPollTimer = null;
 let confirmEmailResendCooldown = false;
 const DAY_KEYS = ['mon','tue','wed','thu','fri','sat','sun'];
 const ZONE_COLORS = {1:'#5B9BFF',2:'#4ADE80',3:'#FACC15',4:'#FB923C',5:'#FF6B5D'};
-const MI_PER_KM = 0.621371, KM_PER_MI = 1.609344, LB_PER_KG = 2.20462;
+const MI_PER_KM = 0.621371, KM_PER_MI = 1.609344, LB_PER_KG = 2.20462, FT_PER_CM = 0.0328084, CM_PER_FT = 30.48;
 function isImperial(){ return state.profile && state.profile.units === 'imperial'; }
 function distUnit(){ return isImperial() ? 'mi' : 'km'; }
 function fmtDist(km, decimals=2){
@@ -402,9 +402,22 @@ function parseWeightInput(val){
   if(!(n>0)) return 0;
   return isImperial() ? n / LB_PER_KG : n;
 }
+// Mismo patrón que fmtWeight/parseWeightInput -- la altura se guarda siempre en cm
+// (state.profile.height), y se muestra convertida a pies (con un decimal, para no perder
+// más de ~1 pulgada de precisión al redondear) cuando el corredor eligió sistema imperial.
+// Pedido del usuario: la altura mostraba "cm" fijo aunque estuviera en modo imperial.
+function fmtHeight(cm){ return isImperial() ? (cm*FT_PER_CM).toFixed(1) : Math.round(cm); }
+function heightUnit(){ return isImperial() ? 'ft' : 'cm'; }
+function parseHeightInput(val){
+  const n = parseFloat(val);
+  if(!(n>0)) return 0;
+  return isImperial() ? n * CM_PER_FT : n;
+}
 function updateProfileUnitLabels(){
   const weightLbl = document.getElementById('perfil-weight-label');
   if(weightLbl) weightLbl.textContent = t(isImperial() ? 'ob_weight_label_imperial' : 'ob_weight_label');
+  const heightLbl = document.getElementById('perfil-height-label');
+  if(heightLbl) heightLbl.textContent = t(isImperial() ? 'ob_height_label_imperial' : 'ob_height_label');
   const kmLbl = document.getElementById('perfil-current-km-label');
   if(kmLbl) kmLbl.textContent = t(isImperial() ? 'ob_currentkm_label_mi' : 'ob_currentkm_label');
   const goalLbl = document.getElementById('perfil-weekly-goal-label');
@@ -1807,7 +1820,7 @@ function savePersonalData(){
   // guardarlos, si no un usuario en modo imperial que tipea "150" (lb) queda con 150kg
   // guardados tal cual.
   const weight = parseWeightInput(document.getElementById('perfil-weight').value);
-  const height = parseFloat(document.getElementById('perfil-height').value);
+  const height = parseHeightInput(document.getElementById('perfil-height').value);
   const terrainChoice = document.querySelector('#perfil-terrain-choice .choice.active');
   const genderChoice = document.querySelector('#perfil-gender-choice .choice.active');
   const goal = document.getElementById('perfil-goal').value;
@@ -4214,7 +4227,7 @@ function renderPerfil(){
   const editingPersonal = ['perfil-weight','perfil-height','perfil-racedate','perfil-current-km'].includes(document.activeElement && document.activeElement.id);
   if(!editingPersonal){
     document.getElementById('perfil-weight').value = p.weight ? fmtWeight(p.weight) : '';
-    document.getElementById('perfil-height').value = p.height || '';
+    document.getElementById('perfil-height').value = p.height ? fmtHeight(p.height) : '';
     // 0 es un valor real y guardado a propósito (alguien nuevo que arranca desde cero) --
     // "|| ''" lo mostraba como campo vacío, indistinguible de "todavía no se cargó nada".
     document.getElementById('perfil-current-km').value = (p.currentWeeklyKm===0 || p.currentWeeklyKm) ? fmtDist(p.currentWeeklyKm,1) : '';
