@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T15:10:10Z';
+const APP_VERSION = '2026-09-21T15:18:07Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8554,7 +8554,7 @@ const TOOLS = [
       duracion_min:{type:"number", description:"Duración de la sesión en minutos. Usalo en vez de distancia_km si el corredor entrena por tiempo (fijate en el contexto) o si pide la sesión directamente en minutos -- se convierte sola a km internamente."},
       zona:{type:"integer", minimum:1, maximum:5, description:"Zona de frecuencia cardíaca objetivo para la sesión NUEVA, no un dato libre: 1-2 para rodaje suave y tirada larga, 3 para tempo/progresivo/fartlek, 4-5 para series/cuestas. No le pongas una zona alta a una sesión suave ni una zona baja a una sesión fuerte -- tiene que ser coherente con tipo_categoria."},
       terreno:{type:"string", enum:["asfalto","trail","mixto"]},
-      repeticiones:{type:"integer", description:"SOLO si la sesión tiene estructura de repeticiones (series, cuestas, fartlek): cantidad de repeticiones. Junto con esfuerzo_min, hace que la app le muestre al corredor el número SIEMPRE en la unidad correcta (metros o minutos, según cómo entrena) -- vos no tenés que elegir la unidad, la app convierte sola. No lo incluyas para sesiones sin repeticiones (rodaje suave, tirada larga, ritmo medio, progresivo)."},
+      repeticiones:{type:"integer", description:"SOLO si la sesión tiene estructura de repeticiones (series, cuestas, fartlek): cantidad de repeticiones. Junto con esfuerzo_min, hace que la app le muestre al corredor el número SIEMPRE en la unidad correcta (metros o minutos, según cómo entrena) -- vos no tenés que elegir la unidad, la app convierte sola. No lo incluyas para sesiones sin repeticiones (rodaje suave, tirada larga, ritmo medio, progresivo). IMPORTANTE: elegí vos estos valores con tu criterio de entrenador, NUNCA se los preguntes al corredor -- mismo criterio que ya usa el generador automático del plan (6 a 10 repeticiones de 2 a 4 minutos de esfuerzo, con 1 a 2 minutos de recuperación, es un fartlek típico). Si el corredor te pidió un cambio de distancia/tiempo total, ajustá la cantidad de repeticiones o los minutos de esfuerzo para llegar a eso, no le pidas que te arme la sesión él."},
       esfuerzo_min:{type:"number", description:"Requerido si incluís repeticiones. Duración de CADA repetición fuerte, SIEMPRE en minutos (nunca en metros, sin importar cómo entrena el corredor -- la app la convierte sola a metros si corresponde)."},
       recuperacion_min:{type:"number", description:"Duración de la recuperación entre cada repetición, SIEMPRE en minutos. Usá el mismo criterio que esfuerzo_min."},
       descripcion:{type:"string", description:"Instrucción breve para el corredor, en el idioma de la conversación. Si incluiste repeticiones/esfuerzo_min/recuperacion_min, NO repitas acá esos números ni su unidad (la app los agrega sola, ya convertidos correctamente) -- esta descripción es solo contexto general: terreno, por qué se hizo el cambio, qué buscar en el tramo. Si la sesión NO tiene repeticiones, esta sí es la descripción completa: dá igual números concretos y accionables si corresponde (ritmo, duración), nunca un rango vago tipo 'a sensación', usando la misma unidad que ya usás para distancia_km/duracion_min (fijate en el contexto si el corredor entrena por distancia o por tiempo)."}
@@ -8725,8 +8725,18 @@ function applyPlanChange(input){
   // positivos en otros idiomas.
   const looksLikeFartlek = /fartlek/i.test(input.tipo||'') || /fartlek/i.test(input.descripcion||'');
   const effectiveCategoria = looksLikeFartlek ? 'fartlek' : input.tipo_categoria;
-  if(REP_BASED_TYPES.includes(effectiveCategoria) && !resolveCustomInterval(input)){
+  const customIntervalCheck = resolveCustomInterval(input);
+  if(REP_BASED_TYPES.includes(effectiveCategoria) && !customIntervalCheck){
     return `Para ${effectiveCategoria} hace falta repeticiones y esfuerzo_min (y recuperacion_min) -- volvé a llamar a modificar_sesion incluyendo esos tres campos, en minutos, sin escribir la cantidad/duración en descripcion. Usá tipo_categoria:"fartlek" para esta sesión.`;
+  }
+  // Reportado por un usuario: aun mandando repeticiones/esfuerzo_min bien, el modelo IGUAL
+  // repetía los números en descripcion -- esta vez en minutos, duplicando (y contradiciendo
+  // en la unidad) la línea que la app agrega sola en metros. La instrucción del campo
+  // descripcion ya pide no hacer esto; como seguía pasando, ahora se rechaza directamente si
+  // descripcion tiene un número seguido de una unidad de tiempo/distancia, igual que ya se
+  // rechaza cuando falta la estructura.
+  if(customIntervalCheck && /\d+([.,]\d+)?\s*(min|minuto|seg|segundo|km|kilómetro|kilometro|\bm\b|metro)/i.test(input.descripcion||'')){
+    return `La descripcion todavía tiene números/unidades de la sesión (minutos, metros, etc.) -- sacalos, la app ya los agrega sola en la unidad correcta. Dejá en descripcion solo contexto (terreno, motivo del cambio), sin repetir cantidad, distancia ni duración.`;
   }
   if(input.semana === 'siguiente'){
     captureUndoSnapshot();
