@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T14:53:15Z';
+const APP_VERSION = '2026-09-21T14:57:10Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8705,8 +8705,19 @@ function applyPlanChange(input){
   // campos -- el resultado de la herramienta (este mismo string) vuelve al modelo como
   // tool_result en la misma respuesta, así que puede corregir y reintentar sin que el
   // corredor tenga que pedirlo nunca más a mano.
-  if(REP_BASED_TYPES.includes(input.tipo_categoria) && !resolveCustomInterval(input)){
-    return `Para ${input.tipo_categoria} hace falta repeticiones y esfuerzo_min (y recuperacion_min) -- volvé a llamar a modificar_sesion incluyendo esos tres campos, en minutos, sin escribir la cantidad/duración en descripcion.`;
+  //
+  // Esto solo mira tipo_categoria -- y un usuario encontró la vuelta: rechazado un pedido de
+  // fartlek sin estructura, el modelo volvió a llamar a la herramienta con tipo:"Fartlek"
+  // (el nombre libre que ve el corredor) pero tipo_categoria en otra cosa (easy/tempo), que
+  // esquiva este chequeo sin querer -- el resultado fue el fartlek de siempre, vago, sin
+  // reps. "fartlek" es palabra prestada del sueco y se escribe IGUAL en los 6 idiomas de la
+  // app (a diferencia de "series"/"cuestas", que sí se traducen) -- por eso alcanza con
+  // buscarla en tipo/descripcion para cerrar ese hueco específico sin arriesgar falsos
+  // positivos en otros idiomas.
+  const looksLikeFartlek = /fartlek/i.test(input.tipo||'') || /fartlek/i.test(input.descripcion||'');
+  const effectiveCategoria = looksLikeFartlek ? 'fartlek' : input.tipo_categoria;
+  if(REP_BASED_TYPES.includes(effectiveCategoria) && !resolveCustomInterval(input)){
+    return `Para ${effectiveCategoria} hace falta repeticiones y esfuerzo_min (y recuperacion_min) -- volvé a llamar a modificar_sesion incluyendo esos tres campos, en minutos, sin escribir la cantidad/duración en descripcion. Usá tipo_categoria:"fartlek" para esta sesión.`;
   }
   if(input.semana === 'siguiente'){
     captureUndoSnapshot();
