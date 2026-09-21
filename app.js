@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T15:24:56Z';
+const APP_VERSION = '2026-09-21T16:05:17Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -219,7 +219,8 @@ const ICONS = {
   video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="M15.5 10.2l6-3.2v10l-6-3.2z"/></svg>',
   stopwatch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v2"/></svg>',
   heart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-10-9.3C.4 8 1.8 4.5 5 3.5c2-.6 4 .2 5.2 2C11.4 3.7 13.4 2.9 15.4 3.5c3.2 1 4.6 4.5 3 7.7-2.5 4.7-10 9.3-10 9.3z"/></svg>',
-  heartFilled: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 20.5s-7.5-4.6-10-9.3C.4 8 1.8 4.5 5 3.5c2-.6 4 .2 5.2 2C11.4 3.7 13.4 2.9 15.4 3.5c3.2 1 4.6 4.5 3 7.7-2.5 4.7-10 9.3-10 9.3z"/></svg>'
+  heartFilled: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 20.5s-7.5-4.6-10-9.3C.4 8 1.8 4.5 5 3.5c2-.6 4 .2 5.2 2C11.4 3.7 13.4 2.9 15.4 3.5c3.2 1 4.6 4.5 3 7.7-2.5 4.7-10 9.3-10 9.3z"/></svg>',
+  share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>'
 };
 
 /* ================= FEEDBACK: toast / confirm / haptics ================= */
@@ -6497,9 +6498,91 @@ function renderPersonalRecordsCard(){
   const prRecords = getPersonalRecords();
   return `<div class="card"><h3>${t('hist_pr_title')}</h3><div class="pr-medal-grid">${PR_DISTANCES.map(b=>{
     const rec = prRecords[b.key];
-    if(rec) return `<div class="pr-medal achieved"><span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${t('pr_label_'+b.key)}</span><span class="pr-medal-time">${fmtTime(rec.durationSec)}</span></div>`;
+    if(rec) return `<div class="pr-medal achieved">
+      <button class="pr-medal-share-btn" onclick="event.stopPropagation(); sharePRImage('${b.key}')" aria-label="${t('aria_share_pr')}">${ICONS.share}</button>
+      <span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${t('pr_label_'+b.key)}</span><span class="pr-medal-time">${fmtTime(rec.durationSec)}</span></div>`;
     return `<div class="pr-medal"><span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${t('pr_label_'+b.key)}</span><span class="pr-medal-locked">${t('pr_medal_locked')}</span></div>`;
   }).join('')}</div></div>`;
+}
+async function sharePRImage(bucketKey){
+  const rec = getPersonalRecords()[bucketKey];
+  if(!rec) return;
+  const run = (state.runs||[]).find(r => String(r.id)===String(rec.runId));
+  const blob = await buildPRShareImageBlob(bucketKey, rec, run);
+  if(!blob) return;
+  const file = new File([blob], 'zancada-pr.png', {type:'image/png'});
+  if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file], title:'Zancada'}); }catch(e){ /* usuario canceló */ }
+  } else {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'zancada-pr.png';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 5000);
+  }
+}
+function buildPRShareImageBlob(bucketKey, rec, run){
+  // Mismo formato "sticker" que shareRunImage/shareWeeklyRecapImage (fondo transparente,
+  // verde #D6FF3F, Bebas Neue + JetBrains Mono), con la medalla y el rótulo "PR" en vez
+  // del logo solo, y el recorrido de ESA carrera récord si tiene puntos GPS guardados.
+  return new Promise(async (resolve)=>{
+    try{
+      try{
+        await Promise.all([
+          document.fonts.load('400 64px "Bebas Neue"'),
+          document.fonts.load('700 92px "JetBrains Mono"'),
+          document.fonts.load('700 28px "Inter"'),
+        ]);
+        await document.fonts.ready;
+      }catch(e){}
+
+      const W = 1080, H = 1920;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur = 16;
+      ctx.shadowOffsetY = 3;
+      ctx.textAlign = 'center';
+
+      ctx.fillStyle = '#D6FF3F';
+      ctx.font = '400 70px "Bebas Neue", Arial, sans-serif';
+      ctx.fillText('ZANCADA', W/2, 380);
+
+      ctx.fillStyle = '#D6FF3F';
+      ctx.font = '700 34px "Inter", Arial, sans-serif';
+      ctx.fillText('PR', W/2, 460);
+
+      ctx.font = '140px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+      ctx.fillText('\u{1F3C5}', W/2, 660);
+
+      ctx.fillStyle = '#EDEFEF';
+      ctx.font = '400 90px "Bebas Neue", Arial, sans-serif';
+      ctx.fillText(t('pr_label_'+bucketKey), W/2, 790);
+
+      const stats = [
+        [fmtDist(rec.distanceKm), distUnit().toUpperCase()],
+        [fmtTime(rec.durationSec), t('run_time').toUpperCase()],
+      ];
+      const rowTop = 880, rowHeight = 240;
+      stats.forEach((s,i)=>{
+        const top = rowTop + i*rowHeight;
+        ctx.fillStyle = '#EDEFEF';
+        ctx.font = '700 92px "JetBrains Mono", monospace';
+        ctx.fillText(s[0], W/2, top + 95);
+        ctx.fillStyle = '#EDEFEF';
+        ctx.font = '700 28px "Inter", Arial, sans-serif';
+        ctx.fillText(s[1], W/2, top + 148);
+      });
+
+      if(run && run.points && run.points.length>1){
+        drawRouteSilhouette(ctx, run.points, 140, 1440, W-280, 400);
+      }
+
+      canvas.toBlob((blob)=>resolve(blob||null), 'image/png');
+    }catch(e){ resolve(null); }
+  });
 }
 function openAchievements(){
   const {distanceBadges, runBadges, streakBadges, unlockedCount, totalCount} = getAchievementSections();

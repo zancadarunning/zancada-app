@@ -1123,7 +1123,15 @@
   .avatar-big img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover;}
   .avatar-edit-badge{position:absolute; bottom:-4px; right:-4px; width:22px; height:22px; border-radius:50%; background:var(--hivis); color:var(--ink); display:flex; align-items:center; justify-content:center; border:2.5px solid var(--asphalt); pointer-events:none;}
   .pr-medal-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-top:4px;}
-  .pr-medal{display:flex; flex-direction:column; align-items:center; gap:5px; padding:14px 6px; border-radius:var(--radius-sm); background:var(--asphalt-3); text-align:center; transition:background .15s ease, transform .15s var(--ease-out);}
+  .pr-medal{position:relative; display:flex; flex-direction:column; align-items:center; gap:5px; padding:14px 6px; border-radius:var(--radius-sm); background:var(--asphalt-3); text-align:center; transition:background .15s ease, transform .15s var(--ease-out);}
+  /* Ícono chico de compartir en la esquina de cada medalla ya ganada -- solo ahí, porque
+     compartir necesita una carrera real de referencia (km, tiempo, recorrido) que una
+     medalla todavía bloqueada no tiene. */
+  .pr-medal-share-btn{position:absolute; top:6px; right:6px; width:22px; height:22px; padding:4px;
+    border:none; border-radius:50%; background:rgba(0,0,0,.28); color:var(--hivis-text);
+    display:flex; align-items:center; justify-content:center; cursor:pointer; transition:transform .13s var(--ease-out), background .13s ease;}
+  .pr-medal-share-btn:active{transform:scale(.88); background:rgba(0,0,0,.4);}
+  .pr-medal-share-btn svg{width:100%; height:100%;}
   /* Una medalla ganada de verdad se siente distinta a una fila de datos: fondo tintado
      COMO YA ESTABA + el mismo glow que el sistema reserva para "esto está encendido"
      (botón primario, tab activo) -- el vitrina de trofeos no puede sentirse como
@@ -2495,9 +2503,7 @@
         <button class="small-link" onclick="logout()" data-i18n="perfil_logout"></button>
         <button class="small-link" onclick="resetApp()" data-i18n="perfil_reset"></button>
       </div>
-      <div style="margin-top:12px;">
-        <button class="small-link" style="color:var(--danger);" onclick="deleteAccount()" data-i18n="perfil_delete_account"></button>
-      </div>
+      <button class="btn btn-danger" style="margin-top:18px;" onclick="deleteAccount()" data-i18n="perfil_delete_account"></button>
     </div>
   </section>
 
