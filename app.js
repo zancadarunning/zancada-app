@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T13:55:29Z';
+const APP_VERSION = '2026-09-21T14:09:29Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3348,6 +3348,16 @@ function repDurationSec(repMeters, profile){
   const pace = estimateBasePaceMinPerKm(profile);
   return (repMeters/1000) * pace * 60;
 }
+// Conversión inversa a repDurationSec -- de minutos a metros, usando el mismo ritmo base del
+// corredor. La usa el fartlek en modo distancia (buildFartlekStructure arma sus repeticiones
+// siempre en minutos, ver el comentario ahí) para poder mostrarlas en metros igual que series
+// y cuestas cuando el corredor entrena por distancia, en vez de mezclar minutos ahí en medio de
+// un plan que por lo demás está todo en km -- reportado por un usuario que entrena por
+// distancia y notó que SOLO el fartlek se le mostraba en minutos.
+function repMetersFromMin(min, profile){
+  const pace = estimateBasePaceMinPerKm(profile);
+  return Math.round((min / pace) * 1000);
+}
 function planAmountText(d){
   if(!(d.dist>0)) return '';
   return isTimeMode() ? `${planDurationMin(d)} ${t('time_unit_min')}` : `${fmtDist(d.dist,1)} ${distUnit()}`;
@@ -3380,10 +3390,17 @@ function planLabel(d){
       ? t('desc_progression_detail_time', {dur: `${Math.max(1, Math.round(planDurationMin(d)/3))} ${t('time_unit_min')}`})
       : t('desc_progression_detail', {third: Math.max(1, Math.round(d.dist/3))});
   } else if(d.typeKey==='fartlek' && d.interval){
-    // A diferencia de series/cuestas, acá no hace falta una versión "_time" separada: los
-    // tramos de fartlek ya están definidos en minutos siempre (workMin/restMin), sea que el
-    // corredor entrene por distancia o por tiempo -- no hay nada que convertir.
-    desc = t('desc_fartlek_detail', {reps:d.interval.reps, work:fmtDurationShort(d.interval.workMin*60), rest:fmtDurationShort(d.interval.restMin*60), zone:d.zone});
+    // buildFartlekStructure arma sus repeticiones siempre en minutos (workMin/restMin) --
+    // eso es interno, no significa que haya que MOSTRARLAS en minutos sin importar el modo
+    // del corredor. Antes se mostraban siempre en tiempo, así que alguien que entrena por
+    // distancia (todo el resto del plan en km) veía el fartlek como la única sesión en
+    // minutos, sin ninguna razón visible. Acá sí hace falta la rama por modo, igual que
+    // series/cuestas -- en distancia se convierten los minutos a metros con
+    // repMetersFromMin (mismo ritmo base que ya usa repDurationSec para la conversión
+    // inversa).
+    desc = timeMode
+      ? t('desc_fartlek_detail_time', {reps:d.interval.reps, work:fmtDurationShort(d.interval.workMin*60), rest:fmtDurationShort(d.interval.restMin*60), zone:d.zone})
+      : t('desc_fartlek_detail', {reps:d.interval.reps, work:repMetersFromMin(d.interval.workMin, state.profile), rest:repMetersFromMin(d.interval.restMin, state.profile), zone:d.zone});
   } else if(d.zone && d.dist>0 && d.typeKey!=='intervals' && d.typeKey!=='fartlek'){
     // el fartlek SIN estructura (sesiones viejas guardadas antes de este cambio, o un
     // custom del coach) sigue siendo "alternar ritmos por sensación" -- decirle "mantenete
