@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T01:37:03Z';
+const APP_VERSION = '2026-09-21T13:55:29Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3140,6 +3140,28 @@ function intervalActualKm(interval){
 function hillActualKm(interval){
   return Math.max(0.1, Math.round(interval.reps * interval.repMeters * 2 / 100) / 10);
 }
+// Antes el fartlek era "alterná tramos fuertes de 2-4 min con recuperación de 1-2 min,
+// variando el ritmo a sensación" -- una sesión real, pero sin ningún número concreto para
+// seguir con cronómetro, a diferencia de series/cuestas (que ya dan reps y distancia/tiempo
+// exactos). Reportado por un usuario: "los fartlek no aclaran bien cómo hacer el ejercicio,
+// quiero todo detallado, en distancia o tiempo". Ahora se arma con reps y duraciones FIJAS
+// (rotando por semana, mismo criterio que buildIntervalStructure) en vez de rangos.
+//
+// A diferencia de hills/intervals, esto NO se usa para recalcular dayObj.dist en generatePlan:
+// el ritmo de cada tramo fuerte varía "a sensación" (esa parte no cambió), así que no hay una
+// distancia exacta por repetición de la que partir -- qualityKm sigue siendo el km total
+// planeado de la sesión (lo que ya entra en el reparto semanal), y esta estructura solo usa el
+// ritmo base del corredor como referencia para dimensionar CUÁNTAS repeticiones entran ahí.
+function buildFartlekStructure(qualityKm, weekNumber, profile){
+  const options = [{workMin:3, restMin:1.5}, {workMin:2, restMin:1}, {workMin:4, restMin:2}];
+  const wn = weekNumber || 1;
+  const { workMin, restMin } = options[(wn-1) % options.length];
+  const pace = estimateBasePaceMinPerKm(profile);
+  const totalMin = qualityKm * pace;
+  const cycleMin = workMin + restMin;
+  const reps = Math.max(4, Math.min(10, Math.round(totalMin / cycleMin)));
+  return { reps, workMin, restMin };
+}
 function calcBmi(p){
   if(!p || !p.weight || !p.height) return null;
   const h = p.height/100;
@@ -3278,6 +3300,9 @@ function generatePlan(p, weekNumber, weekStartDate){
       dayObj.interval = buildHillStructure(distMap[typeKey], caution);
       dayObj.dist = hillActualKm(dayObj.interval);
     }
+    if(typeKey==='fartlek' && !beginner){
+      dayObj.interval = buildFartlekStructure(distMap[typeKey], weekNumber, p);
+    }
     return dayObj;
   });
 }
@@ -3354,9 +3379,17 @@ function planLabel(d){
     desc = timeMode
       ? t('desc_progression_detail_time', {dur: `${Math.max(1, Math.round(planDurationMin(d)/3))} ${t('time_unit_min')}`})
       : t('desc_progression_detail', {third: Math.max(1, Math.round(d.dist/3))});
+  } else if(d.typeKey==='fartlek' && d.interval){
+    // A diferencia de series/cuestas, acá no hace falta una versión "_time" separada: los
+    // tramos de fartlek ya están definidos en minutos siempre (workMin/restMin), sea que el
+    // corredor entrene por distancia o por tiempo -- no hay nada que convertir.
+    desc = t('desc_fartlek_detail', {reps:d.interval.reps, work:fmtDurationShort(d.interval.workMin*60), rest:fmtDurationShort(d.interval.restMin*60), zone:d.zone});
   } else if(d.zone && d.dist>0 && d.typeKey!=='intervals' && d.typeKey!=='fartlek'){
-    // el fartlek ya es alternar ritmos por sensación -- decirle "mantenete en zona X
-    // durante el tramo principal" encima se contradice con la sesión misma
+    // el fartlek SIN estructura (sesiones viejas guardadas antes de este cambio, o un
+    // custom del coach) sigue siendo "alternar ritmos por sensación" -- decirle "mantenete
+    // en zona X durante el tramo principal" encima se contradice con la sesión misma. Con
+    // d.interval (rama de arriba) la zona ya va adentro del texto detallado, así que este
+    // caso nunca se llega a evaluar para un fartlek nuevo.
     desc += t('desc_zone_suffix', {zone:d.zone});
   }
   // Entrada en calor y vuelta a la calma para toda sesión que implique correr (no en
@@ -8404,6 +8437,11 @@ function buildContext(){
   ctx += `\n\n=== PLAN DE ESTA SEMANA (semana ${state.weekNumber}, la semana ACTUAL -- usá SIEMPRE este bloque para responder sobre "hoy", "mañana", "ayer" o "esta semana") ===\n${state.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)${d.status?'/'+d.status:''}${d.rating?'/calificó:'+d.rating:''}`).join(', ')}.\n=== FIN plan de esta semana ===`;
   const nw = getNextWeekPlan();
   ctx += `\n\n=== PLAN DE LA SEMANA QUE VIENE (semana ${nw.weekNumber}, todavía NO empezó -- es DISTINTA a la de arriba, ya calculada pero puede ajustarse según cómo termine esta semana. NUNCA uses estos km para responder sobre "hoy" o "mañana", esos están en el bloque de arriba) ===\n${nw.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)`).join(', ')}.\n=== FIN plan de la semana que viene ===\n`;
+  // Reportado por un usuario: le preguntó al coach cuánto tocaba un día puntual y respondió
+  // con un número (7km) distinto al que estos mismos bloques ya traían (8km) -- no un dato
+  // mal cargado, el bloque de arriba siempre tiene el número real, solo hacía falta pedirle
+  // explícitamente que lo cite tal cual en vez de recordarlo/redondearlo de memoria.
+  ctx += `\n\nCuando cites la distancia, zona o tipo de una sesión de estos dos bloques, copiá el número EXACTO tal como está ahí -- nunca lo redondees ni lo digas de memoria.`;
   return ctx;
 }
 const TOOLS = [
@@ -8419,7 +8457,7 @@ const TOOLS = [
       duracion_min:{type:"number", description:"Duración de la sesión en minutos. Usalo en vez de distancia_km si el corredor entrena por tiempo (fijate en el contexto) o si pide la sesión directamente en minutos -- se convierte sola a km internamente."},
       zona:{type:"integer", minimum:1, maximum:5, description:"Zona de frecuencia cardíaca objetivo para la sesión NUEVA, no un dato libre: 1-2 para rodaje suave y tirada larga, 3 para tempo/progresivo/fartlek, 4-5 para series/cuestas. No le pongas una zona alta a una sesión suave ni una zona baja a una sesión fuerte -- tiene que ser coherente con tipo_categoria."},
       terreno:{type:"string", enum:["asfalto","trail","mixto"]},
-      descripcion:{type:"string", description:"Instrucción breve para el corredor, en el idioma de la conversación"}
+      descripcion:{type:"string", description:"Instrucción breve para el corredor, en el idioma de la conversación. Si la sesión tiene repeticiones (series, cuestas, fartlek), dá SIEMPRE números concretos y accionables -- cantidad de repeticiones y distancia o duración de cada una y de la recuperación (ej. '8 repeticiones de 3 min fuerte con 90 seg de trote suave de recuperación'), nunca un rango vago tipo 'algunos tramos fuertes' o 'varias repeticiones a sensación'. El corredor tiene que poder seguirla con cronómetro sin tener que adivinar nada."}
     }, required:["dia","tipo","tipo_categoria","descripcion"]}
   },
   {
