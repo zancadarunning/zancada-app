@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T14:09:29Z';
+const APP_VERSION = '2026-09-21T14:12:24Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2307,6 +2307,7 @@ function enterApp(){
   applyStaticTranslations();
   document.getElementById('perfil-name').value = state.profile.name;
   checkWeekRollover();
+  checkPlanAlgoVersion();
   autoSkipPastDays();
   repairSkippedDaysWithMatchingRuns();
   autoClearPastEvent();
@@ -2350,6 +2351,7 @@ function enterApp(){
 document.addEventListener('visibilitychange', ()=>{
   if(document.hidden || !currentUserId || !state.onboarded) return;
   checkWeekRollover();
+  checkPlanAlgoVersion();
   autoSkipPastDays();
   repairSkippedDaysWithMatchingRuns();
   autoClearPastEvent();
@@ -2881,6 +2883,25 @@ function computeReturnFromBreakAdjustment(gapWeeks){
   if(gapWeeks < 7) return { gapWeeks, kmFactor: 0.65, weekNumberReset: 2 };
   return { gapWeeks, kmFactor: 0.5, weekNumberReset: 1 };
 }
+// Antes, un arreglo al algoritmo del plan (ej. el fartlek mostrando metros en vez de minutos,
+// o el tope de 30% para series/cuestas) solo se veía en sesiones generadas DESPUÉS del cambio
+// -- un día ya generado y guardado se quedaba con el número/texto viejo para siempre, hasta
+// que algo disparara una regeneración a mano (guardar el perfil, un cambio de semana).
+// Reportado por un usuario: "¿por qué tengo que tocar Días de entrenamiento a mano, que se
+// actualice solo". Subí PLAN_ALGO_VERSION cada vez que generatePlan (o algo que llama, como
+// buildFartlekStructure/buildHillStructure/el reparto semanal) cambie de verdad lo que
+// calcula -- si lo guardado no coincide, esto regenera solo al entrar a la app, con el mismo
+// merge seguro de siempre (preserveLivedDays: nunca toca un día ya vivido, cancelado, o
+// editado a mano por el chat -- solo refresca los días de acá en adelante que el algoritmo
+// generó sin que nadie los haya tocado).
+const PLAN_ALGO_VERSION = 1;
+function checkPlanAlgoVersion(){
+  if(!state.onboarded || !state.plan || !state.plan.length) return;
+  if(state.planAlgoVersion === PLAN_ALGO_VERSION) return;
+  state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
+  state.planAlgoVersion = PLAN_ALGO_VERSION;
+  persist();
+}
 function checkWeekRollover(){
   if(!state.onboarded) return;
   const currentMonday = getMondayISO(new Date());
@@ -2921,6 +2942,11 @@ function checkWeekRollover(){
     state.weekNumber = promotedWeekNumber;
     state.weekStart = promotedWeekStart;
     state.plan = promotedPlan || generatePlan(state.profile, state.weekNumber);
+    // Ver checkPlanAlgoVersion(): esto ya corrió generatePlan con el código de HOY, así que
+    // queda al día por definición -- sin este sello, checkPlanAlgoVersion() (que corre justo
+    // después, en enterApp) no tendría forma de saberlo y regeneraría todo de nuevo un
+    // segundo después, con el mismo resultado pero un persist() de más.
+    state.planAlgoVersion = PLAN_ALGO_VERSION;
     state.nextWeekOverrides = {};
     // Un snapshot de deshacer_cambio guardado en la semana anterior queda atado a esa semana
     // (mismo array de 7 días, pero representando otras fechas) -- restaurarlo después de un
