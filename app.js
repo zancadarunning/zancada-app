@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T14:43:47Z';
+const APP_VERSION = '2026-09-21T14:52:02Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8707,8 +8707,17 @@ function applyPlanChange(input){
     const zone = resolveZone(input.zona);
     if(zone!==null) override.zone = zone;
     if(input.terreno) override.terrain = input.terreno;
+    // A diferencia de la rama de la semana actual (que borra d.interval directo con `delete`
+    // cuando no hay estructura nueva), acá SIEMPRE hay que dejar la clave `interval` puesta
+    // -- aunque sea en null -- porque getNextWeekPlan() arma este día de cero cada vez
+    // (Object.assign({}, d, ov, ...)) a partir de un día recién generado por el algoritmo
+    // para ESA semana. Si ese día base resultaba ser, por ejemplo, una sesión de cuestas
+    // (con repMeters, no workMin/restMin) y el override no traía su propia clave `interval`,
+    // Object.assign conservaba el interval VIEJO de cuestas -- que planLabel intentaba leer
+    // como si fuera de fartlek (workMin/restMin), y como esos campos no existían ahí, salía
+    // "NaNm" en la sesión. Reportado por un usuario con exactamente ese síntoma.
     const customInterval = resolveCustomInterval(input);
-    if(customInterval) override.interval = customInterval;
+    override.interval = customInterval || null;
     state.nextWeekOverrides[input.dia] = override;
     renderPlan(); persist();
     state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+input.dia)), ts:Date.now()});
