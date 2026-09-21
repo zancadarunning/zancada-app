@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T15:18:07Z';
+const APP_VERSION = '2026-09-21T15:24:56Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8662,7 +8662,17 @@ function resolvePlanDistKm(input){
   const interval = resolveCustomInterval(input);
   if(interval){
     const pace = estimateBasePaceMinPerKm(state.profile);
-    const km = Math.max(0.1, Math.round((interval.reps * interval.workMin / pace) * 10) / 10);
+    // Cuestas y fartlek cuentan la recuperación como distancia real -- bajar trotando o
+    // trotar suave entre tramos sigue siendo terreno recorrido, mismo criterio que
+    // hillActualKm/fartlekActualKm ya usan para las sesiones que arma el algoritmo. Series
+    // (intervals) no: ahí la recuperación es una pausa por tiempo, no un tramo que se corre
+    // (ver intervalActualKm). Reportado por un usuario: un fartlek "6x400m + 6x250m de
+    // recuperación" solo mostraba 2.4km (el esfuerzo nomás) en vez de los 3.9km reales que
+    // esas repeticiones suman entre las dos partes -- esta rama tenía el criterio de series
+    // copiado por error, en vez del de fartlek/cuestas.
+    const category = effectiveTipoCategoria(input);
+    const cycleMin = category==='intervals' ? interval.workMin : interval.workMin + interval.restMin;
+    const km = Math.max(0.1, Math.round((interval.reps * cycleMin / pace) * 10) / 10);
     return Math.min(MAX_SESSION_KM, km);
   }
   const distKm = Number(input.distancia_km);
@@ -8677,6 +8687,14 @@ function resolvePlanDistKm(input){
 function resolveZone(zona){
   const z = Number(zona);
   return Number.isFinite(z) ? Math.min(5, Math.max(1, Math.round(z))) : null;
+}
+// "fartlek" es palabra prestada del sueco y se escribe IGUAL en los 6 idiomas de la app (a
+// diferencia de "series"/"cuestas", que sí se traducen) -- alcanza con buscarla en tipo/
+// descripcion para reconocer un fartlek aunque tipo_categoria diga otra cosa (ver el
+// comentario grande en applyPlanChange, junto al primer uso de esto).
+function effectiveTipoCategoria(input){
+  const looksLikeFartlek = /fartlek/i.test(input.tipo||'') || /fartlek/i.test(input.descripcion||'');
+  return looksLikeFartlek ? 'fartlek' : input.tipo_categoria;
 }
 // Estructura de repeticiones para una sesión CUSTOM (armada por el coach vía chat, ej.
 // modificar_sesion) -- reportado por un usuario: el coach describía sus repeticiones a mano
@@ -8719,12 +8737,9 @@ function applyPlanChange(input){
   // fartlek sin estructura, el modelo volvió a llamar a la herramienta con tipo:"Fartlek"
   // (el nombre libre que ve el corredor) pero tipo_categoria en otra cosa (easy/tempo), que
   // esquiva este chequeo sin querer -- el resultado fue el fartlek de siempre, vago, sin
-  // reps. "fartlek" es palabra prestada del sueco y se escribe IGUAL en los 6 idiomas de la
-  // app (a diferencia de "series"/"cuestas", que sí se traducen) -- por eso alcanza con
-  // buscarla en tipo/descripcion para cerrar ese hueco específico sin arriesgar falsos
-  // positivos en otros idiomas.
-  const looksLikeFartlek = /fartlek/i.test(input.tipo||'') || /fartlek/i.test(input.descripcion||'');
-  const effectiveCategoria = looksLikeFartlek ? 'fartlek' : input.tipo_categoria;
+  // reps. effectiveTipoCategoria() cierra ese hueco reconociendo "fartlek" en tipo/
+  // descripcion sin importar qué haya puesto en tipo_categoria (ver esa función).
+  const effectiveCategoria = effectiveTipoCategoria(input);
   const customIntervalCheck = resolveCustomInterval(input);
   if(REP_BASED_TYPES.includes(effectiveCategoria) && !customIntervalCheck){
     return `Para ${effectiveCategoria} hace falta repeticiones y esfuerzo_min (y recuperacion_min) -- volvé a llamar a modificar_sesion incluyendo esos tres campos, en minutos, sin escribir la cantidad/duración en descripcion. Usá tipo_categoria:"fartlek" para esta sesión.`;
