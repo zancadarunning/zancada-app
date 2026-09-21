@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T14:23:11Z';
+const APP_VERSION = '2026-09-21T14:32:24Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8533,7 +8533,7 @@ const TOOLS = [
       duracion_min:{type:"number", description:"Duración de la sesión en minutos. Usalo en vez de distancia_km si el corredor entrena por tiempo (fijate en el contexto) o si pide la sesión directamente en minutos -- se convierte sola a km internamente."},
       zona:{type:"integer", minimum:1, maximum:5, description:"Zona de frecuencia cardíaca objetivo para la sesión NUEVA, no un dato libre: 1-2 para rodaje suave y tirada larga, 3 para tempo/progresivo/fartlek, 4-5 para series/cuestas. No le pongas una zona alta a una sesión suave ni una zona baja a una sesión fuerte -- tiene que ser coherente con tipo_categoria."},
       terreno:{type:"string", enum:["asfalto","trail","mixto"]},
-      descripcion:{type:"string", description:"Instrucción breve para el corredor, en el idioma de la conversación. Si la sesión tiene repeticiones (series, cuestas, fartlek), dá SIEMPRE números concretos y accionables -- cantidad de repeticiones y distancia o duración de cada una y de la recuperación (ej. '8 repeticiones de 3 min fuerte con 90 seg de trote suave de recuperación'), nunca un rango vago tipo 'algunos tramos fuertes' o 'varias repeticiones a sensación'. El corredor tiene que poder seguirla con cronómetro sin tener que adivinar nada."}
+      descripcion:{type:"string", description:"Instrucción breve para el corredor, en el idioma de la conversación. Si la sesión tiene repeticiones (series, cuestas, fartlek), dá SIEMPRE números concretos y accionables -- cantidad de repeticiones y la distancia O duración de cada una y de la recuperación, nunca un rango vago tipo 'algunos tramos fuertes' o 'varias repeticiones a sensación'. Usá SIEMPRE la misma unidad que ya usás para distancia_km/duracion_min más arriba (fijate en el contexto si este corredor entrena por distancia o por tiempo) -- nunca minutos si el corredor entrena por distancia, ni metros si entrena por tiempo. Ejemplo en distancia: '8 repeticiones de 500m fuerte con 200m de trote suave de recuperación'. Ejemplo en tiempo: '8 repeticiones de 3 min fuerte con 90 seg de trote suave de recuperación'. El corredor tiene que poder seguirla sin tener que adivinar nada."}
     }, required:["dia","tipo","tipo_categoria","descripcion"]}
   },
   {
