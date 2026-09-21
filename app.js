@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T14:12:24Z';
+const APP_VERSION = '2026-09-21T14:16:38Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3414,7 +3414,12 @@ function planLabel(d){
   } else if(d.typeKey==='progression' && d.dist>0){
     desc = timeMode
       ? t('desc_progression_detail_time', {dur: `${Math.max(1, Math.round(planDurationMin(d)/3))} ${t('time_unit_min')}`})
-      : t('desc_progression_detail', {third: Math.max(1, Math.round(d.dist/3))});
+      // Antes redondeaba a un km entero (Math.round(d.dist/3)) -- para un progresivo de
+      // 10km eso daba "3 tramos de 3km", que suman 9, no 10 (reportado por un usuario: "me
+      // falta 1 km"). Con un decimal (fmtDist) el error queda en ~0.1km, no un km entero.
+      // También le faltaba convertir a millas en modo imperial -- {third}km estaba fijo en
+      // el texto en vez de usar distUnit() como el resto de la app.
+      : t('desc_progression_detail', {third: fmtDist(Math.max(0.1, d.dist/3), 1), unit: distUnit()});
   } else if(d.typeKey==='fartlek' && d.interval){
     // buildFartlekStructure arma sus repeticiones siempre en minutos (workMin/restMin) --
     // eso es interno, no significa que haya que MOSTRARLAS en minutos sin importar el modo
