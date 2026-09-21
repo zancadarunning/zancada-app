@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T14:16:38Z';
+const APP_VERSION = '2026-09-21T14:20:28Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2894,7 +2894,7 @@ function computeReturnFromBreakAdjustment(gapWeeks){
 // merge seguro de siempre (preserveLivedDays: nunca toca un día ya vivido, cancelado, o
 // editado a mano por el chat -- solo refresca los días de acá en adelante que el algoritmo
 // generó sin que nadie los haya tocado).
-const PLAN_ALGO_VERSION = 1;
+const PLAN_ALGO_VERSION = 2;
 function checkPlanAlgoVersion(){
   if(!state.onboarded || !state.plan || !state.plan.length) return;
   if(state.planAlgoVersion === PLAN_ALGO_VERSION) return;
@@ -3173,11 +3173,12 @@ function hillActualKm(interval){
 // quiero todo detallado, en distancia o tiempo". Ahora se arma con reps y duraciones FIJAS
 // (rotando por semana, mismo criterio que buildIntervalStructure) en vez de rangos.
 //
-// A diferencia de hills/intervals, esto NO se usa para recalcular dayObj.dist en generatePlan:
-// el ritmo de cada tramo fuerte varía "a sensación" (esa parte no cambió), así que no hay una
-// distancia exacta por repetición de la que partir -- qualityKm sigue siendo el km total
-// planeado de la sesión (lo que ya entra en el reparto semanal), y esta estructura solo usa el
-// ritmo base del corredor como referencia para dimensionar CUÁNTAS repeticiones entran ahí.
+// maxReps=10 puede capar el cálculo antes de llegar a qualityKm -- mismo problema que ya se
+// había arreglado para hills/intervals (ver hillActualKm/intervalActualKm): reportado por un
+// usuario en un caso real, un fartlek con qualityKm=6 quedaba capado en 10 repeticiones de
+// 2+1min, que a ritmo base son solo ~4.8km reales -- el número de arriba (6km) no se
+// correspondía con lo que las repeticiones realmente sumaban. dayObj.dist se recalcula ahora
+// a partir de esta estructura (ver fartlekActualKm), igual que hills/intervals.
 function buildFartlekStructure(qualityKm, weekNumber, profile){
   const options = [{workMin:3, restMin:1.5}, {workMin:2, restMin:1}, {workMin:4, restMin:2}];
   const wn = weekNumber || 1;
@@ -3187,6 +3188,14 @@ function buildFartlekStructure(qualityKm, weekNumber, profile){
   const cycleMin = workMin + restMin;
   const reps = Math.max(4, Math.min(10, Math.round(totalMin / cycleMin)));
   return { reps, workMin, restMin };
+}
+// Distancia REAL de una sesión de fartlek a partir de la estructura ya construida -- reps
+// repeticiones de (workMin+restMin) minutos cada una, convertidas a km con el mismo ritmo
+// base que ya usó buildFartlekStructure para dimensionar cuántas reps entraban.
+function fartlekActualKm(interval, profile){
+  const pace = estimateBasePaceMinPerKm(profile);
+  const cycleMin = interval.workMin + interval.restMin;
+  return Math.max(0.1, Math.round((interval.reps * cycleMin / pace) * 10) / 10);
 }
 function calcBmi(p){
   if(!p || !p.weight || !p.height) return null;
@@ -3328,6 +3337,7 @@ function generatePlan(p, weekNumber, weekStartDate){
     }
     if(typeKey==='fartlek' && !beginner){
       dayObj.interval = buildFartlekStructure(distMap[typeKey], weekNumber, p);
+      dayObj.dist = fartlekActualKm(dayObj.interval, p);
     }
     return dayObj;
   });
