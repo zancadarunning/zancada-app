@@ -31,12 +31,28 @@ querés, se puede armar una versión igual de prolija para cada una siguiendo el
 mismo criterio de diseño que `reset-password.html` (mismos colores, misma
 estructura).
 
-## Limitación: un solo idioma
+## Cada usuario lo recibe en su idioma
 
-Supabase permite una sola plantilla por tipo de email para todo el proyecto (no
-hay una versión por idioma como en la app). Esta plantilla quedó en español
-(voseo argentino), que es el idioma principal de Zancada -- un usuario que usa la
-app en inglés/portugués/etc. va a recibir igual este mail en español. Para
-mandar el email en el idioma de cada usuario hace falta un paso más grande
-(Auth Hooks + SMTP propio, en vez de las plantillas nativas del Dashboard) --
-avisame si en algún momento lo querés armar.
+Supabase solo permite UNA plantilla por tipo de email para todo el proyecto (no
+una versión por idioma como en la app) -- pero su motor de plantillas es Go
+`html/template` completo, así que `reset-password.html` elige el texto adentro
+del mismo archivo según `{{ .Data.lang }}`, un campo que ahora la app guarda en
+el `user_metadata` de Supabase Auth de cada usuario (ver `setLang()` y
+`handleSignUp()` en `app.js`) cada vez que:
+- alguien se registra (queda guardado el idioma que tenía puesto en ese momento), o
+- alguien cambia de idioma en Perfil.
+
+Una cuenta vieja que nunca pasó por ninguno de esos dos casos todavía no tiene
+ese campo -- para esas, el mail cae al español (el idioma por default de
+Zancada), igual que como estaba antes de este cambio. En cuanto esa persona
+entre a Perfil y toque el selector de idioma una sola vez, sus próximos mails
+ya le van a llegar en su idioma.
+
+**Importante:** esto depende de que Supabase efectivamente exponga
+`.Data.lang` (el `raw_user_meta_data` del usuario) en la plantilla de
+recuperación de contraseña -- no hay forma de confirmarlo sin probarlo en
+vivo. Después de pegar la plantilla, probá cambiando tu idioma en Perfil a,
+por ejemplo, inglés, y pidiendo un reset de contraseña -- si el mail te llega
+en inglés, quedó funcionando. Si te sigue llegando en español a pesar de
+tener el idioma cambiado, avisame y lo resolvemos por otro camino (Auth Hooks
++ SMTP propio).

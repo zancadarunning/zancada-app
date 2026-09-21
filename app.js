@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T16:05:17Z';
+const APP_VERSION = '2026-09-21T16:15:36Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -175,7 +175,14 @@ async function setLang(code){
   lang = code; state.lang = code;
   applyStaticTranslations();
   populateOnboardDays();
-  if(state.onboarded){ renderAll(); renderHistory(); renderZones(); renderPerfilDays(); persist(); }
+  if(state.onboarded){
+    renderAll(); renderHistory(); renderZones(); renderPerfilDays(); persist();
+    // Mismo motivo que en handleSignUp: sincronizamos el idioma al user_metadata de
+    // Supabase Auth para que los emails de autenticación lo puedan usar. Es best-effort
+    // (no bloquea la UI ni avisa si falla) -- si no llega a guardarse, el email cae al
+    // español por default, no rompe nada.
+    try{ supabaseClient.auth.updateUser({ data: { lang: code } }); }catch(e){}
+  }
 }
 document.getElementById('perfil-lang-choice').addEventListener('click', e=>{
   const c = e.target.closest('.choice'); if(!c) return;
@@ -1444,7 +1451,11 @@ async function handleSignUp(){
   if(!password || !isPasswordStrong(password)){ err.textContent = t('login_err_password_weak'); err.style.display='block'; return; }
   setBtnBusy('signup-submit-btn', true, t('signup_loading'));
   try{
-    const { data, error } = await supabaseClient.auth.signUp({ email, password });
+    // Guardamos el idioma actual en el user_metadata de Supabase Auth (no en app_state,
+    // que Supabase no puede leer) para que los emails de autenticación (reset de
+    // contraseña, etc.) se puedan armar en el idioma de cada usuario -- ver
+    // email-templates/reset-password.html, que lee esto como {{ .Data.lang }}.
+    const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: { lang } } });
     if(error){ err.textContent = translateAuthError(error); err.style.display='block'; return; }
     // Supabase, por diseño, no devuelve un error cuando el email ya tiene una cuenta
     // confirmada -- para no dejar que cualquiera use el formulario de registro para
