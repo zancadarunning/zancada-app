@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T16:58:43Z';
+const APP_VERSION = '2026-09-21T17:03:05Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6582,38 +6582,41 @@ function drawPRBadge(ctx, cx, cy, r){
   ctx.fillStyle = '#D6FF3F';
   ctx.fill();
 
+  // Copa: contorno curvo (borde redondeado arriba, panza, se angosta al cuello) en vez
+  // de un trapecio de lados rectos -- se veía muy anguloso/tosco para ser un trofeo.
   ctx.fillStyle = '#121415';
   ctx.beginPath();
-  ctx.moveTo(cx - r*0.44, cy - r*0.38);
-  ctx.lineTo(cx + r*0.44, cy - r*0.38);
-  ctx.lineTo(cx + r*0.14, cy + r*0.05);
-  ctx.lineTo(cx - r*0.14, cy + r*0.05);
+  ctx.moveTo(cx - r*0.46, cy - r*0.34);
+  ctx.quadraticCurveTo(cx, cy - r*0.52, cx + r*0.46, cy - r*0.34);
+  ctx.bezierCurveTo(cx + r*0.5, cy - r*0.05, cx + r*0.34, cy + r*0.14, cx + r*0.15, cy + r*0.16);
+  ctx.lineTo(cx - r*0.15, cy + r*0.16);
+  ctx.bezierCurveTo(cx - r*0.34, cy + r*0.14, cx - r*0.5, cy - r*0.05, cx - r*0.46, cy - r*0.34);
   ctx.closePath();
   ctx.fill();
 
-  ctx.lineWidth = r*0.09;
-  ctx.strokeStyle = '#121415';
-  ctx.beginPath();
-  ctx.arc(cx - r*0.5, cy - r*0.18, r*0.17, Math.PI*0.15, Math.PI*1.3);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(cx + r*0.5, cy - r*0.18, r*0.17, Math.PI*1.7, Math.PI*0.85);
-  ctx.stroke();
+  // Asas: lazo cerrado y relleno (no un simple trazo curvo) que sale de la panza y
+  // vuelve a ella, como un asa real -- antes eran arcos sueltos que no se leían como
+  // parte del mismo objeto.
+  const handle = (sign)=>{
+    ctx.beginPath();
+    ctx.moveTo(cx + sign*r*0.42, cy - r*0.3);
+    ctx.bezierCurveTo(cx + sign*r*0.82, cy - r*0.32, cx + sign*r*0.86, cy + r*0.08, cx + sign*r*0.5, cy + r*0.08);
+    ctx.bezierCurveTo(cx + sign*r*0.68, cy + r*0.05, cx + sign*r*0.64, cy - r*0.16, cx + sign*r*0.44, cy - r*0.14);
+    ctx.closePath();
+    ctx.fill();
+  };
+  handle(-1); handle(1);
 
-  ctx.fillRect(cx - r*0.06, cy + r*0.05, r*0.12, r*0.22);
-  ctx.beginPath();
-  ctx.moveTo(cx - r*0.24, cy + r*0.27);
-  ctx.lineTo(cx + r*0.24, cy + r*0.27);
-  ctx.lineTo(cx + r*0.18, cy + r*0.38);
-  ctx.lineTo(cx - r*0.18, cy + r*0.38);
-  ctx.closePath();
-  ctx.fill();
+  // Cuello + base en dos escalones, como el pie real de un trofeo
+  ctx.fillRect(cx - r*0.09, cy + r*0.16, r*0.18, r*0.16);
+  ctx.fillRect(cx - r*0.26, cy + r*0.32, r*0.52, r*0.08);
+  ctx.fillRect(cx - r*0.34, cy + r*0.4, r*0.68, r*0.06);
 
   ctx.fillStyle = '#EDEFEF';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.font = '800 ' + Math.round(r*0.26) + 'px "Inter", Arial, sans-serif';
-  ctx.fillText('PR', cx, cy - r*0.16);
+  ctx.fillText('PR', cx, cy - r*0.14);
 
   ctx.restore();
 }
