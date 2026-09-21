@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T14:52:02Z';
+const APP_VERSION = '2026-09-21T14:53:15Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8686,11 +8686,28 @@ function resolveCustomInterval(input){
   const restMin = restMinRaw>0 ? restMinRaw : 1;
   return { reps, workMin, restMin };
 }
+// Tipos que se describen con repeticiones -- si el modelo arma uno de estos sin
+// repeticiones/esfuerzo_min, applyPlanChange rechaza el cambio en vez de dejarlo pasar con
+// texto libre sin estructura (ver el comentario grande más abajo, en el chequeo).
+const REP_BASED_TYPES = ['intervals','hills','fartlek'];
 function applyPlanChange(input){
   // El snapshot de undo se toma DESPUÉS de validar (día encontrado, no bloqueado) -- si
   // se toma antes, un pedido inválido (día ya pasado, por ejemplo) igual pisa el snapshot
   // del cambio real anterior con el estado actual sin cambios, y "deshacer" ya no puede
   // recuperar ese cambio previo aunque el mensaje diga que sí lo deshizo.
+  //
+  // Reportado dos veces por un usuario: series/cuestas/fartlek custom seguían apareciendo en
+  // minutos para alguien que entrena por distancia, a pesar de la instrucción explícita de
+  // mandar repeticiones/esfuerzo_min -- el modelo simplemente no las mandaba algunas veces
+  // (y de paso eso fue lo que disparó el bug del NaN, ver el comentario de más abajo en la
+  // rama 'siguiente'). En vez de seguir confiando en que el modelo cumpla la instrucción,
+  // ahora directamente RECHAZAMOS el cambio si es un tipo con repeticiones y faltan esos
+  // campos -- el resultado de la herramienta (este mismo string) vuelve al modelo como
+  // tool_result en la misma respuesta, así que puede corregir y reintentar sin que el
+  // corredor tenga que pedirlo nunca más a mano.
+  if(REP_BASED_TYPES.includes(input.tipo_categoria) && !resolveCustomInterval(input)){
+    return `Para ${input.tipo_categoria} hace falta repeticiones y esfuerzo_min (y recuperacion_min) -- volvé a llamar a modificar_sesion incluyendo esos tres campos, en minutos, sin escribir la cantidad/duración en descripcion.`;
+  }
   if(input.semana === 'siguiente'){
     captureUndoSnapshot();
     // la semana que sigue no es un array persistido como state.plan, así que el cambio puntual
