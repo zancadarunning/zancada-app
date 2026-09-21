@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T17:03:05Z';
+const APP_VERSION = '2026-09-21T17:08:46Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6528,8 +6528,7 @@ function renderPersonalRecordsCard(){
 async function sharePRImage(bucketKey){
   const rec = getPersonalRecords()[bucketKey];
   if(!rec) return;
-  const run = (state.runs||[]).find(r => String(r.id)===String(rec.runId));
-  const blob = await buildPRShareImageBlob(bucketKey, rec, run);
+  const blob = await buildPRShareImageBlob(bucketKey, rec);
   if(!blob) return;
   const file = new File([blob], 'zancada-pr.png', {type:'image/png'});
   if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
@@ -6620,10 +6619,10 @@ function drawPRBadge(ctx, cx, cy, r){
 
   ctx.restore();
 }
-function buildPRShareImageBlob(bucketKey, rec, run){
+function buildPRShareImageBlob(bucketKey, rec){
   // Misma estructura que la tarjeta de "New PR" de Strava (insignia con rayos arriba,
-  // distancia, tiempo, ritmo, recorrido y marca al pie) pero con nuestra identidad --
-  // fondo transparente, lima #D6FF3F, Bebas Neue + JetBrains Mono, igual que
+  // distancia, tiempo, ritmo y marca al pie) pero con nuestra identidad -- fondo
+  // transparente, lima #D6FF3F, Bebas Neue + JetBrains Mono, igual que
   // shareRunImage/shareWeeklyRecapImage.
   return new Promise(async (resolve)=>{
     try{
@@ -6666,13 +6665,9 @@ function buildPRShareImageBlob(bucketKey, rec, run){
       ctx.font = '700 40px "JetBrains Mono", monospace';
       ctx.fillText(`${fmtPace(paceMin)}/${distUnit()}`, W/2, 1155);
 
-      if(run && run.points && run.points.length>1){
-        drawRouteSilhouette(ctx, run.points, 140, 1300, W-280, 360);
-      }
-
       ctx.fillStyle = '#D6FF3F';
-      ctx.font = '400 46px "Bebas Neue", Arial, sans-serif';
-      ctx.fillText('ZANCADA', W/2, 1800);
+      ctx.font = '400 76px "Bebas Neue", Arial, sans-serif';
+      ctx.fillText('ZANCADA', W/2, 1350);
 
       canvas.toBlob((blob)=>resolve(blob||null), 'image/png');
     }catch(e){ resolve(null); }
