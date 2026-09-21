@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T15:04:29Z';
+const APP_VERSION = '2026-09-21T15:10:10Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8550,7 +8550,7 @@ const TOOLS = [
       dia:{type:"string", enum:DAY_KEYS, description:"Código del día: mon,tue,wed,thu,fri,sat,sun (siempre en estos códigos, sin importar el idioma de la charla)"},
       tipo:{type:"string", description:"Nombre del tipo de sesión en el idioma de la conversación, ej. 'Rodaje suave', 'Easy run'"},
       tipo_categoria:{type:"string", enum:["easy","intervals","tempo","long","fartlek","hills","progression"], description:"Categoría técnica de la sesión en estos códigos fijos, SIN traducir (independiente de 'tipo', que va en el idioma de la charla). Se usa para las estadísticas de variedad de entrenamientos y para relacionar la carrera registrada con el tipo de sesión que tocaba -- elegí la que mejor corresponda a la sesión nueva."},
-      distancia_km:{type:"number"},
+      distancia_km:{type:"number", description:"Distancia total de la sesión, SOLO si NO incluís repeticiones/esfuerzo_min -- si la sesión tiene repeticiones, la app calcula la distancia real sumando reps*esfuerzo_min sola e IGNORA este campo, así que no tiene sentido mandar acá un número que no coincida con esa cuenta (ej. no pongas '7' acá si tus 6 repeticiones de 3min a este ritmo dan 2.4km reales -- mejor subí la cantidad de repeticiones o los minutos de esfuerzo hasta llegar a los 7km que querés, y dejá que la app calcule el total)."},
       duracion_min:{type:"number", description:"Duración de la sesión en minutos. Usalo en vez de distancia_km si el corredor entrena por tiempo (fijate en el contexto) o si pide la sesión directamente en minutos -- se convierte sola a km internamente."},
       zona:{type:"integer", minimum:1, maximum:5, description:"Zona de frecuencia cardíaca objetivo para la sesión NUEVA, no un dato libre: 1-2 para rodaje suave y tirada larga, 3 para tempo/progresivo/fartlek, 4-5 para series/cuestas. No le pongas una zona alta a una sesión suave ni una zona baja a una sesión fuerte -- tiene que ser coherente con tipo_categoria."},
       terreno:{type:"string", enum:["asfalto","trail","mixto"]},
@@ -8651,23 +8651,25 @@ function applyUndoLastChange(){
 // pedidos legítimos de fondistas/ultramaratonistas.
 const MAX_SESSION_KM = 100;
 function resolvePlanDistKm(input){
+  // Si vino una estructura de repeticiones, ESA manda siempre para el número de arriba --
+  // nunca un distancia_km/duracion_min suelto que el modelo haya mandado aparte. Reportado
+  // por un usuario con un caso real: el coach mandó "7km" junto con repeticiones:6,
+  // esfuerzo_min/recuperacion_min que sumaban 2.4km entre las dos -- dos datos del mismo
+  // pedido, completamente inconsistentes entre sí, porque nunca se cruzaban. Mismo criterio
+  // que hillActualKm/intervalActualKm/fartlekActualKm ya aplican para las sesiones que arma
+  // el algoritmo: la distancia real SIEMPRE sale de sumar las repeticiones, nunca de un
+  // número independiente, así sea el propio modelo el que lo haya tipeado.
+  const interval = resolveCustomInterval(input);
+  if(interval){
+    const pace = estimateBasePaceMinPerKm(state.profile);
+    const km = Math.max(0.1, Math.round((interval.reps * interval.workMin / pace) * 10) / 10);
+    return Math.min(MAX_SESSION_KM, km);
+  }
   const distKm = Number(input.distancia_km);
   if(Number.isFinite(distKm) && distKm>0) return Math.min(MAX_SESSION_KM, Math.round(distKm*10)/10);
   const durMin = Number(input.duracion_min);
   if(Number.isFinite(durMin) && durMin>0){
     const km = Math.max(0.5, Math.round((durMin / estimateBasePaceMinPerKm(state.profile))*10)/10);
-    return Math.min(MAX_SESSION_KM, km);
-  }
-  // Si no vino ni distancia_km ni duracion_min pero sí repeticiones+esfuerzo_min, derivamos un
-  // km aproximado de esa estructura en vez de dejar el número de arriba en 0 (o arrastrando la
-  // distancia del día ANTERIOR) al lado de una descripción que ya habla de reps concretas --
-  // mismo criterio que hillActualKm/intervalActualKm/fartlekActualKm usan para las sesiones que
-  // arma el algoritmo: el header siempre tiene que salir de la estructura real, nunca de un
-  // valor que el modelo se haya olvidado de mandar.
-  const interval = resolveCustomInterval(input);
-  if(interval){
-    const pace = estimateBasePaceMinPerKm(state.profile);
-    const km = Math.max(0.1, Math.round((interval.reps * interval.workMin / pace) * 10) / 10);
     return Math.min(MAX_SESSION_KM, km);
   }
   return null;
