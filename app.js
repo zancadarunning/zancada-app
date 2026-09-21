@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T14:32:24Z';
+const APP_VERSION = '2026-09-21T14:43:47Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3407,7 +3407,21 @@ function planLabel(d){
     // la calma cuando tiene distancia (antes se mostraba SOLO el texto del coach, sin esa
     // estructura, lo que hacía que un día editado por chat se viera "distinto" al resto
     // del plan).
-    const desc = d.dist>0 ? `${t('desc_warmup_prefix')}\n${d.desc}\n${t('desc_cooldown_suffix')}` : d.desc;
+    let body = d.desc;
+    if(d.interval){
+      // d.interval llega SIEMPRE en minutos (resolveCustomInterval, en workMin/restMin) --
+      // acá se convierte a la unidad que corresponda, mismo criterio que ya usa esta función
+      // con el fartlek armado por el algoritmo (repMetersFromMin/fmtDurationShort). Así el
+      // número que ve el corredor coincide SIEMPRE con su modo de entreno, sin depender de
+      // que el modelo haya elegido bien la unidad al escribir el texto libre -- reportado por
+      // un usuario: el coach seguía escribiendo minutos para alguien que entrena por
+      // distancia, aunque ya se le había pedido explícitamente que no lo hiciera.
+      const timeModeNow = isTimeMode();
+      const work = timeModeNow ? fmtDurationShort(d.interval.workMin*60) : `${repMetersFromMin(d.interval.workMin, state.profile)}m`;
+      const rest = timeModeNow ? fmtDurationShort(d.interval.restMin*60) : `${repMetersFromMin(d.interval.restMin, state.profile)}m`;
+      body = `${d.desc}\n${t('desc_custom_reps_detail', {reps:d.interval.reps, work, rest, zone:d.zone})}`;
+    }
+    const desc = d.dist>0 ? `${t('desc_warmup_prefix')}\n${body}\n${t('desc_cooldown_suffix')}` : body;
     return {type:d.type, desc};
   }
   const timeMode = isTimeMode();
@@ -8533,7 +8547,10 @@ const TOOLS = [
       duracion_min:{type:"number", description:"Duración de la sesión en minutos. Usalo en vez de distancia_km si el corredor entrena por tiempo (fijate en el contexto) o si pide la sesión directamente en minutos -- se convierte sola a km internamente."},
       zona:{type:"integer", minimum:1, maximum:5, description:"Zona de frecuencia cardíaca objetivo para la sesión NUEVA, no un dato libre: 1-2 para rodaje suave y tirada larga, 3 para tempo/progresivo/fartlek, 4-5 para series/cuestas. No le pongas una zona alta a una sesión suave ni una zona baja a una sesión fuerte -- tiene que ser coherente con tipo_categoria."},
       terreno:{type:"string", enum:["asfalto","trail","mixto"]},
-      descripcion:{type:"string", description:"Instrucción breve para el corredor, en el idioma de la conversación. Si la sesión tiene repeticiones (series, cuestas, fartlek), dá SIEMPRE números concretos y accionables -- cantidad de repeticiones y la distancia O duración de cada una y de la recuperación, nunca un rango vago tipo 'algunos tramos fuertes' o 'varias repeticiones a sensación'. Usá SIEMPRE la misma unidad que ya usás para distancia_km/duracion_min más arriba (fijate en el contexto si este corredor entrena por distancia o por tiempo) -- nunca minutos si el corredor entrena por distancia, ni metros si entrena por tiempo. Ejemplo en distancia: '8 repeticiones de 500m fuerte con 200m de trote suave de recuperación'. Ejemplo en tiempo: '8 repeticiones de 3 min fuerte con 90 seg de trote suave de recuperación'. El corredor tiene que poder seguirla sin tener que adivinar nada."}
+      repeticiones:{type:"integer", description:"SOLO si la sesión tiene estructura de repeticiones (series, cuestas, fartlek): cantidad de repeticiones. Junto con esfuerzo_min, hace que la app le muestre al corredor el número SIEMPRE en la unidad correcta (metros o minutos, según cómo entrena) -- vos no tenés que elegir la unidad, la app convierte sola. No lo incluyas para sesiones sin repeticiones (rodaje suave, tirada larga, ritmo medio, progresivo)."},
+      esfuerzo_min:{type:"number", description:"Requerido si incluís repeticiones. Duración de CADA repetición fuerte, SIEMPRE en minutos (nunca en metros, sin importar cómo entrena el corredor -- la app la convierte sola a metros si corresponde)."},
+      recuperacion_min:{type:"number", description:"Duración de la recuperación entre cada repetición, SIEMPRE en minutos. Usá el mismo criterio que esfuerzo_min."},
+      descripcion:{type:"string", description:"Instrucción breve para el corredor, en el idioma de la conversación. Si incluiste repeticiones/esfuerzo_min/recuperacion_min, NO repitas acá esos números ni su unidad (la app los agrega sola, ya convertidos correctamente) -- esta descripción es solo contexto general: terreno, por qué se hizo el cambio, qué buscar en el tramo. Si la sesión NO tiene repeticiones, esta sí es la descripción completa: dá igual números concretos y accionables si corresponde (ritmo, duración), nunca un rango vago tipo 'a sensación', usando la misma unidad que ya usás para distancia_km/duracion_min (fijate en el contexto si el corredor entrena por distancia o por tiempo)."}
     }, required:["dia","tipo","tipo_categoria","descripcion"]}
   },
   {
@@ -8634,11 +8651,40 @@ function resolvePlanDistKm(input){
     const km = Math.max(0.5, Math.round((durMin / estimateBasePaceMinPerKm(state.profile))*10)/10);
     return Math.min(MAX_SESSION_KM, km);
   }
+  // Si no vino ni distancia_km ni duracion_min pero sí repeticiones+esfuerzo_min, derivamos un
+  // km aproximado de esa estructura en vez de dejar el número de arriba en 0 (o arrastrando la
+  // distancia del día ANTERIOR) al lado de una descripción que ya habla de reps concretas --
+  // mismo criterio que hillActualKm/intervalActualKm/fartlekActualKm usan para las sesiones que
+  // arma el algoritmo: el header siempre tiene que salir de la estructura real, nunca de un
+  // valor que el modelo se haya olvidado de mandar.
+  const interval = resolveCustomInterval(input);
+  if(interval){
+    const pace = estimateBasePaceMinPerKm(state.profile);
+    const km = Math.max(0.1, Math.round((interval.reps * interval.workMin / pace) * 10) / 10);
+    return Math.min(MAX_SESSION_KM, km);
+  }
   return null;
 }
 function resolveZone(zona){
   const z = Number(zona);
   return Number.isFinite(z) ? Math.min(5, Math.max(1, Math.round(z))) : null;
+}
+// Estructura de repeticiones para una sesión CUSTOM (armada por el coach vía chat, ej.
+// modificar_sesion) -- reportado por un usuario: el coach describía sus repeticiones a mano
+// en el texto libre y, aunque ya se le pidió explícitamente que use la unidad correcta según
+// el modo del corredor, seguía escribiendo minutos para alguien que entrena por distancia (un
+// ejemplo en la propia instrucción lo sesgaba). En vez de seguir confiando en que el modelo
+// elija bien la unidad cada vez, ahora el modelo manda SIEMPRE esfuerzo_min/recuperacion_min
+// en minutos (una unidad fija, sin ambigüedad) y la app arma la oración con la unidad
+// correcta ella misma -- mismo criterio que ya usa fartlekActualKm/repMetersFromMin para las
+// sesiones que arma el algoritmo automático, así que esto no puede volver a pasar.
+function resolveCustomInterval(input){
+  const reps = Math.round(Number(input.repeticiones));
+  const workMin = Number(input.esfuerzo_min);
+  if(!(reps>0) || !(workMin>0)) return null;
+  const restMinRaw = Number(input.recuperacion_min);
+  const restMin = restMinRaw>0 ? restMinRaw : 1;
+  return { reps, workMin, restMin };
 }
 function applyPlanChange(input){
   // El snapshot de undo se toma DESPUÉS de validar (día encontrado, no bloqueado) -- si
@@ -8661,6 +8707,8 @@ function applyPlanChange(input){
     const zone = resolveZone(input.zona);
     if(zone!==null) override.zone = zone;
     if(input.terreno) override.terrain = input.terreno;
+    const customInterval = resolveCustomInterval(input);
+    if(customInterval) override.interval = customInterval;
     state.nextWeekOverrides[input.dia] = override;
     renderPlan(); persist();
     state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+input.dia)), ts:Date.now()});
@@ -8685,6 +8733,11 @@ function applyPlanChange(input){
   if(effectiveDistKm!==null) d.dist = effectiveDistKm;
   const zone = resolveZone(input.zona);
   if(zone!==null) d.zone = zone;
+  const customInterval = resolveCustomInterval(input);
+  // Si esta edición no trae repeticiones, no dejamos colgado un d.interval de una edición
+  // ANTERIOR de este mismo día -- si no, una sesión reescrita sin estructura ("cambiala por
+  // un rodaje suave") podía arrastrar reps de la sesión de series que reemplazó.
+  if(customInterval) d.interval = customInterval; else delete d.interval;
   // Si el modelo no menciona terreno (no es obligatorio en la herramienta), no queremos
   // que el día se quede SIN terreno -- antes pasaba justo eso cuando el día venía de ser
   // descanso (terrain:null) y el pedido era, por ejemplo, "pasá la sesión del martes acá":
@@ -8891,7 +8944,7 @@ Ya tenés en el contexto el plan de la semana actual Y el de la semana que sigue
 
 Tenés estas herramientas para aplicar cambios reales en la app. Cuando el corredor pida un cambio, usá SIEMPRE la herramienta correspondiente en la misma respuesta — nunca digas que ya lo cambiaste sin haber llamado a la herramienta:
 - mover_sesion: cuando el pedido es literalmente MOVER/PASAR/CAMBIAR DE DÍA una sesión que ya está planificada, sin cambiar qué es (ej. "pasá el martes al miércoles", "corré lo de hoy para mañana"), dentro de la semana actual. Usala SIEMPRE que el pedido sea de este tipo, en vez de modificar_sesion + cancelar_sesion combinadas -- conserva el terreno, la zona y la descripción original tal cual, que es exactamente lo que se espera de un "cambio de día" (modificar_sesion te haría reescribir la descripción de memoria y perder el terreno si no lo repetís).
-- modificar_sesion: para cambiar UN día puntual por OTRA sesión DISTINTA de la que tenía (tipo, distancia, zona, terreno) -- no para mover la misma sesión de día, para eso está mover_sesion. Sirve para esta semana o la que sigue (parámetro semana). Si el corredor entrena por tiempo (fijate en el contexto) o te da la sesión directamente en minutos, usá duracion_min en vez de distancia_km.
+- modificar_sesion: para cambiar UN día puntual por OTRA sesión DISTINTA de la que tenía (tipo, distancia, zona, terreno) -- no para mover la misma sesión de día, para eso está mover_sesion. Sirve para esta semana o la que sigue (parámetro semana). Si el corredor entrena por tiempo (fijate en el contexto) o te da la sesión directamente en minutos, usá duracion_min en vez de distancia_km. Si la sesión nueva tiene repeticiones (series, cuestas, fartlek), usá SIEMPRE repeticiones/esfuerzo_min/recuperacion_min (en minutos) en vez de escribir la cantidad/unidad vos mismo en descripcion -- la app se encarga de mostrárselo al corredor en la unidad que corresponda.
 - cancelar_sesion: cuando el corredor cancela, saca o no puede hacer una sesión y NO la reemplaza por otra — deja ese día vacío, igual que un día sin entrenamiento. Nunca uses modificar_sesion para esto ni inventes una sesión suave o de zona 1 "de reemplazo": si el pedido es cancelar, el día tiene que quedar sin ningún ejercicio.
 - ajustar_volumen_semana: para pedidos generales de correr más o menos (ej. "quiero correr más km", "bajale un poco"), sin que especifiquen un día — de esta semana o de la que sigue (parámetro semana).
 - modificar_perfil: para cambios permanentes de datos personales que afectan los PRÓXIMOS planes (km semanales base, objetivo, terreno, FC máxima, o el cronograma fijo de días de entreno con dias_entreno). IMPORTANTE: si lo que cambia es QUÉ DÍAS entrena de forma habitual y permanente (ej. "de ahora en adelante entreno martes y jueves"), usá modificar_perfil con dias_entreno -- no mover_sesion/modificar_sesion/cancelar_sesion, que solo afectan una semana puntual y dejarían al corredor con el cronograma viejo la semana siguiente.
