@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T14:57:10Z';
+const APP_VERSION = '2026-09-21T15:04:29Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3392,7 +3392,14 @@ function repDurationSec(repMeters, profile){
 // distancia y notó que SOLO el fartlek se le mostraba en minutos.
 function repMetersFromMin(min, profile){
   const pace = estimateBasePaceMinPerKm(profile);
-  return Math.round((min / pace) * 1000);
+  const raw = (min / pace) * 1000;
+  // Redondeado a la baldosa de 50m más cercana -- el cálculo directo (minutos * ritmo) da
+  // cualquier número (262m, 484m...), no una cifra que alguien elegiría a mano para correr
+  // con el reloj (100, 150, 200, 250, 300...). Mismo espíritu que los tiers fijos que ya usan
+  // buildIntervalStructure/buildHillStructure para SU distancia, solo que acá el punto de
+  // partida es una conversión continua (minutos a metros), no una tabla de opciones fija.
+  // Reportado por un usuario viendo el fartlek en modo distancia.
+  return Math.max(50, Math.round(raw/50)*50);
 }
 function planAmountText(d){
   if(!(d.dist>0)) return '';
