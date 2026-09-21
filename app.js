@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T14:20:28Z';
+const APP_VERSION = '2026-09-21T14:23:11Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5652,6 +5652,13 @@ function getTodayWorkoutStructure(){
   const repSec = isTimeMode() ? repDurationSec(today.interval.repMeters) : undefined;
   if(today.typeKey==='intervals') return {typeKey:'intervals', reps:today.interval.reps, repMeters:today.interval.repMeters, repSec, recoveryMin:today.interval.recoveryMin};
   if(today.typeKey==='hills') return {typeKey:'hills', reps:today.interval.reps, repMeters:today.interval.repMeters, repSec};
+  // Fartlek se completa siempre por TIEMPO en las dos fases, sea que el corredor entrene por
+  // distancia o por tiempo -- a diferencia de series/cuestas, acá no hay una distancia
+  // objetivo por tramo (el ritmo del tramo fuerte es "a sensación", ver
+  // buildFartlekStructure), así que medirlo con GPS no tendría sentido; el minuto/segundo es
+  // el único dato real de la prescripción. Reportado por un usuario: la guía en vivo
+  // funcionaba para series y cuestas pero no hacía nada en un día de fartlek.
+  if(today.typeKey==='fartlek') return {typeKey:'fartlek', reps:today.interval.reps, workSec:Math.round(today.interval.workMin*60), restSec:Math.round(today.interval.restMin*60), restMin:today.interval.restMin};
   return null;
 }
 function setupWorkoutGuide(){
@@ -5674,9 +5681,15 @@ function announceWorkoutPhase(){
   const w = tracker.workout; if(!w) return;
   const s = w.structure;
   if(w.phase==='effort'){
-    speak(s.typeKey==='intervals' ? t('voice_rep_start',{cur:w.currentRep, total:s.reps}) : t('voice_hill_start',{cur:w.currentRep, total:s.reps}));
+    // "Repetición" (genérico) sirve igual de bien para series y fartlek -- solo cuestas
+    // tiene su propia palabra ("Subida").
+    speak(s.typeKey==='hills' ? t('voice_hill_start',{cur:w.currentRep, total:s.reps}) : t('voice_rep_start',{cur:w.currentRep, total:s.reps}));
   } else if(w.phase==='recovery'){
-    speak(s.typeKey==='intervals' ? t('voice_rep_recovery',{cur:w.currentRep, min:s.recoveryMin}) : t('voice_hill_recovery',{cur:w.currentRep}));
+    if(s.typeKey==='hills') speak(t('voice_hill_recovery',{cur:w.currentRep}));
+    // El fartlek redondea los minutos de recuperación para la voz (pueden ser 1.5) -- decir
+    // "1.5 minutos" en voz alta suena raro; el texto escrito de la sesión sí muestra el
+    // valor preciso (fmtDurationShort).
+    else speak(t('voice_rep_recovery',{cur:w.currentRep, min: s.typeKey==='fartlek' ? Math.round(s.restMin) : s.recoveryMin}));
   } else if(w.phase==='done'){
     speak(t('voice_workout_done'));
   }
@@ -5713,6 +5726,9 @@ function tickWorkoutGuide(){
   if(s.typeKey==='intervals'){
     if(w.phase==='effort') complete = s.repSec!=null ? (tracker.elapsedSec - w.phaseStartElapsedSec) >= s.repSec : (tracker.distanceKm - w.phaseStartDistanceKm)*1000 >= s.repMeters;
     else complete = (tracker.elapsedSec - w.phaseStartElapsedSec) >= s.recoveryMin*60;
+  } else if(s.typeKey==='fartlek'){
+    // Ver el comentario en getTodayWorkoutStructure(): siempre por tiempo, nunca por GPS.
+    complete = (tracker.elapsedSec - w.phaseStartElapsedSec) >= (w.phase==='effort' ? s.workSec : s.restSec);
   } else {
     // hills: tanto la subida (esfuerzo) como la bajada trotando (recuperación) se
     // miden por la misma distancia repMeters -- ver comentario arriba de
@@ -5752,6 +5768,8 @@ function renderWorkoutGuide(){
       pct = isEffort
         ? (s.repSec!=null ? ((tracker.elapsedSec - w.phaseStartElapsedSec) / s.repSec)*100 : ((tracker.distanceKm - w.phaseStartDistanceKm)*1000 / s.repMeters)*100)
         : ((tracker.elapsedSec - w.phaseStartElapsedSec) / (s.recoveryMin*60))*100;
+    } else if(s.typeKey==='fartlek'){
+      pct = ((tracker.elapsedSec - w.phaseStartElapsedSec) / (isEffort ? s.workSec : s.restSec))*100;
     } else {
       pct = s.repSec!=null ? ((tracker.elapsedSec - w.phaseStartElapsedSec) / s.repSec)*100 : ((tracker.distanceKm - w.phaseStartDistanceKm)*1000 / s.repMeters)*100;
     }
