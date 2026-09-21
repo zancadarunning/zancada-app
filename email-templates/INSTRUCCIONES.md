@@ -23,13 +23,27 @@ pegarlo a mano en el Dashboard.
 No hace falta tocar el asunto del mail salvo que también lo quieras cambiar (por
 defecto suele ser algo como "Reset Your Password").
 
+## Cómo actualizar la plantilla de "Confirm signup"
+
+Mismos pasos que arriba, pero en la plantilla **Confirm signup** (o **Confirm
+Signup** según la versión del dashboard) -- pegá el contenido completo de
+[`confirm-signup.html`](confirm-signup.html). Para probarla, registrá una
+cuenta nueva con un email que no hayas usado antes.
+
+Esta plantilla en particular tiene una ventaja sobre la de reset: el idioma
+que usa (`{{ .Data.lang }}`, ver la sección de abajo) se guarda en el mismo
+momento en que se crea la cuenta (`handleSignUp()` manda `lang` junto con el
+alta), así que para cuentas NUEVAS no depende de que la persona haya abierto
+la app antes o tocado el selector de idioma -- ya llega bien desde el primer
+mail.
+
 ## Otras plantillas
 
-Las demás plantillas de Supabase (confirmar cuenta, invitación, cambio de email,
-magic link) probablemente tengan el mismo aspecto genérico sin marca -- si
-querés, se puede armar una versión igual de prolija para cada una siguiendo el
-mismo criterio de diseño que `reset-password.html` (mismos colores, misma
-estructura).
+Las que quedan (invitación, cambio de email, magic link) probablemente
+tengan el mismo aspecto genérico sin marca -- si en algún momento las usás,
+se puede armar una versión igual de prolija siguiendo el mismo criterio de
+diseño que `reset-password.html`/`confirm-signup.html` (mismos colores,
+misma estructura).
 
 ## Cada usuario lo recibe en su idioma
 

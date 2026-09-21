@@ -1,0 +1,150 @@
+<!--
+  Plantilla de email "Confirm signup" (confirmación de cuenta al registrarse) de
+  Supabase Auth. Mismo criterio que reset-password.html en esta misma carpeta: este
+  archivo NO lo sirve la app -- hay que pegarlo a mano en Supabase → Authentication →
+  Emails → Confirm signup (ver INSTRUCCIONES.md).
+
+  Misma paleta, misma estructura de tabla + estilos inline, y mismo truco de
+  multi-idioma vía {{ .Data.lang }} que reset-password.html -- ver el comentario en
+  ese archivo para el detalle de cómo se sincroniza ese campo desde la app.
+-->
+<!DOCTYPE html>
+<html lang="es" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<meta name="supported-color-schemes" content="dark light">
+<title>Zancada</title>
+</head>
+<body style="margin:0; padding:0; background-color:#0A0A0A; -webkit-text-size-adjust:100%; text-size-adjust:100%;">
+{{ $lang := .Data.lang }}
+{{ $preheader := "Confirmá tu cuenta para empezar a entrenar con Zancada." }}
+{{ $headline := "Confirmá tu cuenta" }}
+{{ $body := "Gracias por sumarte a Zancada. Tocá el botón para confirmar tu cuenta y arrancar a entrenar." }}
+{{ $button := "Confirmar cuenta" }}
+{{ $note := "Si no creaste esta cuenta, podés ignorar este mensaje con tranquilidad." }}
+{{ $linkNote := "Si el botón no funciona, copiá y pegá este link en tu navegador:" }}
+{{ $footer := "Zancada — tu entrenador personal, en cualquier terreno." }}
+{{ if eq $lang "en" }}
+  {{ $preheader = "Confirm your account to start training with Zancada." }}
+  {{ $headline = "Confirm your account" }}
+  {{ $body = "Thanks for joining Zancada. Tap the button to confirm your account and start training." }}
+  {{ $button = "Confirm account" }}
+  {{ $note = "If you didn't create this account, you can safely ignore this email." }}
+  {{ $linkNote = "If the button doesn't work, copy and paste this link into your browser:" }}
+  {{ $footer = "Zancada — your personal coach, on any terrain." }}
+{{ else if eq $lang "pt" }}
+  {{ $preheader = "Confirme sua conta para começar a treinar com a Zancada." }}
+  {{ $headline = "Confirme sua conta" }}
+  {{ $body = "Obrigado por se juntar à Zancada. Toque no botão para confirmar sua conta e começar a treinar." }}
+  {{ $button = "Confirmar conta" }}
+  {{ $note = "Se você não criou esta conta, pode ignorar este email tranquilamente." }}
+  {{ $linkNote = "Se o botão não funcionar, copie e cole este link no seu navegador:" }}
+  {{ $footer = "Zancada — seu treinador pessoal, em qualquer terreno." }}
+{{ else if eq $lang "fr" }}
+  {{ $preheader = "Confirme ton compte pour commencer à t'entraîner avec Zancada." }}
+  {{ $headline = "Confirme ton compte" }}
+  {{ $body = "Merci de rejoindre Zancada. Touche le bouton pour confirmer ton compte et commencer à t'entraîner." }}
+  {{ $button = "Confirmer le compte" }}
+  {{ $note = "Si tu n'as pas créé ce compte, tu peux ignorer cet email tranquillement." }}
+  {{ $linkNote = "Si le bouton ne fonctionne pas, copie-colle ce lien dans ton navigateur :" }}
+  {{ $footer = "Zancada — votre entraîneur personnel, sur tous les terrains." }}
+{{ else if eq $lang "de" }}
+  {{ $preheader = "Bestätige dein Konto, um mit Zancada zu trainieren." }}
+  {{ $headline = "Bestätige dein Konto" }}
+  {{ $body = "Danke, dass du bei Zancada dabei bist. Tippe auf den Button, um dein Konto zu bestätigen und mit dem Training zu starten." }}
+  {{ $button = "Konto bestätigen" }}
+  {{ $note = "Wenn du dieses Konto nicht erstellt hast, kannst du diese E-Mail einfach ignorieren." }}
+  {{ $linkNote = "Falls der Button nicht funktioniert, kopiere diesen Link in deinen Browser:" }}
+  {{ $footer = "Zancada — dein persönlicher Coach, auf jedem Terrain." }}
+{{ else if eq $lang "it" }}
+  {{ $preheader = "Conferma il tuo account per iniziare ad allenarti con Zancada." }}
+  {{ $headline = "Conferma il tuo account" }}
+  {{ $body = "Grazie per esserti unito a Zancada. Tocca il pulsante per confermare il tuo account e iniziare ad allenarti." }}
+  {{ $button = "Conferma account" }}
+  {{ $note = "Se non hai creato questo account, puoi ignorare tranquillamente questa email." }}
+  {{ $linkNote = "Se il pulsante non funziona, copia e incolla questo link nel tuo browser:" }}
+  {{ $footer = "Zancada — il tuo allenatore personale, su ogni terreno." }}
+{{ end }}
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0; mso-hide:all;">
+    {{ $preheader }}
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0A0A0A;">
+    <tr>
+      <td align="center" style="padding:40px 16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:460px;">
+
+          <tr>
+            <td align="center" style="padding-bottom:28px;">
+              <span style="font-family:Arial, Helvetica, sans-serif; font-size:26px; font-weight:800; letter-spacing:1px; color:#D6FF3F;">ZANCADA</span>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="background-color:#18181B; border-radius:20px; padding:40px 32px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" style="font-family:Arial, Helvetica, sans-serif; font-size:21px; font-weight:800; color:#EDEFEF; padding-bottom:12px;">
+                    {{ $headline }}
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="font-family:Arial, Helvetica, sans-serif; font-size:14.5px; line-height:22px; color:#8B9296; padding-bottom:28px;">
+                    {{ $body }}
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding-bottom:8px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td align="center" bgcolor="#D6FF3F" style="border-radius:999px;">
+                          <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block; padding:15px 34px; font-family:Arial, Helvetica, sans-serif; font-size:15px; font-weight:800; color:#121415; text-decoration:none; border-radius:999px;">
+                            {{ $button }}
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="font-family:Arial, Helvetica, sans-serif; font-size:12px; color:#5F6569; padding-top:22px;">
+                    {{ $note }}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:22px 6px 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="font-family:Arial, Helvetica, sans-serif; font-size:12px; line-height:18px; color:#5F6569; padding-bottom:6px;">
+                    {{ $linkNote }}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-family:'Courier New', monospace; font-size:11.5px; line-height:16px; color:#8B9296; word-break:break-all;">
+                    <a href="{{ .ConfirmationURL }}" target="_blank" style="color:#8B9296; text-decoration:underline;">{{ .ConfirmationURL }}</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td align="center" style="padding:32px 10px 0;">
+              <span style="font-family:Arial, Helvetica, sans-serif; font-size:12px; color:#5F6569;">
+                {{ $footer }}
+              </span>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
