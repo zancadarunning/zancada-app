@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T16:15:36Z';
+const APP_VERSION = '2026-09-21T16:19:40Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -767,6 +767,16 @@ async function loadUserAndEnter(user, isRetry){
       if(deviceTz && state.profile && state.profile.tz !== deviceTz){
         state.profile.tz = deviceTz;
         persist();
+      }
+      // Mismo criterio que profile.tz arriba: mantenemos sincronizado el idioma en el
+      // user_metadata de Supabase Auth (usado por los emails de autenticación, ver
+      // email-templates/reset-password.html) en cada apertura, no solo cuando alguien
+      // toca el selector en Perfil -- así una cuenta creada ANTES de que existiera este
+      // campo también termina teniendo el idioma correcto guardado, sin que el usuario
+      // tenga que hacer nada. Solo escribe si hace falta, para no pegarle a la API en
+      // cada apertura de la app de balde.
+      if(user.user_metadata && user.user_metadata.lang !== lang){
+        try{ supabaseClient.auth.updateUser({ data: { lang } }); }catch(e){}
       }
       if(!state.chat || !state.chat.length) seedCoachGreeting(); else renderChat();
       enterApp();
