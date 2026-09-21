@@ -1,0 +1,21 @@
+-- ============================================================================
+-- push_subscriptions_add_platform: agrega la columna `platform` a la tabla que ya
+-- existe (creada a mano en su momento, no versionada -- ver sql/user_data_rls.sql
+-- para sus políticas de RLS, que ya la asumen).
+--
+-- Por qué hace falta: hasta ahora `push_subscriptions.subscription` guardaba
+-- siempre un objeto de suscripción Web Push (endpoint + claves) para el service
+-- worker de la PWA. La app nativa (Capacitor, ver mobile/push-setup/) no tiene
+-- service worker ni PushManager -- ahí lo que hay que guardar es un token de
+-- Firebase Cloud Messaging, un string, no el mismo objeto. `platform` le dice a
+-- api/send-reminders.js con qué mandar el aviso a cada fila: 'web' -> web-push
+-- (como siempre), 'android'/'ios' -> Firebase Admin (ver sendFcmPush en ese
+-- archivo). DEFAULT 'web' para que las filas que ya existen (todas Web Push,
+-- de antes de que esto existiera) se sigan interpretando igual que siempre, sin
+-- tocarlas una por una.
+--
+-- Cómo correrlo: pegar este archivo entero en el SQL Editor de Supabase y
+-- ejecutarlo. Es seguro volver a correrlo (ADD COLUMN IF NOT EXISTS).
+-- ============================================================================
+
+ALTER TABLE public.push_subscriptions ADD COLUMN IF NOT EXISTS platform text NOT NULL DEFAULT 'web';

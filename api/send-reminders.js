@@ -1,5 +1,6 @@
 const webpush = require('web-push');
 const requireCronSecret = require('./_lib/require-cron-secret');
+const { sendFcmPush } = require('./_lib/fcm');
 
 // ANTES este cron corría UNA vez por día a una hora fija en UTC (11:00 UTC, ver
 // vercel.json) -- pensada para que le llegue a las 8am a un corredor en Argentina
@@ -84,7 +85,7 @@ module.exports = withSentry(async (req, res) => {
       throw new Error(`app_state fetch failed: ${statesRes.status} ${body}`);
     }
     const states = await statesRes.json();
-    const subsRes = await fetch(`${base}/rest/v1/push_subscriptions?select=user_id,subscription`, { headers });
+    const subsRes = await fetch(`${base}/rest/v1/push_subscriptions?select=user_id,subscription,platform`, { headers });
     if (!subsRes.ok) {
       const body = await subsRes.text().catch(() => '');
       throw new Error(`push_subscriptions fetch failed: ${subsRes.status} ${body}`);
@@ -92,12 +93,15 @@ module.exports = withSentry(async (req, res) => {
     const subs = await subsRes.json();
 
     const subsByUser = {};
-    (subs || []).forEach(s => { subsByUser[s.user_id] = s.subscription; });
+    // platform puede venir null en filas viejas si la columna se agregó sin DEFAULT en algún
+    // punto intermedio -- 'web' de fallback, mismo criterio que el DEFAULT de la columna (ver
+    // sql/push_subscriptions_add_platform.sql).
+    (subs || []).forEach(s => { subsByUser[s.user_id] = { subscription: s.subscription, platform: s.platform || 'web' }; });
 
     let sent = 0, skipped = 0, failed = 0;
     for (const row of (states || [])) {
-      const sub = subsByUser[row.user_id];
-      if (!sub) { skipped++; continue; }
+      const subRow = subsByUser[row.user_id];
+      if (!subRow) { skipped++; continue; }
       const data = row.data || {};
       const plan = data.plan;
       if (!plan || !plan.length) { skipped++; continue; }
@@ -130,7 +134,18 @@ module.exports = withSentry(async (req, res) => {
       const body = MSGS[lang].body(typeLabel, today.dist);
 
       try {
-        await webpush.sendNotification(sub, JSON.stringify({ title: 'Zancada', body }));
+        if (subRow.platform === 'android' || subRow.platform === 'ios') {
+          // App nativa (Capacitor) -- acá subscription es {token: '<token de FCM>'}, no una
+          // suscripción Web Push (ver sql/push_subscriptions_add_platform.sql y api/_lib/fcm.js).
+          const dead = await sendFcmPush(subRow.subscription && subRow.subscription.token, 'Zancada', body);
+          if (dead) {
+            await fetch(`${base}/rest/v1/push_subscriptions?user_id=eq.${row.user_id}`, { method: 'DELETE', headers });
+            failed++;
+            continue;
+          }
+        } else {
+          await webpush.sendNotification(subRow.subscription, JSON.stringify({ title: 'Zancada', body }));
+        }
         sent++;
       } catch (err) {
         failed++;

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-19T00:27:48Z';
+const APP_VERSION = '2026-09-21T01:37:03Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -445,6 +445,48 @@ const VAPID_PUBLIC_KEY = 'BLBsiej6FgDHLt2S5DvrDfYU9_jf1_qfIzRswRgjcvLvMTPT1lDnVo
 if('serviceWorker' in navigator && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())){
   navigator.serviceWorker.register('/sw.js').catch(e=>console.error('SW registration failed', e));
 }
+// Notificaciones push en la app nativa (Capacitor + Firebase Cloud Messaging, ver
+// mobile/push-setup/) -- hasta ahora esto no existía: el SW de arriba está a propósito
+// desactivado en nativo, así que enablePushNotifications() de más abajo (pensada para
+// PushManager del navegador) directamente le mostraba "no soportado" a cualquiera que
+// activara el toggle desde la app instalada. Reportado por el usuario al preguntar qué
+// hacía falta rearmar de cara a publicar en las tiendas.
+function nativePushPlugin(){ return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications; }
+// Registrado UNA sola vez al arrancar (no recién cuando el corredor toca el toggle) para
+// que, si FCM llega a rotar el token del dispositivo más adelante (pasa, aunque no seguido),
+// el listener siga vivo y actualice solo lo guardado -- en vez de dejarlo roto hasta que
+// alguien apague/prenda el toggle a mano de nuevo. Antes de que haya sesión iniciada, o si
+// el corredor nunca activó el toggle en este dispositivo, el evento puede llegar igual
+// (el plugin no distingue) -- por eso el guard de state.nativePushEnabled/currentUserId.
+function initNativePushListeners(){
+  const nativePush = nativePushPlugin();
+  if(!nativePush) return;
+  nativePush.addListener('registration', async (token)=>{
+    if(!currentUserId || !state.nativePushEnabled) return;
+    try{
+      await supabaseClient.from('push_subscriptions').upsert({ user_id: currentUserId, subscription: {token: token.value}, platform: window.Capacitor.getPlatform() });
+    }catch(e){ console.error('push nativo: no se pudo guardar el token', e); }
+  });
+  nativePush.addListener('registrationError', (err)=>{ console.error('push nativo: registro falló', err); });
+}
+initNativePushListeners();
+async function enableNativePushNotifications(nativePush){
+  try{
+    let status = await nativePush.checkPermissions();
+    if(status.receive === 'prompt' || status.receive === 'prompt-with-rationale'){
+      const proceed = await showConfirm(t('push_soft_ask'), { confirmText: t('push_soft_ask_confirm'), cancelText: t('push_soft_ask_cancel') });
+      if(!proceed){ await updatePushStatusDisplay(); return; }
+      status = await nativePush.requestPermissions();
+    }
+    if(status.receive !== 'granted'){ showToast(t('push_denied'),'error'); await updatePushStatusDisplay(); return; }
+    // Tiene que quedar en true ANTES de register(): el listener de arriba solo guarda el
+    // token si esto ya está prendido, y el evento 'registration' puede llegar casi al toque.
+    state.nativePushEnabled = true;
+    persist();
+    nativePush.register();
+    await updatePushStatusDisplay();
+  }catch(e){ console.error(e); showToast(t('push_error'),'error'); await updatePushStatusDisplay(); }
+}
 function urlBase64ToUint8Array(base64String){
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/-/g,'+').replace(/_/g,'/');
@@ -457,6 +499,20 @@ async function updatePushStatusDisplay(){
   const el = document.getElementById('push-status');
   const toggle = document.getElementById('push-toggle');
   if(!el) return;
+  const nativePush = nativePushPlugin();
+  if(nativePush){
+    // El plugin nativo no tiene un equivalente a pushManager.getSubscription() (no hay forma
+    // de preguntarle "¿ya estoy registrado?") -- el estado real es la combinación del permiso
+    // del sistema (checkPermissions) y si este dispositivo llegó a pedir el registro alguna
+    // vez (state.nativePushEnabled, ver enableNativePushNotifications/initNativePushListeners).
+    try{
+      const status = await nativePush.checkPermissions();
+      const enabled = status.receive === 'granted' && !!state.nativePushEnabled;
+      el.textContent = enabled ? t('push_enabled') : t('push_disabled');
+      if(toggle) toggle.checked = enabled;
+    }catch(e){ el.textContent = t('push_disabled'); if(toggle) toggle.checked = false; }
+    return;
+  }
   if(!('serviceWorker' in navigator) || !('PushManager' in window)){ el.textContent = t('push_not_supported'); if(toggle) toggle.disabled = true; return; }
   try{
     const reg = await navigator.serviceWorker.ready;
@@ -483,6 +539,8 @@ async function handlePushToggle(checked){
   else await disablePushNotifications();
 }
 async function enablePushNotifications(){
+  const nativePush = nativePushPlugin();
+  if(nativePush){ await enableNativePushNotifications(nativePush); return; }
   try{
     if(!('serviceWorker' in navigator) || !('PushManager' in window)){ showToast(t('push_not_supported'),'error'); await updatePushStatusDisplay(); return; }
     if(Notification.permission === 'default'){
@@ -493,11 +551,25 @@ async function enablePushNotifications(){
     const permission = await Notification.requestPermission();
     if(permission !== 'granted'){ showToast(t('push_denied'),'error'); await updatePushStatusDisplay(); return; }
     const sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) });
-    await supabaseClient.from('push_subscriptions').upsert({ user_id: currentUserId, subscription: sub.toJSON() });
+    await supabaseClient.from('push_subscriptions').upsert({ user_id: currentUserId, subscription: sub.toJSON(), platform: 'web' });
     await updatePushStatusDisplay();
   }catch(e){ console.error(e); showToast(t('push_error'),'error'); await updatePushStatusDisplay(); }
 }
 async function disablePushNotifications(){
+  const nativePush = nativePushPlugin();
+  if(nativePush){
+    try{
+      // El plugin no tiene un "unregister" real (FCM no lo necesita: el token sigue viviendo
+      // del lado del dispositivo, pero dejamos de mandarle nada apenas se borra la fila de
+      // abajo) -- apagar el toggle es, en la práctica, borrar la fila y bajar la bandera local
+      // que initNativePushListeners() usa para decidir si vale la pena guardar un token nuevo.
+      state.nativePushEnabled = false;
+      persist();
+      if(currentUserId) await supabaseClient.from('push_subscriptions').delete().eq('user_id', currentUserId);
+      await updatePushStatusDisplay();
+    }catch(e){ console.error(e); showToast(t('push_error'),'error'); await updatePushStatusDisplay(); }
+    return;
+  }
   try{
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
