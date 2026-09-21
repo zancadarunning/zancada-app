@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T16:19:40Z';
+const APP_VERSION = '2026-09-21T16:58:43Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6542,10 +6542,86 @@ async function sharePRImage(bucketKey){
     setTimeout(()=>URL.revokeObjectURL(url), 5000);
   }
 }
+function drawSunburstRays(ctx, cx, cy, rInner, count){
+  // Rayos alrededor del círculo de la medalla, largo y corto alternado -- mismo recurso
+  // que usa Strava en su tarjeta de "New PR" para las redes, adaptado a nuestro lima en
+  // vez de su dorado.
+  ctx.save();
+  ctx.strokeStyle = '#D6FF3F';
+  ctx.lineCap = 'round';
+  for(let i=0;i<count;i++){
+    const angle = (i/count)*Math.PI*2;
+    const long = i%2===0;
+    const len = long ? rInner*0.55 : rInner*0.28;
+    const gap = rInner*1.2;
+    const x1 = cx + Math.cos(angle)*gap;
+    const y1 = cy + Math.sin(angle)*gap;
+    const x2 = cx + Math.cos(angle)*(gap+len);
+    const y2 = cy + Math.sin(angle)*(gap+len);
+    ctx.lineWidth = long ? rInner*0.045 : rInner*0.028;
+    ctx.beginPath();
+    ctx.moveTo(x1,y1);
+    ctx.lineTo(x2,y2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function drawPRBadge(ctx, cx, cy, r){
+  // Círculo lima sólido con rayos, y adentro una copa/trofeo en silueta oscura con "PR"
+  // encima -- misma composición que la insignia de Strava, en nuestra paleta (lima +
+  // tinta oscura) en vez de dorado + negro.
+  ctx.save();
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+
+  drawSunburstRays(ctx, cx, cy, r, 20);
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI*2);
+  ctx.fillStyle = '#D6FF3F';
+  ctx.fill();
+
+  ctx.fillStyle = '#121415';
+  ctx.beginPath();
+  ctx.moveTo(cx - r*0.44, cy - r*0.38);
+  ctx.lineTo(cx + r*0.44, cy - r*0.38);
+  ctx.lineTo(cx + r*0.14, cy + r*0.05);
+  ctx.lineTo(cx - r*0.14, cy + r*0.05);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.lineWidth = r*0.09;
+  ctx.strokeStyle = '#121415';
+  ctx.beginPath();
+  ctx.arc(cx - r*0.5, cy - r*0.18, r*0.17, Math.PI*0.15, Math.PI*1.3);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx + r*0.5, cy - r*0.18, r*0.17, Math.PI*1.7, Math.PI*0.85);
+  ctx.stroke();
+
+  ctx.fillRect(cx - r*0.06, cy + r*0.05, r*0.12, r*0.22);
+  ctx.beginPath();
+  ctx.moveTo(cx - r*0.24, cy + r*0.27);
+  ctx.lineTo(cx + r*0.24, cy + r*0.27);
+  ctx.lineTo(cx + r*0.18, cy + r*0.38);
+  ctx.lineTo(cx - r*0.18, cy + r*0.38);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = '#EDEFEF';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '800 ' + Math.round(r*0.26) + 'px "Inter", Arial, sans-serif';
+  ctx.fillText('PR', cx, cy - r*0.16);
+
+  ctx.restore();
+}
 function buildPRShareImageBlob(bucketKey, rec, run){
-  // Mismo formato "sticker" que shareRunImage/shareWeeklyRecapImage (fondo transparente,
-  // verde #D6FF3F, Bebas Neue + JetBrains Mono), con la medalla y el rótulo "PR" en vez
-  // del logo solo, y el recorrido de ESA carrera récord si tiene puntos GPS guardados.
+  // Misma estructura que la tarjeta de "New PR" de Strava (insignia con rayos arriba,
+  // distancia, tiempo, ritmo, recorrido y marca al pie) pero con nuestra identidad --
+  // fondo transparente, lima #D6FF3F, Bebas Neue + JetBrains Mono, igual que
+  // shareRunImage/shareWeeklyRecapImage.
   return new Promise(async (resolve)=>{
     try{
       try{
@@ -6553,6 +6629,7 @@ function buildPRShareImageBlob(bucketKey, rec, run){
           document.fonts.load('400 64px "Bebas Neue"'),
           document.fonts.load('700 92px "JetBrains Mono"'),
           document.fonts.load('700 28px "Inter"'),
+          document.fonts.load('800 40px "Inter"'),
         ]);
         await document.fonts.ready;
       }catch(e){}
@@ -6567,39 +6644,32 @@ function buildPRShareImageBlob(bucketKey, rec, run){
       ctx.shadowOffsetY = 3;
       ctx.textAlign = 'center';
 
-      ctx.fillStyle = '#D6FF3F';
-      ctx.font = '400 70px "Bebas Neue", Arial, sans-serif';
-      ctx.fillText('ZANCADA', W/2, 380);
+      drawPRBadge(ctx, W/2, 580, 165);
 
-      ctx.fillStyle = '#D6FF3F';
-      ctx.font = '700 34px "Inter", Arial, sans-serif';
-      ctx.fillText('PR', W/2, 460);
-
-      ctx.font = '140px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
-      ctx.fillText('\u{1F3C5}', W/2, 660);
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur = 16;
+      ctx.shadowOffsetY = 3;
 
       ctx.fillStyle = '#EDEFEF';
       ctx.font = '400 90px "Bebas Neue", Arial, sans-serif';
-      ctx.fillText(t('pr_label_'+bucketKey), W/2, 790);
+      ctx.fillText(t('pr_label_'+bucketKey), W/2, 895);
 
-      const stats = [
-        [fmtDist(rec.distanceKm), distUnit().toUpperCase()],
-        [fmtTime(rec.durationSec), t('run_time').toUpperCase()],
-      ];
-      const rowTop = 880, rowHeight = 240;
-      stats.forEach((s,i)=>{
-        const top = rowTop + i*rowHeight;
-        ctx.fillStyle = '#EDEFEF';
-        ctx.font = '700 92px "JetBrains Mono", monospace';
-        ctx.fillText(s[0], W/2, top + 95);
-        ctx.fillStyle = '#EDEFEF';
-        ctx.font = '700 28px "Inter", Arial, sans-serif';
-        ctx.fillText(s[1], W/2, top + 148);
-      });
+      ctx.fillStyle = '#EDEFEF';
+      ctx.font = '700 92px "JetBrains Mono", monospace';
+      ctx.fillText(fmtTime(rec.durationSec), W/2, 1080);
+
+      const paceMin = rec.distanceKm>0.02 ? (rec.durationSec/60)/rec.distanceKm : 0;
+      ctx.fillStyle = '#8B9296';
+      ctx.font = '700 40px "JetBrains Mono", monospace';
+      ctx.fillText(`${fmtPace(paceMin)}/${distUnit()}`, W/2, 1155);
 
       if(run && run.points && run.points.length>1){
-        drawRouteSilhouette(ctx, run.points, 140, 1440, W-280, 400);
+        drawRouteSilhouette(ctx, run.points, 140, 1300, W-280, 360);
       }
+
+      ctx.fillStyle = '#D6FF3F';
+      ctx.font = '400 46px "Bebas Neue", Arial, sans-serif';
+      ctx.fillText('ZANCADA', W/2, 1800);
 
       canvas.toBlob((blob)=>resolve(blob||null), 'image/png');
     }catch(e){ resolve(null); }
