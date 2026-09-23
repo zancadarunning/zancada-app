@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-23T23:17:09Z';
+const APP_VERSION = '2026-09-23T23:21:43Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -870,10 +870,11 @@ function goToLoginFromSignup(){
   goBackToLogin();
 }
 async function handleGoogleSignIn(btnId){
-  // Este mismo botón/función se usa en login Y en signup (ver los dos onclick en
-  // index.html) -- el checkbox de Términos/Privacidad solo existe en la pantalla de
-  // signup, así que solo ahí hace falta chequearlo antes de arrancar el OAuth.
-  if(btnId === 'signup-google-btn' && !checkLegalAccepted()) return;
+  // A diferencia de email/Apple, Google muestra su propia pantalla de consentimiento
+  // ("Para continuar, revisá los Términos y la Política de Privacidad de Zancada") antes de
+  // volver acá -- pedirle que además tilde nuestro checkbox es un segundo paso redundante
+  // sobre lo mismo. Por eso NO pasa por checkLegalAccepted() ni por confirmLegalForNewAccount()
+  // (ver loadUserAndEnter, que lo saltea para provider==='google').
   setBtnBusy(btnId, true, t('google_loading'));
   try{
     const { error } = await supabaseClient.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: window.location.origin } });
@@ -1501,6 +1502,10 @@ async function confirmLegalForNewAccount(user){
   // pollConfirmEmail), ese dato viaja con la cuenta en el servidor, no en una variable JS que
   // se perdería. Si ya está, no hace falta volver a preguntar acá.
   if(user.user_metadata && user.user_metadata.legalAccepted) return true;
+  // Google ya muestra su propia pantalla ("Para continuar, revisá los Términos y la Política
+  // de Privacidad de Zancada") antes de volver acá -- preguntarlo de nuevo es redundante. Solo
+  // Google hace esto de forma nativa (Apple no), por eso el saltee es específico a ese provider.
+  if(user.app_metadata && user.app_metadata.provider === 'google') return true;
   const terms = `<a href="${apiUrl('/terms.html?lang='+lang)}" target="_blank" rel="noopener" style="color:var(--hivis-text); text-decoration:underline;">${t('legal_terms_link')}</a>`;
   const privacy = `<a href="${apiUrl('/privacy.html?lang='+lang)}" target="_blank" rel="noopener" style="color:var(--hivis-text); text-decoration:underline;">${t('legal_privacy_link')}</a>`;
   const accepted = await showConfirm(t('oauth_legal_confirm', {terms, privacy}), {confirmText: t('oauth_legal_accept_btn'), cancelText: t('cancel_word')});
