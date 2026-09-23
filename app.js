@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-23T23:38:11Z';
+const APP_VERSION = '2026-09-23T23:39:10Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3007,7 +3007,7 @@ function computeReturnFromBreakAdjustment(gapWeeks){
 // merge seguro de siempre (preserveLivedDays: nunca toca un día ya vivido, cancelado, o
 // editado a mano por el chat -- solo refresca los días de acá en adelante que el algoritmo
 // generó sin que nadie los haya tocado).
-const PLAN_ALGO_VERSION = 2;
+const PLAN_ALGO_VERSION = 3;
 function checkPlanAlgoVersion(){
   if(!state.onboarded || !state.plan || !state.plan.length) return;
   if(state.planAlgoVersion === PLAN_ALGO_VERSION) return;
