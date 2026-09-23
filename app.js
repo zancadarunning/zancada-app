@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-23T23:31:26Z';
+const APP_VERSION = '2026-09-23T23:38:11Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3348,13 +3348,24 @@ function trainingCaution(p){
 // Techo a la porción del volumen semanal que una sola sesión de alto impacto (series o
 // cuestas) puede cargar -- ver el comentario en generatePlan, donde se usa.
 const HIGH_IMPACT_SHARE_CAP = 0.3;
+// "Principiante" acá es un criterio de CARGA actual, no de autopercepción. Antes solo
+// miraba runnerType==='new'/goal==='start' -- alguien que eligió "Ya corro" pero puso 0 km
+// semanales actuales (por ejemplo, viene de una pausa muy larga sin marcar el toggle de
+// "volver de una pausa", o completó ese campo rápido sin pensarlo) caía en la rama genérica
+// basada en el volumen pico del objetivo (calcWeeklyKm), con el mismo arranque agresivo que
+// cualquier corredor activo real. Reportado por un usuario: cuenta nueva, "nunca corrí",
+// semana 1 con series/fartlek y ~19km totales -- para alguien que hoy corre 0km/semana, la
+// carga inicial tiene que basarse en ESO, no en a dónde apunta el objetivo final.
+function isBeginnerProfile(p){
+  return p.weeklyKm === 0 || p.goal === 'start' || p.runnerType === 'new' || !(p.currentWeeklyKm > 0);
+}
 function generatePlan(p, weekNumber, weekStartDate){
   weekNumber = weekNumber || 1;
   weekStartDate = weekStartDate || state.weekStart;
   const caution = trainingCaution(p);
   const isRecovery = isRecoveryWeek(weekStartDate);
   const mult = weekMultiplier(weekNumber, caution) * taperMultiplier(p, weekStartDate) * recoveryMultiplier(weekStartDate) * eventRaceWeekMultiplier(weekStartDate, p);
-  const beginner = p.weeklyKm === 0 || p.goal === 'start' || p.runnerType === 'new';
+  const beginner = isBeginnerProfile(p);
   // si el corredor puso una meta semanal propia, la usamos como referencia de volumen en vez
   // del cálculo genérico -- pero acotada para no saltar de golpe a algo que podría lesionarlo
   let effectiveWeeklyKm = p.weeklyKm;
@@ -3480,8 +3491,7 @@ function estimateBasePaceMinPerKm(profile){
   if(anyPR && anyPR.distanceKm>0 && anyPR.durationSec>0){
     return (anyPR.durationSec/60)/anyPR.distanceKm + 1.3;
   }
-  const beginner = profile.weeklyKm === 0 || profile.goal === 'start' || profile.runnerType === 'new';
-  return beginner ? 7.5 : 6.2;
+  return isBeginnerProfile(profile) ? 7.5 : 6.2;
 }
 function planDurationMin(d, profile){
   if(!(d.dist>0)) return 0;

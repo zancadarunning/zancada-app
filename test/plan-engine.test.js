@@ -16,6 +16,14 @@ const { loadApp } = require('./support/load-app');
 function baseProfile(overrides) {
   return Object.assign({
     weeklyKm: 30,
+    // Un corredor "active" de verdad SIEMPRE tiene currentWeeklyKm seteado -- calcWeeklyKm()
+    // deriva weeklyKm A PARTIR de este campo para ese runnerType, nunca al revés (ver
+    // isBeginnerProfile() en app.js). Sin este campo, este fixture representaba un perfil
+    // que no podría existir en la app real (activo con volumen actual desconocido), y por
+    // eso isBeginnerProfile() lo trataba como principiante -- lo cual es justo lo correcto
+    // para ese caso real (alguien que dice "ya corro" pero declaró 0km/semana actuales),
+    // pero no para este fixture, pensado como corredor activo genuino.
+    currentWeeklyKm: 30,
     weeklyGoalKm: 0,
     goal: '10k',
     runnerType: 'active',
@@ -90,6 +98,25 @@ test('generatePlan: principiante entrena easy todos los días salvo el largo', (
   assert.equal(byDay.tue.typeKey, 'easy');
   assert.equal(byDay.thu.typeKey, 'easy');
   ['mon', 'wed', 'fri', 'sat'].forEach(d => assert.equal(byDay[d].typeKey, 'rest'));
+});
+
+test('generatePlan: "ya corro" con 0km/semana actuales se trata como principiante, no como corredor activo', () => {
+  // Reportado por un usuario: cuenta nueva, eligió "Ya corro" en el onboarding pero declaró
+  // 0km/semana actuales -- el plan de semana 1 le salió con series y ~19km totales, el mismo
+  // arranque agresivo que a cualquier corredor activo real, en vez del ramp-up seguro que sí
+  // recibía alguien que elegía "Soy nuevo/a". El criterio real tiene que ser la carga actual
+  // (currentWeeklyKm), no la autopercepción (runnerType) -- ver isBeginnerProfile() en app.js.
+  const app = loadApp();
+  const profile = baseProfile({ runnerType: 'active', currentWeeklyKm: 0, weeklyKm: app.calcWeeklyKm({ runnerType: 'active', currentWeeklyKm: 0, goal: '10k' }), goal: '10k', trainingDays: ['tue', 'thu', 'sun'] });
+  app.state.profile = profile;
+  const plan = app.generatePlan(profile, 1, '2026-09-07');
+  const heavyTypes = ['intervals', 'tempo', 'fartlek', 'hills', 'progression'];
+  plan.forEach(d => {
+    assert.ok(!heavyTypes.includes(d.typeKey), `${d.day} no debería ser ${d.typeKey} para alguien con 0km/semana actuales`);
+    assert.ok(d.beginner, `${d.day} debería quedar marcado como principiante`);
+  });
+  const total = plan.reduce((s, d) => s + (d.dist || 0), 0);
+  assert.ok(total < 10, `el total semanal (${total}km) debería quedar bajo, no saltar directo al volumen del objetivo`);
 });
 
 test('generatePlan: en semana de recuperación no sobrevive ninguna sesión pesada', () => {
