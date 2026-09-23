@@ -507,6 +507,9 @@
   .divider-or{display:flex; align-items:center; gap:10px; margin:20px 0; color:var(--mist-dim);
     font-size:11.5px; text-transform:uppercase; letter-spacing:.08em;}
   .divider-or::before,.divider-or::after{content:''; flex:1; height:1px; background:var(--asphalt-3);}
+  .legal-checkbox-row{display:flex; align-items:flex-start; gap:10px; margin-top:16px; cursor:pointer;}
+  .legal-checkbox-row input[type="checkbox"]{margin-top:2px; width:17px; height:17px; flex-shrink:0; accent-color:var(--hivis); cursor:pointer;}
+  .legal-checkbox-row span{font-size:11.5px; line-height:1.5; color:var(--mist);}
 
   .btn{border:none; border-radius:999px; padding:15px 22px; font-weight:700; font-size:15px; cursor:pointer;
     width:100%; display:flex; align-items:center; justify-content:center; gap:8px;}
@@ -1384,17 +1387,20 @@
       <p class="muted" style="margin:6px 0 0; font-size:11.5px;" data-i18n="password_requirements_hint"></p>
       <p class="err-text" id="signup-err"></p>
     </div>
+    <label class="legal-checkbox-row" for="signup-legal-check">
+      <input type="checkbox" id="signup-legal-check">
+      <span>
+        <span data-i18n="signup_legal_pre"></span>
+        <a href="/terms.html" target="_blank" rel="noopener" style="color:var(--mist); text-decoration:underline;" data-i18n="legal_terms_link"></a>
+        <span data-i18n="signup_legal_and"></span>
+        <a href="/privacy.html" target="_blank" rel="noopener" style="color:var(--mist); text-decoration:underline;" data-i18n="legal_privacy_link"></a>.
+      </span>
+    </label>
     <div class="field"><button class="btn btn-primary" id="signup-submit-btn" data-i18n="login_create_account" onclick="handleSignUp()"></button></div>
     <div class="divider-or"><span data-i18n="login_or"></span></div>
     <button class="btn btn-outline" id="signup-google-btn" onclick="handleGoogleSignIn('signup-google-btn')"><span data-i18n="login_google"></span></button>
     <button class="btn btn-outline" id="signup-apple-btn" style="display:none; margin-top:10px;" onclick="handleAppleSignIn('signup-apple-btn')"><span data-i18n="login_apple"></span></button>
     <button class="small-link" style="display:block; text-align:center; width:100%; margin-top:14px;" onclick="goBackToLogin()" data-i18n="signup_go_login"></button>
-    <p class="muted" style="text-align:center; font-size:11.5px; margin-top:16px; line-height:1.5;">
-      <span data-i18n="signup_legal_pre"></span>
-      <a href="/terms.html" target="_blank" rel="noopener" style="color:var(--mist); text-decoration:underline;" data-i18n="legal_terms_link"></a>
-      <span data-i18n="signup_legal_and"></span>
-      <a href="/privacy.html" target="_blank" rel="noopener" style="color:var(--mist); text-decoration:underline;" data-i18n="legal_privacy_link"></a>.
-    </p>
   </div>
 
   <div class="overlay" id="confirm-email" style="display:none;">

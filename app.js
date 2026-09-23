@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-21T17:08:46Z';
+const APP_VERSION = '2026-09-23T22:41:49Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -849,6 +849,10 @@ function goToLoginFromSignup(){
   goBackToLogin();
 }
 async function handleGoogleSignIn(btnId){
+  // Este mismo botón/función se usa en login Y en signup (ver los dos onclick en
+  // index.html) -- el checkbox de Términos/Privacidad solo existe en la pantalla de
+  // signup, así que solo ahí hace falta chequearlo antes de arrancar el OAuth.
+  if(btnId === 'signup-google-btn' && !checkLegalAccepted()) return;
   setBtnBusy(btnId, true, t('google_loading'));
   try{
     const { error } = await supabaseClient.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: window.location.origin } });
@@ -861,6 +865,8 @@ async function handleGoogleSignIn(btnId){
 // necesitar import ni bundler (mismo patrón que haptic() más arriba). TODO: falta probar
 // este flujo en un dispositivo real una vez armado el proyecto Xcode -- ver mobile/README.md.
 async function handleAppleSignIn(btnId){
+  // Mismo motivo que en handleGoogleSignIn: el checkbox solo existe en signup.
+  if(btnId === 'signup-apple-btn' && !checkLegalAccepted()) return;
   setBtnBusy(btnId, true, t('google_loading'));
   try{
     const AppleSignIn = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AppleSignIn;
@@ -1451,6 +1457,22 @@ async function handleSignIn(){
     await loadUserAndEnter(data.user);
   }finally{ setBtnBusy('login-submit-btn', false); }
 }
+// Chequea el checkbox de "acepto Términos y Privacidad" del signup -- antes esa
+// aceptación era solo un texto pasivo debajo de los botones, sin ninguna acción
+// explícita del usuario. Con datos de salud de por medio (lesiones, embarazo, peso)
+// conviene un consentimiento afirmativo real, no implícito. Se llama desde los 3
+// caminos de alta (email, Google, Apple) -- el checkbox solo existe en la pantalla
+// de signup, nunca en la de login (btnId lo distingue para las dos funciones que
+// comparten login/signup).
+function checkLegalAccepted(){
+  const cb = document.getElementById('signup-legal-check');
+  if(cb && !cb.checked){
+    const err = document.getElementById('signup-err');
+    if(err){ err.textContent = t('signup_legal_required'); err.style.display='block'; }
+    return false;
+  }
+  return true;
+}
 async function handleSignUp(){
   if(document.getElementById('signup-submit-btn')?.disabled) return;
   const email = document.getElementById('signup-email').value.trim();
@@ -1459,6 +1481,7 @@ async function handleSignUp(){
   err.style.display='none';
   if(!email || !email.includes('@')){ err.textContent = t('login_err'); err.style.display='block'; return; }
   if(!password || !isPasswordStrong(password)){ err.textContent = t('login_err_password_weak'); err.style.display='block'; return; }
+  if(!checkLegalAccepted()) return;
   setBtnBusy('signup-submit-btn', true, t('signup_loading'));
   try{
     // Guardamos el idioma actual en el user_metadata de Supabase Auth (no en app_state,
