@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-23T22:41:49Z';
+const APP_VERSION = '2026-09-23T22:59:50Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -806,6 +806,18 @@ function isPasswordStrong(pw){
   // mínimo de caracteres, no complejidad, así que sin este chequeo una contraseña como
   // "12345678" pasaría sin problema.
   return typeof pw === 'string' && pw.length >= 8 && /[A-Z]/.test(pw) && /[a-z]/.test(pw) && /[0-9]/.test(pw);
+}
+// "Crear cuenta" arranca deshabilitado (ver el atributo disabled en index.html) y solo se
+// habilita cuando los 3 requisitos están OK a la vez -- antes se podía tocar siempre y
+// recién al hacer click aparecía el error puntual de qué faltaba. Se llama desde los
+// oninput/onchange de email, contraseña y el checkbox legal (ver index.html).
+function updateSignupButtonState(){
+  const btn = document.getElementById('signup-submit-btn');
+  if(!btn) return;
+  const email = document.getElementById('signup-email').value.trim();
+  const password = document.getElementById('signup-password').value;
+  const legalOk = document.getElementById('signup-legal-check').checked;
+  btn.disabled = !(email.includes('@') && isPasswordStrong(password) && legalOk);
 }
 function translateAuthError(error){
   const msg = (error && error.message) || '';

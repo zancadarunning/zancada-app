@@ -513,8 +513,10 @@
 
   .btn{border:none; border-radius:999px; padding:15px 22px; font-weight:700; font-size:15px; cursor:pointer;
     width:100%; display:flex; align-items:center; justify-content:center; gap:8px;}
-  .btn-primary{background:var(--hivis); color:var(--ink); box-shadow:0 10px 24px var(--hivis-glow); transition:transform .13s var(--ease-out), box-shadow .13s var(--ease-out);}
+  .btn-primary{background:var(--hivis); color:var(--ink); box-shadow:0 10px 24px var(--hivis-glow); transition:transform .13s var(--ease-out), box-shadow .13s var(--ease-out), background .13s ease, color .13s ease;}
   .btn-primary:active{transform:scale(.97); box-shadow:0 4px 12px var(--hivis-glow);}
+  .btn-primary:disabled{background:var(--asphalt-3); color:var(--mist-dim); box-shadow:none; cursor:not-allowed;}
+  .btn-primary:disabled:active{transform:none;}
   .btn-outline{background:var(--asphalt-2); border:1.5px solid var(--overlay-hairline); color:var(--chalk); box-shadow:var(--shadow-card); transition:transform .13s var(--ease-out), background .13s var(--ease-out);}
   .btn-outline:active{transform:scale(.97); background:var(--press);}
   .btn-saved-flash{background:var(--hivis) !important; border-color:var(--hivis) !important; color:var(--ink) !important; transition:background .15s ease, color .15s ease;}
@@ -1376,19 +1378,19 @@
     <p class="lead" data-i18n="signup_lead"></p>
     <div class="field">
       <label for="signup-email" data-i18n="login_email_label"></label>
-      <input type="email" id="signup-email" autocomplete="email" data-i18n-ph="login_email_ph" onkeydown="if(event.key==='Enter') handleSignUp();">
+      <input type="email" id="signup-email" autocomplete="email" data-i18n-ph="login_email_ph" oninput="updateSignupButtonState()" onkeydown="if(event.key==='Enter') handleSignUp();">
     </div>
     <div class="field">
       <label for="signup-password" data-i18n="login_password_label"></label>
       <div class="pw-wrap">
-        <input type="password" id="signup-password" autocomplete="new-password" minlength="8" data-i18n-ph="login_password_ph" onkeydown="if(event.key==='Enter') handleSignUp();">
+        <input type="password" id="signup-password" autocomplete="new-password" minlength="8" data-i18n-ph="login_password_ph" oninput="updateSignupButtonState()" onkeydown="if(event.key==='Enter') handleSignUp();">
         <button type="button" class="pw-toggle" onclick="togglePasswordVisibility('signup-password', this)" data-i18n-aria="aria_show_password"><span class="icon-sq" style="width:18px; height:18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span></button>
       </div>
       <p class="muted" style="margin:6px 0 0; font-size:11.5px;" data-i18n="password_requirements_hint"></p>
       <p class="err-text" id="signup-err"></p>
     </div>
     <label class="legal-checkbox-row" for="signup-legal-check">
-      <input type="checkbox" id="signup-legal-check">
+      <input type="checkbox" id="signup-legal-check" onchange="updateSignupButtonState()">
       <span>
         <span data-i18n="signup_legal_pre"></span>
         <a href="/terms.html" target="_blank" rel="noopener" style="color:var(--mist); text-decoration:underline;" data-i18n="legal_terms_link"></a>
@@ -1396,7 +1398,7 @@
         <a href="/privacy.html" target="_blank" rel="noopener" style="color:var(--mist); text-decoration:underline;" data-i18n="legal_privacy_link"></a>.
       </span>
     </label>
-    <div class="field"><button class="btn btn-primary" id="signup-submit-btn" data-i18n="login_create_account" onclick="handleSignUp()"></button></div>
+    <div class="field"><button class="btn btn-primary" id="signup-submit-btn" data-i18n="login_create_account" onclick="handleSignUp()" disabled></button></div>
     <div class="divider-or"><span data-i18n="login_or"></span></div>
     <button class="btn btn-outline" id="signup-google-btn" onclick="handleGoogleSignIn('signup-google-btn')"><span data-i18n="login_google"></span></button>
     <button class="btn btn-outline" id="signup-apple-btn" style="display:none; margin-top:10px;" onclick="handleAppleSignIn('signup-apple-btn')"><span data-i18n="login_apple"></span></button>
