@@ -119,6 +119,63 @@ test('generatePlan: "ya corro" con 0km/semana actuales se trata como principiant
   assert.ok(total < 10, `el total semanal (${total}km) debería quedar bajo, no saltar directo al volumen del objetivo`);
 });
 
+test('checkBeginnerGraduation: sale de modo principiante solo tras semanas reales de entrenamiento consistente', () => {
+  // Antes isBeginnerProfile() nunca dejaba de ser true por sí sola -- alguien que arrancó
+  // principiante se quedaba en zona 1 y sin fartlek para siempre, aunque entrenara consistente
+  // semana tras semana, salvo que alguien entrara a Perfil a cambiar el dato a mano. Esta
+  // función SÍ debe graduarlo solo, basado en el promedio real corrido (no en que haya pasado
+  // el tiempo del calendario), y dejar currentWeeklyKm en ese promedio real -- no en una
+  // fórmula genérica del objetivo, para no reintroducir el mismo salto brusco que se corrigió
+  // en el test de arriba.
+  const app = loadApp();
+  const today = new Date('2026-10-05T12:00:00'); // lunes
+  const createdAt = app.addDaysToIsoLocal(app.getMondayISO(today), -35);
+  const profile = baseProfile({ runnerType: 'new', currentWeeklyKm: 0, goal: '10k', trainingDays: ['tue', 'thu', 'sun'], createdAt });
+  profile.weeklyKm = app.calcWeeklyKm(profile);
+  app.state.profile = profile;
+  app.state.onboarded = true;
+  app.state.weekStart = app.getMondayISO(today);
+  app.state.plan = app.generatePlan(profile, 5);
+  app.state.chat = [];
+  app.state.runs = [];
+  for(let w = 1; w <= 4; w++){
+    const weekMonday = app.addDaysToIsoLocal(app.state.weekStart, -7 * w);
+    app.state.runs.push({ date: app.addDaysToIsoLocal(weekMonday, 1), distanceKm: 5, durationSec: 30 * 60 });
+    app.state.runs.push({ date: app.addDaysToIsoLocal(weekMonday, 3), distanceKm: 5, durationSec: 30 * 60 });
+  }
+  assert.ok(app.isBeginnerProfile(profile), 'debería seguir siendo principiante antes de graduar');
+
+  app.checkBeginnerGraduation();
+
+  assert.equal(app.state.profile.runnerType, 'active');
+  assert.equal(app.state.profile.currentWeeklyKm, 10); // promedio real de las 4 semanas simuladas
+  assert.ok(!app.isBeginnerProfile(app.state.profile), 'debería dejar de ser principiante tras graduar');
+  assert.ok(app.state.chat.some(m => m.text.includes(app.t('coach_beginner_graduated'))), 'debería avisarle al corredor por el chat');
+  app.state.plan.forEach(d => {
+    if(d.typeKey === 'easy' || d.typeKey === 'long') assert.equal(d.zone, 2, `${d.day} debería pasar a zona 2`);
+  });
+});
+
+test('checkBeginnerGraduation: no gradúa si el promedio real todavía está por debajo del piso', () => {
+  const app = loadApp();
+  const today = new Date('2026-10-05T12:00:00');
+  const createdAt = app.addDaysToIsoLocal(app.getMondayISO(today), -35);
+  const profile = baseProfile({ runnerType: 'new', currentWeeklyKm: 0, goal: '10k', trainingDays: ['tue', 'thu', 'sun'], createdAt });
+  profile.weeklyKm = app.calcWeeklyKm(profile);
+  app.state.profile = profile;
+  app.state.onboarded = true;
+  app.state.weekStart = app.getMondayISO(today);
+  app.state.plan = app.generatePlan(profile, 5);
+  app.state.chat = [];
+  // Corrió poco y salteado -- promedio bajo, no debería graduarlo todavía.
+  app.state.runs = [{ date: app.addDaysToIsoLocal(app.state.weekStart, -7), distanceKm: 2, durationSec: 15 * 60 }];
+
+  app.checkBeginnerGraduation();
+
+  assert.equal(app.state.profile.runnerType, 'new');
+  assert.equal(app.state.chat.length, 0, 'no debería mandar el mensaje de graduación todavía');
+});
+
 test('generatePlan: en semana de recuperación no sobrevive ninguna sesión pesada', () => {
   const app = loadApp();
   const profile = baseProfile();

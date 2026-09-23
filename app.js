@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-23T23:39:10Z';
+const APP_VERSION = '2026-09-23T23:47:42Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2421,6 +2421,7 @@ function enterApp(){
   document.getElementById('perfil-name').value = state.profile.name;
   checkWeekRollover();
   checkPlanAlgoVersion();
+  checkBeginnerGraduation();
   autoSkipPastDays();
   repairSkippedDaysWithMatchingRuns();
   autoClearPastEvent();
@@ -2465,6 +2466,7 @@ document.addEventListener('visibilitychange', ()=>{
   if(document.hidden || !currentUserId || !state.onboarded) return;
   checkWeekRollover();
   checkPlanAlgoVersion();
+  checkBeginnerGraduation();
   autoSkipPastDays();
   repairSkippedDaysWithMatchingRuns();
   autoClearPastEvent();
@@ -3358,6 +3360,36 @@ const HIGH_IMPACT_SHARE_CAP = 0.3;
 // carga inicial tiene que basarse en ESO, no en a dónde apunta el objetivo final.
 function isBeginnerProfile(p){
   return p.weeklyKm === 0 || p.goal === 'start' || p.runnerType === 'new' || !(p.currentWeeklyKm > 0);
+}
+// isBeginnerProfile() por sí sola nunca deja de ser true: si nadie entra a Perfil a mano a
+// cambiar runnerType/km actuales, alguien que arrancó como principiante se queda en zona 1 y
+// sin ningún fartlek para siempre, aunque entrene consistente semana tras semana y su
+// condición mejore un montón (reportado por un usuario: "¿no sería mejor que después de un
+// tiempo entrene en zona 2 con algo de fartlek?"). Esta función SÍ actualiza el perfil de
+// verdad (no es un chequeo de solo lectura como isBeginnerProfile) cuando el promedio REAL de
+// los últimos BEGINNER_GRADUATION_WEEKS (no solo que haya pasado el tiempo -- tiene que haber
+// corrido de verdad) supera BEGINNER_GRADUATION_MIN_KM. Al graduarlo, currentWeeklyKm queda en
+// su promedio real (no en una fórmula genérica del objetivo) para que el volumen que seleccione
+// calcWeeklyKm a partir de ahí parta de su capacidad demostrada, no de un salto al kilometraje
+// pico del objetivo -- el mismo tipo de salto brusco que ya se corrigió en isBeginnerProfile.
+const BEGINNER_GRADUATION_WEEKS = 4;
+const BEGINNER_GRADUATION_MIN_KM = 8;
+function checkBeginnerGraduation(){
+  if(!state.onboarded || !state.profile) return;
+  const p = state.profile;
+  if(!isBeginnerProfile(p)) return; // ya no está en modo principiante, nada que graduar
+  const avgKm = computeActualWeeklyKmAvg(BEGINNER_GRADUATION_WEEKS);
+  if(avgKm === null || avgKm < BEGINNER_GRADUATION_MIN_KM) return;
+  p.runnerType = 'active';
+  p.currentWeeklyKm = Math.round(avgKm);
+  p.weeklyKm = calcWeeklyKm(p);
+  // Igual que checkPlanAlgoVersion(): regenera YA los días de esta semana que el algoritmo
+  // generó sin que nadie los haya tocado, para que el cambio de zona/variedad se vea de
+  // entrada junto con el mensaje -- sin esto, quedaría el plan viejo hasta el lunes que viene.
+  state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
+  state.chat.push({role:'coach', text: t('coach_beginner_graduated'), ts:Date.now()});
+  renderChat();
+  persist();
 }
 function generatePlan(p, weekNumber, weekStartDate){
   weekNumber = weekNumber || 1;
