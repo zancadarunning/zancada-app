@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-23T23:47:42Z';
+const APP_VERSION = '2026-09-23T23:56:58Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2626,7 +2626,26 @@ function addDaysToIsoLocal(iso, days){
 }
 function isCutbackWeek(n){ return n % 4 === 0; }
 const GOAL_PEAK_KM = {start:18, '5k':25, '10k':35, '15k':42, '21k':50, '42k':65, ultra:75, lifestyle:15};
+// Compartidas con el RATIO de generatePlan (ver ahí) -- top-level para que
+// estimateBeginnerWeeklyKm() de acá abajo nunca pueda desincronizarse de la fórmula real que
+// arma las sesiones de un principiante.
+const EASY_SESSION_RATIO = 0.9, BEGINNER_LONG_RATIO = 1.3;
+function estimateBeginnerWeeklyKm(trainingDays){
+  const days = (trainingDays && trainingDays.length) ? trainingDays.length : 3; // mismo default de 3 días que generatePlan
+  const per = 2.5; // mismo valor que generatePlan en semana 1 (mult=1 siempre en la primera semana)
+  const long = Math.round(per * BEGINNER_LONG_RATIO);
+  const easy = Math.round(per * EASY_SESSION_RATIO);
+  return long + easy * Math.max(0, days - 1);
+}
 function calcWeeklyKm(profile){
+  // Antes esto ignoraba por completo la fórmula real que generatePlan() usa para un
+  // principiante -- devolvía el kilometraje PICO del objetivo /1.8, sin ninguna relación con
+  // lo que el plan realmente termina armando. Reportado por un usuario: el saludo del coach
+  // le decía "armé tu plan pensando en tus 19km semanales" a alguien cuyo plan real (el que
+  // genera generatePlan para un principiante) sumaba 7km -- el número que ve el corredor
+  // tiene que coincidir con el plan de verdad, no con una proyección del objetivo final que
+  // ni siquiera se usa para calcular sus sesiones cuando es principiante.
+  if(isBeginnerProfile(profile)) return estimateBeginnerWeeklyKm(profile.trainingDays);
   const peak = GOAL_PEAK_KM[profile.goal] || 20;
   if(profile.runnerType==='active' && profile.currentWeeklyKm>0){
     const base = Math.round(profile.currentWeeklyKm); // arranca desde su realidad actual, no de una fórmula genérica
@@ -3429,7 +3448,7 @@ function generatePlan(p, weekNumber, weekStartDate){
   // importar cuántas sesiones fuertes/suaves le toquen esa semana en particular. El caso
   // principiante queda con su fórmula fija de siempre (no depende de ningún kilometraje
   // puesto o calculado, así que este ajuste no le cambia nada).
-  const RATIO = {easy:0.9, intervals:1.15, tempo:0.85, long:beginner?1.3:1.5, fartlek:1.0, hills:0.9, progression:1.0};
+  const RATIO = {easy:EASY_SESSION_RATIO, intervals:1.15, tempo:0.85, long:beginner?BEGINNER_LONG_RATIO:1.5, fartlek:1.0, hills:0.9, progression:1.0};
   let distMap;
   if(beginner){
     const per = 2.5 * mult;

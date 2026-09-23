@@ -119,6 +119,27 @@ test('generatePlan: "ya corro" con 0km/semana actuales se trata como principiant
   assert.ok(total < 10, `el total semanal (${total}km) debería quedar bajo, no saltar directo al volumen del objetivo`);
 });
 
+test('calcWeeklyKm: para un principiante coincide con lo que generatePlan arma de verdad', () => {
+  // Reportado por un usuario: el saludo del coach ("armé tu plan pensando en tus X km
+  // semanales") usa profile.weeklyKm -- pero para un principiante ese número salía de
+  // GOAL_PEAK_KM/1.8 (una proyección del kilometraje PICO del objetivo), mientras que
+  // generatePlan() arma las sesiones de un principiante con una fórmula totalmente distinta
+  // (per=2.5*ratio). El corredor recibía un número en el saludo que no tenía ninguna relación
+  // con el plan real que acababa de recibir.
+  const app = loadApp();
+  const profile = baseProfile({ runnerType: 'new', currentWeeklyKm: 0, goal: '10k', trainingDays: ['tue', 'thu', 'sun'] });
+  profile.weeklyKm = app.calcWeeklyKm(profile);
+  app.state.profile = profile;
+  const plan = app.generatePlan(profile, 1, '2026-09-07');
+  const total = plan.reduce((s, d) => s + (d.dist || 0), 0);
+  assert.equal(profile.weeklyKm, total, 'el weeklyKm calculado debería coincidir con lo que el plan real suma');
+
+  // Un corredor activo real (currentWeeklyKm>0) no debe cambiar -- sigue basado en su volumen
+  // declarado, no en la fórmula de principiante.
+  const active = baseProfile({ runnerType: 'active', currentWeeklyKm: 30 });
+  assert.equal(app.calcWeeklyKm(active), 30);
+});
+
 test('checkBeginnerGraduation: sale de modo principiante solo tras semanas reales de entrenamiento consistente', () => {
   // Antes isBeginnerProfile() nunca dejaba de ser true por sí sola -- alguien que arrancó
   // principiante se quedaba en zona 1 y sin fartlek para siempre, aunque entrenara consistente
