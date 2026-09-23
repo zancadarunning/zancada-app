@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-23T23:21:43Z';
+const APP_VERSION = '2026-09-23T23:31:26Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2205,6 +2205,7 @@ function calSelectDay(day){
   input.value = dateStr;
   dateBoxUpdaters[calTargetInputId] && dateBoxUpdaters[calTargetInputId]();
   if(calTargetInputId === 'perfil-racedate') markPerfilDirty('personal'); // set vía JS, no dispara 'change'
+  if(calTargetInputId === 'ob-birth') updateObStep2ButtonState();
   closeCalendar();
 }
 setupDateBox('ob-birth','ob-birth-text','date_placeholder');
@@ -2236,6 +2237,21 @@ function obGotoStep(n){
   document.getElementById('ob-progress-fill').style.width = ((n/OB_STEP_COUNT)*100)+'%';
   document.getElementById('ob-back-btn').style.display = n>1 ? 'flex' : 'none';
   document.getElementById('onboard').scrollTop = 0;
+}
+// El paso 2 del onboarding (peso/altura/fecha de nacimiento) dejaba avanzar sin llenar nada
+// -- finishOnboard() al final caía en defaults silenciosos (70kg, 170cm, nacido en 1995) sin
+// avisarle a nadie, lo que descalibraba la FC máxima estimada y la cautela por edad desde el
+// arranque. Mismo patrón que updateSignupButtonState(): el botón arranca deshabilitado (ver
+// el atributo disabled en index.html) y solo se habilita cuando los 3 campos tienen un valor
+// real -- oninput en peso/altura, y calSelectDay() para la fecha (se elige desde el calendario
+// compartido, no dispara 'input').
+function updateObStep2ButtonState(){
+  const btn = document.getElementById('ob-step2-continue-btn');
+  if(!btn) return;
+  const weight = parseFloat(document.getElementById('ob-weight').value);
+  const height = parseFloat(document.getElementById('ob-height').value);
+  const birth = document.getElementById('ob-birth').value;
+  btn.disabled = !(weight>0 && height>0 && birth);
 }
 function obNextStep(){
   haptic(10);

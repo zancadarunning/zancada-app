@@ -1451,8 +1451,8 @@
     <div class="ob-step" data-step="2">
       <h2 class="display" data-i18n="ob_step2_title"></h2>
       <div class="two-col">
-        <div class="field"><label for="ob-weight" data-i18n="ob_weight_label"></label><input type="number" id="ob-weight" value="70" min="30" max="200"></div>
-        <div class="field"><label for="ob-height" data-i18n="ob_height_label"></label><input type="number" id="ob-height" value="170" min="120" max="230"></div>
+        <div class="field"><label for="ob-weight" data-i18n="ob_weight_label"></label><input type="number" id="ob-weight" value="70" min="30" max="200" oninput="updateObStep2ButtonState()"></div>
+        <div class="field"><label for="ob-height" data-i18n="ob_height_label"></label><input type="number" id="ob-height" value="170" min="120" max="230" oninput="updateObStep2ButtonState()"></div>
       </div>
       <div class="field"><label data-i18n="ob_birth_label"></label>
         <div class="date-box" role="button" tabindex="0" data-i18n-aria="ob_birth_label" onclick="openCalendar('ob-birth','ob-birth-text')"><span class="date-box-text" id="ob-birth-text"></span></div>
@@ -1478,7 +1478,7 @@
         <textarea id="ob-healthnotes" rows="2" data-i18n-ph="ob_healthnotes_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
       </div>
       <p class="muted" style="margin-top:10px; font-size:12px;" data-i18n="ob_step2_hint"></p>
-      <div class="field"><button class="btn btn-primary" data-i18n="login_continue" onclick="obNextStep()"></button></div>
+      <div class="field"><button class="btn btn-primary" id="ob-step2-continue-btn" data-i18n="login_continue" onclick="obNextStep()" disabled></button></div>
     </div>
 
     <div class="ob-step" data-step="3">
