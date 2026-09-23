@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-23T22:59:50Z';
+const APP_VERSION = '2026-09-23T23:07:35Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -782,7 +782,16 @@ async function loadUserAndEnter(user, isRetry){
       enterApp();
       return;
     }
-    // la consulta funcionó y confirmó que no hay datos guardados -> recién registrado, onboarding real
+    // la consulta funcionó y confirmó que no hay datos guardados -> recién registrado, onboarding real.
+    // Una alta por email ya pasó por el checkbox de Términos/Privacidad en la pantalla de
+    // signup (nunca llega acá con app_state vacío por otro camino), pero Google/Apple pueden
+    // haber creado la cuenta recién ahora mismo -- confirmLegalForNewAccount() es el chequeo
+    // que cubre ese caso, ver el comentario largo en su definición.
+    if(!(await confirmLegalForNewAccount(user))){
+      await supabaseClient.auth.signOut();
+      location.reload();
+      return;
+    }
     pendingEmail = user.email;
     document.getElementById('splash').style.display='none';
     document.getElementById('login').style.display='none';
@@ -1476,6 +1485,28 @@ async function handleSignIn(){
 // caminos de alta (email, Google, Apple) -- el checkbox solo existe en la pantalla
 // de signup, nunca en la de login (btnId lo distingue para las dos funciones que
 // comparten login/signup).
+// Cubre el hueco que dejaba checkLegalAccepted(): ESE chequeo solo corre antes de llamar a
+// signUp()/OAuth desde la pantalla de signup -- pero "Continuar con Google/Apple" es EL
+// MISMO botón para alguien que ya tiene cuenta y para alguien que se está registrando (no
+// hay forma de saberlo de antemano, antes de volver de Google), y ese botón también existe
+// en la pantalla de LOGIN, sin ningún checkbox cerca. Sin este chequeo acá, entrar por
+// Google desde login con una cuenta que no existía todavía la creaba igual, sin que nadie
+// aceptara nunca los Términos ni la Privacidad. Se llama desde loadUserAndEnter() en la
+// rama de "cuenta recién creada" (app_state vacío) -- una cuenta YA EXISTENTE nunca pasa
+// por ahí, así que esto no le vuelve a aparecer a nadie en logins normales.
+async function confirmLegalForNewAccount(user){
+  // Un alta por email guarda legalAccepted:true en el user_metadata en el momento mismo del
+  // signUp() (ver handleSignUp) -- si confirmar el mail tarda (el usuario cierra la pestaña y
+  // confirma desde el mail en otro dispositivo, caso que ya soporta el polling de
+  // pollConfirmEmail), ese dato viaja con la cuenta en el servidor, no en una variable JS que
+  // se perdería. Si ya está, no hace falta volver a preguntar acá.
+  if(user.user_metadata && user.user_metadata.legalAccepted) return true;
+  const terms = `<a href="${apiUrl('/terms.html?lang='+lang)}" target="_blank" rel="noopener" style="color:var(--hivis-text); text-decoration:underline;">${t('legal_terms_link')}</a>`;
+  const privacy = `<a href="${apiUrl('/privacy.html?lang='+lang)}" target="_blank" rel="noopener" style="color:var(--hivis-text); text-decoration:underline;">${t('legal_privacy_link')}</a>`;
+  const accepted = await showConfirm(t('oauth_legal_confirm', {terms, privacy}), {confirmText: t('oauth_legal_accept_btn'), cancelText: t('cancel_word')});
+  if(accepted){ try{ await supabaseClient.auth.updateUser({ data: { legalAccepted: true } }); }catch(e){} }
+  return accepted;
+}
 function checkLegalAccepted(){
   const cb = document.getElementById('signup-legal-check');
   if(cb && !cb.checked){
@@ -1499,8 +1530,12 @@ async function handleSignUp(){
     // Guardamos el idioma actual en el user_metadata de Supabase Auth (no en app_state,
     // que Supabase no puede leer) para que los emails de autenticación (reset de
     // contraseña, etc.) se puedan armar en el idioma de cada usuario -- ver
-    // email-templates/reset-password.html, que lee esto como {{ .Data.lang }}.
-    const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: { lang } } });
+    // email-templates/reset-password.html, que lee esto como {{ .Data.lang }}. legalAccepted
+    // queda guardado acá mismo (ya pasó por checkLegalAccepted() arriba) para que
+    // confirmLegalForNewAccount() en loadUserAndEnter() no le vuelva a preguntar apenas
+    // confirme el mail -- ese dato viaja con la cuenta en el servidor, no depende de que
+    // sea la misma pestaña/dispositivo el que confirme.
+    const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: { lang, legalAccepted: true } } });
     if(error){ err.textContent = translateAuthError(error); err.style.display='block'; return; }
     // Supabase, por diseño, no devuelve un error cuando el email ya tiene una cuenta
     // confirmada -- para no dejar que cualquiera use el formulario de registro para
