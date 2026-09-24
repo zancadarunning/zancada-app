@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-24T18:04:12Z';
+const APP_VERSION = '2026-09-24T18:07:13Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2830,7 +2830,7 @@ function calcWeeklyKm(profile){
   }
   return Math.round(base);
 }
-function weekMultiplier(n, caution){
+function weekMultiplier(n, caution, skipCutback){
   n = n || 1;
   const growthSteps = n - Math.floor(n/4) - 1;
   // corredores con más cautela (mayor edad y/o contextura) progresan más despacio
@@ -2838,7 +2838,14 @@ function weekMultiplier(n, caution){
   const growthRate = caution && caution.level>=2 ? 1.04 : caution && caution.level>=1 ? 1.05 : 1.06;
   const cap = caution && caution.level>=2 ? 1.5 : caution && caution.level>=1 ? 1.65 : 1.8;
   let mult = Math.pow(growthRate, Math.max(0, growthSteps));
-  if(isCutbackWeek(n)) mult *= 0.75;
+  // skipCutback: esta semana YA tiene una reducción de volumen deliberada y más específica
+  // (taper antes de la carrera objetivo, recuperación post-carrera, o la semana puntual de
+  // una carrera de "Próximos eventos") -- el recorte de descarga PERIÓDICO (cada 4 semanas,
+  // pensado para el bloque normal de entrenamiento) no debe sumarse encima. Mismo criterio
+  // ya usado en eventRaceWeekMultiplier para no descontar dos veces la misma carrera cargada
+  // en Perfil > Metas Y en Próximos eventos -- acá es el mismo problema, pero entre la
+  // descarga periódica y CUALQUIERA de las otras reducciones puntuales, no solo esa.
+  if(isCutbackWeek(n) && !skipCutback) mult *= 0.75;
   return Math.min(mult, cap);
 }
 function taperMultiplier(p, weekStartDate){
@@ -3634,7 +3641,17 @@ function generatePlan(p, weekNumber, weekStartDate){
   weekStartDate = weekStartDate || state.weekStart;
   const caution = trainingCaution(p);
   const isRecovery = isRecoveryWeek(weekStartDate);
-  const mult = weekMultiplier(weekNumber, caution) * taperMultiplier(p, weekStartDate) * recoveryMultiplier(weekStartDate) * eventRaceWeekMultiplier(weekStartDate, p);
+  const taperMult = taperMultiplier(p, weekStartDate);
+  // La descarga periódica (isCutbackWeek, cada 4 semanas) está pensada para el bloque normal
+  // de entrenamiento -- si esta semana YA tiene una reducción de volumen más específica y
+  // deliberada (taper antes de la carrera objetivo, recuperación post-carrera, o la semana
+  // puntual de una carrera de "Próximos eventos"), sumarle la descarga genérica encima
+  // recorta MÁS de lo que cualquiera de esos mecanismos buscaba por separado -- mismo
+  // problema, mismo criterio, que el chequeo de más abajo en eventRaceWeekMultiplier (no
+  // descontar la misma carrera dos veces), generalizado a cualquier combinación de estos
+  // recortes en vez de solo ese caso puntual.
+  const skipPeriodicCutback = taperMult < 1 || isRecovery || isEventRaceWeek(weekStartDate);
+  const mult = weekMultiplier(weekNumber, caution, skipPeriodicCutback) * taperMult * recoveryMultiplier(weekStartDate) * eventRaceWeekMultiplier(weekStartDate, p);
   const beginner = isBeginnerProfile(p);
   // Un principiante con base de un deporte de impacto (ver hasRunningImpactBase) ya tolera el
   // golpe de correr aunque nunca haya salido a correr solo -- a ese lo sacamos del "todo zona 1,

@@ -591,6 +591,33 @@ test('generatePlan: el total real de la semana coincide con el kilometraje seman
   assert.ok(Math.abs(totalSinMeta - 20) <= 3, `sin meta (weeklyKm=20) el total debería rondar 20km, dio ${totalSinMeta}`);
 });
 
+test('weekMultiplier/generatePlan: la descarga periódica no se suma al taper cuando coinciden', () => {
+  // isCutbackWeek (cada 4 semanas) y taperMultiplier (últimas 3 semanas antes de la carrera
+  // objetivo) son dos recortes de volumen INDEPENDIENTES -- si coincidían en la misma semana
+  // (ej. la semana 12 de entreno cae justo dentro de las 3 semanas previas a la carrera), se
+  // multiplicaban entre sí y recortaban mucho más de lo que cualquiera de los dos buscaba por
+  // separado, justo en una semana sensible (cerca de la carrera). Mismo criterio que ya
+  // protege a eventRaceWeekMultiplier de descontar la misma carrera dos veces.
+  const app = loadApp();
+  const caution = { level: 0 };
+  const withoutFix = app.weekMultiplier(12, caution, false) * app.taperMultiplier({ raceDate: '2026-09-13' }, '2026-09-07');
+  const withFix = app.weekMultiplier(12, caution, true) * app.taperMultiplier({ raceDate: '2026-09-13' }, '2026-09-07');
+  assert.ok(withFix > withoutFix, 'con skipCutback el volumen de esa semana debería ser mayor (sin el doble descuento)');
+
+  const profile = baseProfile({ weeklyKm: 30, raceDate: '2026-09-13' }); // domingo
+  app.state.event = null;
+  // semana 12, lunes 2026-09-07 -- 6 días antes de la carrera (dentro del taper Y semana de descarga)
+  const plan12 = app.generatePlan(profile, 12, '2026-09-07');
+  const total12 = plan12.reduce((a, d) => a + d.dist, 0);
+  // semana 11, lunes 2026-08-31 -- 13 días antes (dentro del taper, sin descarga) -- debería
+  // ser MÁS volumen que la 12 (más lejos de la carrera), no menos, a pesar de que la 12 "en
+  // papel" también sería semana de descarga.
+  const plan11 = app.generatePlan(profile, 11, '2026-08-31');
+  const total11 = plan11.reduce((a, d) => a + d.dist, 0);
+  assert.ok(total12 < total11, 'la semana 12 (más cerca de la carrera) debería seguir bajando gradualmente...');
+  assert.ok(total12 / total11 > 0.7, `...pero no desplomarse por el doble descuento -- semana 12 (${total12}) vs semana 11 (${total11})`);
+});
+
 test('generatePlan: availableMinPerSession topea las sesiones entre semana, no la tirada larga', () => {
   // "¿Cuántos minutos tenés disponibles por sesión?" se guardaba en el perfil pero nunca
   // tocaba el plan real -- solo se lo pasaba al coach del chat como sugerencia. Alguien con
