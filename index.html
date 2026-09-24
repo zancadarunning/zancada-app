@@ -1522,6 +1522,34 @@
         <p class="muted" id="ob-newrunner-note" style="margin-top:8px;" data-i18n="ob_newrunner_note"></p>
       </div>
       <div class="field">
+        <label id="ob-crosstraining-label" data-i18n="ob_crosstraining_label"></label>
+        <p class="muted" style="font-size:12px; margin:2px 0 8px;" data-i18n="ob_crosstraining_hint"></p>
+        <div class="choice-row" id="ob-sports" role="group" aria-labelledby="ob-crosstraining-label" style="flex-wrap:wrap;">
+          <div class="choice" data-v="futbol" data-i18n="sport_futbol"></div>
+          <div class="choice" data-v="basquet" data-i18n="sport_basquet"></div>
+          <div class="choice" data-v="voley" data-i18n="sport_voley"></div>
+          <div class="choice" data-v="tenis_padel" data-i18n="sport_tenis_padel"></div>
+          <div class="choice" data-v="natacion" data-i18n="sport_natacion"></div>
+          <div class="choice" data-v="ciclismo" data-i18n="sport_ciclismo"></div>
+          <div class="choice" data-v="gimnasio" data-i18n="sport_gimnasio"></div>
+          <div class="choice" data-v="artes_marciales" data-i18n="sport_artes_marciales"></div>
+          <div class="choice" data-v="crossfit" data-i18n="sport_crossfit"></div>
+          <div class="choice" data-v="otro" data-i18n="sport_otro"></div>
+        </div>
+        <div id="ob-sport-days-wrap" style="margin-top:14px; display:none;">
+          <label id="ob-sport-days-label" data-i18n="ob_sport_days_label"></label>
+          <div class="day-picker" id="ob-sport-days">
+            <div class="day-pill" data-v="mon"></div>
+            <div class="day-pill" data-v="tue"></div>
+            <div class="day-pill" data-v="wed"></div>
+            <div class="day-pill" data-v="thu"></div>
+            <div class="day-pill" data-v="fri"></div>
+            <div class="day-pill" data-v="sat"></div>
+            <div class="day-pill" data-v="sun"></div>
+          </div>
+        </div>
+      </div>
+      <div class="field">
         <label id="ob-terrain-label" data-i18n="ob_terrain_label"></label>
         <div class="choice-row" id="ob-terrain" role="group" aria-labelledby="ob-terrain-label">
           <div class="choice active" data-v="asfalto" data-i18n="ob_terrain_asfalto"></div>
@@ -2148,6 +2176,32 @@
     </div>
   </div>
 
+  <div class="overlay overlay-sheet" id="crosstraining-overlay">
+    <button class="week-nav-btn" onclick="closeCrossTrainingOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_crosstraining_title"></h2>
+    <div class="card" id="perfil-crosstraining-card" style="margin-top:16px;">
+      <label id="perfil-sports-label" data-i18n="ob_crosstraining_label"></label>
+      <p class="muted" style="font-size:12px; margin:2px 0 8px;" data-i18n="ob_crosstraining_hint"></p>
+      <div class="choice-row" id="perfil-sports" role="group" aria-labelledby="perfil-sports-label" style="flex-wrap:wrap;">
+        <div class="choice" data-v="futbol" data-i18n="sport_futbol"></div>
+        <div class="choice" data-v="basquet" data-i18n="sport_basquet"></div>
+        <div class="choice" data-v="voley" data-i18n="sport_voley"></div>
+        <div class="choice" data-v="tenis_padel" data-i18n="sport_tenis_padel"></div>
+        <div class="choice" data-v="natacion" data-i18n="sport_natacion"></div>
+        <div class="choice" data-v="ciclismo" data-i18n="sport_ciclismo"></div>
+        <div class="choice" data-v="gimnasio" data-i18n="sport_gimnasio"></div>
+        <div class="choice" data-v="artes_marciales" data-i18n="sport_artes_marciales"></div>
+        <div class="choice" data-v="crossfit" data-i18n="sport_crossfit"></div>
+        <div class="choice" data-v="otro" data-i18n="sport_otro"></div>
+      </div>
+      <div id="perfil-sport-days-wrap" style="margin-top:14px; display:none;">
+        <label id="perfil-sport-days-label" data-i18n="ob_sport_days_label"></label>
+        <div class="day-picker" id="perfil-sport-days"></div>
+      </div>
+      <button class="btn btn-outline btn-sm perfil-save-btn" id="save-crosstraining-btn" style="margin-top:12px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('crosstraining')"></button>
+    </div>
+  </div>
+
   <div class="overlay overlay-sheet" id="zones-overlay">
     <button class="week-nav-btn" onclick="closeZonesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
@@ -2406,6 +2460,11 @@
         <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/></svg></span>
         <h3 data-i18n="perfil_days_title"></h3>
         <p class="muted" id="perfil-days-summary"></p>
+      </div>
+      <div class="card settile" role="button" tabindex="0" onclick="openCrossTrainingOverlay()">
+        <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M2.5 12h19M12 2.5c2.5 2.7 4 6.2 4 9.5s-1.5 6.8-4 9.5c-2.5-2.7-4-6.2-4-9.5s1.5-6.8 4-9.5z"/></svg></span>
+        <h3 data-i18n="perfil_crosstraining_title"></h3>
+        <p class="muted" id="perfil-crosstraining-summary"></p>
       </div>
       <div class="card settile" role="button" tabindex="0" onclick="openZonesOverlay()">
         <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span>

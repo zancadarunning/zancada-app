@@ -140,6 +140,58 @@ test('calcWeeklyKm: para un principiante coincide con lo que generatePlan arma d
   assert.equal(app.calcWeeklyKm(active), 30);
 });
 
+test('hasCrossTrainingBase/generatePlan: alguien que ya hace otro deporte no arranca como si fuera sedentario', () => {
+  // Pedido por un usuario: alguien que nunca corrió pero juega al fútbol 3 veces por semana
+  // ya tiene una base de entrenamiento real -- no debería arrancar exactamente igual que
+  // alguien 100% sedentario. 2+ días por semana de otro deporte es el piso para contar como
+  // "base real" (1 día suelto no alcanza). El volumen inicial sube, pero profile.weeklyKm
+  // sigue coincidiendo con lo que el plan real suma (misma garantía que el test de arriba).
+  const app = loadApp();
+  const withoutSport = baseProfile({ runnerType: 'new', currentWeeklyKm: 0, goal: '10k', trainingDays: ['tue', 'thu', 'sun'], crossTrainingSports: [], crossTrainingDays: [] });
+  const withSport = baseProfile({ runnerType: 'new', currentWeeklyKm: 0, goal: '10k', trainingDays: ['tue', 'thu', 'sun'], crossTrainingSports: ['futbol'], crossTrainingDays: ['mon', 'wed', 'fri'] });
+  const onlyOneDay = baseProfile({ runnerType: 'new', currentWeeklyKm: 0, goal: '10k', trainingDays: ['tue', 'thu', 'sun'], crossTrainingSports: ['gimnasio'], crossTrainingDays: ['mon'] });
+
+  assert.ok(!app.hasCrossTrainingBase(withoutSport));
+  assert.ok(app.hasCrossTrainingBase(withSport));
+  assert.ok(!app.hasCrossTrainingBase(onlyOneDay), 'un solo día suelto no debería contar como base real');
+
+  [withoutSport, withSport, onlyOneDay].forEach(profile => {
+    profile.weeklyKm = app.calcWeeklyKm(profile);
+    app.state.profile = profile;
+    const plan = app.generatePlan(profile, 1, '2026-09-07');
+    const total = plan.reduce((s, d) => s + (d.dist || 0), 0);
+    assert.equal(profile.weeklyKm, total, 'weeklyKm siempre debería coincidir con el plan real, con o sin base cruzada');
+  });
+
+  assert.ok(withSport.weeklyKm > withoutSport.weeklyKm, 'con una base real de otro deporte, el arranque debería ser más alto que el de alguien sedentario');
+  assert.equal(onlyOneDay.weeklyKm, withoutSport.weeklyKm, 'un solo día de otro deporte no debería cambiar nada');
+});
+
+test('checkBeginnerGraduation: gradúa más rápido a quien ya tenía una base real de otro deporte', () => {
+  const app = loadApp();
+  const today = new Date('2026-10-05T12:00:00');
+  const createdAt = app.addDaysToIsoLocal(app.getMondayISO(today), -21); // hace 3 semanas -- menos que las 4 normales
+  const profile = baseProfile({ runnerType: 'new', currentWeeklyKm: 0, goal: '10k', trainingDays: ['tue', 'thu', 'sun'], createdAt, crossTrainingSports: ['futbol'], crossTrainingDays: ['mon', 'wed', 'fri'] });
+  profile.weeklyKm = app.calcWeeklyKm(profile);
+  app.state.profile = profile;
+  app.state.onboarded = true;
+  app.state.weekStart = app.getMondayISO(today);
+  app.state.plan = app.generatePlan(profile, 3);
+  app.state.chat = [];
+  app.state.runs = [];
+  // Solo 2 semanas reales corridas -- no alcanzarían para el piso normal de 4, pero sí para
+  // el piso reducido (2) de quien ya tiene una base de otro deporte.
+  for(let w = 1; w <= 2; w++){
+    const weekMonday = app.addDaysToIsoLocal(app.state.weekStart, -7 * w);
+    app.state.runs.push({ date: app.addDaysToIsoLocal(weekMonday, 1), distanceKm: 5, durationSec: 30 * 60 });
+    app.state.runs.push({ date: app.addDaysToIsoLocal(weekMonday, 3), distanceKm: 5, durationSec: 30 * 60 });
+  }
+
+  app.checkBeginnerGraduation();
+
+  assert.equal(app.state.profile.runnerType, 'active', 'debería graduar con solo 2 semanas gracias a la base cruzada');
+});
+
 test('checkBeginnerGraduation: sale de modo principiante solo tras semanas reales de entrenamiento consistente', () => {
   // Antes isBeginnerProfile() nunca dejaba de ser true por sí sola -- alguien que arrancó
   // principiante se quedaba en zona 1 y sin fartlek para siempre, aunque entrenara consistente

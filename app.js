@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-23T23:56:58Z';
+const APP_VERSION = '2026-09-24T00:08:43Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -176,7 +176,7 @@ async function setLang(code){
   applyStaticTranslations();
   populateOnboardDays();
   if(state.onboarded){
-    renderAll(); renderHistory(); renderZones(); renderPerfilDays(); persist();
+    renderAll(); renderHistory(); renderZones(); renderPerfilDays(); renderPerfilCrossTraining(); persist();
     // Mismo motivo que en handleSignUp: sincronizamos el idioma al user_metadata de
     // Supabase Auth para que los emails de autenticación lo puedan usar. Es best-effort
     // (no bloquea la UI ni avisa si falla) -- si no llega a guardarse, el email cae al
@@ -1788,6 +1788,7 @@ document.getElementById('perfil-days').addEventListener('click', e=>{
 });
 function populateOnboardDays(){
   document.querySelectorAll('#ob-days .day-pill').forEach(el=>{ el.textContent = t('day_'+el.dataset.v).slice(0,3); });
+  document.querySelectorAll('#ob-sport-days .day-pill').forEach(el=>{ el.textContent = t('day_'+el.dataset.v).slice(0,3); });
 }
 function renderPerfilDays(){
   const selected = state.profile.trainingDays || [];
@@ -1795,6 +1796,62 @@ function renderPerfilDays(){
     `<div class="day-pill${selected.includes(d)?' active':''}" data-v="${d}" role="button" tabindex="0">${t('day_'+d).slice(0,3)}</div>`).join('');
   const daysSummaryEl = document.getElementById('perfil-days-summary');
   if(daysSummaryEl) daysSummaryEl.textContent = DAY_KEYS.filter(d=>selected.includes(d)).map(d=>t('day_'+d)).join(', ');
+}
+// El multi-select de deportes es un simple toggle por chip (varios activos a la vez, a
+// diferencia de terreno/tipo de corredor que son de una sola opción) -- se revela el
+// selector de días recién cuando hay al menos un deporte tildado, porque sin ningún deporte
+// elegido esos días no significan nada.
+function wireSportsToggle(containerId, daysWrapId){
+  const container = document.getElementById(containerId);
+  if(!container) return;
+  container.addEventListener('click', e=>{
+    const c = e.target.closest('.choice'); if(!c) return;
+    c.classList.toggle('active');
+    const anyActive = container.querySelectorAll('.choice.active').length > 0;
+    const wrap = document.getElementById(daysWrapId);
+    if(wrap) wrap.style.display = anyActive ? 'block' : 'none';
+    if(containerId === 'perfil-sports') markPerfilDirty('crosstraining');
+  });
+}
+wireSportsToggle('ob-sports', 'ob-sport-days-wrap');
+wireSportsToggle('perfil-sports', 'perfil-sport-days-wrap');
+document.getElementById('ob-sport-days').addEventListener('click', e=>{
+  const c=e.target.closest('.day-pill'); if(!c) return;
+  c.classList.toggle('active');
+});
+document.getElementById('perfil-sport-days').addEventListener('click', e=>{
+  const c=e.target.closest('.day-pill'); if(!c) return;
+  c.classList.toggle('active');
+  markPerfilDirty('crosstraining');
+});
+function renderPerfilCrossTraining(){
+  const selectedSports = state.profile.crossTrainingSports || [];
+  document.querySelectorAll('#perfil-sports .choice').forEach(el=>{
+    el.classList.toggle('active', selectedSports.includes(el.dataset.v));
+  });
+  const anySport = selectedSports.length > 0;
+  document.getElementById('perfil-sport-days-wrap').style.display = anySport ? 'block' : 'none';
+  const selectedDays = state.profile.crossTrainingDays || [];
+  document.getElementById('perfil-sport-days').innerHTML = DAY_KEYS.map(d=>
+    `<div class="day-pill${selectedDays.includes(d)?' active':''}" data-v="${d}" role="button" tabindex="0">${t('day_'+d).slice(0,3)}</div>`).join('');
+  const summaryEl = document.getElementById('perfil-crosstraining-summary');
+  if(summaryEl){
+    summaryEl.textContent = anySport
+      ? selectedSports.map(s=>t('sport_'+s)).join(', ')
+      : t('perfil_crosstraining_summary_empty');
+  }
+}
+function openCrossTrainingOverlay(){ renderPerfilCrossTraining(); document.getElementById('crosstraining-overlay').classList.add('overlay-open'); }
+function closeCrossTrainingOverlay(){ document.getElementById('crosstraining-overlay').classList.remove('overlay-open'); }
+function saveCrossTraining(){
+  const sports = [...document.querySelectorAll('#perfil-sports .choice.active')].map(el=>el.dataset.v);
+  const days = DAY_KEYS.filter(d => document.querySelector(`#perfil-sport-days .day-pill[data-v="${d}"]`)?.classList.contains('active'));
+  state.profile.crossTrainingSports = sports;
+  // Si sacó todos los deportes, los días quedan sin sentido -- no los dejamos guardados sueltos.
+  state.profile.crossTrainingDays = sports.length ? days : [];
+  state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
+  renderAll(); renderPerfilCrossTraining(); persist();
+  flashSaved('save-crosstraining-btn');
 }
 function preserveLivedDays(oldPlan, newPlan){
   if(!oldPlan || !oldPlan.length) return newPlan;
@@ -1876,10 +1933,11 @@ function relinkTodayRun(){
    evento nativo (elegir terreno/días con un click en un .choice/.day-pill, o elegir fecha
    de carrera desde el calendario). */
 const PERFIL_SAVE_SECTIONS = {
-  personal: { cardId: 'perfil-personal-card', btnId: 'save-personal-btn', run: savePersonalData },
-  goals:    { cardId: 'perfil-goals-card',    btnId: 'save-goals-btn',    run: saveGoals },
-  days:     { cardId: 'perfil-days-card',     btnId: 'save-days-btn',     run: saveTrainingDays },
-  zones:    { cardId: 'perfil-zones-card',    btnId: 'save-zones-btn',    run: saveCustomZones },
+  personal:      { cardId: 'perfil-personal-card',      btnId: 'save-personal-btn',      run: savePersonalData },
+  goals:         { cardId: 'perfil-goals-card',         btnId: 'save-goals-btn',         run: saveGoals },
+  days:          { cardId: 'perfil-days-card',          btnId: 'save-days-btn',          run: saveTrainingDays },
+  zones:         { cardId: 'perfil-zones-card',         btnId: 'save-zones-btn',         run: saveCustomZones },
+  crosstraining: { cardId: 'perfil-crosstraining-card', btnId: 'save-crosstraining-btn', run: saveCrossTraining },
 };
 function markPerfilDirty(key){
   const cfg = PERFIL_SAVE_SECTIONS[key];
@@ -2306,6 +2364,12 @@ async function finishOnboard(){
     : null;
   const availableMinRaw = parseFloat(document.getElementById('ob-availmin').value);
   const availableMinPerSession = availableMinRaw>0 ? Math.round(availableMinRaw) : null;
+  // Alguien que ya hace otro deporte (fútbol, gimnasio, etc.) tiene una base de
+  // entrenamiento real aunque sea principiante EN RUNNING -- sin esto, un jugador de fútbol
+  // de toda la vida que nunca corrió arrancaba tratado exactamente igual que alguien 100%
+  // sedentario. Ver hasCrossTrainingBase()/beginnerPerSessionKm() más abajo, donde se usa.
+  const crossTrainingSports = [...document.querySelectorAll('#ob-sports .choice.active')].map(el=>el.dataset.v);
+  const crossTrainingDays = crossTrainingSports.length ? DAY_KEYS.filter(d => document.querySelector(`#ob-sport-days .day-pill[data-v="${d}"]`)?.classList.contains('active')) : [];
 
   // profile.tz guarda el huso horario del CELULAR del corredor (ej. "America/New_York"
   // para un amigo en Estados Unidos, distinto al nuestro en Argentina) -- lo usa el
@@ -2318,7 +2382,7 @@ async function finishOnboard(){
   // esto, alguien que se sumaba un martes con lunes/miércoles/viernes como días de
   // entrenamiento veía el lunes (e incluso el domingo previo) ya marcado como sesión
   // perdida, cuando en realidad todavía ni tenía cuenta esos días.
-  state.profile = {email:pendingEmail, name, weight, height, birth, gender, pregnancyPostpartum, hasInjuryNote: !!healthNotes, coachNotes: healthNotes ? [healthNotes] : [], terrain, trainBy, trainingDays: trainingDays.length?trainingDays:['tue','thu','sun'], goal, raceDate, runnerType, currentWeeklyKm, returningFromBreak, refRace, availableMinPerSession, hrMax, hrKnown, hrZones:computeZones(hrMax), tz:detectDeviceTz(), createdAt: todayLocalISO()};
+  state.profile = {email:pendingEmail, name, weight, height, birth, gender, pregnancyPostpartum, hasInjuryNote: !!healthNotes, coachNotes: healthNotes ? [healthNotes] : [], terrain, trainBy, trainingDays: trainingDays.length?trainingDays:['tue','thu','sun'], goal, raceDate, runnerType, currentWeeklyKm, returningFromBreak, refRace, availableMinPerSession, crossTrainingSports, crossTrainingDays, hrMax, hrKnown, hrZones:computeZones(hrMax), tz:detectDeviceTz(), createdAt: todayLocalISO()};
   state.profile.weeklyKm = calcWeeklyKm(state.profile);
   state.weekNumber = 1;
   state.weekStart = getMondayISO(new Date());
@@ -2438,6 +2502,7 @@ function enterApp(){
   [...document.getElementById('perfil-trainby-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.profile.trainBy==='time'?'time':'distance')));
   [...document.getElementById('theme-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v===currentThemePref()));
   renderPerfilDays();
+  renderPerfilCrossTraining();
   renderAll(); renderHistory(); renderZones();
   showView('inicio');
   setTimeout(checkPendingRating, 600);
@@ -2630,9 +2695,23 @@ const GOAL_PEAK_KM = {start:18, '5k':25, '10k':35, '15k':42, '21k':50, '42k':65,
 // estimateBeginnerWeeklyKm() de acá abajo nunca pueda desincronizarse de la fórmula real que
 // arma las sesiones de un principiante.
 const EASY_SESSION_RATIO = 0.9, BEGINNER_LONG_RATIO = 1.3;
-function estimateBeginnerWeeklyKm(trainingDays){
+// Jugar al fútbol, nadar, ir al gimnasio, etc. construye una base aeróbica/muscular real,
+// aunque sea alguien 100% principiante EN RUNNING específicamente -- 2+ días por semana es el
+// piso que consideramos "hábito real" y no solo algo ocasional. Compartida por
+// estimateBeginnerWeeklyKm() y generatePlan() (mismo motivo que EASY_SESSION_RATIO de
+// arriba: un solo lugar, sin riesgo de que las dos fórmulas se desincronicen) y por
+// checkBeginnerGraduation() (gradúa más rápido a quien ya tiene esa base).
+function hasCrossTrainingBase(p){
+  return !!(p && p.crossTrainingDays && p.crossTrainingDays.length >= 2);
+}
+const CROSS_TRAINING_BASE_BOOST = 1.3;
+function beginnerPerSessionKm(p){
+  return hasCrossTrainingBase(p) ? 2.5 * CROSS_TRAINING_BASE_BOOST : 2.5;
+}
+function estimateBeginnerWeeklyKm(profile){
+  const trainingDays = profile && profile.trainingDays;
   const days = (trainingDays && trainingDays.length) ? trainingDays.length : 3; // mismo default de 3 días que generatePlan
-  const per = 2.5; // mismo valor que generatePlan en semana 1 (mult=1 siempre en la primera semana)
+  const per = beginnerPerSessionKm(profile); // mismo valor que generatePlan en semana 1 (mult=1 siempre en la primera semana)
   const long = Math.round(per * BEGINNER_LONG_RATIO);
   const easy = Math.round(per * EASY_SESSION_RATIO);
   return long + easy * Math.max(0, days - 1);
@@ -2645,7 +2724,7 @@ function calcWeeklyKm(profile){
   // genera generatePlan para un principiante) sumaba 7km -- el número que ve el corredor
   // tiene que coincidir con el plan de verdad, no con una proyección del objetivo final que
   // ni siquiera se usa para calcular sus sesiones cuando es principiante.
-  if(isBeginnerProfile(profile)) return estimateBeginnerWeeklyKm(profile.trainingDays);
+  if(isBeginnerProfile(profile)) return estimateBeginnerWeeklyKm(profile);
   const peak = GOAL_PEAK_KM[profile.goal] || 20;
   if(profile.runnerType==='active' && profile.currentWeeklyKm>0){
     const base = Math.round(profile.currentWeeklyKm); // arranca desde su realidad actual, no de una fórmula genérica
@@ -3392,12 +3471,18 @@ function isBeginnerProfile(p){
 // calcWeeklyKm a partir de ahí parta de su capacidad demostrada, no de un salto al kilometraje
 // pico del objetivo -- el mismo tipo de salto brusco que ya se corrigió en isBeginnerProfile.
 const BEGINNER_GRADUATION_WEEKS = 4;
+// La mitad de tiempo para quien ya venía con una base real de otro deporte (ver
+// hasCrossTrainingBase) -- su sistema cardiovascular ya no arranca de cero, así que
+// adaptarse a correr en zona 2 con algo de variedad le lleva menos semanas de verdad
+// entrenando que a alguien 100% sedentario antes de esto.
+const BEGINNER_GRADUATION_WEEKS_WITH_BASE = 2;
 const BEGINNER_GRADUATION_MIN_KM = 8;
 function checkBeginnerGraduation(){
   if(!state.onboarded || !state.profile) return;
   const p = state.profile;
   if(!isBeginnerProfile(p)) return; // ya no está en modo principiante, nada que graduar
-  const avgKm = computeActualWeeklyKmAvg(BEGINNER_GRADUATION_WEEKS);
+  const graduationWeeks = hasCrossTrainingBase(p) ? BEGINNER_GRADUATION_WEEKS_WITH_BASE : BEGINNER_GRADUATION_WEEKS;
+  const avgKm = computeActualWeeklyKmAvg(graduationWeeks);
   if(avgKm === null || avgKm < BEGINNER_GRADUATION_MIN_KM) return;
   p.runnerType = 'active';
   p.currentWeeklyKm = Math.round(avgKm);
@@ -3451,7 +3536,7 @@ function generatePlan(p, weekNumber, weekStartDate){
   const RATIO = {easy:EASY_SESSION_RATIO, intervals:1.15, tempo:0.85, long:beginner?BEGINNER_LONG_RATIO:1.5, fartlek:1.0, hills:0.9, progression:1.0};
   let distMap;
   if(beginner){
-    const per = 2.5 * mult;
+    const per = beginnerPerSessionKm(p) * mult;
     distMap = {};
     Object.keys(RATIO).forEach(type=>{ distMap[type] = Math.round(per * RATIO[type]); });
   } else {
@@ -5541,7 +5626,7 @@ async function showView(v){
   if(v==='inicio'){ await refreshStateFromServer(); renderHome(); renderPlan(); }
   if(v==='history'){ await refreshStateFromServer(); renderHistory(); }
   if(v==='plan'){ await refreshStateFromServer(); viewingWeekOffset = 0; renderPlan(); }
-  if(v==='perfil'){ renderPerfilDays(); updatePushStatusDisplay(); updateStravaStatusDisplay(); updatePolarStatusDisplay(); updateWahooStatusDisplay(); updateCorosStatusDisplay(); updateHealthConnectStatusDisplay(); }
+  if(v==='perfil'){ renderPerfilDays(); renderPerfilCrossTraining(); updatePushStatusDisplay(); updateStravaStatusDisplay(); updatePolarStatusDisplay(); updateWahooStatusDisplay(); updateCorosStatusDisplay(); updateHealthConnectStatusDisplay(); }
   if(v==='correr'){ renderRunTodayCard(); initIdleMap(); }
 }
 function goCoachWithPrompt(prefill){
