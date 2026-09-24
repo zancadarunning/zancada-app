@@ -277,6 +277,50 @@ test('checkBeginnerGraduation: no gradúa si el promedio real todavía está por
   assert.equal(app.state.chat.length, 0, 'no debería mandar el mensaje de graduación todavía');
 });
 
+test('applyCoachNote: una lesión reportada por chat (zona_cuerpo) sube la cautela del plan, no solo queda como nota', () => {
+  // Antes, una lesión mencionada por chat quedaba SOLO en coachNotes -- un dato que el coach
+  // de IA podía recordar y mencionar, pero invisible para trainingCaution/generatePlan (que sí
+  // reaccionan a una molestia cargada a mano en Perfil > Molestias). Alguien que le contaba al
+  // chat "me duele la rodilla" en vez de cargarlo en Perfil no conseguía que el plan se pusiera
+  // más conservador. zona_cuerpo hace que la nota entre al mismo state.painLog que usa Perfil,
+  // reusando la misma lógica de vencimiento/resolución en vez de agregar un flag nuevo pegado
+  // para siempre.
+  const app = loadApp();
+  const hrMax = 190;
+  const profile = baseProfile({ birth: '1995-01-01', weight: 70, height: 175, hrMax, hrZones: app.computeZones(hrMax), name: 'Ana' });
+  app.state.profile = profile;
+  app.state.onboarded = true;
+  app.state.weekStart = app.getMondayISO(new Date());
+  app.state.plan = app.generatePlan(profile, 1);
+  app.state.painLog = [];
+  app.state.runs = [];
+  app.state.event = null;
+  app.state.chat = [];
+  app.state.shoes = [];
+  assert.equal(app.trainingCaution(profile).level, 0, 'sin nada reportado, cautela en 0');
+
+  const result = app.applyCoachNote({ nota: 'le duele la rodilla derecha hace unos días', zona_cuerpo: 'rodilla' });
+
+  assert.match(result, /ajust/i, 'debería avisar que el plan se ajustó, no solo que guardó la nota');
+  assert.equal(app.state.painLog.length, 1);
+  assert.equal(app.state.painLog[0].bodyPart, 'rodilla');
+  assert.equal(app.state.painLog[0].active, true);
+  assert.equal(app.trainingCaution(app.state.profile).level, 1, 'la molestia reportada por chat debería subir la cautela, igual que si se hubiera cargado desde Perfil');
+});
+
+test('applyCoachNote: una nota sin zona_cuerpo (preferencia, horario, etc.) no toca la cautela', () => {
+  const app = loadApp();
+  const profile = baseProfile({});
+  app.state.profile = profile;
+  app.state.painLog = [];
+
+  const result = app.applyCoachNote({ nota: 'prefiere entrenar de noche' });
+
+  assert.equal(result, 'Nota guardada.');
+  assert.equal(app.state.painLog.length, 0, 'sin zona_cuerpo no debería crear ninguna molestia');
+  assert.equal(app.state.profile.coachNotes[0], 'prefiere entrenar de noche');
+});
+
 test('checkReturningBreakGraduation: saca el descuento del 60% cuando el promedio real ya alcanzó lo de antes', () => {
   // returningFromBreak bajaba el punto de partida (calcWeeklyKm) a un 60% de lo declarado, y
   // subía la cautela -- pero antes de este fix se quedaba así PARA SIEMPRE, sin ninguna forma

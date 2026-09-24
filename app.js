@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-24T17:48:27Z';
+const APP_VERSION = '2026-09-24T17:52:44Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -9169,7 +9169,8 @@ const TOOLS = [
     name:"guardar_nota_coach",
     description:"Guarda un dato permanente sobre el corredor para tenerlo en cuenta siempre de ahora en adelante, aunque no implique cambiar el plan en este momento: una lesión o molestia, una preferencia de entrenamiento, una restricción de horario, o cualquier otro dato relevante que el corredor comparta. Usala apenas el corredor mencione algo así, para no depender de que quede en el historial de la charla.",
     input_schema:{type:"object", properties:{
-      nota:{type:"string", description:"El dato a recordar, resumido en una frase breve, en el idioma de la conversación."}
+      nota:{type:"string", description:"El dato a recordar, resumido en una frase breve, en el idioma de la conversación."},
+      zona_cuerpo:{type:"string", enum:["rodilla","tobillo","pantorrilla","isquios","cadera","espalda","pie","cuadriceps","otro"], description:"Completá este campo SOLO si la nota describe una lesión, dolor o molestia física nueva del corredor (ej. \"le duele la rodilla hace unos días\") -- elegí la zona del cuerpo más cercana de la lista, o \"otro\" si no encaja. NO lo completes para preferencias, horarios u otro tipo de dato. Al completarlo, la molestia queda registrada igual que si la hubiera cargado a mano en Perfil > Molestias: el plan pasa a un criterio más conservador automáticamente. Se marca como resuelta solo desde Perfil > Molestias (contale al corredor que la va a ver ahí) -- vos no tenés forma de marcarla resuelta por chat."}
     }, required:["nota"]}
   },
   {
@@ -9529,8 +9530,23 @@ function applyCoachNote(input){
   if(!state.profile.coachNotes) state.profile.coachNotes = [];
   state.profile.coachNotes.push(String(input.nota).slice(0,200));
   if(state.profile.coachNotes.length > 12) state.profile.coachNotes = state.profile.coachNotes.slice(-12);
+  // Antes, una lesión mencionada por chat quedaba SOLO en coachNotes -- una nota que el coach
+  // podía mencionar en la charla, pero invisible para trainingCaution/generatePlan (que sí
+  // reaccionan a una molestia cargada a mano en Perfil > Molestias, ver activePainEntries).
+  // Guardándola acá como una entrada más de state.painLog (misma forma que savePainLog())
+  // reusa esa misma lógica ya resuelta -- vence sola a los 21 días o el corredor la marca
+  // resuelta desde Perfil, en vez de agregar un flag nuevo que se queda pegado para siempre
+  // (el mismo tipo de bug que isBeginnerProfile/returningFromBreak tenían antes de esta sesión).
+  let plan_updated = false;
+  if(input.zona_cuerpo){
+    if(!state.painLog) state.painLog = [];
+    state.painLog.push({id:Date.now(), date:localDateISO(), bodyPart:input.zona_cuerpo, note:String(input.nota).slice(0,200), active:true, checkinSent:false, fromChat:true});
+    state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
+    renderAll(); renderZones();
+    plan_updated = true;
+  }
   persist();
-  return 'Nota guardada.';
+  return plan_updated ? 'Nota guardada, y el plan ya se ajustó por la molestia.' : 'Nota guardada.';
 }
 let chatAbortController = null;
 function handleChatSendClick(){
@@ -9587,7 +9603,7 @@ Tenés estas herramientas para aplicar cambios reales en la app. Cuando el corre
 - cancelar_sesion: cuando el corredor cancela, saca o no puede hacer una sesión y NO la reemplaza por otra — deja ese día vacío, igual que un día sin entrenamiento. Nunca uses modificar_sesion para esto ni inventes una sesión suave o de zona 1 "de reemplazo": si el pedido es cancelar, el día tiene que quedar sin ningún ejercicio.
 - ajustar_volumen_semana: para pedidos generales de correr más o menos (ej. "quiero correr más km", "bajale un poco"), sin que especifiquen un día — de esta semana o de la que sigue (parámetro semana).
 - modificar_perfil: para cambios permanentes de datos personales que afectan los PRÓXIMOS planes (km semanales base, objetivo, terreno, FC máxima, o el cronograma fijo de días de entreno con dias_entreno). IMPORTANTE: si lo que cambia es QUÉ DÍAS entrena de forma habitual y permanente (ej. "de ahora en adelante entreno martes y jueves"), usá modificar_perfil con dias_entreno -- no mover_sesion/modificar_sesion/cancelar_sesion, que solo afectan una semana puntual y dejarían al corredor con el cronograma viejo la semana siguiente.
-- guardar_nota_coach: para guardar un dato permanente del corredor (una lesión o molestia, una preferencia, una restricción de horario, etc.) apenas lo mencione, aunque no implique cambiar el plan ahora mismo. El historial de la charla no es infinito, así que esto es lo único que te garantiza acordarte de algo importante más adelante.
+- guardar_nota_coach: para guardar un dato permanente del corredor (una lesión o molestia, una preferencia, una restricción de horario, etc.) apenas lo mencione, aunque no implique cambiar el plan ahora mismo. El historial de la charla no es infinito, así que esto es lo único que te garantiza acordarte de algo importante más adelante. Si lo que cuenta es una lesión o dolor físico nuevo, completá también zona_cuerpo -- eso SÍ hace que el plan se vuelva más conservador de inmediato, no solo que vos lo recuerdes.
 - deshacer_cambio: si el corredor dice que te confundiste, que no era eso, o pide deshacer/revertir el último cambio que hiciste, usá esta herramienta en vez de intentar adivinar manualmente cómo estaba antes -- restaura el plan y el perfil a como estaban justo antes de tu último cambio. Solo deshace UN cambio (el más reciente); si pide deshacer más de uno, avisale que solo podés volver un paso atrás.
 Si el pedido es ambiguo entre "esta semana" y "de ahora en adelante", aplicá el cambio a esta semana con ajustar_volumen_semana para que se note ya, y preguntá si también querés que sea la nueva base con modificar_perfil.
 
