@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-24T18:07:13Z';
+const APP_VERSION = '2026-09-24T18:13:39Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2763,7 +2763,6 @@ function addDaysToIsoLocal(iso, days){
   return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
 }
 function isCutbackWeek(n){ return n % 4 === 0; }
-const GOAL_PEAK_KM = {start:18, '5k':25, '10k':35, '15k':42, '21k':50, '42k':65, ultra:75, lifestyle:15};
 // Compartidas con el RATIO de generatePlan (ver ahí) -- top-level para que
 // estimateBeginnerWeeklyKm() de acá abajo nunca pueda desincronizarse de la fórmula real que
 // arma las sesiones de un principiante.
@@ -2809,26 +2808,21 @@ function calcWeeklyKm(profile){
   // tiene que coincidir con el plan de verdad, no con una proyección del objetivo final que
   // ni siquiera se usa para calcular sus sesiones cuando es principiante.
   if(isBeginnerProfile(profile)) return estimateBeginnerWeeklyKm(profile);
-  const peak = GOAL_PEAK_KM[profile.goal] || 20;
-  if(profile.runnerType==='active' && profile.currentWeeklyKm>0){
-    const base = Math.round(profile.currentWeeklyKm); // arranca desde su realidad actual, no de una fórmula genérica
-    // Si viene de una pausa larga, ese volumen "actual" declarado es en realidad el que
-    // tenía ANTES de parar -- arrancar ahí de nuevo, de golpe, es un patrón clásico de
-    // lesión por sobrecarga. Empezamos más abajo y dejamos que weekMultiplier (con la
-    // progresión más lenta que ya le da el caution.level>=1 de este perfil) lo vaya
-    // recuperando de a poco en las semanas siguientes.
-    return profile.returningFromBreak ? Math.round(base*0.6) : base;
-  }
-  const base = peak / 1.8; // punto de partida que, con la progresión normal, llega al pico
-  if(profile.raceDate){
-    const weeksLeft = Math.round((new Date(profile.raceDate) - new Date()) / (7*86400000));
-    if(weeksLeft > 0 && weeksLeft < 12){
-      // poco tiempo hasta la carrera: arrancar más cerca del pico, sin margen para una progresión larga
-      const urgency = Math.min(1, Math.max(0, (12-weeksLeft)/12));
-      return Math.round(base + (peak-base)*urgency);
-    }
-  }
-  return Math.round(base);
+  // isBeginnerProfile ya exige currentWeeklyKm>0 y runnerType!=='new' para devolver false (ver
+  // su definición) -- con solo esos dos runnerType posibles ('new'/'active'), no ser
+  // principiante implica SIEMPRE runnerType==='active' && currentWeeklyKm>0. Antes había acá
+  // una segunda rama (proyección del kilometraje pico del objetivo, con "urgencia" si la
+  // carrera estaba cerca) para el caso "activo pero sin currentWeeklyKm real" -- ese caso ya
+  // no existe: isBeginnerProfile lo trata como principiante (con razón, es el mismo criterio
+  // que el fix de "alguien que dice 'ya corro' pero declaró 0km/semana"), así que esa rama
+  // había quedado inalcanzable. Se saca en vez de dejarla como código muerto.
+  const base = Math.round(profile.currentWeeklyKm); // arranca desde su realidad actual, no de una fórmula genérica
+  // Si viene de una pausa larga, ese volumen "actual" declarado es en realidad el que
+  // tenía ANTES de parar -- arrancar ahí de nuevo, de golpe, es un patrón clásico de
+  // lesión por sobrecarga. Empezamos más abajo y dejamos que weekMultiplier (con la
+  // progresión más lenta que ya le da el caution.level>=1 de este perfil) lo vaya
+  // recuperando de a poco en las semanas siguientes.
+  return profile.returningFromBreak ? Math.round(base*0.6) : base;
 }
 function weekMultiplier(n, caution, skipCutback){
   n = n || 1;
