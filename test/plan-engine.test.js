@@ -449,6 +449,36 @@ test('generatePlan: el total real de la semana coincide con el kilometraje seman
   assert.ok(Math.abs(totalSinMeta - 20) <= 3, `sin meta (weeklyKm=20) el total debería rondar 20km, dio ${totalSinMeta}`);
 });
 
+test('generatePlan: availableMinPerSession topea las sesiones entre semana, no la tirada larga', () => {
+  // "¿Cuántos minutos tenés disponibles por sesión?" se guardaba en el perfil pero nunca
+  // tocaba el plan real -- solo se lo pasaba al coach del chat como sugerencia. Alguien con
+  // 30 minutos reales entre semana podía terminar con una sesión de 8km calculada sin que
+  // nada en el plan lo supiera. Ahora sí topea las sesiones entre semana (restando los 20 min
+  // fijos de entrada en calor + vuelta a la calma), pero deja la tirada larga del fin de
+  // semana sin tocar a propósito -- esa es la sesión grande del fin de semana.
+  const app = loadApp();
+  const limitado = baseProfile({ weeklyKm: 40, availableMinPerSession: 30 });
+  app.state.profile = limitado;
+  app.state.event = null;
+  const plan = app.generatePlan(limitado, 1, '2026-09-07');
+  const pace = app.estimateBasePaceMinPerKm(limitado);
+  const weekdaySessions = plan.filter(d => d.dist > 0 && d.typeKey !== 'long');
+  assert.ok(weekdaySessions.length > 0, 'debería haber al menos una sesión entre semana para este fixture');
+  weekdaySessions.forEach(d => {
+    const mins = d.dist * pace;
+    assert.ok(mins <= 30, `la sesión de ${d.typeKey} debería entrar en ~30min disponibles, dio ${mins.toFixed(1)}min`);
+  });
+  const longDay = plan.find(d => d.typeKey === 'long');
+  assert.ok(longDay && longDay.dist * pace > 30, 'la tirada larga NO debería estar limitada por availableMinPerSession');
+
+  const sinLimite = baseProfile({ weeklyKm: 40, availableMinPerSession: null });
+  app.state.profile = sinLimite;
+  const planSinLimite = app.generatePlan(sinLimite, 1, '2026-09-07');
+  const totalConLimite = plan.reduce((a, d) => a + d.dist, 0);
+  const totalSinLimite = planSinLimite.reduce((a, d) => a + d.dist, 0);
+  assert.ok(totalConLimite < totalSinLimite, 'con poco tiempo disponible el total semanal real debería ser menor, no compensarse en otro lado');
+});
+
 test('buildIntervalStructure: reps entre 4 y el máximo, y el total ronda la distancia pedida', () => {
   const app = loadApp();
   const { reps, repMeters, recoveryMin } = app.buildIntervalStructure(8, { level: 0 }, 1);

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-24T17:26:17Z';
+const APP_VERSION = '2026-09-24T17:36:35Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2145,10 +2145,17 @@ function finishGoalsSave(){
 function saveGoals(){
   const weeklyGoal = parseDistInput(document.getElementById('perfil-weekly-goal').value);
   const goalNote = document.getElementById('perfil-goal-note').value.trim();
-  const goalChanged = (state.profile.weeklyGoalKm||0) !== weeklyGoal;
-  const backup = { weeklyGoalKm: state.profile.weeklyGoalKm, goalNote: state.profile.goalNote };
+  // "minutos disponibles por sesión" ahora sí topea las sesiones entre semana del plan real
+  // (ver el cap en generatePlan) -- antes esto solo se podía cargar una vez en el onboarding
+  // y nunca se podía tocar después. Mismo guard >0/null que en finishOnboard: un campo
+  // vaciado a mano vuelve a "sin límite", no se queda pegado en 0.
+  const availMinRaw = parseFloat(document.getElementById('perfil-availmin').value);
+  const availableMinPerSession = availMinRaw>0 ? Math.round(availMinRaw) : null;
+  const goalChanged = (state.profile.weeklyGoalKm||0) !== weeklyGoal || (state.profile.availableMinPerSession||null) !== availableMinPerSession;
+  const backup = { weeklyGoalKm: state.profile.weeklyGoalKm, goalNote: state.profile.goalNote, availableMinPerSession: state.profile.availableMinPerSession };
   state.profile.weeklyGoalKm = weeklyGoal;
   state.profile.goalNote = goalNote;
+  state.profile.availableMinPerSession = availableMinPerSession;
   if(goalChanged){
     openPlanChangeTimingModal('goals', backup);
   } else {
@@ -3655,6 +3662,22 @@ function generatePlan(p, weekNumber, weekStartDate){
       }
     });
   }
+  // "¿Cuántos minutos tenés disponibles por sesión?" (onboarding, opcional) se guardaba en el
+  // perfil pero nunca tocaba el plan de verdad -- solo se lo pasábamos al coach del chat como
+  // sugerencia ("si una sesión se pasa de esto, comentaselo"), así que alguien con 30 minutos
+  // reales entre semana igual podía recibir una sesión de 8km calculada sin que nada en el
+  // plan lo supiera. Acá SÍ lo usamos como techo real de las sesiones entre semana (no de la
+  // tirada larga -- esa es a propósito la sesión más grande del fin de semana, caparla
+  // también la dejaría sin sentido). Restamos los 20 min fijos de entrada en calor + vuelta a
+  // la calma (ver desc_warmup_prefix/desc_cooldown_suffix, no están adentro de d.dist) antes
+  // de convertir minutos a km con el ritmo estimado del corredor. No reparte el km "perdido"
+  // en otro lado -- si de verdad tiene poco tiempo, el total semanal real es más bajo, así de
+  // simple, en vez de inflarle la tirada larga para compensar.
+  if(p.availableMinPerSession > 0){
+    const pace = estimateBasePaceMinPerKm(p);
+    const maxSessionKm = Math.max(10, p.availableMinPerSession - 20) / pace;
+    Object.keys(distMap).forEach(type=>{ if(type!=='long') distMap[type] = Math.min(distMap[type], Math.round(maxSessionKm*10)/10); });
+  }
   // La carrera cargada en "Próximos eventos" ya NO le saca la sesión propia al día en el que
   // cae (antes ese día quedaba fijo en descanso porque "la carrera era la sesión") -- ahora es
   // un dato informativo nada más, así que ese día recibe una sesión de entrenamiento normal
@@ -4761,10 +4784,11 @@ function renderPerfil(){
     // guardado con un valor que la persona nunca eligió, apenas abra este panel.
     [...document.getElementById('perfil-gender-choice').children].forEach(c=>c.classList.toggle('active', c.dataset.v===p.gender));
   }
-  const editingGoals = ['perfil-weekly-goal','perfil-goal-note'].includes(document.activeElement && document.activeElement.id);
+  const editingGoals = ['perfil-weekly-goal','perfil-goal-note','perfil-availmin'].includes(document.activeElement && document.activeElement.id);
   if(!editingGoals){
     document.getElementById('perfil-weekly-goal').value = p.weeklyGoalKm ? fmtDist(p.weeklyGoalKm,1) : '';
     document.getElementById('perfil-goal-note').value = p.goalNote || '';
+    document.getElementById('perfil-availmin').value = p.availableMinPerSession || '';
   }
 
   const list = document.getElementById('shoe-list');
@@ -8977,7 +9001,7 @@ function buildContext(){
   if(eventRaceWeekMultiplier(state.weekStart, p) < 1) ctx += ` Esta semana cae la carrera cargada en "Próximos eventos" -- el volumen de esta semana bajó a propósito, como una semana de descarga más, para no llegar reventado a correrla.`;
   if(p.coachNotes && p.coachNotes.length) ctx += ` Notas permanentes guardadas sobre el corredor (lesiones, preferencias u otros datos a tener en cuenta siempre): ${p.coachNotes.map(n=>`"${n}"`).join('; ')}.`;
   if(p.pregnancyPostpartum) ctx += ` El corredor indicó en el onboarding que está embarazada o dio a luz en los últimos 6 meses -- el plan ya se generó con volumen e intensidad reducidos por precaución. Si pregunta por esto, recordale que consulte con su médico/a antes de cualquier cambio de intensidad; no le des indicaciones médicas específicas vos.`;
-  if(p.availableMinPerSession) ctx += ` Dispone de unos ${p.availableMinPerSession} minutos en promedio por sesión entre semana -- si una sesión calculada se pasa bastante de ese tiempo, comentáselo y ofrecé ajustarla.`;
+  if(p.availableMinPerSession) ctx += ` Dispone de unos ${p.availableMinPerSession} minutos en promedio por sesión -- el plan ya limita las sesiones entre semana a ese tiempo (la tirada larga del fin de semana queda afuera de ese límite a propósito). Si igual pregunta por el tiempo de una sesión, tené esto en cuenta.`;
   const activePains = activePainEntries();
   if(activePains.length) ctx += ` Molestias activas registradas por el corredor: ${activePains.map(pa=>`${t('pain_body_'+pa.bodyPart)} (desde ${pa.date}${pa.note?', nota: "'+pa.note+'"':''})`).join('; ')}. Tenelas en cuenta al sugerir ejercicios y preguntá cómo siguen si corresponde.`;
   const todayReadiness = todayReadinessEntry();
