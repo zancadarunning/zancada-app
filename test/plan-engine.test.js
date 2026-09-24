@@ -382,6 +382,32 @@ test('lowerRemainingIntensity: el recorte se nota incluso en sesiones chicas de 
   assert.ok(sun.dist < 3, `3km con -15% debería bajar, quedó en ${sun.dist}`);
 });
 
+test('relinkTodayRun: "Deshacer" sobre una carrera vinculada se mantiene al reabrir la app el mismo día', () => {
+  // relinkTodayRun() busca, en cada apertura de la app, si hay una carrera de HOY sin
+  // vincular al día del plan -- pensado para agarrar una carrera recién sincronizada del
+  // reloj mientras la app estaba cerrada. Pero "Deshacer" (markSession(i,null)) solo saca el
+  // LINK, no borra la carrera de state.runs -- sin recordar qué carrera se desvinculó a
+  // propósito, la próxima apertura de la app (el mismo día) volvía a encontrar esa misma
+  // carrera y la revinculaba sola, deshaciendo en silencio el "Deshacer" del corredor.
+  const app = loadApp();
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  const runId = 999;
+  app.state.runs = [{ id: runId, distanceKm: 5, durationSec: 1800, date: new Date().toISOString() }];
+  app.state.plan = app.DAY_KEYS.map((day, i) => ({ day, typeKey: i === todayIdx ? 'easy' : 'rest', dist: i === todayIdx ? 5 : 0 }));
+  app.state.plan[todayIdx].status = 'done';
+  app.state.plan[todayIdx].linkedRunId = runId;
+
+  app.markSession(todayIdx, null);
+  assert.equal(app.state.plan[todayIdx].status, null, 'debería quedar sin estado tras deshacer');
+  assert.equal(app.state.plan[todayIdx].linkedRunId, null, 'debería quedar sin carrera vinculada tras deshacer');
+
+  const relinked = app.relinkTodayRun(); // simula reabrir la app el mismo día
+
+  assert.equal(relinked, false, 'no debería revincular la misma carrera que se desvinculó a propósito');
+  assert.equal(app.state.plan[todayIdx].status, null, 'el deshacer debería seguir en pie tras reabrir la app');
+  assert.equal(app.state.plan[todayIdx].linkedRunId, null);
+});
+
 test('buildSessionFeedbackMessage: compara lo planeado contra lo real y varía según la calificación', () => {
   // Antes calificar "bien" o "excelente" no generaba NINGÚN mensaje del coach -- solo "mal"
   // mandaba una línea genérica, sin ningún número real de la sesión. Ahora las tres

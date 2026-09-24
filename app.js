@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-24T18:38:17Z';
+const APP_VERSION = '2026-09-24T18:41:43Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1965,7 +1965,14 @@ function relinkTodayRun(){
   const alreadyLinked = today.linkedRunId && state.runs.some(r=>r.id===today.linkedRunId);
   if(alreadyLinked) return false;
   const now = new Date();
+  // today.declinedRunId (ver markSession): si el corredor tocó "Deshacer" a propósito sobre
+  // una carrera YA vinculada, esa carrera sigue existiendo en state.runs (Deshacer solo
+  // desvincula, no borra) -- sin este chequeo, la próxima vez que se abriera la app HOY
+  // mismo, relinkTodayRun() volvía a encontrar esa misma carrera y la revinculaba sola,
+  // deshaciendo en silencio el "Deshacer" del corredor sin ningún aviso. Reportado en una
+  // auditoría.
   const todayRun = (state.runs||[]).find(r=>{
+    if(r.id === today.declinedRunId) return false;
     const d = new Date(r.date);
     return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
   });
@@ -4566,7 +4573,14 @@ function toggleHomeNextDetail(){
 }
 function markSession(i, status){
   state.plan[i].status = status;
-  if(!status) state.plan[i].linkedRunId = null;
+  // Recordamos qué carrera se desvinculó a propósito (ver el chequeo en relinkTodayRun) --
+  // Deshacer solo saca el LINK, la carrera en sí sigue en state.runs (no se borra nada), así
+  // que sin este dato relinkTodayRun() la volvía a encontrar y revincular sola en la próxima
+  // apertura de la app, el mismo día.
+  if(!status){
+    if(state.plan[i].linkedRunId) state.plan[i].declinedRunId = state.plan[i].linkedRunId;
+    state.plan[i].linkedRunId = null;
+  }
   renderPlan(); renderHome(); persist();
   if(status === 'done'){
     haptic([15,40,15]);
