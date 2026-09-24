@@ -408,6 +408,35 @@ test('relinkTodayRun: "Deshacer" sobre una carrera vinculada se mantiene al reab
   assert.equal(app.state.plan[todayIdx].linkedRunId, null);
 });
 
+test('buildWeeklyRecapMessage: una carrera extra sin nada planeado no infla el "X de Y sesiones"', () => {
+  // d.status==='done' sin exigir d.dist>0 contaba también los días "Carrera extra" (corridos
+  // sin nada planeado ese día) en el numerador, pero el denominador (plannedCount) solo
+  // cuenta días CON sesión planeada -- alguien que cumplió sus 3 sesiones planeadas y encima
+  // sumó 2 extras terminaba viendo "5 de 3 sesiones planificadas" en el resumen semanal, un
+  // número que no tiene sentido (5 de 3).
+  const app = loadApp();
+  const weekStart = '2026-09-07';
+  const weekPlan = [
+    { day: 'mon', dist: 0, status: 'done', linkedRunId: 1 }, // "Carrera extra" -- no estaba planeado
+    { day: 'tue', dist: 5, status: 'done', linkedRunId: 2 },
+    { day: 'wed', dist: 0, status: null },
+    { day: 'thu', dist: 5, status: 'done', linkedRunId: 3 },
+    { day: 'fri', dist: 0, status: null },
+    { day: 'sat', dist: 0, status: null },
+    { day: 'sun', dist: 8, status: null }, // planeada, todavía sin correr
+  ];
+  app.state.runs = [
+    { id: 1, distanceKm: 4, durationSec: 1500, date: '2026-09-07T10:00:00Z' },
+    { id: 2, distanceKm: 5, durationSec: 1800, date: '2026-09-08T10:00:00Z' },
+    { id: 3, distanceKm: 5, durationSec: 1800, date: '2026-09-10T10:00:00Z' },
+  ];
+
+  const msg = app.buildWeeklyRecapMessage(weekPlan, weekStart);
+
+  assert.match(msg, /2 de 3/, `el numerador (2 sesiones PLANEADAS cumplidas) no debería contar la carrera extra -- dio: ${msg}`);
+  assert.doesNotMatch(msg, /3 de 3/, 'no debería contar la carrera extra como si fuera una de las 3 planeadas');
+});
+
 test('buildSessionFeedbackMessage: compara lo planeado contra lo real y varía según la calificación', () => {
   // Antes calificar "bien" o "excelente" no generaba NINGÚN mensaje del coach -- solo "mal"
   // mandaba una línea genérica, sin ningún número real de la sesión. Ahora las tres

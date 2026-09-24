@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-24T18:41:43Z';
+const APP_VERSION = '2026-09-24T18:43:47Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3117,7 +3117,13 @@ function buildWeeklyRecapMessage(weekPlan, weekStartIso){
   // Resumen factual de la semana que se cierra, sin juicio de valor (eso ya lo cubren
   // el ajuste automático y el aviso proactivo) -- así el corredor tiene noticias del
   // coach todas las semanas, no solo cuando algo anda mal.
-  const doneCount = weekPlan.filter(d=>d.status==='done').length;
+  // d.status==='done' solo (sin exigir d.dist>0) contaba también los días "Carrera extra"
+  // -- una carrera corrida en un día sin nada planeado (ver relinkTodayRun/
+  // autoMarkSessionDone, que vinculan cualquier carrera del día sin fijarse si ese día tenía
+  // sesión). Alguien que corrió sus 3 sesiones planeadas MÁS 2 extras terminaba viendo "5 de
+  // 3 sesiones planificadas" en el resumen -- un número que no tiene sentido (5 de 3). El
+  // numerador tiene que contar lo mismo que el denominador: sesiones planeadas Y cumplidas.
+  const doneCount = weekPlan.filter(d=>d.dist>0 && d.status==='done').length;
   const plannedCount = weekPlan.filter(d=>d.dist>0).length;
   const weekRuns = (state.runs||[]).filter(r => getMondayISO(new Date(r.date)) === weekStartIso);
   const km = weekRuns.reduce((s,r)=>s+r.distanceKm, 0);
@@ -4551,7 +4557,10 @@ function renderPastWeeks(){
   if(!state.planHistory || state.planHistory.length===0){ card.style.display='none'; return; }
   card.style.display='block';
   document.getElementById('past-weeks-list').innerHTML = state.planHistory.slice().reverse().map(w=>{
-    const doneCount = w.plan.filter(d=>d.status==='done').length;
+    // Mismo bug (y mismo arreglo) que buildWeeklyRecapMessage: sin el d.dist>0, un día
+    // "Carrera extra" (corrida sin nada planeado ese día) contaba en el numerador pero no en
+    // el denominador -- "5 de 3 sesiones" en una semana con extras.
+    const doneCount = w.plan.filter(d=>d.dist>0 && d.status==='done').length;
     const totalSessions = w.plan.filter(d=>d.dist>0).length;
     const plannedAmount = isTimeMode() ? `${w.plan.reduce((a,d)=>a+planDurationMin(d),0)} ${t('time_unit_min')}` : `${fmtDist(w.plan.reduce((a,d)=>a+d.dist,0),1)}${distUnit()}`;
     const offset = w.weekNumber - (state.weekNumber||1);
