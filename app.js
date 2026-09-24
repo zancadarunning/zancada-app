@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-24T18:13:39Z';
+const APP_VERSION = '2026-09-24T18:17:04Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6664,7 +6664,14 @@ async function submitRating(value){
 }
 function lowerRemainingIntensity(pct){
   const factor = 1 + (pct/100);
-  state.plan.forEach(d=>{ if(d.dist>0 && !d.status){ d.dist = Math.max(1, Math.round(d.dist*factor)); } });
+  // Redondear al KM ENTERO (Math.round sin /10) se comía el recorte entero en sesiones
+  // chicas -- típico de un principiante: una sesión de 2km con -15% da 1.7km, que
+  // Math.round vuelve a redondear a... 2km, exactamente el mismo número de antes. Quien
+  // pedía bajar la intensidad por una molestia se quedaba con el plan IDÉNTICO, sin ningún
+  // aviso de que el recorte no hizo nada. Un decimal (mismo criterio que intervalActualKm/
+  // hillActualKm/fartlekActualKm en el resto del generador) alcanza para que el cambio se
+  // note incluso en sesiones de pocos km.
+  state.plan.forEach(d=>{ if(d.dist>0 && !d.status){ d.dist = Math.max(0.1, Math.round(d.dist*factor*10)/10); } });
   renderPlan(); renderHome(); persist();
 }
 async function closeSummary(){
@@ -9565,12 +9572,19 @@ function applyCoachNote(input){
   if(input.zona_cuerpo){
     if(!state.painLog) state.painLog = [];
     state.painLog.push({id:Date.now(), date:localDateISO(), bodyPart:input.zona_cuerpo, note:String(input.nota).slice(0,200), active:true, checkinSent:false, fromChat:true});
-    state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
-    renderAll(); renderZones();
+    // El aumento de cautela (trainingCaution) recién se nota en la PRÓXIMA regeneración del
+    // plan (semana que viene, o cualquier otro guardado que dispare generatePlan) -- para el
+    // resto de ESTA semana, el mismo recorte directo que ya usa savePainLog() desde Perfil
+    // (lowerRemainingIntensity, -15% en lo que queda) es lo que de verdad baja la carga ya
+    // mismo. Antes acá se regeneraba el plan con generatePlan() en su lugar, pero eso da un
+    // efecto mucho más débil para HOY (la cautela recién en 0→1 apenas mueve el volumen de
+    // esta semana) y quedaba inconsistente con lo que pasa cuando la misma molestia se carga
+    // desde el formulario de Perfil -- ahora las dos vías dan la misma protección inmediata.
+    lowerRemainingIntensity(-15);
     plan_updated = true;
   }
   persist();
-  return plan_updated ? 'Nota guardada, y el plan ya se ajustó por la molestia.' : 'Nota guardada.';
+  return plan_updated ? 'Nota guardada, y bajé un 15% lo que queda de la semana por la molestia.' : 'Nota guardada.';
 }
 let chatAbortController = null;
 function handleChatSendClick(){

@@ -327,14 +327,20 @@ test('applyCoachNote: una lesión reportada por chat (zona_cuerpo) sube la caute
   app.state.chat = [];
   app.state.shoes = [];
   assert.equal(app.trainingCaution(profile).level, 0, 'sin nada reportado, cautela en 0');
+  const totalBefore = app.state.plan.reduce((a, d) => a + (d.dist || 0), 0);
 
   const result = app.applyCoachNote({ nota: 'le duele la rodilla derecha hace unos días', zona_cuerpo: 'rodilla' });
 
-  assert.match(result, /ajust/i, 'debería avisar que el plan se ajustó, no solo que guardó la nota');
+  assert.match(result, /15%/, 'debería avisar que bajó la intensidad, no solo que guardó la nota');
   assert.equal(app.state.painLog.length, 1);
   assert.equal(app.state.painLog[0].bodyPart, 'rodilla');
   assert.equal(app.state.painLog[0].active, true);
   assert.equal(app.trainingCaution(app.state.profile).level, 1, 'la molestia reportada por chat debería subir la cautela, igual que si se hubiera cargado desde Perfil');
+  // Ese aumento de cautela recién se nota en la PRÓXIMA regeneración del plan -- para lo que
+  // queda de ESTA semana, el recorte inmediato tiene que venir de lowerRemainingIntensity
+  // (mismo mecanismo que usa savePainLog() desde Perfil), no de esperar a la semana que viene.
+  const totalAfter = app.state.plan.reduce((a, d) => a + (d.dist || 0), 0);
+  assert.ok(totalAfter < totalBefore, 'el resto de esta semana debería bajar de volumen ya mismo, no recién la semana que viene');
 });
 
 test('applyCoachNote: una nota sin zona_cuerpo (preferencia, horario, etc.) no toca la cautela', () => {
@@ -348,6 +354,32 @@ test('applyCoachNote: una nota sin zona_cuerpo (preferencia, horario, etc.) no t
   assert.equal(result, 'Nota guardada.');
   assert.equal(app.state.painLog.length, 0, 'sin zona_cuerpo no debería crear ninguna molestia');
   assert.equal(app.state.profile.coachNotes[0], 'prefiere entrenar de noche');
+});
+
+test('lowerRemainingIntensity: el recorte se nota incluso en sesiones chicas de principiante', () => {
+  // Math.round() al km entero se comía el recorte entero en sesiones chicas: una sesión de
+  // 2km con -15% da 1.7km, que Math.round (sin decimales) redondeaba de vuelta a 2km --
+  // exactamente el mismo número de antes. Alguien le pedía al coach (o al formulario de
+  // Perfil) que bajara la intensidad por una molestia y el plan quedaba IDÉNTICO, sin
+  // ningún aviso de que el recorte no hizo nada. Afecta sobre todo a principiantes, cuyas
+  // sesiones ya son chicas de por sí (2-5km).
+  const app = loadApp();
+  app.state.plan = [
+    { day: 'mon', dist: 0, typeKey: 'rest' },
+    { day: 'tue', dist: 2, typeKey: 'easy' },
+    { day: 'wed', dist: 0, typeKey: 'rest' },
+    { day: 'thu', dist: 0, typeKey: 'rest' },
+    { day: 'fri', dist: 0, typeKey: 'rest' },
+    { day: 'sat', dist: 0, typeKey: 'rest' },
+    { day: 'sun', dist: 3, typeKey: 'long' },
+  ];
+
+  app.lowerRemainingIntensity(-15);
+
+  const tue = app.state.plan.find(d => d.day === 'tue');
+  const sun = app.state.plan.find(d => d.day === 'sun');
+  assert.ok(tue.dist < 2, `2km con -15% debería bajar, quedó en ${tue.dist}`);
+  assert.ok(sun.dist < 3, `3km con -15% debería bajar, quedó en ${sun.dist}`);
 });
 
 test('checkReturningBreakGraduation: saca el descuento del 60% cuando el promedio real ya alcanzó lo de antes', () => {
