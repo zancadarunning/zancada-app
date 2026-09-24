@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-24T17:46:25Z';
+const APP_VERSION = '2026-09-24T17:48:27Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -9027,6 +9027,18 @@ function buildContext(){
   let ctx = `HOY es ${todayLabel}, ${nowTimeLabel} hs (código de día: ${DAY_KEYS[todayIdx]}). Mañana es ${t('day_'+DAY_KEYS[tomorrowIdx])} (código: ${DAY_KEYS[tomorrowIdx]})${tomorrowNote}. Usá esto como la referencia exacta para cualquier pedido con "hoy", "mañana", "ayer" u otro día relativo, y para saber si es de mañana/tarde/noche -- nunca lo adivines mirando el estado del plan NI un "hoy es..." que vos mismo hayas dicho en un mensaje anterior de esta charla: los mensajes viejos pueden ser de otro día, así que este dato (el de ESTE mensaje) manda siempre, incluso si contradice algo que dijiste antes.${p.tz ? ` Zona horaria del corredor: ${p.tz} (usala para inferir de qué país/región es -- por ejemplo para saber si está en el hemisferio sur o norte a la hora de hablar de estaciones del año, clima o época de carreras).` : ''} `;
   const ageForCtx = ageFromBirth(p.birth);
   ctx += `Nombre: ${p.name}.${ageForCtx !== null ? ` Edad aprox: ${ageForCtx}.` : ''} Peso: ${p.weight}kg. Altura: ${p.height}cm. Corre ${p.weeklyKm}km/semana (calculado automáticamente según objetivo y fecha de carrera). Terreno: ${p.terrain}. Objetivo: ${t('ob_goal_'+p.goal)}. Zonas de FC (bpm): ${JSON.stringify(p.hrZones)}.`;
+  // El plan generado (generatePlan) YA sabe si es principiante y le arma sesiones en
+  // consecuencia (zona 1 fija, sin series/tempo/cuestas -- o zona 2 + algún fartlek si ya
+  // tiene base de otro deporte de impacto, ver hasRunningImpactBase), pero el coach del chat
+  // no tenía NINGÚN dato de esto -- podía recibir "dame una serie de 400s" de alguien que
+  // nunca corrió y arma la sesión con modificar_sesion sin saber que el plan la evita a
+  // propósito. Reportado en una auditoría de coherencia: dos sistemas (el generador
+  // determinístico y el coach de IA) tomando la misma decisión con información distinta.
+  if(isBeginnerProfile(p)){
+    ctx += hasRunningImpactBase(p)
+      ? ` Es principiante EN RUNNING (nunca entrenó corriendo solo de forma constante), aunque ya tiene base de otro deporte de impacto (${(p.crossTrainingSports||[]).map(s=>t('sport_'+s)).join(', ')}) -- por eso el plan ya lo tiene en zona 2 con algún fartlek libre cada tanto, en vez del "todo zona 1" de un principiante sin esa base. Si pide series estructuradas, ritmo medio o cuestas, explicale que todavía no le conviene esa carga técnica específica de correr (aunque esté en forma) y ofrecé como mucho más fartlek -- no uses modificar_sesion para darle series/tempo/cuestas.`
+      : ` Es TOTALMENTE principiante en running (nunca entrenó corriendo de forma constante) -- el plan lo tiene a propósito solo en zona 1, con rodajes suaves y sin ninguna sesión de velocidad, para construir base sin lesionarlo. Si pide series, ritmo fuerte, cuestas o fartlek, explicale con calidez por qué todavía no (se gana con constancia, no arrancando fuerte) y no uses modificar_sesion para dárselo -- el sistema lo va a graduar solo a zona 2 con variedad apenas demuestre unas semanas reales de constancia.`;
+  }
   if(p.trainingDays && p.trainingDays.length) ctx += ` Días de entreno habituales (cronograma de base, permanente): ${p.trainingDays.map(d=>t('day_'+d)).join(', ')}. Si el corredor pide cambiar este cronograma de forma permanente (no solo esta semana), usá modificar_perfil con dias_entreno.`;
   if(p.raceDate){
     const weeksLeft = Math.round((new Date(p.raceDate) - new Date()) / (7*86400000));
