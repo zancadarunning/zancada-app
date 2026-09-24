@@ -71,6 +71,35 @@ test('generatePlan: el día "largo" que eligió distributeSessionTypes siempre s
   assert.equal(planDay.typeKey, 'long');
 });
 
+test('distributeSessionTypes: ningún día fuerte queda pegado a la tirada larga cuando hay alternativa', () => {
+  // pickSpacedDays separaba los días fuertes ENTRE SÍ, pero no sabía nada del día de la
+  // tirada larga -- en un plan de 5-6 días (ej. lun/mié/vie/sáb/dom) podía elegir sábado
+  // como día fuerte, justo pegado al domingo largo, exactamente lo que cualquier criterio
+  // real de entrenamiento evita (llegar a la sesión más grande de la semana con las
+  // piernas cargadas de un esfuerzo fuerte del día anterior).
+  const app = loadApp();
+  const caution = { level: 0 };
+  const idx = d => app.DAY_KEYS.indexOf(d);
+  const sessions = app.distributeSessionTypes(['mon', 'wed', 'fri', 'sat', 'sun'], false, 1, caution, false, '10k');
+  assert.equal(sessions.sun, 'long');
+  const longIdx = idx('sun');
+  const hardDays = Object.keys(sessions).filter(d => sessions[d] !== 'long' && sessions[d] !== 'easy' && sessions[d] !== 'rest');
+  assert.ok(hardDays.length >= 1, 'debería haber al menos un día fuerte para poder chequear');
+  hardDays.forEach(d => {
+    assert.ok(Math.abs(idx(d) - longIdx) >= 2, `${d} (día fuerte) no debería quedar pegado a la tirada larga del domingo`);
+  });
+});
+
+test('distributeSessionTypes: con solo 2 días de entreno (el fuerte pegado al largo es inevitable) no rompe', () => {
+  // Caso "fin de semana": sábado + domingo. No hay otro día donde poner el esfuerzo
+  // fuerte -- acá SÍ queda pegado al día largo, porque no hay ninguna alternativa real,
+  // no porque el algoritmo no lo haya intentado evitar.
+  const app = loadApp();
+  const sessions = app.distributeSessionTypes(['sat', 'sun'], false, 1, { level: 0 }, false, '10k');
+  assert.equal(sessions.sun, 'long');
+  assert.notEqual(sessions.sat, 'easy');
+});
+
 test('generatePlan: coincide día a día con distributeSessionTypes en una semana normal', () => {
   const app = loadApp();
   const profile = baseProfile();

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-24T17:52:44Z';
+const APP_VERSION = '2026-09-24T18:04:12Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3320,20 +3320,32 @@ function checkInactivityCheckin(){
   }
   persist();
 }
-function pickSpacedDays(days, count){
+function pickSpacedDays(days, count, avoidDay){
   // Elige `count` días del array (ya en orden cronológico lunes->domingo) tratando
   // de separarlos lo más posible entre sí -- antes se tomaban siempre los primeros
   // `count` días de la lista, así que en un plan de 4 días las dos sesiones fuertes
   // podían caer en días seguidos (ej. series martes + tempo miércoles), sin un día
   // de por medio para absorber la carga.
+  // avoidDay (opcional, típicamente el día de la tirada larga) se suma como un "ancla"
+  // más en el cálculo de separación, sin ser un día elegible -- así la búsqueda evita
+  // sola dejar un día fuerte pegado a la sesión más grande de la semana, cuando hay
+  // alternativa. Antes esto no se tenía en cuenta para nada: un plan de 5-6 días (ej.
+  // lun/mié/vie/sáb/dom) podía terminar con series el sábado y fondo el domingo,
+  // exactamente lo que cualquier criterio real de entrenamiento evita -- llegar a la
+  // sesión más larga de la semana con las piernas ya cargadas de un esfuerzo fuerte del
+  // día anterior. Con 1 solo día fuerte (antes: siempre el primero cronológico de
+  // `days`, sin importar si caía pegado al día largo) pasa por el mismo cálculo ahora,
+  // en vez de tener su propio atajo aparte.
+  if(count<=0) return [];
   if(count>=days.length) return days.slice();
-  if(count<=1) return days.slice(0,1);
   const idx = d => DAY_KEYS.indexOf(d);
+  const avoidIdx = avoidDay ? idx(avoidDay) : null;
   let best = null, bestScore = -1;
   const combo = (start, chosen) => {
     if(chosen.length===count){
+      const anchors = chosen.map(idx).concat(avoidIdx!==null ? [avoidIdx] : []).sort((a,b)=>a-b);
       let minGap = Infinity;
-      for(let i=1;i<chosen.length;i++) minGap = Math.min(minGap, idx(chosen[i])-idx(chosen[i-1]));
+      for(let i=1;i<anchors.length;i++) minGap = Math.min(minGap, anchors[i]-anchors[i-1]);
       if(minGap>bestScore){ bestScore = minGap; best = chosen.slice(); }
       return;
     }
@@ -3395,13 +3407,14 @@ function distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isC
   // estímulo de calidad va variando en vez de repetir siempre el mismo tipo de sesión.
   if(maxHardDays===1){
     const hardType = rotation[(hardOccurrence-1) % rotation.length];
-    remaining.forEach((d,i)=>{ sessions[d] = i===0 ? hardType : 'easy'; });
+    const [chosenDay] = pickSpacedDays(remaining, 1, longDay);
+    remaining.forEach(d=>{ sessions[d] = d===chosenDay ? hardType : 'easy'; });
     return sessions;
   }
   const first = rotation[(hardOccurrence-1) % rotation.length];
   let second = rotation[hardOccurrence % rotation.length];
   if(second === first) second = 'tempo';
-  const [dayA, dayB] = pickSpacedDays(remaining, 2);
+  const [dayA, dayB] = pickSpacedDays(remaining, 2, longDay);
   remaining.forEach(d=>{ sessions[d] = d===dayA ? first : d===dayB ? second : 'easy'; });
   return sessions;
 }
