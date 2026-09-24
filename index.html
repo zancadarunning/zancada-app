@@ -481,7 +481,7 @@
   .cal-cell{padding:16px 4px; border-radius:14px; text-align:center; font-size:14.5px; cursor:pointer; color:var(--chalk); text-transform:capitalize;}
   .cal-cell.current{border:1.5px solid var(--mist-dim);}
   .cal-cell.selected{background:var(--hivis); color:var(--ink); font-weight:800;}
-  #cal-month-label{background:none; border:none; cursor:pointer; padding:6px 10px;}
+  #cal-month-label{background:none; border:none; cursor:pointer; padding:6px 10px; color:var(--hivis-text);}
   .field input:focus,.field select:focus{border-color:var(--hivis); box-shadow:0 0 0 3px var(--hivis-dim);}
   .date-box{transition:border-color .15s ease, box-shadow .15s ease;}
   .date-box:focus-within,.date-box.focused{border-color:var(--hivis); box-shadow:0 0 0 3px var(--hivis-dim);}
@@ -497,6 +497,23 @@
   .choice-row.segmented{flex-wrap:nowrap; gap:2px; background:var(--asphalt-3); border-radius:var(--radius-sm); padding:3px;}
   .choice-row.segmented .choice{min-width:0; border:none; background:none; box-shadow:none; padding:9px 4px; color:var(--mist);}
   .choice-row.segmented .choice.active{background:var(--hivis); color:var(--ink); box-shadow:0 2px 10px var(--hivis-glow);}
+  /* Lista con buscador del picker de deportes (#sport-picker-overlay) -- filas apiladas en
+     vez de chips en grilla, porque con ~24 deportes un grid de .choice no entra ni se lee. */
+  .sport-row{display:flex; align-items:center; justify-content:space-between; padding:13px 16px;
+    background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); border-radius:var(--radius-sm);
+    font-size:14.5px; font-weight:600; color:var(--chalk); cursor:pointer; user-select:none;
+    transition:border-color .13s var(--ease-out), background .13s var(--ease-out);}
+  .sport-row.active{border-color:var(--hivis); background:var(--hivis-dim); color:var(--hivis-text);}
+  .sport-row .check-dot{width:22px; height:22px; border-radius:50%; border:1.5px solid var(--asphalt-4);
+    flex-shrink:0; display:flex; align-items:center; justify-content:center; background:var(--asphalt-3);
+    transition:background .13s var(--ease-out), border-color .13s var(--ease-out);}
+  .sport-row .check-dot svg{width:13px; height:13px; stroke:var(--ink); display:none;}
+  .sport-row.active .check-dot{background:var(--hivis); border-color:var(--hivis);}
+  .sport-row.active .check-dot svg{display:block;}
+  /* Chips de deportes ya elegidos, con una "x" propia para sacarlos sin reabrir el picker. */
+  .sport-chip{flex:none; display:inline-flex; align-items:center; gap:7px; padding-right:9px;}
+  .sport-chip-x{font-size:15px; line-height:1; opacity:.7;}
+  .sport-chip-x:hover{opacity:1;}
   .switch{position:relative; display:inline-block; width:51px; height:31px; flex-shrink:0;}
   .switch input{opacity:0; width:0; height:0; position:absolute;}
   .switch-slider{position:absolute; cursor:pointer; inset:0; background:var(--asphalt-4); transition:.2s; border-radius:31px;}
@@ -1524,18 +1541,8 @@
       <div class="field">
         <label id="ob-crosstraining-label" data-i18n="ob_crosstraining_label"></label>
         <p class="muted" style="font-size:12px; margin:2px 0 8px;" data-i18n="ob_crosstraining_hint"></p>
-        <div class="choice-row" id="ob-sports" role="group" aria-labelledby="ob-crosstraining-label" style="flex-wrap:wrap;">
-          <div class="choice" data-v="futbol" data-i18n="sport_futbol"></div>
-          <div class="choice" data-v="basquet" data-i18n="sport_basquet"></div>
-          <div class="choice" data-v="voley" data-i18n="sport_voley"></div>
-          <div class="choice" data-v="tenis_padel" data-i18n="sport_tenis_padel"></div>
-          <div class="choice" data-v="natacion" data-i18n="sport_natacion"></div>
-          <div class="choice" data-v="ciclismo" data-i18n="sport_ciclismo"></div>
-          <div class="choice" data-v="gimnasio" data-i18n="sport_gimnasio"></div>
-          <div class="choice" data-v="artes_marciales" data-i18n="sport_artes_marciales"></div>
-          <div class="choice" data-v="crossfit" data-i18n="sport_crossfit"></div>
-          <div class="choice" data-v="otro" data-i18n="sport_otro"></div>
-        </div>
+        <div class="choice-row" id="ob-sports-selected" role="group" aria-labelledby="ob-crosstraining-label" style="flex-wrap:wrap; display:none;"></div>
+        <button type="button" class="btn btn-outline btn-sm" id="ob-sports-select-btn" style="margin-top:8px; width:100%;" onclick="openSportPicker('ob')" data-i18n="sport_select_btn"></button>
         <div id="ob-sport-days-wrap" style="margin-top:14px; display:none;">
           <label id="ob-sport-days-label" data-i18n="ob_sport_days_label"></label>
           <div class="day-picker" id="ob-sport-days">
@@ -2182,24 +2189,24 @@
     <div class="card" id="perfil-crosstraining-card" style="margin-top:16px;">
       <label id="perfil-sports-label" data-i18n="ob_crosstraining_label"></label>
       <p class="muted" style="font-size:12px; margin:2px 0 8px;" data-i18n="ob_crosstraining_hint"></p>
-      <div class="choice-row" id="perfil-sports" role="group" aria-labelledby="perfil-sports-label" style="flex-wrap:wrap;">
-        <div class="choice" data-v="futbol" data-i18n="sport_futbol"></div>
-        <div class="choice" data-v="basquet" data-i18n="sport_basquet"></div>
-        <div class="choice" data-v="voley" data-i18n="sport_voley"></div>
-        <div class="choice" data-v="tenis_padel" data-i18n="sport_tenis_padel"></div>
-        <div class="choice" data-v="natacion" data-i18n="sport_natacion"></div>
-        <div class="choice" data-v="ciclismo" data-i18n="sport_ciclismo"></div>
-        <div class="choice" data-v="gimnasio" data-i18n="sport_gimnasio"></div>
-        <div class="choice" data-v="artes_marciales" data-i18n="sport_artes_marciales"></div>
-        <div class="choice" data-v="crossfit" data-i18n="sport_crossfit"></div>
-        <div class="choice" data-v="otro" data-i18n="sport_otro"></div>
-      </div>
+      <div class="choice-row" id="perfil-sports-selected" role="group" aria-labelledby="perfil-sports-label" style="flex-wrap:wrap; display:none;"></div>
+      <button type="button" class="btn btn-outline btn-sm" id="perfil-sports-select-btn" style="margin-top:8px; width:100%;" onclick="openSportPicker('perfil')" data-i18n="sport_select_btn"></button>
       <div id="perfil-sport-days-wrap" style="margin-top:14px; display:none;">
         <label id="perfil-sport-days-label" data-i18n="ob_sport_days_label"></label>
         <div class="day-picker" id="perfil-sport-days"></div>
       </div>
       <button class="btn btn-outline btn-sm perfil-save-btn" id="save-crosstraining-btn" style="margin-top:12px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('crosstraining')"></button>
     </div>
+  </div>
+
+  <div class="overlay overlay-sheet" id="sport-picker-overlay">
+    <button class="week-nav-btn" onclick="closeSportPicker()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="sport_picker_title"></h2>
+    <div class="field" style="margin-top:14px;">
+      <input type="text" id="sport-picker-search" oninput="filterSportPicker()" data-i18n-ph="sport_picker_search_ph" autocomplete="off">
+    </div>
+    <div id="sport-picker-list" style="margin-top:10px; display:flex; flex-direction:column; gap:8px; max-height:52vh; overflow-y:auto;"></div>
+    <button class="btn btn-primary" style="margin-top:16px;" onclick="closeSportPicker()" data-i18n="sport_picker_done"></button>
   </div>
 
   <div class="overlay overlay-sheet" id="zones-overlay">
@@ -2571,7 +2578,8 @@
         <button class="small-link" onclick="logout()" data-i18n="perfil_logout"></button>
         <button class="small-link" onclick="resetApp()" data-i18n="perfil_reset"></button>
       </div>
-      <button class="btn btn-danger" style="margin-top:18px;" onclick="deleteAccount()" data-i18n="perfil_delete_account"></button>
+      <button class="btn btn-outline" style="margin-top:18px;" onclick="logout()" data-i18n="perfil_logout"></button>
+      <button class="btn btn-danger" style="margin-top:12px;" onclick="deleteAccount()" data-i18n="perfil_delete_account"></button>
     </div>
   </section>
 

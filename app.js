@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-24T00:08:43Z';
+const APP_VERSION = '2026-09-24T17:26:17Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -175,6 +175,7 @@ async function setLang(code){
   lang = code; state.lang = code;
   applyStaticTranslations();
   populateOnboardDays();
+  renderSportChips('ob');
   if(state.onboarded){
     renderAll(); renderHistory(); renderZones(); renderPerfilDays(); renderPerfilCrossTraining(); persist();
     // Mismo motivo que en handleSignUp: sincronizamos el idioma al user_metadata de
@@ -387,6 +388,13 @@ let confirmEmailPw = '';
 let confirmEmailPollTimer = null;
 let confirmEmailResendCooldown = false;
 const DAY_KEYS = ['mon','tue','wed','thu','fri','sat','sun'];
+// Orden aproximado de más jugado a nivel mundial a menos -- no hace falta precisión de
+// estudio de mercado, solo que el que abre la lista vea primero los deportes más comunes
+// (fútbol, básquet, etc.) y al final los de nicho, en vez de un orden alfabético al voleo.
+const SPORTS_LIST = ['futbol','basquet','voley','criquet','tenis_padel','beisbol','rugby',
+  'futbol_americano','handball','hockey_cesped','hockey_hielo','golf','boxeo','artes_marciales',
+  'natacion','ciclismo','remo','escalada','surf','esqui_snowboard','patin_skate',
+  'yoga_pilates','otro'];
 const ZONE_COLORS = {1:'#5B9BFF',2:'#4ADE80',3:'#FACC15',4:'#FB923C',5:'#FF6B5D'};
 const MI_PER_KM = 0.621371, KM_PER_MI = 1.609344, LB_PER_KG = 2.20462, FT_PER_CM = 0.0328084, CM_PER_FT = 30.48;
 function isImperial(){ return state.profile && state.profile.units === 'imperial'; }
@@ -1797,24 +1805,70 @@ function renderPerfilDays(){
   const daysSummaryEl = document.getElementById('perfil-days-summary');
   if(daysSummaryEl) daysSummaryEl.textContent = DAY_KEYS.filter(d=>selected.includes(d)).map(d=>t('day_'+d)).join(', ');
 }
-// El multi-select de deportes es un simple toggle por chip (varios activos a la vez, a
-// diferencia de terreno/tipo de corredor que son de una sola opción) -- se revela el
-// selector de días recién cuando hay al menos un deporte tildado, porque sin ningún deporte
-// elegido esos días no significan nada.
-function wireSportsToggle(containerId, daysWrapId){
-  const container = document.getElementById(containerId);
-  if(!container) return;
-  container.addEventListener('click', e=>{
-    const c = e.target.closest('.choice'); if(!c) return;
-    c.classList.toggle('active');
-    const anyActive = container.querySelectorAll('.choice.active').length > 0;
-    const wrap = document.getElementById(daysWrapId);
-    if(wrap) wrap.style.display = anyActive ? 'block' : 'none';
-    if(containerId === 'perfil-sports') markPerfilDirty('crosstraining');
-  });
+// La selección de deporte ya no es un grid fijo de chips siempre visible (con 24 deportes en
+// pantalla a la vez no entraba/se veía espantoso) -- ahora es un botón "Seleccionar deporte"
+// que abre un picker con buscador (#sport-picker-overlay, compartido entre onboarding y
+// Perfil) sobre SPORTS_LIST. Mientras el picker está abierto, la selección vive en un Set
+// aparte (sportPickerTemp) y recién se aplica al draft del contexto ("ob" u "perfil") al
+// cerrar con "Listo" -- así cancelar (o simplemente no tocar nada) no deja nada a medio
+// aplicar. El selector de días recién se revela cuando hay al menos un deporte elegido.
+let obSelectedSports = [];
+let perfilSportsDraft = [];
+let sportPickerCtx = null;
+let sportPickerTemp = new Set();
+function sportsDraftFor(ctx){ return ctx === 'ob' ? obSelectedSports : perfilSportsDraft; }
+function setSportsDraftFor(ctx, arr){ if(ctx==='ob') obSelectedSports = arr; else perfilSportsDraft = arr; }
+function renderSportChips(ctx){
+  const sports = sportsDraftFor(ctx);
+  const row = document.getElementById(ctx+'-sports-selected');
+  const btn = document.getElementById(ctx+'-sports-select-btn');
+  if(row){
+    row.style.display = sports.length ? 'flex' : 'none';
+    row.innerHTML = sports.map(s=>
+      `<div class="choice active sport-chip" data-v="${s}">${t('sport_'+s)}<span class="sport-chip-x" onclick="event.stopPropagation(); removeSelectedSport('${ctx}','${s}')">&times;</span></div>`).join('');
+  }
+  if(btn) btn.textContent = t(sports.length ? 'sport_select_btn_more' : 'sport_select_btn');
+  const wrap = document.getElementById(ctx+'-sport-days-wrap');
+  if(wrap) wrap.style.display = sports.length ? 'block' : 'none';
 }
-wireSportsToggle('ob-sports', 'ob-sport-days-wrap');
-wireSportsToggle('perfil-sports', 'perfil-sport-days-wrap');
+function removeSelectedSport(ctx, key){
+  setSportsDraftFor(ctx, sportsDraftFor(ctx).filter(s=>s!==key));
+  renderSportChips(ctx);
+  if(ctx === 'perfil') markPerfilDirty('crosstraining');
+}
+function openSportPicker(ctx){
+  sportPickerCtx = ctx;
+  sportPickerTemp = new Set(sportsDraftFor(ctx));
+  const search = document.getElementById('sport-picker-search');
+  if(search) search.value = '';
+  renderSportPickerList();
+  document.getElementById('sport-picker-overlay').classList.add('overlay-open');
+}
+function closeSportPicker(){
+  if(sportPickerCtx){
+    setSportsDraftFor(sportPickerCtx, SPORTS_LIST.filter(s=>sportPickerTemp.has(s)));
+    renderSportChips(sportPickerCtx);
+    if(sportPickerCtx === 'perfil') markPerfilDirty('crosstraining');
+  }
+  sportPickerCtx = null;
+  document.getElementById('sport-picker-overlay').classList.remove('overlay-open');
+}
+function toggleSportPickerRow(key){
+  if(sportPickerTemp.has(key)) sportPickerTemp.delete(key); else sportPickerTemp.add(key);
+  renderSportPickerList();
+}
+function filterSportPicker(){ renderSportPickerList(); }
+function renderSportPickerList(){
+  const list = document.getElementById('sport-picker-list');
+  if(!list) return;
+  const q = (document.getElementById('sport-picker-search')?.value || '').trim().toLowerCase();
+  const filtered = SPORTS_LIST.filter(s => !q || t('sport_'+s).toLowerCase().includes(q));
+  list.innerHTML = filtered.length ? filtered.map(s => `
+    <div class="sport-row${sportPickerTemp.has(s)?' active':''}" onclick="toggleSportPickerRow('${s}')">
+      <span>${t('sport_'+s)}</span>
+      <span class="check-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+    </div>`).join('') : `<p class="muted" style="text-align:center; padding:20px 0;">${t('sport_picker_empty')}</p>`;
+}
 document.getElementById('ob-sport-days').addEventListener('click', e=>{
   const c=e.target.closest('.day-pill'); if(!c) return;
   c.classList.toggle('active');
@@ -1825,18 +1879,15 @@ document.getElementById('perfil-sport-days').addEventListener('click', e=>{
   markPerfilDirty('crosstraining');
 });
 function renderPerfilCrossTraining(){
-  const selectedSports = state.profile.crossTrainingSports || [];
-  document.querySelectorAll('#perfil-sports .choice').forEach(el=>{
-    el.classList.toggle('active', selectedSports.includes(el.dataset.v));
-  });
-  const anySport = selectedSports.length > 0;
-  document.getElementById('perfil-sport-days-wrap').style.display = anySport ? 'block' : 'none';
+  perfilSportsDraft = [...(state.profile.crossTrainingSports || [])];
+  renderSportChips('perfil');
   const selectedDays = state.profile.crossTrainingDays || [];
   document.getElementById('perfil-sport-days').innerHTML = DAY_KEYS.map(d=>
     `<div class="day-pill${selectedDays.includes(d)?' active':''}" data-v="${d}" role="button" tabindex="0">${t('day_'+d).slice(0,3)}</div>`).join('');
   const summaryEl = document.getElementById('perfil-crosstraining-summary');
   if(summaryEl){
-    summaryEl.textContent = anySport
+    const selectedSports = state.profile.crossTrainingSports || [];
+    summaryEl.textContent = selectedSports.length
       ? selectedSports.map(s=>t('sport_'+s)).join(', ')
       : t('perfil_crosstraining_summary_empty');
   }
@@ -1844,7 +1895,7 @@ function renderPerfilCrossTraining(){
 function openCrossTrainingOverlay(){ renderPerfilCrossTraining(); document.getElementById('crosstraining-overlay').classList.add('overlay-open'); }
 function closeCrossTrainingOverlay(){ document.getElementById('crosstraining-overlay').classList.remove('overlay-open'); }
 function saveCrossTraining(){
-  const sports = [...document.querySelectorAll('#perfil-sports .choice.active')].map(el=>el.dataset.v);
+  const sports = perfilSportsDraft;
   const days = DAY_KEYS.filter(d => document.querySelector(`#perfil-sport-days .day-pill[data-v="${d}"]`)?.classList.contains('active'));
   state.profile.crossTrainingSports = sports;
   // Si sacó todos los deportes, los días quedan sin sentido -- no los dejamos guardados sueltos.
@@ -2364,11 +2415,13 @@ async function finishOnboard(){
     : null;
   const availableMinRaw = parseFloat(document.getElementById('ob-availmin').value);
   const availableMinPerSession = availableMinRaw>0 ? Math.round(availableMinRaw) : null;
-  // Alguien que ya hace otro deporte (fútbol, gimnasio, etc.) tiene una base de
+  // Alguien que ya hace otro deporte (fútbol, natación, etc.) tiene una base de
   // entrenamiento real aunque sea principiante EN RUNNING -- sin esto, un jugador de fútbol
   // de toda la vida que nunca corrió arrancaba tratado exactamente igual que alguien 100%
   // sedentario. Ver hasCrossTrainingBase()/beginnerPerSessionKm() más abajo, donde se usa.
-  const crossTrainingSports = [...document.querySelectorAll('#ob-sports .choice.active')].map(el=>el.dataset.v);
+  // obSelectedSports es el draft que arma el picker de deportes (ver openSportPicker/
+  // closeSportPicker) -- ya NO hay un grid de .choice fijo en el DOM del que leer esto.
+  const crossTrainingSports = obSelectedSports;
   const crossTrainingDays = crossTrainingSports.length ? DAY_KEYS.filter(d => document.querySelector(`#ob-sport-days .day-pill[data-v="${d}"]`)?.classList.contains('active')) : [];
 
   // profile.tz guarda el huso horario del CELULAR del corredor (ej. "America/New_York"
@@ -2703,6 +2756,17 @@ const EASY_SESSION_RATIO = 0.9, BEGINNER_LONG_RATIO = 1.3;
 // checkBeginnerGraduation() (gradúa más rápido a quien ya tiene esa base).
 function hasCrossTrainingBase(p){
   return !!(p && p.crossTrainingDays && p.crossTrainingDays.length >= 2);
+}
+// De los deportes de la lista, estos son los que ya implican correr/sprintear de manera
+// repetida como parte del juego (fútbol, rugby, básquet, handball, hockey, tenis/pádel) --
+// alguien que juega alguno de estos 2+ días por semana ya viene absorbiendo el impacto
+// específico de correr en las piernas, algo que la base aeróbica de nadar o andar en
+// bici NO da (por eso un ciclista de toda la vida igual puede lastimarse las primeras
+// semanas si arranca a correr de golpe). Se usa en generatePlan para sacarlo del "todo
+// zona 1, solo rodajes suaves" apenas arranca -- ver la nota junto a "impactBase" ahí.
+const RUNNING_IMPACT_SPORTS = ['futbol','basquet','rugby','futbol_americano','handball','hockey_cesped','hockey_hielo','tenis_padel'];
+function hasRunningImpactBase(p){
+  return hasCrossTrainingBase(p) && !!(p.crossTrainingSports || []).some(s => RUNNING_IMPACT_SPORTS.includes(s));
 }
 const CROSS_TRAINING_BASE_BOOST = 1.3;
 function beginnerPerSessionKm(p){
@@ -3258,14 +3322,14 @@ function pickSpacedDays(days, count){
   combo(0, []);
   return best;
 }
-function distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isCutback, goal){
+function distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isCutback, goal, varietyOk){
   if(!trainingDays.length) return {};
   const pref = ['sun','sat','fri','thu','wed','tue','mon'];
   let longDay = trainingDays[trainingDays.length-1];
   for(const d of pref){ if(trainingDays.includes(d)){ longDay = d; break; } }
   const remaining = trainingDays.filter(d=>d!==longDay);
   const sessions = {}; sessions[longDay] = 'long';
-  if(beginner || !remaining.length){
+  if((beginner && !varietyOk) || !remaining.length){
     remaining.forEach(d=>{ sessions[d]='easy'; });
     return sessions;
   }
@@ -3276,10 +3340,16 @@ function distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isC
   // demasiada intensidad a un plan de 3 días. Un perfil de más cautela (edad/
   // contextura) baja este límite todavía más, sin eliminar la calidad del todo.
   const wn = weekNumber || 1;
-  const rotation = hardSessionRotation(goal, caution);
+  let rotation = hardSessionRotation(goal, caution);
+  // Alguien que TODAVÍA es principiante en running (nunca corrió solo) pero ya tiene base
+  // de un deporte de impacto (ver hasRunningImpactBase) puede salir de "todo zona 1" -- pero
+  // no le sirve de nada una sesión de series o ritmo medio con técnica y paces que todavía no
+  // tiene: lo único que pidió explícitamente el entrenador acá es "algún fartlek de vez en
+  // cuando", así que la rotación de calidad para este grupo queda fija en fartlek nomás.
+  if(beginner && varietyOk) rotation = ['fartlek'];
   let maxHardDays, hardOccurrence;
   if(remaining.length<=2){
-    if(caution.level>=2){
+    if(caution.level>=2 || (beginner && varietyOk)){
       // el día fuerte aparece cada dos semanas en vez de todas para el perfil más
       // conservador -> se sigue sumando estímulo de calidad sin el impacto repetido
       // de un esfuerzo exigente semana tras semana. Contamos OCURRENCIAS de día
@@ -3293,7 +3363,7 @@ function distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isC
       hardOccurrence = wn;
     }
   } else {
-    maxHardDays = caution.level>=2 ? 1 : Math.min(2, remaining.length-1);
+    maxHardDays = (caution.level>=2 || (beginner && varietyOk)) ? 1 : Math.min(2, remaining.length-1);
     hardOccurrence = wn;
   }
   if(isCutback) maxHardDays = Math.max(0, maxHardDays-1); // semana de descarga: también baja la intensidad, no solo el volumen
@@ -3502,6 +3572,14 @@ function generatePlan(p, weekNumber, weekStartDate){
   const isRecovery = isRecoveryWeek(weekStartDate);
   const mult = weekMultiplier(weekNumber, caution) * taperMultiplier(p, weekStartDate) * recoveryMultiplier(weekStartDate) * eventRaceWeekMultiplier(weekStartDate, p);
   const beginner = isBeginnerProfile(p);
+  // Un principiante con base de un deporte de impacto (ver hasRunningImpactBase) ya tolera el
+  // golpe de correr aunque nunca haya salido a correr solo -- a ese lo sacamos del "todo zona 1,
+  // solo rodaje suave" desde el día 1 (zona 2 + algún fartlek), aunque siga siendo "principiante"
+  // para el CÁLCULO DE VOLUMEN (effectiveWeeklyKm/beginnerPerSessionKm más abajo no cambian: la
+  // base de otro deporte no le da eficiencia de carrera, solo tolerancia al impacto). easyOnly es
+  // el que de verdad decide zona/variedad de sesión; beginner sigue decidiendo el volumen.
+  const varietyOk = beginner && hasRunningImpactBase(p);
+  const easyOnly = beginner && !varietyOk;
   // si el corredor puso una meta semanal propia, la usamos como referencia de volumen en vez
   // del cálculo genérico -- pero acotada para no saltar de golpe a algo que podría lesionarlo
   let effectiveWeeklyKm = p.weeklyKm;
@@ -3510,10 +3588,10 @@ function generatePlan(p, weekNumber, weekStartDate){
     const minWk = p.weeklyKm * 0.7;
     effectiveWeeklyKm = Math.min(maxWk, Math.max(minWk, p.weeklyGoalKm));
   }
-  const zoneMap = {easy:beginner?1:2, intervals:4, tempo:3, long:2, fartlek:3, hills:4, progression:3};
+  const zoneMap = {easy:easyOnly?1:2, intervals:4, tempo:3, long:2, fartlek:3, hills:4, progression:3};
   const defaultDays = beginner ? ['tue','thu','sun'] : ['tue','wed','fri','sun'];
   const trainingDays = DAY_KEYS.filter(d => (p.trainingDays && p.trainingDays.length ? p.trainingDays : defaultDays).includes(d));
-  const sessionMap = distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isCutbackWeek(weekNumber), p.goal);
+  const sessionMap = distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isCutbackWeek(weekNumber), p.goal, varietyOk);
   if(isRecovery){
     // En la semana de recuperación evitamos series/tempo/cuestas/fartlek/progresivo/rodaje
     // largo -- todo eso suma carga justo cuando el cuerpo todavía está absorbiendo el
@@ -3587,15 +3665,15 @@ function generatePlan(p, weekNumber, weekStartDate){
     if(!typeKey) return {day, typeKey:'rest', dist:0, terrain:null, zone:null, beginner};
     const terrain = typeKey==='intervals' ? 'asfalto' : p.terrain;
     const dayObj = {day, typeKey, dist:distMap[typeKey], terrain, zone:zoneMap[typeKey], beginner};
-    if(typeKey==='intervals' && !beginner){
+    if(typeKey==='intervals' && !easyOnly){
       dayObj.interval = buildIntervalStructure(distMap[typeKey], caution, weekNumber);
       dayObj.dist = intervalActualKm(dayObj.interval);
     }
-    if(typeKey==='hills' && !beginner){
+    if(typeKey==='hills' && !easyOnly){
       dayObj.interval = buildHillStructure(distMap[typeKey], caution);
       dayObj.dist = hillActualKm(dayObj.interval);
     }
-    if(typeKey==='fartlek' && !beginner){
+    if(typeKey==='fartlek' && !easyOnly){
       dayObj.interval = buildFartlekStructure(distMap[typeKey], weekNumber, p);
       dayObj.dist = fartlekActualKm(dayObj.interval, p);
     }

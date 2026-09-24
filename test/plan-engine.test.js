@@ -192,6 +192,34 @@ test('checkBeginnerGraduation: gradúa más rápido a quien ya tenía una base r
   assert.equal(app.state.profile.runnerType, 'active', 'debería graduar con solo 2 semanas gracias a la base cruzada');
 });
 
+test('hasRunningImpactBase/generatePlan: deporte de impacto (fútbol) saca de zona 1 desde el día 1, uno sin impacto (natación) no', () => {
+  // Pedido explícito: alguien que ya juega al fútbol tolera el impacto de correr aunque
+  // nunca haya salido a correr solo -- no tiene sentido tratarlo con el mismo criterio
+  // ultraconservador (zona 1 fija, sin ninguna variedad) que a alguien 100% sedentario o que
+  // solo nada/anda en bici (base aeróbica real, pero sin ESE impacto específico).
+  const app = loadApp();
+  const withImpact = baseProfile({ runnerType: 'new', currentWeeklyKm: 0, goal: '10k', trainingDays: ['tue', 'thu', 'sun'], crossTrainingSports: ['futbol'], crossTrainingDays: ['mon', 'wed', 'fri'] });
+  const withoutImpact = baseProfile({ runnerType: 'new', currentWeeklyKm: 0, goal: '10k', trainingDays: ['tue', 'thu', 'sun'], crossTrainingSports: ['natacion'], crossTrainingDays: ['mon', 'wed', 'fri'] });
+
+  assert.ok(app.hasRunningImpactBase(withImpact));
+  assert.ok(!app.hasRunningImpactBase(withoutImpact), 'nadar da base aeróbica pero no tolerancia al impacto de correr');
+
+  const planWithImpact = app.generatePlan(withImpact, 1, '2026-09-07');
+  const planWithoutImpact = app.generatePlan(withoutImpact, 1, '2026-09-07');
+  const easyDayWithImpact = planWithImpact.find(d => d.typeKey === 'easy');
+  const easyDayWithoutImpact = planWithoutImpact.find(d => d.typeKey === 'easy');
+  assert.equal(easyDayWithImpact.zone, 2, 'con base de impacto, el rodaje suave ya es zona 2 desde el día 1');
+  assert.equal(easyDayWithoutImpact.zone, 1, 'sin base de impacto, sigue siendo zona 1 aunque tenga base aeróbica de otro deporte');
+
+  // En una semana par le toca el único estímulo de calidad habilitado para este grupo
+  // (fartlek, no series ni ritmo medio -- todavía no tiene técnica/eficiencia de carrera).
+  const planWeek2 = app.generatePlan(withImpact, 2, '2026-09-07');
+  const hardDay = planWeek2.find(d => d.typeKey !== 'easy' && d.typeKey !== 'long' && d.typeKey !== 'rest');
+  assert.ok(hardDay, 'en semana par debería haber un día de calidad habilitado');
+  assert.equal(hardDay.typeKey, 'fartlek', 'el único estímulo de calidad para un principiante con base de impacto es fartlek');
+  assert.ok(hardDay.interval, 'el fartlek debe tener estructura armada, no quedar genérico');
+});
+
 test('checkBeginnerGraduation: sale de modo principiante solo tras semanas reales de entrenamiento consistente', () => {
   // Antes isBeginnerProfile() nunca dejaba de ser true por sí sola -- alguien que arrancó
   // principiante se quedaba en zona 1 y sin fartlek para siempre, aunque entrenara consistente
