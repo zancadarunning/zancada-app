@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-24T18:29:07Z';
+const APP_VERSION = '2026-09-24T18:38:17Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4483,7 +4483,18 @@ function renderPlan(){
       lblDesc = t('plan_race_day_desc', {name: escapeHtml(state.event.name)});
     }
     const eventAmountText = isEventDay && state.event.distanceKm>0 ? `${fmtDist(state.event.distanceKm,1)} ${distUnit()}` : '';
-    const isRestDay = !(d.dist>0) && !d.raceDay && !isEventDay;
+    // Correr un día sin nada planeado (día de descanso, pero apareció una carrera vinculada
+    // -- ver relinkTodayRun/autoMarkSessionDone, que enlazan cualquier carrera del día sin
+    // fijarse si ese día tenía sesión) dejaba la tarjeta diciendo "Descanso" para siempre,
+    // aunque tuviera el tilde de hecho y el km/ritmo real en el detalle -- reportado por el
+    // usuario, que la primera vez se llevó la duda de si el extra había quedado registrado
+    // en el Plan o no. Ahora ese título cambia a "Carrera extra" y el badge de arriba
+    // muestra el km real corrido, en vez de quedar en blanco.
+    const extraRun = (!(d.dist>0) && !d.raceDay && !isEventDay && d.status==='done' && d.linkedRunId)
+      ? state.runs.find(r=>r.id===d.linkedRunId) : null;
+    if(extraRun) lblType = t('plan_extra_run_title');
+    const extraRunAmountText = extraRun ? `${fmtDist(extraRun.distanceKm)}${distUnit()}` : '';
+    const isRestDay = !(d.dist>0) && !d.raceDay && !isEventDay && !extraRun;
     // color:var(--hivis-text) acá (no --hivis puro): --hivis es el lima de marca tal cual,
     // que en modo claro sigue siendo el mismo lima brillante casi sin contraste sobre
     // blanco -- --hivis-text es la versión oscurecida pensada justo para texto/íconos
@@ -4518,7 +4529,7 @@ function renderPlan(){
       <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" onclick="toggleDay(${i})">
         <div class="day-badge"><div class="d">${t('day_'+d.day).slice(0,3)}</div>${dateLbl?`<div class="mono muted" style="font-size:10px; margin-top:2px;">${dateLbl}</div>`:''}</div>
         <div class="day-info">
-          <div class="day-info-title-row"><span class="t">${lblType}</span>${isEventDay?(eventAmountText?`<span class="day-km-inline">${eventAmountText}</span>`:''):(d.dist>0?`<span class="day-km-inline">${planAmountText(d)}</span>`:'')}</div>
+          <div class="day-info-title-row"><span class="t">${lblType}</span>${isEventDay?(eventAmountText?`<span class="day-km-inline">${eventAmountText}</span>`:''):(d.dist>0?`<span class="day-km-inline">${planAmountText(d)}</span>`:(extraRunAmountText?`<span class="day-km-inline">${extraRunAmountText}</span>`:''))}</div>
           ${meta?`<div class="day-row-chips">${meta}</div>`:''}
         </div>
         <div class="day-row-end">${statusIcon}</div>
