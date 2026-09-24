@@ -277,6 +277,75 @@ test('checkBeginnerGraduation: no gradúa si el promedio real todavía está por
   assert.equal(app.state.chat.length, 0, 'no debería mandar el mensaje de graduación todavía');
 });
 
+test('checkReturningBreakGraduation: saca el descuento del 60% cuando el promedio real ya alcanzó lo de antes', () => {
+  // returningFromBreak bajaba el punto de partida (calcWeeklyKm) a un 60% de lo declarado, y
+  // subía la cautela -- pero antes de este fix se quedaba así PARA SIEMPRE, sin ninguna forma
+  // de sacarlo (ni el campo estaba en Perfil para editarlo). Alguien que volvió de una pausa
+  // declarando 40km/semana y ya está entrenando consistente otra vez debería recuperar su
+  // volumen real, no seguir descontado un 40% para siempre.
+  const app = loadApp();
+  const today = new Date('2026-10-05T12:00:00'); // lunes
+  const createdAt = app.addDaysToIsoLocal(app.getMondayISO(today), -35);
+  const profile = baseProfile({ runnerType: 'active', currentWeeklyKm: 40, returningFromBreak: true, createdAt, birth: '1995-01-01' });
+  profile.weeklyKm = app.calcWeeklyKm(profile);
+  assert.equal(profile.weeklyKm, 24, 'arranca en el 60% de lo declarado por la pausa');
+  app.state.profile = profile;
+  app.state.onboarded = true;
+  app.state.weekStart = app.getMondayISO(today);
+  app.state.plan = app.generatePlan(profile, 5);
+  app.state.chat = [];
+  app.state.runs = [];
+  // 4 semanas reales promediando 35km/semana -- por encima del piso del 80% de 40 (32km).
+  for(let w = 1; w <= 4; w++){
+    const weekMonday = app.addDaysToIsoLocal(app.state.weekStart, -7 * w);
+    app.state.runs.push({ date: app.addDaysToIsoLocal(weekMonday, 1), distanceKm: 18, durationSec: 90 * 60 });
+    app.state.runs.push({ date: app.addDaysToIsoLocal(weekMonday, 4), distanceKm: 17, durationSec: 85 * 60 });
+  }
+  assert.equal(app.trainingCaution(profile).level, 1, 'returningFromBreak todavía suma cautela antes de graduar');
+
+  app.checkReturningBreakGraduation();
+
+  assert.equal(app.state.profile.returningFromBreak, false, 'debería sacar el flag de pausa');
+  assert.equal(app.state.profile.currentWeeklyKm, 35, 'currentWeeklyKm pasa al promedio real, no queda pegado en lo declarado antes de la pausa');
+  assert.equal(app.state.profile.weeklyKm, 35, 'sin el *0.6, el volumen ya no está descontado');
+  assert.equal(app.trainingCaution(app.state.profile).level, 0, 'sin el flag, esa cautela extra ya no aplica');
+  assert.ok(app.state.chat.some(m => m.text.includes(app.t('coach_returning_break_graduated'))), 'debería avisarle al corredor por el chat');
+});
+
+test('checkReturningBreakGraduation: no gradúa si el promedio real todavía está por debajo de lo declarado antes de la pausa', () => {
+  const app = loadApp();
+  const today = new Date('2026-10-05T12:00:00');
+  const createdAt = app.addDaysToIsoLocal(app.getMondayISO(today), -35);
+  const profile = baseProfile({ runnerType: 'active', currentWeeklyKm: 40, returningFromBreak: true, createdAt });
+  profile.weeklyKm = app.calcWeeklyKm(profile);
+  app.state.profile = profile;
+  app.state.onboarded = true;
+  app.state.weekStart = app.getMondayISO(today);
+  app.state.plan = app.generatePlan(profile, 5);
+  app.state.chat = [];
+  // Volviendo de a poco, todavía lejos del 80% de 40 (32km) -- no debería graduarlo todavía.
+  app.state.runs = [{ date: app.addDaysToIsoLocal(app.state.weekStart, -7), distanceKm: 10, durationSec: 60 * 60 }];
+
+  app.checkReturningBreakGraduation();
+
+  assert.equal(app.state.profile.returningFromBreak, true, 'no debería sacar el flag todavía');
+  assert.equal(app.state.chat.length, 0, 'no debería mandar el mensaje de graduación todavía');
+});
+
+test('ageFromBirth/trainingCaution: sin fecha de nacimiento no inventa una edad de ~56 años', () => {
+  // Cuentas de antes de que fecha de nacimiento fuera obligatoria en el onboarding pueden
+  // tener birth=null -- new Date(null) cae en el epoch (1970), así que ageFromBirth(null) le
+  // daba a esa persona una edad real de ~56 años en 2026, sin ningún aviso, sea cual sea su
+  // edad de verdad. Eso subía trainingCaution a nivel 1 igual que a alguien de 45+ de verdad.
+  const app = loadApp();
+  assert.equal(app.ageFromBirth(null), null, 'sin fecha, la edad tiene que ser "no sabemos", no un número inventado');
+  assert.equal(app.ageFromBirth(undefined), null);
+  assert.equal(app.ageFromBirth(''), null);
+
+  const profile = baseProfile({ birth: null, weight: null, height: null });
+  assert.equal(app.trainingCaution(profile).level, 0, 'sin edad conocida no debería sumar cautela por edad');
+});
+
 test('generatePlan: en semana de recuperación no sobrevive ninguna sesión pesada', () => {
   const app = loadApp();
   const profile = baseProfile();

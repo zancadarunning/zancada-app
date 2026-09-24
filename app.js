@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-24T17:36:35Z';
+const APP_VERSION = '2026-09-24T17:46:25Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2174,7 +2174,18 @@ document.getElementById('perfil-gender-choice').addEventListener('click', e=>{
   [...document.getElementById('perfil-gender-choice').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
   markPerfilDirty('personal');
 });
-function ageFromBirth(dateStr){ const b=new Date(dateStr); return Math.max(10, Math.floor((Date.now()-b.getTime())/(365.25*24*3600*1000))); }
+// Cuentas de antes de que peso/altura/fecha de nacimiento fueran obligatorios en el
+// onboarding pueden tener birth=null todavía -- sin este chequeo, new Date(null) cae en el
+// epoch (1970), y esa persona queda tratada como si tuviera ~56 años SIEMPRE (bump de cautela
+// en trainingCaution, "Edad aprox" mal en el contexto del coach de chat) sin ningún aviso, sin
+// importar la edad real. null acá significa "no sabemos", y cada lugar que lo usa decide qué
+// hacer con esa falta de dato en vez de asumir un número inventado.
+function ageFromBirth(dateStr){
+  if(!dateStr) return null;
+  const b = new Date(dateStr);
+  if(isNaN(b.getTime())) return null;
+  return Math.max(10, Math.floor((Date.now()-b.getTime())/(365.25*24*3600*1000)));
+}
 const dateBoxUpdaters = {};
 function setupDateBox(inputId, textId, placeholderKey){
   const input = document.getElementById(inputId);
@@ -2546,6 +2557,7 @@ function enterApp(){
   checkWeekRollover();
   checkPlanAlgoVersion();
   checkBeginnerGraduation();
+  checkReturningBreakGraduation();
   autoSkipPastDays();
   repairSkippedDaysWithMatchingRuns();
   autoClearPastEvent();
@@ -2592,6 +2604,7 @@ document.addEventListener('visibilitychange', ()=>{
   checkWeekRollover();
   checkPlanAlgoVersion();
   checkBeginnerGraduation();
+  checkReturningBreakGraduation();
   autoSkipPastDays();
   repairSkippedDaysWithMatchingRuns();
   autoClearPastEvent();
@@ -3502,8 +3515,10 @@ function trainingCaution(p){
   const age = ageFromBirth(p.birth);
   const bmi = calcBmi(p);
   let level = 0;
-  if(age >= 60) level = Math.max(level, 2);
-  else if(age >= 45) level = Math.max(level, 1);
+  if(age !== null){
+    if(age >= 60) level = Math.max(level, 2);
+    else if(age >= 45) level = Math.max(level, 1);
+  }
   if(bmi !== null){
     if(bmi >= 30) level = Math.max(level, 2);
     else if(bmi >= 27) level = Math.max(level, 1);
@@ -3569,6 +3584,35 @@ function checkBeginnerGraduation(){
   // entrada junto con el mensaje -- sin esto, quedaría el plan viejo hasta el lunes que viene.
   state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
   state.chat.push({role:'coach', text: t('coach_beginner_graduated'), ts:Date.now()});
+  renderChat();
+  persist();
+}
+// "Volver de una pausa larga" (ob-returning en el onboarding) es OTRO flag que, igual que el
+// de principiante antes de este fix, se guardaba una sola vez y nunca se sacaba solo -- baja
+// el punto de partida a un 60% de lo declarado (ver calcWeeklyKm) y sube la cautela para
+// siempre, aunque la persona vuelva a entrenar consistente y su volumen real ya haya alcanzado
+// lo de antes. Sin esto, alguien que declaró "volver de una pausa" en el onboarding queda con
+// ese 40% de descuento PERMANENTE en su kilometraje semanal, para siempre, sin ninguna forma
+// de sacarlo (ni siquiera editando "Datos personales" en Perfil -- ese campo no está ahí).
+const RETURNING_BREAK_GRADUATION_WEEKS = 4;
+function checkReturningBreakGraduation(){
+  if(!state.onboarded || !state.profile) return;
+  const p = state.profile;
+  // Sin currentWeeklyKm > 0 no hay una referencia real de "lo de antes" contra la cual medir
+  // que ya volvió -- ese caso ya cae en isBeginnerProfile de todos modos (ver calcWeeklyKm:
+  // el *0.6 de returningFromBreak solo pesa en la rama de corredor activo con km actual>0),
+  // así que el flag no le afecta el volumen igual, no hay apuro en sacarlo.
+  if(!p.returningFromBreak || !(p.currentWeeklyKm > 0)) return;
+  const avgKm = computeActualWeeklyKmAvg(RETURNING_BREAK_GRADUATION_WEEKS);
+  // El piso es lo que la persona declaró que corría ANTES de parar, no un número fijo --
+  // alguien que volvía a 15km/semana no debería esperar lo mismo que alguien que volvía a
+  // 60km/semana.
+  if(avgKm === null || avgKm < p.currentWeeklyKm * 0.8) return;
+  p.returningFromBreak = false;
+  p.currentWeeklyKm = Math.round(avgKm);
+  p.weeklyKm = calcWeeklyKm(p);
+  state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
+  state.chat.push({role:'coach', text: t('coach_returning_break_graduated'), ts:Date.now()});
   renderChat();
   persist();
 }
@@ -8981,7 +9025,8 @@ function buildContext(){
     ? `, pero OJO: es el ${t('day_'+DAY_KEYS[tomorrowIdx])} de LA SEMANA QUE VIENE, no el de esta semana (hoy es domingo, el último día de la semana actual). Para un pedido sobre "mañana" en este caso: con modificar_sesion o cancelar_sesion usá semana:'siguiente'; mover_sesion NO sirve porque no puede cruzar de una semana a la otra -- si piden mover la sesión de hoy para mañana, usá cancelar_sesion en el día de hoy (dia:'sun') y modificar_sesion con semana:'siguiente' en el lunes que viene, repitiendo el mismo tipo/distancia/zona/terreno que tenía la sesión de hoy`
     : '';
   let ctx = `HOY es ${todayLabel}, ${nowTimeLabel} hs (código de día: ${DAY_KEYS[todayIdx]}). Mañana es ${t('day_'+DAY_KEYS[tomorrowIdx])} (código: ${DAY_KEYS[tomorrowIdx]})${tomorrowNote}. Usá esto como la referencia exacta para cualquier pedido con "hoy", "mañana", "ayer" u otro día relativo, y para saber si es de mañana/tarde/noche -- nunca lo adivines mirando el estado del plan NI un "hoy es..." que vos mismo hayas dicho en un mensaje anterior de esta charla: los mensajes viejos pueden ser de otro día, así que este dato (el de ESTE mensaje) manda siempre, incluso si contradice algo que dijiste antes.${p.tz ? ` Zona horaria del corredor: ${p.tz} (usala para inferir de qué país/región es -- por ejemplo para saber si está en el hemisferio sur o norte a la hora de hablar de estaciones del año, clima o época de carreras).` : ''} `;
-  ctx += `Nombre: ${p.name}. Edad aprox: ${ageFromBirth(p.birth)}. Peso: ${p.weight}kg. Altura: ${p.height}cm. Corre ${p.weeklyKm}km/semana (calculado automáticamente según objetivo y fecha de carrera). Terreno: ${p.terrain}. Objetivo: ${t('ob_goal_'+p.goal)}. Zonas de FC (bpm): ${JSON.stringify(p.hrZones)}.`;
+  const ageForCtx = ageFromBirth(p.birth);
+  ctx += `Nombre: ${p.name}.${ageForCtx !== null ? ` Edad aprox: ${ageForCtx}.` : ''} Peso: ${p.weight}kg. Altura: ${p.height}cm. Corre ${p.weeklyKm}km/semana (calculado automáticamente según objetivo y fecha de carrera). Terreno: ${p.terrain}. Objetivo: ${t('ob_goal_'+p.goal)}. Zonas de FC (bpm): ${JSON.stringify(p.hrZones)}.`;
   if(p.trainingDays && p.trainingDays.length) ctx += ` Días de entreno habituales (cronograma de base, permanente): ${p.trainingDays.map(d=>t('day_'+d)).join(', ')}. Si el corredor pide cambiar este cronograma de forma permanente (no solo esta semana), usá modificar_perfil con dias_entreno.`;
   if(p.raceDate){
     const weeksLeft = Math.round((new Date(p.raceDate) - new Date()) / (7*86400000));
