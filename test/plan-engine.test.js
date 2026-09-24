@@ -382,6 +382,65 @@ test('lowerRemainingIntensity: el recorte se nota incluso en sesiones chicas de 
   assert.ok(sun.dist < 3, `3km con -15% debería bajar, quedó en ${sun.dist}`);
 });
 
+test('buildSessionFeedbackMessage: compara lo planeado contra lo real y varía según la calificación', () => {
+  // Antes calificar "bien" o "excelente" no generaba NINGÚN mensaje del coach -- solo "mal"
+  // mandaba una línea genérica, sin ningún número real de la sesión. Ahora las tres
+  // calificaciones dan una devolución con los datos reales (distancia, ritmo) comparados
+  // contra lo planeado.
+  const app = loadApp();
+  const plannedDay = { typeKey: 'easy', dist: 5 };
+  const run = { distanceKm: 5.2, durationSec: 30 * 60 }; // 5.2km en 30min -> ~5:46/km
+
+  const msgBien = app.buildSessionFeedbackMessage(plannedDay, run, 'bien');
+  assert.match(msgBien, /5[.,]2/, 'debería incluir la distancia real corrida');
+  assert.match(msgBien, /5[.,]0? ?km/i, 'debería incluir la distancia planeada');
+
+  const msgExcelente = app.buildSessionFeedbackMessage(plannedDay, run, 'excelente');
+  assert.notEqual(msgExcelente, msgBien, 'excelente y bien deberían dar mensajes distintos');
+
+  const msgMal = app.buildSessionFeedbackMessage(plannedDay, run, 'mal');
+  assert.notEqual(msgMal, msgBien);
+});
+
+test('buildSessionFeedbackMessage: sin sesión planeada (día extra) usa la variante distinta', () => {
+  const app = loadApp();
+  const restDay = { typeKey: 'rest', dist: 0 };
+  const run = { distanceKm: 4, durationSec: 24 * 60 };
+
+  const msg = app.buildSessionFeedbackMessage(restDay, run, 'excelente');
+
+  assert.doesNotMatch(msg, /tenías \d/i, 'sin sesión planeada no debería mencionar una distancia planeada que no existía');
+  assert.match(msg, /4[.,]00/, 'debería igual mencionar lo que corrió de verdad');
+});
+
+test('buildSessionFeedbackMessage: sin carrera vinculada no manda ningún mensaje', () => {
+  const app = loadApp();
+  assert.equal(app.buildSessionFeedbackMessage({ typeKey: 'easy', dist: 5 }, null, 'bien'), null);
+  assert.equal(app.buildSessionFeedbackMessage({ typeKey: 'easy', dist: 5 }, { distanceKm: 0, durationSec: 0 }, 'bien'), null);
+});
+
+test('submitRating: manda la devolución al chat con la carrera vinculada del día', async () => {
+  const app = loadApp();
+  const profile = baseProfile({ birth: '1995-01-01', weight: 70, height: 175 });
+  app.state.profile = profile;
+  app.state.onboarded = true;
+  app.state.chat = [];
+  const runId = 12345;
+  app.state.runs = [{ id: runId, distanceKm: 5.2, durationSec: 30 * 60, date: new Date().toISOString() }];
+  app.state.plan = [{ day: 'mon', typeKey: 'easy', dist: 5, zone: 2, status: 'done', linkedRunId: runId }];
+  // ratingTargetIdx es una variable interna de app.js (no expuesta al sandbox de tests) --
+  // se setea sola llamando a checkPendingRating(), el disparador real de este flujo, en vez
+  // de intentar tocarla desde afuera.
+  app.checkPendingRating();
+
+  await app.submitRating('bien');
+
+  assert.equal(app.state.plan[0].rating, 'bien');
+  const lastMsg = app.state.chat[app.state.chat.length - 1];
+  assert.equal(lastMsg.role, 'coach');
+  assert.match(lastMsg.text, /5[.,]2/, 'la devolución en el chat debería tener la distancia real');
+});
+
 test('checkReturningBreakGraduation: saca el descuento del 60% cuando el promedio real ya alcanzó lo de antes', () => {
   // returningFromBreak bajaba el punto de partida (calcWeeklyKm) a un 60% de lo declarado, y
   // subía la cautela -- pero antes de este fix se quedaba así PARA SIEMPRE, sin ninguna forma

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-24T18:17:04Z';
+const APP_VERSION = '2026-09-24T18:29:07Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6646,13 +6646,42 @@ function dismissRating(){
   document.getElementById('rating-modal').style.display = 'none';
   ratingTargetIdx = null;
 }
+// Devolución de una sesión puntual: compara lo planeado (tipo, distancia) contra lo que la
+// carrera vinculada realmente sumó (distancia, ritmo), y arma un mensaje del coach que varía
+// según la calificación (mal/bien/excelente) -- antes de esto, calificar "bien" o "excelente"
+// no generaba NINGÚN mensaje del coach, y "mal" solo mandaba una línea genérica sin ningún
+// dato real de la sesión. Sin d.linkedRunId (no debería pasar -- un día 'done' siempre lo
+// tiene, ver autoMarkSessionDone/relinkTodayRun) no hay número real que mostrar, así que no
+// se manda nada en vez de inventar una devolución sin datos.
+function buildSessionFeedbackMessage(d, run, rating){
+  if(!run || !(run.distanceKm>0) || !(run.durationSec>0)) return null;
+  const pace = (run.durationSec/60)/run.distanceKm;
+  const vars = {
+    actual: `${fmtDist(run.distanceKm,2)} ${distUnit()}`,
+    pace: `${fmtPace(pace)}/${distUnit()}`
+  };
+  // d.dist>0 es el mismo criterio que ya usa renderPlan para distinguir un día CON sesión
+  // planeada de uno sin ella (descanso, o una carrera espontánea sin nada armado ese día) --
+  // ahí la devolución no tiene con qué comparar, así que usa la variante "_extra".
+  if(d.dist>0){
+    const typeLabel = t('type_'+d.typeKey);
+    vars.type = typeLabel.charAt(0).toLowerCase() + typeLabel.slice(1);
+    vars.planned = `${fmtDist(d.dist,1)} ${distUnit()}`;
+    return t('coach_feedback_'+rating, vars);
+  }
+  return t('coach_feedback_'+rating+'_extra', vars);
+}
 async function submitRating(value){
   if(ratingTargetIdx===null) return;
   const idx = ratingTargetIdx;
-  state.plan[idx].rating = value;
+  const d = state.plan[idx];
+  d.rating = value;
   document.getElementById('rating-modal').style.display = 'none';
   ratingTargetIdx = null;
   await persist();
+  const run = d.linkedRunId ? (state.runs||[]).find(r=>r.id===d.linkedRunId) : null;
+  const feedbackMsg = buildSessionFeedbackMessage(d, run, value);
+  if(feedbackMsg){ state.chat.push({role:'coach', text: feedbackMsg, ts:Date.now()}); renderChat(); }
   if(value === 'mal'){
     if(await showConfirm(t('rating_lower_intensity_confirm'))){
       lowerRemainingIntensity(-15);
