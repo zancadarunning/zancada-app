@@ -667,6 +667,21 @@ test('generatePlan: en semana de recuperación no sobrevive ninguna sesión pesa
   });
 });
 
+test('isRecoveryWeek: cargar la PRÓXIMA carrera durante la semana de recuperación no apaga la recuperación de la que ya pasó', () => {
+  // isRecoveryWeek miraba (state.event && state.event.date) || state.lastEventDate -- un ||
+  // que, apenas el corredor cargaba su próxima carrera (una carrera FUTURA) justo durante la
+  // semana de recuperación de la que acababa de correr, hacía ganar siempre a state.event.date
+  // (la carrera nueva, que nunca cae "ayer") por sobre lastEventDate (la carrera real de ayer),
+  // apagando en silencio el recorte de volumen post-carrera y el cartel de "Recuperación" --
+  // justo la semana en la que más hacían falta.
+  const app = loadApp();
+  app.state.event = { date: '2026-10-18', name: 'Próxima carrera', type: 'ruta' }; // una carrera futura recién cargada
+  app.state.lastEventDate = '2026-09-06'; // domingo -- la que se acaba de correr
+  const weekStartDate = '2026-09-07'; // lunes siguiente a la carrera recién corrida
+
+  assert.ok(app.isRecoveryWeek(weekStartDate), 'la semana debería seguir siendo de recuperación aunque ya haya una carrera nueva cargada');
+});
+
 test('preserveLivedDays: no pisa un día de hoy en adelante que el corredor ya personalizó a mano (d.custom)', () => {
   // Reportado por el usuario: tenía 3 sesiones de 5km puestas a mano por el chat del coach
   // (modificar_sesion las marca con d.custom=true) y, al cargar una carrera en Próximos

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-25T15:49:09Z';
+const APP_VERSION = '2026-09-25T20:35:44Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2919,20 +2919,25 @@ function isRecoveryWeek(weekStartDate){
   // en "Próximos eventos", pero SOLO cuando esa carrera cayó en domingo -- así nos
   // aseguramos de que sea de verdad "la semana entera después de correrla" (lunes a
   // domingo) y no una carrera entre semana, donde "la semana que sigue" ya arranca con
-  // días de por medio y el criterio sería más ambiguo. Usamos state.lastEventDate además
-  // de state.event.date porque autoClearPastEvent() borra state.event apenas pasó la
-  // fecha -- sin este respaldo, perderíamos el dato justo cuando más lo necesitamos (el
-  // lunes después de la carrera, la propia recarga de la app dispara ese borrado antes
-  // de que el resto de la semana pueda seguir mostrando la recuperación).
+  // días de por medio y el criterio sería más ambiguo. Miramos tanto state.event.date
+  // como state.lastEventDate (no uno u otro con ||) porque autoClearPastEvent() borra
+  // state.event apenas pasó la fecha y lo guarda en lastEventDate como respaldo -- pero si
+  // el corredor carga la PRÓXIMA carrera justo esa misma semana de recuperación (algo bien
+  // común: recién corrió, ya anota la siguiente), state.event.date pasa a apuntar a esa
+  // carrera futura, que nunca cae "ayer" -- con || eso ganaba siempre y apagaba la
+  // recuperación de la carrera que sí acababa de pasar. Evaluamos los dos candidatos y
+  // alcanza con que UNO cumpla la condición real (cayó ayer, domingo).
   if(!weekStartDate) return false;
-  const eventDateStr = (state.event && state.event.date) || state.lastEventDate;
-  if(!eventDateStr) return false;
   const start = new Date(weekStartDate+'T00:00:00');
-  const raceDate = new Date(eventDateStr+'T00:00:00');
-  if(isNaN(start.getTime()) || isNaN(raceDate.getTime())) return false;
-  if(raceDate.getDay() !== 0) return false; // 0 = domingo
-  const daysSinceRace = Math.round((start - raceDate) / 86400000);
-  return daysSinceRace === 1;
+  if(isNaN(start.getTime())) return false;
+  const candidates = [state.event && state.event.date, state.lastEventDate].filter(Boolean);
+  return candidates.some(eventDateStr=>{
+    const raceDate = new Date(eventDateStr+'T00:00:00');
+    if(isNaN(raceDate.getTime())) return false;
+    if(raceDate.getDay() !== 0) return false; // 0 = domingo
+    const daysSinceRace = Math.round((start - raceDate) / 86400000);
+    return daysSinceRace === 1;
+  });
 }
 function recoveryMultiplier(weekStartDate){
   return isRecoveryWeek(weekStartDate) ? 0.6 : 1;
@@ -6890,11 +6895,15 @@ function toggleManualForm(){
     dateBoxUpdaters['man-date'] && dateBoxUpdaters['man-date']();
     const sel = document.getElementById('man-shoe');
     sel.innerHTML = state.shoes.length ? state.shoes.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('') : `<option value="">${t('no_shoes')}</option>`;
+    // El label decía "Distancia (km)" fijo sin importar el modo del corredor -- alguien en
+    // millas tipeaba un número pensando en millas (lo que ve en todo el resto de la app) y
+    // ese valor se guardaba tal cual como si fueran km, corrompiendo la distancia real.
+    document.getElementById('man-dist-label').textContent = t(isImperial() ? 'hist_manual_dist_mi' : 'hist_manual_dist');
   }
 }
 function saveManualRun(){
   const date = document.getElementById('man-date').value;
-  const dist = parseFloat(document.getElementById('man-dist').value);
+  const dist = parseDistInput(document.getElementById('man-dist').value);
   const durMin = parseFloat(document.getElementById('man-dur').value);
   // Antes solo chequeaba "truthy" (!dist), asi que un valor negativo (o -0) pasaba
   // derecho -- mismo criterio que ya usa saveEditRun, exigiendo que sean positivos de
@@ -9038,7 +9047,11 @@ function openEditRun(runId){
   // real (ver el comentario junto a localDateISO/getTodayRun).
   document.getElementById('edit-run-date').value = localDateISO(r.date);
   dateBoxUpdaters['edit-run-date'] && dateBoxUpdaters['edit-run-date']();
-  document.getElementById('edit-run-dist').value = r.distanceKm;
+  // Mismo motivo que en toggleManualForm: el campo mostraba el km crudo aunque el label diga
+  // "(mi)" en modo imperial -- se precarga en la unidad que el corredor está viendo (la misma
+  // que ya usa la tarjeta de esta carrera en Historial, ver fmtDist), no en km sin convertir.
+  document.getElementById('edit-run-dist-label').textContent = t(isImperial() ? 'hist_manual_dist_mi' : 'hist_manual_dist');
+  document.getElementById('edit-run-dist').value = fmtDist(r.distanceKm, 2);
   document.getElementById('edit-run-dur').value = Math.round((r.durationSec/60)*10)/10;
   const avgHr = r.avgHr || (r.hrLog && r.hrLog.length ? Math.round(r.hrLog.reduce((a,h)=>a+h.bpm,0)/r.hrLog.length) : '');
   document.getElementById('edit-run-hr').value = avgHr || '';
@@ -9051,7 +9064,7 @@ async function saveEditRun(){
   const r = state.runs.find(x => String(x.id) === String(editingRunId));
   if(!r) return;
   const date = document.getElementById('edit-run-date').value;
-  const dist = parseFloat(document.getElementById('edit-run-dist').value);
+  const dist = parseDistInput(document.getElementById('edit-run-dist').value);
   const durMin = parseFloat(document.getElementById('edit-run-dur').value);
   if(!date || !(dist>0) || !(durMin>0)){ showToast(t('edit_run_invalid'),'error'); return; }
   const hr = parseInt(document.getElementById('edit-run-hr').value);
