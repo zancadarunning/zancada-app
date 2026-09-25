@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-25T01:37:29Z';
+const APP_VERSION = '2026-09-25T01:56:14Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3060,7 +3060,18 @@ function computeActualWeeklyKmAvg(weeks){
     if(wk >= currentMonday) return;
     byWeek[wk] = (byWeek[wk]||0) + (r.distanceKm||0);
   });
-  const earliestMonday = state.profile.createdAt ? getMondayISO(new Date(state.profile.createdAt)) : null;
+  // Mismo motivo que addDaysToIsoLocal(): createdAt es un "YYYY-MM-DD" sin hora, y
+  // `new Date(iso)` con ese formato lo parsea como MEDIANOCHE UTC, no local. En husos
+  // negativos (Argentina, el mercado principal de este app) eso cae en la noche del día
+  // ANTERIOR en hora local, así que getMondayISO() -- que lee día/fecha locales -- podía
+  // devolver el lunes de la semana anterior cuando createdAt caía justo un lunes,
+  // adelantando earliestMonday una semana entera y diluyendo el promedio real con una
+  // semana de antes de que existiera la cuenta. Se arma el Date con componentes locales.
+  let earliestMonday = null;
+  if(state.profile.createdAt){
+    const [cy,cm,cd] = state.profile.createdAt.split('-').map(Number);
+    earliestMonday = getMondayISO(new Date(cy, cm-1, cd));
+  }
   let sum = 0, count = 0;
   for(let i=1; i<=weeks; i++){
     const wk = addDaysToIsoLocal(currentMonday, -7*i);

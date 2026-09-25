@@ -427,6 +427,31 @@ test('markSession: "Deshacer" limpia también la calificación vieja, no solo el
   assert.equal(idx, todayIdx, 'el día re-marcado hecho debería volver a pedir calificación');
 });
 
+test('computeActualWeeklyKmAvg: no diluye el promedio con una semana previa a que la cuenta exista, en husos horarios negativos', () => {
+  // createdAt es un "YYYY-MM-DD" sin hora. `new Date("YYYY-MM-DD")` lo parsea como MEDIANOCHE
+  // UTC, no local -- en husos negativos (Argentina, el mercado principal de este app) esa
+  // medianoche UTC cae la noche del día ANTERIOR en hora local. Si alguien terminaba el
+  // onboarding justo un lunes, getMondayISO(new Date(createdAt)) devolvía el lunes de la
+  // semana ANTERIOR (por leer día/fecha ya corridos a domingo), así que earliestMonday
+  // quedaba una semana adelantado y colaba una semana de ANTES de que la cuenta existiera
+  // en el promedio real usado para graduar a principiantes o a quien vuelve de una pausa.
+  const prevTz = process.env.TZ;
+  process.env.TZ = 'America/Argentina/Buenos_Aires';
+  try {
+    const app = loadApp();
+    app.state.profile = baseProfile({ createdAt: '2026-09-21' }); // un lunes
+    app.state.weekStart = '2026-09-28'; // la semana de la cuenta ya terminó, estamos en la siguiente
+    app.state.runs = [
+      { date: '2026-09-16T12:00:00.000Z', distanceKm: 999 }, // semana anterior a createdAt: no debería contar
+      { date: '2026-09-22T12:00:00.000Z', distanceKm: 10 },  // semana de createdAt: sí cuenta
+    ];
+    const avg = app.computeActualWeeklyKmAvg(3);
+    assert.equal(avg, 10, `no debería incluir la semana anterior a que la cuenta existiera, dio ${avg}`);
+  } finally {
+    process.env.TZ = prevTz;
+  }
+});
+
 test('buildWeeklyRecapMessage: una carrera extra sin nada planeado no infla el "X de Y sesiones"', () => {
   // d.status==='done' sin exigir d.dist>0 contaba también los días "Carrera extra" (corridos
   // sin nada planeado ese día) en el numerador, pero el denominador (plannedCount) solo
