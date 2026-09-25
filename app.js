@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-25T21:58:35Z';
+const APP_VERSION = '2026-09-25T23:52:05Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7762,6 +7762,58 @@ function switchRDTab(tab){
   else if(tab==='graficos') renderRDGraficos(panel);
   else if(tab==='detalles') renderRDDetalles(panel);
 }
+// r.splits siempre viene armado en tramos de 1KM (se calcula una sola vez, del lado del
+// servidor, al sincronizar la carrera -- ver api/_lib/fit-activity-helpers.js) sin importar
+// la unidad que el corredor tenga elegida. En modo imperial, renderRDSegmentos/renderRDRitmo
+// mostraban esos mismos tramos de 1km bajo un ritmo/distancia ya CONVERTIDOS a millas (ej.
+// "0.62 mi" para lo que en realidad es un tramo entero de 1km) -- el número no es solo una
+// etiqueta rara, describe mal el tramo real. Acá se recalculan los tramos de cero por milla,
+// a partir del recorrido real (r.points, con la misma distancia acumulada por Haversine que
+// ya usa buildColoredRouteSegments/computeVideoRouteData) -- mismo criterio de "tiempo real si
+// hay marca de tiempo por punto GPS, si no repartido proporcional a la distancia" que ya usa
+// computeVideoRouteData para carreras sincronizadas sin marca de tiempo por punto.
+function rebucketSplitsByDistance(r, segmentKm){
+  const points = r.points||[];
+  if(points.length<3 || !(segmentKm>0)) return null;
+  const cum=[0];
+  for(let i=1;i<points.length;i++) cum.push(cum[i-1]+haversine(points[i-1].lat,points[i-1].lon,points[i].lat,points[i].lon));
+  const totalDistKm = cum[cum.length-1];
+  if(!(totalDistKm>0)) return null;
+  const hasRealTime = points[0].t!=null && points[points.length-1].t!=null && points[points.length-1].t > points[0].t;
+  const totalSec = r.durationSec || 0;
+  const timeAt = i => hasRealTime ? (points[i].t - points[0].t) : (totalSec * (cum[i]/totalDistKm));
+
+  const numFull = Math.floor(totalDistKm / segmentKm);
+  const splits = [];
+  let startIdx = 0, startTime = 0;
+  for(let seg=1; seg<=numFull; seg++){
+    const targetDist = seg*segmentKm;
+    let idx = startIdx;
+    while(idx<points.length-1 && cum[idx]<targetDist) idx++;
+    const segDistKm = cum[idx]-cum[startIdx];
+    const segTime = timeAt(idx)-startTime;
+    const paceMin = segDistKm>0 ? (segTime/60)/segDistKm : 0;
+    splits.push({km: seg, paceMin: Math.round(paceMin*100)/100, avgHr:null, avgCadence:null});
+    startIdx = idx; startTime = timeAt(idx);
+  }
+  const lastIdx = points.length-1;
+  const remainderKm = cum[lastIdx]-cum[startIdx];
+  if(remainderKm > segmentKm*0.05){
+    const segTime = timeAt(lastIdx)-startTime;
+    const paceMin = remainderKm>0 ? (segTime/60)/remainderKm : 0;
+    // Mismo motivo que el tope en 0.99 del lado del servidor (ver el comentario junto a
+    // buildSplitsAndSeriesFromFitRecords): un remainder redondeado que caiga justo en un
+    // número entero se confundiría con un tramo completo (Number.isInteger(s.km), más abajo
+    // en renderRDSegmentos, es lo que distingue un tramo lleno de uno suelto).
+    const remainderLabel = Math.min(Math.round((remainderKm/segmentKm)*100)/100, 0.99);
+    splits.push({km: remainderLabel, paceMin: Math.round(paceMin*100)/100, avgHr:null, avgCadence:null});
+  }
+  return splits.length ? splits : null;
+}
+function getDisplaySplits(r){
+  if(!isImperial()) return r.splits||[];
+  return rebucketSplitsByDistance(r, KM_PER_MI) || r.splits || [];
+}
 // Corta el recorrido (r.points) en tramos por km alineados con r.splits, y le
 // asigna a cada tramo el color de zona de ritmo (relativa al promedio de ESA
 // carrera, ver classifyPaceRelative) -- así el mapa de la pestaña Ruta se ve
@@ -7795,7 +7847,7 @@ function renderRDRuta(panel){
   const {r, paceMin, cal} = rdCurrent;
   const dateStr = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
   const timeStr = new Date(r.date).toLocaleTimeString(LOCALE_MAP[lang], {hour:'numeric', minute:'2-digit'});
-  const paces = (r.splits||[]).map(s=>s.paceMin).filter(p=>p>0);
+  const paces = getDisplaySplits(r).map(s=>s.paceMin).filter(p=>p>0);
   const slowest = paces.length ? Math.max(...paces) : paceMin;
   const fastest = paces.length ? Math.min(...paces) : paceMin;
   panel.innerHTML = `
@@ -7950,7 +8002,7 @@ function rdRecenterMap(){
 }
 function renderRDRitmo(panel){
   const {r, paceMin} = rdCurrent;
-  const splits = r.splits||[];
+  const splits = getDisplaySplits(r);
   const splitPaces = splits.map(s=>s.paceMin).filter(p=>p>0);
   const fastest = splitPaces.length ? Math.min(...splitPaces) : paceMin;
   const maxPaceForBar = Math.max(...splitPaces, paceMin) * 1.02 || 1;
@@ -7974,11 +8026,16 @@ function renderRDRitmo(panel){
 }
 function renderRDSegmentos(panel){
   const {r, paceMin, avgHr} = rdCurrent;
-  const splits = r.splits||[];
+  const splits = getDisplaySplits(r);
+  // Un tramo "lleno" mide 1 unidad INTERNA -- 1km para r.splits (siempre en km, ver el
+  // comentario junto a rebucketSplitsByDistance) o 1 milla (KM_PER_MI km) para los tramos
+  // recalculados por milla en modo imperial. Sin esto, un tramo entero de milla se trataba
+  // como si fuera de 1km para calcular su duración/distancia real.
+  const unitKm = isImperial() && splits!==r.splits ? KM_PER_MI : 1;
   const anyHr = splits.some(s=>s.avgHr!=null);
   const anyCad = splits.some(s=>s.avgCadence!=null);
   const rows = splits.map(s=>{
-    const segDistKm = Number.isInteger(s.km) ? 1 : s.km;
+    const segDistKm = (Number.isInteger(s.km) ? 1 : s.km) * unitKm;
     const segSec = Math.round(s.paceMin*60*segDistKm);
     return `<tr>
       <td>${s.km}</td>
@@ -7993,7 +8050,7 @@ function renderRDSegmentos(panel){
     <div style="overflow-x:auto;">
     <table class="rd-seg-table">
       <thead><tr>
-        <th>${t('rd_seg_col')}</th><th>${t('rd_seg_dur')}</th><th>${t('rd_seg_dist')} (${distUnit()})</th><th>${t('run_pace_word')} (/${distUnit()})</th>
+        <th>${distUnit().toUpperCase()}</th><th>${t('rd_seg_dur')}</th><th>${t('rd_seg_dist')} (${distUnit()})</th><th>${t('run_pace_word')} (/${distUnit()})</th>
         ${anyHr ? `<th>${t('hist_avg_hr')}</th>` : ''}
         ${anyCad ? `<th>${t('hist_cadence')}</th>` : ''}
       </tr></thead>

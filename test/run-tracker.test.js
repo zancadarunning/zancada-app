@@ -84,6 +84,51 @@ test('clearRunProgress borra el progreso guardado', () => {
   assert.equal(app.readRunProgress(), null);
 });
 
+test('getDisplaySplits: en modo imperial recalcula los tramos por milla real, no por km relabeleado', () => {
+  // r.splits siempre viene armado en tramos de 1KM (se calcula del lado del servidor al
+  // sincronizar, sin importar la unidad del corredor). renderRDSegmentos/renderRDRitmo
+  // mostraban esos mismos tramos de 1km con la distancia/ritmo ya CONVERTIDOS a millas --
+  // un tramo entero de 1km terminaba mostrando "0.62 mi", describiendo mal el tramo real (no
+  // es solo una etiqueta rara: la fila entera describe una distancia que no es la del tramo).
+  // getDisplaySplits() recalcula los tramos de cero por milla real a partir del recorrido
+  // (r.points), usando el tiempo real por punto GPS cuando está disponible.
+  const app = loadApp();
+  app.state.profile = { units: 'imperial' };
+  const R = 6371; // mismo radio que usa haversine() en app.js
+  const totalKm = 5;
+  const paceMinPerKm = 5; // ritmo constante real: 5:00/km
+  const totalSec = totalKm * paceMinPerKm * 60;
+  const numPoints = 500;
+  const points = [];
+  for(let i=0;i<numPoints;i++){
+    const fracDist = i/(numPoints-1);
+    const distKm = fracDist*totalKm;
+    points.push({lat:0, lon:(distKm/R)*(180/Math.PI), t: Math.round(fracDist*totalSec), alt:null});
+  }
+  const run = { points, durationSec: totalSec, distanceKm: totalKm };
+
+  const splits = app.getDisplaySplits(run);
+
+  // 5km = ~3.11 millas -> 3 tramos completos de 1 milla + un resto de ~0.11 milla.
+  assert.equal(splits.length, 4, `debería dar 3 millas completas + 1 resto, dio ${splits.length} tramos`);
+  assert.deepEqual(Array.from(splits.slice(0,3).map(s=>s.km)), [1,2,3], 'los primeros 3 tramos deberían estar numerados como millas enteras');
+  splits.slice(0,3).forEach(s=>{
+    assert.ok(Math.abs(s.paceMin - 5) < 0.05, `cada tramo de 1 milla real, a ritmo constante de 5:00/km, debería seguir dando ~5:00/km, dio ${s.paceMin}`);
+  });
+  assert.ok(splits[3].km > 0 && splits[3].km < 1, 'el resto debería ser una fracción de milla, no de km');
+});
+
+test('getDisplaySplits: en modo métrico, o sin puntos de recorrido, usa r.splits tal cual (sin recalcular)', () => {
+  const app = loadApp();
+  const rSplits = [{km:1, paceMin:5, avgHr:null, avgCadence:null}, {km:2, paceMin:5.2, avgHr:null, avgCadence:null}];
+
+  app.state.profile = { units: 'metric' };
+  assert.equal(app.getDisplaySplits({ splits: rSplits, points: [] }), rSplits, 'en métrico no debería tocar r.splits');
+
+  app.state.profile = { units: 'imperial' };
+  assert.equal(app.getDisplaySplits({ splits: rSplits, points: [] }), rSplits, 'sin puntos de recorrido (carrera manual, Health Connect) debería caer de vuelta a r.splits');
+});
+
 test('isLikelyDuplicateOfExistingRun: no confunde una entrada en calor corta con la sesión fuerte que sigue, aunque tengan distancia parecida', () => {
   // El chequeo de duplicados entre fuentes (Health Connect vs. Strava/Polar/Wahoo, ver el
   // comentario junto a la función) solo miraba hora de inicio (10 min) y distancia (10%) --
