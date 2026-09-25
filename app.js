@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-25T21:26:22Z';
+const APP_VERSION = '2026-09-25T21:58:35Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7112,8 +7112,15 @@ function getAchievementSections(){
 
   const distanceBadges = ACH_DISTANCE_KM.map(km=>{
     const achieved = totalKm >= km;
+    // fmtDist(km-totalKm, 0) redondea al entero más cercano -- a menos de medio km/milla
+    // del umbral (ej. a 0.4km de la medalla de 50km) el faltante daba "0", un cartel de
+    // "Faltan 0 km" en una medalla que sigue bloqueada, como si ya estuviera. El faltante
+    // NUNCA puede mostrar 0 mientras siga bloqueado -- redondeamos siempre para arriba
+    // (Math.ceil) en la unidad ya convertida, con un piso de 1.
+    const remainingKm = km - totalKm;
+    const remainingDisplay = Math.max(1, Math.ceil(isImperial() ? remainingKm*MI_PER_KM : remainingKm));
     return {achieved, label: `${fmtDist(km,0)} ${distUnit()}`,
-      progressText: achieved ? null : t('ach_locked_distance_left', {n: `${fmtDist(km-totalKm,0)} ${distUnit()}`})};
+      progressText: achieved ? null : t('ach_locked_distance_left', {n: `${remainingDisplay} ${distUnit()}`})};
   });
   const runBadges = ACH_RUN_COUNT.map(n=>{
     const achieved = totalRuns >= n;

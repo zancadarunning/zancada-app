@@ -255,6 +255,24 @@ test('getAchievementSections: cuenta bien lo desbloqueado en cada categoría', (
   assert.ok(sections.unlockedCount >= 1 && sections.unlockedCount < sections.totalCount);
 });
 
+test('getAchievementSections: el "Faltan X" de una medalla de distancia nunca muestra 0 mientras siga bloqueada', () => {
+  // fmtDist(km-totalKm, 0) redondea al entero más cercano -- a menos de medio km/milla del
+  // umbral (ej. a 0.4km de la medalla de 50km) el faltante daba "0", un cartel de "Faltan 0
+  // km" en una medalla que el propio `achieved` seguía marcando como bloqueada -- como si ya
+  // estuviera desbloqueada. El texto de progreso nunca debería contradecir el estado real.
+  const app = loadApp();
+  app.state.profile = { units: 'metric' };
+  app.state.runs = [{ id: '1', distanceKm: 49.6, durationSec: 15000, date: daysAgoISO(5) }]; // a 0.4km de los 50km
+  app.state.bestStreakWeeks = 0;
+  app.state.streakWeeks = 0;
+
+  const sections = app.getAchievementSections();
+  const fiftyKm = sections.distanceBadges[0];
+
+  assert.equal(fiftyKm.achieved, false, 'con 49.6km, la medalla de 50km todavía debería estar bloqueada');
+  assert.doesNotMatch(fiftyKm.progressText, /\b0\s*km\b/, `no debería decir "0 km" mientras sigue bloqueada, dio: "${fiftyKm.progressText}"`);
+});
+
 test('getAchievementSections: sin ninguna carrera, nada está desbloqueado', () => {
   const app = loadApp();
   app.state.profile = { units: 'metric' };
