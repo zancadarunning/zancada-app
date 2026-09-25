@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-25T02:57:18Z';
+const APP_VERSION = '2026-09-25T15:49:09Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2492,7 +2492,18 @@ async function finishOnboard(){
   // esto, alguien que se sumaba un martes con lunes/miércoles/viernes como días de
   // entrenamiento veía el lunes (e incluso el domingo previo) ya marcado como sesión
   // perdida, cuando en realidad todavía ni tenía cuenta esos días.
-  state.profile = {email:pendingEmail, name, weight, height, birth, gender, pregnancyPostpartum, hasInjuryNote: !!healthNotes, coachNotes: healthNotes ? [healthNotes] : [], terrain, trainBy, trainingDays: trainingDays.length?trainingDays:['tue','thu','sun'], goal, raceDate, runnerType, currentWeeklyKm, returningFromBreak, refRace, availableMinPerSession, crossTrainingSports, crossTrainingDays, hrMax, hrKnown, hrZones:computeZones(hrMax), tz:detectDeviceTz(), createdAt: todayLocalISO()};
+  state.profile = {email:pendingEmail, name, weight, height, birth, gender, pregnancyPostpartum, coachNotes: healthNotes ? [healthNotes] : [], terrain, trainBy, trainingDays: trainingDays.length?trainingDays:['tue','thu','sun'], goal, raceDate, runnerType, currentWeeklyKm, returningFromBreak, refRace, availableMinPerSession, crossTrainingSports, crossTrainingDays, hrMax, hrKnown, hrZones:computeZones(hrMax), tz:detectDeviceTz(), createdAt: todayLocalISO()};
+  // Antes esto era un flag propio (hasInjuryNote) que, a diferencia de toda otra señal de
+  // cautela, no tenía forma de destildarse -- una molestia mencionada una sola vez en el
+  // onboarding subía la cautela del plan para siempre, sin vencimiento ni botón en Perfil
+  // para resolverla. Guardándola acá como una entrada más de painLog (misma forma que
+  // savePainLog()/applyCoachNote(), bodyPart:'otro' porque el onboarding no pide zona
+  // específica) reusa esa lógica ya resuelta: vence sola a los 21 días o el corredor la
+  // marca resuelta desde Perfil > Molestias, en vez de agregar un flag nuevo que se queda
+  // pegado para siempre.
+  if(healthNotes){
+    state.painLog = [{id:Date.now(), date:todayLocalISO(), bodyPart:'otro', note:healthNotes, active:true, checkinSent:false, fromOnboarding:true}];
+  }
   state.profile.weeklyKm = calcWeeklyKm(state.profile);
   state.weekNumber = 1;
   state.weekStart = getMondayISO(new Date());
@@ -3584,6 +3595,24 @@ function calcBmi(p){
   if(!(h>0)) return null;
   return p.weight / (h*h);
 }
+// pregnancyPostpartum se tilda una sola vez en el onboarding y, a diferencia de TODAS las
+// otras señales que suben la cautela (molestia de painLog: vence a los 21 días; principiante/
+// returningFromBreak: se gradúan solos con checkBeginnerGraduation/checkReturningBreakGraduation),
+// no tenía ningún vencimiento -- se quedaba subiendo la cautela para siempre, aunque el propio
+// mensaje que el coach del chat le manda al modelo (buildContext) ya asume que es algo de "los
+// últimos 6 meses". Sin este chequeo, alguien que marcó esto en el onboarding quedaba con el
+// plan tapado en cautela nivel 2 de por vida, sin ninguna forma de destildarlo (no hay ningún
+// toggle en Perfil para esto). Reusado acá y en buildContext para que las dos lecturas del
+// mismo dato (el plan determinístico y lo que el coach de IA le dice al corredor) coincidan
+// siempre -- mismo motivo que ya justificó el aviso de principiante en el chat.
+const PREGNANCY_CAUTION_DAYS = 182;
+function pregnancyStillRecent(p){
+  if(!p || !p.pregnancyPostpartum) return false;
+  if(!p.createdAt) return true; // sin fecha de referencia (cuenta vieja): mantenemos la cautela, heurística conservadora
+  const createdMs = new Date(p.createdAt+'T00:00:00').getTime();
+  if(isNaN(createdMs)) return true;
+  return (Date.now() - createdMs) < PREGNANCY_CAUTION_DAYS*86400000;
+}
 function trainingCaution(p){
   // Perfil de "cautela" del corredor: junta edad y contextura física para moderar
   // cuántas sesiones fuertes por semana tolera bien y qué tan rápido puede subir
@@ -3606,12 +3635,14 @@ function trainingCaution(p){
   // hardSessionRotation) y una progresión de volumen más lenta (ver weekMultiplier),
   // hasta que el corredor la marque como resuelta desde Perfil.
   if(activePainEntries(21).length) level = Math.max(level, 1);
-  // Embarazo/postparto reciente, una lesión o condición médica declarada en el
-  // onboarding, o volver de una pausa larga: mismo criterio conservador que la edad/IMC,
-  // se combinan con Math.max en vez de sumarse, así ningún combo de señales empuja el
-  // nivel más allá de 2 (el techo que ya define weekMultiplier/hardSessionRotation).
-  if(p.pregnancyPostpartum) level = Math.max(level, 2);
-  if(p.hasInjuryNote) level = Math.max(level, 1);
+  // Embarazo/postparto reciente (ver pregnancyStillRecent, vence a los ~6 meses) o volver
+  // de una pausa larga: mismo criterio conservador que la edad/IMC, se combinan con
+  // Math.max en vez de sumarse, así ningún combo de señales empuja el nivel más allá de 2
+  // (el techo que ya define weekMultiplier/hardSessionRotation). Una lesión o condición
+  // declarada en el onboarding ya no es un flag propio -- se guarda como una entrada más de
+  // painLog (ver finishOnboard), así que activePainEntries(21) de arriba ya la cubre, con
+  // el mismo vencimiento a los 21 días o "ya no me duele" desde Perfil que cualquier otra.
+  if(pregnancyStillRecent(p)) level = Math.max(level, 2);
   if(p.returningFromBreak) level = Math.max(level, 1);
   return { age, bmi, level };
 }
@@ -9230,7 +9261,7 @@ function buildContext(){
   if(recoveryMultiplier(state.weekStart) < 1) ctx += ` Esta semana es de recuperación, la que sigue a la carrera que corrió (cargada en "Próximos eventos") -- el volumen bajó a propósito por eso.`;
   if(eventRaceWeekMultiplier(state.weekStart, p) < 1) ctx += ` Esta semana cae la carrera cargada en "Próximos eventos" -- el volumen de esta semana bajó a propósito, como una semana de descarga más, para no llegar reventado a correrla.`;
   if(p.coachNotes && p.coachNotes.length) ctx += ` Notas permanentes guardadas sobre el corredor (lesiones, preferencias u otros datos a tener en cuenta siempre): ${p.coachNotes.map(n=>`"${n}"`).join('; ')}.`;
-  if(p.pregnancyPostpartum) ctx += ` El corredor indicó en el onboarding que está embarazada o dio a luz en los últimos 6 meses -- el plan ya se generó con volumen e intensidad reducidos por precaución. Si pregunta por esto, recordale que consulte con su médico/a antes de cualquier cambio de intensidad; no le des indicaciones médicas específicas vos.`;
+  if(pregnancyStillRecent(p)) ctx += ` El corredor indicó en el onboarding que está embarazada o dio a luz en los últimos 6 meses -- el plan ya se generó con volumen e intensidad reducidos por precaución. Si pregunta por esto, recordale que consulte con su médico/a antes de cualquier cambio de intensidad; no le des indicaciones médicas específicas vos.`;
   if(p.availableMinPerSession) ctx += ` Dispone de unos ${p.availableMinPerSession} minutos en promedio por sesión -- el plan ya limita las sesiones entre semana a ese tiempo (la tirada larga del fin de semana queda afuera de ese límite a propósito). Si igual pregunta por el tiempo de una sesión, tené esto en cuenta.`;
   const activePains = activePainEntries();
   if(activePains.length) ctx += ` Molestias activas registradas por el corredor: ${activePains.map(pa=>`${t('pain_body_'+pa.bodyPart)} (desde ${pa.date}${pa.note?', nota: "'+pa.note+'"':''})`).join('; ')}. Tenelas en cuenta al sugerir ejercicios y preguntá cómo siguen si corresponde.`;

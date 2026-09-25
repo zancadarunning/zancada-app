@@ -633,6 +633,25 @@ test('ageFromBirth/trainingCaution: sin fecha de nacimiento no inventa una edad 
   assert.equal(app.trainingCaution(profile).level, 0, 'sin edad conocida no debería sumar cautela por edad');
 });
 
+test('trainingCaution: embarazo/postparto marcado en el onboarding deja de subir la cautela después de ~6 meses', () => {
+  // pregnancyPostpartum se tilda una sola vez en el onboarding y, a diferencia de TODA otra
+  // señal de cautela (molestia de painLog: vence a los 21 días; principiante/returningFromBreak:
+  // se gradúan solos), no tenía ningún vencimiento -- alguien que lo marcó quedaba con el plan
+  // tapado en cautela nivel 2 para siempre, sin ningún toggle en Perfil para destildarlo, aunque
+  // el propio mensaje del coach de IA (buildContext) ya asumía que era algo de "los últimos 6
+  // meses". Ahora vence solo, usando profile.createdAt como referencia.
+  const app = loadApp();
+  const recent = baseProfile({ pregnancyPostpartum: true, createdAt: app.todayLocalISO?.() || new Date().toISOString().slice(0,10), birth: null, weight: null, height: null });
+  assert.equal(app.trainingCaution(recent).level, 2, 'recién marcado, la cautela debería estar en el techo');
+
+  const eightMonthsAgo = new Date(Date.now() - 240 * 86400000).toISOString().slice(0,10);
+  const old = baseProfile({ pregnancyPostpartum: true, createdAt: eightMonthsAgo, birth: null, weight: null, height: null });
+  assert.equal(app.trainingCaution(old).level, 0, 'después de ~6 meses, la cautela extra por esto ya no debería aplicar');
+
+  const noDate = baseProfile({ pregnancyPostpartum: true, createdAt: null, birth: null, weight: null, height: null });
+  assert.equal(app.trainingCaution(noDate).level, 2, 'sin fecha de referencia (cuenta vieja), se mantiene la cautela por las dudas');
+});
+
 test('generatePlan: en semana de recuperación no sobrevive ninguna sesión pesada', () => {
   const app = loadApp();
   const profile = baseProfile();
