@@ -408,6 +408,25 @@ test('relinkTodayRun: "Deshacer" sobre una carrera vinculada se mantiene al reab
   assert.equal(app.state.plan[todayIdx].linkedRunId, null);
 });
 
+test('markSession: "Deshacer" limpia también la calificación vieja, no solo el estado y el link', () => {
+  // Sin esto, una calificación de una sesión deshecha quedaba pegada al día: al volver a
+  // marcarlo hecho más tarde (con otra carrera, o a mano) findUnratedDoneDay() lo veía como
+  // "ya calificado" y nunca volvía a pedir la devolución -- y encima esa calificación
+  // fantasma seguía contando en el ajuste automático de volumen de la semana.
+  const app = loadApp();
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  app.state.plan = app.DAY_KEYS.map((day, i) => ({ day, typeKey: i === todayIdx ? 'easy' : 'rest', dist: i === todayIdx ? 5 : 0 }));
+  app.state.plan[todayIdx].status = 'done';
+  app.state.plan[todayIdx].rating = 'mal';
+
+  app.markSession(todayIdx, null);
+  assert.equal(app.state.plan[todayIdx].rating, undefined, 'deshacer debería borrar la calificación vieja');
+
+  app.state.plan[todayIdx].status = 'done';
+  const idx = app.findUnratedDoneDay();
+  assert.equal(idx, todayIdx, 'el día re-marcado hecho debería volver a pedir calificación');
+});
+
 test('buildWeeklyRecapMessage: una carrera extra sin nada planeado no infla el "X de Y sesiones"', () => {
   // d.status==='done' sin exigir d.dist>0 contaba también los días "Carrera extra" (corridos
   // sin nada planeado ese día) en el numerador, pero el denominador (plannedCount) solo

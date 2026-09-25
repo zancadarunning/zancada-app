@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-24T18:43:47Z';
+const APP_VERSION = '2026-09-25T01:37:29Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4589,6 +4589,10 @@ function markSession(i, status){
   if(!status){
     if(state.plan[i].linkedRunId) state.plan[i].declinedRunId = state.plan[i].linkedRunId;
     state.plan[i].linkedRunId = null;
+    // Si no, una calificación vieja quedaba pegada al día: al re-marcarlo hecho más tarde
+    // (con otra carrera, o a mano) no volvía a pedirse la devolución, y encima esa
+    // calificación fantasma seguía contando en el ajuste semanal de volumen.
+    delete state.plan[i].rating;
   }
   renderPlan(); renderHome(); persist();
   if(status === 'done'){
