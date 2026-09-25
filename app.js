@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-25T21:13:02Z';
+const APP_VERSION = '2026-09-25T21:26:22Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -9104,6 +9104,13 @@ async function saveEditRun(){
   if(!date || !(dist>0) || !(durMin>0)){ showToast(t('edit_run_invalid'),'error'); return; }
   const hr = parseInt(document.getElementById('edit-run-hr').value);
   const newShoeId = document.getElementById('edit-run-shoe').value || null;
+  // checkNewPR(), unas líneas más abajo, recalcula el récord EXCLUYENDO esta misma carrera --
+  // si esta carrera YA era el récord vigente de su distancia, excluirla deja como "anterior"
+  // a la que le sigue, así que checkNewPR() volvía a anunciarla como marca nueva cada vez que
+  // se guardaba una edición, aunque el cambio fuera solo la zapatilla, la FC o la fecha (nada
+  // que afecte el ritmo real). Guardamos el ritmo de ANTES para solo volver a chequear el
+  // récord si de verdad cambió algo que puede correrlo (distancia o duración).
+  const pacedChanged = dist !== r.distanceKm || Math.round(durMin*60) !== r.durationSec;
 
   // reacomodamos el kilometraje acumulado de zapatillas: se lo restamos al par viejo
   // (con la distancia vieja) y se lo sumamos al par nuevo (con la distancia nueva) --
@@ -9136,7 +9143,7 @@ async function saveEditRun(){
   const newShoe = state.shoes.find(s => String(s.id) === String(newShoeId));
   if(newShoe) newShoe.km += dist;
   checkShoeWearAlerts();
-  checkNewPR(r); // editar una carrera también puede convertirla en récord nuevo
+  if(pacedChanged) checkNewPR(r); // editar una carrera también puede convertirla en récord nuevo (solo si tocaron distancia o duración)
 
   const savedRunId = r.id;
   closeEditRun();
