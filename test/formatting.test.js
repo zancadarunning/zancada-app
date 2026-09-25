@@ -23,6 +23,33 @@ test('fmtDist: en imperial convierte a millas', () => {
   assert.equal(app.fmtDist(10, 2), '6.21');
 });
 
+test('parseDistInput: en imperial convierte lo tipeado (millas) a km antes de guardarlo', () => {
+  // saveManualRun/saveEditRun (Historial) guardaban el valor tipeado en el campo de
+  // distancia con un parseFloat crudo, directo en distanceKm -- sin pasar por
+  // parseDistInput, que es la función que YA usa el resto de la app (el km/semana de
+  // Perfil, por ejemplo) para esta misma conversión. Alguien en modo imperial que tipeaba
+  // "3.1" pensando en millas (lo que ve en toda la app) terminaba con una carrera guardada
+  // de 3.1KM, no de 3.1 millas (~5km) -- silenciosamente casi la mitad de la distancia real.
+  const app = loadApp();
+  app.state.profile = { units: 'imperial' };
+  const km = app.parseDistInput('3.1');
+  assert.ok(Math.abs(km - 4.989) < 0.01, `3.1 millas debería guardarse como ~4.99km, dio ${km}`);
+});
+
+test('parseDistInput: en métrico deja el valor tal cual (ya está en km)', () => {
+  const app = loadApp();
+  app.state.profile = { units: 'metric' };
+  assert.equal(app.parseDistInput('10'), 10);
+});
+
+test('parseDistInput: valores inválidos o negativos dan 0, no NaN ni un número negativo guardado', () => {
+  const app = loadApp();
+  app.state.profile = { units: 'metric' };
+  assert.equal(app.parseDistInput('-5'), 0);
+  assert.equal(app.parseDistInput('abc'), 0);
+  assert.equal(app.parseDistInput(''), 0);
+});
+
 test('fmtPace: da minutos:segundos por km, o el placeholder si no hay ritmo', () => {
   const app = loadApp();
   app.state.profile = { units: 'metric' };
