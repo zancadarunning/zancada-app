@@ -289,3 +289,55 @@ test('ajustar_volumen_semana (semana siguiente): una sesión de cuestas del algo
     }
   }
 });
+
+test('guardar_nota_coach (zona_cuerpo): deshacer_cambio revierte el recorte de intensidad que dispara la molestia', () => {
+  // guardar_nota_coach era la única de las herramientas que tocan el plan sin llamar a
+  // captureUndoSnapshot() primero -- "me duele la rodilla" (con zona_cuerpo) baja un 15% lo
+  // que queda de la semana YA MISMO (lowerRemainingIntensity), pero sin ningún snapshot un
+  // "deshacé eso" inmediatamente después contestaba que no había nada para deshacer, dejando
+  // ese recorte pegado para siempre.
+  const app = loadApp();
+  app.state.profile = baseProfile(app);
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  app.state.plan = app.DAY_KEYS.map((day, i) => ({ day, typeKey: i === todayIdx ? 'easy' : 'rest', dist: i === todayIdx ? 5 : 0 }));
+  app.state.coachUndoSnapshot = null;
+  app.state.chat = [];
+
+  const distBefore = app.state.plan[todayIdx].dist;
+  app.applyCoachNote({ nota: 'me duele la rodilla', zona_cuerpo: 'rodilla' });
+  assert.ok(app.state.plan[todayIdx].dist < distBefore, 'la nota con zona_cuerpo debería recortar la intensidad ya mismo');
+
+  const result = app.applyUndoLastChange();
+
+  assert.doesNotMatch(result, /no hay ningún cambio/i, 'debería poder deshacer el recorte que la nota disparó');
+  assert.equal(app.state.plan[todayIdx].dist, distBefore, 'deshacer debería restaurar la distancia de antes del recorte');
+});
+
+test('ajustar meta semanal "ahora" a mitad de semana: el total real de la semana llega a la meta nueva, no se queda pegado en la vieja', () => {
+  // generatePlan no sabe nada de "cuánto ya se corrió esta semana" -- al subir la meta a
+  // mitad de semana, el único día que sobrevivía a preserveLivedDays (los ya hechos quedan
+  // con su distancia VIEJA) terminaba con la porción que le tocaría en una semana ENTERA con
+  // la meta nueva, no con lo que en realidad falta para llegar a ella. El coach igual decía
+  // "listo, ajusté el plan para tu nueva meta" -- una promesa falsa.
+  const app = loadApp();
+  app.state.profile = baseProfile(app, { weeklyKm: 20, currentWeeklyKm: 20, weeklyGoalKm: 20, trainingDays: ['mon','tue','thu','sun'] });
+  app.state.weekNumber = 1;
+  app.state.weekStart = app.getMondayISO(new Date());
+  const plan = app.generatePlan(app.state.profile, 1);
+  plan.forEach(d => { if(['mon','tue','thu'].includes(d.day)) d.status = 'done'; });
+  app.state.plan = plan;
+  app.state.runs = ['mon','tue','thu'].map((day,i) => ({
+    id: i+1,
+    date: new Date().toISOString(),
+    distanceKm: plan.find(d=>d.day===day).dist,
+  }));
+  const freshFullWeek = app.generatePlan(Object.assign({}, app.state.profile, {weeklyGoalKm: 40}), 1).reduce((s,d)=>s+d.dist, 0);
+
+  app.state.profile.weeklyGoalKm = 40; // el corredor sube la meta a mitad de semana
+  app.applyGoalsChangeNow();
+
+  const total = app.state.plan.reduce((s,d)=>s+d.dist, 0);
+  assert.ok(Math.abs(total - freshFullWeek) < 0.2, `el total real de la semana (${total}) debería acercarse al objetivo semanal ya acotado por seguridad (${freshFullWeek}), no quedarse cerca de la meta vieja`);
+  // Los días ya corridos no deberían tocarse -- solo el/los días que quedan por delante.
+  assert.equal(app.state.plan.find(d=>d.day==='mon').dist, plan.find(d=>d.day==='mon').dist);
+});

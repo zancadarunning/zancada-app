@@ -181,6 +181,28 @@ test('getPersonalRecords: excludeRunId saca esa carrera del cálculo (para saber
   assert.equal(withAll['10k'].runId, 'new');
 });
 
+test('runBenefitKey: reconoce el tipo real de una carrera de una semana ya cerrada (planHistory), no solo la semana actual', () => {
+  // runBenefitKey buscaba el día vinculado SOLO en state.plan (la semana actual) -- para una
+  // carrera de 2+ semanas atrás (ya movida a planHistory en el rollover semanal) nunca
+  // encontraba el día real, y caía al heurístico de distancia/ritmo, que puede confundir una
+  // sesión de cuestas con un rodaje fácil/tempo cualquiera. getQualitySessionBreakdown (con el
+  // mismo propósito de reconocer el tipo real de una sesión) sí mira planHistory -- este es el
+  // mismo dato, solo que runBenefitKey no lo usaba.
+  const app = loadApp();
+  const runId = 42;
+  app.state.runs = [
+    { id: runId, distanceKm: 5, durationSec: 1500, date: daysAgoISO(20) },
+  ];
+  app.state.plan = app.DAY_KEYS.map(day => ({ day, typeKey: 'rest', dist: 0 })); // semana actual: no la tiene
+  app.state.planHistory = [
+    { weekNumber: 1, weekStart: '2020-01-06', plan: app.DAY_KEYS.map((day,i) => ({ day, typeKey: i===2 ? 'hills' : 'rest', dist: i===2 ? 6 : 0, status: i===2 ? 'done' : null, linkedRunId: i===2 ? runId : null })) },
+  ];
+
+  const key = app.runBenefitKey(app.state.runs[0]);
+
+  assert.equal(key, 'hills', `debería reconocer el typeKey real de planHistory en vez de caer al heurístico, dio "${key}"`);
+});
+
 test('predictRaceTime: sin ninguna marca personal cargada devuelve null', () => {
   const app = loadApp();
   app.state.runs = [];

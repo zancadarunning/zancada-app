@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-25T02:35:50Z';
+const APP_VERSION = '2026-09-25T02:57:18Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2130,7 +2130,35 @@ function applyGoalsChangeNow(){
   // la meta semanal ahora es un input real del plan (acotado por seguridad en generatePlan),
   // no solo un número decorativo para la barra de progreso -- así que hay que regenerar
   // el plan de la semana y avisarle al coach para que quede todo conectado
-  state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
+  const fresh = generatePlan(state.profile, state.weekNumber||1);
+  const merged = preserveLivedDays(state.plan, fresh);
+  // generatePlan no sabe nada de "cuánto ya se corrió esta semana" -- reparte la meta nueva
+  // (ya acotada por seguridad ahí adentro, ver effectiveWeeklyKm/minWk/maxWk) entre TODOS los
+  // días de la semana como si arrancara de cero, y preserveLivedDays después deja los días ya
+  // vividos (hechos/salteados/personalizados) con su distancia VIEJA. Sin esto, si el corredor
+  // sube la meta a mitad de semana (ej. de 20 a 40km, con 13km ya corridos), el único día que
+  // sobrevive de la regeneración terminaba con LA PORCIÓN que le tocaría en una semana entera
+  // repartida entre TODOS los días -- no lo que en realidad falta -- y el total real de la
+  // semana se quedaba pegado cerca de la meta VIEJA, aunque el coach dijera "listo, ajusté el
+  // plan para tu nueva meta". Acá reescalamos SOLO los días que de verdad vienen del plan
+  // recién generado (los que preserveLivedDays no reemplazó por el valor viejo) para que,
+  // sumados a lo YA CORRIDO de verdad esta semana (state.runs, mismo criterio que ya usa la
+  // barra de progreso de Inicio), den el total que generatePlan decidió para la semana entera
+  // (fresh, ya acotado) -- así el tope de seguridad de effectiveWeeklyKm se sigue respetando
+  // igual que en una regeneración de semana completa, sin tocar el TIPO de sesión elegido.
+  if(state.profile.weeklyGoalKm > 0){
+    const weekRuns = (state.runs||[]).filter(r => getMondayISO(new Date(r.date)) === state.weekStart);
+    const doneKm = weekRuns.reduce((s,r)=>s+(r.distanceKm||0), 0);
+    const freshTotal = fresh.reduce((s,d)=>s+(d.dist||0), 0);
+    const remaining = Math.max(0, freshTotal - doneKm);
+    const freshDays = merged.filter((d,i)=> d===fresh[i] && d.dist>0);
+    const freshSum = freshDays.reduce((s,d)=>s+d.dist, 0);
+    if(freshDays.length && freshSum>0){
+      const factor = remaining / freshSum;
+      freshDays.forEach(d=>{ d.dist = Math.max(0.1, Math.round(d.dist*factor*10)/10); });
+    }
+  }
+  state.plan = merged;
   if(state.profile.weeklyGoalKm > 0){
     state.chat.push({role:'coach', text: t('coach_weekly_goal_updated', {km: fmtDist(state.profile.weeklyGoalKm,1), unit: distUnit()}), ts:Date.now()});
     renderChat();
@@ -6938,12 +6966,20 @@ function nearestPRBucket(km){
   return (best && bestDiff <= 0.06) ? best : null;
 }
 // Para la "devolución" que se muestra en cada tarjeta del historial (para qué sirvió esa
-// sesión). Cuando la carrera está vinculada a un día real del plan usamos su tipo real;
-// si no (carga manual, importada de Strava sin vincular, o de una semana ya vieja donde
-// el plan de ese momento no se conserva), la clasificamos por distancia/ritmo relativos
-// al resto del historial -- no es una ciencia exacta, pero da una devolución razonable.
+// sesión). Cuando la carrera está vinculada a un día real del plan usamos su tipo real
+// (mirando tanto la semana actual como planHistory, igual que getQualitySessionBreakdown,
+// para no perder el tipo real de una carrera de una semana ya cerrada); si no está vinculada
+// a ningún día (carga manual, importada de Strava sin vincular), la clasificamos por
+// distancia/ritmo relativos al resto del historial -- no es una ciencia exacta, pero da una
+// devolución razonable.
 function runBenefitKey(r){
-  const linkedDay = (state.plan||[]).find(d => d.linkedRunId === r.id);
+  let linkedDay = (state.plan||[]).find(d => d.linkedRunId === r.id);
+  if(!linkedDay){
+    for(const h of (state.planHistory||[])){
+      linkedDay = (h.plan||[]).find(d => d.linkedRunId === r.id);
+      if(linkedDay) break;
+    }
+  }
   if(linkedDay && linkedDay.typeKey && linkedDay.typeKey !== 'rest') return linkedDay.typeKey;
   if(nearestPRBucket(r.distanceKm)) return 'race';
   const others = (state.runs||[]).filter(x => x.id!==r.id && x.distanceKm>0 && x.durationSec>0);
@@ -9701,6 +9737,14 @@ function applyCoachNote(input){
   // (el mismo tipo de bug que isBeginnerProfile/returningFromBreak tenían antes de esta sesión).
   let plan_updated = false;
   if(input.zona_cuerpo){
+    // A diferencia de la nota en sí (que según el comentario de arriba nunca se tiene que
+    // perder, ni siquiera con deshacer_cambio), esto SÍ mueve el plan -- lowerRemainingIntensity
+    // recorta d.dist de lo que queda de la semana, igual que hacen las otras 5 herramientas que
+    // sí llaman a captureUndoSnapshot(). Sin este llamado, guardar_nota_coach quedaba como la
+    // única herramienta que toca el plan sin dejar cómo estaba antes guardado -- "deshacé eso"
+    // después de "me duele la rodilla" contestaba que no había nada para deshacer (o, peor,
+    // deshacía un cambio más viejo sin relación, dejando el recorte de la molestia sin revertir).
+    captureUndoSnapshot();
     if(!state.painLog) state.painLog = [];
     state.painLog.push({id:Date.now(), date:localDateISO(), bodyPart:input.zona_cuerpo, note:String(input.nota).slice(0,200), active:true, checkinSent:false, fromChat:true});
     // El aumento de cautela (trainingCaution) recién se nota en la PRÓXIMA regeneración del
