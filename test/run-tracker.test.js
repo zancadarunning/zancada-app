@@ -40,6 +40,30 @@ test('saveRunProgress guarda elapsedSec (no solo distanceKm/points/hrLog)', () =
   assert.equal(saved.lastAnnouncedKm, 3);
 });
 
+test('saveRunProgress guarda running (para no reanudar corriendo una carrera que se pausó a mano)', () => {
+  // Bug hermano del de elapsedSec (ver el comentario de arriba del archivo): togglePause()
+  // llama a saveRunProgress() justo al pausar a mano, para poder recuperar el progreso lo más
+  // cerca posible del momento real de la pausa -- pero sin este campo, actuallyStartRun() no
+  // tenía forma de saber que la carrera estaba pausada al cerrarse la app (batería, el sistema
+  // mata la app, etc.) y la recuperaba SIEMPRE como si estuviera corriendo, retomando GPS y
+  // distancia sin que el corredor tocara nada.
+  const app = loadApp();
+  app.setTracker({
+    startedAt: Date.now() - 10 * 60 * 1000,
+    points: [],
+    distanceKm: 2,
+    hrLog: [],
+    lastAnnouncedKm: 2,
+    elapsedSec: 500,
+    running: false, // pausada a mano justo antes de guardar
+  });
+
+  app.saveRunProgress();
+  const saved = app.readRunProgress();
+
+  assert.equal(saved.running, false, 'el progreso guardado tiene que reflejar que la carrera estaba pausada, no asumir que sigue corriendo');
+});
+
 test('saveRunProgress no guarda nada si no hay una carrera en curso (sin startedAt)', () => {
   const app = loadApp();
   app.setTracker({ startedAt: null, points: [], distanceKm: 0, hrLog: [], lastAnnouncedKm: 0, elapsedSec: 0 });

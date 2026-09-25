@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-25T02:27:21Z';
+const APP_VERSION = '2026-09-25T02:35:50Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6093,6 +6093,11 @@ function saveRunProgress(finished){
       hrLog: tracker.hrLog,
       lastAnnouncedKm: tracker.lastAnnouncedKm,
       elapsedSec: tracker.elapsedSec,
+      // running: togglePause() llama a saveRunProgress() justo al pausar (ver su comentario)
+      // para poder recuperar el progreso lo más cerca posible del momento real de la pausa --
+      // pero sin guardar ESTE campo, actuallyStartRun() no tenía forma de saber que la carrera
+      // estaba pausada al cerrarse la app, y la recuperaba siempre como si estuviera corriendo.
+      running: !!tracker.running,
       finished: !!finished
     }));
   }catch(e){}
@@ -6538,17 +6543,24 @@ function actuallyStartRun(saved){
   // rato) -- elapsedSec ahora hace lo mismo: se restaura tal cual, sin extrapolar por reloj
   // de pared. El único margen de error es el intervalo entre el último guardado (cada fix
   // de GPS, y como mucho cada 15s por el timer) y el cierre real, siempre chico.
+  // running: si la carrera guardada estaba pausada A MANO cuando se cerró la app (togglePause
+  // guarda al toque, ver saveRunProgress), recuperarla tenía que respetar esa pausa -- antes
+  // se forzaba running:true sin importar nada, así que reabrir la app después de una pausa
+  // manual arrancaba a trackear GPS/distancia solo, sin que el corredor tocara nada (el botón
+  // encima seguía mostrando "Pausar", escondiendo que en realidad ya estaba corriendo de
+  // nuevo). saved.running puede faltar en progreso guardado por una versión vieja de la app,
+  // de ahí el default a true (siempre se guardaba corriendo, antes de este cambio).
+  const restoredRunning = saved ? (saved.running !== false) : true;
   tracker = saved
-    ? {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:saved.elapsedSec||0, running:true, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt, autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null}
+    ? {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:saved.elapsedSec||0, running:restoredRunning, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt, autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null}
     : {watchId:null, timerId:null, points:[], distanceKm:0, elapsedSec:0, running:true, hrLog:[], lastAnnouncedKm:0, startedAt:Date.now(), autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null};
   requestWakeLock();
   document.getElementById('runIdle').style.display='none';
   document.getElementById('runSummary').style.display='none';
   document.getElementById('runActive').style.display='block';
-  // El botón arranca en "Pausar" -- sin esto quedaba con el texto que tenía la
-  // última vez que se renderizó la pantalla (típicamente "Reanudar", puesto por
-  // applyStaticTranslations() al cargar la app con tracker.running todavía en false).
-  document.getElementById('pauseBtn').textContent = t('run_pause');
+  // El botón refleja el estado real restaurado (ver comentario de arriba) -- antes quedaba
+  // fijo en "Pausar" sin importar si la carrera se había guardado pausada.
+  document.getElementById('pauseBtn').textContent = restoredRunning ? t('run_pause') : t('run_resume');
   updateRecordingLabel();
   initLiveMap();
   updateLiveStats();
