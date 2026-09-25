@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-25T02:07:27Z';
+const APP_VERSION = '2026-09-25T02:27:21Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2189,7 +2189,11 @@ document.getElementById('perfil-gender-choice').addEventListener('click', e=>{
 // hacer con esa falta de dato en vez de asumir un número inventado.
 function ageFromBirth(dateStr){
   if(!dateStr) return null;
-  const b = new Date(dateStr);
+  // dateStr es un "YYYY-MM-DD" sin hora -- new Date(dateStr) sin 'T00:00:00' lo parsea como
+  // medianoche UTC, no local (mismo bug ya encontrado en earliestMonday/buildContext). En
+  // husos negativos (Argentina) eso corre el nacimiento 3 horas para atrás, así que en las
+  // horas previas a la medianoche local del cumpleaños esta función ya sumaba un año de más.
+  const b = new Date(dateStr+'T00:00:00');
   if(isNaN(b.getTime())) return null;
   return Math.max(10, Math.floor((Date.now()-b.getTime())/(365.25*24*3600*1000)));
 }
@@ -9593,7 +9597,16 @@ function applyVolumeAdjust(input){
     nw.plan.forEach(d=>{
       if(d.dist>0){
         const lbl = d.custom ? {type:d.type, desc:d.desc} : planLabel(d);
-        state.nextWeekOverrides[d.day] = { type: lbl.type, desc: lbl.desc, dist: Math.max(1, Math.round(d.dist*factor)), zone: d.zone, terrain: d.terrain };
+        // Mismo motivo que en applyPlanChange (ver su comentario sobre esta misma rama):
+        // getNextWeekPlan() arma este día de cero cada vez con Object.assign({}, d, ov, ...),
+        // así que si el override no trae su propia clave `interval`, queda colgado el
+        // interval VIEJO del algoritmo (reps/repMeters, de series o cuestas) -- que planLabel
+        // intenta leer después como si fuera de fartlek (workMin/restMin) y sale "NaNm". Si el
+        // día ya era custom, conservamos SU interval (ya viene en el formato correcto o en
+        // null); si todavía era del algoritmo, el texto de lbl.desc ya tiene los números
+        // reales incrustados (reps, metros, minutos), así que no hace falta ningún interval.
+        const interval = d.custom ? (d.interval || null) : null;
+        state.nextWeekOverrides[d.day] = { type: lbl.type, desc: lbl.desc, dist: Math.max(1, Math.round(d.dist*factor)), zone: d.zone, terrain: d.terrain, interval };
       }
     });
     renderPlan(); persist();
@@ -9603,7 +9616,23 @@ function applyVolumeAdjust(input){
   // Los días que ya pasaron (o que ya se corrieron/saltearon) quedan afuera del ajuste --
   // no tiene sentido subir o bajar retroactivamente el volumen de un día de esta semana
   // que ya terminó.
-  state.plan.forEach(d=>{ if(d.dist>0 && !isDayLocked(d.day)){ d.dist = Math.max(1, Math.round(d.dist*factor)); d.custom = true; } });
+  state.plan.forEach(d=>{
+    if(d.dist>0 && !isDayLocked(d.day)){
+      if(!d.custom){
+        // Mismo bug que ya se arregló en applyPlanChange (ver sus comentarios): marcar
+        // custom:true sin resolver antes tipo/descripción dejaba planLabel() leyendo
+        // d.type/d.desc undefined, y si el día era de series/cuestas (interval en formato
+        // reps/repMeters del algoritmo) encima intentaba mostrarlo como fartlek
+        // (workMin/restMin), saliendo "NaNm". planLabel(d) ACÁ, antes de tocar nada, ya deja
+        // los números reales (reps, metros, minutos) incrustados como texto en desc.
+        const lbl = planLabel(d);
+        d.type = lbl.type; d.desc = lbl.desc;
+        delete d.interval;
+        d.custom = true;
+      }
+      d.dist = Math.max(1, Math.round(d.dist*factor));
+    }
+  });
   renderPlan(); renderHome(); persist();
   state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')), ts:Date.now()});
   return `OK, ajusté el volumen de esta semana ${pct>0?'+':''}${pct}%.`;

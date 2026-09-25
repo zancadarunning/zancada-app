@@ -228,3 +228,64 @@ test('checkWeekRollover: un día cancelado para la semana que viene se promueve 
   assert.equal(wed.typeKey, 'rest');
   assert.equal(wed.dist, 0);
 });
+
+test('ajustar_volumen_semana (semana actual): una sesión de series del algoritmo no queda mostrando "undefined"/NaN al volverse personalizada', () => {
+  // applyVolumeAdjust marcaba d.custom=true (para que la próxima regeneración del plan no le
+  // pise el ajuste manual) sin resolver antes tipo/descripción -- planLabel(), en la rama
+  // custom, lee d.type/d.desc (quedaban undefined) y, si el día tenía d.interval del
+  // algoritmo (reps/repMeters de series o cuestas, no workMin/restMin de fartlek), intentaba
+  // mostrarlo igual como si fuera fartlek -- saliendo "NaNm". Mismo bug ya arreglado antes
+  // en applyPlanChange (modificar_sesion), pero nunca portado acá.
+  const app = loadApp();
+  app.state.profile = baseProfile(app);
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  const todayKey = app.DAY_KEYS[todayIdx];
+  app.state.plan = app.DAY_KEYS.map((day, i) => ({
+    day,
+    typeKey: i === todayIdx ? 'intervals' : 'rest',
+    dist: i === todayIdx ? 8 : 0,
+    zone: i === todayIdx ? 4 : null,
+    interval: i === todayIdx ? { reps: 6, repMeters: 400, recoveryMin: 2 } : null,
+  }));
+  app.state.chat = [];
+
+  const result = app.applyVolumeAdjust({ porcentaje: -15 });
+
+  assert.ok(!/undefined|NaN/.test(result), `la respuesta del coach no debería tener undefined/NaN: ${result}`);
+  const d = app.state.plan[todayIdx];
+  assert.equal(d.custom, true);
+  const lbl = app.planLabel(d);
+  assert.ok(!/undefined|NaN/.test(lbl.type + ' ' + lbl.desc), `planLabel no debería mostrar undefined/NaN -- type:"${lbl.type}" desc:"${lbl.desc}"`);
+});
+
+test('ajustar_volumen_semana (semana siguiente): una sesión de cuestas del algoritmo no queda mostrando "undefined"/NaN al volverse personalizada', () => {
+  // Mismo bug que el test de arriba, pero en la rama "semana que viene": el override
+  // guardado en state.nextWeekOverrides nunca traía su propia clave `interval`, así que
+  // Object.assign en getNextWeekPlan() dejaba colgado el interval VIEJO del algoritmo
+  // (repMeters de cuestas) sobre un día ahora custom -- mismo síntoma "NaNm" que
+  // applyPlanChange ya había encontrado y arreglado para su propia rama "siguiente".
+  const app = loadApp();
+  // Con currentWeeklyKm alto y los 7 días habilitados, la semana 3 del algoritmo mete una
+  // sesión de cuestas de verdad (interval en formato reps/repMeters, SIN workMin/restMin) --
+  // necesario para que este test ejercite el bug real, no un fartlek (que ya usa
+  // workMin/restMin, compatible con lo que planLabel espera de un día custom).
+  app.state.profile = baseProfile(app, { currentWeeklyKm: 40, weeklyKm: 40, trainingDays: ['mon','tue','wed','thu','fri','sat','sun'] });
+  app.state.weekNumber = 2; // getNextWeekPlan() arma la semana 3 con este perfil
+  app.state.weekStart = app.getMondayISO(new Date());
+  app.state.plan = app.generatePlan(app.state.profile, 2);
+  app.state.nextWeekOverrides = {};
+  app.state.chat = [];
+
+  const nwBefore = app.getNextWeekPlan();
+  assert.ok(nwBefore.plan.some(d => d.typeKey === 'hills' && d.interval), 'la semana que viene debería incluir una sesión de cuestas para que el test sea válido');
+
+  app.applyVolumeAdjust({ porcentaje: -15, semana: 'siguiente' });
+
+  const nw = app.getNextWeekPlan();
+  for(const d of nw.plan){
+    if(d.dist>0){
+      const lbl = app.planLabel(d);
+      assert.ok(!/undefined|NaN/.test(lbl.type + ' ' + lbl.desc), `día ${d.day}: planLabel no debería mostrar undefined/NaN -- type:"${lbl.type}" desc:"${lbl.desc}"`);
+    }
+  }
+});
