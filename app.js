@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-25T20:36:29Z';
+const APP_VERSION = '2026-09-25T21:06:46Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -550,9 +550,30 @@ async function updatePushStatusDisplay(){
     if(toggle) toggle.checked = !!sub;
   }catch(e){ el.textContent = t('push_disabled'); if(toggle) toggle.checked = false; }
 }
+// enable/disablePushNotifications hacen varios await en cadena (service worker, permiso,
+// suscripción/token, upsert o delete en Supabase) -- sin ningún candado, tocar el toggle
+// rápido (apagar-prender, o prender-apagar-prender) podía disparar dos llamadas superpuestas
+// que terminan en cualquier orden. El resultado quedaba en silencio desincronizado: por
+// ejemplo, el upsert de un "activar" viejo podía resolver DESPUÉS del delete de un
+// "desactivar" más nuevo, dejando la fila de push_subscriptions viva (y las notificaciones
+// llegando) aunque el toggle mostrara apagado -- o al revés, un delete viejo borrando la
+// suscripción de una activación reciente mientras el toggle sigue mostrando prendido.
+// Deshabilitar el checkbox mientras hay una operación en curso hace imposible disparar la
+// segunda antes de que la primera (y su updatePushStatusDisplay() final, que sincroniza el
+// checkbox con el estado real) haya terminado.
+let pushToggleBusy = false;
 async function handlePushToggle(checked){
-  if(checked) await enablePushNotifications();
-  else await disablePushNotifications();
+  if(pushToggleBusy) return;
+  pushToggleBusy = true;
+  const toggleEl = document.getElementById('push-toggle');
+  if(toggleEl) toggleEl.disabled = true;
+  try{
+    if(checked) await enablePushNotifications();
+    else await disablePushNotifications();
+  } finally {
+    pushToggleBusy = false;
+    if(toggleEl) toggleEl.disabled = false;
+  }
 }
 async function enablePushNotifications(){
   const nativePush = nativePushPlugin();
