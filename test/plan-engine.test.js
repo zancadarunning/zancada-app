@@ -481,6 +481,30 @@ test('buildWeeklyRecapMessage: una carrera extra sin nada planeado no infla el "
   assert.doesNotMatch(msg, /3 de 3/, 'no debería contar la carrera extra como si fuera una de las 3 planeadas');
 });
 
+test('buildWeeklyRecapMessage: un salto de varias semanas corta la racha aunque la última semana activa haya cumplido', () => {
+  // La racha mide semanas SEGUIDAS cumpliendo el plan. Antes, buildWeeklyRecapMessage solo
+  // miraba si LA ÚLTIMA semana activa cumplió su propio 70%, sin fijarse si hubo semanas
+  // enteras de calendario sin cerrar en el medio (el corredor desapareció y volvió). Alguien
+  // que traía una racha de 3 semanas, desaparecía un mes, y volvía a entrenar bien esa
+  // última semana antes de irse, terminaba viendo a la vez "volviste de una pausa" Y "¡vas 4
+  // semanas seguidas!" -- dos mensajes contradictorios -- y esa racha inflada quedaba
+  // grabada para siempre en bestStreakWeeks (Logros).
+  const app = loadApp();
+  const weekStart = '2026-09-07';
+  const weekPlan = [
+    { day: 'mon', dist: 5, status: 'done' },
+    { day: 'tue', dist: 5, status: 'done' },
+    { day: 'wed', dist: 0, status: null },
+  ];
+  app.state.runs = [];
+  app.state.streakWeeks = 3;
+
+  const msg = app.buildWeeklyRecapMessage(weekPlan, weekStart, 5); // 5 semanas de salto
+
+  assert.equal(app.state.streakWeeks, 0, 'un salto de varias semanas debería cortar la racha, no extenderla');
+  assert.doesNotMatch(msg, /semanas seguidas/i, 'no debería felicitar por una racha que en realidad se cortó');
+});
+
 test('buildSessionFeedbackMessage: compara lo planeado contra lo real y varía según la calificación', () => {
   // Antes calificar "bien" o "excelente" no generaba NINGÚN mensaje del coach -- solo "mal"
   // mandaba una línea genérica, sin ningún número real de la sesión. Ahora las tres

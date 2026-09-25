@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-25T01:56:14Z';
+const APP_VERSION = '2026-09-25T02:07:27Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3124,7 +3124,7 @@ function getNextWeekPlan(){
   });
   return { plan, weekNumber: wn, weekStart: nextStartIso };
 }
-function buildWeeklyRecapMessage(weekPlan, weekStartIso){
+function buildWeeklyRecapMessage(weekPlan, weekStartIso, diffWeeks){
   // Resumen factual de la semana que se cierra, sin juicio de valor (eso ya lo cubren
   // el ajuste automático y el aviso proactivo) -- así el corredor tiene noticias del
   // coach todas las semanas, no solo cuando algo anda mal.
@@ -3149,7 +3149,15 @@ function buildWeeklyRecapMessage(weekPlan, weekStartIso){
   // Se corta apenas una semana no llega a ese umbral. Solo la mencionamos a partir de
   // la segunda semana seguida, para no sonar como un contador vacío en la primera.
   const metGoal = plannedCount>0 && (doneCount/plannedCount) >= 0.7;
-  state.streakWeeks = metGoal ? (state.streakWeeks||0)+1 : 0;
+  // diffWeeks>1 significa que hubo al menos una semana entera de calendario sin cerrar
+  // entre el último recap y este (el corredor desapareció y volvió) -- la racha mide
+  // semanas SEGUIDAS, así que un salto la corta aunque esta última semana activa haya
+  // cumplido su propio 70%. Sin este chequeo, alguien que entrenaba bien una semana y
+  // después desaparecía un mes recibía a la vez el aviso de "volviste de una pausa" Y
+  // "¡vas racha de semanas!" en el mismo momento -- dos mensajes contradictorios -- y esa
+  // racha inflada quedaba grabada para siempre en bestStreakWeeks (la pantalla de Logros).
+  const brokeStreak = (diffWeeks||1) > 1;
+  state.streakWeeks = (metGoal && !brokeStreak) ? (state.streakWeeks||0)+1 : 0;
   // Guardamos también la racha más larga alcanzada alguna vez (no solo la actual) --
   // la usa la pantalla de Logros para no perder un hito ya conseguido cuando la racha
   // en curso se corta.
@@ -3236,7 +3244,7 @@ function checkWeekRollover(){
     const breakAdj = computeReturnFromBreakAdjustment(detectTrainingGapWeeks(state.weekStart));
     if(state.weekStart && state.plan && state.plan.length){
       state.planHistory.push({weekNumber: state.weekNumber||1, weekStart: state.weekStart, plan: state.plan});
-      recapMsg = buildWeeklyRecapMessage(state.plan, state.weekStart);
+      recapMsg = buildWeeklyRecapMessage(state.plan, state.weekStart, diffWeeks);
       goalUpsellMsg = checkGoalUpsell();
       if(diffWeeks === 1 && !breakAdj){
         // exactamente la semana que ya veníamos mostrando como "la que sigue" (con el ajuste
@@ -9150,7 +9158,11 @@ function buildContext(){
   }
   if(p.trainingDays && p.trainingDays.length) ctx += ` Días de entreno habituales (cronograma de base, permanente): ${p.trainingDays.map(d=>t('day_'+d)).join(', ')}. Si el corredor pide cambiar este cronograma de forma permanente (no solo esta semana), usá modificar_perfil con dias_entreno.`;
   if(p.raceDate){
-    const weeksLeft = Math.round((new Date(p.raceDate) - new Date()) / (7*86400000));
+    // p.raceDate es un "YYYY-MM-DD" sin hora -- new Date(p.raceDate) SIN el 'T00:00:00' lo
+    // parsea como medianoche UTC, no local (mismo bug ya encontrado en earliestMonday). En
+    // husos negativos (Argentina) eso corre la cuenta regresiva: una carrera de hoy o mañana
+    // a la tarde podía aparecer como "ya pasó" en el contexto que lee el coach del chat.
+    const weeksLeft = Math.round((new Date(p.raceDate+'T00:00:00') - new Date()) / (7*86400000));
     ctx += ` Fecha de la carrera objetivo: ${p.raceDate} (${weeksLeft>0?`faltan ${weeksLeft} semanas`:'ya pasó'}).`;
   }
   if(p.weeklyGoalKm > 0) ctx += ` Meta de km que el corredor se puso para esta semana: ${p.weeklyGoalKm}km (esto ya se usó para ajustar el volumen del plan actual, dentro de márgenes seguros).`;
