@@ -83,3 +83,37 @@ test('clearRunProgress borra el progreso guardado', () => {
   app.clearRunProgress();
   assert.equal(app.readRunProgress(), null);
 });
+
+test('isLikelyDuplicateOfExistingRun: no confunde una entrada en calor corta con la sesión fuerte que sigue, aunque tengan distancia parecida', () => {
+  // El chequeo de duplicados entre fuentes (Health Connect vs. Strava/Polar/Wahoo, ver el
+  // comentario junto a la función) solo miraba hora de inicio (10 min) y distancia (10%) --
+  // una entrada en calor corta seguida, unos minutos después, de una serie/tiempo fuerte con
+  // distancia parecida (3km trotando + 3.2km fuerte) caía en esa misma ventana y las dos
+  // actividades reales y distintas se trataban como una sola, perdiendo una para siempre.
+  // La MISMA actividad sincronizada dos veces (el caso real que esto existe para atajar)
+  // siempre tiene una duración prácticamente idéntica además de la distancia -- por eso
+  // ahora también exige duración parecida.
+  const app = loadApp();
+  const start = new Date('2026-09-20T08:00:00Z');
+  const warmup = { date: start.toISOString(), distanceKm: 3, durationSec: 20 * 60 }; // trote suave, 15min/km
+  const existingRuns = [warmup];
+
+  const mainSetStart = new Date(start.getTime() + 7 * 60 * 1000); // 7 min después
+  const isDup = app.isLikelyDuplicateOfExistingRun(mainSetStart.toISOString(), 3.2, existingRuns, 14 * 60); // fuerte, ~4:22/km
+
+  assert.equal(isDup, false, 'dos actividades reales con distancia parecida pero ritmos muy distintos no deberían tratarse como duplicadas');
+});
+
+test('isLikelyDuplicateOfExistingRun: sigue detectando la misma actividad real sincronizada desde dos fuentes', () => {
+  const app = loadApp();
+  const start = new Date('2026-09-20T08:00:00Z');
+  const fromStrava = { date: start.toISOString(), distanceKm: 5.02, durationSec: 1500 };
+  const existingRuns = [fromStrava];
+
+  // La misma carrera, sincronizada un rato después desde Health Connect -- pequeñas
+  // diferencias de GPS/reloj entre fuentes, pero esencialmente la misma actividad.
+  const fromHealthConnectStart = new Date(start.getTime() + 30 * 1000);
+  const isDup = app.isLikelyDuplicateOfExistingRun(fromHealthConnectStart.toISOString(), 4.98, existingRuns, 1510);
+
+  assert.equal(isDup, true, 'la misma actividad real sincronizada desde otra fuente sigue debiendo detectarse como duplicada');
+});

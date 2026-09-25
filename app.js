@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-25T21:06:46Z';
+const APP_VERSION = '2026-09-25T21:13:02Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1390,7 +1390,7 @@ function sourceBadgeHtml(source, withMargin){
   if(!label) return '';
   return `<span class="tag tag-asfalto"${withMargin?' style="margin-right:6px;"':''}>${label}</span>`;
 }
-function isLikelyDuplicateOfExistingRun(startIso, distanceKm, existingRuns){
+function isLikelyDuplicateOfExistingRun(startIso, distanceKm, existingRuns, durationSec){
   // Compara contra CUALQUIER carrera ya guardada, sin importar la fuente -- si el mismo
   // reloj manda la actividad tanto por Health Connect (local, en este dispositivo) como
   // por Strava/Polar/Wahoo (la nube de esa marca), sin este chequeo se guardaban las dos
@@ -1399,14 +1399,28 @@ function isLikelyDuplicateOfExistingRun(startIso, distanceKm, existingRuns){
   // (10 min) y distancia parecida (10%, con un piso de 300m para carreras cortas) --
   // suficiente para reconocer la misma actividad real sin confundir dos carreras
   // distintas hechas el mismo día.
+  // Ojo con solo mirar distancia: una entrada en calor corta seguida, unos minutos después,
+  // de una serie/tiempo fuerte con distancia parecida (ej. 3km trotando + 3.2km fuerte) caía
+  // dentro de esta misma ventana de 10 min y 10% -- dos actividades reales y distintas
+  // terminaban tratadas como una sola, perdiendo una de las dos para siempre. La MISMA
+  // actividad sincronizada dos veces (el caso real que este chequeo existe para atajar)
+  // siempre tiene una duración prácticamente idéntica además de la distancia -- dos
+  // esfuerzos distintos de distancia parecida casi nunca duran lo mismo (ritmos distintos).
+  // Exigir también duración parecida (10%, piso de 60s) cierra ese falso positivo sin
+  // debilitar la detección del caso real.
   const startMs = new Date(startIso).getTime();
   if(isNaN(startMs)) return false;
   return (existingRuns||[]).some(r=>{
     const rMs = new Date(r.date).getTime();
     if(isNaN(rMs) || Math.abs(rMs-startMs) > 10*60*1000) return false;
     const rKm = r.distanceKm || 0;
-    const tol = Math.max(0.3, rKm*0.1);
-    return Math.abs(rKm - distanceKm) <= tol;
+    const distTol = Math.max(0.3, rKm*0.1);
+    if(Math.abs(rKm - distanceKm) > distTol) return false;
+    if(durationSec>0 && r.durationSec>0){
+      const durTol = Math.max(60, r.durationSec*0.1);
+      if(Math.abs(r.durationSec - durationSec) > durTol) return false;
+    }
+    return true;
   });
 }
 function getHealthConnectBridge(){
@@ -1438,7 +1452,7 @@ async function syncHealthConnectNow(){
     const knownIds = new Set((state.runs||[]).map(r=>r.healthConnectId));
     const newRuns = (exercises||[])
       .filter(ex=>!knownIds.has(ex.id))
-      .filter(ex=>!isLikelyDuplicateOfExistingRun(ex.startTime, (ex.distanceMeters||0)/1000, state.runs))
+      .filter(ex=>!isLikelyDuplicateOfExistingRun(ex.startTime, (ex.distanceMeters||0)/1000, state.runs, ex.durationSec))
       .map(healthConnectExerciseToRun);
     if(newRuns.length){
       state.runs = [...(state.runs||[]), ...newRuns];
@@ -9759,6 +9773,19 @@ function applyProfileChange(input){
   const validDays = Array.isArray(input.dias_entreno) ? DAY_KEYS.filter(d=>input.dias_entreno.includes(d)) : [];
   const hasAnyChange = !!(input.objetivo || input.fecha_carrera || input.terreno || typeof input.fc_maxima==='number' || typeof input.km_actuales==='number' || validDays.length);
   if(!hasAnyChange) return 'No hubo cambios para aplicar.';
+  // La fecha de carrera cargada desde Perfil > Metas pasa por calBoundsFor/calDateAllowed
+  // (no puede quedar en el pasado, ver el comentario junto a calBoundsFor) -- pero esta vía
+  // (modificar_perfil, la herramienta del coach de chat) escribía fecha_carrera directo en
+  // state.profile.raceDate sin ninguna validación. El modelo puede alucinar un formato raro,
+  // o el corredor puede mencionar de pasada una fecha que ya pasó -- sin este chequeo,
+  // taperMultiplier/weeksLeft (el contexto que lee el propio coach) terminaban trabajando con
+  // una fecha objetivo inválida o vieja, sin que nadie se diera cuenta.
+  if(input.fecha_carrera){
+    const validFormat = /^\d{4}-\d{2}-\d{2}$/.test(input.fecha_carrera) && !isNaN(new Date(input.fecha_carrera+'T00:00:00').getTime());
+    if(!validFormat || !calDateAllowed(input.fecha_carrera, calBoundsFor('perfil-racedate'))){
+      return `La fecha de carrera "${input.fecha_carrera}" no es válida -- tiene que ser una fecha real en formato YYYY-MM-DD y no puede ser una fecha ya pasada. Confirmá la fecha correcta con el corredor y volvé a llamar a modificar_perfil.`;
+    }
+  }
   captureUndoSnapshot();
   const changes = [];
   let recalc = false;

@@ -84,6 +84,34 @@ test('applyProfileChange: dias_entreno con valores inválidos no cambia nada', (
   assert.deepEqual(Array.from(app.state.profile.trainingDays), ['tue', 'wed', 'fri', 'sun']);
 });
 
+test('applyProfileChange: modificar_perfil rechaza una fecha_carrera ya pasada, no la escribe directo en el perfil', () => {
+  // El calendario de Perfil > Metas no deja elegir una fecha de carrera ya pasada
+  // (calBoundsFor/calDateAllowed) -- pero modificar_perfil (la herramienta del coach de
+  // chat) escribía fecha_carrera directo en state.profile.raceDate sin ninguna validación.
+  // El modelo puede alucinar un formato raro, o el corredor puede mencionar una fecha que
+  // ya pasó -- sin este chequeo, taperMultiplier/weeksLeft terminaban trabajando con una
+  // fecha objetivo inválida o vieja.
+  const app = loadApp();
+  app.state.profile = baseProfile(app, { raceDate: null });
+  app.state.weekNumber = 1;
+  app.state.plan = app.generatePlan(app.state.profile, 1);
+  app.state.nextWeekOverrides = {};
+  app.state.chat = [];
+
+  const pastResult = app.applyProfileChange({ fecha_carrera: '2020-01-01' });
+  assert.match(pastResult, /no es válida/i, 'debería rechazar una fecha ya pasada');
+  assert.equal(app.state.profile.raceDate, null, 'no debería haber tocado el perfil');
+
+  const garbageResult = app.applyProfileChange({ fecha_carrera: 'el mes que viene' });
+  assert.match(garbageResult, /no es válida/i, 'debería rechazar un formato que no sea YYYY-MM-DD');
+  assert.equal(app.state.profile.raceDate, null);
+
+  const futureDate = app.addDaysToIsoLocal(app.todayLocalISO(), 60);
+  const okResult = app.applyProfileChange({ fecha_carrera: futureDate });
+  assert.doesNotMatch(okResult, /no es válida/i, 'una fecha futura válida sí debería aceptarse');
+  assert.equal(app.state.profile.raceDate, futureDate);
+});
+
 test('deshacer_cambio: restaura el plan y el perfil a como estaban antes del último cambio', () => {
   const app = loadApp();
   app.state.profile = baseProfile(app);
