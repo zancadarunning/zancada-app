@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-26T03:44:55Z';
+const APP_VERSION = '2026-09-26T03:52:21Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1499,6 +1499,13 @@ async function syncHealthConnectNow(){
           shoe.km = state.runs.filter(r=>String(r.shoeId)===String(shoe.id)).reduce((a,r)=>a+(r.distanceKm||0),0);
         });
       }
+      // A diferencia de Strava/Polar/Wahoo/COROS (que sincronizan vía el backend y pasan por
+      // refreshStateFromServer, que sí llama checkNewPR por cada carrera nueva -- ver ese
+      // comentario), Health Connect entra directo a state.runs en memoria acá mismo, así que
+      // sin esto una marca personal nueva de un reloj sin API propia (Huawei, ver el resto de
+      // relojes que dependen de Health Connect) nunca disparaba el festejo/aviso de "nuevo
+      // récord", aunque Logros sí mostrara la marca correcta (se recalcula siempre en vivo).
+      newRuns.forEach(checkNewPR);
       renderHistory(); renderHome(); renderPerfil();
     }
     return {synced:newRuns.length>0};
