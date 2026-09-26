@@ -238,7 +238,17 @@ function activityToRun(record, detail) {
     };
   }
   const startTime = record.startTime || record.start_time || record.date || d.startTime || d.start_time;
-  const startDate = new Date(startTime);
+  // localDatePart: mismo criterio que localDatePartFromIso() en polar-activity-helpers.js --
+  // si startTime es un ISO con offset real (ej. "...T21:30:00-03:00"), leer el día con
+  // getUTCDay() sobre el Date crudo lo convierte a UTC primero y pierde la fecha local,
+  // reproduciendo el mismo bug de "corrida de noche cargada al día siguiente" ya arreglado
+  // para Strava/Polar. Esta rama es best-effort (nombres de campo nunca confirmados, ver el
+  // comentario grande arriba) -- no hay forma de saber si el string real vendrá con offset o
+  // no, pero tomar los primeros 10 caracteres es correcto en el caso con offset y no
+  // empeora el caso sin offset. Se usa para planDayIndex/planMonday, nunca para `date`
+  // (que sí necesita el instante real completo).
+  const localDatePart = String(startTime || '').slice(0, 10);
+  const startDate = new Date(localDatePart + 'T00:00:00Z');
   const distanceM = record.distance ?? record.totalDistance ?? d.distance ?? d.totalDistance ?? 0;
   const durationSec = record.duration ?? record.totalDuration ?? record.movingDuration ?? d.duration ?? d.totalDuration ?? 0;
   const id = getCorosRecordId(record);
@@ -262,7 +272,7 @@ function activityToRun(record, detail) {
     series: null,
     shoeId: null,
     source: 'coros',
-    planMonday: getMondayISO(startTime),
+    planMonday: getMondayISO(localDatePart),
     planDayIndex: (startDate.getUTCDay() + 6) % 7
   };
 }

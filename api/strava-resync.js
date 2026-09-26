@@ -57,7 +57,12 @@ module.exports = withSentry(async (req, res) => {
             run.elevationGain = act.total_elevation_gain || 0;
             run.avgHr = act.average_heartrate ? Math.round(act.average_heartrate) : (run.avgHr || null);
             run.maxHr = act.max_heartrate ? Math.round(act.max_heartrate) : null;
-            run.avgCadence = act.average_cadence || null;
+            // *2: Strava reporta la cadencia de running como pasos de UNA sola pierna por
+          // minuto, no el total -- mismo criterio que activityToRun() en
+          // strava-activity-helpers.js (línea ~198). Sin el *2 acá, una carrera vieja
+          // rellenada por este cron de backfill quedaba con la mitad de la cadencia real,
+          // mientras que la misma carrera sincronizada de cero mostraba el valor correcto.
+          run.avgCadence = act.average_cadence ? Math.round(act.average_cadence * 2) : null;
             run.calories = act.calories ? Math.round(act.calories) : null;
             if (act.map && act.map.summary_polyline && (!run.points || !run.points.length)) {
               run.points = decodePolyline(act.map.summary_polyline);
