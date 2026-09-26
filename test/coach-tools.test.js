@@ -369,3 +369,31 @@ test('ajustar meta semanal "ahora" a mitad de semana: el total real de la semana
   // Los días ya corridos no deberían tocarse -- solo el/los días que quedan por delante.
   assert.equal(app.state.plan.find(d=>d.day==='mon').dist, plan.find(d=>d.day==='mon').dist);
 });
+
+test('buildContext: le dice al modelo, ya resuelto, qué pasó hoy y qué toca mañana -- sin que tenga que cruzarlo contra el plan completo', () => {
+  // Reportado por un usuario con una charla real: con el día de hoy y el plan completo de
+  // la semana YA en el contexto, el coach (Haiku) igual se confundía cruzando "hoy es
+  // viernes" contra la lista larga del plan para deducir qué le tocaba -- llegó a inventar
+  // que la sesión de "mañana" era la de 9km que ya se había corrido (mal, con dolor) HOY.
+  // Este test verifica que buildContext() le arme esa respuesta ya resuelta, en una frase
+  // directa, para que el modelo no tenga que inferirla del resto del bloque.
+  const app = loadApp();
+  app.state.profile = baseProfile(app);
+  app.state.weekNumber = 5;
+  app.state.weekStart = app.getMondayISO(new Date());
+  app.state.event = null;
+  app.state.runs = [];
+  app.state.shoes = [];
+  app.state.painLog = [];
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  // trainingDays de baseProfile no incluye lunes -- así que, incluso si hoy es domingo (y
+  // "mañana" cae en la semana que viene, ver tomorrowIsNextWeek en buildContext), el lunes
+  // recién generado también da descanso, y el test vale sin importar qué día se corra.
+  app.state.plan = app.DAY_KEYS.map((day, i) => ({ day, typeKey: 'rest', dist: 0 }));
+  app.state.plan[todayIdx] = { day: app.DAY_KEYS[todayIdx], typeKey: 'easy', dist: 9, status: 'done', rating: 'mal' };
+
+  const ctx = app.buildContext();
+
+  assert.match(ctx, /La sesión de HOY es: .*9km.*ya hecho.*calificó: mal/, `debería describir la sesión de hoy ya resuelta, dio: ${ctx.match(/La sesión de HOY es:[^.]*\./)}`);
+  assert.match(ctx, /La sesión de MAÑANA es: descanso/, 'debería describir la sesión de mañana ya resuelta');
+});

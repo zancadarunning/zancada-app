@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-25T23:52:05Z';
+const APP_VERSION = '2026-09-26T00:05:54Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -9343,7 +9343,31 @@ function buildContext(){
   const tomorrowNote = tomorrowIsNextWeek
     ? `, pero OJO: es el ${t('day_'+DAY_KEYS[tomorrowIdx])} de LA SEMANA QUE VIENE, no el de esta semana (hoy es domingo, el último día de la semana actual). Para un pedido sobre "mañana" en este caso: con modificar_sesion o cancelar_sesion usá semana:'siguiente'; mover_sesion NO sirve porque no puede cruzar de una semana a la otra -- si piden mover la sesión de hoy para mañana, usá cancelar_sesion en el día de hoy (dia:'sun') y modificar_sesion con semana:'siguiente' en el lunes que viene, repitiendo el mismo tipo/distancia/zona/terreno que tenía la sesión de hoy`
     : '';
-  let ctx = `HOY es ${todayLabel}, ${nowTimeLabel} hs (código de día: ${DAY_KEYS[todayIdx]}). Mañana es ${t('day_'+DAY_KEYS[tomorrowIdx])} (código: ${DAY_KEYS[tomorrowIdx]})${tomorrowNote}. Usá esto como la referencia exacta para cualquier pedido con "hoy", "mañana", "ayer" u otro día relativo, y para saber si es de mañana/tarde/noche -- nunca lo adivines mirando el estado del plan NI un "hoy es..." que vos mismo hayas dicho en un mensaje anterior de esta charla: los mensajes viejos pueden ser de otro día, así que este dato (el de ESTE mensaje) manda siempre, incluso si contradice algo que dijiste antes.${p.tz ? ` Zona horaria del corredor: ${p.tz} (usala para inferir de qué país/región es -- por ejemplo para saber si está en el hemisferio sur o norte a la hora de hablar de estaciones del año, clima o época de carreras).` : ''} `;
+  // getNextWeekPlan() se calcula acá arriba (antes de necesitarse para el bloque de la
+  // semana que viene, más abajo) porque también hace falta para poder describir la sesión
+  // de "mañana" cuando hoy es domingo (tomorrowIsNextWeek) -- ese "mañana" vive en el plan
+  // de la semana que viene, no en el de esta.
+  const nw = getNextWeekPlan();
+  // Reportado por un usuario (charla real): con el día y el plan completo YA en el
+  // contexto, el modelo (sobre todo Haiku) igual se confundía tratando de cruzar "hoy es
+  // viernes" contra la lista larga del plan semanal para deducir qué le tocaba -- terminó
+  // inventando que la sesión de mañana era "la de 9km que movimos" cuando esos 9km ya
+  // eran los de HOY (y encima con dolor), y tardó varios mensajes en corregirse solo. Acá
+  // se le arma la respuesta YA resuelta, en una sola frase corta, sin que tenga que buscar
+  // ni cruzar nada -- mismo criterio que el aviso de "citá el número exacto" más abajo:
+  // cuanto menos tenga que inferir el modelo, menos margen para que se equivoque.
+  const describePlanDayForCtx = d=>{
+    if(!d) return 'sin datos';
+    if(!(d.dist>0)) return 'descanso';
+    const label = d.custom ? d.type : t('type_'+d.typeKey);
+    let s = `${label}, ${d.dist}km`;
+    if(d.status==='done') s += ' (ya hecho' + (d.rating?', calificó: '+d.rating:'') + ')';
+    else if(d.status==='skipped') s += ' (salteado)';
+    return s;
+  };
+  const todaySessionDesc = describePlanDayForCtx(state.plan[todayIdx]);
+  const tomorrowSessionDesc = describePlanDayForCtx(tomorrowIsNextWeek ? nw.plan[tomorrowIdx] : state.plan[tomorrowIdx]);
+  let ctx = `HOY es ${todayLabel}, ${nowTimeLabel} hs (código de día: ${DAY_KEYS[todayIdx]}). Mañana es ${t('day_'+DAY_KEYS[tomorrowIdx])} (código: ${DAY_KEYS[tomorrowIdx]})${tomorrowNote}. Usá esto como la referencia exacta para cualquier pedido con "hoy", "mañana", "ayer" u otro día relativo, y para saber si es de mañana/tarde/noche -- nunca lo adivines mirando el estado del plan NI un "hoy es..." que vos mismo hayas dicho en un mensaje anterior de esta charla: los mensajes viejos pueden ser de otro día, así que este dato (el de ESTE mensaje) manda siempre, incluso si contradice algo que dijiste antes. La sesión de HOY es: ${todaySessionDesc}. La sesión de MAÑANA es: ${tomorrowSessionDesc}. Estos dos datos ya están resueltos -- no hace falta que los recalcules ni los cruces contra el resto del plan más abajo, y si contradicen algo que vos mismo dijiste antes en esta charla, estos mandan siempre.${p.tz ? ` Zona horaria del corredor: ${p.tz} (usala para inferir de qué país/región es -- por ejemplo para saber si está en el hemisferio sur o norte a la hora de hablar de estaciones del año, clima o época de carreras).` : ''} `;
   const ageForCtx = ageFromBirth(p.birth);
   ctx += `Nombre: ${p.name}.${ageForCtx !== null ? ` Edad aprox: ${ageForCtx}.` : ''} Peso: ${p.weight}kg. Altura: ${p.height}cm. Corre ${p.weeklyKm}km/semana (calculado automáticamente según objetivo y fecha de carrera). Terreno: ${p.terrain}. Objetivo: ${t('ob_goal_'+p.goal)}. Zonas de FC (bpm): ${JSON.stringify(p.hrZones)}.`;
   // El plan generado (generatePlan) YA sabe si es principiante y le arma sesiones en
@@ -9423,7 +9447,6 @@ function buildContext(){
   // todo con un modelo más chico (Haiku), que sigue mejor una estructura clara que un
   // párrafo largo y denso.
   ctx += `\n\n=== PLAN DE ESTA SEMANA (semana ${state.weekNumber}, la semana ACTUAL -- usá SIEMPRE este bloque para responder sobre "hoy", "mañana", "ayer" o "esta semana") ===\n${state.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)${d.status?'/'+d.status:''}${d.rating?'/calificó:'+d.rating:''}`).join(', ')}.\n=== FIN plan de esta semana ===`;
-  const nw = getNextWeekPlan();
   ctx += `\n\n=== PLAN DE LA SEMANA QUE VIENE (semana ${nw.weekNumber}, todavía NO empezó -- es DISTINTA a la de arriba, ya calculada pero puede ajustarse según cómo termine esta semana. NUNCA uses estos km para responder sobre "hoy" o "mañana", esos están en el bloque de arriba) ===\n${nw.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)`).join(', ')}.\n=== FIN plan de la semana que viene ===\n`;
   // Reportado por un usuario: le preguntó al coach cuánto tocaba un día puntual y respondió
   // con un número (7km) distinto al que estos mismos bloques ya traían (8km) -- no un dato
