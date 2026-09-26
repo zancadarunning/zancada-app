@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-26T02:47:26Z';
+const APP_VERSION = '2026-09-26T02:55:45Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -285,7 +285,14 @@ function escapeHtml(str){
   return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function sysMsgWithIcon(icon, text){
-  return `<span class="icon-sq" style="width:12px; height:12px; vertical-align:-1px; margin-right:4px;">${icon}</span>${text}`;
+  // Defensa en profundidad: renderChat() inserta los mensajes de rol 'system' con innerHTML
+  // SIN escapar (a diferencia de los de usuario/coach, ver escapeHtml/formatCoachText ahí) --
+  // asumía que este texto siempre viene de t()/concatenación de strings fijos, nunca de
+  // datos crudos. Eso dejó de ser cierto en más de un lugar (ver el comentario en
+  // applyPlanChange/applyCancelSession sobre input.dia sin validar) -- escapar acá, en el
+  // único lugar donde se arma este texto, cierra el hueco sin depender de que cada llamador
+  // se acuerde de hacerlo.
+  return `<span class="icon-sq" style="width:12px; height:12px; vertical-align:-1px; margin-right:4px;">${icon}</span>${escapeHtml(text)}`;
 }
 // El coach a veces usa **negrita** al estilo markdown para resaltar algo, y a veces
 // arma listas con líneas que arrancan en "- ". Escapamos el texto primero (por
@@ -9753,6 +9760,18 @@ function resolveCustomInterval(input){
 // texto libre sin estructura (ver el comentario grande más abajo, en el chequeo).
 const REP_BASED_TYPES = ['intervals','hills','fartlek'];
 function applyPlanChange(input){
+  // El input_schema de la herramienta declara dia como enum:DAY_KEYS, pero eso es solo una
+  // guía para el modelo -- la API de tool use no lo hace cumplir de verdad (mismo motivo que
+  // ya vale para zona/distancia_km, ver los comentarios de MAX_SESSION_KM/resolveZone más
+  // abajo). La rama de la semana ACTUAL valida esto indirectamente (state.plan.find no
+  // encuentra nada si el día no es real, y devuelve "Día no encontrado." antes de tocar
+  // nada), pero la rama 'siguiente' escribía state.nextWeekOverrides[input.dia] y armaba
+  // t('day_'+input.dia) con el valor CRUDO, sin ese mismo chequeo -- si el modelo mandaba
+  // cualquier otra cosa ahí (alucinación, o texto de la charla que terminó colándose en ese
+  // campo), t() devuelve la clave tal cual cuando no encuentra traducción (ver esa función),
+  // y ese texto sin escapar terminaba en un mensaje de chat de rol 'system', que renderChat()
+  // inserta con innerHTML sin escapar -- una inyección de HTML real, no solo teórica.
+  if(!DAY_KEYS.includes(input.dia)) return 'Día no encontrado.';
   // El snapshot de undo se toma DESPUÉS de validar (día encontrado, no bloqueado) -- si
   // se toma antes, un pedido inválido (día ya pasado, por ejemplo) igual pisa el snapshot
   // del cambio real anterior con el estado actual sin cambios, y "deshacer" ya no puede
@@ -9914,6 +9933,11 @@ function applyMoveSession(input){
   return `OK, moví la sesión de ${input.dia_origen} a ${input.dia_destino}.`;
 }
 function applyCancelSession(input){
+  // Mismo motivo que el chequeo equivalente en applyPlanChange: la rama 'siguiente' usaba
+  // input.dia crudo (sin validar contra DAY_KEYS) tanto para la clave de nextWeekOverrides
+  // como para t('day_'+input.dia) en el mensaje de chat -- un valor inesperado del modelo
+  // terminaba sin escapar en un mensaje de rol 'system'.
+  if(!DAY_KEYS.includes(input.dia)) return 'Día no encontrado.';
   // Antes, cuando el corredor cancelaba una sesión por chat, el modelo terminaba
   // llamando a modificar_sesion igual (es la única herramienta de "un día puntual"
   // que conocía) y como esa herramienta exige tipo/descripción, improvisaba algo

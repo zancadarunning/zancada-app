@@ -477,3 +477,34 @@ test('buildContext: le dice al modelo, ya resuelto, qué pasó hoy y qué toca m
   assert.match(ctx, /La sesión de HOY es: .*9km.*ya hecho.*calificó: mal/, `debería describir la sesión de hoy ya resuelta, dio: ${ctx.match(/La sesión de HOY es:[^.]*\./)}`);
   assert.match(ctx, /La sesión de MAÑANA es: descanso/, 'debería describir la sesión de mañana ya resuelta');
 });
+
+test('modificar_sesion/cancelar_sesion (semana siguiente): rechazan un "dia" que no es un DAY_KEYS real, en vez de usarlo crudo', () => {
+  // El input_schema de las herramientas declara dia como enum:DAY_KEYS, pero la API de tool
+  // use no lo hace cumplir de verdad -- la rama 'siguiente' de ambas herramientas escribía
+  // state.nextWeekOverrides[input.dia] y armaba t('day_'+input.dia) con el valor CRUDO, sin
+  // validar. t() devuelve la clave tal cual cuando no hay traducción, y ese texto terminaba
+  // sin escapar en un mensaje de chat de rol 'system' (ver el fix en sysMsgWithIcon) --
+  // una inyección de HTML real si el modelo mandaba algo inesperado ahí.
+  const app = loadApp();
+  app.state.profile = baseProfile(app);
+  app.state.nextWeekOverrides = {};
+  app.state.chat = [];
+
+  const badDia = '<img src=x onerror=alert(1)>';
+  const r1 = app.applyPlanChange({ semana: 'siguiente', dia: badDia, tipo: 'Rodaje', tipo_categoria: 'easy', descripcion: 'x', distancia_km: 5 });
+  assert.equal(r1, 'Día no encontrado.');
+  assert.equal(Object.keys(app.state.nextWeekOverrides).length, 0, 'no debería haber escrito nada en nextWeekOverrides con un día inválido');
+
+  const r2 = app.applyCancelSession({ semana: 'siguiente', dia: badDia });
+  assert.equal(r2, 'Día no encontrado.');
+  assert.equal(Object.keys(app.state.nextWeekOverrides).length, 0);
+
+  assert.equal(app.state.chat.length, 0, 'no debería haber mandado ningún mensaje de chat con el día inválido adentro');
+});
+
+test('sysMsgWithIcon: escapa el texto -- defensa en profundidad, ya que renderChat() inserta los mensajes de sistema con innerHTML', () => {
+  const app = loadApp();
+  const result = app.sysMsgWithIcon('<svg></svg>', '<img src=x onerror=alert(1)>');
+  assert.doesNotMatch(result, /<img/, `el texto debería quedar escapado, dio: ${result}`);
+  assert.match(result, /&lt;img/, 'debería aparecer como entidad HTML, no como tag real');
+});
