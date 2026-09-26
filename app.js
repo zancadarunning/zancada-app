@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-26T02:57:57Z';
+const APP_VERSION = '2026-09-26T03:09:55Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2812,7 +2812,14 @@ function hideOverlayForBack(el){
   // se liberaba con URL.revokeObjectURL -- quedaba pisado recién la próxima vez que alguien
   // abriera CUALQUIER video de ruta. Tocar atrás durante la grabación tiene que cortarla de
   // verdad, no solo esconder la pantalla.
+  // sport-picker-overlay tampoco es un overlay-sheet genérico: closeSportPicker() aplica
+  // sportPickerTemp (el draft de deportes tildados) al perfil/onboarding real y limpia
+  // sportPickerCtx -- sacarle la clase overlay-open a mano, como a cualquier otro overlay-
+  // sheet, deja el draft sin aplicar y sportPickerCtx colgado, así que atrás con el botón
+  // físico/gesto de Android tiraba las selecciones del usuario sin avisar (a diferencia de
+  // la flecha o "Listo" de su propia UI, que sí las guardan).
   if(el.id === 'rd-video-overlay') closeDynamicVideo();
+  else if(el.id === 'sport-picker-overlay') closeSportPicker();
   else if(el.classList.contains('overlay-sheet')) el.classList.remove('overlay-open');
   else el.style.display = 'none';
 }
@@ -5325,7 +5332,11 @@ function prefersReducedMotion(){
     if(projected > sheetHeight * 0.35){
       springTo(sheet, sheetHeight + 60, {from: current, velocity, damping: reduced ? 1 : 0.86, response: reduced ? 0.22 : 0.34,
         onUpdate: v => { sheet.style.transform = `translateY(${v}px)`; },
-        onComplete: () => { sheet.classList.remove('overlay-open'); sheet.style.transform = ''; sheet.style.transition = ''; }
+        // sport-picker-overlay es el único de estos nueve overlays cuyo cierre real tiene que
+        // aplicar un draft (ver closeSportPicker) -- sacarle la clase a mano como al resto
+        // dejaba las selecciones tildadas sin guardar si el usuario cerraba arrastrando en vez
+        // de con la flecha o "Listo".
+        onComplete: () => { if(sheet.id === 'sport-picker-overlay') closeSportPicker(); else sheet.classList.remove('overlay-open'); sheet.style.transform = ''; sheet.style.transition = ''; }
       });
     } else {
       springTo(sheet, 0, {from: current, velocity, damping: 1, response: reduced ? 0.22 : 0.32,
