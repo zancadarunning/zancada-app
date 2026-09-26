@@ -87,10 +87,18 @@ async function workoutToRun(workout, accessToken){
     // FIT cuando está disponible.
     elevationGain: fit.elevationGain != null ? fit.elevationGain : Math.round(num(summary.ascent_accum) || 0),
     elevationLoss: fit.elevationLoss,
-    avgHr: summary.heart_rate_avg ? Math.round(num(summary.heart_rate_avg)) : null,
+    // OJO: chequear la STRING cruda (summary.heart_rate_avg ? ...) antes de parsearla es
+    // el bug que ya tenían estas tres líneas -- un string no vacío como "0.0" (Wahoo lo
+    // manda así cuando no hubo banda de FC/podómetro pareado, en vez de omitir la clave)
+    // es truthy en JS, así que ese chequeo pasaba igual y guardaba avgHr/avgCadence/
+    // calories en 0 en vez de null -- una sesión sin sensor terminaba mostrando "0 bpm"/
+    // "0 spm" en el detalle de la carrera, como si el reloj hubiera medido cero de
+    // verdad. Acá se parsea PRIMERO con num() y se chequea el NÚMERO ya parseado (0 es
+    // falsy de verdad ahí), mismo criterio que ya usa activityToRun de Strava para esto.
+    avgHr: num(summary.heart_rate_avg) ? Math.round(num(summary.heart_rate_avg)) : null,
     maxHr: null,
-    avgCadence: summary.cadence_avg ? Math.round(num(summary.cadence_avg)) : null,
-    calories: summary.calories_accum ? Math.round(num(summary.calories_accum)) : null,
+    avgCadence: num(summary.cadence_avg) ? Math.round(num(summary.cadence_avg)) : null,
+    calories: num(summary.calories_accum) ? Math.round(num(summary.calories_accum)) : null,
     hrLog: [],
     points: [],
     splits: fit.splits,
