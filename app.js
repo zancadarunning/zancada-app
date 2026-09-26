@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-26T00:36:51Z';
+const APP_VERSION = '2026-09-26T00:51:05Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3328,7 +3328,7 @@ function checkWeekRollover(){
     if(state.weekStart && state.plan && state.plan.length){
       state.planHistory.push({weekNumber: state.weekNumber||1, weekStart: state.weekStart, plan: state.plan});
       recapMsg = buildWeeklyRecapMessage(state.plan, state.weekStart, diffWeeks);
-      goalUpsellMsg = checkGoalUpsell();
+      let adjustedDown = false;
       if(diffWeeks === 1 && !breakAdj){
         // exactamente la semana que ya veníamos mostrando como "la que sigue" (con el ajuste
         // automático y los cambios del coach ya adentro) -> pasa a ser la actual tal cual
@@ -3349,8 +3349,18 @@ function checkWeekRollover(){
         if(adj.factor !== 1){
           state.profile.weeklyKm = Math.max(5, Math.round(state.profile.weeklyKm*adj.factor));
           adjustNote = adj.note;
+          adjustedDown = adj.factor < 1;
         }
       }
+      // checkGoalUpsell() sugiere pasar a un objetivo más exigente -- pero se puede cumplir
+      // el plan casi entero (streak sigue en pie, metGoal en buildWeeklyRecapMessage solo
+      // mira cuántas sesiones se hicieron) y AUN ASÍ tener varias calificadas "mal" ese
+      // mismo lapso, disparando un recorte de volumen. Sin este chequeo, el coach podía
+      // mandar en la misma ráfaga "bajé el volumen porque la costó esta semana" seguido de
+      // "¡veniste tan constante, animate a un objetivo más difícil!" -- dos mensajes que se
+      // pisan entre sí. No lo marcamos como "ya mostrado" acá: si la próxima semana cierra
+      // bien, sigue disponible, solo se pospone en vez de perderse.
+      if(!breakMsg && !adjustedDown) goalUpsellMsg = checkGoalUpsell();
     }
     state.weekNumber = promotedWeekNumber;
     state.weekStart = promotedWeekStart;
