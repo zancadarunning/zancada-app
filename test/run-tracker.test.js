@@ -162,3 +162,27 @@ test('isLikelyDuplicateOfExistingRun: sigue detectando la misma actividad real s
 
   assert.equal(isDup, true, 'la misma actividad real sincronizada desde otra fuente sigue debiendo detectarse como duplicada');
 });
+
+test('maybeAnnounceKm: un salto de más de 1km en un solo fix de GPS no se salta el anuncio de los km intermedios', () => {
+  // onPosition() descarta entero cualquier fix con accuracy>50 (típico después de un túnel,
+  // un bosque denso, o edificios altos) -- el siguiente fix bueno mide la distancia contra el
+  // último punto ACEPTADO, así que un solo fix puede sumarle a distanceKm bastante más de 1km
+  // de una vez. Antes, maybeAnnounceKm() solo anunciaba el número final y saltaba
+  // lastAnnouncedKm directo a ese valor -- si la distancia pasaba de 2.94km a 4.15km en un
+  // fix, el corredor escuchaba "kilómetro 4" y el "kilómetro 3" desaparecía para siempre.
+  const app = loadApp();
+  app.state.profile = { units: 'metric', voiceEnabled: true };
+  app.setTracker({ distanceKm: 4.15, elapsedSec: 1200, lastAnnouncedKm: 2, points: [], hrLog: [] });
+
+  const announced = [];
+  const originalSpeak = app.speak;
+  app.speak = (text) => announced.push(text);
+  try{
+    app.maybeAnnounceKm();
+  } finally {
+    app.speak = originalSpeak;
+  }
+
+  assert.equal(app.getTracker().lastAnnouncedKm, 4, 'debería quedar al día con el km real');
+  assert.equal(announced.length, 2, `debería haber anunciado los 2 km salteados (3 y 4), anunció ${announced.length}: ${JSON.stringify(announced)}`);
+});

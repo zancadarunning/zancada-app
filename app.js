@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-26T01:09:54Z';
+const APP_VERSION = '2026-09-26T01:15:49Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6258,9 +6258,19 @@ function maybeAnnounceKm(){
   // Ahora el anuncio por voz respeta la misma unidad que ya se ve en pantalla.
   const currentUnit = Math.floor(isImperial() ? tracker.distanceKm*MI_PER_KM : tracker.distanceKm);
   if(currentUnit>0 && currentUnit>tracker.lastAnnouncedKm){
-    tracker.lastAnnouncedKm = currentUnit;
+    // Un solo fix de GPS puede sumar de golpe más de 1 unidad (ver onPosition: un fix con
+    // accuracy>50 -- típico después de un túnel, un bosque denso, o edificios altos -- se
+    // descarta entero, así que el siguiente fix bueno mide la distancia contra el último punto
+    // ACEPTADO, no el anterior). Antes esto solo anunciaba el número final (currentUnit) y
+    // marcaba lastAnnouncedKm de un salto -- si la distancia pasó de 2.94km a 4.15km en un
+    // solo fix, el corredor escuchaba "kilómetro 4" y el "kilómetro 3" desaparecía para
+    // siempre, sin ningún aviso. Recorremos cada unidad saltada -- speechSynthesis encola los
+    // anuncios en vez de superponerlos, así que se escuchan en orden, uno atrás del otro.
     const paceMin = (tracker.elapsedSec/60)/tracker.distanceKm;
-    speak(t(isImperial() ? 'voice_mi' : 'voice_km', {km:currentUnit, pace:fmtPace(paceMin)}));
+    for(let km=tracker.lastAnnouncedKm+1; km<=currentUnit; km++){
+      speak(t(isImperial() ? 'voice_mi' : 'voice_km', {km, pace:fmtPace(paceMin)}));
+    }
+    tracker.lastAnnouncedKm = currentUnit;
     // Antes cada km se anunciaba solo por voz -- sin nada en pantalla, es el momento más
     // repetido de toda la carrera (varias veces por sesión) y no tenía ningún refuerzo para
     // quien corre con el volumen bajo o mira el teléfono en vez de escuchar.
