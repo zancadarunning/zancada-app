@@ -186,3 +186,16 @@ test('maybeAnnounceKm: un salto de más de 1km en un solo fix de GPS no se salta
   assert.equal(app.getTracker().lastAnnouncedKm, 4, 'debería quedar al día con el km real');
   assert.equal(announced.length, 2, `debería haber anunciado los 2 km salteados (3 y 4), anunció ${announced.length}: ${JSON.stringify(announced)}`);
 });
+
+test('isImplausibleRunSpeed: descarta un salto de posición que implicaría correr a velocidad imposible', () => {
+  // onPosition() solo filtraba fixes por accuracy (>50m se descarta entero) -- un fix con
+  // accuracy aceptable (ej. 45m) pero un error de multipath típico entre edificios altos podía
+  // implicar una posición ~80m corrida en 1-2s (30-80 m/s), que se sumaba entero a
+  // distanceKm sin que nada lo cuestionara. Reportado en una auditoría: un corredor parado
+  // podía acumular decenas/cientos de metros fantasma de un puñado de fixes así.
+  const app = loadApp();
+  assert.equal(app.isImplausibleRunSpeed(45), true, '45 m/s (~162km/h) no es una velocidad humana real corriendo');
+  assert.equal(app.isImplausibleRunSpeed(3.5), false, '3.5 m/s (~12.6km/h, trote normal) tiene que seguir aceptándose');
+  assert.equal(app.isImplausibleRunSpeed(11.9), false, 'justo por debajo del techo tiene que aceptarse (no cortar sprints reales)');
+  assert.equal(app.isImplausibleRunSpeed(null), false, 'sin referencia de velocidad (primer fix) no hay forma de juzgar -- no se rechaza');
+});

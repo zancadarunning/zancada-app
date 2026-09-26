@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-26T03:36:22Z';
+const APP_VERSION = '2026-09-26T03:44:55Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -530,6 +530,15 @@ async function updatePushStatusDisplay(){
     // vez (state.nativePushEnabled, ver enableNativePushNotifications/initNativePushListeners).
     try{
       const status = await nativePush.checkPermissions();
+      // Mismo problema que el bloque de abajo (web push): el usuario puede revocar el permiso
+      // de notificaciones desde la configuración del sistema (no desde este toggle) -- sin
+      // esto, la fila de push_subscriptions (con el token de FCM de este dispositivo) quedaba
+      // viva para siempre, y api/send-reminders.js le seguía intentando mandar avisos a un
+      // token que el sistema operativo ya cortó del otro lado.
+      if(status.receive !== 'granted' && state.nativePushEnabled){
+        state.nativePushEnabled = false;
+        if(currentUserId){ try{ await supabaseClient.from('push_subscriptions').delete().eq('user_id', currentUserId); }catch(e){} }
+      }
       const enabled = status.receive === 'granted' && !!state.nativePushEnabled;
       el.textContent = enabled ? t('push_enabled') : t('push_disabled');
       if(toggle) toggle.checked = enabled;
@@ -6294,6 +6303,17 @@ let tracker = {watchId:null, timerId:null, points:[], distanceKm:0, elapsedSec:0
 const AUTO_PAUSE_SPEED_MPS = 0.5; // por debajo de esto (~1.8 km/h) se considera "parado"
 const AUTO_RESUME_SPEED_MPS = 0.9; // por encima de esto (~3.2 km/h) se considera "moviéndose de nuevo"
 const AUTO_PAUSE_HOLD_MS = 10000; // cuánto tiempo quieto antes de pausar solo
+// 12 m/s (~43km/h) está muy por encima de lo que corre cualquier persona real (más rápido
+// que el récord mundial de 100m de Bolt sostenido) -- de sobra para nunca rechazar una
+// bajada empinada o un sprint final real, pero suficiente para descartar el "salto" clásico
+// de un fix de GPS ruidoso (multipath entre edificios altos, rebote después de un túnel/
+// arboleda) que onPosition() aceptaba igual porque su accuracy reportada (<=50m) pasaba el
+// único filtro que existía. speedMps ya se calculaba para la auto-pausa -- este es el mismo
+// número, solo que ahora también se usa para decidir si ese paso es creíble.
+const MAX_PLAUSIBLE_SPEED_MPS = 12;
+function isImplausibleRunSpeed(speedMps){
+  return speedMps!=null && speedMps > MAX_PLAUSIBLE_SPEED_MPS;
+}
 function isTrackingActive(){ return tracker.running && !tracker.autoPaused; }
 function updateRecordingLabel(){
   const dot = document.getElementById('run-rec-dot');
@@ -6349,6 +6369,13 @@ function saveRunProgress(finished){
       // pero sin guardar ESTE campo, actuallyStartRun() no tenía forma de saber que la carrera
       // estaba pausada al cerrarse la app, y la recuperaba siempre como si estuviera corriendo.
       running: !!tracker.running,
+      // autoPaused: sin esto, cerrar la app mientras la auto-pausa por quietud estaba activa
+      // (semáforo, agua) y reabrirla la recuperaba como si estuviera corriendo de verdad --
+      // isTrackingActive() (running && !autoPaused) volvía a dar true de golpe, así que el
+      // timer sumaba elapsedSec real durante los primeros ~10s+ que tarda en detectar de
+      // nuevo la quietud (AUTO_PAUSE_HOLD_MS), inflando el tiempo total de esa carrera con
+      // tiempo parado.
+      autoPaused: !!tracker.autoPaused,
       finished: !!finished
     }));
   }catch(e){}
@@ -6823,8 +6850,15 @@ function actuallyStartRun(saved){
   // nuevo). saved.running puede faltar en progreso guardado por una versión vieja de la app,
   // de ahí el default a true (siempre se guardaba corriendo, antes de este cambio).
   const restoredRunning = saved ? (saved.running !== false) : true;
+  // autoPaused: mismo criterio que restoredRunning arriba -- si la app se cerró mientras la
+  // auto-pausa por quietud estaba activa, recuperarla tiene que respetar eso (si no,
+  // isTrackingActive() da true de nuevo apenas se reabre y el timer suma tiempo real hasta
+  // que una nueva racha de quietud vuelva a disparar la auto-pausa, ~10s+ después). saved
+  // puede faltar este campo por una versión vieja de la app -- default a false, mismo
+  // comportamiento que tenía siempre antes de este cambio.
+  const restoredAutoPaused = saved ? !!saved.autoPaused : false;
   tracker = saved
-    ? {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:saved.elapsedSec||0, running:restoredRunning, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt, autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null}
+    ? {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:saved.elapsedSec||0, running:restoredRunning, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt, autoPaused:restoredAutoPaused, lastMoveMs:Date.now(), lastFixMs:null}
     : {watchId:null, timerId:null, points:[], distanceKm:0, elapsedSec:0, running:true, hrLog:[], lastAnnouncedKm:0, startedAt:Date.now(), autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null};
   requestWakeLock();
   document.getElementById('runIdle').style.display='none';
@@ -6878,7 +6912,7 @@ function onPosition(pos){
   // stepKm se mediría contra el último punto grabado ANTES de pausar, sumando de golpe
   // a distanceKm todo lo caminado/manejado durante la pausa.
   tracker.lastRawPoint = {lat, lon};
-  if(active){
+  if(active && !isImplausibleRunSpeed(speedMps)){
     // Antes cualquier paso menor a 2m se descartaba directo -- a paso de caminata o
     // entrada en calor (~1 m/s) los fixes seguidos suelen quedar por debajo de esos 2m,
     // y ese movimiento real se perdía para siempre en vez de acumularse. Ahora se guarda
