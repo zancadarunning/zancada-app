@@ -77,13 +77,28 @@ module.exports = withSentry(async (req, res) => {
     const input = await readRawBody(req);
     if(!input || !input.length){ res.status(400).json({error:'Empty body'}); return; }
     if(input.length > MAX_BYTES){ res.status(413).json({error:'Video too large'}); return; }
+    // Antes se le pasaba cualquier byte que llegara acá directo al auto-probing de ffmpeg
+    // (que decide sólo, mirando el contenido, qué demuxer de los DECENAS que trae usar) --
+    // este endpoint solo tiene sentido para el MP4 fragmentado que graba MediaRecorder (ver
+    // el comentario grande arriba), así que no hay motivo real para aceptar nada que no sea
+    // eso. Todo archivo ISO base media (MP4/MOV real) empieza con una caja "ftyp" en el byte
+    // 4 -- si no está, ni vale la pena gastar un proceso de ffmpeg en algo que no es un video
+    // de esta app. Sigue sin ser una validación de contenido completa (un MP4 válido puede
+    // tener átomos maliciosos), pero saca de la mesa cualquier otro container/codec.
+    if(input.length < 12 || input.slice(4, 8).toString('ascii') !== 'ftyp'){
+      res.status(400).json({error:'Not a valid MP4 file'}); return;
+    }
 
     const id = crypto.randomBytes(8).toString('hex');
     inPath = path.join(os.tmpdir(), `zancada-in-${id}.mp4`);
     outPath = path.join(os.tmpdir(), `zancada-out-${id}.mp4`);
     fs.writeFileSync(inPath, input);
 
-    await runFfmpeg(['-y', '-i', inPath, '-c', 'copy', '-movflags', '+faststart', '-f', 'mp4', outPath]);
+    // -f mp4 antes de -i: fuerza el demuxer de entrada a mp4/mov/isom en vez de dejar que
+    // ffmpeg siga auto-detectando sobre bytes que ya sabemos son ftyp (defensa en profundidad
+    // -- sin esto, ffmpeg podía elegir un demuxer distinto si el contenido después del ftyp
+    // engañaba al auto-probing).
+    await runFfmpeg(['-y', '-f', 'mp4', '-i', inPath, '-c', 'copy', '-movflags', '+faststart', '-f', 'mp4', outPath]);
 
     const output = fs.readFileSync(outPath);
     res.setHeader('Content-Type', 'video/mp4');
