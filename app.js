@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-26T02:55:45Z';
+const APP_VERSION = '2026-09-26T02:57:57Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5979,11 +5979,19 @@ if(window.visualViewport){
 })();
 /* ---- detectar version nueva y recargar la app sola (sin tener que cerrarla) ---- */
 let appUpdateChecking = false;
+let appUpdateFound = false;
 async function checkForAppUpdate(){
   // Adentro del wrapper nativo no hay nada que "detectar" -- app.js viene empaquetado
   // en el binario y las actualizaciones llegan por la tienda, no recargando la página.
   if(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return false;
-  if(appUpdateChecking) return false;
+  // appUpdateChecking se suelta en el finally de ABAJO, que corre antes de que el
+  // setTimeout de 700ms (más abajo) llegue a navegar de verdad -- si la pestaña vuelve a
+  // estar visible en esa ventana (un swipe rápido en el selector de apps del celular
+  // alcanza para eso), este chequeo podía reentrar, volver a encontrar la MISMA versión
+  // nueva, y disparar el toast/haptic y un segundo timer de recarga de nuevo. appUpdateFound
+  // es la bandera que sigue en pie durante toda esa ventana (no solo mientras el fetch está
+  // en vuelo), para no repetir el aviso de algo que ya se está por recargar solo.
+  if(appUpdateChecking || appUpdateFound) return false;
   appUpdateChecking = true;
   try{
     /* Pide solo los primeros bytes de app.js (Range) en vez del archivo entero (498KB,
@@ -6000,6 +6008,7 @@ async function checkForAppUpdate(){
     const text = await res.text();
     const m = text.match(/const APP_VERSION\s*=\s*'([^']+)'/);
     if(m && m[1] && m[1] !== APP_VERSION){
+      appUpdateFound = true;
       haptic([10,30,10]);
       showToast(t('update_found_msg'), 'success');
       /* location.reload() puede volver a servir una copia vieja de la caché del navegador —
@@ -6715,6 +6724,17 @@ function recenterMap(){
   liveMap.setView(liveMarker.getLatLng(), 17);
 }
 function startRun(){
+  // Evita un doble-tap en "Comenzar a correr": actuallyStartRun() más abajo siempre arma un
+  // tracker NUEVO y pide un watchPosition nuevo -- el watchId del anterior, que solo vivía en
+  // el objeto tracker recién descartado, se perdía sin llamar nunca a clearWatch(). Ese primer
+  // watcher seguía disparando onPosition() (que lee SIEMPRE el tracker global vigente) el
+  // resto de la sesión (incluso en la carrera SIGUIENTE), duplicando puntos GPS, updateLiveMap()
+  // y anuncios de voz por km, y arruinando la cuenta de auto-pausa (dos fixes casi al mismo
+  // tiempo dan un dtSec cercano a cero). Esto pasaba justo en la ventana de milisegundos ANTES
+  // de que llegara el primer fix de GPS: ahí `saved.points` todavía está en `[]`, así que
+  // ninguna de las dos ramas de recuperación de abajo lo detecta, y las dos caen por defecto a
+  // actuallyStartRun(null) -- "carrera nueva" otra vez, con un watcher de más ya corriendo.
+  if(tracker && tracker.watchId !== null) return;
   if(!navigator.geolocation){ document.getElementById('geo-warning').style.display='block'; document.getElementById('geo-warning').textContent=t('geo_err_support'); return; }
   const saved = readRunProgress();
   // Una carrera ya FINALIZADA (el usuario tocó "Finalizar", ver saveRunProgress(true) en
@@ -6886,6 +6906,11 @@ function togglePause(){
 function stopRun(){
   clearInterval(tracker.timerId);
   if(tracker.watchId!==null) navigator.geolocation.clearWatch(tracker.watchId);
+  // Sin esto, tracker.watchId se quedaba con el id ya limpiado (clearWatch no lo pone en
+  // null solo) -- el guard contra doble-tap de startRun() (if(tracker.watchId!==null)
+  // return;) lo hubiera confundido con una carrera todavía activa, bloqueando arrancar la
+  // PRÓXIMA carrera para siempre.
+  tracker.watchId = null;
   releaseWakeLock();
   tracker.workout = null;
   // Guardamos el progreso final ANTES de mostrar el resumen -- si la app se cierra
