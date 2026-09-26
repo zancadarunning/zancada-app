@@ -55,6 +55,41 @@ test('persist: mientras un guardado sigue en vuelo, uno nuevo no arranca un pedi
   pending[1]({ data: null, error: null });
 });
 
+test('persist: una pestaña en segundo plano no pisa un guardado más nuevo de otra pestaña/dispositivo', async () => {
+  // checkForRemoteConflict() solo corre cuando la pestaña VUELVE a estar visible -- no
+  // protege a una pestaña que se queda en segundo plano y nunca vuelve al frente.
+  // flushPendingBackup() reintenta cada 25s un guardado que había fallado antes, sin
+  // importar si la pestaña está oculta -- si mientras tanto OTRA pestaña/dispositivo, al
+  // frente, ya guardó algo más nuevo, ese reintento en segundo plano pisaba esa versión
+  // más nueva con el `state` viejo que esta pestaña todavía tenía en memoria.
+  const upsertCalls = [];
+  const app = loadApp({
+    onUpsert(payload) {
+      upsertCalls.push({ chatLen: (payload.data.chat || []).length });
+      return Promise.resolve({ data: null, error: null });
+    },
+    onMaybeSingle() {
+      // "el servidor" dice que ya hay algo guardado bastante más nuevo que lo último que
+      // esta pestaña sabía (ver loadedStateVersion, seteado por el primer persist() de abajo).
+      return Promise.resolve({ data: { updated_at: new Date(Date.now() + 60000).toISOString() }, error: null });
+    },
+  });
+  app.setCurrentUserId('user-de-prueba');
+  app.document.visibilityState = 'visible';
+  app.state.chat = [{ role: 'user', text: 'msg 1', ts: 1 }];
+
+  await app.persist(); // primer guardado, normal, en primer plano -- fija loadedStateVersion
+  assert.equal(upsertCalls.length, 1, 'el primer guardado (pestaña visible) debería salir normal');
+
+  // Ahora la pestaña queda en segundo plano (el usuario cambió a otra app/pestaña) y, sin que
+  // el corredor toque nada acá, flushPendingBackup() reintenta un guardado viejo.
+  app.document.visibilityState = 'hidden';
+  app.state.chat.push({ role: 'coach', text: 'esto no debería llegar a guardarse todavía', ts: 2 });
+  await app.persist();
+
+  assert.equal(upsertCalls.length, 1, 'un guardado en segundo plano no debería escribir nada si el servidor ya tiene algo más nuevo');
+});
+
 test('persist: varios pedidos en el mismo instante que uno está en vuelo se juntan en UN solo guardado encolado, no uno por cada llamada', async () => {
   const upsertCalls = [];
   const pending = [];

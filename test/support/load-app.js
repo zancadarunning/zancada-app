@@ -133,11 +133,13 @@ function loadApp(opts) {
   // (persist(), para probar que los guardados no se pisan entre sí -- ver
   // plan-engine.test.js) pueden pasar opts.onUpsert para controlar cuándo
   // "responde" cada upsert y así simular guardados que llegan en otro orden.
+  // opts.onMaybeSingle, con el mismo espíritu, deja simular qué "ya hay guardado" en el
+  // servidor (updated_at) para el chequeo de conflicto entre pestañas de persist().
   const chain = () => {
     const q = {
       select(){ return q; }, eq(){ return q; },
       upsert(payload){ return opts.onUpsert ? opts.onUpsert(payload) : Promise.resolve({ data: null, error: null }); },
-      maybeSingle(){ return Promise.resolve({ data: null, error: null }); }, delete(){ return q; },
+      maybeSingle(){ return opts.onMaybeSingle ? opts.onMaybeSingle() : Promise.resolve({ data: null, error: null }); }, delete(){ return q; },
       order(){ return q; }, limit(){ return q; }, then(resolve){ resolve({ data: null, error: null }); },
     };
     return q;

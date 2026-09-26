@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-26T01:02:57Z';
+const APP_VERSION = '2026-09-26T01:09:54Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -666,10 +666,32 @@ async function persist(){
   if(persistInFlight){ persistQueued = true; return; }
   persistInFlight = true;
   try{
-    const nowIso = new Date().toISOString();
-    await supabaseClient.from('app_state').upsert({ user_id: currentUserId, data: state, updated_at: nowIso });
-    loadedStateVersion = nowIso; // este guardado ya es la versión más nueva que conocemos
-    clearPendingBackup();
+    // checkForRemoteConflict() (ver más abajo) solo corre cuando la pestaña VUELVE a estar
+    // visible -- protege el caso de "cambiaste de pestaña/dispositivo", pero no el de una
+    // pestaña que se queda en segundo plano y nunca vuelve al frente. flushPendingBackup()
+    // reintenta cada 25s un guardado que había fallado antes (por ejemplo, por conexión) sin
+    // importar si la pestaña está oculta -- si mientras tanto OTRA pestaña o dispositivo, al
+    // frente, ya guardó algo más nuevo (una carrera cargada, un cambio de plan), este reintento
+    // en segundo plano pisaba esa versión más nueva con el `state` viejo que esta pestaña
+    // todavía tiene en memoria, sin ningún aviso. Antes de escribir desde una pestaña oculta,
+    // nos fijamos si el servidor ya tiene algo más nuevo que lo último que sabíamos -- si es
+    // así, no escribimos nada (el backup local pendiente queda como está, para reintentar más
+    // tarde) en vez de arriesgarnos a perder el cambio ajeno. Si esta pestaña vuelve a estar
+    // visible más adelante, el chequeo de conflicto de siempre ya se encarga de avisarle al
+    // corredor y ofrecerle recargar.
+    let skipWrite = false;
+    if(typeof document !== 'undefined' && document.visibilityState !== 'visible' && loadedStateVersion){
+      const { data } = await supabaseClient.from('app_state').select('updated_at').eq('user_id', currentUserId).maybeSingle();
+      if(data && data.updated_at && new Date(data.updated_at).getTime() > new Date(loadedStateVersion).getTime()){
+        skipWrite = true;
+      }
+    }
+    if(!skipWrite){
+      const nowIso = new Date().toISOString();
+      await supabaseClient.from('app_state').upsert({ user_id: currentUserId, data: state, updated_at: nowIso });
+      loadedStateVersion = nowIso; // este guardado ya es la versión más nueva que conocemos
+      clearPendingBackup();
+    }
   }catch(e){
     console.error('persist error', e);
     savePendingBackup(); // sin conexión: lo guardamos en el teléfono y reintentamos más tarde
