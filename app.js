@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-26T02:42:05Z';
+const APP_VERSION = '2026-09-26T02:47:26Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2319,6 +2319,20 @@ function calDateAllowed(dateStr, bounds){
   if(bounds.max && dateStr > bounds.max) return false;
   return true;
 }
+// Antes las flechas de mes no se fijaban en calBoundsFor() para nada -- se podía navegar
+// (o hasta llegar con el teclado) a un mes ENTERO fuera de rango, donde las 30 y pico celdas
+// salían todas deshabilitadas sin ningún cartel que explique por qué. Esto compara el MES
+// candidato completo (no un día puntual) contra el límite: solo bloquea un paso que dejaría
+// el mes de destino totalmente fuera de bounds, no el mes límite en sí (que sigue teniendo
+// algunos días válidos, ver calDateAllowed por día).
+function calMonthOutOfBounds(viewDate, delta, bounds){
+  if(!bounds.min && !bounds.max) return false;
+  const candidate = new Date(viewDate.getFullYear(), viewDate.getMonth()+delta, 1);
+  const candidateYm = `${candidate.getFullYear()}-${String(candidate.getMonth()+1).padStart(2,'0')}`;
+  if(bounds.max && candidateYm > bounds.max.slice(0,7)) return true;
+  if(bounds.min && candidateYm < bounds.min.slice(0,7)) return true;
+  return false;
+}
 function openCalendar(inputId){
   calTargetInputId = inputId;
   const input = document.getElementById(inputId);
@@ -2335,7 +2349,21 @@ function calNavigate(delta){
      vez en la vista de días, un año a la vez en la de meses, y un bloque de 16 años en la
      de años — así no hay que ir de a un paso para saltos grandes (ver calShowYears). */
   if(calViewMode === 'years'){ calYearsRangeStart += delta*16; renderCalYears(); return; }
-  if(calViewMode === 'months'){ calViewDate.setFullYear(calViewDate.getFullYear() + delta); renderCalMonths(); return; }
+  // calViewDate.setDate(1) ANTES de tocar mes/año, en las dos ramas de abajo: si el cursor
+  // venía en un día 29/30/31 (heredado de calSelectedDate al abrir el calendario, ver
+  // openCalendar) y el mes/año de destino es más corto (ej. 31 de enero → febrero, o 29 de
+  // febrero de un año bisiesto → el mismo año sin serlo), setMonth/setFullYear no rechazan
+  // ni recortan el día fuera de rango -- lo DESBORDAN al mes siguiente. "Mes que viene" desde
+  // el 31 de enero terminaba mostrando marzo, saltándose febrero por completo, sin ninguna
+  // forma de elegir un día de febrero con la flecha. El día del cursor no importa para elegir
+  // qué mes mostrar, así que fijarlo en 1 antes de cada paso lo hace siempre seguro.
+  if(calViewMode === 'months'){ calViewDate.setDate(1); calViewDate.setFullYear(calViewDate.getFullYear() + delta); renderCalMonths(); return; }
+  // Tampoco se fijaba en calBoundsFor() -- se podía navegar más allá del mes límite hacia un
+  // mes que queda ENTERO fuera de rango (ver el comentario junto a calMonthOutOfBounds). El
+  // botón ya queda deshabilitado para ese lado en renderCalendar(), pero este chequeo es la
+  // protección real (por si algo más dispara la navegación, ej. el teclado).
+  if(calMonthOutOfBounds(calViewDate, delta, calBoundsFor(calTargetInputId))) return;
+  calViewDate.setDate(1);
   calViewDate.setMonth(calViewDate.getMonth() + delta);
   renderCalendar();
 }
@@ -2344,10 +2372,12 @@ function calShowYears(){
   renderCalYears();
 }
 function calShowMonths(year){
+  calViewDate.setDate(1); // ver el comentario en calNavigate -- evita desbordar de año si el día era 29/30/31
   calViewDate.setFullYear(year);
   renderCalMonths();
 }
 function calSelectMonth(monthIndex){
+  calViewDate.setDate(1); // idem
   calViewDate.setMonth(monthIndex);
   renderCalendar();
 }
@@ -2404,6 +2434,12 @@ function renderCalendar(){
   const today = new Date(); today.setHours(0,0,0,0);
   const selectedTime = calSelectedDate ? new Date(calSelectedDate.getFullYear(), calSelectedDate.getMonth(), calSelectedDate.getDate()).getTime() : null;
   const bounds = calBoundsFor(calTargetInputId);
+  // Aviso visual de que no hay más nada de ese lado -- antes las flechas quedaban siempre
+  // activas aunque el mes siguiente/anterior completo cayera fuera de rango, así que tocarlas
+  // llevaba a un mes con TODAS las celdas deshabilitadas, sin ningún cartel de por qué.
+  const prevBtn = document.getElementById('cal-prev-btn'), nextBtn = document.getElementById('cal-next-btn');
+  if(prevBtn) prevBtn.disabled = calMonthOutOfBounds(calViewDate, -1, bounds);
+  if(nextBtn) nextBtn.disabled = calMonthOutOfBounds(calViewDate, 1, bounds);
 
   let cells = [];
   for(let i=startOffset; i>0; i--) cells.push({day: daysInPrevMonth-i+1, other:true});

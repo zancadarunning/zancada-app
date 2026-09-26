@@ -2383,9 +2383,9 @@
 
   <div class="overlay" id="calendar-modal" style="display:none; z-index:60;">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
-      <button class="week-nav-btn" onclick="calNavigate(-1)" data-i18n-aria="aria_week_prev"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+      <button id="cal-prev-btn" class="week-nav-btn" onclick="calNavigate(-1)" data-i18n-aria="aria_week_prev"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
       <button id="cal-month-label" onclick="calShowYears()" style="font-weight:800; font-size:18px; text-transform:capitalize;"></button>
-      <button class="week-nav-btn" onclick="calNavigate(1)" data-i18n-aria="aria_week_next"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span></button>
+      <button id="cal-next-btn" class="week-nav-btn" onclick="calNavigate(1)" data-i18n-aria="aria_week_next"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span></button>
     </div>
     <div class="cal-weekdays" id="cal-weekdays"></div>
     <div class="cal-grid" id="cal-grid"></div>
