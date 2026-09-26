@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-26T01:15:49Z';
+const APP_VERSION = '2026-09-26T02:42:05Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2524,7 +2524,15 @@ async function finishOnboard(){
   // hasta que tenga 3+ carreras registradas.
   const refRaceDistRaw = parseFloat(document.getElementById('ob-refrace-dist').value);
   const refRaceMinRaw = parseFloat(document.getElementById('ob-refrace-min').value);
-  const refRace = (runnerType==='active' && refRaceDistRaw>0 && refRaceMinRaw>0)
+  // Sin ningún límite de ritmo, un tipeo (ej. "5" en distancia y "5" en minutos -- 1:00/km,
+  // más rápido que cualquier plusmarca mundial) se guardaba tal cual y calibraba TODO el
+  // ritmo base del plan (estimateBasePaceMinPerKm) hasta tener 3+ carreras reales que lo
+  // reemplacen -- semanas enteras de sesiones a un ritmo imposible de sostener. El rango
+  // (2:30/km a 20:00/km) es generoso a propósito: cubre desde un ritmo de élite real hasta
+  // una carrera hecha caminando, sin bloquear ninguna marca legítima.
+  const refRacePaceMinPerKm = (refRaceDistRaw>0 && refRaceMinRaw>0) ? refRaceMinRaw/refRaceDistRaw : null;
+  const refRacePaceOk = refRacePaceMinPerKm!==null && refRacePaceMinPerKm>=2.5 && refRacePaceMinPerKm<=20;
+  const refRace = (runnerType==='active' && refRaceDistRaw>0 && refRaceMinRaw>0 && refRacePaceOk)
     ? { distanceKm: refRaceDistRaw, durationSec: Math.round(refRaceMinRaw*60), date: todayLocalISO() }
     : null;
   const availableMinRaw = parseFloat(document.getElementById('ob-availmin').value);
@@ -4808,6 +4816,13 @@ function saveCustomZones(){
   }
   state.profile.hrZones = newZones;
   state.profile.hrKnown = true;
+  // hrZonesCustom distingue "estas zonas se cargaron a mano, número por número" (acá) de
+  // "estas zonas son la fórmula estándar aplicada a un hrMax conocido" (onboarding,
+  // modificar_perfil). Sin esta distinción, checkHrMaxFromRuns() -- que sube el hrMax solo
+  // cuando un pico real de FC en 2+ carreras supera lo guardado -- volvía a calcular las
+  // zonas con computeZones(nuevoMax) apenas eso pasaba, pisando en silencio zonas cargadas a
+  // mano (por ejemplo, de un test de lactato) con las de la fórmula genérica.
+  state.profile.hrZonesCustom = true;
   renderZones(); renderPlan(); persist();
   flashSaved('save-zones-btn');
 }
@@ -6075,6 +6090,12 @@ function checkHrMaxFromRuns(){
      siempre, descalibrando las zonas de entrenamiento hasta que el corredor lo notara y lo
      corrigiera a mano. Tomar el 2do valor más alto entre todos los runs (en vez del máximo
      histórico) exige que al menos dos carreras hayan llegado a esa marca o más. */
+  // Si el corredor cargó sus zonas a mano (saveCustomZones, ver hrZonesCustom) -- por
+  // ejemplo, de un test de lactato, no de una fórmula sobre un hrMax -- no las pisamos con
+  // computeZones(observedMax) solo porque un par de carreras superaron el hrMax guardado:
+  // esas zonas custom fueron a propósito, y "más FC máxima" no dice nada de si siguen
+  // siendo las zonas correctas para esta persona.
+  if(state.profile.hrZonesCustom) return;
   const observedMax = (state.runs||[]).map(r=>r.maxHr).filter(v=>typeof v==='number' && v<=220).sort((a,b)=>b-a)[1];
   if(observedMax && observedMax > (state.profile.hrMax||0)){
     state.profile.hrMax = observedMax;
@@ -9979,7 +10000,7 @@ function applyProfileChange(input){
   if(input.objetivo){ state.profile.goal = input.objetivo; changes.push('objetivo'); recalc = true; }
   if(input.fecha_carrera){ state.profile.raceDate = input.fecha_carrera; changes.push('fecha de carrera'); recalc = true; }
   if(input.terreno){ state.profile.terrain = input.terreno; changes.push('terreno'); }
-  if(typeof input.fc_maxima==='number'){ state.profile.hrMax = input.fc_maxima; state.profile.hrKnown = true; state.profile.hrZones = computeZones(input.fc_maxima); changes.push('FC máxima'); }
+  if(typeof input.fc_maxima==='number'){ state.profile.hrMax = input.fc_maxima; state.profile.hrKnown = true; state.profile.hrZones = computeZones(input.fc_maxima); state.profile.hrZonesCustom = false; changes.push('FC máxima'); }
   if(typeof input.km_actuales==='number'){ state.profile.currentWeeklyKm = input.km_actuales; state.profile.runnerType = 'active'; changes.push('km actuales'); recalc = true; }
   if(validDays.length){
     // Cronograma de base nuevo y permanente (no un cambio puntual de una sesión):

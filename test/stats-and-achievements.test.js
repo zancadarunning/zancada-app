@@ -54,6 +54,27 @@ test('classifyHR: sin zonas configuradas devuelve zona 2 por defecto en vez de r
   assert.equal(app.classifyHR(150), 2);
 });
 
+test('checkHrMaxFromRuns: no pisa zonas cargadas a mano (hrZonesCustom) aunque un par de carreras superen el hrMax guardado', () => {
+  // saveCustomZones() deja cargar las 5 zonas número por número (ej. de un test de lactato),
+  // sin que vengan de la fórmula estándar sobre un hrMax -- pero no toca hrMax en sí.
+  // checkHrMaxFromRuns() solo miraba si el hrMax guardado quedó superado por 2+ carreras
+  // reales, sin fijarse si las zonas actuales eran custom -- así que zonas cargadas a mano
+  // terminaban reemplazadas en silencio por computeZones(nuevoMax), la fórmula genérica.
+  const app = loadApp();
+  const customZones = { 1: { min: 90, max: 120 }, 2: { min: 121, max: 140 }, 3: { min: 141, max: 158 }, 4: { min: 159, max: 174 }, 5: { min: 175, max: 195 } };
+  app.state.profile = { hrMax: 180, hrKnown: true, hrZonesCustom: true, hrZones: customZones };
+  // 2 carreras con maxHr por encima del hrMax guardado -- normalmente dispararía la actualización.
+  app.state.runs = [
+    { id: 1, distanceKm: 10, durationSec: 3000, maxHr: 190, date: new Date().toISOString() },
+    { id: 2, distanceKm: 10, durationSec: 3000, maxHr: 188, date: new Date().toISOString() },
+  ];
+
+  app.checkHrMaxFromRuns();
+
+  assert.equal(app.state.profile.hrMax, 180, 'no debería tocar hrMax con zonas custom cargadas');
+  assert.deepEqual(app.state.profile.hrZones, customZones, 'las zonas cargadas a mano no deberían pisarse');
+});
+
 test('classifyPaceRelative: clasifica el ritmo de un tramo contra el promedio de esa carrera', () => {
   const app = loadApp();
   // avgPaceMin = 6 min/km
