@@ -158,6 +158,33 @@ test('buildSplitsAndSeriesFromFitRecords: calcula maxPower sin RangeError en una
   assert.ok(avgPower > 200 && avgPower < maxPower);
 });
 
+test('buildSplitsAndSeriesFromFitRecords: un salto grande de distancia en un solo fix no genera splits fantasma para los km que salteó', () => {
+  // Reportado en una auditoría: si el punto donde termina el split anterior (startIdx) ya
+  // quedó MÁS ALLÁ de un km entero por un salto de un solo fix (reconexión de GPS después
+  // de un túnel/arboleda, o un stream de pocos Hz), el while no avanzaba para ese km --
+  // buildSegment(startIdx, startIdx, ...) con fromIdx===toIdx daba un split fantasma con
+  // paceMin:0, repetido para CADA km entero que el salto se comió de una sola vez.
+  const t0 = Date.parse('2026-09-01T10:00:00.000Z');
+  const records = [];
+  // Primer km normal: 201 muestras a 5m/s, 0..1000m (t=0..200s).
+  for (let i = 0; i <= 200; i++) records.push({ timestamp: new Date(t0 + i * 1000), distance: i * 5 });
+  // Salto de un solo fix: de 1000m (t=200s) a 5300m (t=201s) -- se come los km 3, 4 y 5 enteros.
+  records.push({ timestamp: new Date(t0 + 201 * 1000), distance: 5300 });
+  // Continúa normal desde ahí, otra vez a 5m/s: 150 muestras más, hasta 6050m (t=351s).
+  for (let i = 1; i <= 150; i++) records.push({ timestamp: new Date(t0 + (201 + i) * 1000), distance: 5300 + i * 5 });
+
+  const { splits } = buildSplitsAndSeriesFromFitRecords(records);
+  const kms = splits.map(s => s.km);
+  // km 2 absorbe TODO el salto en un solo split (con un ritmo absurdo, esperable con datos
+  // tan salteados -- eso ya lo hacía bien el código de antes, no es lo que este test cubre).
+  // Lo que SÍ importa: los km 3, 4 y 5 -- que el salto se comió sin dejar ningún punto real
+  // adentro -- no deberían aparecer como splits fantasma duplicados con paceMin:0.
+  assert.deepEqual(kms, [1, 2, 6], `no debería haber splits fantasma para los km 3/4/5 saltados, dio: ${JSON.stringify(kms)}`);
+  // El último split (km 6) tiene datos reales de vuelta a ritmo normal (5m/s = 3.33min/km)
+  // -- confirma que el fix no perdió los puntos reales después del salto.
+  assert.equal(splits[2].paceMin, 3.33);
+});
+
 // Prueba de punta a punta contra el propio @garmin/fitsdk (no solo el bucketeo puro de
 // arriba): arma un archivo FIT real de juguete con el Encoder del SDK, lo decodifica con
 // decodeFitRecords() -- la misma función que usan fetchFitSplits() de
@@ -196,4 +223,36 @@ test('decodeFitRecords: decodifica un archivo FIT real (armado con el propio Enc
   const { splits, avgPower } = buildSplitsAndSeriesFromFitRecords(records);
   assert.equal(splits.length, 2); // 1245m => 1km completo + 0.245km de resto
   assert.equal(avgPower, 220);
+});
+
+test('decodeFitRecords: un archivo truncado (descarga cortada a mitad) no revienta y deja rastro en los logs', async () => {
+  // decoder.read() del propio SDK nunca tira -- ante un RangeError de lectura de buffer
+  // (archivo cortado) atrapa el error y devuelve, en `errors`, lo que salió mal, junto con
+  // los mensajes que sí llegó a decodificar ANTES del corte en `messages`. Antes
+  // decodeFitRecords descartaba `errors` sin mirarlo -- el resultado parcial se devolvía
+  // como si fuera la actividad completa, sin ningún rastro en los logs de Vercel a pesar
+  // de que el comentario grande de este archivo asume justo eso como primer paso para
+  // depurar un FIT real inesperado.
+  const { Encoder } = await import('@garmin/fitsdk');
+  const enc = new Encoder();
+  enc.writeMesg({ mesgNum: 0, type: 'activity', manufacturer: 1, timeCreated: new Date('2026-09-01T10:00:00Z') });
+  const t0 = Date.parse('2026-09-01T10:00:00Z');
+  for (let i = 0; i < 250; i++) {
+    enc.writeMesg({ mesgNum: 20, timestamp: new Date(t0 + i * 1000), distance: i * 5, heartRate: 150, speed: 5 });
+  }
+  const bytes = enc.close();
+  const truncated = Buffer.from(bytes).slice(0, Math.floor(bytes.length * 0.6)); // corta a mitad de camino
+
+  const originalError = console.error;
+  const loggedCalls = [];
+  console.error = (...args) => loggedCalls.push(args);
+  let records;
+  try {
+    records = await decodeFitRecords(truncated);
+  } finally {
+    console.error = originalError;
+  }
+  assert.ok(Array.isArray(records) && records.length > 0, 'un archivo truncado no debería tirar excepción, y debería devolver los mensajes decodificados antes del corte');
+  assert.ok(records.length < 250, 'el archivo truncado no puede tener los 250 registros completos');
+  assert.ok(loggedCalls.some(args => String(args[0]).includes('errores')), 'el corte debería quedar registrado en los logs, antes se descartaba en silencio');
 });

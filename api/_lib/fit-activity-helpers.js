@@ -60,7 +60,18 @@ async function decodeFitRecords(buffer) {
   const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
   const stream = Stream.fromBuffer(buf);
   const decoder = new Decoder(stream);
-  const { messages } = decoder.read();
+  // decoder.read() nunca tira -- si el archivo viene truncado (descarga cortada a mitad,
+  // un glitch del lado del proveedor) atrapa el RangeError de la lectura de buffer que sea
+  // y devuelve, en `errors`, lo que salió mal, junto con los mensajes que sí llegó a
+  // decodificar ANTES del corte en `messages`. Antes se descartaba `errors` sin mirarlo --
+  // el resultado parcial (ej. una carrera de 10km cortada a los 6km) se devolvía como si
+  // fuera la actividad completa, sin ningún rastro en los logs de Vercel a pesar de que el
+  // comentario grande de arriba de este archivo asume justo eso como primer paso para
+  // depurar un FIT real inesperado.
+  const { messages, errors } = decoder.read();
+  if (errors && errors.length) {
+    console.error('fit: decoder.read() devolvió errores (datos parciales, ver mensaje):', errors.map(e => e && e.message));
+  }
   return (messages && messages.recordMesgs) || [];
 }
 
@@ -132,6 +143,16 @@ function buildSplitsAndSeriesFromFitRecords(records) {
     let startIdx = 0, startTime = 0;
     for (let km = 1; km <= numFullKm; km++) {
       const targetDist = km * 1000;
+      // Si el punto donde ya estamos parados (startIdx, el final del split anterior) quedó
+      // MÁS ALLÁ de este km entero, es porque un solo salto de distancia (reconexión de GPS
+      // después de un túnel/arboleda, o un stream de pocos Hz) se comió este km sin ningún
+      // punto real adentro -- antes esto generaba un split fantasma (fromIdx===toIdx,
+      // segDistKm=0, paceMin=0) para CADA km saltado, mostrando varias filas de "0:00/km"
+      // imposibles en la tabla. No hay ningún dato real de "acá pasó este km" para mostrar,
+      // así que no se genera fila para él -- el próximo km que sí tenga un punto real que lo
+      // cruce va a mostrar, honestamente, el tramo completo (incluyendo lo saltado) en una
+      // sola fila con su ritmo promedio real, en vez de inventar varias filas imposibles.
+      if (distArr[startIdx] >= targetDist) continue;
       let idx = startIdx;
       while (idx < distArr.length && distArr[idx] < targetDist) idx++;
       if (idx >= distArr.length) idx = distArr.length - 1;
