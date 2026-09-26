@@ -70,6 +70,57 @@ test('applyProfileChange: dias_entreno cambia el cronograma de base y regenera e
   });
 });
 
+test('mover_sesion: el día movido sobrevive a una regeneración del plan (dias_entreno), y sin mostrar "undefined"/NaN', (t) => {
+  // swapPlanDaySessions() intercambia typeKey/dist/interval/etc. entre los dos días, pero si
+  // ninguno de los dos ya era custom o cancelled (el caso más común: dos sesiones lisas del
+  // algoritmo), quedaban SIN ninguna marca de protección después del swap. preserveLivedDays()
+  // -- lo único que evita que una regeneración del plan (guardar el perfil, cambiar de
+  // objetivo, o hasta otra herramienta del coach en la MISMA respuesta) le pise el contenido a
+  // un día -- solo respeta un día con d.custom o d.cancelled en true. modificar_sesion y
+  // cancelar_sesion ya se protegen solos; mover_sesion era la única de las tres que no, así
+  // que el movimiento que el corredor acababa de confirmar podía desaparecer en silencio en la
+  // próxima regeneración. Además, marcar custom:true sin resolver antes tipo/descripción (y
+  // sin limpiar un interval en formato del algoritmo) es el mismo bug ya arreglado en
+  // ajustar_volumen_semana -- "NaNm" en una sesión de series/cuestas movida.
+  const app = loadApp();
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  if(todayIdx === 6){
+    // Domingo es el último día de la semana (lunes a domingo) -- todo otro día ya "pasó"
+    // para isDayLocked, así que mover_sesion no tiene ningún destino válido dentro de la
+    // misma semana hoy. No hay forma de armar este escenario un domingo.
+    t.skip('mover_sesion no tiene ningún día de destino válido dentro de esta semana cuando hoy es domingo');
+    return;
+  }
+  const origDay = app.DAY_KEYS[todayIdx];
+  const destDay = app.DAY_KEYS[todayIdx + 1];
+  app.state.profile = baseProfile(app);
+  app.state.weekNumber = 1;
+  app.state.plan = app.DAY_KEYS.map(day => ({ day, typeKey: 'rest', dist: 0, terrain: null, zone: null }));
+  app.state.plan[app.DAY_KEYS.indexOf(origDay)] = {
+    day: origDay, typeKey: 'intervals', dist: 8, terrain: 'asfalto', zone: 4,
+    interval: { reps: 6, repMeters: 400, recoveryMin: 2 },
+  };
+  app.state.nextWeekOverrides = {};
+  app.state.chat = [];
+
+  const result = app.applyMoveSession({ dia_origen: origDay, dia_destino: destDay });
+  assert.match(result, /OK, moví/);
+
+  const movedDay = app.state.plan.find(d => d.day === destDay);
+  const lbl = app.planLabel(movedDay);
+  assert.ok(!/undefined|NaN/.test(lbl.type + ' ' + lbl.desc), `planLabel del día movido no debería mostrar undefined/NaN -- type:"${lbl.type}" desc:"${lbl.desc}"`);
+  assert.ok(movedDay.custom || movedDay.cancelled, 'el día movido debería quedar protegido (custom o cancelled) contra una regeneración del plan');
+
+  // Ahora disparamos una regeneración real del plan (mismo mecanismo que el reportado: otra
+  // herramienta del coach, o guardar el Perfil, en cualquier momento posterior) -- dias_entreno
+  // SIGUE incluyendo destDay, para aislar específicamente si el swap sobrevive (y no confundir
+  // el resultado con "dejó de ser día de entreno") -- y confirmamos que el movimiento sigue en pie.
+  app.applyProfileChange({ dias_entreno: [destDay, app.DAY_KEYS[(app.DAY_KEYS.indexOf(destDay)+1)%7]] });
+  const stillProtected = app.state.plan.find(d => d.day === destDay);
+  const stillLbl = app.planLabel(stillProtected);
+  assert.equal(stillLbl.type, lbl.type, 'la sesión movida no debería perderse con una regeneración del plan que la sigue incluyendo como día de entreno');
+});
+
 test('applyProfileChange: dias_entreno con valores inválidos no cambia nada', () => {
   const app = loadApp();
   app.state.profile = baseProfile(app);

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-26T00:51:05Z';
+const APP_VERSION = '2026-09-26T00:59:49Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -9780,6 +9780,36 @@ function applyMoveSession(input){
   // comentario equivalente en applyPlanChange.
   captureUndoSnapshot();
   swapPlanDaySessions(origDay, destDay);
+  // Sin esto, si los dos días eran sesiones lisas del algoritmo (el caso más común -- ninguno
+  // ya era custom ni cancelled antes del swap), quedaban SIN ninguna marca de protección
+  // después de moverlos. preserveLivedDays() -- lo único que evita que una regeneración del
+  // plan (guardar el perfil, cambiar de objetivo, cargar una carrera en Próximos Eventos, o
+  // incluso otra herramienta del coach en la MISMA respuesta) le pise el contenido a un día --
+  // solo respeta un día con d.custom o d.cancelled en true; sin ninguno de los dos, el
+  // movimiento que el corredor acaba de confirmar desaparecía en silencio en la próxima
+  // regeneración, sin ningún aviso ni error. modificar_sesion y cancelar_sesion ya se
+  // protegen solos (ponen custom/cancelled) -- mover_sesion era la única de las tres que no.
+  // Un día que terminó cancelado (llevaba la marca cancelled consigo en el swap) no se toca:
+  // esos días van a propósito con custom:false (ver el merge de nextWeekOverrides), si no
+  // planLabel() intentaría leer d.type/d.desc (undefined en un día cancelado) en vez de
+  // mostrarlo como el descanso normal que es. Y un día que YA era custom antes del swap
+  // (con su propio type/desc ya resueltos, viajaron con él) tampoco se toca -- resolverlo
+  // de nuevo con planLabel() reenvolvería la entrada en calor/vuelta a la calma sobre un
+  // desc que ya las tenía adentro, duplicándolas cada vez que se lo vuelva a mover.
+  // Para un día recién movido que SIGUE siendo del algoritmo (el caso más común: ninguno de
+  // los dos ya era custom), mismo bug que ya se arregló en applyVolumeAdjust -- marcar
+  // custom:true sin resolver antes tipo/descripción deja planLabel() leyendo d.type/d.desc
+  // undefined, y si el día tenía una estructura de repeticiones del algoritmo (reps/repMeters
+  // de series o cuestas, no workMin/restMin) encima la mostraría como si fuera fartlek,
+  // saliendo "NaNm". planLabel(d) ACÁ, con typeKey/interval ya intercambiados, deja los
+  // números reales incrustados como texto en desc antes de marcarlo protegido.
+  [origDay, destDay].forEach(d=>{
+    if(d.cancelled || d.custom) return;
+    const lbl = planLabel(d);
+    d.type = lbl.type; d.desc = lbl.desc;
+    delete d.interval;
+    d.custom = true;
+  });
   renderPlan(); renderHome(); renderRunTodayCard(); persist();
   state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+input.dia_origen)+' → '+t('day_'+input.dia_destino)), ts:Date.now()});
   return `OK, moví la sesión de ${input.dia_origen} a ${input.dia_destino}.`;
