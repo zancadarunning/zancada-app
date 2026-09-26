@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-26T00:59:49Z';
+const APP_VERSION = '2026-09-26T01:02:57Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2730,7 +2730,17 @@ function isOverlayCurrentlyVisible(el){
   return !!(el.style.display && el.style.display !== 'none');
 }
 function hideOverlayForBack(el){
-  if(el.classList.contains('overlay-sheet')) el.classList.remove('overlay-open');
+  // rd-video-overlay es un caso especial: atrás de ese overlay hay un requestAnimationFrame
+  // dibujando la cámara del video y un MediaRecorder grabando (ver closeDynamicVideo). Solo
+  // ocultarlo con display:none (como cualquier otro overlay genérico) no para ninguna de las
+  // dos cosas -- rdVideoState.cancelled seguía en false, así que la animación y la grabación
+  // seguían corriendo invisibles hasta terminar solas (hasta 12s), gastando batería/CPU de
+  // más, y el blob URL del video resultante (ya inalcanzable, el overlay sigue oculto) nunca
+  // se liberaba con URL.revokeObjectURL -- quedaba pisado recién la próxima vez que alguien
+  // abriera CUALQUIER video de ruta. Tocar atrás durante la grabación tiene que cortarla de
+  // verdad, no solo esconder la pantalla.
+  if(el.id === 'rd-video-overlay') closeDynamicVideo();
+  else if(el.classList.contains('overlay-sheet')) el.classList.remove('overlay-open');
   else el.style.display = 'none';
 }
 // typeof MutationObserver !== 'undefined': el harness de tests (test/support/load-app.js)
