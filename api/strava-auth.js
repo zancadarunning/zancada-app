@@ -26,11 +26,24 @@ function verifyState(state) {
 
 const { withSentry, reportError } = require('./_lib/sentry');
 
+// Antes cada rama de error de acá abajo dejaba al usuario en una página muerta (texto plano
+// o el JSON crudo que devolvió Strava) sin ningún link de vuelta a la app -- pasa de verdad
+// cuando el usuario toca "Cancelar" en la pantalla de consentimiento de Strava (code nunca
+// llega) o cuando el intercambio de token falla. failGracefully manda de vuelta a la app en
+// vez de mostrar el detalle interno (que además podía filtrar el payload crudo del proveedor
+// o el mensaje de una excepción) -- el log server-side (console.error/reportError) sigue
+// teniendo el detalle real para debuggear.
+function failGracefully(res, reason, detail) {
+  console.error('strava-auth: ' + reason, detail || '');
+  res.writeHead(302, { Location: '/' });
+  res.end();
+}
+
 module.exports = withSentry(async (req, res) => {
   const { code, state: rawState } = req.query;
-  if (!code || !rawState) { res.status(400).send('Falta code o state'); return; }
+  if (!code || !rawState) { failGracefully(res, 'falta code o state'); return; }
   const userId = verifyState(rawState);
-  if (!userId) { res.status(400).send('State inválido o vencido'); return; }
+  if (!userId) { failGracefully(res, 'state inválido o vencido'); return; }
   try {
     const tokenRes = await fetch('https://www.strava.com/oauth/token', {
       method: 'POST',
@@ -43,7 +56,8 @@ module.exports = withSentry(async (req, res) => {
       })
     });
     const tokenData = await tokenRes.json();
-    if (!tokenData.access_token) { res.status(400).json(tokenData); return; }
+    if (!tokenData.access_token) { failGracefully(res, 'token exchange failed', tokenData); return; }
+    if (!tokenData.athlete || !tokenData.athlete.id) { failGracefully(res, 'respuesta sin athlete.id', tokenData); return; }
     const base = process.env.SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_KEY;
     const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' };
@@ -84,6 +98,6 @@ module.exports = withSentry(async (req, res) => {
   } catch (err) {
     console.error('strava-auth error', err);
     await reportError(err, { endpoint: 'strava-auth' });
-    res.status(500).send('Error: ' + err.message);
+    failGracefully(res, 'excepción no controlada', err.message);
   }
 });

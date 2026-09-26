@@ -38,11 +38,21 @@ function verifyState(state) {
 
 const { withSentry, reportError } = require('./_lib/sentry');
 
+// Ver el comentario igual a este en strava-auth.js: antes cada rama de error de acá abajo
+// dejaba al usuario en una página muerta (texto plano o el JSON crudo del proveedor) sin
+// ningún link de vuelta a la app -- pasa de verdad si el usuario cancela el consentimiento
+// o si el intercambio de token falla. El log server-side sigue teniendo el detalle real.
+function failGracefully(res, reason, detail) {
+  console.error('polar-auth: ' + reason, detail || '');
+  res.writeHead(302, { Location: '/' });
+  res.end();
+}
+
 module.exports = withSentry(async (req, res) => {
   const { code, state: rawState } = req.query;
-  if (!code || !rawState) { res.status(400).send('Falta code o state'); return; }
+  if (!code || !rawState) { failGracefully(res, 'falta code o state'); return; }
   const userId = verifyState(rawState);
-  if (!userId) { res.status(400).send('State inválido o vencido'); return; }
+  if (!userId) { failGracefully(res, 'state inválido o vencido'); return; }
 
   try {
     const basicAuth = Buffer.from(`${process.env.POLAR_CLIENT_ID}:${process.env.POLAR_CLIENT_SECRET}`).toString('base64');
@@ -56,7 +66,7 @@ module.exports = withSentry(async (req, res) => {
       body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI })
     });
     const tokenData = await tokenRes.json();
-    if (!tokenData.access_token) { res.status(400).json(tokenData); return; }
+    if (!tokenData.access_token) { failGracefully(res, 'token exchange failed', tokenData); return; }
     const accessToken = tokenData.access_token;
     const polarUserId = tokenData.x_user_id;
 
@@ -122,6 +132,6 @@ module.exports = withSentry(async (req, res) => {
   } catch (err) {
     console.error('polar-auth error', err);
     await reportError(err, { endpoint: 'polar-auth' });
-    res.status(500).send('Error: ' + err.message);
+    failGracefully(res, 'excepción no controlada', err.message);
   }
 });

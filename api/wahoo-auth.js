@@ -28,11 +28,20 @@ function verifyState(state) {
 
 const { withSentry, reportError } = require('./_lib/sentry');
 
+// Ver el comentario igual a este en strava-auth.js: antes cada rama de error de acá abajo
+// dejaba al usuario en una página muerta (texto plano o el JSON crudo del proveedor) sin
+// ningún link de vuelta a la app. El log server-side sigue teniendo el detalle real.
+function failGracefully(res, reason, detail) {
+  console.error('wahoo-auth: ' + reason, detail || '');
+  res.writeHead(302, { Location: '/' });
+  res.end();
+}
+
 module.exports = withSentry(async (req, res) => {
   const { code, state: rawState } = req.query;
-  if (!code || !rawState) { res.status(400).send('Falta code o state'); return; }
+  if (!code || !rawState) { failGracefully(res, 'falta code o state'); return; }
   const userId = verifyState(rawState);
-  if (!userId) { res.status(400).send('State inválido o vencido'); return; }
+  if (!userId) { failGracefully(res, 'state inválido o vencido'); return; }
 
   try {
     const tokenRes = await fetch('https://api.wahooligan.com/oauth/token', {
@@ -47,7 +56,7 @@ module.exports = withSentry(async (req, res) => {
       })
     });
     const tokenData = await tokenRes.json();
-    if (!tokenData.access_token) { res.status(400).json(tokenData); return; }
+    if (!tokenData.access_token) { failGracefully(res, 'token exchange failed', tokenData); return; }
 
     const base = process.env.SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_KEY;
@@ -106,6 +115,6 @@ module.exports = withSentry(async (req, res) => {
   } catch (err) {
     console.error('wahoo-auth error', err);
     await reportError(err, { endpoint: 'wahoo-auth' });
-    res.status(500).send('Error: ' + err.message);
+    failGracefully(res, 'excepción no controlada', err.message);
   }
 });
