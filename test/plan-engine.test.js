@@ -682,6 +682,47 @@ test('isRecoveryWeek: cargar la PRÓXIMA carrera durante la semana de recuperaci
   assert.ok(app.isRecoveryWeek(weekStartDate), 'la semana debería seguir siendo de recuperación aunque ya haya una carrera nueva cargada');
 });
 
+test('postGoalRaceRecoveryMultiplier: la semana siguiente a la carrera OBJETIVO (Perfil > Metas) también baja el volumen, aunque nunca se haya cargado en "Próximos eventos"', () => {
+  // taperMultiplier() vuelve a 1 apenas "esa carrera ya pasó" (daysToRace<0) -- sin este
+  // multiplicador, un corredor que solo carga la carrera en Perfil > Metas (nunca la duplica
+  // en "Próximos eventos", que es el único otro lugar que dispara recuperación vía
+  // isRecoveryWeek/recoveryMultiplier) arrancaba la semana siguiente a su carrera OBJETIVO
+  // otra vez a full volumen, sin ningún descanso post-carrera.
+  const app = loadApp();
+  app.state.event = null;
+  app.state.lastEventDate = null;
+  const p = { raceDate: '2026-09-13' }; // domingo
+  assert.equal(app.postGoalRaceRecoveryMultiplier(p, '2026-09-14'), 0.6, 'el lunes siguiente a la carrera objetivo debería bajar el volumen');
+  assert.equal(app.postGoalRaceRecoveryMultiplier(p, '2026-09-21'), 1, 'la semana SIGUIENTE a esa ya no debería seguir recortada');
+  assert.equal(app.taperMultiplier(p, '2026-09-14'), 1, 'taperMultiplier por sí solo ya no ve nada especial en esa semana (la carrera "ya pasó")');
+});
+
+test('postGoalRaceRecoveryMultiplier: no descuenta dos veces si la carrera objetivo es la misma que la de "Próximos eventos"', () => {
+  const app = loadApp();
+  const p = { raceDate: '2026-09-13' };
+  app.state.event = { date: '2026-09-13', name: 'La carrera', type: 'ruta' };
+  app.state.lastEventDate = null;
+  // recoveryMultiplier ya cubre este caso vía isRecoveryWeek -- postGoalRaceRecoveryMultiplier
+  // no debería aplicar SU PROPIO 0.6 encima (0.6*0.6 sería mucho más recorte del que busca
+  // cualquiera de los dos mecanismos por separado).
+  assert.equal(app.postGoalRaceRecoveryMultiplier(p, '2026-09-14'), 1, 'no debería descontar de nuevo si ya la cubre recoveryMultiplier');
+  assert.equal(app.recoveryMultiplier('2026-09-14'), 0.6, 'pero recoveryMultiplier sí la cubre, vía state.event');
+});
+
+test('generatePlan: la semana siguiente a la carrera OBJETIVO (sin cargarla en "Próximos eventos") tampoco tiene sesiones pesadas', () => {
+  const app = loadApp();
+  const profile = baseProfile({ raceDate: '2026-09-13' }); // domingo
+  app.state.profile = profile;
+  app.state.event = null;
+  app.state.lastEventDate = null;
+  const weekStartDate = '2026-09-14'; // lunes siguiente a la carrera
+  const plan = app.generatePlan(profile, 13, weekStartDate);
+  const heavyTypes = ['intervals', 'tempo', 'fartlek', 'hills', 'progression', 'long'];
+  plan.forEach(d => {
+    assert.ok(!heavyTypes.includes(d.typeKey), `${d.day} no debería ser ${d.typeKey} la semana después de la carrera objetivo`);
+  });
+});
+
 test('preserveLivedDays: no pisa un día de hoy en adelante que el corredor ya personalizó a mano (d.custom)', () => {
   // Reportado por el usuario: tenía 3 sesiones de 5km puestas a mano por el chat del coach
   // (modificar_sesion las marca con d.custom=true) y, al cargar una carrera en Próximos

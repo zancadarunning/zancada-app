@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-26T03:09:55Z';
+const APP_VERSION = '2026-09-26T03:36:22Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3067,6 +3067,28 @@ function isRecoveryWeek(weekStartDate){
 function recoveryMultiplier(weekStartDate){
   return isRecoveryWeek(weekStartDate) ? 0.6 : 1;
 }
+function postGoalRaceRecoveryMultiplier(p, weekStartDate){
+  // recoveryMultiplier() ya cubre la semana de recuperación posterior a una carrera cargada
+  // en "Próximos eventos" (state.event/state.lastEventDate) -- pero si el corredor solo carga
+  // la carrera OBJETIVO en Perfil > Metas (p.raceDate) y nunca la duplica en "Próximos
+  // eventos" (caso bien común: es la única carrera que le importa, no ve motivo para anotarla
+  // dos veces), taperMultiplier() vuelve a 1 apenas "esa carrera ya pasó" -- la semana
+  // siguiente arrancaba de nuevo a full volumen, sin ningún descanso post-carrera, justo lo
+  // opuesto de lo que ya hace el mecanismo de recuperación para el otro caso. Mismo criterio
+  // que isRecoveryWeek (solo si la carrera cayó en domingo, para que "la semana que sigue" sea
+  // lunes a domingo completo, sin ambigüedad).
+  if(!p || !p.raceDate || !weekStartDate) return 1;
+  // Si la carrera objetivo es la MISMA que la cargada en "Próximos eventos" (mismo raceDate),
+  // recoveryMultiplier ya la cubre -- no descontar dos veces.
+  if(state.event && state.event.date === p.raceDate) return 1;
+  if(state.lastEventDate === p.raceDate) return 1;
+  const start = new Date(weekStartDate+'T00:00:00');
+  const raceDate = new Date(p.raceDate+'T00:00:00');
+  if(isNaN(start.getTime()) || isNaN(raceDate.getTime())) return 1;
+  if(raceDate.getDay() !== 0) return 1; // 0 = domingo
+  const daysSinceRace = Math.round((start - raceDate) / 86400000);
+  return daysSinceRace === 1 ? 0.6 : 1;
+}
 function isEventRaceWeek(weekStartDate){
   // La carrera cargada en "Próximos eventos" es informativa (nombre, cuenta regresiva,
   // calendario, calculadora de ritmo) y a propósito YA NO reprograma el plan con semanas
@@ -3871,16 +3893,18 @@ function generatePlan(p, weekNumber, weekStartDate){
   const caution = trainingCaution(p);
   const isRecovery = isRecoveryWeek(weekStartDate);
   const taperMult = taperMultiplier(p, weekStartDate);
+  const postGoalRaceMult = postGoalRaceRecoveryMultiplier(p, weekStartDate);
   // La descarga periódica (isCutbackWeek, cada 4 semanas) está pensada para el bloque normal
   // de entrenamiento -- si esta semana YA tiene una reducción de volumen más específica y
-  // deliberada (taper antes de la carrera objetivo, recuperación post-carrera, o la semana
-  // puntual de una carrera de "Próximos eventos"), sumarle la descarga genérica encima
-  // recorta MÁS de lo que cualquiera de esos mecanismos buscaba por separado -- mismo
-  // problema, mismo criterio, que el chequeo de más abajo en eventRaceWeekMultiplier (no
-  // descontar la misma carrera dos veces), generalizado a cualquier combinación de estos
-  // recortes en vez de solo ese caso puntual.
-  const skipPeriodicCutback = taperMult < 1 || isRecovery || isEventRaceWeek(weekStartDate);
-  const mult = weekMultiplier(weekNumber, caution, skipPeriodicCutback) * taperMult * recoveryMultiplier(weekStartDate) * eventRaceWeekMultiplier(weekStartDate, p);
+  // deliberada (taper antes de la carrera objetivo, recuperación post-carrera de esa MISMA
+  // carrera objetivo, recuperación post-carrera de "Próximos eventos", o la semana puntual de
+  // una carrera de "Próximos eventos"), sumarle la descarga genérica encima recorta MÁS de lo
+  // que cualquiera de esos mecanismos buscaba por separado -- mismo problema, mismo criterio,
+  // que el chequeo de más abajo en eventRaceWeekMultiplier (no descontar la misma carrera dos
+  // veces), generalizado a cualquier combinación de estos recortes en vez de solo ese caso
+  // puntual.
+  const skipPeriodicCutback = taperMult < 1 || isRecovery || postGoalRaceMult < 1 || isEventRaceWeek(weekStartDate);
+  const mult = weekMultiplier(weekNumber, caution, skipPeriodicCutback) * taperMult * postGoalRaceMult * recoveryMultiplier(weekStartDate) * eventRaceWeekMultiplier(weekStartDate, p);
   const beginner = isBeginnerProfile(p);
   // Un principiante con base de un deporte de impacto (ver hasRunningImpactBase) ya tolera el
   // golpe de correr aunque nunca haya salido a correr solo -- a ese lo sacamos del "todo zona 1,
@@ -3902,11 +3926,13 @@ function generatePlan(p, weekNumber, weekStartDate){
   const defaultDays = beginner ? ['tue','thu','sun'] : ['tue','wed','fri','sun'];
   const trainingDays = DAY_KEYS.filter(d => (p.trainingDays && p.trainingDays.length ? p.trainingDays : defaultDays).includes(d));
   const sessionMap = distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isCutbackWeek(weekNumber), p.goal, varietyOk);
-  if(isRecovery){
+  if(isRecovery || postGoalRaceMult < 1){
     // En la semana de recuperación evitamos series/tempo/cuestas/fartlek/progresivo/rodaje
     // largo -- todo eso suma carga justo cuando el cuerpo todavía está absorbiendo el
     // esfuerzo de la carrera. Se reemplaza por rodaje suave (o descanso, si ese día ya
-    // no tenía sesión) hasta la semana siguiente, que retoma el plan normal.
+    // no tenía sesión) hasta la semana siguiente, que retoma el plan normal. Mismo criterio
+    // sea la recuperación de una carrera de "Próximos eventos" (isRecovery) o de la carrera
+    // OBJETIVO de Perfil > Metas cuando nunca se duplicó ahí (postGoalRaceMult).
     const heavyTypes = ['intervals','tempo','fartlek','hills','progression','long'];
     Object.keys(sessionMap).forEach(day=>{ if(heavyTypes.includes(sessionMap[day])) sessionMap[day] = 'easy'; });
   }
@@ -9565,6 +9591,7 @@ function buildContext(){
   // y podía dar una explicación inventada si le preguntaban por qué bajó el volumen.
   if(taperMultiplier(p, state.weekStart) < 1) ctx += ` Esta semana el corredor está en la puesta a punto (tapering) antes de su carrera OBJETIVO del ${p.raceDate} -- el volumen de esta semana ya bajó a propósito por eso, es normal y esperable que sea menor a los ${p.weeklyKm}km/semana de crucero.`;
   if(recoveryMultiplier(state.weekStart) < 1) ctx += ` Esta semana es de recuperación, la que sigue a la carrera que corrió (cargada en "Próximos eventos") -- el volumen bajó a propósito por eso.`;
+  if(postGoalRaceRecoveryMultiplier(p, state.weekStart) < 1) ctx += ` Esta semana es de recuperación, la que sigue a la carrera OBJETIVO del ${p.raceDate} que el corredor ya corrió -- el volumen bajó a propósito por eso.`;
   if(eventRaceWeekMultiplier(state.weekStart, p) < 1) ctx += ` Esta semana cae la carrera cargada en "Próximos eventos" -- el volumen de esta semana bajó a propósito, como una semana de descarga más, para no llegar reventado a correrla.`;
   if(p.coachNotes && p.coachNotes.length) ctx += ` Notas permanentes guardadas sobre el corredor (lesiones, preferencias u otros datos a tener en cuenta siempre): ${p.coachNotes.map(n=>`"${n}"`).join('; ')}.`;
   if(pregnancyStillRecent(p)) ctx += ` El corredor indicó en el onboarding que está embarazada o dio a luz en los últimos 6 meses -- el plan ya se generó con volumen e intensidad reducidos por precaución. Si pregunta por esto, recordale que consulte con su médico/a antes de cualquier cambio de intensidad; no le des indicaciones médicas específicas vos.`;
