@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-27T20:16:06Z';
+const APP_VERSION = '2026-09-27T20:31:20Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -284,15 +284,35 @@ function celebrate(){
 }
 // --- Personaje del coach: ojos que siguen el mouse/dedo + expresiones de festejo --------
 // El botón flotante que abre el chat del coach (coach-fab) tenía un ícono genérico de
-// globo de diálogo -- ahora es una carita propia (dos ojos + una boca, dibujados a mano en
-// SVG, ver index.html) que sigue el puntero por toda la pantalla y cambia de expresión en
-// los momentos que la app ya reconoce como un logro (nueva marca personal o meta semanal
-// cumplida, ambos vía celebrate() más arriba) y al terminar una carrera trackeada (ver
-// closeSummary). Sin ninguna librería externa.
-const MASCOT_EXPRESSIONS = {
-  neutral: 'M17 31 Q25 35 33 31',
-  happy:   'M15 29 Q25 40 35 29',
-  excited: 'M14 28 Q25 42 36 28',
+// globo de diálogo -- ahora es una "nube" propia (varios círculos superpuestos, ver
+// index.html) con dos ojos en forma de pastilla vertical que siguen el puntero por toda la
+// pantalla y cambian de forma en los momentos que la app ya reconoce como un logro (nueva
+// marca personal o meta semanal cumplida, ambos vía celebrate() más arriba) y al terminar
+// una carrera trackeada (ver closeSummary). Sin ninguna librería externa.
+//
+// La expresión se hace cambiando la FORMA de los ojos (atributo "d" de cada <path>), no una
+// boca -- el personaje no tiene boca a propósito, todo el gesto sale de los ojos (pastilla
+// vertical en reposo, achatada horizontal al festejar). Cada forma está escrita dos veces
+// (una centrada en el ojo izquierdo, otra en el derecho) porque el "d" de un path SVG es
+// siempre en coordenadas absolutas del documento, no relativas al ojo -- no hay forma de
+// reusar un solo "d" para los dos ojos sin además mover el <path> con un transform (y el
+// transform ya lo usa initMascotEyes para el seguimiento de mirada/parpadeo).
+const MASCOT_EYE_SHAPES = {
+  // Pastilla vertical (5 de ancho x 14 de alto) -- el mismo reposo de siempre.
+  neutral: {
+    l: 'M21.5 23.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z',
+    r: 'M37.5 23.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z',
+  },
+  // Pastilla horizontal achatada (13x6) -- ojos entrecerrados de contento, terminaste una carrera.
+  happy: {
+    l: 'M20.5 25 h7 a3 3 0 0 1 0 6 h-7 a3 3 0 0 1 0 -6 z',
+    r: 'M36.5 25 h7 a3 3 0 0 1 0 6 h-7 a3 3 0 0 1 0 -6 z',
+  },
+  // Círculo grande (radio 4.5) -- ojos bien abiertos, marca personal o meta cumplida.
+  excited: {
+    l: 'M19.5 28 a4.5 4.5 0 1 0 9 0 a4.5 4.5 0 1 0 -9 0',
+    r: 'M35.5 28 a4.5 4.5 0 1 0 9 0 a4.5 4.5 0 1 0 -9 0',
+  },
 };
 let mascotExpressionTimer = null;
 let mascotExpressionPriority = -1;
@@ -302,14 +322,15 @@ let mascotExpressionPriority = -1;
 // -- sin esto, terminar una carrera que ADEMÁS es récord mostraba la cara de festejo grande
 // solo un instante, tapada enseguida por la genérica de "carrera terminada".
 function setMascotExpression(name, {duration=2200, priority=1}={}){
-  const mouth = document.getElementById('mascot-mouth');
-  if(!mouth || !MASCOT_EXPRESSIONS[name]) return;
+  const eyeL = document.getElementById('mascot-eye-l'), eyeR = document.getElementById('mascot-eye-r');
+  const shape = MASCOT_EYE_SHAPES[name];
+  if(!eyeL || !eyeR || !shape) return;
   if(priority < mascotExpressionPriority) return;
   mascotExpressionPriority = priority;
-  mouth.setAttribute('d', MASCOT_EXPRESSIONS[name]);
+  eyeL.setAttribute('d', shape.l); eyeR.setAttribute('d', shape.r);
   clearTimeout(mascotExpressionTimer);
   mascotExpressionTimer = setTimeout(()=>{
-    mouth.setAttribute('d', MASCOT_EXPRESSIONS.neutral);
+    eyeL.setAttribute('d', MASCOT_EYE_SHAPES.neutral.l); eyeR.setAttribute('d', MASCOT_EYE_SHAPES.neutral.r);
     mascotExpressionPriority = -1;
   }, duration);
 }
@@ -403,8 +424,12 @@ function initMascotEyes(){
   (function blinkLoop(){
     const delay = 2800 + Math.random()*2400;
     setTimeout(()=>{
-      setEyeSquash(eyeL, 18, 20, 0.12); setEyeSquash(eyeR, 32, 20, 0.12);
-      setTimeout(()=>{ setEyeSquash(eyeL, 18, 20, 1); setEyeSquash(eyeR, 32, 20, 1); }, 130);
+      // (24,28)/(40,28): centro de CUALQUIERA de las 3 formas de MASCOT_EYE_SHAPES (pastilla
+      // vertical, pastilla horizontal, círculo) -- las tres comparten el mismo centro por
+      // diseño, así que el parpadeo escala bien alrededor del centro real sea cual sea la
+      // expresión activa en ese momento.
+      setEyeSquash(eyeL, 24, 28, 0.12); setEyeSquash(eyeR, 40, 28, 0.12);
+      setTimeout(()=>{ setEyeSquash(eyeL, 24, 28, 1); setEyeSquash(eyeR, 40, 28, 1); }, 130);
       blinkLoop();
     }, delay);
   })();
