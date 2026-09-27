@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-27T18:52:55Z';
+const APP_VERSION = '2026-09-27T19:06:36Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7899,7 +7899,7 @@ function renderHistory(){
       <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" onclick="deleteRun('${r.id}')"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
       <div class="card hist-card swipe-content" onclick="openRunDetail('${r.id}')" style="cursor:pointer;">
         <div class="hist-top"><span style="font-weight:700;">${dateStr}</span>${hasMap ? '' : `<span class="hist-date">${r.manual? `<span class="tag tag-asfalto" style="margin-right:6px;">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, true)}${fmtTime(r.durationSec)}</span>`}</div>
-        ${hasMap ? `<div class="hist-map" id="hist-map-${r.id}"><div class="hist-map-badge">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false)}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
+        ${hasMap ? `<div class="hist-map" id="hist-map-${r.id}" data-run-id="${r.id}"><div class="hist-map-badge">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false)}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
         <div class="stat-row-divided">
           <div class="stat-cell"><div class="n">${fmtDist(r.distanceKm)}</div><div class="l">${distUnit()}</div></div>
           <div class="stat-cell"><div class="n">${fmtPace(paceMin)}</div><div class="l">${t('run_pace_word')}</div></div>
@@ -7916,16 +7916,46 @@ function renderHistory(){
   }).join('');
   historyMaps.forEach(m=>m.remove());
   historyMaps = [];
-  (state.runs||[]).filter(r=>r.points && r.points.length>1).forEach(r=>{
-    const el = document.getElementById('hist-map-'+r.id);
-    if(!el) return;
+  if(historyMapObserver){ historyMapObserver.disconnect(); historyMapObserver = null; }
+  // Antes se creaba un mapa de Leaflet vivo (con su propio tile layer pidiendo tiles) para
+  // CADA carrera con puntos de GPS, de una sola vez, cada vez que se renderiza Historial --
+  // incluida cada tecla tipeada en el buscador (hist-search llama a renderHistory() en cada
+  // input). Alguien con cientos/miles de carreras trackeadas terminaba creando y destruyendo
+  // esa misma cantidad de mapas de golpe en cada búsqueda, sin ninguna razón (la enorme
+  // mayoría ni siquiera están visibles en pantalla). Ahora se usa un solo IntersectionObserver
+  // para crear cada mapa recién cuando su tarjeta entra en pantalla (o está cerca, por el
+  // rootMargin) -- el resto de la lista no le cuesta nada a Leaflet hasta que el usuario
+  // scrollea hasta ahí.
+  const mapRunsById = new Map((state.runs||[]).filter(r=>r.points && r.points.length>1).map(r=>[String(r.id), r]));
+  function buildHistMap(el, r){
     const map = L.map(el, {zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, touchZoom:false, boxZoom:false, keyboard:false});
     L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20, detectRetina:true}).addTo(map);
     const latlngs = r.points.map(p=>[p.lat,p.lon]);
     const poly = L.polyline(latlngs, {color:'#0B5D2E', weight:3, lineCap:'round', lineJoin:'round'}).addTo(map);
     map.fitBounds(poly.getBounds(), {padding:[10,10]});
     historyMaps.push(map);
-  });
+  }
+  if(mapRunsById.size && typeof IntersectionObserver !== 'undefined'){
+    historyMapObserver = new IntersectionObserver((entries, obs)=>{
+      entries.forEach(entry=>{
+        if(!entry.isIntersecting) return;
+        obs.unobserve(entry.target);
+        const r = mapRunsById.get(String(entry.target.dataset.runId));
+        if(r) buildHistMap(entry.target, r);
+      });
+    }, {rootMargin:'400px 0px'});
+    mapRunsById.forEach((r, id)=>{
+      const el = document.getElementById('hist-map-'+id);
+      if(el) historyMapObserver.observe(el);
+    });
+  } else {
+    // Navegador sin IntersectionObserver (rarísimo hoy): mismo comportamiento de siempre,
+    // crear todos los mapas de una.
+    mapRunsById.forEach((r, id)=>{
+      const el = document.getElementById('hist-map-'+id);
+      if(el) buildHistMap(el, r);
+    });
+  }
   animateHistTrendBars();
 }
 function animateHistTrendBars(){
@@ -7942,6 +7972,7 @@ function animateHistTrendBars(){
 
 let detailMap = null;
 let historyMaps = [];
+let historyMapObserver = null;
 function analyzeSplitPacing(splits){
   // Compara el ritmo promedio de la primera mitad de la carrera contra la segunda para
   // detectar si se corrió parejo, acelerando (negative split, buena señal) o
