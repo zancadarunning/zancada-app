@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-27T18:40:29Z';
+const APP_VERSION = '2026-09-27T18:52:55Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -454,7 +454,14 @@ function updateProfileUnitLabels(){
   const goalLbl = document.getElementById('perfil-weekly-goal-label');
   if(goalLbl) goalLbl.textContent = t(isImperial() ? 'perfil_weekly_goal_label_mi' : 'perfil_weekly_goal_label');
   const evDist = document.getElementById('ev-distance');
-  if(evDist) evDist.placeholder = t(isImperial() ? 'perfil_ev_dist_ph_mi' : 'perfil_ev_dist_ph');
+  if(evDist){
+    const evDistLabel = t(isImperial() ? 'perfil_ev_dist_ph_mi' : 'perfil_ev_dist_ph');
+    evDist.placeholder = evDistLabel;
+    // aria-label acá también: el placeholder desaparece apenas el usuario escribe algo, así
+    // que sin esto un lector de pantalla se quedaba sin ningún nombre accesible persistente
+    // para este campo (encontrado en una auditoría de accesibilidad de index.html).
+    evDist.setAttribute('aria-label', evDistLabel);
+  }
 }
 function fmtPace(minPerKm){
   if(!minPerKm || minPerKm<=0) return '—';

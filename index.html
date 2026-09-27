@@ -1517,11 +1517,11 @@
             </div>
           </div>
           <div style="margin-top:14px;">
-            <label data-i18n="ob_refrace_label"></label>
+            <label id="ob-refrace-label" data-i18n="ob_refrace_label"></label>
             <p class="muted" style="font-size:12px; margin:2px 0 8px;" data-i18n="ob_refrace_hint"></p>
             <div class="two-col">
               <div class="field" style="margin:0;">
-                <select id="ob-refrace-dist">
+                <select id="ob-refrace-dist" data-i18n-aria="aria_refrace_dist">
                   <option value="" data-i18n="ob_refrace_none"></option>
                   <option value="5">5K</option>
                   <option value="10">10K</option>
@@ -1531,7 +1531,7 @@
                 </select>
               </div>
               <div class="field" style="margin:0;">
-                <input type="number" id="ob-refrace-min" min="0" data-i18n-ph="ob_refrace_min_ph">
+                <input type="number" id="ob-refrace-min" min="0" data-i18n-ph="ob_refrace_min_ph" data-i18n-aria="ob_refrace_min_ph">
               </div>
             </div>
           </div>
@@ -1879,7 +1879,7 @@
           <div class="stat-box"><div class="n mono" id="sum-cal">0</div><div class="l" data-i18n="run_calories"></div></div>
         </div>
       </div>
-      <div class="card"><h3 data-i18n="run_summary_shoe_q"></h3><select id="sum-shoe"></select></div>
+      <div class="card"><h3 id="sum-shoe-label" data-i18n="run_summary_shoe_q"></h3><select id="sum-shoe" aria-labelledby="sum-shoe-label"></select></div>
       <button class="btn btn-primary" data-i18n="run_summary_done" onclick="closeSummary()"></button>
     </div>
   </section>
@@ -1902,14 +1902,14 @@
         <input type="hidden" id="man-date">
       </div>
       <div class="two-col">
-        <div class="field"><label for="man-dist" id="man-dist-label" data-i18n="hist_manual_dist"></label><input type="number" id="man-dist" step="0.1" min="0"></div>
+        <div class="field"><label for="man-dist" id="man-dist-label" data-i18n="hist_manual_dist"></label><input type="number" id="man-dist" step="0.1" min="0" inputmode="decimal"></div>
         <div class="field"><label for="man-dur" data-i18n="hist_manual_dur"></label><input type="number" id="man-dur" min="0"></div>
       </div>
       <div class="field"><label for="man-hr" data-i18n="hist_manual_hr"></label><input type="number" id="man-hr"></div>
       <div class="field"><label for="man-shoe" data-i18n="run_summary_shoe_q"></label><select id="man-shoe"></select></div>
       <button class="btn btn-primary btn-sm" id="man-save-btn" style="width:100%; margin-top:6px;" data-i18n="hist_manual_save" onclick="saveManualRun()"></button>
     </div>
-    <input type="text" id="hist-search" data-i18n-ph="hist_search_ph" oninput="renderHistory()" style="width:100%; margin-bottom:14px; background:var(--asphalt-2); border:1px solid var(--overlay-hairline); color:var(--chalk); padding:8px 14px; border-radius:999px; font-size:13.5px; font-family:inherit;">
+    <input type="text" id="hist-search" data-i18n-ph="hist_search_ph" data-i18n-aria="hist_search_ph" oninput="renderHistory()" style="width:100%; margin-bottom:14px; background:var(--asphalt-2); border:1px solid var(--overlay-hairline); color:var(--chalk); padding:8px 14px; border-radius:999px; font-size:13.5px; font-family:inherit;">
     <div id="history-list"></div>
   </section>
 
@@ -2001,8 +2001,8 @@
     <div class="card" style="margin-top:16px;">
       <div id="shoe-list"></div>
       <div class="add-row">
-        <input type="text" id="shoe-name" data-i18n-ph="perfil_shoe_ph">
-        <select id="shoe-terrain">
+        <input type="text" id="shoe-name" data-i18n-ph="perfil_shoe_ph" data-i18n-aria="perfil_shoe_ph">
+        <select id="shoe-terrain" data-i18n-aria="aria_shoe_terrain">
           <option value="asfalto" data-i18n="ob_terrain_asfalto"></option>
           <option value="trail" data-i18n="ob_terrain_trail"></option>
           <option value="mixto" data-i18n="ob_terrain_mixto"></option>
@@ -2148,12 +2148,12 @@
     <div class="card" style="margin-top:16px;">
       <div id="event-box"></div>
       <button class="small-link" style="margin-top:10px; display:flex; align-items:center; gap:5px;" onclick="openPaceCalcModal()"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v2"/></svg></span><span data-i18n="pace_calc_open_btn"></span></button>
-      <div class="add-row" style="margin-top:10px;"><input type="text" id="ev-name" data-i18n-ph="perfil_ev_name_ph"></div>
-      <div class="add-row" style="margin-top:8px;"><input type="number" id="ev-distance" step="0.1" min="0" data-i18n-ph="perfil_ev_dist_ph"></div>
+      <div class="add-row" style="margin-top:10px;"><input type="text" id="ev-name" data-i18n-ph="perfil_ev_name_ph" data-i18n-aria="perfil_ev_name_ph"></div>
+      <div class="add-row" style="margin-top:8px;"><input type="number" id="ev-distance" step="0.1" min="0" inputmode="decimal" data-i18n-ph="perfil_ev_dist_ph" data-i18n-aria="perfil_ev_dist_ph"></div>
       <div class="add-row" style="margin-top:8px;">
         <div class="date-box" style="flex:1;" role="button" tabindex="0" data-i18n-aria="hist_manual_date" onclick="openCalendar('ev-date','ev-date-text')"><span class="date-box-text" id="ev-date-text"></span></div>
         <input type="hidden" id="ev-date">
-        <select id="ev-type">
+        <select id="ev-type" data-i18n-aria="aria_event_type">
           <option value="ruta" data-i18n="ev_type_ruta"></option>
           <option value="trail" data-i18n="ev_type_trail"></option>
           <option value="obstaculos" data-i18n="ev_type_obstaculos"></option>
@@ -2207,7 +2207,7 @@
     <button class="week-nav-btn" onclick="closeSportPicker()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="sport_picker_title"></h2>
     <div class="field" style="margin-top:14px;">
-      <input type="text" id="sport-picker-search" oninput="filterSportPicker()" data-i18n-ph="sport_picker_search_ph" autocomplete="off">
+      <input type="text" id="sport-picker-search" oninput="filterSportPicker()" data-i18n-ph="sport_picker_search_ph" data-i18n-aria="sport_picker_search_ph" autocomplete="off">
     </div>
     <div id="sport-picker-list" style="margin-top:10px; display:flex; flex-direction:column; gap:8px; max-height:52vh; overflow-y:auto;"></div>
     <button class="btn btn-primary" style="margin-top:16px;" onclick="closeSportPicker()" data-i18n="sport_picker_done"></button>
@@ -2313,7 +2313,7 @@
       <div class="choice" data-v="cuadriceps" data-i18n="pain_body_cuadriceps"></div>
       <div class="choice" data-v="otro" data-i18n="pain_body_otro"></div>
     </div>
-    <textarea id="pain-note" rows="2" data-i18n-ph="pain_note_ph" style="width:100%; margin-top:14px; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+    <textarea id="pain-note" rows="2" data-i18n-ph="pain_note_ph" data-i18n-aria="pain_note_ph" style="width:100%; margin-top:14px; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
     <div style="display:flex; gap:10px; margin-top:20px;">
       <button class="btn btn-outline" style="flex:1;" onclick="closePainModal()" data-i18n="cancel_word"></button>
       <button class="btn btn-primary" style="flex:1;" onclick="savePainLog()" data-i18n="pain_save"></button>
@@ -2348,16 +2348,16 @@
     </div>
     <div class="field" id="pc-custom-km-field" style="display:none;">
       <label id="pc-custom-km-label" for="pc-custom-km" data-i18n="pace_calc_custom_km_label"></label>
-      <input type="number" id="pc-custom-km" step="0.1" min="0.1" oninput="renderPaceCalcResults()">
+      <input type="number" id="pc-custom-km" step="0.1" min="0.1" inputmode="decimal" oninput="renderPaceCalcResults()">
     </div>
     <div class="field">
       <label id="pc-time-label" data-i18n="pace_calc_time_label"></label>
       <div class="time-picker-row" role="group" aria-labelledby="pc-time-label">
-        <div class="tp-col"><select id="pc-time-h" onchange="renderPaceCalcResults()"></select><span class="tp-unit" data-i18n="time_unit_h"></span></div>
+        <div class="tp-col"><select id="pc-time-h" data-i18n-aria="time_unit_h" onchange="renderPaceCalcResults()"></select><span class="tp-unit" data-i18n="time_unit_h"></span></div>
         <span class="tp-colon">:</span>
-        <div class="tp-col"><select id="pc-time-m" onchange="renderPaceCalcResults()"></select><span class="tp-unit" data-i18n="time_unit_min"></span></div>
+        <div class="tp-col"><select id="pc-time-m" data-i18n-aria="time_unit_min" onchange="renderPaceCalcResults()"></select><span class="tp-unit" data-i18n="time_unit_min"></span></div>
         <span class="tp-colon">:</span>
-        <div class="tp-col"><select id="pc-time-s" onchange="renderPaceCalcResults()"></select><span class="tp-unit" data-i18n="time_unit_sec"></span></div>
+        <div class="tp-col"><select id="pc-time-s" data-i18n-aria="time_unit_sec" onchange="renderPaceCalcResults()"></select><span class="tp-unit" data-i18n="time_unit_sec"></span></div>
       </div>
     </div>
     <div class="field">
@@ -2418,7 +2418,7 @@
              se limpian bien al cerrar el teclado en layouts con position:fixed como este
              (ver el comentario largo en app.js, cerca de forceFixedLayoutReflow). Sacando
              la barra de sugerencias de raíz, no queda nada que pueda dejar ese resto. -->
-        <input type="text" id="chatInput" data-i18n-ph="coach_ph" onkeydown="if(event.key==='Enter') handleChatSendClick();" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <input type="text" id="chatInput" data-i18n-ph="coach_ph" data-i18n-aria="coach_ph" onkeydown="if(event.key==='Enter') handleChatSendClick();" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
         <button class="chat-send" id="chat-send-btn" onclick="handleChatSendClick()" data-i18n-aria="aria_send"><span class="icon-sq" style="width:18px; height:18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></span></button>
       </div>
     </div>
@@ -2435,7 +2435,7 @@
       </div>
       <input type="file" id="perfil-photo-input" accept="image/*" style="display:none;" onchange="handleAvatarPhotoChange(event)">
       <div>
-        <input type="text" id="perfil-name" class="display" style="background:none; border:none; color:var(--chalk); font-size:21px; padding:0; outline:none; width:100%;">
+        <input type="text" id="perfil-name" class="display" data-i18n-aria="ob_name_label" style="background:none; border:none; color:var(--chalk); font-size:21px; padding:0; outline:none; width:100%;">
         <p class="muted" id="perfil-sub">—</p>
         <p class="muted" id="perfil-remove-photo" style="display:none; font-size:12px; margin-top:2px; text-decoration:underline; cursor:pointer;" onclick="removeAvatarPhoto(event)" data-i18n="perfil_remove_photo"></p>
       </div>
