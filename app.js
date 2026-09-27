@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-27T20:31:20Z';
+const APP_VERSION = '2026-09-27T20:39:13Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -300,18 +300,18 @@ function celebrate(){
 const MASCOT_EYE_SHAPES = {
   // Pastilla vertical (5 de ancho x 14 de alto) -- el mismo reposo de siempre.
   neutral: {
-    l: 'M21.5 23.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z',
-    r: 'M37.5 23.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z',
+    l: 'M24.5 24.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z',
+    r: 'M38.5 24.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z',
   },
   // Pastilla horizontal achatada (13x6) -- ojos entrecerrados de contento, terminaste una carrera.
   happy: {
-    l: 'M20.5 25 h7 a3 3 0 0 1 0 6 h-7 a3 3 0 0 1 0 -6 z',
-    r: 'M36.5 25 h7 a3 3 0 0 1 0 6 h-7 a3 3 0 0 1 0 -6 z',
+    l: 'M23.5 26 h7 a3 3 0 0 1 0 6 h-7 a3 3 0 0 1 0 -6 z',
+    r: 'M37.5 26 h7 a3 3 0 0 1 0 6 h-7 a3 3 0 0 1 0 -6 z',
   },
   // Círculo grande (radio 4.5) -- ojos bien abiertos, marca personal o meta cumplida.
   excited: {
-    l: 'M19.5 28 a4.5 4.5 0 1 0 9 0 a4.5 4.5 0 1 0 -9 0',
-    r: 'M35.5 28 a4.5 4.5 0 1 0 9 0 a4.5 4.5 0 1 0 -9 0',
+    l: 'M22.5 29 a4.5 4.5 0 1 0 9 0 a4.5 4.5 0 1 0 -9 0',
+    r: 'M36.5 29 a4.5 4.5 0 1 0 9 0 a4.5 4.5 0 1 0 -9 0',
   },
 };
 let mascotExpressionTimer = null;
@@ -424,12 +424,12 @@ function initMascotEyes(){
   (function blinkLoop(){
     const delay = 2800 + Math.random()*2400;
     setTimeout(()=>{
-      // (24,28)/(40,28): centro de CUALQUIERA de las 3 formas de MASCOT_EYE_SHAPES (pastilla
+      // (27,29)/(41,29): centro de CUALQUIERA de las 3 formas de MASCOT_EYE_SHAPES (pastilla
       // vertical, pastilla horizontal, círculo) -- las tres comparten el mismo centro por
       // diseño, así que el parpadeo escala bien alrededor del centro real sea cual sea la
       // expresión activa en ese momento.
-      setEyeSquash(eyeL, 24, 28, 0.12); setEyeSquash(eyeR, 40, 28, 0.12);
-      setTimeout(()=>{ setEyeSquash(eyeL, 24, 28, 1); setEyeSquash(eyeR, 40, 28, 1); }, 130);
+      setEyeSquash(eyeL, 27, 29, 0.12); setEyeSquash(eyeR, 41, 29, 0.12);
+      setTimeout(()=>{ setEyeSquash(eyeL, 27, 29, 1); setEyeSquash(eyeR, 41, 29, 1); }, 130);
       blinkLoop();
     }, delay);
   })();
