@@ -152,6 +152,31 @@ test('calcTrainingLoad: bajó mucho el volumen de esta semana da nivel bajo', ()
   assert.ok(load.ratio < 0.8, `ratio esperado < 0.8, dio ${load.ratio}`);
 });
 
+test('calcTrainingLoad: una carrera con distanceKm negativa (dato corrupto) se ignora, no resta del promedio', () => {
+  // kmWithin sumaba r.distanceKm sin chequear el signo -- una carrera corrupta con distancia
+  // negativa (mala edición a mano, o un glitch de sincronización) arrastraba
+  // chronicWeeklyAvg a un número NEGATIVO (30km reales - 50km del dato corrupto, /4 semanas
+  // = -5km/sem), lo que a su vez daba un ratio negativo (10/-5 = -2), muy por debajo de 0.8
+  // -- se mostraba como "corriste de menos" (level:'low'), el resultado más alejado posible
+  // de la realidad (tres semanas reales y parejas de 10km, nada de "menos").
+  const app = loadApp();
+  app.state.weekStart = daysAgoISO(28).slice(0, 10);
+  app.state.runs = [
+    { date: daysAgoISO(2), distanceKm: 10 },
+    { date: daysAgoISO(10), distanceKm: 10 },
+    { date: daysAgoISO(17), distanceKm: 10 },
+    { date: daysAgoISO(24), distanceKm: -50 }, // dato corrupto, no debería contar
+  ];
+  const load = app.calcTrainingLoad();
+  assert.ok(load);
+  // Con el dato corrupto correctamente ignorado: chronicWeeklyAvg = 30km/4sem = 7.5, ratio =
+  // 10/7.5 ≈ 1.33 -- un resultado real y explicable ("un poco más que el promedio reciente"),
+  // nunca 'low' ni un ratio negativo.
+  assert.notEqual(load.level, 'low', `una distancia negativa no debería arrastrar el nivel a 'low', dio ${load.level} (ratio ${load.ratio})`);
+  assert.ok(load.ratio > 0, `el ratio nunca debería ser negativo, dio ${load.ratio}`);
+  assert.ok(Math.abs(load.ratio - 4/3) < 0.01, `ratio esperado ~1.33 ignorando el dato corrupto, dio ${load.ratio}`);
+});
+
 test('detectTrainingGapWeeks: sin carreras nunca cargadas y sin referencia devuelve 0', () => {
   const app = loadApp();
   app.state.runs = [];
@@ -173,6 +198,25 @@ test('detectTrainingGapWeeks: con carreras, cuenta desde la más reciente sin im
     { date: daysAgoISO(45) },
   ];
   assert.equal(app.detectTrainingGapWeeks(), 2);
+});
+
+test('detectTrainingGapWeeks: una carrera con fecha en el futuro (típo de año, o reloj del celular mal puesto) no esconde una pausa real', () => {
+  // Antes lastRunMs se quedaba con CUALQUIER fecha mayor a las demás, sin chequear que
+  // fuera pasada -- una sola carrera mal fechada en el futuro ganaba, y Math.max(0, ...)
+  // sobre un diff negativo daba 0 directo, como si nunca hubiera habido ninguna pausa.
+  const app = loadApp();
+  app.state.runs = [
+    { date: daysAgoISO(60) }, // la última carrera REAL, hace 60 días (~8 semanas de pausa)
+    { date: new Date(Date.now() + 400 * 86400000).toISOString() }, // típo: año que viene
+  ];
+  assert.equal(app.detectTrainingGapWeeks(), 8, 'la carrera futura no debería tapar la pausa real de la carrera de hace 60 días');
+});
+
+test('detectTrainingGapWeeks: si TODAS las fechas son inválidas o futuras, cae al fallback en vez de devolver 0 directo', () => {
+  const app = loadApp();
+  app.state.runs = [{ date: 'fecha-invalida' }, { date: new Date(Date.now() + 400 * 86400000).toISOString() }];
+  const gap = app.detectTrainingGapWeeks(daysAgoLocalDateStr(21));
+  assert.equal(gap, 3, 'sin ninguna fecha real utilizable, debería usar el fallback igual que con state.runs vacío');
 });
 
 test('getPersonalRecords: se queda con el tiempo más rápido por distancia estándar (dentro de +-6%)', () => {

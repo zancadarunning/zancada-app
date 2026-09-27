@@ -49,7 +49,9 @@ test('calBoundsFor: cada input tiene el límite que le corresponde (nacimiento n
   // harness, con un Object de ESE realm -- deepEqual estricto compara también el
   // constructor, así que hay que "aterrizarlo" a un objeto del realm del test primero
   // (mismo motivo que Array.from() en los tests que comparan arrays, ver coach-tools.test.js).
-  assert.deepEqual({...app.calBoundsFor('ob-birth')}, { max: today });
+  // ob-birth también tiene un piso (120 años atrás) desde el fix de plausibilidad de edad --
+  // ver el comentario en calBoundsFor.
+  assert.deepEqual({...app.calBoundsFor('ob-birth')}, { max: today, min: `${Number(today.slice(0,4))-120}-01-01` });
   assert.deepEqual({...app.calBoundsFor('ob-racedate')}, { min: today });
   assert.deepEqual({...app.calBoundsFor('perfil-racedate')}, { min: today });
   assert.deepEqual({...app.calBoundsFor('ev-date')}, { min: today });

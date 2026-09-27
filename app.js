@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-27T18:29:24Z';
+const APP_VERSION = '2026-09-27T18:40:29Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -420,10 +420,15 @@ function parseDistInput(val){
 }
 function fmtWeight(kg){ return Math.round(isImperial() ? kg * LB_PER_KG : kg); }
 function weightUnit(){ return isImperial() ? 'lb' : 'kg'; }
+// 25-250kg: generoso a propósito (cubre desde un chico chiquito hasta un físico grandote de
+// verdad), pero rechaza los típos obvios (ej. "5" en vez de "50", o un "900" con un cero de
+// más) que antes pasaban derecho con solo el chequeo de ">0" -- guardando un peso imposible
+// para siempre, que ensuciaba el cálculo de calorías de cada carrera desde ese día.
 function parseWeightInput(val){
   const n = parseFloat(val);
   if(!(n>0)) return 0;
-  return isImperial() ? n / LB_PER_KG : n;
+  const kg = isImperial() ? n / LB_PER_KG : n;
+  return (kg>=25 && kg<=250) ? kg : 0;
 }
 // Mismo patrón que fmtWeight/parseWeightInput -- la altura se guarda siempre en cm
 // (state.profile.height), y se muestra convertida a pies (con un decimal, para no perder
@@ -431,10 +436,13 @@ function parseWeightInput(val){
 // Pedido del usuario: la altura mostraba "cm" fijo aunque estuviera en modo imperial.
 function fmtHeight(cm){ return isImperial() ? (cm*FT_PER_CM).toFixed(1) : Math.round(cm); }
 function heightUnit(){ return isImperial() ? 'ft' : 'cm'; }
+// 100-230cm: mismo criterio que parseWeightInput -- generoso para no rechazar a nadie real,
+// pero rechaza un típo obvio (ej. "10" en vez de "170").
 function parseHeightInput(val){
   const n = parseFloat(val);
   if(!(n>0)) return 0;
-  return isImperial() ? n * CM_PER_FT : n;
+  const cm = isImperial() ? n * CM_PER_FT : n;
+  return (cm>=100 && cm<=230) ? cm : 0;
 }
 function updateProfileUnitLabels(){
   const weightLbl = document.getElementById('perfil-weight-label');
@@ -2264,8 +2272,11 @@ function saveGoals(){
   // (ver el cap en generatePlan) -- antes esto solo se podía cargar una vez en el onboarding
   // y nunca se podía tocar después. Mismo guard >0/null que en finishOnboard: un campo
   // vaciado a mano vuelve a "sin límite", no se queda pegado en 0.
+  // Tope de 300min (5hs): generoso a propósito (cubre hasta la tirada larga de un
+  // ultramaratonista), pero rechaza un típo obvio (ej. escribir minutos donde entraban
+  // segundos) que antes quedaba guardado tal cual, sin ningún techo.
   const availMinRaw = parseFloat(document.getElementById('perfil-availmin').value);
-  const availableMinPerSession = availMinRaw>0 ? Math.round(availMinRaw) : null;
+  const availableMinPerSession = (availMinRaw>0 && availMinRaw<=300) ? Math.round(availMinRaw) : null;
   const goalChanged = (state.profile.weeklyGoalKm||0) !== weeklyGoal || (state.profile.availableMinPerSession||null) !== availableMinPerSession;
   const backup = { weeklyGoalKm: state.profile.weeklyGoalKm, goalNote: state.profile.goalNote, availableMinPerSession: state.profile.availableMinPerSession };
   state.profile.weeklyGoalKm = weeklyGoal;
@@ -2332,7 +2343,12 @@ let calViewMode = 'days', calYearsRangeStart = 1995;
 // FC máxima real. Cada entrada acá define, como mucho, un mínimo y/o máximo (YYYY-MM-DD).
 function calBoundsFor(inputId){
   const today = todayLocalISO();
-  if(inputId === 'ob-birth') return { max: today }; // nadie nace en el futuro
+  // min: 120 años atrás -- generoso a propósito (nadie real hoy tiene más), pero antes el
+  // año-picker (ver calShowMonths) dejaba retroceder sin ningún piso, así que se podía cargar
+  // una fecha de nacimiento de hace, por ejemplo, 200 años, que después alimentaba
+  // estimateHrMax/trainingCaution con una edad sin ningún chequeo de plausibilidad (a
+  // diferencia de refRace, que sí valida su rango).
+  if(inputId === 'ob-birth') return { max: today, min: `${Number(today.slice(0,4))-120}-01-01` }; // nadie nace en el futuro ni hace más de 120 años
   if(inputId === 'ob-racedate' || inputId === 'perfil-racedate' || inputId === 'ev-date') return { min: today }; // una carrera objetivo/próxima ya pasada no tiene sentido cargarla como futura
   if(inputId === 'man-date' || inputId === 'edit-run-date') return { max: today }; // no se puede cargar una carrera que todavía no corriste
   return {};
@@ -2552,9 +2568,14 @@ async function finishOnboard(){
   // chequeo. Reportado en una auditoría: un peso negativo hace que las calorías de cada
   // carrera se calculen y se muestren en negativo, siempre, hasta que alguien lo note y lo
   // corrija a mano desde Perfil.
-  const weightRaw = parseFloat(document.getElementById('ob-weight').value);
+  // parseWeightInput/parseHeightInput ya validan un rango de verdad (25-250kg, 100-230cm) y
+  // no solo ">0" -- durante el onboarding isImperial() siempre da false (todavía no existe
+  // state.profile.units), así que se comportan como un parseFloat metric puro, pero ahora
+  // con el mismo piso de plausibilidad que savePersonalData (Perfil) ya tiene para este
+  // mismo campo. Antes un típo como "5" (kg) o "900" quedaba guardado para siempre.
+  const weightRaw = parseWeightInput(document.getElementById('ob-weight').value);
   const weight = weightRaw>0 ? weightRaw : 70;
-  const heightRaw = parseFloat(document.getElementById('ob-height').value);
+  const heightRaw = parseHeightInput(document.getElementById('ob-height').value);
   const height = heightRaw>0 ? heightRaw : 170;
   const birth = document.getElementById('ob-birth').value || '1995-01-01';
   // Con guarda + default, igual que el mismo patrón en savePersonalData: hoy siempre hay
@@ -2562,7 +2583,13 @@ async function finishOnboard(){
   // sacan sin poner otra en su lugar, pero sin esta guarda un cambio futuro en ese markup
   // rompería finishOnboard con un TypeError justo en el último paso del onboarding.
   const runnerType = document.querySelector('#ob-runnertype .choice.active')?.dataset.v || 'new';
-  const currentWeeklyKm = runnerType==='active' ? (parseFloat(document.getElementById('ob-currentkm').value) || 0) : 0;
+  // "|| 0" (como estaba antes) tiene el mismo problema que ya se documentó arriba para
+  // peso/altura: un valor negativo es truthy en JS y pasaba derecho, guardando un
+  // kilometraje semanal negativo para siempre (isBeginnerProfile lo trataría como
+  // principiante igual, pero el número crudo seguía mostrándose así en Perfil/el saludo
+  // del coach).
+  const currentWeeklyKmRaw = runnerType==='active' ? parseFloat(document.getElementById('ob-currentkm').value) : 0;
+  const currentWeeklyKm = currentWeeklyKmRaw>0 ? currentWeeklyKmRaw : 0;
   const terrain = document.querySelector('#ob-terrain .choice.active')?.dataset.v || 'asfalto';
   const trainBy = document.querySelector('#ob-trainby .choice.active')?.dataset.v || 'distance';
   const trainingDays = DAY_KEYS.filter(d => document.querySelector(`#ob-days .day-pill[data-v="${d}"]`).classList.contains('active'));
@@ -2594,8 +2621,9 @@ async function finishOnboard(){
   const refRace = (runnerType==='active' && refRaceDistRaw>0 && refRaceMinRaw>0 && refRacePaceOk)
     ? { distanceKm: refRaceDistRaw, durationSec: Math.round(refRaceMinRaw*60), date: todayLocalISO() }
     : null;
+  // Mismo tope de 300min (5hs) que saveGoals() en Perfil -- ver ese comentario.
   const availableMinRaw = parseFloat(document.getElementById('ob-availmin').value);
-  const availableMinPerSession = availableMinRaw>0 ? Math.round(availableMinRaw) : null;
+  const availableMinPerSession = (availableMinRaw>0 && availableMinRaw<=300) ? Math.round(availableMinRaw) : null;
   // Alguien que ya hace otro deporte (fútbol, natación, etc.) tiene una base de
   // entrenamiento real aunque sea principiante EN RUNNING -- sin esto, un jugador de fútbol
   // de toda la vida que nunca corrió arrancaba tratado exactamente igual que alguien 100%
@@ -3395,22 +3423,25 @@ function detectTrainingGapWeeks(fallbackSinceIso){
   // (que solo mide cuánto tiempo de calendario pasó desde que se abrió la app la última
   // vez), esto mide si el corredor realmente dejó de entrenar. Alguien puede entrenar
   // puntual sin abrir la app todos los días -> eso no es una pausa real.
-  if(!state.runs || !state.runs.length){
-    // Sin ninguna carrera cargada nunca (ej. alguien que se registró y no volvió a abrir
-    // la app en semanas) no hay una última fecha real de la cual partir -- antes esto
-    // devolvía 0 siempre, como si "nunca hubo pausa", y un usuario que vuelve después de
-    // varias semanas sin entrenar nada se encontraba con un plan promovido de golpe a un
-    // volumen que nunca sostuvo. Si nos pasan una referencia (el inicio de la semana que
-    // veníamos mostrando), calculamos la pausa desde ahí en vez de asumir que no hubo.
+  const now = Date.now();
+  // d<=now: una fecha en el futuro (clock skew del dispositivo, o un típo de año al cargar
+  // una carrera a mano) no puede ser "la última carrera real" -- sin este chequeo, una sola
+  // carrera mal fechada hacía que lastRunMs quedara en el futuro y Math.max(0, ...) diera
+  // directamente 0, escondiendo una pausa real de semanas detrás de esa carrera fantasma.
+  let lastRunMs = 0;
+  (state.runs||[]).forEach(r=>{ const d = new Date(r.date).getTime(); if(!isNaN(d) && d>lastRunMs && d<=now) lastRunMs = d; });
+  if(!lastRunMs){
+    // Ni una carrera con fecha real y pasada -- ya sea porque no hay ninguna carrera cargada
+    // nunca, o porque las que hay tienen fechas rotas/en el futuro. En cualquiera de los dos
+    // casos, sin una última fecha confiable de la cual partir, calculamos la pausa desde la
+    // referencia que nos pasaron (el inicio de la semana que veníamos mostrando) en vez de
+    // asumir que nunca hubo pausa.
     if(!fallbackSinceIso) return 0;
     const sinceMs = new Date(fallbackSinceIso+'T00:00:00').getTime();
     if(isNaN(sinceMs)) return 0;
-    return Math.max(0, Math.floor((Date.now() - sinceMs) / (7*86400000)));
+    return Math.max(0, Math.floor((now - sinceMs) / (7*86400000)));
   }
-  let lastRunMs = 0;
-  state.runs.forEach(r=>{ const d = new Date(r.date).getTime(); if(!isNaN(d) && d>lastRunMs) lastRunMs = d; });
-  if(!lastRunMs) return 0;
-  return Math.max(0, Math.floor((Date.now() - lastRunMs) / (7*86400000)));
+  return Math.max(0, Math.floor((now - lastRunMs) / (7*86400000)));
 }
 function computeReturnFromBreakAdjustment(gapWeeks){
   // Volver de una pausa real (viaje, lesión, lo que sea) retomando el plan justo donde
@@ -4580,9 +4611,17 @@ function calcTrainingLoad(){
   const planStart = getPlanStartDate();
   if(!planStart) return null;
   const now = Date.now();
-  const daysSincePlan = (now - new Date(planStart).getTime()) / 86400000;
+  // planStart es un "YYYY-MM-DD" (getMondayISO), pensado como medianoche LOCAL -- pero
+  // new Date("YYYY-MM-DD") sin hora lo interpreta como medianoche UTC, no local (mismo bug
+  // ya arreglado en detectTrainingGapWeeks más abajo, que sí le agrega 'T00:00:00'). Para
+  // alguien en UTC-3 esto corría el gate de "hace 14 días" unas 3hs, según el huso horario.
+  const daysSincePlan = (now - new Date(planStart+'T00:00:00').getTime()) / 86400000;
   if(daysSincePlan < 14) return null; // hace menos de 2 semanas que existe este plan: todavía no hay con qué comparar de forma confiable
   const kmWithin = days => runs.reduce((a,r)=>{
+    // r.distanceKm>0: una carrera corrupta/mal editada a mano con distancia negativa no
+    // debería poder arrastrar el promedio hacia abajo y disfrazarse de "corriste de menos"
+    // (level:'low') en vez de simplemente ignorarse como el dato inválido que es.
+    if(!(r.distanceKm>0)) return a;
     const diff = now - new Date(r.date).getTime();
     return (diff >= 0 && diff <= days*86400000) ? a + r.distanceKm : a;
   }, 0);

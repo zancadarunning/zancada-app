@@ -50,6 +50,29 @@ test('parseDistInput: valores inválidos o negativos dan 0, no NaN ni un número
   assert.equal(app.parseDistInput(''), 0);
 });
 
+test('parseWeightInput/parseHeightInput: un típo obvio (mucho más chico o grande que cualquier persona real) da 0, no el número tal cual', () => {
+  // Antes solo chequeaban ">0" -- un típo como "5" (en vez de "50") o un "900" con un cero de
+  // más pasaba derecho y quedaba guardado como el peso/altura real para siempre, ensuciando
+  // el cálculo de calorías de cada carrera. El rango (25-250kg, 100-230cm) es generoso a
+  // propósito, para no rechazar ninguna persona real.
+  const app = loadApp();
+  app.state.profile = { units: 'metric' };
+  assert.equal(app.parseWeightInput('5'), 0, 'un peso de 5kg no es plausible');
+  assert.equal(app.parseWeightInput('900'), 0, 'un peso de 900kg no es plausible');
+  assert.equal(app.parseWeightInput('70'), 70, 'un peso real sigue aceptándose tal cual');
+  assert.equal(app.parseHeightInput('10'), 0, 'una altura de 10cm no es plausible');
+  assert.equal(app.parseHeightInput('170'), 170, 'una altura real sigue aceptándose tal cual');
+});
+
+test('parseWeightInput/parseHeightInput: en imperial, la conversión pasa PRIMERO y el rango se aplica sobre el kg/cm ya convertido', () => {
+  const app = loadApp();
+  app.state.profile = { units: 'imperial' };
+  // 154lb ~ 70kg -- un valor real tipeado en libras, tiene que aceptarse (y no compararse
+  // contra el rango como si fuera kg, donde 154 quedaría rechazado por estar sobre 250).
+  const kg = app.parseWeightInput('154');
+  assert.ok(Math.abs(kg - 69.85) < 0.5, `154lb debería dar ~70kg, dio ${kg}`);
+});
+
 test('fmtPace: da minutos:segundos por km, o el placeholder si no hay ritmo', () => {
   const app = loadApp();
   app.state.profile = { units: 'metric' };
