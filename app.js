@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-27T19:06:36Z';
+const APP_VERSION = '2026-09-27T19:57:58Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -251,6 +251,12 @@ function haptic(pattern){
    app, cayendo con una animación CSS y sacándose solos del DOM al terminar. Respeta
    prefers-reduced-motion (no todos quieren cosas moviéndose por la pantalla). */
 function celebrate(){
+  // El personaje del coach (ver setMascotExpression/initMascotEyes más abajo) también
+  // festeja acá -- primera línea, ANTES del early-return de prefers-reduced-motion, porque
+  // cambiar la forma de la boca es un cambio de estado puntual (como un toast), no una
+  // animación continua -- no hay motivo para negarle ESO a alguien con esa preferencia,
+  // a diferencia del confetti (que sí es puro movimiento y por eso se sigue salteando).
+  setMascotExpression('excited', {priority:2, duration:2600});
   try{
     if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const layer = document.createElement('div');
@@ -275,6 +281,133 @@ function celebrate(){
     }
     setTimeout(()=>{ layer.remove(); }, 2200);
   }catch(e){}
+}
+// --- Personaje del coach: ojos que siguen el mouse/dedo + expresiones de festejo --------
+// El botón flotante que abre el chat del coach (coach-fab) tenía un ícono genérico de
+// globo de diálogo -- ahora es una carita propia (dos ojos + una boca, dibujados a mano en
+// SVG, ver index.html) que sigue el puntero por toda la pantalla y cambia de expresión en
+// los momentos que la app ya reconoce como un logro (nueva marca personal o meta semanal
+// cumplida, ambos vía celebrate() más arriba) y al terminar una carrera trackeada (ver
+// closeSummary). Sin ninguna librería externa.
+const MASCOT_EXPRESSIONS = {
+  neutral: 'M17 31 Q25 35 33 31',
+  happy:   'M15 29 Q25 40 35 29',
+  excited: 'M14 28 Q25 42 36 28',
+};
+let mascotExpressionTimer = null;
+let mascotExpressionPriority = -1;
+// priority: si ya hay una expresión de más prioridad activa (ej. "excited" por una marca
+// personal, prioridad 2), una de menor prioridad que llega justo en el medio (ej. el
+// "happy" genérico de terminar cualquier carrera, prioridad 1) no la corta antes de tiempo
+// -- sin esto, terminar una carrera que ADEMÁS es récord mostraba la cara de festejo grande
+// solo un instante, tapada enseguida por la genérica de "carrera terminada".
+function setMascotExpression(name, {duration=2200, priority=1}={}){
+  const mouth = document.getElementById('mascot-mouth');
+  if(!mouth || !MASCOT_EXPRESSIONS[name]) return;
+  if(priority < mascotExpressionPriority) return;
+  mascotExpressionPriority = priority;
+  mouth.setAttribute('d', MASCOT_EXPRESSIONS[name]);
+  clearTimeout(mascotExpressionTimer);
+  mascotExpressionTimer = setTimeout(()=>{
+    mouth.setAttribute('d', MASCOT_EXPRESSIONS.neutral);
+    mascotExpressionPriority = -1;
+  }, duration);
+}
+// Ojos que siguen el puntero (mouse) o el dedo (touchmove) -- clampeados a un radio chico
+// (MAX_OFFSET) para que se lea como "de reojo", no como si los ojos se fueran a otro lado.
+// Con prefers-reduced-motion no se engancha nada de esto (ver celebrate() para el mismo
+// criterio con el confetti): ni el seguimiento, ni las miradas propias de "estar vivo", ni
+// el parpadeo -- todo movimiento continuo queda afuera, la carita se queda quieta y neutra.
+function initMascotEyes(){
+  const eyes = document.getElementById('mascot-eyes');
+  const eyeL = document.getElementById('mascot-eye-l');
+  const eyeR = document.getElementById('mascot-eye-r');
+  const fab = document.querySelector('.coach-fab');
+  if(!eyes || !eyeL || !eyeR || !fab) return;
+  if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  // OJO -- el movimiento de los ojos usa el atributo SVG "transform" (setAttribute), NUNCA
+  // la propiedad CSS transform (style.transform): probado a mano en el navegador, hay
+  // motores que renderizan <circle>/<g> perfectamente pero jamás aplican ningún transform
+  // CSS sobre elementos SVG (queda siempre en la matriz identidad, sin ningún error ni
+  // aviso) -- el atributo nativo de SVG en cambio funciona en cualquier motor con soporte
+  // de SVG, viejo o nuevo, así que es la única forma confiable de mover estas piezas.
+  const MAX_OFFSET = 3.2;
+  let lastLookMs = 0;
+  // Tween manual por setTimeout (~60fps, reemplaza la transición que hubiera dado CSS si
+  // hubiera funcionado) -- interpola el offset actual de los ojos hacia el destino con una
+  // curva ease-out cúbica en ~220ms, en vez de saltar de golpe a la nueva posición.
+  // setTimeout en vez de requestAnimationFrame a propósito: rAF se pausa/nunca dispara en una
+  // pestaña oculta/en segundo plano (esperable, mismo comportamiento en cualquier navegador
+  // real) -- setTimeout sigue disparando igual, así que el personaje no se queda "pegado" en
+  // la última posición si el usuario vuelve a la app después de tenerla en segundo plano.
+  let curX = 0, curY = 0, eyesTimer = null;
+  function animateEyesTo(targetX, targetY, duration){
+    clearTimeout(eyesTimer);
+    const startX = curX, startY = curY, t0 = Date.now();
+    (function step(){
+      const t = Math.min(1, (Date.now()-t0)/duration);
+      const eased = 1 - Math.pow(1-t, 3);
+      curX = startX + (targetX-startX)*eased;
+      curY = startY + (targetY-startY)*eased;
+      eyes.setAttribute('transform', `translate(${curX.toFixed(2)} ${curY.toFixed(2)})`);
+      if(t < 1) eyesTimer = setTimeout(step, 16);
+    })();
+  }
+  function lookAt(clientX, clientY){
+    const rect = fab.getBoundingClientRect();
+    // Un fab con display:none (todavía no inició sesión) da un rect de ancho/alto 0 --
+    // dividir por esa distancia daría Infinity/NaN en el transform.
+    if(!rect.width) return;
+    const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
+    const dx = clientX - cx, dy = clientY - cy;
+    const dist = Math.hypot(dx, dy) || 1;
+    const ox = (dx/dist) * Math.min(MAX_OFFSET, dist/12);
+    const oy = (dy/dist) * Math.min(MAX_OFFSET, dist/12);
+    animateEyesTo(ox, oy, 220);
+    lastLookMs = Date.now();
+  }
+  // Throttle por setTimeout (no rAF, mismo motivo que animateEyesTo arriba) -- pointermove/
+  // touchmove disparan muchísimas veces por segundo durante un arrastre real; sin este
+  // throttle se recalcularía el offset (y se reiniciaría el tween) en cada uno de esos
+  // eventos en vez de una vez cada ~16ms.
+  let movePending = false, pendingXY = null;
+  function onMove(x, y){
+    pendingXY = [x, y];
+    if(movePending) return;
+    movePending = true;
+    setTimeout(()=>{ movePending = false; if(pendingXY) lookAt(pendingXY[0], pendingXY[1]); }, 16);
+  }
+  document.addEventListener('pointermove', e=> onMove(e.clientX, e.clientY), {passive:true});
+  document.addEventListener('touchmove', e=>{ const tp = e.touches[0]; if(tp) onMove(tp.clientX, tp.clientY); }, {passive:true});
+  // Miradas propias: si no hubo un movimiento real hace un rato, el personaje igual "vive"
+  // -- mira para un lado al azar un instante y vuelve al centro, en vez de quedarse
+  // congelado esperando que alguien lo toque.
+  (function idleGlanceLoop(){
+    const delay = 3200 + Math.random()*2600;
+    setTimeout(()=>{
+      if(Date.now()-lastLookMs > 2800){
+        const ang = Math.random()*Math.PI*2;
+        animateEyesTo(Math.cos(ang)*MAX_OFFSET, Math.sin(ang)*MAX_OFFSET*0.6, 260);
+        setTimeout(()=>{ if(Date.now()-lastLookMs > 2800) animateEyesTo(0, 0, 260); }, 900);
+      }
+      idleGlanceLoop();
+    }, delay);
+  })();
+  // Parpadeo: escala Y a 0.12 alrededor del propio centro de cada ojo (cx,cy) -- con el
+  // atributo transform hay que armar a mano translate-scale-translate para escalar
+  // alrededor de un punto que no sea el origen (0,0) del SVG, si no el "parpadeo" también
+  // corriría la posición del ojo hacia arriba.
+  function setEyeSquash(el, cx, cy, scaleY){
+    el.setAttribute('transform', scaleY===1 ? '' : `translate(${cx} ${cy}) scale(1 ${scaleY}) translate(${-cx} ${-cy})`);
+  }
+  (function blinkLoop(){
+    const delay = 2800 + Math.random()*2400;
+    setTimeout(()=>{
+      setEyeSquash(eyeL, 18, 20, 0.12); setEyeSquash(eyeR, 32, 20, 0.12);
+      setTimeout(()=>{ setEyeSquash(eyeL, 18, 20, 1); setEyeSquash(eyeR, 32, 20, 1); }, 130);
+      blinkLoop();
+    }, delay);
+  })();
 }
 // Escapa texto libre (nombres, mensajes de chat, etc.) antes de insertarlo
 // en el HTML. Sin esto, alguien podía poner algo como <img onerror=...> como
@@ -7170,6 +7303,10 @@ async function closeSummary(){
   await persist();
   showView('inicio');
   showToast(t('run_completed_toast'), 'success');
+  // Prioridad 1: si checkNewPR() de arriba ya disparó celebrate() (prioridad 2, marca
+  // personal nueva), esta expresión genérica de "terminaste una carrera" no la corta antes
+  // de tiempo -- ver el comentario de setMascotExpression.
+  setMascotExpression('happy', {priority:1, duration:2200});
   haptic([15,40,15]);
   setTimeout(checkPendingRating, 500);
 }
@@ -10454,3 +10591,12 @@ function restoreSendBtn(){
 /* Traducir todo lo estático apenas carga la página, sin esperar a que el usuario toque un idioma */
 applyStaticTranslations();
 populateOnboardDays();
+// typeof MutationObserver !== 'undefined': mismo criterio que la guarda del observer de
+// overlays más arriba en el archivo -- el harness de tests (test/support/load-app.js) corre
+// app.js en una sandbox de Node con un DOM mínimo simulado (sin MutationObserver real, y
+// con getElementById/querySelector que SIEMPRE devuelven un elemento falso, nunca null) --
+// initMascotEyes() arranca dos cadenas de setTimeout recursivas pensadas para no terminar
+// nunca en una página real, pero que sin esta guarda quedaban colgadas para siempre en
+// cada uno de los ~150 loadApp() de la suite de tests, así que "node --test" nunca
+// terminaba de correr.
+if(typeof MutationObserver !== 'undefined') initMascotEyes();
