@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-26T03:52:21Z';
+const APP_VERSION = '2026-09-27T18:29:24Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7194,7 +7194,7 @@ function computeDailyTrend(days){
     // localDateISO(r.date), no r.date.slice(0,10): r.date es un timestamp UTC completo,
     // cortarlo a mano daba el día calendario en UTC en vez del día LOCAL real de la
     // carrera (ver el comentario junto a localDateISO/getTodayRun).
-    const km = state.runs.filter(r => localDateISO(r.date) === dateStr).reduce((a,r)=>a+r.distanceKm,0);
+    const km = (state.runs||[]).filter(r => localDateISO(r.date) === dateStr).reduce((a,r)=>a+r.distanceKm,0);
     let planned = false;
     // dateStr >= state.weekStart no alcanza solo: weekStart es el lunes de la semana en la
     // que se creó la cuenta, así que alguien que se sumó un martes igual pasaba esa
@@ -7211,8 +7211,12 @@ function computeDailyTrend(days){
   return result;
 }
 function computeTrends(){
-  const totalKm = state.runs.reduce((a,r)=>a+r.distanceKm,0);
-  return {totalKm, totalRuns: state.runs.length};
+  // (state.runs||[]): renderHistory() llama a esto (y a computeDailyTrend) ANTES de su
+  // propio chequeo de "sin carreras" -- si state.runs llegara undefined (ej. un estado
+  // parcial cargado del servidor sin esa clave), esto reventaba antes de llegar siquiera
+  // al estado vacío que ya maneja bien más abajo.
+  const totalKm = (state.runs||[]).reduce((a,r)=>a+r.distanceKm,0);
+  return {totalKm, totalRuns: (state.runs||[]).length};
 }
 function getQualitySessionBreakdown(daysBack){
   // Cuenta las sesiones fuertes COMPLETADAS (series, tempo, fartlek, cuestas,
