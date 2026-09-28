@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T15:07:25Z';
+const APP_VERSION = '2026-09-28T15:16:47Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6583,7 +6583,15 @@ function saveEditShoe(id){
 async function deleteShoe(id){
   if(!(await showConfirm(t('confirm_delete'), {danger:true, confirmText:t('delete_word')}))) return;
   state.shoes = state.shoes.filter(s=>s.id!==id);
-  renderPerfil(); persist();
+  // Las carreras que tenían esta zapatilla asignada se quedaban con un shoeId colgado,
+  // apuntando a una zapatilla que ya no existe -- el detalle de la carrera lo mostraba bien
+  // igual ("sin registrar", el render ya hace shoe?escapeHtml(shoe.name):t('hist_no_shoe')),
+  // pero el dato de fondo seguía siendo un id inválido para siempre, hasta que alguien
+  // volviera a editar esa carrera puntual a mano. Lo limpiamos acá, mismo criterio que ya usa
+  // deleteRun() para desvincular el día del plan cuando borra la carrera correspondiente --
+  // borrar algo también limpia lo que quedaba apuntándole.
+  state.runs.forEach(r=>{ if(String(r.shoeId)===String(id)) r.shoeId = null; });
+  renderPerfil(); renderHistory(); persist();
 }
 function checkShoeWearAlerts(){
   (state.shoes||[]).forEach(s=>{
