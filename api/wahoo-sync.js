@@ -12,6 +12,42 @@ const { withSentry, reportError } = require('./_lib/sentry');
 // ver el comentario grande de backfillWahooSplits.
 const BACKFILL_BATCH = 5;
 
+// GET /v1/workouts de Wahoo no tiene ningún filtro por fecha (a diferencia de Strava,
+// que sí soporta ?after=<timestamp> -- ver sync-strava.js) -- antes este cron pedía
+// SIEMPRE page=1&per_page=10 nada más, sin importar cuántos workouts nuevos hubiera de
+// verdad. Eso alcanza mientras el cron corra sin interrupciones (cada 15', casi nunca
+// se acumulan más de 10 workouts nuevos entre corridas), pero si el token quedó sin
+// refrescar un rato largo, o el usuario reconecta después de un tiempo desconectado,
+// cualquier workout más viejo que los 10 más recientes quedaba fuera de esa única
+// página para SIEMPRE -- el resto de este archivo solo mira "nuevo o no" contra la
+// página que llegó, nunca reintenta una página más vieja.
+//
+// PER_PAGE/MAX_PAGES de acá abajo recorren hasta 5 páginas de 30 (150 workouts) y
+// cortan antes si una página viene incompleta (wahoo ya no tiene más para dar). Es una
+// cota, no una garantía absoluta para una cuenta con cientos de workouts de otro
+// deporte entre medio -- pero cubre el caso real (reconexión después de días u horas
+// desconectado) sin arriesgar un cron sin límite de páginas.
+const WORKOUTS_PER_PAGE = 30;
+const WORKOUTS_MAX_PAGES = 5;
+
+async function fetchRecentWahooWorkouts(accessToken) {
+  const all = [];
+  for (let page = 1; page <= WORKOUTS_MAX_PAGES; page++) {
+    const wRes = await fetch(`https://api.wahooligan.com/v1/workouts?page=${page}&per_page=${WORKOUTS_PER_PAGE}`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (!wRes.ok) {
+      if (page === 1) throw new Error(`workouts fetch failed: ${wRes.status} ${await wRes.text().catch(() => '')}`);
+      break; // ya trajimos al menos una página -- una falla en una página siguiente no debería tirar lo ya conseguido
+    }
+    const wData = await wRes.json();
+    const workouts = (wData && wData.workouts) || [];
+    all.push(...workouts);
+    if (workouts.length < WORKOUTS_PER_PAGE) break; // última página (Wahoo no tenía más para dar)
+  }
+  return all;
+}
+
 // Completa splits/series/potencia de carreras YA guardadas que quedaron sin el FIT real
 // (splitsV !== 3) -- el caso típico es una carrera cargada por el botón "Sincronizar
 // ahora" (wahoo-sync-now.js) o por la conexión inicial (wahoo-auth.js), que a propósito
@@ -94,16 +130,14 @@ module.exports = withSentry(async (req, res) => {
           accessToken = refreshed.accessToken;
         }
 
-        const wRes = await fetch('https://api.wahooligan.com/v1/workouts?page=1&per_page=10', {
-          headers: { Authorization: `Bearer ${accessToken}` }
-        });
-        if (!wRes.ok) {
+        let workouts;
+        try {
+          workouts = await fetchRecentWahooWorkouts(accessToken);
+        } catch (fetchErr) {
           errors++;
-          console.error('wahoo-sync (cron): workouts fetch failed', conn.user_id, wRes.status, await wRes.text().catch(() => ''));
+          console.error('wahoo-sync (cron): workouts fetch failed', conn.user_id, fetchErr && fetchErr.message);
           continue;
         }
-        const wData = await wRes.json();
-        const workouts = (wData && wData.workouts) || [];
         const runWorkouts = workouts.filter(w => isRunningWorkoutType(w.workout_type_id));
 
         if (runWorkouts.length) {

@@ -323,4 +323,22 @@ async function setStravaSyncStatus(base, headers, userId, status) {
   } catch (e) { /* no-op a propósito, ver comentario de arriba */ }
 }
 
-module.exports = { decodePolyline, fetchStreams, getMondayISO, activityToRun, mergeStravaRuns, purgeStravaRunsForUser, setStravaSyncStatus };
+// Llama a la función SQL delete_strava_run (ver /sql/delete_strava_run.sql)
+// para borrar UNA sola carrera por su stravaId, de forma atómica. La usa
+// strava-webhook.js cuando Strava manda un evento con aspect_type 'delete'
+// (el usuario borró esa actividad puntual desde Strava, distinto de
+// deauthorizeAthlete() que borra TODAS las carreras de Strava porque el
+// usuario revocó el acceso a la app entera).
+async function deleteStravaRun(base, headers, userId, stravaId) {
+  const res = await fetch(`${base}/rest/v1/rpc/delete_strava_run`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ p_user_id: userId, p_strava_id: stravaId })
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`delete_strava_run rpc failed: ${res.status} ${text}`);
+  }
+}
+
+module.exports = { decodePolyline, fetchStreams, getMondayISO, activityToRun, mergeStravaRuns, purgeStravaRunsForUser, setStravaSyncStatus, deleteStravaRun };

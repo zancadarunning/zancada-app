@@ -1,4 +1,4 @@
-const { activityToRun, mergeStravaRuns, purgeStravaRunsForUser } = require('./_lib/strava-activity-helpers');
+const { activityToRun, mergeStravaRuns, purgeStravaRunsForUser, deleteStravaRun } = require('./_lib/strava-activity-helpers');
 
 // Mensajes cortos por idioma para el aviso que le queda al usuario en el chat del coach
 // cuando revocó el acceso desde la propia Strava (ver deauthorizeAthlete más abajo) -- no
@@ -42,7 +42,27 @@ async function syncActivity(athleteId, activityId) {
     headers: { Authorization: `Bearer ${conn.access_token}` }
   });
   const act = await actRes.json();
-  if (!act || !((act.sport_type || act.type || '').includes('Run'))) return;
+  // act.errors (o directamente !act): la request a Strava falló -- token todavía
+  // inválido pese al refresh de arriba, actividad puesta en privado, rate limit,
+  // Strava caído, lo que sea (mismo chequeo que ya usa strava-resync.js). NO
+  // tratamos esto como "no es una carrera" -- si lo hiciéramos, un simple error de
+  // red o un token que tardó en refrescar borraría (ver más abajo) una carrera que
+  // en realidad sigue siendo válida del lado de Strava. Nos vamos sin tocar nada;
+  // si de verdad cambió de tipo o se borró, el próximo evento (o el aspect_type
+  // 'delete', manejado aparte en deleteActivity) lo va a volver a intentar.
+  if (!act || act.errors) return;
+  if (!((act.sport_type || act.type || '').includes('Run'))) {
+    // Ya tenemos la actividad de verdad (no un error) y confirmamos que NO es una
+    // carrera. Esto cubre el evento 'update' donde el usuario editó en Strava el
+    // tipo de una actividad YA sincronizada (por ejemplo, la tenía mal etiquetada
+    // como Run y la corrigió a Ride) -- antes acá se cortaba en seco sin tocar nada
+    // más, así que esa actividad se quedaba en el Historial de Zancada como
+    // carrera para siempre, aunque en Strava ya no lo sea. deleteStravaRun no hace
+    // nada si esta activityId nunca se había guardado (el caso normal: un evento
+    // de una actividad que nunca fue un Run), así que este llamado es seguro.
+    await deleteStravaRun(base, headers, conn.user_id, activityId);
+    return;
+  }
 
   const newRun = await activityToRun(act, conn.access_token);
   // 'upsert': Strava manda este mismo evento tanto para actividades nuevas
@@ -51,6 +71,25 @@ async function syncActivity(athleteId, activityId) {
   // con los datos nuevos, no saltearla. merge_strava_runs preserva el
   // shoeId que el usuario haya asignado a mano en la app.
   await mergeStravaRuns(base, headers, conn.user_id, [newRun], 'upsert');
+}
+
+// Strava manda este evento cuando el usuario borra una actividad puntual
+// (aspect_type 'delete', object_type 'activity') -- antes esto no se
+// manejaba para nada, así que una carrera borrada del lado de Strava se
+// quedaba en el Historial de Zancada para siempre. A diferencia de
+// deauthorizeAthlete() (que borra TODAS las carreras de Strava porque el
+// usuario revocó el acceso a la app entera), acá se borra solo la carrera
+// puntual que Strava avisa, por su activityId.
+async function deleteActivity(athleteId, activityId) {
+  const base = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_KEY;
+  const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
+
+  const connRes = await fetch(`${base}/rest/v1/strava_connections?athlete_id=eq.${athleteId}&select=user_id`, { headers });
+  const conns = await connRes.json();
+  if (!conns || !conns.length) return;
+
+  await deleteStravaRun(base, headers, conns[0].user_id, activityId);
 }
 
 // Strava manda este evento cuando el usuario revoca el acceso de la app
@@ -112,6 +151,8 @@ module.exports = withSentry(async (req, res) => {
       }
       if (event && event.object_type === 'activity' && (event.aspect_type === 'create' || event.aspect_type === 'update')) {
         await syncActivity(event.owner_id, event.object_id);
+      } else if (event && event.object_type === 'activity' && event.aspect_type === 'delete') {
+        await deleteActivity(event.owner_id, event.object_id);
       } else if (event && event.object_type === 'athlete' && event.updates && event.updates.authorized === 'false') {
         await deauthorizeAthlete(event.object_id);
       }

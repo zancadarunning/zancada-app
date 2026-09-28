@@ -92,13 +92,23 @@ module.exports = withSentry(async (req, res) => {
     // Borramos los datos de la app asociados al usuario, tabla por tabla.
     // Cada una se borra de forma tolerante a errores: si una falla, seguimos
     // igual con las demás en vez de frenar todo el proceso a mitad de camino.
-    // (No hace falta listar acá polar_connections/wahoo_connections ni las
-    // tablas sociales -- usernames/follows/run_feed/run_likes -- porque las
-    // 6 tienen su user_id con ON DELETE CASCADE hacia auth.users, así que el
-    // borrado del usuario de auth más abajo ya las limpia solas. Sí hace
-    // falta listar acá las 3 de abajo porque son las únicas que el borrado
-    // del usuario de auth no toca de por sí.)
-    const tables = ['app_state', 'push_subscriptions', 'strava_connections'];
+    // (No hace falta listar acá polar_connections/wahoo_connections/
+    // coros_connections ni las tablas sociales -- usernames/follows/
+    // run_feed/run_likes -- porque esas 7 tienen su user_id con ON DELETE
+    // CASCADE hacia auth.users (ver sql/create_polar_connections.sql,
+    // sql/create_wahoo_connections.sql, sql/create_coros_connections.sql,
+    // sql/social.sql), así que el borrado del usuario de auth más abajo ya
+    // las limpia solas.
+    //
+    // chat_usage (sql/chat_usage.sql) es la excepción: user_id ahí NO tiene
+    // ninguna foreign key hacia auth.users (se armó como PRIMARY KEY
+    // (user_id, usage_date) suelto, sin REFERENCES), así que el borrado del
+    // usuario de auth NO la toca -- sin listarla acá, quedaba huérfana para
+    // siempre una fila por cada día que el usuario borrado haya usado el
+    // chat con el coach. app_state/push_subscriptions/strava_connections se
+    // crearon a mano (no versionadas, ver sql/push_subscriptions_add_platform.sql)
+    // y por las dudas se listan también, aunque tengan cascade.
+    const tables = ['app_state', 'push_subscriptions', 'strava_connections', 'chat_usage'];
     for (const table of tables) {
       try {
         await fetch(`${base}/rest/v1/${table}?user_id=eq.${userId}`, { method: 'DELETE', headers });
