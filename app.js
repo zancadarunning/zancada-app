@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T04:52:41Z';
+const APP_VERSION = '2026-09-28T04:55:13Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7216,7 +7216,16 @@ function startRun(){
   // reabrir la app varias horas después de tocar "Finalizar" hacía que nunca se llegara a
   // esta rama, y actuallyStartRun(null) más abajo pisaba en el momento el resumen ya
   // guardado, perdiendo la carrera entera sin ningún aviso.
-  if(saved && saved.finished && (saved.points||[]).length){
+  // OJO -- a diferencia de la rama de abajo (carrera INTERRUMPIDA, ver su comentario sobre
+  // el double-tap), esta NO exige (saved.points||[]).length: una carrera ya finalizada puede
+  // legítimamente tener cero puntos de GPS (corrida en cinta, o el celular nunca llegó a
+  // conseguir señal) y aun así tener distancia/duración válidas guardadas por
+  // saveRunProgress(true) en stopRun() -- exigir puntos acá hacía que ese resumen ya cerrado
+  // cayera derecho a actuallyStartRun(null) más abajo, arrancando una carrera nueva vacía y
+  // perdiendo la sesión entera (con su tiempo ya corrido) sin ningún aviso, si la app se
+  // cerraba antes de que el usuario llegara a confirmar el resumen. Encontrado en una
+  // auditoría de punta a punta.
+  if(saved && saved.finished){
     restoreTrackerFromSaved(saved);
     showRunSummaryUI();
     return;
