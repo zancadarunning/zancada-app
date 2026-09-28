@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T21:10:50Z';
+const APP_VERSION = '2026-09-28T21:17:48Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6572,9 +6572,30 @@ async function showView(v){
   // una auditoría de punta a punta.
   if(v==='coach') checkWeekRollover();
   if(v==='coach'){ syncAppMinHeight(); syncCoachChatLayout(); scrollChatToBottom(); state.lastSeenChatTs = Date.now(); persist(); updateChatBadge(); } else { updateChatScrollBtn(); }
-  if(v==='inicio'){ await refreshStateFromServer(); renderHome(); renderPlan(); }
-  if(v==='history'){ await refreshStateFromServer(); renderHistory(); }
-  if(v==='plan'){ await refreshStateFromServer(); viewingWeekOffset = 0; renderPlan(); }
+  // Renderizamos primero con lo que ya está guardado en el celular (renderHome/renderPlan/
+  // renderHistory tardan ~5ms, medido en un dispositivo real) y recién DESPUÉS salimos a
+  // buscar la versión del servidor -- no lo pedimos y ESPERAMOS antes de mostrar nada. El
+  // pedido a Supabase en sí tarda ~650-800ms en una red hogareña normal (a veces mucho
+  // más), y antes bloqueaba el cambio de pestaña entero: tocar Inicio/Plan/Historial se
+  // sentía "trabado" aunque la app en sí no tuviera nada lento que hacer, medido en un
+  // Moto E6 Plus real. refreshStateFromServer() se sigue llamando siempre igual (con sus
+  // efectos de fondo -- alertas de zapatillas, FCmax, PRs nuevos -- que no dependen de qué
+  // pantalla esté mirando el corredor), solo que ya no bloquea el primer pintado; si la
+  // respuesta trae algo distinto, volvemos a renderizar en cuanto llega -- pero solo si el
+  // corredor sigue en esa misma pestaña (si ya se fue a otra, no tiene sentido pisarle la
+  // pantalla que está mirando ahora con datos de la que dejó).
+  if(v==='inicio'){
+    renderHome(); renderPlan();
+    refreshStateFromServer().then(()=>{ if(document.getElementById('view-inicio').classList.contains('active')){ renderHome(); renderPlan(); } });
+  }
+  if(v==='history'){
+    renderHistory();
+    refreshStateFromServer().then(()=>{ if(document.getElementById('view-history').classList.contains('active')){ renderHistory(); } });
+  }
+  if(v==='plan'){
+    viewingWeekOffset = 0; renderPlan();
+    refreshStateFromServer().then(()=>{ if(document.getElementById('view-plan').classList.contains('active')){ renderPlan(); } });
+  }
   if(v==='perfil'){ renderPerfilDays(); renderPerfilCrossTraining(); updatePushStatusDisplay(); updateStravaStatusDisplay(); updatePolarStatusDisplay(); updateWahooStatusDisplay(); updateCorosStatusDisplay(); updateHealthConnectStatusDisplay(); }
   if(v==='correr'){ renderRunTodayCard(); initIdleMap(); }
 }
