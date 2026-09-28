@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T15:06:06Z';
+const APP_VERSION = '2026-09-28T15:07:25Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10762,9 +10762,14 @@ function applyVolumeAdjust(input){
   }
   // Los días que ya pasaron (o que ya se corrieron/saltearon) quedan afuera del ajuste --
   // no tiene sentido subir o bajar retroactivamente el volumen de un día de esta semana
-  // que ya terminó.
+  // que ya terminó. touchedCount cuenta cuántos días de verdad se tocaron -- si es 0 (por
+  // ejemplo, un domingo con toda la semana ya hecha/salteada), el mensaje de abajo avisa
+  // que no había nada para ajustar en vez de confirmar un cambio que nunca pasó. Encontrado
+  // con pruebas adversariales.
+  let touchedCount = 0;
   state.plan.forEach(d=>{
     if(d.dist>0 && !isDayLocked(d.day)){
+      touchedCount++;
       if(!d.custom){
         // Mismo bug que ya se arregló en applyPlanChange (ver sus comentarios): marcar
         // custom:true sin resolver antes tipo/descripción dejaba planLabel() leyendo
@@ -10782,6 +10787,9 @@ function applyVolumeAdjust(input){
       d.dist = Math.max(1, Math.round(d.dist*factor));
     }
   });
+  if(!touchedCount){
+    return 'No quedaba ningún día ajustable esta semana (los que tenían sesión ya pasaron, ya se corrieron o ya se saltearon) -- no se aplicó ningún cambio.';
+  }
   renderPlan(); renderHome(); persist();
   state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')), ts:Date.now()});
   return `OK, ajusté el volumen de esta semana ${pct>0?'+':''}${pct}%.`;
