@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T02:12:14Z';
+const APP_VERSION = '2026-09-28T02:21:08Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4827,6 +4827,12 @@ function renderHome(){
       haptic([15,40,15,40,25]);
       showToast(t('goal_reached_msg'), 'success');
       celebrate();
+      // Mismo mecanismo enlatado que checkNewPR/checkAchievementUnlocks -- celebrate() por sí
+      // sola nunca manda nada al chat (la usan tres lugares distintos, cada uno con su propio
+      // mensaje si le hace falta), así que antes esto solo se veía en el toast, nunca quedaba
+      // registrado en la conversación con el coach.
+      state.chat.push({role:'coach', text: t('coach_goal_reached_msg', {km: fmtDist(state.profile.weeklyGoalKm,1), unit: distUnit()}), ts:Date.now()});
+      renderChat();
       persist();
     }
   } else {
