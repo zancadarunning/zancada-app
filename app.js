@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T01:34:14Z';
+const APP_VERSION = '2026-09-28T01:46:11Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -466,7 +466,16 @@ function initMascotEyes(){
   // congelado esperando que alguien lo toque. Y si pasó AÚN más tiempo sin ninguna
   // interacción real, se queda dormido (ojos entrecerrados finitos) hasta el próximo
   // movimiento real -- lookAt() lo despierta (ver ahí arriba).
-  const SLEEPY_AFTER_MS = 45000;
+  // De madrugada (23-6h, hora LOCAL del dispositivo) se hace el dormido mucho más rápido --
+  // mismo estado "sleepy" de siempre, ni una forma ni un timer nuevo, solo un umbral de
+  // inactividad más corto para que de noche el personaje se sienta con ganas de dormir en
+  // vez de con la misma energía constante a cualquier hora. Se calcula una sola vez al
+  // cargar la página (no re-evalúa a medianoche si la pestaña queda abierta) porque nadie
+  // deja la app abierta sin tocarla durante horas y horas -- no vale la complejidad de un
+  // segundo timer solo para ese caso límite.
+  const hour = new Date().getHours();
+  const isLateNight = hour >= 23 || hour < 6;
+  const SLEEPY_AFTER_MS = isLateNight ? 12000 : 45000;
   (function idleGlanceLoop(){
     const delay = 3200 + Math.random()*2600;
     setTimeout(()=>{
@@ -6464,6 +6473,11 @@ function checkShoeWearAlerts(){
       s.wearAlerted = true;
       haptic(20);
       showToast(t('shoe_wear_alert_msg', {name:s.name}), 'error');
+      // Mismo gesto que dormir mal o cargar una molestia -- "algo para tomarse con calma",
+      // no un festejo ni un error grave. wearAlerted ya garantiza que esto dispare una sola
+      // vez por par de zapatillas (se resetea solo si el km vuelve a bajar del umbral).
+      setMascotColor('bad', {duration:5000});
+      setMascotExpression('concerned', {priority:1, duration:5000});
     } else if(pct<=80 && s.wearAlerted){
       s.wearAlerted = false;
     }
