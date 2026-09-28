@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T04:50:00Z';
+const APP_VERSION = '2026-09-28T04:52:41Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6487,6 +6487,18 @@ async function showView(v){
   // quedó corta por cualquier motivo, es justo ENTRAR a esta vista el momento en que
   // eso se nota (barra gris debajo de la tabbar). Volver a medir acá autocorrige el
   // caso aunque los reintentos de la carga inicial no hayan alcanzado.
+  // checkWeekRollover() acá (además de enterApp()/visibilitychange, ver esos comentarios):
+  // si la app queda ABIERTA Y EN PRIMER PLANO cruzando la medianoche del domingo al lunes
+  // (sin que el usuario cambie de pestaña ni la minimice -- típico en desktop/tablet), ni
+  // enterApp() ni el listener de visibilitychange vuelven a correr, así que state.plan/
+  // state.weekStart se quedan pegados a la semana vieja. Sin este chequeo, abrir el chat en
+  // ese estado y pedirle al coach algo sobre "hoy" hacía que buildContext() (más abajo, en
+  // sendChat()) describiera el día de HOY apuntando al casillero de un array que en realidad
+  // sigue siendo el de la semana pasada -- y una herramienta como cancelar_sesion/
+  // modificar_sesion terminaba mutando esa semana vieja en vez de la real, mostrando "listo"
+  // por un cambio que después se pierde en silencio en el próximo rollover real. Reportado en
+  // una auditoría de punta a punta.
+  if(v==='coach') checkWeekRollover();
   if(v==='coach'){ syncAppMinHeight(); syncCoachChatLayout(); scrollChatToBottom(); state.lastSeenChatTs = Date.now(); persist(); updateChatBadge(); } else { updateChatScrollBtn(); }
   if(v==='inicio'){ await refreshStateFromServer(); renderHome(); renderPlan(); }
   if(v==='history'){ await refreshStateFromServer(); renderHistory(); }
@@ -10756,6 +10768,14 @@ function cancelChatRequest(){
   if(chatAbortController){ chatAbortController.abort(); }
 }
 async function sendChat(){
+  // Mismo chequeo (y mismo motivo) que se agregó en showView('coach') -- se repite acá porque
+  // sendChat() también se dispara desde los chips rápidos (sendChatChip) y desde
+  // goCoachWithPrompt() sin pasar necesariamente por una entrada fresca a la vista, y porque
+  // una conversación puede seguir abierta un buen rato: si la medianoche del domingo al lunes
+  // cae DURANTE la charla (con la app ya abierta en el chat), el chequeo de showView() de
+  // cuando se entró ya no alcanza -- este es el que de verdad importa, porque es el que corre
+  // justo antes de construir el contexto que ve el modelo.
+  checkWeekRollover();
   const input = document.getElementById('chatInput');
   const text = input.value.trim(); if(!text) return;
   const sendBtn = document.getElementById('chat-send-btn');
