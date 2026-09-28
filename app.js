@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T01:52:30Z';
+const APP_VERSION = '2026-09-28T02:03:44Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5323,11 +5323,22 @@ function resolvePainLog(id){
   if(!entry) return;
   entry.active = false;
   entry.resolvedDate = localDateISO();
-  renderPainLog(); persist();
+  renderPainLog();
   // Espejo de la cara "concerned" que puso savePainLog() al cargarla -- si se preocupó al
   // anotarla, tiene sentido que se alivie al cerrarla. Sin cambio de color (no es un festejo
   // grande como una marca personal, solo una carita contenta breve).
   setMascotExpression('happy', {priority:1, duration:2200});
+  // Mensaje enlatado, mismo motivo que en checkShoeWearAlerts: es un aviso, no algo que
+  // necesite una respuesta personalizada de la IA (a diferencia de savePainLog, que sí simula
+  // que el corredor escribió el mensaje para pedir consejo específico).
+  state.chat.push({role:'coach', text: t('coach_pain_resolved_msg', {part: t('pain_body_'+entry.bodyPart)}), ts:Date.now()});
+  renderChat();
+  // persist() al final, después del push al chat -- antes se llamaba justo después de
+  // renderPainLog(), una línea antes de agregar este mensaje; movido para que el mensaje
+  // nuevo quede guardado en la misma llamada, no en una futura (persist() no espera a que
+  // termine el guardado remoto, así que un persist() anterior al push corría el riesgo real
+  // de mandar el estado sin este mensaje todavía adentro).
+  persist();
 }
 async function deletePainLog(id){
   if(!(await showConfirm(t('confirm_delete'), {danger:true, confirmText:t('delete_word')}))) return;
@@ -6522,6 +6533,15 @@ function checkShoeWearAlerts(){
       // vez por par de zapatillas (se resetea solo si el km vuelve a bajar del umbral).
       setMascotColor('bad', {duration:5000});
       setMascotExpression('concerned', {priority:1, duration:5000});
+      // Mensaje enlatado en el chat (mismo mecanismo que checkNewPR/el "che, tanto tiempo" de
+      // checkWeekRollover), no el de simular que el corredor escribió algo (eso lo usan
+      // savePainLog/logReadiness porque ahí sí hace falta un consejo personalizado de la IA;
+      // acá alcanza con el aviso, no hay nada que la IA tenga que analizar caso por caso).
+      // persist() sin await a propósito -- checkShoeWearAlerts() se llama desde muchos
+      // lugares del archivo, sync y async, y no todos guardan el estado enseguida después.
+      state.chat.push({role:'coach', text: t('coach_shoe_wear_msg', {name:s.name}), ts:Date.now()});
+      renderChat();
+      persist();
     } else if(pct<=80 && s.wearAlerted){
       s.wearAlerted = false;
     }
