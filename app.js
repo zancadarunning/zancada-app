@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T19:27:03Z';
+const APP_VERSION = '2026-09-28T19:29:36Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2511,8 +2511,21 @@ function savePersonalData(){
   // fmtWeight()/fmtDist() en renderPerfil()) -- hay que reconvertirlos a kg/km ANTES de
   // guardarlos, si no un usuario en modo imperial que tipea "150" (lb) queda con 150kg
   // guardados tal cual.
-  const weight = parseWeightInput(document.getElementById('perfil-weight').value);
-  const height = parseHeightInput(document.getElementById('perfil-height').value);
+  const weightInput = document.getElementById('perfil-weight');
+  const heightInput = document.getElementById('perfil-height');
+  // Si el campo todavía muestra exactamente el mismo texto con el que renderPerfil lo
+  // pobló (fmtWeight/fmtHeight del valor ya guardado), el corredor no tocó este campo --
+  // guardamos el kg/cm original tal cual, sin re-parsear. Sin este chequeo, CUALQUIER guardado
+  // de "Datos personales" en modo imperial (aunque solo se haya cambiado el terreno o el
+  // género) reconvertía peso/altura ida y vuelta a través del valor redondeado que se ve en
+  // pantalla (lb/ft, con menos precisión que el kg/cm guardado) y los pisaba con un número
+  // levemente distinto -- ej. 70kg -> "154" lb -> 69.853kg -- un drift silencioso y
+  // acumulativo en cada guardado, encontrado por testing adversarial reproduciendo
+  // savePersonalData() de punta a punta.
+  const weight = (state.profile.weight && weightInput.value === String(fmtWeight(state.profile.weight)))
+    ? state.profile.weight : parseWeightInput(weightInput.value);
+  const height = (state.profile.height && heightInput.value === String(fmtHeight(state.profile.height)))
+    ? state.profile.height : parseHeightInput(heightInput.value);
   const terrainChoice = document.querySelector('#perfil-terrain-choice .choice.active');
   const genderChoice = document.querySelector('#perfil-gender-choice .choice.active');
   const goal = document.getElementById('perfil-goal').value;
@@ -2526,7 +2539,12 @@ function savePersonalData(){
   if(goal) state.profile.goal = goal;
   state.profile.raceDate = raceDate;
   if(currentKmInput && currentKmInput.value !== ''){
-    state.profile.currentWeeklyKm = parseDistInput(currentKmInput.value);
+    // Mismo motivo que peso/altura arriba: si el campo sigue mostrando el fmtDist(...,1) con
+    // el que se pobló, no lo tocó -- no lo re-parseamos, para no perder precisión (ej. 20km ->
+    // "12.4" mi -> 19.956km) en un guardado que ni siquiera cambió este campo.
+    const kmUnchanged = (state.profile.currentWeeklyKm===0 || state.profile.currentWeeklyKm)
+      && currentKmInput.value === fmtDist(state.profile.currentWeeklyKm, 1);
+    state.profile.currentWeeklyKm = kmUnchanged ? state.profile.currentWeeklyKm : parseDistInput(currentKmInput.value);
     state.profile.runnerType = 'active';
   }
   state.profile.weeklyKm = calcWeeklyKm(state.profile);
@@ -5296,8 +5314,15 @@ function saveCustomZones(){
   // se supere -- si no exigimos min<max por zona y máximos estrictamente ascendentes,
   // una carga a mano invertida (ej. zona 1 con max 190) hace que TODAS las pulsaciones
   // caigan en zona 1 y las zonas 2-5 queden inalcanzables sin que nadie se entere.
+  // 30-250bpm: mismo rango generoso-pero-no-absurdo que ya usa activity-sanity.js del lado
+  // del servidor (MIN_HR/MAX_HR) -- sin este chequeo, un min/max negativo o de 3 dígitos de
+  // más (típo, o pegar del campo equivocado) pasaba derecho con solo min<max/máximos
+  // ascendentes, y como classifyHR() solo mira el max (nunca el min), quedaba corrompiendo en
+  // silencio la clasificación de zona de CADA pulsación real registrada desde ese momento
+  // (casi siempre cayendo en zona 5) -- encontrado por testing adversarial.
   for(let n=1;n<=5;n++){
-    if(newZones[n].min >= newZones[n].max || (n>1 && newZones[n].max <= newZones[n-1].max)){
+    if(newZones[n].min >= newZones[n].max || (n>1 && newZones[n].max <= newZones[n-1].max)
+       || newZones[n].min<30 || newZones[n].min>250 || newZones[n].max<30 || newZones[n].max>250){
       showToast(t('zones_invalid_error'), 'error');
       return;
     }
