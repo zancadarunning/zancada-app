@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T00:05:22Z';
+const APP_VERSION = '2026-09-28T00:15:37Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -257,6 +257,7 @@ function celebrate(){
   // animación continua -- no hay motivo para negarle ESO a alguien con esa preferencia,
   // a diferencia del confetti (que sí es puro movimiento y por eso se sigue salteando).
   setMascotExpression('excited', {priority:2, duration:2600});
+  setMascotColor('good', {duration:3200});
   try{
     if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const layer = document.createElement('div');
@@ -343,6 +344,34 @@ function setMascotExpression(name, {duration=2200, priority=1}={}){
     eyeL.setAttribute('d', MASCOT_EYE_SHAPES.neutral.l); eyeR.setAttribute('d', MASCOT_EYE_SHAPES.neutral.r);
     mascotExpressionPriority = -1;
   }, duration);
+}
+// Color del cuerpo: lima de siempre (neutral), un dorado cálido cuando pasa algo bueno
+// (marca personal, meta semanal, racha de semanas), y un tono arcilla cuando pasa algo que
+// conviene tomarse con calma (durmió mal, cargó una molestia/lesión) -- reusa colores que
+// la app ya usa en otro lado (--zone3 es el dorado de la zona de esfuerzo "constante",
+// --clay es el mismo tono que ya usan las etiquetas de terreno asfalto) en vez de inventar
+// hex nuevos sueltos. Sin sistema de prioridad (a diferencia de las expresiones): son pocos
+// disparadores, ninguno realmente compite entre sí, así que "el último que llamó gana y
+// reinicia el timer" alcanza.
+const MASCOT_BODY_COLORS = { neutral: 'var(--hivis)', good: 'var(--zone3)', bad: 'var(--clay)' };
+let mascotColorTimer = null;
+function setMascotColor(name, {duration=4000}={}){
+  const body = document.getElementById('mascot-body');
+  if(!body || !MASCOT_BODY_COLORS[name]) return;
+  body.setAttribute('fill', MASCOT_BODY_COLORS[name]);
+  clearTimeout(mascotColorTimer);
+  mascotColorTimer = setTimeout(()=>{ body.setAttribute('fill', MASCOT_BODY_COLORS.neutral); }, duration);
+}
+// Guiño (un solo ojo, no los dos -- eso ya es el parpadeo normal) apenas se toca el botón,
+// antes de entrar al chat -- showView('coach') esconde coach-fab-wrap en el mismo instante
+// (ver el otro lugar que lo hace, más abajo en el archivo), así que sin este delay chico el
+// guiño nunca llegaría a verse.
+function openCoachWithWink(){
+  const eyeR = document.getElementById('mascot-eye-r');
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(!eyeR || reduced){ showView('coach'); return; }
+  eyeR.setAttribute('transform', 'translate(40 30) scale(1 0.12) translate(-40 -30)');
+  setTimeout(()=>{ eyeR.setAttribute('transform', ''); showView('coach'); }, 140);
 }
 // Ojos que siguen el puntero (mouse) o el dedo (touchmove) -- clampeados a un radio chico
 // (MAX_OFFSET) para que se lea como "de reojo", no como si los ojos se fueran a otro lado.
@@ -3618,6 +3647,8 @@ function buildWeeklyRecapMessage(weekPlan, weekStartIso, diffWeeks){
   state.bestStreakWeeks = Math.max(state.bestStreakWeeks||0, state.streakWeeks);
   if(state.streakWeeks >= 2){
     msg += ' ' + t('coach_streak_line', {n: state.streakWeeks});
+    setMascotExpression('excited', {priority:2, duration:2600});
+    setMascotColor('good', {duration:3200});
   }
   return msg;
 }
@@ -5207,6 +5238,7 @@ async function savePainLog(){
   const note = document.getElementById('pain-note').value.trim().slice(0,200);
   if(!state.painLog) state.painLog = [];
   state.painLog.push({id:Date.now(), date:localDateISO(), bodyPart, note, active:true, checkinSent:false});
+  setMascotColor('bad', {duration:5000});
   closePainModal();
   renderPainLog();
   await persist();
@@ -5350,6 +5382,7 @@ async function logReadiness(quality){
   renderReadinessCard();
   await persist();
   if(quality === 'mal'){
+    setMascotColor('bad', {duration:5000});
     const idx = (new Date().getDay()+6)%7;
     const today = state.plan[idx];
     const hasSessionToday = today && today.dist>0 && !today.status;
