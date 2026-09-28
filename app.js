@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T14:44:09Z';
+const APP_VERSION = '2026-09-28T14:47:17Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10350,7 +10350,23 @@ const TOOLS = [
 // deshacerlo, el snapshot se perdía y deshacer_cambio contestaba "no hay nada para deshacer"
 // aunque el cambio siguiera fresco. Guardarlo en `state` lo hace sobrevivir un cierre/reapertura,
 // igual que el resto de lo que el coach toca.
+//
+// coachUndoTurnSnapshotTaken (variable de módulo, NO se persiste -- solo necesita durar lo que
+// dura un intercambio, nunca sobrevivir un cierre de la app) evita que un mismo pedido que
+// dispare MÁS DE UNA herramienta en la misma respuesta (ej. "pasá el martes al miércoles y
+// cancelá el jueves" -- mover_sesion + cancelar_sesion, o el propio loop de sendChat() dándole
+// al modelo varias vueltas) termine pisando el snapshot una y otra vez, cada vez con un estado
+// más "intermedio" (después del primer cambio, antes del segundo) en vez del estado de ANTES
+// de todo el turno. Sin esto, "deshacer" después de un pedido así solo revertía el ÚLTIMO
+// cambio aplicado, dejando los anteriores del mismo pedido sin revertir -- el corredor pedía
+// deshacer "eso que acabas de hacer" (todo el pedido) y solo se deshacía una parte. Se resetea
+// una vez por CADA mensaje nuevo del corredor (al principio de sendChat()), no por cada vuelta
+// del loop de herramientas -- un mismo pedido puede necesitar varias vueltas de ida y vuelta
+// con el modelo, y todas esas vueltas siguen siendo UN solo turno a los ojos de "deshacer".
+let coachUndoTurnSnapshotTaken = false;
 function captureUndoSnapshot(){
+  if(coachUndoTurnSnapshotTaken) return;
+  coachUndoTurnSnapshotTaken = true;
   state.coachUndoSnapshot = {
     plan: JSON.parse(JSON.stringify(state.plan)),
     nextWeekOverrides: JSON.parse(JSON.stringify(state.nextWeekOverrides || {})),
@@ -10860,6 +10876,10 @@ async function sendChat(){
   const text = input.value.trim(); if(!text) return;
   const sendBtn = document.getElementById('chat-send-btn');
   if(sendBtn?.dataset.busy==='1') return; // ya hay un mensaje en camino
+  // Nuevo turno de verdad (pasó el chequeo de arriba, este mensaje va a mandarse) -- reseteamos
+  // acá, no al principio de la función, para no pisar el flag de un sendChat() todavía en
+  // vuelo si por lo que sea esta llamada se cuela antes de que termine (ver coachUndoTurnSnapshotTaken).
+  coachUndoTurnSnapshotTaken = false;
   if(sendBtn){
     sendBtn.dataset.originalHtml = sendBtn.innerHTML;
     sendBtn.dataset.busy = '1';
