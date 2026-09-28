@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T00:15:37Z';
+const APP_VERSION = '2026-09-28T00:21:33Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -315,6 +315,14 @@ const MASCOT_EYE_SHAPES = {
   excited: {
     l: 'M19.5 30 a4.5 4.5 0 1 0 9 0 a4.5 4.5 0 1 0 -9 0',
     r: 'M35.5 30 a4.5 4.5 0 1 0 9 0 a4.5 4.5 0 1 0 -9 0',
+  },
+  // Cápsula angosta e inclinada (radio 2.2) -- la punta de ADENTRO (más cerca del centro de
+  // la cara) más arriba, la de AFUERA más abajo, mismo gesto que unas cejas fruncidas hacia
+  // la nariz. Se usa junto con setMascotColor('bad', ...) -- dormiste mal, cargaste una
+  // molestia/lesión -- para que el gesto no dependa solo del color.
+  concerned: {
+    l: 'M24.73 24.73 L18.73 30.73 L21.27 33.27 L27.27 27.27 Z',
+    r: 'M36.73 27.27 L42.73 33.27 L45.27 30.73 L39.27 24.73 Z',
   },
   // Pastilla bien chata y fina (8x2.5) -- ojos entrecerrados de sueño, después de un rato
   // largo sin que nadie toque la app (ver SLEEPY_AFTER_MS en initMascotEyes). No pasa por
@@ -3746,6 +3754,12 @@ function checkWeekRollover(){
         state.profile.weeklyKm = Math.max(5, Math.round(state.profile.weeklyKm * breakAdj.kmFactor));
         if(breakAdj.weekNumberReset) promotedWeekNumber = breakAdj.weekNumberReset;
         breakMsg = t('coach_return_from_break', {weeks: breakAdj.gapWeeks});
+        // checkWeekRollover() solo corre una vez por transición real de semana (no en cada
+        // render), así que esto es un "che, tanto tiempo" genuino, no algo que se repita cada
+        // vez que se abre la app -- reusa la expresión "happy" (contento, sin la intensidad
+        // de un festejo real) en vez de sumar una cuarta forma de ojos solo para esto.
+        setMascotExpression('happy', {priority:1, duration:2600});
+        setMascotColor('good', {duration:3200});
       } else {
         // el ajuste semanal de siempre (sesiones salteadas/mal calificadas) solo aplica
         // cuando NO hubo una pausa real -- si la hubo, ya está cubierto (y mejor explicado)
@@ -5239,6 +5253,7 @@ async function savePainLog(){
   if(!state.painLog) state.painLog = [];
   state.painLog.push({id:Date.now(), date:localDateISO(), bodyPart, note, active:true, checkinSent:false});
   setMascotColor('bad', {duration:5000});
+  setMascotExpression('concerned', {priority:1, duration:5000});
   closePainModal();
   renderPainLog();
   await persist();
@@ -5383,6 +5398,7 @@ async function logReadiness(quality){
   await persist();
   if(quality === 'mal'){
     setMascotColor('bad', {duration:5000});
+    setMascotExpression('concerned', {priority:1, duration:5000});
     const idx = (new Date().getDay()+6)%7;
     const today = state.plan[idx];
     const hasSessionToday = today && today.dist>0 && !today.status;
