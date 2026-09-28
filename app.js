@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T05:07:50Z';
+const APP_VERSION = '2026-09-28T14:37:25Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10870,6 +10870,18 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
   let networkFailed = false;
   let cancelled = false;
   let anyToolApplied = false;
+  // Salvaguarda contra el modelo afirmando en TEXTO que ya aplicó un cambio (plan o perfil)
+  // sin haber llamado ninguna herramienta -- el prompt de arriba ya se lo pide explícitamente
+  // ("nunca digas que ya lo cambiaste sin haber llamado a la herramienta"), pero una
+  // instrucción de prompt no es una garantía real, solo un pedido. Reportado por un usuario
+  // real: pidió "actualizalo en mi plan", el coach contestó con una lista de sesiones "ya
+  // cargadas" (texto solo, cero tool_use en esa respuesta), y el plan de verdad se quedó
+  // exactamente igual -- el corredor se enteró recién al mirar el plan y ver que no coincidía
+  // con lo que el chat decía. CLAIM_PATTERN es deliberadamente amplio (mejor una vuelta extra
+  // de más en un caso ambiguo que dejar pasar una confirmación falsa) -- ver el chequeo más
+  // abajo, junto al break del loop.
+  const CLAIM_PATTERN = /\b(ya\s+(est[aá]|qued[oó]|lo\s+(cambi[eé]|actualic[eé]|apliqu[eé]|hice)|se\s+aplic[oó])|listo,|actualizad[oa]\s|cargad[oa]\s|already\s+(updated|changed|applied|done)|all\s+set|it'?s\s+(done|updated)|c'est\s+(fait|mis\s+à\s+jour)|gi[àa]\s+(aggiornat|fatt)|(bereits|schon)\s+(aktualisiert|erledigt)|j[aá]\s+atualizad)/i;
+  let correctionAttempted = false;
   chatAbortController = new AbortController();
   try{
     // Mandamos el token de sesión igual que en los demás endpoints, para que
@@ -10888,7 +10900,21 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
       const textPart = blocks.filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
       if(textPart) finalText += (finalText? '\n':'') + textPart;
       const toolUses = blocks.filter(b=>b.type==='tool_use');
-      if(toolUses.length===0) break;
+      if(toolUses.length===0){
+        // Nunca se llamó ninguna herramienta en TODA la charla y el texto suena a que sí se
+        // aplicó algo: le damos una única vuelta más para que se autocorrija (llame la
+        // herramienta de verdad, o aclare que en realidad no hay ningún cambio aplicado) en
+        // vez de mostrarle al corredor una confirmación que puede ser falsa.
+        // correctionAttempted evita un segundo intento -- si insiste, mostramos lo que dijo.
+        if(!anyToolApplied && !correctionAttempted && CLAIM_PATTERN.test(finalText)){
+          correctionAttempted = true;
+          messages.push({role:'assistant', content: blocks});
+          messages.push({role:'user', content: 'Tu respuesta anterior sonaba a que ya aplicaste un cambio en el plan o el perfil, pero no llamaste ninguna herramienta. Si corresponde un cambio real, llamá la herramienta correspondiente ahora mismo. Si en realidad no hay ningún cambio que aplicar (por ejemplo, solo estabas describiendo una idea para más adelante), corregí tu mensaje y aclarale a el/la corredor/a que todavía no se aplicó nada en la app.'});
+          finalText = ''; // descartamos el texto potencialmente falso -- nos quedamos con la respuesta corregida
+          continue;
+        }
+        break;
+      }
       anyToolApplied = true;
       const toolResults = toolUses.map(tu=>{
         let result;
