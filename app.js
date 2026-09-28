@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T15:26:59Z';
+const APP_VERSION = '2026-09-28T19:26:12Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8624,6 +8624,25 @@ function getDisplaySplits(r){
   if(!isImperial()) return r.splits||[];
   return rebucketSplitsByDistance(r, KM_PER_MI) || r.splits || [];
 }
+// Una carrera sincronizada de Polar/Wahoo trae splits reales (calculados del lado del
+// servidor a partir del archivo FIT, siempre en tramos de 1km -- ver
+// buildSplitsAndSeriesFromFitRecords en api/_lib/fit-activity-helpers.js) pero NUNCA
+// guarda la ruta (r.points queda [] siempre, ver exerciseToRun en
+// polar-activity-helpers.js/wahoo-activity-helpers.js) -- sin los puntos GPS,
+// rebucketSplitsByDistance no tiene de dónde recalcular tramos reales por milla (haría
+// falta la distancia acumulada punto a punto, que acá no existe) y getDisplaySplits cae
+// de vuelta a los mismos tramos de 1km de r.splits tal cual. Mostrar esos tramos bajo el
+// rótulo "MI" (como pasaba antes de este chequeo) repite el mismo bug que ya se había
+// arreglado para el caso con ruta real: "0.62 mi" para lo que en realidad es un tramo
+// entero de 1km (ver el comentario grande junto a rebucketSplitsByDistance). Sin una ruta
+// real no hay forma honesta de mostrar tramos por milla, así que renderRDSegmentos/
+// renderRDRitmo usan esto para decidir si el resultado de getDisplaySplits está de verdad
+// en millas (mismo chequeo -- identidad de referencia -- que ya usa rebucketSplitsByDistance
+// para devolver un array nuevo) o si hay que mostrarlo en km pese a que el corredor eligió
+// millas como unidad.
+function displaySplitsAreMiles(r, splits){
+  return isImperial() && splits.length>0 && splits!==r.splits;
+}
 // Corta el recorrido (r.points) en tramos por km alineados con r.splits, y le
 // asigna a cada tramo el color de zona de ritmo (relativa al promedio de ESA
 // carrera, ver classifyPaceRelative) -- así el mapa de la pestaña Ruta se ve
@@ -8813,6 +8832,10 @@ function rdRecenterMap(){
 function renderRDRitmo(panel){
   const {r, paceMin} = rdCurrent;
   const splits = getDisplaySplits(r);
+  // Mismo motivo que en renderRDSegmentos: sin ruta real (Polar/Wahoo) los tramos siguen
+  // siendo de 1km aunque el corredor esté en modo imperial -- el rótulo de la columna
+  // izquierda tiene que reflejar eso, no asumir ciegamente distUnit().
+  const unitLabel = displaySplitsAreMiles(r, splits) ? 'mi' : 'km';
   const splitPaces = splits.map(s=>s.paceMin).filter(p=>p>0);
   const fastest = splitPaces.length ? Math.min(...splitPaces) : paceMin;
   const maxPaceForBar = Math.max(...splitPaces, paceMin) * 1.02 || 1;
@@ -8823,7 +8846,7 @@ function renderRDRitmo(panel){
       <div><span class="mono" style="font-size:22px; font-weight:800; display:block;">${fmtPace(fastest)}</span><span class="muted" style="font-size:12px;">${t('rd_fastest_pace')}</span></div>
     </div>
     ${pacingAnalysis ? `<p style="font-weight:700; margin-bottom:14px; font-size:13.5px;">${t('hist_split_'+pacingAnalysis.kind)}</p>` : ''}
-    <div class="muted" style="font-size:11px; margin-bottom:8px; display:flex; justify-content:space-between;"><span>${distUnit()}</span><span>${t('run_pace_word')} (/${distUnit()})</span></div>
+    <div class="muted" style="font-size:11px; margin-bottom:8px; display:flex; justify-content:space-between;"><span>${unitLabel}</span><span>${t('run_pace_word')} (/${distUnit()})</span></div>
     ${splits.map(s=>{
       const zone = classifyPaceRelative(s.paceMin, paceMin);
       const widthPct = s.paceMin>0 ? Math.max(22, Math.min(100, (s.paceMin/maxPaceForBar)*100)) : 22;
@@ -8837,11 +8860,24 @@ function renderRDRitmo(panel){
 function renderRDSegmentos(panel){
   const {r, paceMin, avgHr} = rdCurrent;
   const splits = getDisplaySplits(r);
+  // milesOk: si getDisplaySplits de verdad devolvió tramos recalculados por milla a partir
+  // de la ruta real (rebucketSplitsByDistance), o si cayó de vuelta a los tramos de 1km de
+  // r.splits porque esta carrera no tiene puntos GPS guardados (Polar/Wahoo, ver el
+  // comentario junto a displaySplitsAreMiles). En ese segundo caso NO hay forma honesta de
+  // mostrar la tabla en millas -- se muestra en km pese a que el corredor eligió millas,
+  // en vez de repetir el bug ya arreglado para el caso con ruta real ("0.62 mi" para lo que
+  // en realidad es un tramo entero de 1km).
+  const milesOk = displaySplitsAreMiles(r, splits);
+  const unitLabel = milesOk ? 'mi' : 'km';
   // Un tramo "lleno" mide 1 unidad INTERNA -- 1km para r.splits (siempre en km, ver el
   // comentario junto a rebucketSplitsByDistance) o 1 milla (KM_PER_MI km) para los tramos
   // recalculados por milla en modo imperial. Sin esto, un tramo entero de milla se trataba
   // como si fuera de 1km para calcular su duración/distancia real.
-  const unitKm = isImperial() && splits!==r.splits ? KM_PER_MI : 1;
+  const unitKm = milesOk ? KM_PER_MI : 1;
+  // fmtDist() convierte siempre según isImperial() global -- acá hace falta formatear según
+  // milesOk (la unidad REAL de esta tabla, que puede ser km aunque el corredor esté en modo
+  // imperial), así que no se puede reusar tal cual para esta columna en particular.
+  const fmtSegDist = km => milesOk ? fmtDist(km) : km.toFixed(2);
   const anyHr = splits.some(s=>s.avgHr!=null);
   const anyCad = splits.some(s=>s.avgCadence!=null);
   const rows = splits.map(s=>{
@@ -8850,7 +8886,7 @@ function renderRDSegmentos(panel){
     return `<tr>
       <td>${s.km}</td>
       <td>${fmtTime(segSec)}</td>
-      <td>${fmtDist(segDistKm)}</td>
+      <td>${fmtSegDist(segDistKm)}</td>
       <td>${fmtPace(s.paceMin)}</td>
       ${anyHr ? `<td>${s.avgHr!=null ? s.avgHr : '–'}</td>` : ''}
       ${anyCad ? `<td>${s.avgCadence!=null ? s.avgCadence : '–'}</td>` : ''}
@@ -8860,14 +8896,14 @@ function renderRDSegmentos(panel){
     <div style="overflow-x:auto;">
     <table class="rd-seg-table">
       <thead><tr>
-        <th>${distUnit().toUpperCase()}</th><th>${t('rd_seg_dur')}</th><th>${t('rd_seg_dist')} (${distUnit()})</th><th>${t('run_pace_word')} (/${distUnit()})</th>
+        <th>${unitLabel.toUpperCase()}</th><th>${t('rd_seg_dur')}</th><th>${t('rd_seg_dist')} (${unitLabel})</th><th>${t('run_pace_word')} (/${distUnit()})</th>
         ${anyHr ? `<th>${t('hist_avg_hr')}</th>` : ''}
         ${anyCad ? `<th>${t('hist_cadence')}</th>` : ''}
       </tr></thead>
       <tbody>
         ${rows}
         <tr>
-          <td>${t('rd_total')}</td><td>${fmtTime(r.durationSec)}</td><td>${fmtDist(r.distanceKm)}</td><td>${fmtPace(paceMin)}</td>
+          <td>${t('rd_total')}</td><td>${fmtTime(r.durationSec)}</td><td>${fmtSegDist(r.distanceKm)}</td><td>${fmtPace(paceMin)}</td>
           ${anyHr ? `<td>${avgHr!=null?avgHr:'–'}</td>` : ''}
           ${anyCad ? `<td>${r.avgCadence!=null?r.avgCadence:'–'}</td>` : ''}
         </tr>
@@ -11002,6 +11038,7 @@ async function sendChat(){
   renderChat();
   document.getElementById('chatLog').insertAdjacentHTML('beforeend', `<div class="msg coach typing msg-enter" id="typing"><span></span><span></span><span></span></div>`);
   scrollChatToBottom();
+  document.getElementById('coach-fab-thinking')?.classList.add('show');
 
   // Mandamos como máximo los últimos CHAT_HISTORY_LIMIT mensajes: una charla de meses
   // mandaría el historial entero en cada request, cada vez más lento y más caro sin
@@ -11110,6 +11147,7 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
   chatAbortController = null;
 
   document.getElementById('typing')?.remove();
+  document.getElementById('coach-fab-thinking')?.classList.remove('show');
   if(cancelled){
     // El corredor apretó "pausar": no mostramos error ni reintentamos, simplemente
     // dejamos el mensaje ya enviado en el historial y volvemos a dejar todo listo

@@ -129,6 +129,53 @@ test('getDisplaySplits: en modo métrico, o sin puntos de recorrido, usa r.split
   assert.equal(app.getDisplaySplits({ splits: rSplits, points: [] }), rSplits, 'sin puntos de recorrido (carrera manual, Health Connect) debería caer de vuelta a r.splits');
 });
 
+test('renderRDSegmentos/renderRDRitmo: una carrera SIN ruta (Polar/Wahoo, ver exerciseToRun en polar-activity-helpers.js -- points siempre []) muestra sus splits reales en KM aunque el corredor esté en modo imperial, en vez de repetir el bug de "0.62 mi" ya arreglado para el caso con ruta real', () => {
+  // getDisplaySplits ya cae de vuelta a r.splits (tramos de 1km reales, calculados del lado
+  // del servidor a partir del FIT -- ver buildSplitsAndSeriesFromFitRecords) cuando no hay
+  // puntos GPS para recalcular por milla (test de arriba). Pero renderRDSegmentos/
+  // renderRDRitmo (los que arman la tabla/las barras que ve el corredor) usaban ciegamente
+  // distUnit()/isImperial() para el rótulo y la conversión de distancia de esa tabla, sin
+  // fijarse si getDisplaySplits había logrado recalcular de verdad o si había caído de
+  // vuelta a los tramos de 1km -- mostrando "0.62 mi" para lo que en realidad es un tramo
+  // entero de 1km, exactamente el bug que el comentario de rebucketSplitsByDistance dice
+  // haber arreglado, pero solo para carreras CON ruta.
+  const app = loadApp();
+  const cache = new Map();
+  const origGetById = app.document.getElementById.bind(app.document);
+  app.document.getElementById = (id) => {
+    if (!cache.has(id)) cache.set(id, origGetById(id));
+    return cache.get(id);
+  };
+
+  app.state.profile = { name: 'Test', units: 'imperial', weight: 70 };
+  app.state.runs = [{
+    id: 'r1',
+    date: new Date().toISOString(),
+    distanceKm: 3.4,
+    durationSec: 1200,
+    points: [], // Polar/Wahoo nunca guardan la ruta, solo splits (ver exerciseToRun)
+    splits: [
+      { km: 1, paceMin: 5.5, avgHr: null, avgCadence: null },
+      { km: 2, paceMin: 5.6, avgHr: null, avgCadence: null },
+      { km: 3, paceMin: 5.4, avgHr: null, avgCadence: null },
+      { km: 0.4, paceMin: 5.7, avgHr: null, avgCadence: null },
+    ],
+  }];
+
+  app.openRunDetail('r1');
+
+  app.switchRDTab('segmentos');
+  const segHtml = cache.get('rd-panel-segmentos').innerHTML;
+  assert.match(segHtml, /<th>KM<\/th>/, 'el encabezado de la tabla de segmentos debería decir KM, no MI, sin ruta real para recalcular por milla');
+  assert.doesNotMatch(segHtml, />0\.62</, 'un tramo entero de 1km no debería mostrarse como "0.62" (su conversión a millas) en la columna de distancia');
+  assert.match(segHtml, /<td>1\.00<\/td>/, 'un tramo entero debería seguir mostrando 1.00 (km reales), no la conversión a millas');
+  assert.match(segHtml, /<td>3\.40<\/td>/, 'la fila de total debería mostrar la distancia real en km (3.40), coherente con el resto de la tabla, no 2.11mi');
+
+  app.switchRDTab('ritmo');
+  const ritmoHtml = cache.get('rd-panel-ritmo').innerHTML;
+  assert.match(ritmoHtml, /<span>km<\/span>/, 'el rótulo de la columna de tramos en Ritmo debería decir km, no mi, sin ruta real');
+});
+
 test('isLikelyDuplicateOfExistingRun: no confunde una entrada en calor corta con la sesión fuerte que sigue, aunque tengan distancia parecida', () => {
   // El chequeo de duplicados entre fuentes (Health Connect vs. Strava/Polar/Wahoo, ver el
   // comentario junto a la función) solo miraba hora de inicio (10 min) y distancia (10%) --
