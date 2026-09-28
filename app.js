@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T14:47:17Z';
+const APP_VERSION = '2026-09-28T15:03:56Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4473,15 +4473,27 @@ function planAmountText(d){
   if(!(d.dist>0)) return '';
   return isTimeMode() ? `${planDurationMin(d)} ${t('time_unit_min')}` : `${fmtDist(d.dist,1)} ${distUnit()}`;
 }
-function planLabel(d){
-  if(d.raceDay) return {type: t('plan_race_day_type'), desc: t('plan_race_day_desc', {name: escapeHtml(d.raceEventName || '')})};
+// Separada de planLabel() (más abajo) para que quien necesite guardar el texto de una sesión
+// SIN la envoltura de entrada en calor/vuelta a la calma pueda pedirla así -- ver
+// applyMoveSession/applyVolumeAdjust, que "congelan" un día del algoritmo (d.custom pasa a
+// true) guardando el texto resuelto en d.desc. Si esas funciones guardaran el resultado YA
+// envuelto de planLabel(), la PRÓXIMA vez que algo llame a planLabel() sobre ese mismo día
+// (ahora custom) -- que es exactamente lo que hace CUALQUIER render posterior (Plan, Inicio,
+// Correr, el modal de calificación, la exportación .ics) -- la rama "custom" de planLabel()
+// volvería a agregar la envoltura encima de un texto que YA la tenía adentro, duplicando
+// "Comenzá con 10 minutos de entrada en calor..."/"...vuelta a la calma..." para siempre en
+// ese día. Encontrado en una auditoría con pruebas adversariales (ejecutando las herramientas
+// del coach, no solo leyendo el código) -- pasaba en el camino más común de las dos
+// herramientas (mover_sesion y ajustar_volumen_semana), cada vez que "congelan" un día que
+// todavía era del algoritmo puro.
+function planLabelBody(d){
   if(d.custom){
     // Una sesión "custom" es texto libre que el coach (IA) escribió a partir de un pedido
     // del usuario (modificar_sesion) -- pero sigue siendo una sesión de running como
     // cualquier otra, así que también lleva la estructura de entrada en calor / vuelta a
     // la calma cuando tiene distancia (antes se mostraba SOLO el texto del coach, sin esa
     // estructura, lo que hacía que un día editado por chat se viera "distinto" al resto
-    // del plan).
+    // del plan). Esa envoltura se agrega en planLabel(), no acá -- ver el comentario de arriba.
     let body = d.desc;
     if(d.interval){
       // d.interval llega SIEMPRE en minutos (resolveCustomInterval, en workMin/restMin) --
@@ -4496,8 +4508,7 @@ function planLabel(d){
       const rest = timeModeNow ? fmtDurationShort(d.interval.restMin*60) : `${repMetersFromMin(d.interval.restMin, state.profile)}m`;
       body = `${d.desc}\n${t('desc_custom_reps_detail', {reps:d.interval.reps, work, rest, zone:d.zone})}`;
     }
-    const desc = d.dist>0 ? `${t('desc_warmup_prefix')}\n${body}\n${t('desc_cooldown_suffix')}` : body;
-    return {type:d.type, desc};
+    return {type:d.type, desc:body};
   }
   const timeMode = isTimeMode();
   const suf = d.beginner && (d.typeKey==='easy'||d.typeKey==='long'||d.typeKey==='rest') ? '_beginner' : '';
@@ -4539,15 +4550,23 @@ function planLabel(d){
     // caso nunca se llega a evaluar para un fartlek nuevo.
     desc += t('desc_zone_suffix', {zone:d.zone});
   }
+  return {type:t('type_'+d.typeKey), desc};
+}
+function planLabel(d){
+  if(d.raceDay) return {type: t('plan_race_day_type'), desc: t('plan_race_day_desc', {name: escapeHtml(d.raceEventName || '')})};
+  const lbl = planLabelBody(d);
   // Entrada en calor y vuelta a la calma para toda sesión que implique correr (no en
   // días de descanso). Antes era una frase agregada al final ("...y sumale 5 a 15 min
   // de trote suave al principio y al final"); ahora el pedido es una ESTRUCTURA fija de
   // 3 partes -- entrada en calor, el detalle de la sesión, vuelta a la calma, cada una
   // en su propio párrafo -- con 10 minutos fijos en vez de un rango. El \n se ve como
   // salto de línea real en todos los lugares donde se muestra esto (home, plan, correr)
-  // gracias a white-space:pre-line en .muted y .day-detail.
-  if(d.dist>0) desc = `${t('desc_warmup_prefix')}\n${desc}\n${t('desc_cooldown_suffix')}`;
-  return {type:t('type_'+d.typeKey), desc};
+  // gracias a white-space:pre-line en .muted y .day-detail. Se agrega UNA sola vez, acá --
+  // planLabelBody() nunca la agrega (ver su comentario) para que quien necesite el texto sin
+  // envolver (applyMoveSession/applyVolumeAdjust, al congelar un día del algoritmo) lo pueda
+  // pedir sin duplicarla en el próximo render.
+  const desc = d.dist>0 ? `${t('desc_warmup_prefix')}\n${lbl.desc}\n${t('desc_cooldown_suffix')}` : lbl.desc;
+  return {type:lbl.type, desc};
 }
 
 /* ---- exportar la semana como archivo .ics -----
@@ -10620,11 +10639,14 @@ function applyMoveSession(input){
   // custom:true sin resolver antes tipo/descripción deja planLabel() leyendo d.type/d.desc
   // undefined, y si el día tenía una estructura de repeticiones del algoritmo (reps/repMeters
   // de series o cuestas, no workMin/restMin) encima la mostraría como si fuera fartlek,
-  // saliendo "NaNm". planLabel(d) ACÁ, con typeKey/interval ya intercambiados, deja los
-  // números reales incrustados como texto en desc antes de marcarlo protegido.
+  // saliendo "NaNm". planLabelBody(d) ACÁ (SIN la envoltura de entrada en calor/vuelta a la
+  // calma que agrega planLabel() -- ver el comentario grande junto a esa función: si se
+  // guardara ya envuelta, el próximo render la duplicaría), con typeKey/interval ya
+  // intercambiados, deja los números reales incrustados como texto en desc antes de marcarlo
+  // protegido.
   [origDay, destDay].forEach(d=>{
     if(d.cancelled || d.custom) return;
-    const lbl = planLabel(d);
+    const lbl = planLabelBody(d);
     d.type = lbl.type; d.desc = lbl.desc;
     delete d.interval;
     d.custom = true;
@@ -10692,7 +10714,11 @@ function applyVolumeAdjust(input){
     if(!state.nextWeekOverrides) state.nextWeekOverrides = {};
     nw.plan.forEach(d=>{
       if(d.dist>0){
-        const lbl = d.custom ? {type:d.type, desc:d.desc} : planLabel(d);
+        // planLabelBody (no planLabel) para el caso no-custom -- ver el comentario grande
+        // junto a planLabel(): guardar acá el texto YA envuelto con entrada en calor/vuelta a
+        // la calma duplicaría esa envoltura la próxima vez que algo (Plan, Inicio, etc.)
+        // llame a planLabel() sobre este mismo día, que para entonces ya quedó custom:true.
+        const lbl = d.custom ? {type:d.type, desc:d.desc} : planLabelBody(d);
         // Mismo motivo que en applyPlanChange (ver su comentario sobre esta misma rama):
         // getNextWeekPlan() arma este día de cero cada vez con Object.assign({}, d, ov, ...),
         // así que si el override no trae su propia clave `interval`, queda colgado el
@@ -10719,9 +10745,11 @@ function applyVolumeAdjust(input){
         // custom:true sin resolver antes tipo/descripción dejaba planLabel() leyendo
         // d.type/d.desc undefined, y si el día era de series/cuestas (interval en formato
         // reps/repMeters del algoritmo) encima intentaba mostrarlo como fartlek
-        // (workMin/restMin), saliendo "NaNm". planLabel(d) ACÁ, antes de tocar nada, ya deja
-        // los números reales (reps, metros, minutos) incrustados como texto en desc.
-        const lbl = planLabel(d);
+        // (workMin/restMin), saliendo "NaNm". planLabelBody(d) ACÁ (SIN la envoltura de
+        // entrada en calor/vuelta a la calma -- ver el comentario junto a planLabel(), si se
+        // guardara ya envuelta se duplicaría en el próximo render), antes de tocar nada, ya
+        // deja los números reales (reps, metros, minutos) incrustados como texto en desc.
+        const lbl = planLabelBody(d);
         d.type = lbl.type; d.desc = lbl.desc;
         delete d.interval;
         d.custom = true;
