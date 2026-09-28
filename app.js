@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T15:03:56Z';
+const APP_VERSION = '2026-09-28T15:06:06Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10526,6 +10526,31 @@ function applyPlanChange(input){
   // rechaza cuando falta la estructura.
   if(customIntervalCheck && /\d+([.,]\d+)?\s*(min|minuto|seg|segundo|km|kilómetro|kilometro|\bm\b|metro)/i.test(input.descripcion||'')){
     return `La descripcion todavía tiene números/unidades de la sesión (minutos, metros, etc.) -- sacalos, la app ya los agrega sola en la unidad correcta. Dejá en descripcion solo contexto (terreno, motivo del cambio), sin repetir cantidad, distancia ni duración.`;
+  }
+  // Los textos de series/cuestas/fartlek (desc_intervals_detail, desc_hills_detail,
+  // desc_fartlek_detail, desc_custom_reps_detail) siempre citan la zona objetivo -- si el
+  // modelo manda repeticiones/esfuerzo_min sin zona, resolveZone(undefined) da null y esos
+  // textos terminaban mostrando literalmente "zona null" al corredor (t() hace un replace
+  // directo, sin ningún chequeo de null). Encontrado con pruebas adversariales. Rechazamos
+  // acá, mismo patrón que el chequeo de arriba (repeticiones sin esfuerzo_min).
+  if(customIntervalCheck && resolveZone(input.zona)===null){
+    return `Para ${effectiveCategoria} hace falta también la zona objetivo (zona, 1 a 5) -- volvé a llamar a modificar_sesion incluyéndola.`;
+  }
+  // distancia_km/duracion_min mandados EXPLÍCITAMENTE pero con un valor sin sentido (0,
+  // negativo, no numérico) -- a diferencia de OMITIRLOS del todo (que a propósito deja la
+  // sesión con la distancia de ANTES, ver la descripción de esta herramienta), un valor
+  // explícito pero inválido es casi seguro un error del modelo, no una decisión a propósito.
+  // Sin este chequeo, resolvePlanDistKm() devolvía null igual que si el campo nunca se
+  // hubiera mandado -- la sesión se quedaba con la distancia VIEJA, pero el mensaje de
+  // confirmación la mostraba como si fuera la nueva, sin que nadie se enterara de que el
+  // número pedido en realidad nunca se aplicó. Encontrado con pruebas adversariales.
+  if(!customIntervalCheck){
+    if(input.distancia_km !== undefined && !(Number(input.distancia_km) > 0)){
+      return `distancia_km:${input.distancia_km} no es un valor válido -- tiene que ser un número mayor a 0. Si no querés cambiar la distancia, omití este campo directamente en vez de mandar 0.`;
+    }
+    if(input.duracion_min !== undefined && !(Number(input.duracion_min) > 0)){
+      return `duracion_min:${input.duracion_min} no es un valor válido -- tiene que ser un número mayor a 0. Si no querés cambiar la duración, omití este campo directamente en vez de mandar 0.`;
+    }
   }
   if(input.semana === 'siguiente'){
     captureUndoSnapshot();
