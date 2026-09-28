@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T02:03:44Z';
+const APP_VERSION = '2026-09-28T02:12:14Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7497,6 +7497,7 @@ async function closeSummary(){
     series: paceSeries ? {t: paceSeries.t, hr: null, paceMin: paceSeries.paceMin} : null
   });
   checkNewPR(state.runs[state.runs.length-1]);
+  checkAchievementUnlocks();
   autoMarkSessionDone(runDate, runId);
   clearRunProgress();
   document.getElementById('runSummary').style.display='none';
@@ -7555,6 +7556,7 @@ function saveManualRun(){
   const runId = Date.now();
   state.runs.push({id:runId, date:isoDate, distanceKm:dist, durationSec:Math.round(durMin*60), hrLog: hr?[{t:0,bpm:hr}]:[], points:[], shoeId, manual:true});
   checkNewPR(state.runs[state.runs.length-1]);
+  checkAchievementUnlocks();
   const shoe = state.shoes.find(s=>s.id===shoeId);
   if(shoe) shoe.km += dist;
   checkShoeWearAlerts();
@@ -7747,6 +7749,54 @@ function getAchievementSections(){
   const recordBadges = PR_DISTANCES.map(b=>({achieved: !!prRecords[b.key]}));
   const allBadges = [...distanceBadges, ...runBadges, ...streakBadges, ...recordBadges];
   return {distanceBadges, runBadges, streakBadges, unlockedCount: allBadges.filter(b=>b.achieved).length, totalCount: allBadges.length};
+}
+// A diferencia de checkNewPR (que sí avisa al toque), las medallas de arriba son 100%
+// pasivas: getAchievementSections() las recalcula al vuelo cada vez que se abre la pantalla
+// de Logros, pero nada detecta el momento en que una se desbloquea de verdad -- alguien podía
+// cruzar los 100km totales en una carrera cualquiera y no enterarse hasta entrar a mirar por
+// su cuenta. Esta función sí detecta el cruce real, comparando contra
+// state.notifiedAchievements (mismo espíritu que wearAlerted en checkShoeWearAlerts: un
+// registro de qué ids ya se avisaron, para no festejar la misma medalla en cada carrera
+// nueva). Se llama desde los mismos lugares que ya llaman a checkNewPR() -- terminar una
+// carrera trackeada, cargar una a mano, o editar distancia/duración de una existente --
+// porque son los únicos momentos en que el total de km o de carreras puede cruzar un umbral.
+//
+// Ojo con las rachas: NO se incluyen acá a propósito. Toda semana con racha >=2 ya festeja y
+// avisa por chat en buildWeeklyRecapMessage() (con el número real de esa semana, no solo en
+// los hitos 2/4/8/12/26) -- agregar una segunda notificación acá duplicaría el aviso justo
+// las semanas en que la racha cae en uno de esos números.
+function checkAchievementUnlocks(){
+  const isFirstCheck = !state.notifiedAchievements;
+  if(!state.notifiedAchievements) state.notifiedAchievements = [];
+  const totalKm = (state.runs||[]).reduce((a,r)=>a+r.distanceKm,0);
+  const totalRuns = (state.runs||[]).length;
+  const newlyUnlocked = [];
+  ACH_DISTANCE_KM.forEach(km=>{
+    const id = 'dist_'+km;
+    if(totalKm >= km && !state.notifiedAchievements.includes(id)){
+      state.notifiedAchievements.push(id);
+      newlyUnlocked.push({key:'coach_achievement_distance', vars:{label: `${fmtDist(km,0)} ${distUnit()}`}});
+    }
+  });
+  ACH_RUN_COUNT.forEach(n=>{
+    const id = 'runs_'+n;
+    if(totalRuns >= n && !state.notifiedAchievements.includes(id)){
+      state.notifiedAchievements.push(id);
+      newlyUnlocked.push({key:'coach_achievement_runs', vars:{n}});
+    }
+  });
+  // Primera vez que corre esto para esta cuenta (recién actualizó a esta versión): alguien
+  // con meses de historial real puede tener ya varias medallas cruzadas de antes -- sin este
+  // corte, la primera carrera después de actualizar dispararía un festejo (y un mensaje de
+  // chat) por CADA medalla vieja de golpe. Las marcamos como ya vistas en silencio, sin
+  // festejar nada retroactivo; a partir de la próxima carrera, cualquier medalla realmente
+  // nueva sí avisa.
+  if(isFirstCheck){ persist(); return; }
+  if(!newlyUnlocked.length) return;
+  newlyUnlocked.forEach(a=>{ state.chat.push({role:'coach', text: t(a.key, a.vars), ts:Date.now()}); });
+  renderChat();
+  celebrate();
+  persist();
 }
 function renderAchievementBadgeGrid(badges){
   return `<div class="pr-medal-grid">${badges.map(b=>{
@@ -9846,7 +9896,7 @@ async function saveEditRun(){
   const newShoe = state.shoes.find(s => String(s.id) === String(newShoeId));
   if(newShoe) newShoe.km += dist;
   checkShoeWearAlerts();
-  if(pacedChanged) checkNewPR(r); // editar una carrera también puede convertirla en récord nuevo (solo si tocaron distancia o duración)
+  if(pacedChanged){ checkNewPR(r); checkAchievementUnlocks(); } // editar distancia también puede cruzar un umbral de km total
 
   const savedRunId = r.id;
   closeEditRun();
