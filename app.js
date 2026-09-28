@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T15:16:47Z';
+const APP_VERSION = '2026-09-28T15:26:59Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7631,10 +7631,27 @@ function saveManualRun(){
   // derecho -- mismo criterio que ya usa saveEditRun, exigiendo que sean positivos de
   // verdad. Sin esto, una distancia negativa terminaba restando km de la zapatilla
   // elegida en vez de sumarlos (ver mas abajo).
-  if(!date || !(dist>0) || !(durMin>0)){ showToast(t('edit_run_invalid'),'error'); return; }
-  const hr = parseInt(document.getElementById('man-hr').value);
+  // MAX_MANUAL_DIST_KM/48hs: mismo techo que api/_lib/activity-sanity.js ya usa del lado
+  // del servidor para las carreras sincronizadas de cada marca, acá para la carga manual --
+  // un típo (un cero de más, confundir minutos con horas) antes quedaba guardado tal cual,
+  // sin ningún techo, corrompiendo para siempre cualquier estadística que sume totalKm
+  // (Logros, la tendencia de Historial, el kilometraje de la zapatilla elegida). Encontrado
+  // con pruebas adversariales: 99999km y 999999min pasaban derecho.
+  if(!date || !(dist>0) || !(durMin>0) || dist>500 || durMin>48*60){ showToast(t('edit_run_invalid'),'error'); return; }
+  // La fecha del <input type="date"> viene validada por el navegador en la inmensa mayoría
+  // de los casos, pero no hay ninguna garantía real (un valor cargado a mano vía devtools,
+  // un webview raro) -- sin este chequeo, toISOString() más abajo tiraba una excepción sin
+  // atrapar (RangeError: Invalid time value) en vez del mismo toast de "dato inválido" que
+  // ya usa el resto de esta función. Encontrado con pruebas adversariales.
+  const parsedDate = new Date(date+'T12:00:00');
+  if(isNaN(parsedDate.getTime())){ showToast(t('edit_run_invalid'),'error'); return; }
+  const hrRaw = parseInt(document.getElementById('man-hr').value);
+  // Mismo rango humano plausible que activity-sanity.js (30-250bpm) -- un típo en el campo
+  // de FC (ej. "900" en vez de "90") no bloquea la carga entera (la FC es un dato opcional),
+  // pero tampoco se guarda tal cual: se descarta, igual que si el campo hubiera quedado vacío.
+  const hr = (hrRaw>=30 && hrRaw<=250) ? hrRaw : null;
   const shoeId = parseInt(document.getElementById('man-shoe').value) || null;
-  const isoDate = new Date(date+'T12:00:00').toISOString();
+  const isoDate = parsedDate.toISOString();
   const runId = Date.now();
   state.runs.push({id:runId, date:isoDate, distanceKm:dist, durationSec:Math.round(durMin*60), hrLog: hr?[{t:0,bpm:hr}]:[], points:[], shoeId, manual:true});
   checkNewPR(state.runs[state.runs.length-1]);
@@ -7879,6 +7896,28 @@ function checkAchievementUnlocks(){
   renderChat();
   celebrate();
   persist();
+}
+// Espejo de checkAchievementUnlocks(), pero para cuando el total BAJA (borrar una carrera, o
+// achicarle la distancia al editarla) en vez de subir. Sin esto, borrar una carrera que había
+// cruzado una medalla dejaba ese id marcado "ya avisado" en state.notifiedAchievements para
+// siempre, aunque la pantalla de Logros (que recalcula todo en vivo desde state.runs, sin
+// memoria de nada) ya la mostrara de nuevo bloqueada. Si el corredor volvía a cruzar ese mismo
+// umbral más adelante -- un caso real y plausible: borra una carrera duplicada de Strava y
+// sigue entrenando hasta volver a superarlo -- checkAchievementUnlocks() nunca volvía a
+// festejar ni avisar por chat, aunque para el corredor esa fuera la primera vez que de verdad
+// llega a VER la medalla desbloqueada (la vez anterior la carrera que la cruzó se borró casi
+// enseguida). Encontrado con pruebas adversariales.
+function unmarkLostAchievements(){
+  if(!state.notifiedAchievements || !state.notifiedAchievements.length) return;
+  const totalKm = (state.runs||[]).reduce((a,r)=>a+r.distanceKm,0);
+  const totalRuns = (state.runs||[]).length;
+  state.notifiedAchievements = state.notifiedAchievements.filter(id=>{
+    const distMatch = id.match(/^dist_([\d.]+)$/);
+    if(distMatch) return totalKm >= Number(distMatch[1]);
+    const runsMatch = id.match(/^runs_(\d+)$/);
+    if(runsMatch) return totalRuns >= Number(runsMatch[1]);
+    return true; // id con un formato inesperado -- no tocar lo que no reconocemos
+  });
 }
 function renderAchievementBadgeGrid(badges){
   return `<div class="pr-medal-grid">${badges.map(b=>{
@@ -8992,6 +9031,7 @@ async function deleteRun(runId){
   const planDay = state.plan.find(d => d.linkedRunId === run.id);
   if(planDay){ planDay.status = null; planDay.linkedRunId = null; }
   state.runs.splice(idx,1);
+  unmarkLostAchievements();
   closeRunDetail();
   renderHistory(); renderHome(); renderPlan(); renderPerfil();
   persist();
@@ -10010,7 +10050,10 @@ async function saveEditRun(){
   const newShoe = state.shoes.find(s => String(s.id) === String(newShoeId));
   if(newShoe) newShoe.km += r.distanceKm;
   checkShoeWearAlerts();
-  if(pacedChanged){ checkNewPR(r); checkAchievementUnlocks(); } // editar distancia también puede cruzar un umbral de km total
+  // editar distancia también puede cruzar un umbral de km total hacia arriba (checkAchievementUnlocks)
+  // o hacerlo bajar de uno que ya estaba cruzado (unmarkLostAchievements, ver su comentario) --
+  // las dos son no-ops si no corresponden, así que llamar a ambas siempre es seguro.
+  if(pacedChanged){ checkNewPR(r); checkAchievementUnlocks(); unmarkLostAchievements(); }
 
   const savedRunId = r.id;
   closeEditRun();
