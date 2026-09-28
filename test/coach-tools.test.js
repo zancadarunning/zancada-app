@@ -421,20 +421,39 @@ test('guardar_nota_coach (zona_cuerpo): deshacer_cambio revierte el recorte de i
   assert.equal(app.state.plan[todayIdx].dist, distBefore, 'deshacer debería restaurar la distancia de antes del recorte');
 });
 
-test('ajustar meta semanal "ahora" a mitad de semana: el total real de la semana llega a la meta nueva, no se queda pegado en la vieja', () => {
+test('ajustar meta semanal "ahora" a mitad de semana: el total real de la semana llega a la meta nueva, no se queda pegado en la vieja', (t) => {
   // generatePlan no sabe nada de "cuánto ya se corrió esta semana" -- al subir la meta a
   // mitad de semana, el único día que sobrevivía a preserveLivedDays (los ya hechos quedan
   // con su distancia VIEJA) terminaba con la porción que le tocaría en una semana ENTERA con
   // la meta nueva, no con lo que en realidad falta para llegar a ella. El coach igual decía
   // "listo, ajusté el plan para tu nueva meta" -- una promesa falsa.
+  //
+  // Los días "ya hechos" y el día "que falta" se eligen relativos a todayIdx (no con claves
+  // fijas 'mon'/'tue'/'thu') -- mismo motivo que el resto de esta suite (ver el comentario en
+  // "applyProfileChange: dias_entreno..." más arriba): preserveLivedDays() solo preserva un
+  // día done/skipped si su índice es <= todayIdx (el día real de HOY), así que con días fijos
+  // este test pasaba o fallaba según qué día de la semana le tocara correr de verdad -- 'thu'
+  // (índice 3) marcado "done" mientras el reloj real todavía no llegó ni a 'tue' (por ejemplo,
+  // corriendo un lunes) no se preserva, porque para la app eso está en el futuro, no en el
+  // pasado -- exactamente el escenario que rompía este test antes de este cambio.
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  if(todayIdx === 6){
+    t.skip('domingo es el último día de la semana -- no queda ningún día por delante para redistribuir');
+    return;
+  }
   const app = loadApp();
-  app.state.profile = baseProfile(app, { weeklyKm: 20, currentWeeklyKm: 20, weeklyGoalKm: 20, trainingDays: ['mon','tue','thu','sun'] });
+  const doneOffsets = Array.from(new Set([Math.max(0, todayIdx-2), Math.max(0, todayIdx-1), todayIdx]));
+  const doneDays = doneOffsets.map(i => app.DAY_KEYS[i]);
+  const remainingDay = app.DAY_KEYS[todayIdx+1];
+  const trainingDays = Array.from(new Set([...doneDays, remainingDay]));
+
+  app.state.profile = baseProfile(app, { weeklyKm: 20, currentWeeklyKm: 20, weeklyGoalKm: 20, trainingDays });
   app.state.weekNumber = 1;
   app.state.weekStart = app.getMondayISO(new Date());
   const plan = app.generatePlan(app.state.profile, 1);
-  plan.forEach(d => { if(['mon','tue','thu'].includes(d.day)) d.status = 'done'; });
+  plan.forEach(d => { if(doneDays.includes(d.day)) d.status = 'done'; });
   app.state.plan = plan;
-  app.state.runs = ['mon','tue','thu'].map((day,i) => ({
+  app.state.runs = doneDays.map((day,i) => ({
     id: i+1,
     date: new Date().toISOString(),
     distanceKm: plan.find(d=>d.day===day).dist,
@@ -447,7 +466,8 @@ test('ajustar meta semanal "ahora" a mitad de semana: el total real de la semana
   const total = app.state.plan.reduce((s,d)=>s+d.dist, 0);
   assert.ok(Math.abs(total - freshFullWeek) < 0.2, `el total real de la semana (${total}) debería acercarse al objetivo semanal ya acotado por seguridad (${freshFullWeek}), no quedarse cerca de la meta vieja`);
   // Los días ya corridos no deberían tocarse -- solo el/los días que quedan por delante.
-  assert.equal(app.state.plan.find(d=>d.day==='mon').dist, plan.find(d=>d.day==='mon').dist);
+  const firstDoneDay = doneDays[0];
+  assert.equal(app.state.plan.find(d=>d.day===firstDoneDay).dist, plan.find(d=>d.day===firstDoneDay).dist);
 });
 
 test('buildContext: le dice al modelo, ya resuelto, qué pasó hoy y qué toca mañana -- sin que tenga que cruzarlo contra el plan completo', () => {

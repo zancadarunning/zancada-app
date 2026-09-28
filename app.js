@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T02:41:11Z';
+const APP_VERSION = '2026-09-28T04:50:00Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -9832,6 +9832,18 @@ function changeRunShoe(runId, newShoeId){
    distancia mal importada de Strava, un error al cargarla a mano) era borrarla
    entera y perder el registro. Reutiliza los mismos campos que el alta manual. */
 let editingRunId = null;
+// Valores de distancia/duración TAL COMO quedan precargados en el formulario (redondeados a
+// 2 decimales y a bloques de 0.1min/6s respectivamente -- ver más abajo), no los crudos del
+// GPS (r.distanceKm/r.durationSec, con muchos más decimales). saveEditRun() compara contra
+// ESTOS, no contra los crudos -- si comparara contra los crudos, guardar sin tocar ninguno de
+// los dos campos igual daba "cambió" (el valor redondeado que viaja de ida y vuelta por el
+// campo del formulario casi nunca es bit-a-bit igual al float crudo original), lo que hacía
+// perder la precisión real del GPS en CADA edición (se sobrescribía igual, sin condición) y
+// además re-disparaba una falsa "marca personal nueva" en la primera edición de cualquier
+// carrera que fuera el récord vigente de su distancia (getPersonalRecords la excluye a ELLA
+// misma al recalcular, así que sin otra carrera en el mismo casillero siempre parece "sin
+// marca previa" y checkNewPR la anuncia como nueva).
+let editingRunOrigDist = null, editingRunOrigDurMin = null;
 function openEditRun(runId){
   const r = state.runs.find(x => String(x.id) === String(runId));
   if(!r) return;
@@ -9847,6 +9859,12 @@ function openEditRun(runId){
   document.getElementById('edit-run-dist-label').textContent = t(isImperial() ? 'hist_manual_dist_mi' : 'hist_manual_dist');
   document.getElementById('edit-run-dist').value = fmtDist(r.distanceKm, 2);
   document.getElementById('edit-run-dur').value = Math.round((r.durationSec/60)*10)/10;
+  // Releemos los campos que acabamos de escribir (en vez de recalcular la misma fórmula acá
+  // aparte) para que la comparación en saveEditRun() sea contra el valor EXACTO que
+  // parseDistInput/parseFloat le van a dar a esos mismos strings, sin depender de que la
+  // fórmula de acá y la de allá se mantengan en sincro a mano.
+  editingRunOrigDist = parseDistInput(document.getElementById('edit-run-dist').value);
+  editingRunOrigDurMin = parseFloat(document.getElementById('edit-run-dur').value);
   const avgHr = r.avgHr || (r.hrLog && r.hrLog.length ? Math.round(r.hrLog.reduce((a,h)=>a+h.bpm,0)/r.hrLog.length) : '');
   document.getElementById('edit-run-hr').value = avgHr || '';
   const sel = document.getElementById('edit-run-shoe');
@@ -9867,9 +9885,15 @@ async function saveEditRun(){
   // si esta carrera YA era el récord vigente de su distancia, excluirla deja como "anterior"
   // a la que le sigue, así que checkNewPR() volvía a anunciarla como marca nueva cada vez que
   // se guardaba una edición, aunque el cambio fuera solo la zapatilla, la FC o la fecha (nada
-  // que afecte el ritmo real). Guardamos el ritmo de ANTES para solo volver a chequear el
-  // récord si de verdad cambió algo que puede correrlo (distancia o duración).
-  const pacedChanged = dist !== r.distanceKm || Math.round(durMin*60) !== r.durationSec;
+  // que afecte el ritmo real). Comparamos contra editingRunOrigDist/editingRunOrigDurMin (los
+  // valores YA REDONDEADOS que quedaron precargados en el formulario al abrirlo, ver
+  // openEditRun), NO contra r.distanceKm/r.durationSec crudos del GPS -- comparar contra los
+  // crudos casi siempre daba "cambió" aunque el corredor no hubiera tocado ninguno de los dos
+  // campos, porque un valor redondeado que va y vuelve por un input rara vez cae bit-a-bit
+  // igual al float crudo original. Eso truncaba la precisión real en cada edición (ver más
+  // abajo, la asignación ahora también depende de este flag) y además disparaba una falsa
+  // marca personal nueva en la primera edición de cualquier carrera que fuera récord vigente.
+  const pacedChanged = dist !== editingRunOrigDist || durMin !== editingRunOrigDurMin;
 
   // reacomodamos el kilometraje acumulado de zapatillas: se lo restamos al par viejo
   // (con la distancia vieja) y se lo sumamos al par nuevo (con la distancia nueva) --
@@ -9890,8 +9914,11 @@ async function saveEditRun(){
   const newDate = new Date(date+'T00:00:00');
   newDate.setHours(oldMoment.getHours(), oldMoment.getMinutes(), oldMoment.getSeconds());
   r.date = newDate.toISOString();
-  r.distanceKm = dist;
-  r.durationSec = Math.round(durMin*60);
+  // Solo pisamos distancia/duración si de verdad cambiaron (pacedChanged) -- si no, dejamos
+  // los valores crudos del GPS tal cual estaban, en vez de truncarlos a la precisión
+  // redondeada del formulario (2 decimales / bloques de 0.1min) en CADA edición, aunque el
+  // corredor solo haya tocado la zapatilla, la FC o la fecha.
+  if(pacedChanged){ r.distanceKm = dist; r.durationSec = Math.round(durMin*60); }
   if(hr>0){ r.avgHr = hr; if(!r.hrLog || r.hrLog.length<=1) r.hrLog = [{t:0,bpm:hr}]; }
   r.shoeId = newShoeId;
   // Reclama el día NUEVO si corresponde a esta semana -- antes solo se desvinculaba el día
@@ -9899,8 +9926,13 @@ async function saveEditRun(){
   // era justamente corregir a qué día pertenecía de verdad la carrera.
   autoMarkSessionDone(r.date, r.id);
 
+  // r.distanceKm (ya actualizado arriba si pacedChanged, o el crudo original si no) -- no
+  // el "dist" recién parseado del formulario -- para que el neto sea exactamente cero cuando
+  // la distancia no cambió, incluso si distinta zapatilla (oldShoe!==newShoe): restar el
+  // crudo viejo arriba y sumar el crudo (sin redondear) acá evita un goteo de precisión en
+  // el kilometraje acumulado de la zapatilla en cada edición que no toca la distancia.
   const newShoe = state.shoes.find(s => String(s.id) === String(newShoeId));
-  if(newShoe) newShoe.km += dist;
+  if(newShoe) newShoe.km += r.distanceKm;
   checkShoeWearAlerts();
   if(pacedChanged){ checkNewPR(r); checkAchievementUnlocks(); } // editar distancia también puede cruzar un umbral de km total
 
