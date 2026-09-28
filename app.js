@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T04:55:13Z';
+const APP_VERSION = '2026-09-28T05:07:50Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1809,7 +1809,11 @@ async function syncHealthConnectNow(){
       // sin esto una marca personal nueva de un reloj sin API propia (Huawei, ver el resto de
       // relojes que dependen de Health Connect) nunca disparaba el festejo/aviso de "nuevo
       // récord", aunque Logros sí mostrara la marca correcta (se recalcula siempre en vivo).
+      // checkAchievementUnlocks() una sola vez después del forEach (no por carrera): recalcula
+      // los totales de state.runs completo en cada llamada, así que alcanza con una vez por
+      // tanda para detectar cualquier medalla que este lote de carreras nuevas haga cruzar.
       newRuns.forEach(checkNewPR);
+      checkAchievementUnlocks();
       renderHistory(); renderHome(); renderPerfil();
     }
     return {synced:newRuns.length>0};
@@ -2202,6 +2206,18 @@ let sportPickerCtx = null;
 let sportPickerTemp = new Set();
 function sportsDraftFor(ctx){ return ctx === 'ob' ? obSelectedSports : perfilSportsDraft; }
 function setSportsDraftFor(ctx, arr){ if(ctx==='ob') obSelectedSports = arr; else perfilSportsDraft = arr; }
+// A diferencia de #perfil-sport-days (renderPerfilCrossTraining regenera ese innerHTML entero
+// desde state.profile.crossTrainingDays cada vez que se abre, así que nunca queda un día
+// pegado de una selección vieja), #ob-sport-days es un bloque ESTÁTICO en el HTML del
+// onboarding -- nada lo regenera, solo se van togglenado los .day-pill a mano (ver el
+// addEventListener más abajo). Sin este control, elegir "Fútbol" y marcar lunes/miércoles,
+// después sacar "Fútbol" y elegir "Yoga" en su lugar, dejaba lunes/miércoles todavía
+// marcados -- finishOnboard() los guardaba como si fueran los días de Yoga, sin que el
+// usuario los haya confirmado para ESE deporte. obLastSportsKey guarda qué combinación de
+// deportes fue la última que de verdad se renderizó para onboarding; si cambió (se agregó o
+// sacó alguno), se limpian los días marcados -- si no cambió (por ej. abrir el picker y
+// cerrarlo sin tocar nada), se dejan como estaban.
+let obLastSportsKey = null;
 function renderSportChips(ctx){
   const sports = sportsDraftFor(ctx);
   const row = document.getElementById(ctx+'-sports-selected');
@@ -2214,6 +2230,13 @@ function renderSportChips(ctx){
   if(btn) btn.textContent = t(sports.length ? 'sport_select_btn_more' : 'sport_select_btn');
   const wrap = document.getElementById(ctx+'-sport-days-wrap');
   if(wrap) wrap.style.display = sports.length ? 'block' : 'none';
+  if(ctx === 'ob'){
+    const key = sports.slice().sort().join(',');
+    if(key !== obLastSportsKey){
+      document.querySelectorAll('#ob-sport-days .day-pill').forEach(el=>el.classList.remove('active'));
+      obLastSportsKey = key;
+    }
+  }
 }
 function removeSelectedSport(ctx, key){
   setSportsDraftFor(ctx, sportsDraftFor(ctx).filter(s=>s!==key));
@@ -5855,9 +5878,14 @@ async function refreshStateFromServer(){
         if(data.updated_at) loadedStateVersion = data.updated_at;
         checkShoeWearAlerts();
         checkHrMaxFromRuns();
-        // Las carreras que llegan nuevas por la sincronización con Strava también pueden ser récord.
+        // Las carreras que llegan nuevas por la sincronización con Strava también pueden ser récord
+        // o cruzar una medalla de Logros (checkAchievementUnlocks ya se llama junto a checkNewPR en
+        // closeSummary/saveManualRun/saveEditRun -- faltaba acá, así que sumar km/carreras vía un
+        // reloj sincronizado nunca disparaba el festejo/aviso de medalla, aunque Logros sí mostrara
+        // el hito correcto al entrar a mirar por su cuenta, igual que pasaba con checkNewPR antes
+        // de que este mismo comentario se agregara para esa función).
         const newRuns = (state.runs||[]).filter(r=>!prevRunIds.has(String(r.id)));
-        if(newRuns.length){ newRuns.forEach(checkNewPR); persist(); }
+        if(newRuns.length){ newRuns.forEach(checkNewPR); checkAchievementUnlocks(); persist(); }
       }
     }
   }catch(e){ console.error('refresh error', e); }
