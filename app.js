@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-27T23:45:55Z';
+const APP_VERSION = '2026-09-28T00:05:22Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -284,15 +284,17 @@ function celebrate(){
 }
 // --- Personaje del coach: ojos que siguen el mouse/dedo + expresiones de festejo --------
 // El botón flotante que abre el chat del coach (coach-fab) tenía un ícono genérico de
-// globo de diálogo -- ahora es una "nube" propia (varios círculos superpuestos, ver
-// index.html) con dos ojos en forma de pastilla vertical que siguen el puntero por toda la
-// pantalla y cambian de forma en los momentos que la app ya reconoce como un logro (nueva
-// marca personal o meta semanal cumplida, ambos vía celebrate() más arriba) y al terminar
-// una carrera trackeada (ver closeSummary). Sin ninguna librería externa.
+// globo de diálogo -- ahora es un círculo lima propio (ver index.html) con dos ojos en
+// forma de pastilla vertical que siguen el puntero por toda la pantalla y cambian de forma
+// en los momentos que la app ya reconoce como un logro (nueva marca personal o meta semanal
+// cumplida, ambos vía celebrate() más arriba) y al terminar una carrera trackeada (ver
+// closeSummary). También se queda dormido si pasa un rato largo sin interacción, y saluda
+// con dos parpadeos apenas carga la página. Sin ninguna librería externa.
 //
 // La expresión se hace cambiando la FORMA de los ojos (atributo "d" de cada <path>), no una
 // boca -- el personaje no tiene boca a propósito, todo el gesto sale de los ojos (pastilla
-// vertical en reposo, achatada horizontal al festejar). Cada forma está escrita dos veces
+// vertical en reposo, achatada horizontal al festejar, chatita y fina al dormirse). Cada
+// forma está escrita dos veces
 // (una centrada en el ojo izquierdo, otra en el derecho) porque el "d" de un path SVG es
 // siempre en coordenadas absolutas del documento, no relativas al ojo -- no hay forma de
 // reusar un solo "d" para los dos ojos sin además mover el <path> con un transform (y el
@@ -312,6 +314,14 @@ const MASCOT_EYE_SHAPES = {
   excited: {
     l: 'M19.5 30 a4.5 4.5 0 1 0 9 0 a4.5 4.5 0 1 0 -9 0',
     r: 'M35.5 30 a4.5 4.5 0 1 0 9 0 a4.5 4.5 0 1 0 -9 0',
+  },
+  // Pastilla bien chata y fina (8x2.5) -- ojos entrecerrados de sueño, después de un rato
+  // largo sin que nadie toque la app (ver SLEEPY_AFTER_MS en initMascotEyes). No pasa por
+  // setMascotExpression (no tiene un final automático -- se queda así hasta la próxima
+  // interacción real, no hasta que venza un timer).
+  sleepy: {
+    l: 'M20 28.75 h8 a1.25 1.25 0 0 1 0 2.5 h-8 a1.25 1.25 0 0 1 0 -2.5 z',
+    r: 'M36 28.75 h8 a1.25 1.25 0 0 1 0 2.5 h-8 a1.25 1.25 0 0 1 0 -2.5 z',
   },
 };
 let mascotExpressionTimer = null;
@@ -353,7 +363,13 @@ function initMascotEyes(){
   // aviso) -- el atributo nativo de SVG en cambio funciona en cualquier motor con soporte
   // de SVG, viejo o nuevo, así que es la única forma confiable de mover estas piezas.
   const MAX_OFFSET = 3.2;
-  let lastLookMs = 0;
+  // Date.now() (no 0): idleMs se calcula como Date.now()-lastLookMs -- si arrancara en 0
+  // (época 1970), ESE resultado sería la fecha actual completa en ms (billones), muy por
+  // encima de cualquier umbral de "inactivo" -- el personaje se quedaba dormido a los pocos
+  // segundos de cargar la página, no después de un rato real sin interacción. Reportado en
+  // la propia verificación de esta función al agregar el estado "dormido".
+  let lastLookMs = Date.now();
+  let mascotSleepy = false;
   // Tween manual por setTimeout (~60fps, reemplaza la transición que hubiera dado CSS si
   // hubiera funcionado) -- interpola el offset actual de los ojos hacia el destino con una
   // curva ease-out cúbica en ~220ms, en vez de saltar de golpe a la nueva posición.
@@ -375,6 +391,14 @@ function initMascotEyes(){
     })();
   }
   function lookAt(clientX, clientY){
+    // Cualquier movimiento real despierta al personaje si se había quedado dormido (ver
+    // SLEEPY_AFTER_MS más abajo) -- pero solo si no hay una expresión de festejo activa en
+    // ese momento (mascotExpressionPriority>=0), para no pisarle la cara a un festejo real
+    // que justo esté mostrándose.
+    if(mascotSleepy && mascotExpressionPriority < 0){
+      mascotSleepy = false;
+      eyeL.setAttribute('d', MASCOT_EYE_SHAPES.neutral.l); eyeR.setAttribute('d', MASCOT_EYE_SHAPES.neutral.r);
+    }
     const rect = fab.getBoundingClientRect();
     // Un fab con display:none (todavía no inició sesión) da un rect de ancho/alto 0 --
     // dividir por esa distancia daría Infinity/NaN en el transform.
@@ -402,11 +426,23 @@ function initMascotEyes(){
   document.addEventListener('touchmove', e=>{ const tp = e.touches[0]; if(tp) onMove(tp.clientX, tp.clientY); }, {passive:true});
   // Miradas propias: si no hubo un movimiento real hace un rato, el personaje igual "vive"
   // -- mira para un lado al azar un instante y vuelve al centro, en vez de quedarse
-  // congelado esperando que alguien lo toque.
+  // congelado esperando que alguien lo toque. Y si pasó AÚN más tiempo sin ninguna
+  // interacción real, se queda dormido (ojos entrecerrados finitos) hasta el próximo
+  // movimiento real -- lookAt() lo despierta (ver ahí arriba).
+  const SLEEPY_AFTER_MS = 45000;
   (function idleGlanceLoop(){
     const delay = 3200 + Math.random()*2600;
     setTimeout(()=>{
-      if(Date.now()-lastLookMs > 2800){
+      const idleMs = Date.now()-lastLookMs;
+      if(idleMs > SLEEPY_AFTER_MS){
+        // priority<0: no pisar una expresión de festejo real que esté mostrándose justo en
+        // este momento -- se vuelve a chequear en la próxima vuelta del loop si no se pudo
+        // esta vez.
+        if(!mascotSleepy && mascotExpressionPriority < 0){
+          mascotSleepy = true;
+          eyeL.setAttribute('d', MASCOT_EYE_SHAPES.sleepy.l); eyeR.setAttribute('d', MASCOT_EYE_SHAPES.sleepy.r);
+        }
+      } else if(idleMs > 2800){
         const ang = Math.random()*Math.PI*2;
         animateEyesTo(Math.cos(ang)*MAX_OFFSET, Math.sin(ang)*MAX_OFFSET*0.6, 260);
         setTimeout(()=>{ if(Date.now()-lastLookMs > 2800) animateEyesTo(0, 0, 260); }, 900);
@@ -433,6 +469,20 @@ function initMascotEyes(){
       blinkLoop();
     }, delay);
   })();
+  // Saludo inicial: dos parpadeos seguidos apenas termina de cargar la página, para que la
+  // primera impresión sea "esto está vivo" en vez de una imagen quieta -- mismo
+  // setEyeSquash que ya usa blinkLoop, solo que disparado una vez a mano en vez de por el
+  // temporizador al azar (que recién arranca a los 2800-5200ms).
+  setTimeout(()=>{
+    setEyeSquash(eyeL, 24, 30, 0.12); setEyeSquash(eyeR, 40, 30, 0.12);
+    setTimeout(()=>{
+      setEyeSquash(eyeL, 24, 30, 1); setEyeSquash(eyeR, 40, 30, 1);
+      setTimeout(()=>{
+        setEyeSquash(eyeL, 24, 30, 0.12); setEyeSquash(eyeR, 40, 30, 0.12);
+        setTimeout(()=>{ setEyeSquash(eyeL, 24, 30, 1); setEyeSquash(eyeR, 40, 30, 1); }, 130);
+      }, 160);
+    }, 130);
+  }, 600);
 }
 // Escapa texto libre (nombres, mensajes de chat, etc.) antes de insertarlo
 // en el HTML. Sin esto, alguien podía poner algo como <img onerror=...> como

@@ -1285,26 +1285,23 @@
      flotante siempre a mano -- mismo destino (showView('coach')) y mismo badge
      de no leídos que tenía el tab, solo que ya no compite por espacio abajo. */
   .coach-fab-wrap{position:fixed; left:0; right:0; bottom:calc(104px + var(--safe-bottom)); max-width:480px; margin:0 auto; pointer-events:none; z-index:21;}
-  /* Personaje propio del coach (ver initMascotEyes/setMascotExpressionByEyes en app.js) --
-     ya no es un ícono adentro de un botón circular: el propio dibujo (una "nube" hecha de
-     varios círculos superpuestos, todos del mismo lima, dibujados a mano -- ver el SVG más
-     abajo) ES el personaje, con su silueta irregular real, no recortada por ningún círculo.
-     Mismo espíritu que un blob de nube con ojitos (género genérico de mascota, no algo que
-     nadie pueda "poseer" -- lo usan decenas de personajes de sobra conocidos), pero con nuestra
-     propia forma/proporciones, sin trazar ni copiar el path de ningún proyecto externo -- ver
-     el comentario sobre licencia AGPL en el historial de commits para por qué esto importa acá.
-     drop-shadow (filter, no box-shadow) sigue la silueta real de la nube en vez de la caja
-     rectangular/circular del botón. */
+  /* Personaje propio del coach (ver initMascotEyes/setMascotExpression en app.js) -- un
+     círculo lima simple (mismo espíritu que un blob con ojitos, género genérico de mascota,
+     no algo que nadie pueda "poseer" -- lo usan decenas de personajes de sobra conocidos),
+     dibujado a mano, sin trazar ni copiar el path de ningún proyecto externo -- ver el
+     comentario sobre licencia AGPL en el historial de commits para por qué esto importa acá.
+     drop-shadow (filter, no box-shadow) sigue la silueta real del círculo en vez de la caja
+     rectangular del botón. */
   .coach-fab{position:absolute; right:10px; bottom:0; width:74px; height:74px; background:none; border:none; pointer-events:auto;
     display:flex; align-items:center; justify-content:center; cursor:pointer; transition:transform .12s ease;}
   .coach-fab:active{transform:scale(.92);}
   .coach-fab svg{width:74px; height:74px; filter:drop-shadow(0 6px 10px rgba(0,0,0,.4)) drop-shadow(0 0 10px var(--hivis-glow));}
   .coach-fab .nav-badge-dot{top:2px; right:8px; background:var(--ink); border-color:var(--hivis);}
-  /* Los ojos son <path> (no <ellipse>/<rect>) a propósito: setMascotExpressionByEyes() cambia
-     de expresión reemplazando el atributo "d" de cada uno por una forma distinta (pastilla
-     vertical en reposo, achatada al festejar), el mismo mecanismo por el que ya se
-     reemplazaba el "d" de la boca en la versión anterior -- así no hace falta mezclar
-     elementos de tipos distintos (ellipse vs. rect) según la expresión.
+  /* Los ojos son <path> (no <ellipse>/<rect>) a propósito: setMascotExpression() cambia de
+     expresión reemplazando el atributo "d" de cada uno por una forma distinta (pastilla
+     vertical en reposo, achatada al festejar, chatita al dormirse), el mismo mecanismo por
+     el que ya se reemplazaba el "d" de la boca en la versión anterior -- así no hace falta
+     mezclar elementos de tipos distintos (ellipse vs. rect) según la expresión.
      El movimiento (seguimiento de mirada + parpadeo) usa el atributo SVG "transform"
      (seteado a mano por JS, con su propio easing por setTimeout -- no requestAnimationFrame,
      que se pausa en una pestaña oculta/en segundo plano) en vez de la propiedad CSS
@@ -1313,8 +1310,6 @@
      mientras que el atributo SVG nativo funciona en cualquier motor con soporte de SVG,
      viejo o nuevo. Por eso ninguna regla CSS de acá abajo toca "transform". */
   .mascot-eye{fill:var(--ink);}
-  .mascot-eye{fill:var(--ink);}
-  .mascot-eye-shine{fill:rgba(255,255,255,.85);}
 
   .elev-divider{display:flex; align-items:center; gap:8px; margin:22px 0 14px; color:var(--mist-dim);}
   .elev-divider svg{width:60px; height:14px; flex-shrink:0;}
