@@ -1120,7 +1120,18 @@
   .chat-input-bar{flex-shrink:0; background:var(--asphalt);
     padding:10px 20px; display:none; align-items:center; gap:8px; border-top:1px solid var(--asphalt-3);}
   .chat-input-bar.active{display:flex;}
-  .chat-input-bar input{flex:1; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:13px 16px; border-radius:999px; font-size:15px; outline:none;}
+  /* min-width:0 -- sin esto, en un celular angosto de verdad (probado en un Moto E6 Plus
+     real, 320px CSS de ancho) el botón de enviar quedaba cortado, la mitad afuera de la
+     pantalla. Un <input> dentro de un flex row tiene, por defecto, un ancho mínimo propio
+     (min-width:auto -- el motor lo calcula a partir de su tamaño "intrínseco" de contenido,
+     no del texto que tenga cargado) que NO se encoge aunque flex:1/flex-shrink:1 lo pidan
+     -- confirmado midiendo con el protocolo de depuración de Chrome: el input pedía 253.78px
+     de los 228px que en realidad le quedaban libres (280px de contenido de la barra menos
+     los 44px fijos del botón y 8px de gap), empujando al botón 5.78px afuera del borde
+     derecho de la pantalla. min-width:0 en el input le permite encogerse de verdad para
+     dejarle su lugar fijo al botón, sin afectar el ancho en una pantalla con espacio de
+     sobra (ahí igual ocupa todo el flex:1 disponible). */
+  .chat-input-bar input{flex:1; min-width:0; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:13px 16px; border-radius:999px; font-size:15px; outline:none;}
   .chat-input-bar input:focus{border-color:var(--hivis);}
   .chat-send{background:var(--hivis); color:var(--ink); border:none; width:44px; height:44px; border-radius:50%; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .12s ease, background .15s ease;}
   .chat-send:active{transform:scale(.92);}
