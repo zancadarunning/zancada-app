@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T00:21:33Z';
+const APP_VERSION = '2026-09-28T01:34:14Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -9821,12 +9821,25 @@ function renderChat(){
 }
 // Puntito en la pestaña del coach cuando hay un mensaje suyo (proactivo o de ajuste
 // automático) que todavía no viste, para no depender de entrar "porque sí" a mirar.
+let mascotBadgeWasVisible = false;
 function updateChatBadge(){
   const badge = document.getElementById('chat-tab-badge');
   if(!badge) return;
   const lastSeen = state.lastSeenChatTs || 0;
   const hasUnread = (state.chat||[]).some(m => m.role==='coach' && m.ts && m.ts > lastSeen);
   badge.style.display = hasUnread ? 'block' : 'none';
+  // "pop" del personaje solo en la TRANSICIÓN de sin-leer a con-leer -- updateChatBadge()
+  // se llama en cada renderChat() (bastante seguido mientras se habla con el coach), así
+  // que sin este chequeo el botón pegaría un salto en cada re-render mientras el mensaje
+  // sigue sin leerse, no solo cuando de verdad llega uno nuevo.
+  if(hasUnread && !mascotBadgeWasVisible){
+    const fab = document.querySelector('.coach-fab');
+    if(fab && !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)){
+      fab.classList.remove('pop'); void fab.offsetWidth; fab.classList.add('pop');
+      setTimeout(()=>fab.classList.remove('pop'), 500);
+    }
+  }
+  mascotBadgeWasVisible = hasUnread;
 }
 // Chips de respuesta rápida con las preguntas más típicas, para no tener que escribir
 // todo siempre (sobre todo recién terminada una corrida). Se muestran una sola vez,

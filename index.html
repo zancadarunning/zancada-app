@@ -1295,6 +1295,13 @@
   .coach-fab{position:absolute; right:10px; bottom:0; width:74px; height:74px; background:none; border:none; pointer-events:auto;
     display:flex; align-items:center; justify-content:center; cursor:pointer; transition:transform .12s ease;}
   .coach-fab:active{transform:scale(.92);}
+  /* "Pop" cuando llega un mensaje nuevo del coach (ver updateChatBadge en app.js) -- en el
+     propio botón HTML, no en el SVG de adentro, porque acá SÍ hace falta una transición CSS
+     de verdad (a diferencia del seguimiento de mirada/parpadeo, que usa el atributo SVG
+     "transform" por el problema de compatibilidad ya documentado -- .coach-fab es un
+     <button> normal, no un elemento SVG, así que no tiene ese problema). */
+  @keyframes mascotPop{0%{transform:scale(1);} 35%{transform:scale(1.16);} 65%{transform:scale(.95);} 100%{transform:scale(1);}}
+  .coach-fab.pop{animation:mascotPop .5s ease-out;}
   .coach-fab svg{width:74px; height:74px; filter:drop-shadow(0 2px 3px rgba(0,0,0,.3)) drop-shadow(0 8px 14px rgba(0,0,0,.45));}
   .coach-fab .nav-badge-dot{top:2px; right:8px; background:var(--ink); border-color:var(--hivis);}
   /* Los ojos son <path> (no <ellipse>/<rect>) a propósito: setMascotExpression() cambia de
@@ -2614,7 +2621,7 @@
     <button class="nav-btn" data-view="perfil" onclick="showView('perfil')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 20c1.5-4 5-5.5 7.5-5.5s6 1.5 7.5 5.5"/></svg><span data-i18n="nav_profile"></span></button>
   </nav>
   <div class="coach-fab-wrap" id="coach-fab-wrap" style="display:none;">
-    <button class="coach-fab" onclick="openCoachWithWink()" data-i18n-aria="nav_coach"><svg viewBox="0 0 64 64" aria-hidden="true"><circle id="mascot-body" class="mascot-body" cx="32" cy="32" r="28" fill="var(--hivis)"/><g id="mascot-eyes" class="mascot-eyes"><path id="mascot-eye-l" class="mascot-eye" d="M21.5 25.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z"/><path id="mascot-eye-r" class="mascot-eye" d="M37.5 25.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z"/></g></svg><span class="nav-badge-dot" id="chat-tab-badge"></span></button>
+    <button class="coach-fab" onclick="openCoachWithWink()" data-i18n-aria="nav_coach"><svg viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="mascotSheen" cx="32%" cy="26%" r="78%"><stop offset="0%" stop-color="#fff" stop-opacity=".38"/><stop offset="55%" stop-color="#fff" stop-opacity=".06"/><stop offset="100%" stop-color="#000" stop-opacity=".2"/></radialGradient></defs><circle id="mascot-body" class="mascot-body" cx="32" cy="32" r="28" fill="var(--hivis)"/><circle cx="32" cy="32" r="28" fill="url(#mascotSheen)" pointer-events="none"/><g id="mascot-eyes" class="mascot-eyes"><path id="mascot-eye-l" class="mascot-eye" d="M21.5 25.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z"/><path id="mascot-eye-r" class="mascot-eye" d="M37.5 25.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z"/></g></svg><span class="nav-badge-dot" id="chat-tab-badge"></span></button>
   </div>
 </div>
 <!-- Spacer invisible que garantiza SIEMPRE unos pocos px de overflow real en el
