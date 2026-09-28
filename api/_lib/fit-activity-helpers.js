@@ -104,7 +104,15 @@ function buildSplitsAndSeriesFromFitRecords(records) {
   const powerArr = valid.some(r => r.power != null) ? valid.map(r => (r.power != null ? r.power : null)) : null;
 
   const totalDistM = distArr[distArr.length - 1];
-  const numFullKm = Math.floor(totalDistM / 1000);
+  // Cota de seguridad: totalDistM sale de un campo "distance" del FIT (uint32 escalado --
+  // ver el SDK), sin ninguna validación de rango antes de usarlo. Un archivo FIT corrupto
+  // o mal armado (dispositivo con un bug de firmware, descarga con bytes pisados, o
+  // cualquier fuente que algún día alimente esto con datos no confiables) puede dejar ahí
+  // un valor enorme -- y el for de más abajo ("for (let km=1; km<=numFullKm; km++)") se
+  // quedaba girando prácticamente para siempre, sin ningún error visible: la función
+  // serverless simplemente corre hasta el timeout. 1000km es una cota generosa (ninguna
+  // carrera real llega ahí) que corta ese caso sin afectar ninguna actividad legítima.
+  const numFullKm = Number.isFinite(totalDistM) ? Math.min(Math.floor(totalDistM / 1000), 1000) : 0;
 
   function buildSegment(fromIdx, toIdx, fromTime, label) {
     const segDistKm = (distArr[toIdx] - distArr[fromIdx]) / 1000;

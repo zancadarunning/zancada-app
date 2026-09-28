@@ -64,7 +64,15 @@ async function fetchStreams(activityId, accessToken) {
     const cadArr = streams.cadence ? streams.cadence.data : null;
     const velArr = streams.velocity_smooth ? streams.velocity_smooth.data : null;
     const totalDistM = distArr[distArr.length - 1];
-    const numFullKm = Math.floor(totalDistM / 1000);
+    // Cota de seguridad: totalDistM viene tal cual del JSON de streams de Strava, sin
+    // ninguna validación de rango -- un valor corrupto/absurdo (bug del lado de Strava,
+    // o cualquier respuesta inesperada) convertía numFullKm en un número enorme (o
+    // Infinity/NaN si además no es un número finito), y el for de más abajo ("for (let
+    // km=1; km<=numFullKm; km++)") se quedaba girando prácticamente para siempre -- la
+    // función serverless simplemente corre hasta el timeout, sin ningún error visible.
+    // 1000km es una cota generosa (ninguna carrera real llega ahí) que corta ese caso
+    // sin afectar ninguna actividad legítima.
+    const numFullKm = Number.isFinite(totalDistM) ? Math.min(Math.floor(totalDistM / 1000), 1000) : 0;
 
     function buildSegment(fromIdx, toIdx, fromTime, label) {
       const segDistKm = (distArr[toIdx] - distArr[fromIdx]) / 1000;
