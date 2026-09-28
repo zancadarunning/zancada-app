@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T20:54:48Z';
+const APP_VERSION = '2026-09-28T21:10:50Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7963,21 +7963,52 @@ function renderPersonalRecordsCard(){
     return `<div class="pr-medal"><span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${t('pr_label_'+b.key)}</span><span class="pr-medal-locked">${t('pr_medal_locked')}</span></div>`;
   }).join('')}</div></div>`;
 }
-async function sharePRImage(bucketKey){
-  const rec = getPersonalRecords()[bucketKey];
-  if(!rec) return;
-  const blob = await buildPRShareImageBlob(bucketKey, rec);
-  if(!blob) return;
-  const file = new File([blob], 'zancada-pr.png', {type:'image/png'});
+// Comparte (o descarga, si no hay share nativo) un blob de imagen ya generado -- mismo
+// patrón que repetían sharePRImage/shareRunImage/shareWeeklyRecapImage cada una por su
+// lado, unificado acá. En la app nativa (Capacitor/Android) usa los plugins Share +
+// Filesystem para abrir el panel real de compartir de Android -- navigator.share y
+// navigator.canShare NO están disponibles dentro del WebView de Capacitor (confirmado en
+// un Moto E6 Plus real: ambos dan `false`), así que sin esto el código caía siempre a la
+// rama de "descarga" (un <a download> con una blob: URL) -- y esa rama tampoco funciona
+// ahí: Android WebView no sabe qué hacer con la descarga de una blob: URL sin un
+// DownloadListener nativo registrado (que esta app no tiene, a propósito -- lo que
+// corresponde acá es compartir, no descargar). Resultado: tocar "compartir" no hacía
+// nada, sin ningún error visible para el usuario. En la web (navegador de escritorio o
+// PWA) sigue exactamente el comportamiento de antes.
+async function shareImageBlobFile(blob, filename){
+  const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  const Share = isNative && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
+  const Filesystem = isNative && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
+  if(Share && Filesystem){
+    try{
+      const base64 = await new Promise((resolve, reject)=>{
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(String(reader.result).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      const written = await Filesystem.writeFile({ path: filename, data: base64, directory: 'CACHE' });
+      await Share.share({ files: [written.uri], title: 'Zancada' });
+    }catch(e){ /* usuario canceló el panel de compartir nativo, o algo falló -- no rompemos la UI por esto */ }
+    return;
+  }
+  const file = new File([blob], filename, {type:'image/png'});
   if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
     try{ await navigator.share({files:[file], title:'Zancada'}); }catch(e){ /* usuario canceló */ }
   } else {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'zancada-pr.png';
+    a.href = url; a.download = filename;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(()=>URL.revokeObjectURL(url), 5000);
   }
+}
+async function sharePRImage(bucketKey){
+  const rec = getPersonalRecords()[bucketKey];
+  if(!rec) return;
+  const blob = await buildPRShareImageBlob(bucketKey, rec);
+  if(!blob) return;
+  await shareImageBlobFile(blob, 'zancada-pr.png');
 }
 function drawSunburstRays(ctx, cx, cy, rInner, count){
   // Rayos alrededor del círculo de la medalla, largo y corto alternado -- mismo recurso
@@ -9177,16 +9208,7 @@ async function shareRunImage(runId){
   const blob = await buildShareImageBlob(r);
   if(!blob) return;
 
-  const file = new File([blob], 'zancada.png', {type:'image/png'});
-  if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
-    try{ await navigator.share({files:[file], title:'Zancada'}); }catch(e){ /* usuario canceló */ }
-  } else {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'zancada.png';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(()=>URL.revokeObjectURL(url), 5000);
-  }
+  await shareImageBlobFile(blob, 'zancada.png');
 }
 function buildShareImageBlob(r){
   return new Promise(async (resolve)=>{
@@ -9246,16 +9268,7 @@ function buildShareImageBlob(r){
 async function shareWeeklyRecapImage(){
   const blob = await buildWeeklyShareImageBlob();
   if(!blob) return;
-  const file = new File([blob], 'zancada-semana.png', {type:'image/png'});
-  if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
-    try{ await navigator.share({files:[file], title:'Zancada'}); }catch(e){ /* usuario canceló */ }
-  } else {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'zancada-semana.png';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(()=>URL.revokeObjectURL(url), 5000);
-  }
+  await shareImageBlobFile(blob, 'zancada-semana.png');
 }
 function buildWeeklyShareImageBlob(){
   // Mismo formato "sticker" que el resumen de una carrera individual (buildShareImageBlob),
