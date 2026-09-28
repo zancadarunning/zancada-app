@@ -251,6 +251,15 @@
     box-shadow:0 16px 36px -14px rgba(168,78,28,.18);}
   :root[data-theme="light"] #offline-banner{ color:#FFFFFF; }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  /* text-size-adjust:100% -- sin esto, Chrome en Android "booster" automáticamente el
+     tamaño de fuente más allá del font-size real declarado en CSS (pensado para texto en
+     columnas angostas en sitios no-responsive viejos) -- probado en un celular real de
+     pantalla chica (Moto E6 Plus): un font-size:44px terminaba renderizado a 57.2px
+     (44*1.3, el factor de boost típico de Chrome), bastante más grande de lo pedido. Esta app
+     ya es responsive a propósito (media queries, unidades relativas, tipografía pensada
+     para cada tamaño de pantalla), así que ese "boost" automático no ayuda -- solo hace
+     que el texto se vea más grande de lo diseñado, sin poder controlarlo desde el CSS. */
+  html{-webkit-text-size-adjust:100%; text-size-adjust:100%;}
   html,body{margin:0; padding:0; background:var(--asphalt); height:100%;}
   body{font-family:'Inter',-apple-system,sans-serif; color:var(--chalk); overscroll-behavior-y:none;}
   .display{font-family:'Bebas Neue',sans-serif; letter-spacing:.02em;}
@@ -350,8 +359,18 @@
      deja 100dvh y 100vh como fallback en cascada para navegadores viejos que no
      entienden la unidad svh (una declaración con un valor no soportado se ignora por
      completo, así que la anterior queda en pie). */
+  /* overflow-y:auto -- encontrado probando en un celular real de pantalla chica (Moto E6
+     Plus, 320px CSS de ancho): las 3 tarjetas de .splash-features necesitan ~467px de alto,
+     pero .splash-mid (centrada con justify-content:center dentro de #splash) solo le deja
+     ~203px en una pantalla de 619px de alto total. Sin overflow-y, ese contenido más alto
+     que su caja se desborda para los DOS lados (arriba, tapando el título/tag; abajo,
+     tapando el botón Comenzar) en vez de empujar nada -- centrado por flexbox no recorta ni
+     reacomoda el contenido que no entra. Con overflow-y:auto en #splash, ese mismo exceso de
+     alto simplemente se vuelve scrolleable (todo se ve bien apilado, el usuario baja un
+     toque si hace falta) en vez de superponerse. En una pantalla alta (donde todo entra)
+     esto no cambia nada, sigue centrado y sin scroll. */
   #splash{position:fixed; top:0; left:0; right:0; height:100vh; height:100dvh; height:100svh;
-    z-index:60;
+    z-index:60; overflow-y:auto;
     background:
       radial-gradient(65% 45% at 50% 0%, rgba(214,255,63,.1), transparent 60%),
       radial-gradient(60% 40% at 100% 15%, rgba(192,106,46,.08), transparent 62%),
@@ -381,7 +400,31 @@
      para no interferir con el ajuste de altura real de #splash que ya es delicado -- ver el
      comentario largo mas arriba junto a la regla de #splash sobre por que 100svh se elige a
      mano. transform no dispara reflow, asi que esto no puede reabrir ese bug. */
-  #splash .splash-mid{flex:1; width:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:0; padding-bottom:96px;
+  /* justify-content:safe center (con "center" solo como fallback un renglón antes, para
+     navegadores que no entienden la palabra clave "safe" -- un valor no soportado se ignora
+     por completo, así que la declaración anterior queda en pie): encontrado en el mismo
+     celular real de pantalla chica del comentario de overflow-y en #splash. Centrado
+     "normal" (sin "safe") no alcanza con overflow-y:auto en el padre -- cuando el contenido
+     centrado es más alto que su caja, el desborde queda repartido simétricamente para los
+     dos lados, y ESE desborde en particular las specs de flexbox lo tratan como no
+     alcanzable por scroll (el motor nunca hace crecer el scrollHeight del ancestro para
+     cubrirlo) -- por eso las 3 tarjetas se veían tapando el título/tag y el botón aunque
+     #splash ya tuviera overflow-y:auto. "safe center" es exactamente para esto: centra
+     mientras entra, y si no entra cae a alinear desde el principio (como flex-start) en vez
+     de desbordar sin poder scrollear -- con eso sí alcanza el overflow-y:auto del padre.
+     Sin min-height:0 (a propósito, sacado del original): con min-height:0, .splash-mid
+     podía encogerse por debajo de lo que su propio contenido (.splash-features) necesita
+     -- la CAJA de .splash-mid se quedaba en 203px (lo que le tocaba de "flex:1" en una
+     pantalla chica) aunque su contenido real midiera 467px, y el botón "Comenzar" (el
+     siguiente hermano en el flujo normal) arrancaba justo después de esos 203px --
+     tapando visualmente el resto de las tarjetas que ya venían desbordando por abajo. Con
+     min-height:auto (el default que queda al sacar esta línea), un flex item no se encoge
+     por debajo del tamaño mínimo de su contenido cuando overflow es visible (el default,
+     acá nunca se tocó) -- en una pantalla chica .splash-mid crece a sus 467px reales en
+     vez de comprimirse, empujando el botón después de las tarjetas en vez de superponerlo,
+     y esos 467px pasan a formar parte del alto scrolleable real de #splash (que ya tiene
+     overflow-y:auto) en vez de quedar flotando afuera de la cuenta. */
+  #splash .splash-mid{flex:1; width:100%; display:flex; flex-direction:column; justify-content:center; justify-content:safe center; align-items:center; padding-bottom:96px;
     animation:splashIn .55s cubic-bezier(.22,1,.36,1);}
   @keyframes splashIn{from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:translateY(0);}}
   @media (prefers-reduced-motion:reduce){ #splash .splash-mid{animation:none;} }
@@ -393,6 +436,22 @@
   .splash-feature{display:flex; align-items:flex-start; gap:12px;}
   .splash-feature strong{display:block; font-size:14px; color:var(--chalk); font-weight:700;}
   .splash-feature p{margin:2px 0 0; font-size:12.5px; color:var(--mist); line-height:1.4;}
+  /* Pantallas chicas de verdad (celulares viejos/baratos de gama baja, ej. Moto E6 Plus:
+     320x619 CSS px -- bastante menos que un celular moderno típico, que ronda 360-412px de
+     ancho y 700-900px de alto) -- probado en el dispositivo real. Con los tamaños "normales"
+     de acá arriba, el contenido de la splash mide ~778px pero el viewport entero mide 619px:
+     todo se ve grande e incómodo Y hace falta scrollear bastante para llegar al botón
+     "Comenzar". Compactamos SOLO en este rango (nunca toca celulares de tamaño normal ni
+     desktop) -- letra más chica, menos aire entre elementos -- para que entre más de un
+     vistazo sin perder el mismo diseño ni layout. */
+  @media (max-height:700px){
+    #splash{padding:20px 32px;}
+    #splash .word{font-size:44px;}
+    #splash .pulse-strip{margin:14px 0;}
+    #splash .tag{margin-top:6px; font-size:13.5px;}
+    .splash-features{margin-top:16px; gap:12px;}
+    #splash .splash-mid{padding-bottom:32px;}
+  }
   .lang-row{display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:28px;}
   .lang-pill{padding:8px 13px; border-radius:999px; border:1.5px solid var(--asphalt-4); background:var(--asphalt-2);
     color:var(--mist); font-size:12px; font-weight:700; cursor:pointer;}
