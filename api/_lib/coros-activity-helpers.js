@@ -35,6 +35,8 @@
 // Vercel de una cuenta conectada (mismo camino que ya se usó para confirmar el formato
 // de querySportRecords).
 
+const { sanitizeActivityNumbers } = require('./activity-sanity.js');
+
 const MCP_ENDPOINT = 'https://mcp.coros.com/mcp';
 
 // Llama una tool del servidor MCP de COROS vía JSON-RPC 2.0. El propio FAQ de COROS
@@ -213,7 +215,7 @@ function activityToRun(record, detail) {
   const d = detail || {};
   if (record && record.dateStr) {
     const startDate = new Date(record.dateStr + 'T00:00:00Z');
-    return {
+    return sanitizeActivityNumbers({
       id: 'coros_' + record.labelId,
       corosId: record.labelId,
       date: new Date(record.startTimestamp * 1000).toISOString(),
@@ -235,7 +237,7 @@ function activityToRun(record, detail) {
       source: 'coros',
       planMonday: getMondayISO(record.dateStr),
       planDayIndex: (startDate.getUTCDay() + 6) % 7
-    };
+    });
   }
   const startTime = record.startTime || record.start_time || record.date || d.startTime || d.start_time;
   // localDatePart: mismo criterio que localDatePartFromIso() en polar-activity-helpers.js --
@@ -252,7 +254,7 @@ function activityToRun(record, detail) {
   const distanceM = record.distance ?? record.totalDistance ?? d.distance ?? d.totalDistance ?? 0;
   const durationSec = record.duration ?? record.totalDuration ?? record.movingDuration ?? d.duration ?? d.totalDuration ?? 0;
   const id = getCorosRecordId(record);
-  return {
+  return sanitizeActivityNumbers({
     id: 'coros_' + id,
     corosId: id,
     date: startTime,
@@ -274,7 +276,7 @@ function activityToRun(record, detail) {
     source: 'coros',
     planMonday: getMondayISO(localDatePart),
     planDayIndex: (startDate.getUTCDay() + 6) % 7
-  };
+  });
 }
 
 async function mergeCorosRuns(base, headers, userId, newRuns, mode) {

@@ -13,6 +13,8 @@
 // Ver fetchFitSplits() más abajo y el comentario grande de
 // api/_lib/fit-activity-helpers.js para cómo se decodifica.
 
+const { sanitizeActivityNumbers } = require('./activity-sanity.js');
+
 // IDs de workout_type_id relacionados a running, según la tabla de tipos de
 // la API de Wahoo (cloud-api.wahooligan.com): 1 = running (outdoor), 5 =
 // running en cinta, 67 = carrera de running, 71 = running indoor virtual.
@@ -73,7 +75,7 @@ async function workoutToRun(workout, accessToken){
   const fit = accessToken ? await fetchFitSplits(summary.file && summary.file.url, accessToken) : emptyFitResult();
   const startDate = new Date(workout.starts);
   const num = (v) => (v != null ? parseFloat(v) : null);
-  return {
+  return sanitizeActivityNumbers({
     id: 'wahoo_' + workout.id,
     wahooId: workout.id,
     date: workout.starts,
@@ -123,7 +125,7 @@ async function workoutToRun(workout, accessToken){
     source: 'wahoo',
     planMonday: getMondayISO(workout.starts),
     planDayIndex: (startDate.getUTCDay() + 6) % 7
-  };
+  });
 }
 
 async function mergeWahooRuns(base, headers, userId, newRuns, mode){

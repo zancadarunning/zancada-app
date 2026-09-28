@@ -26,6 +26,8 @@
 // nunca se enteraba de que una sincronización de Strava había tocado los
 // datos.
 
+const { sanitizeActivityNumbers } = require('./activity-sanity.js');
+
 function decodePolyline(encoded) {
   if (!encoded) return [];
   let points = [], index = 0, lat = 0, lng = 0;
@@ -188,7 +190,7 @@ async function activityToRun(act, accessToken) {
   // números son la hora local -- por eso alcanza con leerla con getUTCDay()/getUTCDate(),
   // sin necesidad de saber el huso horario real).
   const startDate = new Date(act.start_date_local || act.start_date);
-  return {
+  return sanitizeActivityNumbers({
     id: 'strava_' + act.id,
     stravaId: act.id,
     date: act.start_date,
@@ -223,7 +225,7 @@ async function activityToRun(act, accessToken) {
     // campos de paso, ver comentario de arriba (start_date_local, no start_date):
     planMonday: getMondayISO(act.start_date_local || act.start_date),
     planDayIndex: (startDate.getUTCDay() + 6) % 7
-  };
+  });
 }
 
 // Llama a la función SQL merge_strava_runs (ver /sql/merge_strava_runs.sql)

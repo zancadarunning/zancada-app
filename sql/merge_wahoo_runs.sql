@@ -31,6 +31,20 @@ DECLARE
   v_idx int;
   v_found_idx int;
   v_old_shoe jsonb;
+  -- Dedupe cruzado de fuente (ver el bloque más abajo, y el mismo chequeo del lado del
+  -- cliente en isLikelyDuplicateOfExistingRun(), app.js): una carrera nueva sin coincidencia
+  -- de wahooId puede seguir siendo la MISMA actividad real ya guardada desde otra fuente
+  -- (el tracker propio de la app, o el mismo reloj conectado a otra marca a la vez).
+  v_is_dup boolean;
+  v_existing jsonb;
+  v_existing_ms double precision;
+  v_new_ms double precision;
+  v_existing_km numeric;
+  v_new_km numeric;
+  v_dist_tol numeric;
+  v_existing_dur numeric;
+  v_new_dur numeric;
+  v_dur_tol numeric;
 BEGIN
   IF p_new_runs IS NULL OR jsonb_array_length(p_new_runs) = 0 THEN
     RETURN;
@@ -58,6 +72,48 @@ BEGIN
         EXIT;
       END IF;
     END LOOP;
+
+    -- Sin coincidencia por wahooId: antes de tratarla como carrera genuinamente nueva,
+    -- chequeamos si es la MISMA actividad real ya guardada desde otra fuente (el tracker
+    -- propio de Zancada, u otra marca conectada al mismo tiempo), que nunca tuvo un wahooId
+    -- hasta ahora. Misma tolerancia que isLikelyDuplicateOfExistingRun() en app.js: inicio
+    -- dentro de 10 min, distancia dentro del 10% (piso 0.3km), y si ambas tienen duración
+    -- cargada, duración dentro del 10% (piso 60s). Ver merge_strava_runs.sql para el porqué
+    -- completo -- encontrado en una auditoría de punta a punta.
+    v_new_ms := NULL;
+    BEGIN
+      v_new_ms := extract(epoch FROM (v_run_clean->>'date')::timestamptz) * 1000;
+    EXCEPTION WHEN OTHERS THEN
+      v_new_ms := NULL;
+    END;
+    v_is_dup := false;
+    IF v_found_idx IS NULL AND v_new_ms IS NOT NULL THEN
+      FOR v_idx IN 0 .. jsonb_array_length(v_runs) - 1 LOOP
+        v_existing := v_runs -> v_idx;
+        v_existing_ms := NULL;
+        BEGIN
+          v_existing_ms := extract(epoch FROM (v_existing->>'date')::timestamptz) * 1000;
+        EXCEPTION WHEN OTHERS THEN
+          v_existing_ms := NULL;
+        END;
+        IF v_existing_ms IS NULL OR abs(v_existing_ms - v_new_ms) > 10*60*1000 THEN CONTINUE; END IF;
+        v_existing_km := COALESCE((v_existing->>'distanceKm')::numeric, 0);
+        v_new_km := COALESCE((v_run_clean->>'distanceKm')::numeric, 0);
+        v_dist_tol := GREATEST(0.3, v_existing_km * 0.1);
+        IF abs(v_existing_km - v_new_km) > v_dist_tol THEN CONTINUE; END IF;
+        v_existing_dur := COALESCE((v_existing->>'durationSec')::numeric, 0);
+        v_new_dur := COALESCE((v_run_clean->>'durationSec')::numeric, 0);
+        IF v_existing_dur > 0 AND v_new_dur > 0 THEN
+          v_dur_tol := GREATEST(60, v_existing_dur * 0.1);
+          IF abs(v_existing_dur - v_new_dur) > v_dur_tol THEN CONTINUE; END IF;
+        END IF;
+        v_is_dup := true;
+        EXIT;
+      END LOOP;
+    END IF;
+    IF v_found_idx IS NULL AND v_is_dup THEN
+      CONTINUE; -- misma actividad real ya guardada desde otra fuente -- no duplicar
+    END IF;
 
     IF v_found_idx IS NOT NULL THEN
       IF p_mode <> 'upsert' THEN

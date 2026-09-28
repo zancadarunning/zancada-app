@@ -11,6 +11,8 @@
 // y el comentario grande de api/_lib/fit-activity-helpers.js para el detalle de cómo se
 // decodifica ese archivo.
 
+const { sanitizeActivityNumbers } = require('./activity-sanity.js');
+
 function isRunningSport(sport) {
   if (!sport) return false;
   const s = String(sport).toUpperCase();
@@ -83,7 +85,7 @@ async function exerciseToRun(exercise, accessToken) {
   const fit = accessToken ? await fetchFitSplits(exercise.id, accessToken) : emptyFitResult();
   const localDate = localDatePartFromIso(exercise.start_time);
   const startDate = new Date(localDate + 'T00:00:00Z');
-  return {
+  return sanitizeActivityNumbers({
     id: 'polar_' + exercise.id,
     polarId: exercise.id,
     date: exercise.start_time,
@@ -121,7 +123,7 @@ async function exerciseToRun(exercise, accessToken) {
     source: 'polar',
     planMonday: getMondayISO(localDate),
     planDayIndex: (startDate.getUTCDay() + 6) % 7
-  };
+  });
 }
 
 async function mergePolarRuns(base, headers, userId, newRuns, mode) {
