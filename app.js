@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T01:46:11Z';
+const APP_VERSION = '2026-09-28T01:52:30Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -374,12 +374,47 @@ function setMascotColor(name, {duration=4000}={}){
 // antes de entrar al chat -- showView('coach') esconde coach-fab-wrap en el mismo instante
 // (ver el otro lugar que lo hace, más abajo en el archivo), así que sin este delay chico el
 // guiño nunca llegaría a verse.
+// Se pone en true mientras dura (y un instante después de soltar) un mantener-presionado
+// real detectado por initMascotHoldEasterEgg() -- openCoachWithWink() lo chequea primero
+// para NO abrir el chat en ese caso: mantener presionado es "jugar con el personaje", un
+// gesto aparte de tocar para abrir la conversación, no una forma más lenta de hacer lo mismo.
+let mascotHoldFired = false;
 function openCoachWithWink(){
+  if(mascotHoldFired){ mascotHoldFired = false; return; }
   const eyeR = document.getElementById('mascot-eye-r');
   const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if(!eyeR || reduced){ showView('coach'); return; }
   eyeR.setAttribute('transform', 'translate(40 30) scale(1 0.12) translate(-40 -30)');
   setTimeout(()=>{ eyeR.setAttribute('transform', ''); showView('coach'); }, 140);
+}
+// Easter egg de mantener presionado el personaje (no de tocarlo, eso ya abre el chat con un
+// guiño -- ver openCoachWithWink) -- puro juego, no depende de ningún dato real de la app,
+// solo para que se sienta con más personalidad si alguien lo toca de más.
+function initMascotHoldEasterEgg(){
+  const fab = document.querySelector('.coach-fab');
+  if(!fab) return;
+  const HOLD_MS = 550;
+  let holdTimer = null;
+  function cancelHold(){ clearTimeout(holdTimer); }
+  function startHold(){
+    cancelHold();
+    holdTimer = setTimeout(()=>{
+      mascotHoldFired = true;
+      haptic(15);
+      setMascotExpression('excited', {priority:1, duration:900});
+      // Mismo pop de escala que ya usa updateChatBadge() para un mensaje nuevo -- reusar en
+      // vez de sumar una animación CSS más para el mismo gesto de "algo pasó acá".
+      const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if(!reduced){
+        fab.classList.remove('pop'); void fab.offsetWidth; fab.classList.add('pop');
+        setTimeout(()=>fab.classList.remove('pop'), 500);
+      }
+    }, HOLD_MS);
+  }
+  fab.addEventListener('pointerdown', startHold);
+  fab.addEventListener('pointerup', cancelHold);
+  fab.addEventListener('pointerleave', cancelHold);
+  fab.addEventListener('pointercancel', cancelHold);
 }
 // Ojos que siguen el puntero (mouse) o el dedo (touchmove) -- clampeados a un radio chico
 // (MAX_OFFSET) para que se lea como "de reojo", no como si los ojos se fueran a otro lado.
@@ -2946,6 +2981,11 @@ async function finishOnboard(){
   seedCoachGreeting();
   await persist();
   enterApp();
+  // Primera vez que el personaje se muestra de verdad para esta cuenta -- un festejo (mismos
+  // ojos/color que ya usa celebrate() para una marca personal) en vez del parpadeo genérico
+  // de "recién cargó la página", para que arrancar el plan también se sienta como un logro.
+  setMascotExpression('excited', {priority:2, duration:2600});
+  setMascotColor('good', {duration:3200});
 }
 function syncTabbarHeight(){
   const bar = document.getElementById('tabbar');
@@ -5284,6 +5324,10 @@ function resolvePainLog(id){
   entry.active = false;
   entry.resolvedDate = localDateISO();
   renderPainLog(); persist();
+  // Espejo de la cara "concerned" que puso savePainLog() al cargarla -- si se preocupó al
+  // anotarla, tiene sentido que se alivie al cerrarla. Sin cambio de color (no es un festejo
+  // grande como una marca personal, solo una carita contenta breve).
+  setMascotExpression('happy', {priority:1, duration:2200});
 }
 async function deletePainLog(id){
   if(!(await showConfirm(t('confirm_delete'), {danger:true, confirmText:t('delete_word')}))) return;
@@ -10750,4 +10794,4 @@ populateOnboardDays();
 // nunca en una página real, pero que sin esta guarda quedaban colgadas para siempre en
 // cada uno de los ~150 loadApp() de la suite de tests, así que "node --test" nunca
 // terminaba de correr.
-if(typeof MutationObserver !== 'undefined') initMascotEyes();
+if(typeof MutationObserver !== 'undefined'){ initMascotEyes(); initMascotHoldEasterEgg(); }
