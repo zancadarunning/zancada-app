@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-28T14:37:25Z';
+const APP_VERSION = '2026-09-28T14:44:09Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10247,6 +10247,17 @@ function buildContext(){
   // de cuándo usar cada uno, hace mucho más difícil que el modelo los confunda -- sobre
   // todo con un modelo más chico (Haiku), que sigue mejor una estructura clara que un
   // párrafo largo y denso.
+  // Fechas de calendario de cada día de las dos semanas, ya resueltas -- mismo motivo que
+  // todaySessionDesc/tomorrowSessionDesc más arriba: el modelo NO es confiable haciendo
+  // aritmética de calendario de memoria. Reportado por un usuario real: preguntó "¿qué
+  // lunes?" sobre la semana que viene, y el coach contestó una fecha que ni siquiera caía
+  // un lunes (calculó mal cuántos días faltaban) -- el bloque de abajo solo traía nombres
+  // de día ("mon", "tue"...) sin ninguna fecha de calendario asociada, así que cualquier
+  // pregunta por "qué día del mes" cae en la misma trampa que ya se documentó para "hoy"/
+  // "mañana" al principio de esta función. addDaysToIsoLocal ya es la misma función segura
+  // contra DST que usa el resto del archivo para esto.
+  const datesForWeek = weekStartIso => DAY_KEYS.map((d,i)=>`${d}=${addDaysToIsoLocal(weekStartIso, i)}`).join(', ');
+  ctx += `\n\nFechas de calendario de cada día de esta semana: ${datesForWeek(state.weekStart)}. Fechas de calendario de cada día de la semana que viene: ${datesForWeek(nw.weekStart)}. Si te preguntan qué fecha del mes cae tal día, usá estos datos directo -- nunca calcules vos cuántos días faltan ni a qué fecha corresponde un día, aunque te parezca un cálculo simple.`;
   ctx += `\n\n=== PLAN DE ESTA SEMANA (semana ${state.weekNumber}, la semana ACTUAL -- usá SIEMPRE este bloque para responder sobre "hoy", "mañana", "ayer" o "esta semana") ===\n${state.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)${d.status?'/'+d.status:''}${d.rating?'/calificó:'+d.rating:''}`).join(', ')}.\n=== FIN plan de esta semana ===`;
   ctx += `\n\n=== PLAN DE LA SEMANA QUE VIENE (semana ${nw.weekNumber}, todavía NO empezó -- es DISTINTA a la de arriba, ya calculada pero puede ajustarse según cómo termine esta semana. NUNCA uses estos km para responder sobre "hoy" o "mañana", esos están en el bloque de arriba) ===\n${nw.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)`).join(', ')}.\n=== FIN plan de la semana que viene ===\n`;
   // Reportado por un usuario: le preguntó al coach cuánto tocaba un día puntual y respondió
@@ -10730,12 +10741,41 @@ function applyProfileChange(input){
   }
   captureUndoSnapshot();
   const changes = [];
+  // A diferencia de fecha_carrera (arriba, valida ANTES de tocar nada y rechaza la llamada
+  // entera si está mal) fc_maxima/km_actuales rechazan solo ESE campo puntual -- si vinieran
+  // junto con otro cambio válido en el mismo pedido (ej. "cambiá mi objetivo a 10k y mi FC
+  // máxima a 900"), descartar la llamada completa tiraría también el objetivo, que sí era
+  // válido. rejectedNotes junta los rechazos puntuales para avisarle al modelo al final, sin
+  // interrumpir el resto.
+  const rejectedNotes = [];
   let recalc = false;
   if(input.objetivo){ state.profile.goal = input.objetivo; changes.push('objetivo'); recalc = true; }
   if(input.fecha_carrera){ state.profile.raceDate = input.fecha_carrera; changes.push('fecha de carrera'); recalc = true; }
   if(input.terreno){ state.profile.terrain = input.terreno; changes.push('terreno'); }
-  if(typeof input.fc_maxima==='number'){ state.profile.hrMax = input.fc_maxima; state.profile.hrKnown = true; state.profile.hrZones = computeZones(input.fc_maxima); state.profile.hrZonesCustom = false; changes.push('FC máxima'); }
-  if(typeof input.km_actuales==='number'){ state.profile.currentWeeklyKm = input.km_actuales; state.profile.runnerType = 'active'; changes.push('km actuales'); recalc = true; }
+  // Mismo motivo que MAX_SESSION_KM/resolveZone en modificar_sesion: el input_schema de la
+  // herramienta es solo una guía, la API de tool use no hace cumplir ningún rango de verdad.
+  // Sin este chequeo, una FC máxima alucinada o mal transcripta (ej. "900" en vez de "190")
+  // se guardaba tal cual y computeZones() armaba zonas de entrenamiento sin ningún sentido --
+  // 100-220bpm es el mismo techo que ya usa checkHrMaxFromRuns()/el aviso automático de FC
+  // máxima observada (ver esos comentarios) para descartar un pico de sensor imposible.
+  if(typeof input.fc_maxima==='number'){
+    if(input.fc_maxima < 100 || input.fc_maxima > 220){
+      rejectedNotes.push(`la FC máxima "${input.fc_maxima}" no parece un valor real (tiene que estar entre 100 y 220bpm) -- no se aplicó`);
+    } else {
+      state.profile.hrMax = input.fc_maxima; state.profile.hrKnown = true; state.profile.hrZones = computeZones(input.fc_maxima); state.profile.hrZonesCustom = false; changes.push('FC máxima');
+    }
+  }
+  // Mismo criterio: un kilometraje semanal alucinado (ej. "300" transcripto de "30") infla
+  // calcWeeklyKm/el plan generado a un volumen imposible de sostener. El techo es generoso a
+  // propósito (no hay techo real para un ultramaratonista de volumen muy alto) -- solo corta
+  // el caso de una cifra claramente imposible como referencia de "cuánto corre por semana".
+  if(typeof input.km_actuales==='number'){
+    if(input.km_actuales < 0 || input.km_actuales > 300){
+      rejectedNotes.push(`el kilometraje semanal "${input.km_actuales}" no parece un valor real -- no se aplicó`);
+    } else {
+      state.profile.currentWeeklyKm = input.km_actuales; state.profile.runnerType = 'active'; changes.push('km actuales'); recalc = true;
+    }
+  }
   if(validDays.length){
     // Cronograma de base nuevo y permanente (no un cambio puntual de una sesión):
     // por esto usamos recalc para forzar una regeneración completa del plan, igual
@@ -10745,6 +10785,9 @@ function applyProfileChange(input){
     changes.push('días de entreno');
     recalc = true;
   }
+  if(!changes.length){
+    return rejectedNotes.length ? `No se aplicó ningún cambio: ${rejectedNotes.join('; ')} -- confirmá el valor correcto con el corredor y volvé a llamar a modificar_perfil.` : 'No hubo cambios para aplicar.';
+  }
   if(recalc){
     state.profile.weeklyKm = calcWeeklyKm(state.profile);
     state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
@@ -10752,7 +10795,7 @@ function applyProfileChange(input){
   }
   renderAll(); renderZones(); persist();
   state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')), ts:Date.now()});
-  return `Perfil actualizado: ${changes.join(', ')}.`;
+  return `Perfil actualizado: ${changes.join(', ')}.${rejectedNotes.length ? ' OJO -- '+rejectedNotes.join('; ')+'.' : ''}`;
 }
 function applyCoachNote(input){
   // Guardamos el dato aparte del historial del chat (que a futuro se puede recortar
