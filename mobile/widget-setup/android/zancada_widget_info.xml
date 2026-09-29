@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DÓNDE VA: android/app/src/main/res/xml/zancada_widget_info.xml
+
+  Metadata del widget: tamaño mínimo, cada cuánto se refresca solo de respaldo
+  (1 hora: la actualización "de verdad" pasa cuando la app llama a
+  updateAllWidgets() apenas se abre Inicio), y qué layout usar.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="3600000"
+    android:initialLayout="@layout/zancada_widget"
+    android:previewLayout="@layout/zancada_widget"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />

@@ -1,0 +1,49 @@
+<!--
+  AndroidManifest-snippet.xml -- Health Connect
+
+  Los <uses-permission> van SUELTOS, directo adentro de <manifest> (al mismo nivel
+  que los que ya tiene la app, no adentro de <application>). El bloque <queries> es
+  nuevo -- si el manifest ya tiene un bloque <queries> de otra cosa, agregá el
+  <package> de acá adentro del que ya existe en vez de duplicar la etiqueta.
+
+  El bloque <activity>/<activity-alias> de más abajo va DENTRO de <application>,
+  junto a la de MainActivity. NO es opcional: sin él, Health Connect abre y cierra
+  su propia pantalla de permisos en menos de un segundo, sin mostrar ningún diálogo,
+  y le devuelve a la app "ningún permiso otorgado" como si el usuario hubiera dicho
+  que no -- aunque nunca vio nada. Confirmado en un dispositivo real (era el bug
+  detrás de "me dice que no le di permisos en Health Connect" aunque nunca apareció
+  ningún cartel para elegir sí/no). Documentado en developer.android.com/
+  health-and-fitness/health-connect/get-started, sección "Cómo mostrar el diálogo
+  de la política de privacidad de tu app". Requiere el archivo
+  PermissionsRationaleActivity.kt de esta misma carpeta.
+-->
+
+<uses-permission android:name="android.permission.health.READ_EXERCISE" />
+<uses-permission android:name="android.permission.health.READ_DISTANCE" />
+<uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+
+<queries>
+    <package android:name="com.google.android.apps.healthdata" />
+</queries>
+
+<!-- Este bloque va DENTRO de <application>...</application>, no suelto en <manifest>. -->
+<activity
+    android:name=".PermissionsRationaleActivity"
+    android:exported="true">
+    <intent-filter>
+        <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+    </intent-filter>
+</activity>
+
+<!-- Mismo motivo que arriba, pero para Android 14+ (donde Health Connect es parte
+     del sistema, no una app aparte): ahí el intent/categoría son distintos. -->
+<activity-alias
+    android:name="ViewPermissionUsageActivity"
+    android:exported="true"
+    android:targetActivity=".PermissionsRationaleActivity"
+    android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+    <intent-filter>
+        <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+        <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+    </intent-filter>
+</activity-alias>
