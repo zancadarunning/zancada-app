@@ -53,7 +53,7 @@ class ZancadaWidgetProvider : AppWidgetProvider() {
             val spannable = SpannableString(amount)
             val splitAt = amount.indexOf(' ')
             if (splitAt > 0) {
-                spannable.setSpan(RelativeSizeSpan(1.85f), 0, splitAt, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                spannable.setSpan(RelativeSizeSpan(2.4f), 0, splitAt, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
                 spannable.setSpan(StyleSpan(Typeface.BOLD), 0, splitAt, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
                 spannable.setSpan(ForegroundColorSpan(Color.parseColor("#EDEFEF")), 0, splitAt, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
                 spannable.setSpan(ForegroundColorSpan(Color.parseColor("#8B9296")), splitAt, amount.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)

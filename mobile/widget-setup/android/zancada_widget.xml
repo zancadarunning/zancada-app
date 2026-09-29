@@ -21,14 +21,14 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_card_bg"
-    android:padding="18dp">
+    android:padding="16dp">
 
     <!-- Marca chica en la esquina: el mismo ícono redondo del launcher, a
          muy baja prominencia (como suelen hacer los widgets de iOS: la
          marca se intuye, no compite con el dato real). -->
     <ImageView
-        android:layout_width="14dp"
-        android:layout_height="14dp"
+        android:layout_width="15dp"
+        android:layout_height="15dp"
         android:layout_gravity="top|end"
         android:src="@mipmap/ic_launcher_round"
         android:alpha="0.55"
@@ -47,7 +47,7 @@
             android:layout_height="wrap_content"
             android:text="HOY"
             android:textColor="#D6FF3F"
-            android:textSize="11sp"
+            android:textSize="14sp"
             android:textStyle="bold"
             android:letterSpacing="0.16"
             android:fontFamily="sans-serif-medium" />
@@ -55,7 +55,7 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="8dp"
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
@@ -67,9 +67,9 @@
                  tintear el color con setColorFilter() desde el provider. -->
             <ImageView
                 android:id="@+id/widget_zone_dot"
-                android:layout_width="7dp"
-                android:layout_height="7dp"
-                android:layout_marginEnd="6dp"
+                android:layout_width="9dp"
+                android:layout_height="9dp"
+                android:layout_marginEnd="7dp"
                 android:src="@drawable/widget_zone_dot"
                 android:contentDescription="@null"
                 android:visibility="gone" />
@@ -80,7 +80,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:textColor="#EDEFEF"
-                android:textSize="14sp"
+                android:textSize="21sp"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif-medium"
                 android:maxLines="2" />
@@ -98,9 +98,9 @@
             android:id="@+id/widget_amount_big"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="9dp"
+            android:layout_marginTop="12dp"
             android:textColor="#EDEFEF"
-            android:textSize="14sp"
+            android:textSize="19sp"
             android:fontFamily="monospace"
             android:maxLines="1" />
     </LinearLayout>
@@ -115,9 +115,9 @@
         android:visibility="visible">
 
         <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:layout_marginBottom="8dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginBottom="10dp"
             android:alpha="0.9"
             android:src="@mipmap/ic_launcher_round"
             android:contentDescription="@null" />
@@ -127,17 +127,17 @@
             android:layout_height="wrap_content"
             android:text="Zancada"
             android:textColor="#EDEFEF"
-            android:textSize="14sp"
+            android:textSize="18sp"
             android:textStyle="bold"
             android:fontFamily="sans-serif-medium" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="5dp"
             android:text="Abrí la app para ver tu sesión de hoy"
             android:textColor="#8B9296"
-            android:textSize="12sp"
+            android:textSize="14sp"
             android:gravity="center"
             android:maxLines="2" />
     </LinearLayout>

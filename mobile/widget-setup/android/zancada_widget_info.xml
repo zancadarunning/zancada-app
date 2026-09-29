@@ -5,12 +5,22 @@
   Metadata del widget: tamaño mínimo, cada cuánto se refresca solo de respaldo
   (1 hora: la actualización "de verdad" pasa cuando la app llama a
   updateAllWidgets() apenas se abre Inicio), y qué layout usar.
+
+  targetCellHeight=1 (antes 2): con 2 filas, algunos launchers (confirmado
+  en un Moto E6 Plus real) arman una card mucho más alta de lo que el
+  contenido necesita: 3 líneas de texto perdidas en el medio de un
+  rectángulo enorme. 1 fila alcanza de sobra ahora que el texto es más
+  grande. Esto solo afecta el tamaño con el que un launcher ofrece agregar
+  el widget por primera vez: una instancia que ya está en la pantalla de
+  inicio no cambia de tamaño sola al reinstalar la app, hay que sacarla y
+  volver a agregarla para ver el nuevo tamaño por default (después el
+  usuario la puede agrandar/achicar a mano, resizeMode ya lo permite).
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="180dp"
-    android:minHeight="110dp"
+    android:minHeight="90dp"
     android:targetCellWidth="3"
-    android:targetCellHeight="2"
+    android:targetCellHeight="1"
     android:updatePeriodMillis="3600000"
     android:initialLayout="@layout/zancada_widget"
     android:previewLayout="@layout/zancada_widget"
