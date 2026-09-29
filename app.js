@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-29T19:59:45Z';
+const APP_VERSION = '2026-09-29T20:05:55Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1877,6 +1877,15 @@ function updateHealthConnectStatusDisplay(){
   const card = document.getElementById('healthconnect-card');
   const isAndroid = !!(window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'android');
   if(card) card.style.display = isAndroid ? '' : 'none';
+  // El cartel de arriba de Relojes ("¿No ves tu reloj...") recomienda Strava en
+  // web/iOS (aplica ahí, y Health Connect ni existe en esas plataformas), pero en
+  // Android tiene más sentido recomendar Health Connect -- ya cubre cualquier marca
+  // que escriba ahí (Huawei, Samsung, Garmin, etc.) sin pasar por ninguna conexión
+  // propia, y no tiene el riesgo de duplicados de sumar Strava ENCIMA de un reloj que
+  // ya sincroniza directo. data-i18n de index.html ya puso el texto de Strava por
+  // default (ver applyStaticTranslations) -- acá solo lo pisamos en Android.
+  const hintEl = document.getElementById('devices-hint-text');
+  if(hintEl) hintEl.textContent = isAndroid ? t('perfil_connectivity_hint_android') : t('perfil_connectivity_hint');
   if(!isAndroid) return;
   const el = document.getElementById('healthconnect-status');
   const btn = document.getElementById('healthconnect-connect-btn');
