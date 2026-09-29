@@ -1,8 +1,7 @@
 // HealthConnectBridgePlugin.kt
 //
 // Plugin LOCAL de Capacitor (vive directo en este proyecto de Android Studio, no es
-// un paquete de npm instalado aparte -- mismo criterio que WidgetBridgePlugin.kt en
-// ../widget-setup/android/). Le da a app.js acceso a Health Connect: cualquier
+// un paquete de npm instalado aparte). Le da a app.js acceso a Health Connect: cualquier
 // entrenamiento que haya llegado ahí (Huawei Health, Samsung Health, Garmin Connect,
 // y en general cualquier app de reloj que soporte Health Connect) aparece solo en
 // Zancada sin necesitar una conexión propia por marca como Strava/Polar/Wahoo.

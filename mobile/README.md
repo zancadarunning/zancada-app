@@ -10,8 +10,8 @@ archivos cambian en la raíz del repo.
 
 **Bundle ID / Application ID: `org.zancada.app`** — sugerido, no definitivo. Si lo
 cambiás, actualizalo en `capacitor.config.json` (`appId`) y en cualquier lugar de
-`widget-setup/` o `healthconnect-setup/` que lo mencione (son varios archivos,
-buscá "org.zancada.app" en esas carpetas).
+`healthconnect-setup/` que lo mencione (son varios archivos, buscá
+"org.zancada.app" en esa carpeta).
 
 ## Primer armado
 
@@ -27,8 +27,6 @@ Esto genera `mobile/ios/` y `mobile/android/` (no existen hasta que corras esto)
 
 ## Funcionalidad nativa ya armada (código escrito, falta compilar/integrar)
 
-- **`widget-setup/`** — widget de "próxima sesión" para la pantalla de inicio
-  (iOS y Android). Ver `widget-setup/INSTRUCCIONES.md`.
 - **`healthconnect-setup/`** — trae los entrenamientos registrados en Health
   Connect (Android) a Zancada, para relojes que no tienen conexión directa
   propia (ej. Huawei, o cualquier otro que escriba en Health Connect). Ver

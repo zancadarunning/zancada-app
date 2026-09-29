@@ -11,8 +11,8 @@ de notificaciones desde la app instalada no hacía nada, aunque el toggle mismo 
 igual que en la web.
 
 **Importante: esto no se puede compilar ni probar desde acá**, mismo motivo que
-`../healthconnect-setup/` y `../widget-setup/` — hace falta Android Studio con un
-dispositivo o emulador real. Android Studio funciona en Windows, así que a diferencia de
+`../healthconnect-setup/` — hace falta Android Studio con un dispositivo o
+emulador real. Android Studio funciona en Windows, así que a diferencia de
 iOS esto no espera a que consigas una Mac (iOS queda fuera de esta guía por ahora, por el
 mismo motivo que el resto de la app nativa: necesita Xcode).
 
@@ -21,9 +21,9 @@ mismo motivo que el resto de la app nativa: necesita Xcode).
 1. `app.js` (código ya escrito, ver `enableNativePushNotifications`/
    `initNativePushListeners` cerca de donde estaba el registro del service worker) le pide
    permiso al plugin oficial de Capacitor `PushNotifications` y se registra contra Firebase
-   Cloud Messaging (FCM) — a diferencia de `HealthConnectBridge`/`WidgetBridge`, este plugin
-   **sí es un paquete de npm** (`@capacitor/push-notifications`), no hay que escribir Kotlin
-   a mano.
+   Cloud Messaging (FCM) — a diferencia de `HealthConnectBridge`, este plugin **sí es
+   un paquete de npm** (`@capacitor/push-notifications`), no hay que escribir Kotlin a
+   mano.
 2. El token de FCM que devuelve el registro se guarda en la misma tabla `push_subscriptions`
    que ya usa la web (una columna nueva, `platform`, distingue `'web'` de `'android'`/`'ios'`
    — ver `sql/push_subscriptions_add_platform.sql`, correlo en el SQL Editor de Supabase si

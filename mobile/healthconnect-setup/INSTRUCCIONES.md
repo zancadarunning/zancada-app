@@ -5,11 +5,10 @@ de Android donde escriben apps como Huawei Health, Samsung Health, y varias más
 Zancada. Cubre relojes que no tienen una conexión propia por marca en la app (por
 ejemplo, Huawei).
 
-**Importante: esto no se puede compilar ni probar desde acá**, mismo motivo que el
-widget (ver `../widget-setup/INSTRUCCIONES.md`) — es código nativo (Kotlin) que corre
-por fuera del WebView, y hace falta Android Studio con un dispositivo o emulador real
-para compilarlo y probarlo. Android Studio funciona en Windows, así que a diferencia
-de iOS esto no espera a que consigas una Mac.
+**Importante: esto no se puede compilar ni probar desde acá** — es código nativo
+(Kotlin) que corre por fuera del WebView, y hace falta Android Studio con un
+dispositivo o emulador real para compilarlo y probarlo. Android Studio funciona
+en Windows, así que a diferencia de iOS esto no espera a que consigas una Mac.
 
 ## Cómo funciona
 
@@ -66,9 +65,9 @@ Android Studio te va a pedir sincronizar Gradle apenas guardes el archivo — de
 
 1. Copiá `android/HealthConnectBridgePlugin.kt` (de esta carpeta `healthconnect-setup/`)
    a `mobile/android/app/src/main/java/org/zancada/app/HealthConnectBridgePlugin.kt`
-   (el mismo paquete que `MainActivity` y que `WidgetBridgePlugin.kt` si ya armaste el
-   widget). Si cambiaste el `appId` en `capacitor.config.json`, usá ese paquete en vez
-   de `org.zancada.app` acá y en el archivo `.kt` mismo (la línea `package ...`).
+   (el mismo paquete que `MainActivity`). Si cambiaste el `appId` en
+   `capacitor.config.json`, usá ese paquete en vez de `org.zancada.app` acá y en el
+   archivo `.kt` mismo (la línea `package ...`).
 2. Copiá también `android/PermissionsRationaleActivity.kt` (de esta misma carpeta) al
    mismo lugar, `mobile/android/app/src/main/java/org/zancada/app/`. **Este archivo no
    es opcional** — ver el paso 3 para por qué.

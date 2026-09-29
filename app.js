@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-29T20:05:55Z';
+const APP_VERSION = '2026-09-29T21:41:27Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1750,7 +1750,7 @@ async function disconnectCoros(){
    posible con un cron de fondo, porque no hay ningún cron: solo sincroniza cuando el
    usuario lo pide, con la app abierta y state ya cargado en memoria.
    En la web (y en iOS) window.Capacitor.Plugins.HealthConnectBridge no existe, así
-   que todo esto queda inerte -- mismo patrón que updateHomeWidget()/haptic(). */
+   que todo esto queda inerte -- mismo patrón que haptic(). */
 function healthConnectExerciseToRun(ex){
   return {
     id: 'healthconnect_' + ex.id,
@@ -4809,25 +4809,6 @@ function openRaceTipsInfo(){
 }
 function closeRaceTipsInfo(){ document.getElementById('race-tips-info-modal').style.display = 'none'; }
 
-/* ================= WIDGET de pantalla de inicio (iOS/Android) =====================
-   Le pasa a un plugin nativo LOCAL (WidgetBridge -- no es un plugin de npm, vive
-   directo en el proyecto de Xcode/Android Studio, ver mobile/widget-setup/) un
-   resumen chiquito de la sesión de HOY, para que el widget de la pantalla de inicio
-   lo pueda mostrar sin depender del WebView (que el widget no tiene). En la web/PWA
-   el plugin no existe, así que esto no hace nada -- mismo patrón que haptic() y
-   handleAppleSignIn() para detectar plugins nativos sin romper la versión web. */
-function updateHomeWidget(day, lbl){
-  try{
-    const WidgetBridge = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.WidgetBridge;
-    if(!WidgetBridge) return;
-    WidgetBridge.save({
-      type: lbl.type,
-      amount: planAmountText(day),
-      zone: (day && day.dist>0 && day.zone) ? String(day.zone) : '',
-      dateISO: todayLocalISO()
-    });
-  }catch(e){}
-}
 // Intercambia el CONTENIDO de la sesión (tipo, distancia, terreno, zona, estructura de
 // series, y también si es una sesión "custom" escrita por el coach vía chat) entre dos
 // días del plan -- cada objeto conserva su propio "day" (la clave del día de la semana no
@@ -4936,7 +4917,6 @@ function renderHome(){
   document.getElementById('home-next-detail').classList.remove('open');
   document.getElementById('home-next-hint').classList.remove('open');
   document.getElementById('home-next-hint-label').textContent = t('home_next_see_detail');
-  updateHomeWidget(today, lbl);
 
   // Si ya corrimos hoy, mostramos el resumen de esa sesión en lugar del cartel de
   // "próxima sesión" -- ver getTodayRun().
