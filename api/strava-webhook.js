@@ -149,6 +149,17 @@ module.exports = withSentry(async (req, res) => {
         console.error('strava-webhook: subscription_id no coincide, se ignora el evento', event && event.subscription_id);
         return;
       }
+      // owner_id/object_id se interpolan sin comillas en un filtro PostgREST
+      // (athlete_id=eq.${athleteId}, ver syncActivity/deleteActivity/deauthorizeAthlete)
+      // -- si el subscription_id de arriba alguna vez se filtra (es un valor fijo, no
+      // rotativo, y lo devuelve el endpoint de debug), un event.owner_id/object_id con
+      // un "&" o similar podría agregar filtros PostgREST no previstos a esa consulta.
+      // El chequeo de subscription_id es la defensa principal; esto es una segunda capa
+      // barata, no confiar en enteros que en teoría "ya vienen bien" de Strava.
+      if (event) {
+        if (event.owner_id !== undefined && !Number.isInteger(event.owner_id)) { console.error('strava-webhook: owner_id no numérico, se ignora', event.owner_id); return; }
+        if (event.object_id !== undefined && !Number.isInteger(event.object_id)) { console.error('strava-webhook: object_id no numérico, se ignora', event.object_id); return; }
+      }
       if (event && event.object_type === 'activity' && (event.aspect_type === 'create' || event.aspect_type === 'update')) {
         await syncActivity(event.owner_id, event.object_id);
       } else if (event && event.object_type === 'activity' && event.aspect_type === 'delete') {
