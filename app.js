@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-29T01:23:30Z';
+const APP_VERSION = '2026-09-29T01:36:22Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7256,6 +7256,53 @@ const MAPBOX_TOKEN = 'pk.eyJ1IjoiemFuY2FkYSIsImEiOiJjbXU0cm9sbGEwM2tzMndwczE4emE
 const MAPBOX_STYLE = 'streets-v12';
 const MAPBOX_TILE_URL = `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/tiles/256/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`;
 const MAPBOX_ATTRIBUTION = '&copy; <a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noopener">Mapbox</a> &copy; OpenStreetMap contributors';
+// Implementación del "Encoded Polyline Algorithm Format" (el mismo que usan Google Maps y
+// la API de imágenes estáticas de Mapbox) -- codifica un array de puntos GPS en un string
+// compacto para mandarlo en la URL de un pedido de imagen. Sin librería de por medio:
+// es un algoritmo chico y bien documentado, no vale la pena traer una dependencia entera
+// solo por esto.
+function encodePolylinePoints(points){
+  let output = '', prevLat = 0, prevLng = 0;
+  const encodeNum = (num) => {
+    let sgn = num << 1;
+    if(num < 0) sgn = ~sgn;
+    let out = '';
+    while(sgn >= 0x20){ out += String.fromCharCode((0x20 | (sgn & 0x1f)) + 63); sgn >>= 5; }
+    out += String.fromCharCode(sgn + 63);
+    return out;
+  };
+  points.forEach(([lat, lng]) => {
+    const lat5 = Math.round(lat * 1e5), lng5 = Math.round(lng * 1e5);
+    output += encodeNum(lat5 - prevLat) + encodeNum(lng5 - prevLng);
+    prevLat = lat5; prevLng = lng5;
+  });
+  return output;
+}
+// Las miniaturas de mapa de la lista de Historial usan una imagen estática de Mapbox (un
+// solo <img>) en vez de un mapa de Leaflet interactivo de verdad -- medido en un celular
+// real de gama baja con dumpsys gfxinfo: cada mini-mapa interactivo (con su propia capa de
+// mosaicos retina pedidos por red, aunque arrastrar/zoom estén deshabilitados) era carísimo
+// de mantener vivo, y con 10+ tarjetas en la lista el scroll de Historial quedaba mucho más
+// trabado que el resto de la app. Tiene sentido acá porque estos mini-mapas de la lista YA
+// estaban configurados sin ninguna interacción (dragging/zoom/etc. todos en false) -- son
+// una vista previa nomás, así que no se pierde nada de funcionalidad real. El mapa del
+// DETALLE de una carrera puntual (pestaña Ruta, sí interactivo) sigue siendo un Leaflet de
+// verdad -- ahí sí hace falta poder explorar el recorrido de verdad, y es UN mapa a la vez,
+// no 10+ compitiendo durante el scroll de una lista.
+// maxPoints=120: decimado a propósito -- una carrera larga puede traer miles de puntos GPS,
+// mucho más detalle del que se nota en una miniatura de 108px de alto, y la URL de la API
+// de Mapbox tiene un límite de longitud.
+function buildHistMapStaticUrl(r, width, height){
+  const pts = r.points;
+  const maxPoints = 120;
+  const step = pts.length > maxPoints ? pts.length / maxPoints : 1;
+  const sampled = [];
+  for(let i=0; i<pts.length; i += step) sampled.push(pts[Math.floor(i)]);
+  if(sampled[sampled.length-1] !== pts[pts.length-1]) sampled.push(pts[pts.length-1]);
+  const encoded = encodeURIComponent(encodePolylinePoints(sampled.map(p=>[p.lat, p.lon])));
+  const w = Math.round(width), h = Math.round(height);
+  return `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/static/path-3+0B5D2E-1(${encoded})/auto/${w}x${h}?access_token=${MAPBOX_TOKEN}`;
+}
 function initLiveMap(){
   if(liveMap){ liveMap.remove(); liveMap=null; }
   liveMap = L.map('liveMap', {zoomControl:false, attributionControl:true}).setView([0,0], 15);
@@ -8528,7 +8575,7 @@ function renderHistory(){
       <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" onclick="deleteRun('${r.id}')"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
       <div class="card hist-card swipe-content" onclick="openRunDetail('${r.id}')" style="cursor:pointer;">
         <div class="hist-top"><span style="font-weight:700;">${dateStr}</span>${hasMap ? '' : `<span class="hist-date">${r.manual? `<span class="tag tag-asfalto" style="margin-right:6px;">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, true)}${fmtTime(r.durationSec)}</span>`}</div>
-        ${hasMap ? `<div class="hist-map" id="hist-map-${r.id}" data-run-id="${r.id}"><div class="hist-map-badge">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false)}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
+        ${hasMap ? `<div class="hist-map" data-run-id="${r.id}"><img class="hist-map-img" src="${buildHistMapStaticUrl(r, 400, 108)}" loading="lazy" alt="" decoding="async"><div class="hist-map-badge">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false)}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
         <div class="stat-row-divided">
           <div class="stat-cell"><div class="n">${fmtDist(r.distanceKm)}</div><div class="l">${distUnit()}</div></div>
           <div class="stat-cell"><div class="n">${fmtPace(paceMin)}</div><div class="l">${t('run_pace_word')}</div></div>
@@ -8543,48 +8590,10 @@ function renderHistory(){
       </div>
     </div>`;
   }).join('');
-  historyMaps.forEach(m=>m.remove());
-  historyMaps = [];
-  if(historyMapObserver){ historyMapObserver.disconnect(); historyMapObserver = null; }
-  // Antes se creaba un mapa de Leaflet vivo (con su propio tile layer pidiendo tiles) para
-  // CADA carrera con puntos de GPS, de una sola vez, cada vez que se renderiza Historial --
-  // incluida cada tecla tipeada en el buscador (hist-search llama a renderHistory() en cada
-  // input). Alguien con cientos/miles de carreras trackeadas terminaba creando y destruyendo
-  // esa misma cantidad de mapas de golpe en cada búsqueda, sin ninguna razón (la enorme
-  // mayoría ni siquiera están visibles en pantalla). Ahora se usa un solo IntersectionObserver
-  // para crear cada mapa recién cuando su tarjeta entra en pantalla (o está cerca, por el
-  // rootMargin) -- el resto de la lista no le cuesta nada a Leaflet hasta que el usuario
-  // scrollea hasta ahí.
-  const mapRunsById = new Map((state.runs||[]).filter(r=>r.points && r.points.length>1).map(r=>[String(r.id), r]));
-  function buildHistMap(el, r){
-    const map = L.map(el, {zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, touchZoom:false, boxZoom:false, keyboard:false});
-    L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20, detectRetina:true}).addTo(map);
-    const latlngs = r.points.map(p=>[p.lat,p.lon]);
-    const poly = L.polyline(latlngs, {color:'#0B5D2E', weight:3, lineCap:'round', lineJoin:'round'}).addTo(map);
-    map.fitBounds(poly.getBounds(), {padding:[10,10]});
-    historyMaps.push(map);
-  }
-  if(mapRunsById.size && typeof IntersectionObserver !== 'undefined'){
-    historyMapObserver = new IntersectionObserver((entries, obs)=>{
-      entries.forEach(entry=>{
-        if(!entry.isIntersecting) return;
-        obs.unobserve(entry.target);
-        const r = mapRunsById.get(String(entry.target.dataset.runId));
-        if(r) buildHistMap(entry.target, r);
-      });
-    }, {rootMargin:'400px 0px'});
-    mapRunsById.forEach((r, id)=>{
-      const el = document.getElementById('hist-map-'+id);
-      if(el) historyMapObserver.observe(el);
-    });
-  } else {
-    // Navegador sin IntersectionObserver (rarísimo hoy): mismo comportamiento de siempre,
-    // crear todos los mapas de una.
-    mapRunsById.forEach((r, id)=>{
-      const el = document.getElementById('hist-map-'+id);
-      if(el) buildHistMap(el, r);
-    });
-  }
+  // Los mini-mapas de esta lista son <img> con loading="lazy" (ver buildHistMapStaticUrl()
+  // más arriba) -- ya no hace falta crear/destruir mapas de Leaflet acá ni un
+  // IntersectionObserver a mano, el navegador se encarga solo de no pedir la imagen hasta
+  // que la tarjeta esté por entrar en pantalla.
   animateHistTrendBars();
 }
 function animateHistTrendBars(){
@@ -8600,8 +8609,6 @@ function animateHistTrendBars(){
 }
 
 let detailMap = null;
-let historyMaps = [];
-let historyMapObserver = null;
 function analyzeSplitPacing(splits){
   // Compara el ritmo promedio de la primera mitad de la carrera contra la segunda para
   // detectar si se corrió parejo, acelerando (negative split, buena señal) o
