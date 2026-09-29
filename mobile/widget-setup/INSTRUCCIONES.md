@@ -87,12 +87,13 @@ Abrí `mobile/android/` en Android Studio (`npx cap open android` lo hace por vo
    `package ...` de los dos archivos .kt.
 2. Copiá `android/zancada_widget.xml` a
    `mobile/android/app/src/main/res/layout/zancada_widget.xml`.
-3. Copiá `android/widget_card_bg.xml` y `android/widget_zone_dot.xml` (de esta
-   carpeta) a `mobile/android/app/src/main/res/drawable/` (puede que la
-   carpeta `res/drawable/` no exista todavía — creála). Son la card redondeada
-   de fondo y el puntito de color de zona que usa el layout de arriba —
-   **sin estos dos archivos el widget no compila**, `zancada_widget.xml` los
-   referencia por nombre.
+3. Copiá `android/widget_card_bg.xml`, `android/widget_zone_dot.xml` y
+   `android/widget_hoy_pill.xml` (de esta carpeta) a
+   `mobile/android/app/src/main/res/drawable/` (puede que la carpeta
+   `res/drawable/` no exista todavía — creála). Son la card de fondo, el
+   puntito de color de zona, y el chip detrás de la etiqueta HOY que usa
+   el layout de arriba — **sin estos tres archivos el widget no compila**,
+   `zancada_widget.xml` los referencia por nombre.
 4. Copiá `android/zancada_widget_info.xml` a
    `mobile/android/app/src/main/res/xml/zancada_widget_info.xml` (puede que la
    carpeta `res/xml/` no exista todavía — creála).
@@ -114,20 +115,33 @@ texto de distancia/tiempo como un `SpannableString` (`RelativeSizeSpan` +
 `StyleSpan` + `ForegroundColorSpan`) para que la cifra salga grande/negrita/
 clara y la unidad ("km"/"min") chica y gris, las dos en la MISMA `TextView`
 — es la única forma de mezclar dos tamaños en una línea en RemoteViews, no
-hay manera de hacerlo solo con atributos XML. El fondo (`widget_card_bg.xml`)
-es un "mesh gradient" en capas (`layer-list`: degradé diagonal de base +
-resplandor lima tenue arriba a la derecha + sombra tenue abajo a la
-izquierda + borde hairline arriba de todo) en vez de un color plano o un
-gradiente de dos puntas nomás — le da profundidad real sin necesitar una
-imagen de textura. El widget NO tiene ningún ícono de marca (se sacó por
-pedido explícito): la identidad de Zancada queda en el color lima del texto
-y del resplandor del fondo, no en un logo compitiendo con el dato. Tiene
-además un punto de color por zona (mismos 5 colores que `ZONE_COLORS` en
-`app.js`) al lado del tipo de sesión. Si alguna vez agregás un elemento
-nuevo al layout, usá solo clases que RemoteViews sabe inflar (`TextView`,
-`ImageView`, `FrameLayout`, `LinearLayout`, etc.) — un `<View>` genérico
-rompe el widget en tiempo de ejecución con "Error inflating class
-android.view.View" (pasó una vez armando el punto de zona; el layout de esta
+hay manera de hacerlo solo con atributos XML. Ese número usa
+`fontFamily="sans-serif-black"` (no monoespaciada): a este tamaño una
+tipografía "black" tiene mucha más presencia que una monoespaciada, que se
+ve más angosta/técnica al lado.
+
+El fondo (`widget_card_bg.xml`) es un "mesh gradient" con sombra propia en
+capas (`layer-list`): un óvalo oscuro difuso apoyado debajo del borde
+inferior (la card está insetBottom para dejarle lugar), un negro casi puro
+tipo `--ink`/`--asphalt` de index.html (no un gris carbón genérico) con DOS
+resplandores lima apilados arriba a la derecha a distinto radio para que la
+caída se sienta gradual en vez de un anillo brusco, y sin ningún borde/
+stroke: borde + sombra juntos es justo el combo "card de IA genérica" que
+hay que evitar, así que la propia sombra y el contraste del degradé contra
+el fondo hacen de borde. La etiqueta "HOY" tiene un fondo tipo chip
+(`widget_hoy_pill.xml`, lima al ~15% de opacidad) en vez de texto suelto —
+mismo lenguaje que ya usan los tags/badges del resto de la app (ej.
+"NATIVO"/"CONECTADO" en Relojes).
+
+El widget NO tiene ningún ícono de marca (se sacó por pedido explícito): la
+identidad de Zancada queda en el color lima del texto y del resplandor del
+fondo, no en un logo compitiendo con el dato. Tiene además un punto de
+color por zona (mismos 5 colores que `ZONE_COLORS` en `app.js`) al lado del
+tipo de sesión. Si alguna vez agregás un elemento nuevo al layout, usá solo
+clases que RemoteViews sabe inflar (`TextView`, `ImageView`, `FrameLayout`,
+`LinearLayout`, etc.) — un `<View>` genérico rompe el widget en tiempo de
+ejecución con "Error inflating class android.view.View" (pasó una vez
+armando el punto de zona; el layout de esta
 carpeta ya usa `ImageView` en su lugar).
 
 **Sobre el tamaño de la card:** si en algún momento vuelve a sentirse

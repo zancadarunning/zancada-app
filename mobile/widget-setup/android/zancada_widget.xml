@@ -38,17 +38,22 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:background="@drawable/widget_hoy_pill"
+            android:paddingStart="9dp"
+            android:paddingEnd="9dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
             android:text="HOY"
             android:textColor="#D6FF3F"
-            android:textSize="14sp"
+            android:textSize="12sp"
             android:textStyle="bold"
-            android:letterSpacing="0.16"
+            android:letterSpacing="0.14"
             android:fontFamily="sans-serif-medium" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="10dp"
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
@@ -84,9 +89,11 @@
              para que la cifra salga grande/negrita/clara y la unidad
              ("km"/"min") chica y gris, ambas en esta misma TextView: por
              eso el tamaño/color acá son solo la base sobre la que esos spans
-             escalan, no el resultado final. fontFamily monospace para que
-             las cifras queden tabulares, igual criterio que .mono en
-             index.html para los números de stats. -->
+             escalan, no el resultado final. fontFamily sans-serif-black (no
+             monospace): a este tamaño una tipografía "black"/ultra-negrita
+             lee como un número hero con mucha más presencia que una
+             monoespaciada, que a igual tamaño se ve más angosta/técnica.
+             Probado en un dispositivo real, el cambio se nota. -->
         <TextView
             android:id="@+id/widget_amount_big"
             android:layout_width="match_parent"
@@ -94,7 +101,7 @@
             android:layout_marginTop="12dp"
             android:textColor="#EDEFEF"
             android:textSize="19sp"
-            android:fontFamily="monospace"
+            android:fontFamily="sans-serif-black"
             android:maxLines="1" />
     </LinearLayout>
 
