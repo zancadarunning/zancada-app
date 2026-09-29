@@ -3,20 +3,34 @@
   DÓNDE VA: android/app/src/main/res/layout/zancada_widget.xml
 
   Layout del widget. Colores tomados a mano de la paleta oscura de Zancada
-  (variables ink y hivis en index.html): el widget no puede leer el CSS de
-  la app, así que quedan hardcodeados acá.
+  (variables asphalt-2/chalk/mist/hivis en index.html) y mismo radius de
+  26dp que usan las cards de la app: el widget no puede leer el CSS, así
+  que todo queda hardcodeado acá, pero apunta a verse como una card más de
+  la propia app, no como un recuadro nativo genérico.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#121415"
-    android:padding="16dp">
+    android:background="@drawable/widget_card_bg"
+    android:padding="18dp">
+
+    <!-- Marca chica en la esquina: el mismo ícono redondo del launcher, a
+         baja prominencia, para que el widget se lea como "de Zancada" sin
+         competir con el dato real. -->
+    <ImageView
+        android:layout_width="18dp"
+        android:layout_height="18dp"
+        android:layout_gravity="top|end"
+        android:src="@mipmap/ic_launcher_round"
+        android:alpha="0.9"
+        android:contentDescription="@null" />
 
     <LinearLayout
         android:id="@+id/widget_session_group"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
         android:orientation="vertical"
         android:visibility="gone">
 
@@ -26,25 +40,54 @@
             android:text="HOY"
             android:textColor="#D6FF3F"
             android:textSize="11sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:letterSpacing="0.14"
+            android:fontFamily="sans-serif-medium" />
 
         <TextView
             android:id="@+id/widget_type"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textColor="#FFFFFF"
-            android:textSize="16sp"
+            android:layout_marginTop="5dp"
+            android:textColor="#EDEFEF"
+            android:textSize="17sp"
             android:textStyle="bold"
+            android:fontFamily="sans-serif-medium"
+            android:lineSpacingExtra="1dp"
             android:maxLines="2" />
 
-        <TextView
-            android:id="@+id/widget_amount"
+        <LinearLayout
+            android:id="@+id/widget_meta_row"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textColor="#BFBFBF"
-            android:textSize="13sp" />
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <!-- ImageView, no View liso: RemoteViews (lo que arma un widget de
+                 pantalla de inicio) solo sabe inflar un set fijo de clases, y
+                 android.view.View no está en esa lista: confirmado con un
+                 crash real en el dispositivo ("Error inflating class
+                 android.view.View"). ImageView sí, y de paso permite
+                 tintear el color con setColorFilter() desde el provider. -->
+            <ImageView
+                android:id="@+id/widget_zone_dot"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:layout_marginEnd="6dp"
+                android:src="@drawable/widget_zone_dot"
+                android:contentDescription="@null"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/widget_amount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#8B9296"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium" />
+        </LinearLayout>
     </LinearLayout>
 
     <LinearLayout
@@ -56,21 +99,30 @@
         android:gravity="center"
         android:visibility="visible">
 
+        <ImageView
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_marginBottom="8dp"
+            android:src="@mipmap/ic_launcher_round"
+            android:contentDescription="@null" />
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Zancada"
-            android:textColor="#FFFFFF"
+            android:textColor="#EDEFEF"
             android:textSize="14sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:text="Abrí la app para ver tu sesión de hoy"
-            android:textColor="#999999"
+            android:textColor="#8B9296"
             android:textSize="12sp"
-            android:gravity="center" />
+            android:gravity="center"
+            android:maxLines="2" />
     </LinearLayout>
 </FrameLayout>

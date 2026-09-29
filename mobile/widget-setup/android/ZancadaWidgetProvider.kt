@@ -13,10 +13,21 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
+import android.graphics.Color
 import android.view.View
 import android.widget.RemoteViews
 import org.json.JSONObject
 import java.util.Calendar
+
+// Mismos 5 colores que ZONE_COLORS en app.js -- si esa constante cambia algún
+// día, actualizar acá también a mano (el widget no puede leer app.js).
+private val ZONE_COLORS = mapOf(
+    "1" to "#5B9BFF",
+    "2" to "#4ADE80",
+    "3" to "#FACC15",
+    "4" to "#FB923C",
+    "5" to "#FF6B5D"
+)
 
 class ZancadaWidgetProvider : AppWidgetProvider() {
 
@@ -45,11 +56,13 @@ class ZancadaWidgetProvider : AppWidgetProvider() {
             var isStale = true
             var type = ""
             var amount = ""
+            var zone = ""
             if (raw != null) {
                 try {
                     val json = JSONObject(raw)
                     type = json.optString("type", "")
                     amount = json.optString("amount", "")
+                    zone = json.optString("zone", "")
                     val dateISO = json.optString("dateISO", "")
                     if (dateISO.isNotEmpty()) {
                         val parts = dateISO.split("-")
@@ -72,6 +85,14 @@ class ZancadaWidgetProvider : AppWidgetProvider() {
                 views.setViewVisibility(R.id.widget_empty_group, View.GONE)
                 views.setTextViewText(R.id.widget_type, type)
                 views.setTextViewText(R.id.widget_amount, amount)
+
+                val zoneColor = ZONE_COLORS[zone]
+                if (zoneColor != null) {
+                    views.setViewVisibility(R.id.widget_zone_dot, View.VISIBLE)
+                    views.setInt(R.id.widget_zone_dot, "setColorFilter", Color.parseColor(zoneColor))
+                } else {
+                    views.setViewVisibility(R.id.widget_zone_dot, View.GONE)
+                }
             } else {
                 views.setViewVisibility(R.id.widget_session_group, View.GONE)
                 views.setViewVisibility(R.id.widget_empty_group, View.VISIBLE)

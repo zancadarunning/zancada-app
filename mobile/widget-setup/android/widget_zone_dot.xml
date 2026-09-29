@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DÓNDE VA: android/app/src/main/res/drawable/widget_zone_dot.xml
+
+  Círculo chico y sólido, blanco por default: ZancadaWidgetProvider.kt le
+  cambia el color en tiempo real con setColorFilter() según la zona de la
+  sesión (mismos 5 colores que ZONE_COLORS en app.js), igual que los puntitos
+  de color que ya usa la app en las leyendas de zona (".dot" en index.html).
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#FFFFFF" />
+    <size android:width="8dp" android:height="8dp" />
+</shape>

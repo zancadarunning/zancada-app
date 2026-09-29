@@ -87,19 +87,36 @@ Abrí `mobile/android/` en Android Studio (`npx cap open android` lo hace por vo
    `package ...` de los dos archivos .kt.
 2. Copiá `android/zancada_widget.xml` a
    `mobile/android/app/src/main/res/layout/zancada_widget.xml`.
-3. Copiá `android/zancada_widget_info.xml` a
+3. Copiá `android/widget_card_bg.xml` y `android/widget_zone_dot.xml` (de esta
+   carpeta) a `mobile/android/app/src/main/res/drawable/` (puede que la
+   carpeta `res/drawable/` no exista todavía — creála). Son la card redondeada
+   de fondo y el puntito de color de zona que usa el layout de arriba —
+   **sin estos dos archivos el widget no compila**, `zancada_widget.xml` los
+   referencia por nombre.
+4. Copiá `android/zancada_widget_info.xml` a
    `mobile/android/app/src/main/res/xml/zancada_widget_info.xml` (puede que la
    carpeta `res/xml/` no exista todavía — creála).
-4. Pegá el contenido de `android/AndroidManifest-snippet.xml` DENTRO de la
+5. Pegá el contenido de `android/AndroidManifest-snippet.xml` DENTRO de la
    etiqueta `<application>` de
    `mobile/android/app/src/main/AndroidManifest.xml` (no reemplaces el manifest
    entero, solo agregá ese bloque `<receiver>`).
-5. Registrá el plugin en `MainActivity` — ver `android/MainActivity-registro.md`
+6. Registrá el plugin en `MainActivity` — ver `android/MainActivity-registro.md`
    para el paso exacto (es una línea).
-6. Sincronizá Gradle (Android Studio te lo va a ofrecer solo al detectar los
+7. Sincronizá Gradle (Android Studio te lo va a ofrecer solo al detectar los
    archivos nuevos) y corré la app en un emulador o dispositivo. Para agregar el
    widget: mantené presionada la pantalla de inicio → Widgets → buscá "Zancada" →
    arrastralo a la pantalla.
+
+**Sobre el diseño:** el widget usa `@mipmap/ic_launcher_round` como marca chica
+en la esquina (ya existe en cualquier proyecto generado por
+`capacitor-assets`, ver el comando en `mobile/README.md` — no hace falta
+agregar nada aparte para eso) y un punto de color por zona (mismos 5 colores
+que `ZONE_COLORS` en `app.js`) al lado de la distancia/tiempo. Si alguna vez
+agregás un elemento nuevo al layout, usá solo clases que RemoteViews sabe
+inflar (`TextView`, `ImageView`, `FrameLayout`, `LinearLayout`, etc.) — un
+`<View>` genérico rompe el widget en tiempo de ejecución con
+"Error inflating class android.view.View" (pasó una vez armando el punto de
+zona; el layout de esta carpeta ya usa `ImageView` en su lugar).
 
 ## 4. Mantenimiento
 
