@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-29T01:36:22Z';
+const APP_VERSION = '2026-09-29T01:42:00Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7292,6 +7292,15 @@ function encodePolylinePoints(points){
 // maxPoints=120: decimado a propósito -- una carrera larga puede traer miles de puntos GPS,
 // mucho más detalle del que se nota en una miniatura de 108px de alto, y la URL de la API
 // de Mapbox tiene un límite de longitud.
+// width/height acá son en píxeles CSS (el tamaño en pantalla de .hist-map, no el tamaño
+// real del archivo que hay que pedir) -- multiplicamos por devicePixelRatio adentro. Sin
+// esto, en cualquier celular con pantalla de densidad alta (la gran mayoría hoy: probado
+// en un Moto E6 Plus real con devicePixelRatio 1.75, donde .hist-map mide 326x108px de
+// CSS pero necesita 571x189px de verdad) se pedía la imagen más chica de lo que ocupa en
+// pantalla, y el navegador la estira -- exactamente lo que se ve "pixelado/feo" al
+// agrandar cualquier imagen de trama más chica que su tamaño de despliegue. Tope en 3x
+// (no devicePixelRatio directo) para no pedir un archivo innecesariamente pesado en
+// pantallas de densidad rarísima.
 function buildHistMapStaticUrl(r, width, height){
   const pts = r.points;
   const maxPoints = 120;
@@ -7300,7 +7309,8 @@ function buildHistMapStaticUrl(r, width, height){
   for(let i=0; i<pts.length; i += step) sampled.push(pts[Math.floor(i)]);
   if(sampled[sampled.length-1] !== pts[pts.length-1]) sampled.push(pts[pts.length-1]);
   const encoded = encodeURIComponent(encodePolylinePoints(sampled.map(p=>[p.lat, p.lon])));
-  const w = Math.round(width), h = Math.round(height);
+  const dpr = Math.min((typeof devicePixelRatio!=='undefined' && devicePixelRatio) || 1, 3);
+  const w = Math.min(1280, Math.round(width * dpr)), h = Math.min(1280, Math.round(height * dpr));
   return `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/static/path-3+0B5D2E-1(${encoded})/auto/${w}x${h}?access_token=${MAPBOX_TOKEN}`;
 }
 function initLiveMap(){
