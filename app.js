@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-29T15:47:17Z';
+const APP_VERSION = '2026-09-29T16:25:04Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2833,7 +2833,9 @@ function renderCalendar(){
   let cells = [];
   for(let i=startOffset; i>0; i--) cells.push({day: daysInPrevMonth-i+1, other:true});
   for(let d=1; d<=daysInMonth; d++) cells.push({day:d, other:false});
-  while(cells.length % 7 !== 0) cells.push({day: cells.length, other:true});
+  // El día del mes SIGUIENTE tiene que arrancar en 1, no en cells.length -- eso mostraba
+  // el total acumulado de celdas como si fuera el número de día (ej. "34" en vez de "3").
+  for(let d=1; cells.length % 7 !== 0; d++) cells.push({day:d, other:true});
 
   document.getElementById('cal-grid').innerHTML = cells.map(c=>{
     if(c.other) return `<div class="cal-day other-month">${c.day}</div>`;
