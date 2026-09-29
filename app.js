@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-29T01:42:00Z';
+const APP_VERSION = '2026-09-29T14:49:18Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -241,7 +241,20 @@ function haptic(pattern){
     const Haptics = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics;
     if(Haptics){ Haptics.impact({ style: 'MEDIUM' }); return; }
   }catch(e){}
-  try{ if(navigator.vibrate) navigator.vibrate(pattern); }catch(e){}
+  // Piso de duración para navigator.vibrate(): confirmado en un dispositivo real que los
+  // motores ERM (los comunes en gamas media/baja, sin @capacitor/haptics instalado) no
+  // llegan a arrancar con pulsos de 15-40ms -- el sistema recibe el pedido (confirmado con
+  // dumpsys vibrator) pero el teléfono no llega a sentirse. 1500ms sí se sintió, así que
+  // cualquier pulso por debajo de este piso se estira; en los patrones [on, pausa, on, ...]
+  // solo se estiran los índices pares (los "on"), no las pausas.
+  const VIBRATE_MIN_MS = 40;
+  try{
+    if(!navigator.vibrate) return;
+    const p = Array.isArray(pattern)
+      ? pattern.map((ms, i) => i % 2 === 0 ? Math.max(ms, VIBRATE_MIN_MS) : ms)
+      : Math.max(pattern, VIBRATE_MIN_MS);
+    navigator.vibrate(p);
+  }catch(e){}
 }
 /* ---- Micro-festejo (confetti) ----
    Los dos únicos momentos donde ya existía un showToast('success') atado a algo que el
