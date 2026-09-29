@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-29T15:00:20Z';
+const APP_VERSION = '2026-09-29T15:28:06Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1740,10 +1740,16 @@ function healthConnectExerciseToRun(ex){
 // Polar/Wahoo/Health Connect quedaban con carreras "sin marca" (sin insignia, invisibles
 // para el buscador) aunque llegaran de un reloj sincronizado igual que las de Strava.
 const SOURCE_LABELS = {strava:'Strava', polar:'Polar', wahoo:'Wahoo', coros:'COROS', healthconnect:'Health Connect'};
+// Logos reales de cada marca (ver img/brand-logos/FUENTES.md para el origen de cada uno)
+// en vez de mostrar solo el nombre en texto -- van sobre un fondo claro porque la mayoría
+// son wordmarks oscuros/a color pensados para fondo blanco, no para las tarjetas oscuras
+// de la app.
+const SOURCE_LOGOS = {strava:'img/brand-logos/strava.svg', polar:'img/brand-logos/polar.svg', wahoo:'img/brand-logos/wahoo.svg', coros:'img/brand-logos/coros.png', healthconnect:'img/brand-logos/healthconnect.png'};
 function sourceBadgeHtml(source, withMargin){
   const label = SOURCE_LABELS[source];
+  const logo = SOURCE_LOGOS[source];
   if(!label) return '';
-  return `<span class="tag tag-asfalto"${withMargin?' style="margin-right:6px;"':''}>${label}</span>`;
+  return `<span class="tag tag-brand"${withMargin?' style="margin-right:6px;"':''}><img class="tag-brand-logo" src="${logo}" alt="${label}" loading="lazy"></span>`;
 }
 function isLikelyDuplicateOfExistingRun(startIso, distanceKm, existingRuns, durationSec){
   // Compara contra CUALQUIER carrera ya guardada, sin importar la fuente -- si el mismo
