@@ -479,7 +479,15 @@
      cuando se saca overlay-open) es rápido y directo -- es una respuesta del sistema.
      Abrir (la regla de abajo) se toma unos milisegundos más con un resorte apenas
      insinuado -- es la hoja "llegando", tiene sentido que se sienta un poco viva. */
-  .overlay-sheet{display:block; opacity:0; pointer-events:none; transform:translateY(22px);
+  /* display:none (no display:block) -- un panel que nunca se abrió en la sesión (la
+     mayoría: la mayoría de los corredores nunca visita "Zonas" o "Molestias" en una
+     sesión dada) arranca ya sin pintarse, en vez de solo invisible por opacity:0. Medido
+     en un celular real de gama baja: con display:block por defecto, TODOS los paneles
+     "hoja" (~12 en total) se quedaban renderizados desde el arranque de la app aunque el
+     corredor nunca los tocara -- openOverlaySheetEl()/el listener de transitionend de
+     app.js (ver el comentario grande ahí) se encargan de mostrarlos/ocultarlos de verdad
+     ahora, así que ya no hace falta que la regla base los deje pintados "por si acaso". */
+  .overlay-sheet{display:none; opacity:0; pointer-events:none; transform:translateY(22px);
     transition:opacity .18s var(--ease-out), transform .18s var(--ease-out);}
   .overlay-sheet.overlay-open{opacity:1; pointer-events:auto; transform:translateY(0);
     transition:opacity .3s var(--ease-spring), transform .3s var(--ease-spring);}

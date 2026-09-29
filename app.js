@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-29T00:48:28Z';
+const APP_VERSION = '2026-09-29T01:00:49Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2249,7 +2249,7 @@ function openSportPicker(ctx){
   const search = document.getElementById('sport-picker-search');
   if(search) search.value = '';
   renderSportPickerList();
-  document.getElementById('sport-picker-overlay').classList.add('overlay-open');
+  openOverlaySheetEl(document.getElementById('sport-picker-overlay'));
 }
 function closeSportPicker(){
   if(sportPickerCtx){
@@ -2299,7 +2299,7 @@ function renderPerfilCrossTraining(){
       : t('perfil_crosstraining_summary_empty');
   }
 }
-function openCrossTrainingOverlay(){ renderPerfilCrossTraining(); document.getElementById('crosstraining-overlay').classList.add('overlay-open'); }
+function openCrossTrainingOverlay(){ renderPerfilCrossTraining(); openOverlaySheetEl(document.getElementById('crosstraining-overlay')); }
 function closeCrossTrainingOverlay(){ document.getElementById('crosstraining-overlay').classList.remove('overlay-open'); }
 function saveCrossTraining(){
   const sports = perfilSportsDraft;
@@ -3250,6 +3250,48 @@ if(typeof MutationObserver !== 'undefined' && typeof document !== 'undefined' &&
     // observer llegue a leerla y terminaría llamando a history.back() de más.
     queueMicrotask(()=>{ closingOverlayFromBackButton = false; });
   });
+}
+/* Rendimiento: los overlay-sheet (ver el comentario grande junto a .overlay-sheet en
+   index.html) quedan siempre display:block a propósito, para poder animar con
+   opacity+transform -- pero eso significa que, una vez abierto una sola vez, un panel
+   como "Datos personales" o "Zapatillas" se queda pintándose en CADA frame de scroll de
+   CUALQUIER pantalla de la app para siempre (con sus tarjetas, sombras y botones), solo
+   invisible por opacity:0 -- el corredor nunca lo nota, pero la WebView sigue trabajando
+   por él. Medido en un celular real de gama baja con dumpsys gfxinfo: esto es parte real
+   del 93-100% de frames trabados durante el scroll, en cualquier pantalla, incluso si el
+   corredor nunca volvió a abrir ningún panel.
+
+   Arreglo en dos partes:
+   1) closeOverlaySheet* (cualquier camino: los ~12 closeX(), o el gesto de swipe de
+      wireOverlaySheetSwipe) saca la clase overlay-open, que dispara la transición de
+      opacity ya definida en CSS -- un solo listener de transitionend, delegado en
+      document (no hace falta tocar cada función de cierre), recién ahí -- cuando la
+      animación de cierre YA TERMINÓ, no antes -- pone display:none de verdad. Ponerlo
+      antes cortaría el fundido de salida de un salto.
+   2) openOverlaySheetEl() (usado por los ~12 openX(), reemplazando el
+      .classList.add('overlay-open') que tenían cada uno) saca ese display:none al volver
+      a abrir, con un reflow forzado (leer offsetHeight) en el medio -- sin este paso, sacar
+      display:none y agregar overlay-open en el mismo tick no le da tiempo al navegador de
+      "registrar" el fotograma de partida (opacity:0, ya visible) antes de animar hacia
+      opacity:1, y la apertura se ve de un salto en vez de con el resorte de entrada. */
+if(typeof document !== 'undefined'){
+  document.addEventListener('transitionend', (e)=>{
+    const el = e.target;
+    if(e.propertyName !== 'opacity') return;
+    if(!(el instanceof HTMLElement) || !el.classList.contains('overlay-sheet')) return;
+    if(!el.classList.contains('overlay-open')) el.style.display = 'none';
+  });
+}
+function openOverlaySheetEl(el){
+  // display:'block' explícito (no '' /limpiar el inline) -- la regla base .overlay-sheet
+  // en index.html ahora arranca en display:none (ver el comentario grande junto a esa
+  // regla), así que limpiar el inline a '' dejaría el display:none de la regla base sin
+  // pisar. El reflow forzado (offsetHeight) entre esto y agregar overlay-open sigue siendo
+  // necesario: sin él, el navegador nunca "ve" el fotograma de partida (opacity:0, ya
+  // display:block) antes de animar hacia opacity:1, y la apertura salta en vez de animarse.
+  el.style.display = 'block';
+  void el.offsetHeight;
+  el.classList.add('overlay-open');
 }
 async function logout(){ await waitForPendingPersist(); await supabaseClient.auth.signOut(); location.reload(); }
 async function resetApp(){
@@ -5357,7 +5399,7 @@ document.getElementById('pain-body-choice').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('pain-body-choice').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
 });
-function openPainOverlay(){ document.getElementById('pain-overlay').classList.add('overlay-open'); }
+function openPainOverlay(){ openOverlaySheetEl(document.getElementById('pain-overlay')); }
 function closePainOverlay(){ document.getElementById('pain-overlay').classList.remove('overlay-open'); }
 function openPainModal(){
   document.getElementById('pain-note').value = '';
@@ -5704,21 +5746,21 @@ function renderPerfil(){
    que abren un overlay de pantalla completa -- mismo patrón que openAchievements(). No
    hace falta reconstruir el HTML de adentro (a diferencia de logros): los inputs ya
    existen siempre en el DOM y renderPerfil() los mantiene al día estén o no visibles. */
-function openDevicesOverlay(){ document.getElementById('devices-overlay').classList.add('overlay-open'); }
+function openDevicesOverlay(){ openOverlaySheetEl(document.getElementById('devices-overlay')); }
 function closeDevicesOverlay(){ document.getElementById('devices-overlay').classList.remove('overlay-open'); }
-function openPersonalDataOverlay(){ document.getElementById('personal-data-overlay').classList.add('overlay-open'); }
+function openPersonalDataOverlay(){ openOverlaySheetEl(document.getElementById('personal-data-overlay')); }
 function closePersonalDataOverlay(){ document.getElementById('personal-data-overlay').classList.remove('overlay-open'); }
-function openGoalsOverlay(){ document.getElementById('goals-overlay').classList.add('overlay-open'); }
+function openGoalsOverlay(){ openOverlaySheetEl(document.getElementById('goals-overlay')); }
 function closeGoalsOverlay(){ document.getElementById('goals-overlay').classList.remove('overlay-open'); }
-function openShoesOverlay(){ document.getElementById('shoes-overlay').classList.add('overlay-open'); }
+function openShoesOverlay(){ openOverlaySheetEl(document.getElementById('shoes-overlay')); }
 function closeShoesOverlay(){ document.getElementById('shoes-overlay').classList.remove('overlay-open'); }
-function openEventOverlay(){ document.getElementById('event-overlay').classList.add('overlay-open'); }
+function openEventOverlay(){ openOverlaySheetEl(document.getElementById('event-overlay')); }
 function closeEventOverlay(){ document.getElementById('event-overlay').classList.remove('overlay-open'); }
-function openLangOverlay(){ document.getElementById('lang-overlay').classList.add('overlay-open'); }
+function openLangOverlay(){ openOverlaySheetEl(document.getElementById('lang-overlay')); }
 function closeLangOverlay(){ document.getElementById('lang-overlay').classList.remove('overlay-open'); }
-function openDaysOverlay(){ document.getElementById('days-overlay').classList.add('overlay-open'); }
+function openDaysOverlay(){ openOverlaySheetEl(document.getElementById('days-overlay')); }
 function closeDaysOverlay(){ document.getElementById('days-overlay').classList.remove('overlay-open'); }
-function openZonesOverlay(){ document.getElementById('zones-overlay').classList.add('overlay-open'); }
+function openZonesOverlay(){ openOverlaySheetEl(document.getElementById('zones-overlay')); }
 function closeZonesOverlay(){ document.getElementById('zones-overlay').classList.remove('overlay-open'); }
 /* ---- Resorte estilo Apple (WWDC 2018, "Designing Fluid Interfaces") ----
    damping 1 = crítico, sin rebote; response = segundos hasta asentarse -- no es una
@@ -8179,7 +8221,7 @@ function openAchievements(){
     <div class="card"><h3>${t('ach_section_runs')}</h3>${renderAchievementBadgeGrid(runBadges)}</div>
     <div class="card"><h3>${t('ach_section_streak')}</h3>${renderAchievementBadgeGrid(streakBadges)}</div>
   `;
-  document.getElementById('achievements-modal').classList.add('overlay-open');
+  openOverlaySheetEl(document.getElementById('achievements-modal'));
 }
 function closeAchievements(){
   document.getElementById('achievements-modal').classList.remove('overlay-open');
