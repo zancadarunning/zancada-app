@@ -117,7 +117,15 @@
     --ease-out:cubic-bezier(.22,1,.36,1);
     --tabbar-bg:rgba(24,24,27,.92);
     --toast-error-bg:#3a1f1c; --toast-error-fg:#FF9A8D;
-    --shadow-card:0 8px 22px rgba(0,0,0,.4); --shadow-lg:0 16px 48px rgba(0,0,0,.55);
+    /* Radio de desenfoque achicado a propósito (offset y blur, no la opacidad/color) --
+       medido en un celular real de gama baja con dumpsys gfxinfo: un box-shadow con blur
+       grande (22-48px) es carísimo de rasterizar en cualquier GPU débil, sin importar
+       cuántos elementos lo usen a la vez -- confirmado comparando "sin sombra" (15ms) contra
+       "misma sombra, blur chico" (también 15ms) contra "blur grande, mismo color/opacidad"
+       (48-93ms, 95-100% de frames trabados). Un blur chico (2-6px) sigue leyéndose como
+       "con presencia" -- un borde luminoso más ajustado en vez de un halo difuso grande --
+       pero cuesta lo mismo (casi nada) que no tener sombra. */
+    --shadow-card:0 2px 4px rgba(0,0,0,.4); --shadow-lg:0 3px 6px rgba(0,0,0,.55);
     --hivis-glow:rgba(214,255,63,.32);
     /* Colores de zona (ritmo/FC) del tema oscuro: se probó una versión pastel
        más suave y se volvió atrás a pedido del usuario -- estos son los
@@ -161,7 +169,8 @@
       --contour-line:rgba(0,0,0,.05);
       --tabbar-bg:rgba(255,255,255,.88);
       --toast-error-bg:#FDEBEA; --toast-error-fg:#B0241A;
-      --shadow-card:0 10px 24px rgba(20,22,18,.10); --shadow-lg:0 18px 50px rgba(20,22,18,.15);
+      /* Mismo achique de blur que la versión oscura de arriba -- ver ese comentario. */
+      --shadow-card:0 2px 4px rgba(20,22,18,.10); --shadow-lg:0 3px 6px rgba(20,22,18,.15);
       --hivis-glow:rgba(150,186,0,.32);
       /* Las 5 zonas del modo oscuro (azul pizarra → verde salvia → dorado apagado →
          terracota → ladrillo apagado, ver el comentario grande junto a --zone1 de :root)
@@ -196,15 +205,15 @@
        equivalentes que sí se notan sobre un fondo claro. */
     :root:not([data-theme="dark"]) .card-highlight{
       background:linear-gradient(160deg, rgba(150,186,0,.12), rgba(255,255,255,.65) 55%);
-      box-shadow:0 0 0 1px rgba(150,186,0,.28), 0 0 26px rgba(150,186,0,.22), 0 16px 32px rgba(20,22,18,.12);}
+      box-shadow:0 0 0 1px rgba(150,186,0,.28), 0 0 4px rgba(150,186,0,.22), 0 3px 5px rgba(20,22,18,.12);}
     :root:not([data-theme="dark"]) .confirm-card{
       background:linear-gradient(160deg, rgba(255,255,255,.92), rgba(231,232,227,.9) 55%);}
     :root:not([data-theme="dark"]) .card-shell-hivis{
       background:rgba(150,186,0,.08); border-color:rgba(150,186,0,.28);
-      box-shadow:0 16px 36px -14px rgba(150,186,0,.22);}
+      box-shadow:0 3px 6px -2px rgba(150,186,0,.22);}
     :root:not([data-theme="dark"]) .card-shell-clay{
       background:rgba(168,78,28,.06); border-color:rgba(168,78,28,.26);
-      box-shadow:0 16px 36px -14px rgba(168,78,28,.18);}
+      box-shadow:0 3px 6px -2px rgba(168,78,28,.18);}
     /* #offline-banner usa --ink (texto oscuro) sobre --clay como fondo -- funciona bien en
        oscuro (--clay ahí es más clarito, 4.7:1 con --ink) pero en claro --clay se oscurece
        a propósito para servir como TEXTO legible en otros lugares (ver el comentario grande
@@ -223,7 +232,8 @@
     --contour-line:rgba(0,0,0,.05);
     --tabbar-bg:rgba(255,255,255,.88);
     --toast-error-bg:#FDEBEA; --toast-error-fg:#B0241A;
-    --shadow-card:0 10px 24px rgba(20,22,18,.10); --shadow-lg:0 18px 50px rgba(20,22,18,.15);
+    /* Mismo achique de blur que la versión oscura -- ver ese comentario. */
+    --shadow-card:0 2px 4px rgba(20,22,18,.10); --shadow-lg:0 3px 6px rgba(20,22,18,.15);
     --hivis-glow:rgba(150,186,0,.32);
     /* Mismas 5 zonas que en el bloque de arriba (@media prefers-color-scheme:light) --
        ver ese comentario grande para el porqué de oscurecer estos tonos en vez de usar
@@ -240,15 +250,15 @@
   }
   :root[data-theme="light"] .card-highlight{
     background:linear-gradient(160deg, rgba(150,186,0,.12), rgba(255,255,255,.65) 55%);
-    box-shadow:0 0 0 1px rgba(150,186,0,.28), 0 0 26px rgba(150,186,0,.22), 0 16px 32px rgba(20,22,18,.12);}
+    box-shadow:0 0 0 1px rgba(150,186,0,.28), 0 0 4px rgba(150,186,0,.22), 0 3px 5px rgba(20,22,18,.12);}
   :root[data-theme="light"] .confirm-card{
     background:linear-gradient(160deg, rgba(255,255,255,.92), rgba(231,232,227,.9) 55%);}
   :root[data-theme="light"] .card-shell-hivis{
     background:rgba(150,186,0,.08); border-color:rgba(150,186,0,.28);
-    box-shadow:0 16px 36px -14px rgba(150,186,0,.22);}
+    box-shadow:0 3px 6px -2px rgba(150,186,0,.22);}
   :root[data-theme="light"] .card-shell-clay{
     background:rgba(168,78,28,.06); border-color:rgba(168,78,28,.26);
-    box-shadow:0 16px 36px -14px rgba(168,78,28,.18);}
+    box-shadow:0 3px 6px -2px rgba(168,78,28,.18);}
   :root[data-theme="light"] #offline-banner{ color:#FFFFFF; }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   /* text-size-adjust:100% -- sin esto, Chrome en Android "booster" automáticamente el
@@ -455,7 +465,7 @@
   .lang-row{display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:28px;}
   .lang-pill{padding:8px 13px; border-radius:999px; border:1.5px solid var(--asphalt-4); background:var(--asphalt-2);
     color:var(--mist); font-size:12px; font-weight:700; cursor:pointer;}
-  .lang-pill.active{border-color:var(--hivis); color:var(--hivis-text); background:var(--hivis-dim); box-shadow:0 4px 14px var(--hivis-glow);}
+  .lang-pill.active{border-color:var(--hivis); color:var(--hivis-text); background:var(--hivis-dim); box-shadow:0 1px 3px var(--hivis-glow);}
 
   .overlay{position:fixed; inset:0; z-index:50; background:var(--asphalt); max-width:480px; margin:0 auto;
     overflow-y:auto; display:none; padding:calc(28px + var(--safe-top)) 24px calc(28px + var(--safe-bottom));}
@@ -508,7 +518,7 @@
   .toast-wrap{position:fixed; left:0; right:0; bottom:calc(92px + var(--safe-bottom)); display:flex; justify-content:center; z-index:85; pointer-events:none; padding:0 24px; transition:bottom .15s ease;}
   body.chat-kb-open .toast-wrap{bottom:calc(85px + (var(--safe-bottom) * 2));}
   .toast{background:var(--asphalt-4); color:var(--chalk); padding:13px 18px; border-radius:999px; font-size:13.5px; font-weight:600;
-    box-shadow:0 8px 24px rgba(0,0,0,.4); display:flex; align-items:center; gap:8px; max-width:360px; text-align:center;
+    box-shadow:0 2px 5px rgba(0,0,0,.4); display:flex; align-items:center; gap:8px; max-width:360px; text-align:center;
     opacity:0; transform:translateY(10px) scale(.96); transition:opacity .22s var(--ease-out), transform .22s var(--ease-out); pointer-events:auto;}
   .toast.show{opacity:1; transform:translateY(0) scale(1);}
   .toast.error{background:var(--toast-error-bg); color:var(--toast-error-fg); border:1px solid rgba(255,107,93,.3);}
@@ -556,14 +566,14 @@
   .choice{flex:1; min-width:80px; text-align:center; padding:11px 6px; border-radius:var(--radius-sm);
     border:1.5px solid var(--asphalt-4); background:var(--asphalt-2); color:var(--mist);
     font-size:12.5px; font-weight:600; cursor:pointer; user-select:none;}
-  .choice.active{border-color:var(--hivis); color:var(--hivis-text); background:var(--hivis-dim); box-shadow:0 4px 14px var(--hivis-glow);}
+  .choice.active{border-color:var(--hivis); color:var(--hivis-text); background:var(--hivis-dim); box-shadow:0 1px 3px var(--hivis-glow);}
   /* Control segmentado de una sola pieza (borde redondeado continuo, sin que cada
      opción sea un botón suelto con su propio borde) -- para grupos chicos de 2-3
      opciones mutuamente excluyentes (sueño, terreno, unidades, voz). Los grupos con
      muchas opciones (dolores, idioma) siguen usando .choice-row sin esta clase. */
   .choice-row.segmented{flex-wrap:nowrap; gap:2px; background:var(--asphalt-3); border-radius:var(--radius-sm); padding:3px;}
   .choice-row.segmented .choice{min-width:0; border:none; background:none; box-shadow:none; padding:9px 4px; color:var(--mist);}
-  .choice-row.segmented .choice.active{background:var(--hivis); color:var(--ink); box-shadow:0 2px 10px var(--hivis-glow);}
+  .choice-row.segmented .choice.active{background:var(--hivis); color:var(--ink); box-shadow:0 1px 3px var(--hivis-glow);}
   /* Lista con buscador del picker de deportes (#sport-picker-overlay) -- filas apiladas en
      vez de chips en grilla, porque con ~24 deportes un grid de .choice no entra ni se lee. */
   .sport-row{display:flex; align-items:center; justify-content:space-between; padding:13px 16px;
@@ -597,8 +607,8 @@
 
   .btn{border:none; border-radius:999px; padding:15px 22px; font-weight:700; font-size:15px; cursor:pointer;
     width:100%; display:flex; align-items:center; justify-content:center; gap:8px;}
-  .btn-primary{background:var(--hivis); color:var(--ink); box-shadow:0 10px 24px var(--hivis-glow); transition:transform .13s var(--ease-out), box-shadow .13s var(--ease-out), background .13s ease, color .13s ease;}
-  .btn-primary:active{transform:scale(.97); box-shadow:0 4px 12px var(--hivis-glow);}
+  .btn-primary{background:var(--hivis); color:var(--ink); box-shadow:0 2px 5px var(--hivis-glow); transition:transform .13s var(--ease-out), box-shadow .13s var(--ease-out), background .13s ease, color .13s ease;}
+  .btn-primary:active{transform:scale(.97); box-shadow:0 1px 3px var(--hivis-glow);}
   .btn-primary:disabled{background:var(--asphalt-3); color:var(--mist-dim); box-shadow:none; cursor:not-allowed;}
   .btn-primary:disabled:active{transform:none;}
   .btn-outline{background:var(--asphalt-2); border:1.5px solid var(--overlay-hairline); color:var(--chalk); box-shadow:var(--shadow-card); transition:transform .13s var(--ease-out), background .13s var(--ease-out);}
@@ -642,7 +652,7 @@
     position:sticky; top:0; z-index:50; isolation:isolate; background:linear-gradient(180deg, var(--tabbar-bg) 55%, transparent);
     flex-shrink:0;}
   header.top .brand{display:flex; align-items:center; gap:9px;}
-  header.top .brand .dot{width:9px; height:9px; border-radius:50%; background:var(--hivis); box-shadow:0 0 10px var(--hivis);}
+  header.top .brand .dot{width:9px; height:9px; border-radius:50%; background:var(--hivis); box-shadow:0 0 2px var(--hivis);}
   header.top .brand span{font-size:15px; font-weight:800; letter-spacing:.02em;}
 
   /* Antes 128px para que el contenido no quedara tapado DEBAJO de la tabbar, que era
@@ -697,7 +707,7 @@
      radiales de fondo de #app filtrando por debajo, para que cada tarjeta se sienta
      parte de la misma atmósfera en vez de un rectángulo neutro cualquiera. */
   .card{background:var(--asphalt-2); border-radius:var(--radius); padding:22px; margin-bottom:20px; border:1px solid var(--overlay-hairline);
-    box-shadow:var(--shadow-card), inset 0 1px 0 rgba(255,255,255,.03), 0 30px 60px -35px rgba(214,255,63,.06);}
+    box-shadow:var(--shadow-card), inset 0 1px 0 rgba(255,255,255,.03), 0 5px 8px -5px rgba(214,255,63,.06);}
   .card[onclick]{cursor:pointer; transition:transform .13s var(--ease-out);}
   .card[onclick]:active{transform:scale(.98);}
   /* El ícono principal de cada fila-botón (Datos personales, Objetivos, Zapatillas...
@@ -769,7 +779,7 @@
   .card-highlight{background:linear-gradient(160deg, rgba(214,255,63,.1), rgba(24,24,27,.55) 55%);
     -webkit-backdrop-filter:blur(22px) saturate(1.4); backdrop-filter:blur(22px) saturate(1.4);
     border-color:var(--hivis); border-width:1.5px;
-    box-shadow:0 0 0 1px rgba(214,255,63,.22), 0 0 26px rgba(214,255,63,.28), 0 16px 32px rgba(0,0,0,.4);}
+    box-shadow:0 0 0 1px rgba(214,255,63,.22), 0 0 4px rgba(214,255,63,.28), 0 3px 5px rgba(0,0,0,.4);}
   /* "Doble bisel": una carcasa fina por fuera de las dos cards destacadas, como si
      el vidrio esmerilado de arriba estuviera calzado en una bandeja -- en vez de la
      tarjeta flotando sola contra el fondo. El radio exterior crece exactamente lo
@@ -778,9 +788,9 @@
   .card-shell{padding:6px; border-radius:32px; margin-bottom:20px;}
   .card-shell > .card{margin-bottom:0;}
   .card-shell-hivis{background:rgba(214,255,63,.035); border:1px solid rgba(214,255,63,.14);
-    box-shadow:0 20px 44px -14px rgba(214,255,63,.16);}
+    box-shadow:0 4px 8px -2px rgba(214,255,63,.16);}
   .card-shell-clay{background:rgba(192,106,46,.04); border:1px solid rgba(192,106,46,.16);
-    box-shadow:0 20px 44px -14px rgba(192,106,46,.14);}
+    box-shadow:0 4px 8px -2px rgba(192,106,46,.14);}
   /* Recuadro único de Conectividad (Strava + Polar + Wahoo + Health Connect, ver el
      comentario grande en el HTML): el aviso de arriba resuelve "no encuentro mi
      marca" antes de que el corredor tenga que leer las 4 descripciones, y cada fila
@@ -807,7 +817,7 @@
   .next-session-bullet{display:flex; gap:7px; align-items:flex-start; color:var(--mist); font-size:13.5px; line-height:1.45; margin-top:5px;}
   .next-session-bullet::before{content:''; width:5px; height:5px; margin-top:7px; border-radius:50%; background:var(--hivis); flex-shrink:0;}
   .stat-row{display:flex; gap:10px;}
-  .stat-box{flex:1; background:var(--asphalt-3); border-radius:var(--radius-sm); padding:13px 10px; text-align:center; border:1px solid var(--overlay-hairline); box-shadow:0 2px 8px rgba(0,0,0,.14);}
+  .stat-box{flex:1; background:var(--asphalt-3); border-radius:var(--radius-sm); padding:13px 10px; text-align:center; border:1px solid var(--overlay-hairline); box-shadow:0 1px 2px rgba(0,0,0,.14);}
   /* Cada km recorrido ya se anuncia por voz (ver maybeAnnounceKm) -- es el momento más
      repetido de toda la carrera y no tenía ningún refuerzo en pantalla para quien corre
      con el volumen bajo. Un solo pulso de color + escala en el número de distancia, sin
@@ -845,7 +855,7 @@
   .trend-stroke{width:5px; border-radius:99px; background:var(--chalk); transition:height .4s cubic-bezier(.22,1,.36,1);}
   .trend-stroke.trend-planned{background:var(--mist-dim);}
   .trend-stroke.trend-rest{width:1.5px; background:var(--asphalt-4);}
-  .trend-stroke.trend-today{background:var(--hivis); box-shadow:0 0 8px var(--hivis-glow);}
+  .trend-stroke.trend-today{background:var(--hivis); box-shadow:0 0 2px var(--hivis-glow);}
   .trend-lbl{font-size:9.5px; color:var(--mist); text-transform:uppercase; letter-spacing:.04em; flex-shrink:0;}
   /* Insignia "STRAVA" + duración sobre la vista previa del mapa, en vez de una fila de
      texto aparte encima de la tarjeta -- libera espacio y agrupa el origen del dato
@@ -887,7 +897,7 @@
      un blanco plano para todo entrenamiento -- convierte la tira semanal en un dato real
      (de un vistazo se ve qué días son suaves vs. exigentes), no solo una barra decorativa. */
   .week-days .wd-col.training .wd-bar{background:var(--zc, var(--chalk));}
-  .week-days .wd-col.today .wd-bar{background:var(--hivis); box-shadow:0 0 10px var(--hivis-glow), 0 0 22px var(--hivis-glow);}
+  .week-days .wd-col.today .wd-bar{background:var(--hivis); box-shadow:0 0 3px var(--hivis-glow);}
   .week-days .wd-col:active .wd-bar{transform:scaleX(1.4);}
   .week-days .wd-col.today .wd-lbl{color:var(--chalk); font-weight:700;}
   .coach-snippet{display:flex; gap:12px; align-items:flex-start;}
@@ -1002,10 +1012,15 @@
   .run-bg-route .rbr-finish-dim{opacity:.3;}
   .go-circle{position:relative; z-index:1; width:100%; max-width:220px; height:88px; border-radius:999px; margin:0 auto; background:var(--hivis);
     display:flex; align-items:center; justify-content:center; flex-direction:column; color:var(--ink); border:none; cursor:pointer;
-    box-shadow:0 16px 40px var(--hivis-glow); transition:transform .12s ease, box-shadow .12s ease; animation:goCirclePulse 2.6s ease-in-out infinite;}
+    box-shadow:0 3px 8px var(--hivis-glow); transition:transform .12s ease, box-shadow .12s ease; animation:goCirclePulse 2.6s ease-in-out infinite;}
   .go-circle .display{font-size:25px; letter-spacing:.03em;}
-  .go-circle:active{transform:scale(.96); box-shadow:0 8px 24px var(--hivis-glow); animation-play-state:paused;}
-  @keyframes goCirclePulse{0%,100%{box-shadow:0 16px 40px var(--hivis-glow);} 50%{box-shadow:0 16px 48px var(--hivis-glow), 0 0 0 8px var(--hivis-dim);}}
+  .go-circle:active{transform:scale(.96); box-shadow:0 2px 5px var(--hivis-glow); animation-play-state:paused;}
+  /* Blur chico (no solo offset/opacidad) también en la animación -- una sombra grande
+     ANIMADA (cambiando de tamaño en loop infinito, no solo estática) es todavía más cara
+     que una fija: se repinta en cada frame mientras el botón esté en pantalla, no nada más
+     durante el scroll. Ver el comentario grande junto a --shadow-card sobre por qué el blur
+     chico casi no cambia el look pero sí el costo. */
+  @keyframes goCirclePulse{0%,100%{box-shadow:0 3px 8px var(--hivis-glow);} 50%{box-shadow:0 3px 10px var(--hivis-glow), 0 0 0 8px var(--hivis-dim);}}
   @media (prefers-reduced-motion:reduce){ .go-circle{animation:none;} }
   #runActive,#runSummary{display:none;}
   .rec-dot{width:9px; height:9px; border-radius:50%; background:var(--danger); animation:blink 1.4s ease-in-out infinite; display:inline-block; margin-right:7px;}
@@ -1060,7 +1075,7 @@
      el touch-action:none evita que el navegador intente hacer scroll de la página
      mientras el dedo está sobre la agarradera. */
   .rd-map-handle{position:absolute; left:50%; bottom:10px; transform:translateX(-50%); width:42px; height:5px; border-radius:999px;
-    background:rgba(255,255,255,.55); z-index:11; box-shadow:0 1px 5px rgba(0,0,0,.35); touch-action:none; cursor:grab;}
+    background:rgba(255,255,255,.55); z-index:11; box-shadow:0 1px 2px rgba(0,0,0,.35); touch-action:none; cursor:grab;}
   .rd-ruta-below{transition:opacity .26s ease, max-height .3s ease, margin .3s ease; max-height:600px; opacity:1;}
   .rd-ruta-below.rd-collapsed{opacity:0; max-height:0; margin:0; overflow:hidden; pointer-events:none;}
   .rd-big-dist{font-size:44px; font-weight:800; line-height:1;}
@@ -1161,13 +1176,13 @@
   /* position:absolute relativo a #coachChatWrap (que es el positioning context) --
      JS ajusta "bottom" según el alto real de la barra de escribir. */
   .chat-scroll-btn-wrap{position:absolute; left:0; right:0; bottom:86px; pointer-events:none; z-index:2;}
-  .chat-scroll-btn{position:absolute; right:20px; bottom:0; width:38px; height:38px; border-radius:50%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--hivis-text); display:flex; align-items:center; justify-content:center; cursor:pointer; pointer-events:auto; box-shadow:0 3px 12px rgba(0,0,0,.35); transition:transform .12s ease;}
+  .chat-scroll-btn{position:absolute; right:20px; bottom:0; width:38px; height:38px; border-radius:50%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--hivis-text); display:flex; align-items:center; justify-content:center; cursor:pointer; pointer-events:auto; box-shadow:0 1px 3px rgba(0,0,0,.35); transition:transform .12s ease;}
   .chat-scroll-btn:active{transform:scale(.9);}
 
   .day-picker{display:flex; flex-wrap:wrap; gap:8px;}
   .day-pill{width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center;
     border:1.5px solid var(--asphalt-4); background:var(--asphalt-2); color:var(--mist); font-size:11px; font-weight:700; cursor:pointer; user-select:none; flex-shrink:0;}
-  .day-pill.active{border-color:var(--hivis); color:var(--hivis-text); background:var(--hivis-dim); box-shadow:0 4px 14px var(--hivis-glow);}
+  .day-pill.active{border-color:var(--hivis); color:var(--hivis-text); background:var(--hivis-dim); box-shadow:0 1px 3px var(--hivis-glow);}
 
   .hist-card{margin-bottom:12px;}
   .type-breakdown-row{display:flex; align-items:center; gap:10px; margin-bottom:9px;}
@@ -1245,7 +1260,7 @@
      COMO YA ESTABA + el mismo glow que el sistema reserva para "esto está encendido"
      (botón primario, tab activo) -- el vitrina de trofeos no puede sentirse como
      cualquier otro chip. */
-  .pr-medal.achieved{background:var(--hivis-dim); box-shadow:0 0 0 1px rgba(214,255,63,.18), 0 8px 20px -8px var(--hivis-glow);}
+  .pr-medal.achieved{background:var(--hivis-dim); box-shadow:0 0 0 1px rgba(214,255,63,.18), 0 2px 4px -1px var(--hivis-glow);}
   .pr-medal .icon-sq{width:24px; height:24px; color:var(--mist-dim); transition:transform .15s var(--ease-spring);}
   .pr-medal.achieved .icon-sq{color:var(--hivis-text);}
   .pr-medal-label{font-size:11.5px; font-weight:800; color:var(--mist);}
@@ -1282,7 +1297,7 @@
      detalle de carrera, el calendario) no usan la clase .week-nav y no se ven
      afectadas por esto. */
   .week-nav{display:flex; align-items:center; justify-content:center; gap:10px; margin:0 auto 16px; max-width:280px;}
-  .week-nav .week-nav-btn{width:34px; height:34px; background:var(--hivis); color:#0a0a0a; flex-shrink:0; box-shadow:0 3px 12px var(--hivis-glow);}
+  .week-nav .week-nav-btn{width:34px; height:34px; background:var(--hivis); color:#0a0a0a; flex-shrink:0; box-shadow:0 1px 3px var(--hivis-glow);}
   .week-nav .week-nav-btn:active{background:var(--hivis); transform:scale(.88);}
   .week-nav-label{margin:0; text-align:center; color:var(--chalk); font-size:13px; font-weight:700; flex:1; letter-spacing:.01em; white-space:nowrap;
     padding:9px 18px; background:var(--asphalt-2); border:1px solid var(--overlay-hairline); border-radius:999px;}
@@ -1367,15 +1382,20 @@
   nav.tabbar button.nav-btn-primary{flex:0 0 auto; width:64px; margin-top:-24px;}
   nav.tabbar button.nav-btn-primary .nav-primary-circle{width:56px; height:56px; border-radius:50%; background:var(--hivis);
     display:flex; align-items:center; justify-content:center; border:4px solid var(--asphalt);
-    box-shadow:0 10px 24px var(--hivis-glow); transition:transform .13s var(--ease-out), box-shadow .13s var(--ease-out);}
+    box-shadow:0 2px 5px var(--hivis-glow); transition:transform .13s var(--ease-out), box-shadow .13s var(--ease-out);}
   nav.tabbar button.nav-btn-primary svg{width:37px; height:37px; padding:0; color:var(--ink); background:none !important;}
-  nav.tabbar button.nav-btn-primary.active .nav-primary-circle{box-shadow:0 12px 30px var(--hivis-glow), 0 0 0 3px var(--hivis-dim);}
+  nav.tabbar button.nav-btn-primary.active .nav-primary-circle{box-shadow:0 2px 6px var(--hivis-glow), 0 0 0 3px var(--hivis-dim);}
   nav.tabbar button.nav-btn-primary:active .nav-primary-circle{transform:scale(.92);}
   /* Respiración lenta y sutil en el círculo de Correr cuando NO es la pestaña activa --
      "esta es la acción que existe para interrumpirte el día", igual que un botón de
      grabar que respira antes de que lo toques. Se apaga solo mientras está activo (ahí
-     ya tiene su propio glow fijo, más fuerte) y con reduced-motion. */
-  @keyframes primaryPulse{0%,100%{box-shadow:0 10px 24px var(--hivis-glow);} 50%{box-shadow:0 10px 32px var(--hivis-glow), 0 0 0 7px var(--hivis-dim);}}
+     ya tiene su propio glow fijo, más fuerte) y con reduced-motion.
+     Blur chico en las tres paradas de la animación (no solo en el estado estático de
+     arriba) -- esta es la ÚNICA sombra animada que está siempre en pantalla, en
+     cualquier vista, todo el tiempo (parte de la tabbar) -- ver el comentario grande
+     junto a --shadow-card sobre por qué el blur chico casi no cambia el look pero sí
+     el costo. */
+  @keyframes primaryPulse{0%,100%{box-shadow:0 2px 5px var(--hivis-glow);} 50%{box-shadow:0 2px 7px var(--hivis-glow), 0 0 0 7px var(--hivis-dim);}}
   nav.tabbar button.nav-btn-primary:not(.active) .nav-primary-circle{animation:primaryPulse 2.6s ease-in-out infinite;}
   @media (prefers-reduced-motion:reduce){ nav.tabbar button.nav-btn-primary .nav-primary-circle{animation:none;} }
   /* Botón flotante del coach: al sacar Coach de la tabbar (para bajar de 6 a 5
@@ -1422,7 +1442,7 @@
     transition:opacity .15s ease, transform .15s ease;}
   .coach-fab-thinking.show{opacity:1; transform:scale(1);}
   .coach-fab-thinking-bubble{position:relative; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4);
-    border-radius:14px; padding:9px 13px; display:flex; align-items:center; gap:3px; box-shadow:0 3px 12px rgba(0,0,0,.35);}
+    border-radius:14px; padding:9px 13px; display:flex; align-items:center; gap:3px; box-shadow:0 1px 3px rgba(0,0,0,.35);}
   .coach-fab-thinking-bubble span{width:6px; height:6px; border-radius:50%; background:var(--mist); animation:blink 1s infinite;}
   .coach-fab-thinking-bubble span:nth-child(2){animation-delay:.15s;}
   .coach-fab-thinking-bubble span:nth-child(3){animation-delay:.3s;}
