@@ -14,6 +14,12 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Typeface
+import android.text.Spannable
+import android.text.SpannableString
+import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
+import android.text.style.StyleSpan
 import android.view.View
 import android.widget.RemoteViews
 import org.json.JSONObject
@@ -38,6 +44,23 @@ class ZancadaWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
+        // "8.2 km" / "45 min" -> "8.2" grande+negrita+clara, "km"/"min" chico+gris,
+        // las dos partes en la MISMA TextView (RemoteViews no tiene otra forma de
+        // mezclar dos tamaños en una línea salvo con spans). planAmountText() en
+        // app.js siempre arma el string como "NÚMERO UNIDAD" con un solo espacio
+        // -- ver la función en app.js si esto alguna vez deja de calzar.
+        private fun buildAmountSpannable(amount: String): SpannableString {
+            val spannable = SpannableString(amount)
+            val splitAt = amount.indexOf(' ')
+            if (splitAt > 0) {
+                spannable.setSpan(RelativeSizeSpan(1.85f), 0, splitAt, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                spannable.setSpan(StyleSpan(Typeface.BOLD), 0, splitAt, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                spannable.setSpan(ForegroundColorSpan(Color.parseColor("#EDEFEF")), 0, splitAt, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                spannable.setSpan(ForegroundColorSpan(Color.parseColor("#8B9296")), splitAt, amount.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            return spannable
+        }
+
         // La llama WidgetBridgePlugin.kt cada vez que la app guarda un dato nuevo --
         // sin esto, cambiar el SharedPreferences no redibuja el widget solo.
         fun updateAllWidgets(context: Context) {
@@ -84,7 +107,7 @@ class ZancadaWidgetProvider : AppWidgetProvider() {
                 views.setViewVisibility(R.id.widget_session_group, View.VISIBLE)
                 views.setViewVisibility(R.id.widget_empty_group, View.GONE)
                 views.setTextViewText(R.id.widget_type, type)
-                views.setTextViewText(R.id.widget_amount, amount)
+                views.setTextViewText(R.id.widget_amount_big, buildAmountSpannable(amount))
 
                 val zoneColor = ZONE_COLORS[zone]
                 if (zoneColor != null) {

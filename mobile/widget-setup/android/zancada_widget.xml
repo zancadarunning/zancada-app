@@ -7,6 +7,14 @@
   26dp que usan las cards de la app: el widget no puede leer el CSS, así
   que todo queda hardcodeado acá, pero apunta a verse como una card más de
   la propia app, no como un recuadro nativo genérico.
+
+  Diseño inspirado en los widgets nativos de iOS (Apple Fitness, Nike Run
+  Club "Last Run"): el número (distancia/tiempo) es el elemento con más
+  peso visual de la card, no una leyenda chica al pie: ese número grande
+  lo arma ZancadaWidgetProvider.kt como texto con estilos mixtos (número
+  grande y en negrita, unidad chica y gris), no acá en el XML: RemoteViews
+  no tiene una forma directa de poner dos tamaños de letra en la misma
+  línea sin eso.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
@@ -16,14 +24,14 @@
     android:padding="18dp">
 
     <!-- Marca chica en la esquina: el mismo ícono redondo del launcher, a
-         baja prominencia, para que el widget se lea como "de Zancada" sin
-         competir con el dato real. -->
+         muy baja prominencia (como suelen hacer los widgets de iOS: la
+         marca se intuye, no compite con el dato real). -->
     <ImageView
-        android:layout_width="18dp"
-        android:layout_height="18dp"
+        android:layout_width="14dp"
+        android:layout_height="14dp"
         android:layout_gravity="top|end"
         android:src="@mipmap/ic_launcher_round"
-        android:alpha="0.9"
+        android:alpha="0.55"
         android:contentDescription="@null" />
 
     <LinearLayout
@@ -41,26 +49,13 @@
             android:textColor="#D6FF3F"
             android:textSize="11sp"
             android:textStyle="bold"
-            android:letterSpacing="0.14"
+            android:letterSpacing="0.16"
             android:fontFamily="sans-serif-medium" />
 
-        <TextView
-            android:id="@+id/widget_type"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="5dp"
-            android:textColor="#EDEFEF"
-            android:textSize="17sp"
-            android:textStyle="bold"
-            android:fontFamily="sans-serif-medium"
-            android:lineSpacingExtra="1dp"
-            android:maxLines="2" />
-
-        <LinearLayout
-            android:id="@+id/widget_meta_row"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
@@ -72,22 +67,42 @@
                  tintear el color con setColorFilter() desde el provider. -->
             <ImageView
                 android:id="@+id/widget_zone_dot"
-                android:layout_width="8dp"
-                android:layout_height="8dp"
+                android:layout_width="7dp"
+                android:layout_height="7dp"
                 android:layout_marginEnd="6dp"
                 android:src="@drawable/widget_zone_dot"
                 android:contentDescription="@null"
                 android:visibility="gone" />
 
             <TextView
-                android:id="@+id/widget_amount"
-                android:layout_width="wrap_content"
+                android:id="@+id/widget_type"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:textColor="#8B9296"
-                android:textSize="13sp"
+                android:layout_weight="1"
+                android:textColor="#EDEFEF"
+                android:textSize="14sp"
                 android:textStyle="bold"
-                android:fontFamily="sans-serif-medium" />
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="2" />
         </LinearLayout>
+
+        <!-- El número hero: ZancadaWidgetProvider.kt le arma un
+             SpannableString (RelativeSizeSpan + StyleSpan + ForegroundColorSpan)
+             para que la cifra salga grande/negrita/clara y la unidad
+             ("km"/"min") chica y gris, ambas en esta misma TextView: por
+             eso el tamaño/color acá son solo la base sobre la que esos spans
+             escalan, no el resultado final. fontFamily monospace para que
+             las cifras queden tabulares, igual criterio que .mono en
+             index.html para los números de stats. -->
+        <TextView
+            android:id="@+id/widget_amount_big"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="9dp"
+            android:textColor="#EDEFEF"
+            android:textSize="14sp"
+            android:fontFamily="monospace"
+            android:maxLines="1" />
     </LinearLayout>
 
     <LinearLayout
@@ -100,9 +115,10 @@
         android:visibility="visible">
 
         <ImageView
-            android:layout_width="30dp"
-            android:layout_height="30dp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
             android:layout_marginBottom="8dp"
+            android:alpha="0.9"
             android:src="@mipmap/ic_launcher_round"
             android:contentDescription="@null" />
 

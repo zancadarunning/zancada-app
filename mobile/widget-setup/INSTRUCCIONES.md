@@ -107,16 +107,25 @@ Abrí `mobile/android/` en Android Studio (`npx cap open android` lo hace por vo
    widget: mantené presionada la pantalla de inicio → Widgets → buscá "Zancada" →
    arrastralo a la pantalla.
 
-**Sobre el diseño:** el widget usa `@mipmap/ic_launcher_round` como marca chica
-en la esquina (ya existe en cualquier proyecto generado por
-`capacitor-assets`, ver el comando en `mobile/README.md` — no hace falta
-agregar nada aparte para eso) y un punto de color por zona (mismos 5 colores
-que `ZONE_COLORS` en `app.js`) al lado de la distancia/tiempo. Si alguna vez
-agregás un elemento nuevo al layout, usá solo clases que RemoteViews sabe
-inflar (`TextView`, `ImageView`, `FrameLayout`, `LinearLayout`, etc.) — un
-`<View>` genérico rompe el widget en tiempo de ejecución con
-"Error inflating class android.view.View" (pasó una vez armando el punto de
-zona; el layout de esta carpeta ya usa `ImageView` en su lugar).
+**Sobre el diseño:** inspirado en cómo arman sus widgets nativos Apple Fitness
+y Nike Run Club (Last Run) — el número es el elemento con más peso visual de
+la card, no una leyenda chica al pie. `ZancadaWidgetProvider.kt` arma el
+texto de distancia/tiempo como un `SpannableString` (`RelativeSizeSpan` +
+`StyleSpan` + `ForegroundColorSpan`) para que la cifra salga grande/negrita/
+clara y la unidad ("km"/"min") chica y gris, las dos en la MISMA `TextView`
+— es la única forma de mezclar dos tamaños en una línea en RemoteViews, no
+hay manera de hacerlo solo con atributos XML. El fondo (`widget_card_bg.xml`)
+tiene un gradiente diagonal muy sutil en vez de un color plano, para darle
+algo de profundidad sin verse "efecto app genérica". El widget también usa
+`@mipmap/ic_launcher_round` como marca chica en la esquina (ya existe en
+cualquier proyecto generado por `capacitor-assets`, ver el comando en
+`mobile/README.md`) y un punto de color por zona (mismos 5 colores que
+`ZONE_COLORS` en `app.js`) al lado del tipo de sesión. Si alguna vez agregás
+un elemento nuevo al layout, usá solo clases que RemoteViews sabe inflar
+(`TextView`, `ImageView`, `FrameLayout`, `LinearLayout`, etc.) — un `<View>`
+genérico rompe el widget en tiempo de ejecución con "Error inflating class
+android.view.View" (pasó una vez armando el punto de zona; el layout de esta
+carpeta ya usa `ImageView` en su lugar).
 
 ## 4. Mantenimiento
 
