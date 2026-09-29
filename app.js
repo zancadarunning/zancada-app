@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-29T14:49:18Z';
+const APP_VERSION = '2026-09-29T15:00:20Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1739,7 +1739,7 @@ function healthConnectExerciseToRun(ex){
 // Antes Historial solo reconocía r.source==='strava' para la insignia y la búsqueda --
 // Polar/Wahoo/Health Connect quedaban con carreras "sin marca" (sin insignia, invisibles
 // para el buscador) aunque llegaran de un reloj sincronizado igual que las de Strava.
-const SOURCE_LABELS = {strava:'Strava', polar:'Polar', wahoo:'Wahoo', healthconnect:'Health Connect'};
+const SOURCE_LABELS = {strava:'Strava', polar:'Polar', wahoo:'Wahoo', coros:'COROS', healthconnect:'Health Connect'};
 function sourceBadgeHtml(source, withMargin){
   const label = SOURCE_LABELS[source];
   if(!label) return '';
