@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-29T16:25:04Z';
+const APP_VERSION = '2026-09-29T19:59:45Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -774,7 +774,45 @@ function fmtPace(minPerKm){
 /* ---- Supabase: cuentas y datos reales, sincronizados entre dispositivos ---- */
 const SUPABASE_URL = 'https://smcicgaraqlvalxvdriz.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable__JlJqs3dTRRxBcR0QhkUpA_sSPPOW6j';
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// "Recordarme" del login (ver el checkbox en index.html y handleSignIn): elige en qué
+// storage guarda Supabase la sesión. localStorage sobrevive cerrar y volver a abrir la
+// app/pestaña (lo que ya pasaba siempre, sin este checkbox); sessionStorage se borra sola
+// al cerrar -- para alguien que inicia sesión en un dispositivo compartido y no quiere
+// quedar logueado ahí para siempre. REMEMBER_ME_KEY (la preferencia en sí, no la sesión)
+// siempre va en localStorage -- es solo un true/false, no un dato sensible, y tiene que
+// sobrevivir el cierre de la app para que la próxima apertura sepa dónde buscar la sesión.
+const REMEMBER_ME_KEY = 'zancada_remember_me';
+function getRememberMe(){
+  try{ return localStorage.getItem(REMEMBER_ME_KEY) !== 'false'; }catch(e){ return true; }
+}
+function setRememberMe(remember){
+  try{ localStorage.setItem(REMEMBER_ME_KEY, remember ? 'true' : 'false'); }catch(e){}
+}
+// Storage "dual" que Supabase usa para leer/guardar la sesión: mira getRememberMe() en cada
+// llamada (no solo una vez al crear el cliente), así que cambiar el checkbox y volver a
+// iniciar sesión alcanza para que la próxima sesión quede en el storage correcto, sin
+// necesitar recrear supabaseClient.
+const dualAuthStorage = {
+  getItem(key){
+    try{
+      const primary = getRememberMe() ? localStorage : sessionStorage;
+      const secondary = getRememberMe() ? sessionStorage : localStorage;
+      return primary.getItem(key) ?? secondary.getItem(key);
+    }catch(e){ return null; }
+  },
+  setItem(key, value){
+    try{
+      const target = getRememberMe() ? localStorage : sessionStorage;
+      const other = getRememberMe() ? sessionStorage : localStorage;
+      target.setItem(key, value);
+      other.removeItem(key); // no dejar una copia vieja dando vueltas en el otro storage
+    }catch(e){}
+  },
+  removeItem(key){
+    try{ localStorage.removeItem(key); sessionStorage.removeItem(key); }catch(e){}
+  }
+};
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: dualAuthStorage } });
 
 /* ---- Notificaciones push ---- */
 const VAPID_PUBLIC_KEY = 'BLBsiej6FgDHLt2S5DvrDfYU9_jf1_qfIzRswRgjcvLvMTPT1lDnVo9NUu8lRfYSVobM_zI80R9KWDbfb-tZXfU';
@@ -1881,6 +1919,10 @@ async function handleSignIn(){
   err.style.display='none';
   if(!email || !email.includes('@')){ err.textContent = t('login_err'); err.style.display='block'; return; }
   if(!password){ err.textContent = t('login_err_password'); err.style.display='block'; return; }
+  // Antes de firmar in: dualAuthStorage (ver la creación de supabaseClient) mira esta
+  // preferencia recién en el momento de guardar la sesión que devuelve signInWithPassword,
+  // así que hay que dejarla puesta ANTES de esa llamada, no después.
+  setRememberMe(document.getElementById('login-remember-me')?.checked !== false);
   setBtnBusy('login-submit-btn', true, t('login_loading'));
   try{
     const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
@@ -3346,6 +3388,14 @@ async function deleteAccount(){
   }
   const { data: { session } } = await supabaseClient.auth.getSession();
   if(session && session.user){ await loadUserAndEnter(session.user); }
+  // Contraparte del script inline en <head> (clase zc-maybe-session): ese script solo
+  // adivina rápido, por la PRESENCIA de algo con forma de sesión guardada, para ocultar
+  // splash/login antes de pintar nada -- welcomeUserAndEnter() de arriba (si corrió) ya se
+  // encarga de esconderlos del todo cuando la sesión resulta válida de verdad. Pero si NO
+  // había sesión real (token vencido, storage corrupto, lo que sea), esa clase se queda
+  // pegada y splash/login nunca vuelven a aparecer -- el corredor queda mirando una
+  // pantalla en blanco sin ninguna forma de iniciar sesión. Sacarla acá cubre ese caso.
+  else { document.documentElement.classList.remove('zc-maybe-session'); }
 })();
 
 /* ================= PLAN GENERATION (con progresión semana a semana) ================= */

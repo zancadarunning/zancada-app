@@ -48,6 +48,33 @@
     document.getElementById('theme-color-meta').setAttribute('content', isLight ? '#F0F1EE' : '#0A0A0A');
   }catch(e){}
 })();</script>
+<!-- Mismo motivo que el bloque de arriba (tema), pero para #splash/#login: ninguno de los
+     dos tiene display:none por default en el CSS -- se ocultan recién cuando loadUserAndEnter()
+     (en app.js, mucho más abajo en el body) confirma que hay sesión Y terminó de traer los
+     datos de la cuenta. Para alguien que YA tiene sesión guardada, eso deja un instante real
+     (carga de red incluida) donde "Bienvenido, Comenzar" se ve en pantalla antes de saltar
+     directo a Inicio -- lo reportó un usuario. Acá solo miramos si HAY algo con pinta de sesión
+     guardada (más rápido que llamar a supabaseClient.auth.getSession(), que ni existe todavía
+     en este punto del <head>) y ocultamos con CSS antes de que se pinte nada; el chequeo de
+     verdad (¿la sesión sigue siendo válida?) lo sigue haciendo init() como siempre, y si
+     resulta que no había sesión real, esa misma función se encarga de sacar esta clase de
+     vuelta (ver el comentario en init()). dualAuthStorage guarda bajo localStorage O
+     sessionStorage según "Recordarme" del login (ver supabaseClient más abajo) -- por eso acá
+     se revisan los dos storages, no solo localStorage. -->
+<script>(function(){
+  try{
+    var hasSession = false;
+    for(var i=0; i<localStorage.length && !hasSession; i++){
+      var k = localStorage.key(i);
+      if(k && k.indexOf('sb-') === 0 && k.indexOf('-auth-token') !== -1) hasSession = true;
+    }
+    for(var j=0; j<sessionStorage.length && !hasSession; j++){
+      var k2 = sessionStorage.key(j);
+      if(k2 && k2.indexOf('sb-') === 0 && k2.indexOf('-auth-token') !== -1) hasSession = true;
+    }
+    if(hasSession) document.documentElement.classList.add('zc-maybe-session');
+  }catch(e){}
+})();</script>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -387,6 +414,10 @@
       var(--asphalt);
     display:flex; flex-direction:column;
     align-items:center; justify-content:flex-start; text-align:center; padding:32px; max-width:480px; margin:0 auto;}
+  /* Ver el script inline en <head> que agrega esta clase: alguien con pinta de sesión
+     guardada nunca llega a ver la splash ni el login, ni por un instante, mientras init()
+     (en app.js) confirma la sesión de verdad y trae los datos de la cuenta. */
+  html.zc-maybe-session #splash, html.zc-maybe-session #login{display:none !important;}
   /* Fondo atmosférico de la splash: una cordillera hecha con el mismo lenguaje que ya
      usa el resto de la app (el mismo motivo de perfil de elevación de los separadores,
      acá como escenario en vez de ícono) -- "el terreno que viene" detrás de la marca,
@@ -1554,6 +1585,10 @@
       </div>
       <p class="err-text" id="login-err"></p>
     </div>
+    <label class="legal-checkbox-row" for="login-remember-me" style="margin-top:0; margin-bottom:18px; align-items:center;">
+      <input type="checkbox" id="login-remember-me" checked>
+      <span style="font-size:13.5px; color:var(--chalk);" data-i18n="login_remember_me"></span>
+    </label>
     <div class="field"><button class="btn btn-primary" id="login-submit-btn" data-i18n="login_continue" onclick="handleSignIn()"></button></div>
     <button class="small-link" id="login-forgot-btn" style="display:block; text-align:center; width:100%; margin-top:14px;" onclick="handleForgotPassword()" data-i18n="login_forgot"></button>
     <div class="divider-or"><span data-i18n="login_or"></span></div>
