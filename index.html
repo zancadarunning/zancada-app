@@ -621,8 +621,17 @@
   /* isolation:isolate acá también -- ver el comentario junto a .idle-map-wrap. Subimos
      z-index de 5 a 50 de paso, para tener margen de sobra contra cualquier otro contenido
      de una vista que use transform (no solo el mapa de Correr). */
+  /* Sin backdrop-filter (sacado a propósito, no un olvido): este header es position:sticky
+     y queda visible en TODAS las vistas mientras se scrollea -- el navegador tiene que
+     recalcular el desenfoque en cada frame de cada scroll, en toda la app, todo el tiempo.
+     Medido en un celular real de gama baja (Moto E6 Plus) con `dumpsys gfxinfo`: 100% de
+     los frames se trababan durante un scroll simple (~200-400ms por frame en vez de los
+     ~16ms de un scroll fluido). var(--tabbar-bg) ya es 92% opaco (rgba(24,24,27,.92)), así
+     que sacar el blur no cambia casi nada visualmente (comparado a mano, header con/sin
+     blur se ven prácticamente idénticos) pero saca de encima el costo de GPU más caro de
+     toda la app. Mismo motivo en nav.tabbar, más abajo. */
   header.top{padding:calc(16px + var(--safe-top)) 20px 14px; display:flex; align-items:center; justify-content:space-between;
-    position:sticky; top:0; z-index:50; isolation:isolate; background:linear-gradient(180deg, var(--tabbar-bg) 55%, transparent); backdrop-filter:blur(16px) saturate(1.5); -webkit-backdrop-filter:blur(16px) saturate(1.5);
+    position:sticky; top:0; z-index:50; isolation:isolate; background:linear-gradient(180deg, var(--tabbar-bg) 55%, transparent);
     flex-shrink:0;}
   header.top .brand{display:flex; align-items:center; gap:9px;}
   header.top .brand .dot{width:9px; height:9px; border-radius:50%; background:var(--hivis); box-shadow:0 0 10px var(--hivis);}
@@ -1322,8 +1331,19 @@
      sticky (esos insets sirven para stickiness horizontal, no para achicar el ancho de
      la caja como con fixed) -- se reemplazan por width+margin para lograr el mismo
      ancho y centrado de antes. */
-  nav.tabbar{position:sticky; bottom:var(--safe-bottom); width:calc(100% - 28px); max-width:452px; margin:14px auto 0; background:var(--tabbar-bg);
-    backdrop-filter:blur(20px) saturate(1.6); -webkit-backdrop-filter:blur(20px) saturate(1.6); display:flex; padding:9px 6px; flex-shrink:0;
+  /* Sin backdrop-filter -- mismo motivo y misma medición que header.top más arriba: sticky
+     y siempre visible durante el scroll de cualquier vista, el efecto más caro de GPU de
+     toda la app (confirmado con dumpsys gfxinfo en un celular real de gama baja: 100% de
+     frames trabados durante un scroll simple).
+     background:var(--asphalt-2) en vez de var(--tabbar-bg) -- mismo color exacto (mismo
+     rgb, --asphalt-2 es #18181B/#FFFFFF según tema, igual que --tabbar-bg), pero 100%
+     opaco en vez de 92%. Sin blur de por medio, ese 8% de transparencia alcanzaba para que
+     el GPU de este mismo celular (con fallas de composición ya documentadas en otros
+     comentarios de esta sesión) dejara pasar texto del contenido que scrollea detrás,
+     visible por encima de las etiquetas Inicio/Plan/Historial/Perfil -- probado en el
+     dispositivo real. */
+  nav.tabbar{position:sticky; bottom:var(--safe-bottom); width:calc(100% - 28px); max-width:452px; margin:14px auto 0; background:var(--asphalt-2);
+    display:flex; padding:9px 6px; flex-shrink:0;
     border-radius:26px; border:1px solid var(--overlay-hairline); box-shadow:var(--shadow-lg); z-index:20;}
   nav.tabbar button{flex:1; background:none; border:none; color:var(--mist); display:flex; flex-direction:column; align-items:center; gap:4px; font-size:10.5px; font-weight:600; cursor:pointer; padding:4px 2px; transition:transform .13s var(--ease-out), color .13s var(--ease-out);}
   .nav-icon-wrap{position:relative; display:inline-flex;}
