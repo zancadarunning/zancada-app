@@ -2,21 +2,67 @@
 <!--
   DÓNDE VA: android/app/src/main/res/drawable/widget_card_bg.xml
 
-  Fondo de "card" redondeada para el widget: mismo radius de 26dp y borde
-  sutil tipo overlay-hairline que usan las cards de index.html, pero con un
-  gradiente diagonal muy sutil (en vez de un solo color plano) para darle
-  algo de profundidad: inspirado en cómo los widgets nativos de iOS
-  (Apple Fitness, Nike Run Club) casi nunca usan un fondo 100% chato, aunque
-  la diferencia entre los dos extremos acá es mínima a propósito: la idea es
-  que se note "hay algo ahí" sin que se vea un degradé de app genérica.
+  Fondo "mesh gradient" de la card: varias capas de degradé apiladas
+  (layer-list), no una textura de imagen: RemoteViews puede tener
+  cualquier drawable como background porque eso lo resuelve el sistema de
+  recursos, no el inflador restringido de vistas, así que acá no aplica la
+  limitación de RemoteViews que sí afecta qué CLASES DE VISTA puede armar
+  (ver el comentario sobre ImageView vs View en zancada_widget.xml).
+
+  Capas de abajo hacia arriba:
+  1. Base: degradé diagonal oscuro (mismo criterio que antes, un poco más
+     de contraste entre las dos puntas).
+  2. Resplandor lima tenue arriba a la derecha: reemplaza al ícono de
+     marca que había ahí antes (se sacó por pedido): en vez de un logo,
+     un toque de color de marca disuelto en el fondo, como suelen hacer
+     los dashboards prolijos (Linear, Vercel) en vez de un ícono posta.
+  3. Sombra tenue abajo a la izquierda, para que el degradé no se sienta
+     parejo: profundidad real, no solo dos colores lisos.
+  4. Borde hairline + esquinas redondeadas arriba de todo, para que el
+     contorno quede nítido encima de las tres capas de color.
+
+  Todas las capas repiten el mismo radius de 26dp para que la silueta
+  final quede prolijamente redondeada en las cuatro esquinas.
 -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <corners android:radius="26dp" />
-    <stroke android:width="1dp" android:color="#0BFFFFFF" />
-    <gradient
-        android:type="linear"
-        android:angle="315"
-        android:startColor="#1D1D21"
-        android:endColor="#131315" />
-</shape>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="26dp" />
+            <gradient
+                android:type="linear"
+                android:angle="315"
+                android:startColor="#1F1F23"
+                android:endColor="#0F0F11" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="26dp" />
+            <gradient
+                android:type="radial"
+                android:gradientRadius="150dp"
+                android:centerX="0.86"
+                android:centerY="0.1"
+                android:startColor="#1AD6FF3F"
+                android:endColor="#00D6FF3F" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="26dp" />
+            <gradient
+                android:type="radial"
+                android:gradientRadius="170dp"
+                android:centerX="0.06"
+                android:centerY="0.96"
+                android:startColor="#3D000000"
+                android:endColor="#00000000" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="26dp" />
+            <stroke android:width="1dp" android:color="#12FFFFFF" />
+        </shape>
+    </item>
+</layer-list>

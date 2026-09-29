@@ -115,17 +115,32 @@ texto de distancia/tiempo como un `SpannableString` (`RelativeSizeSpan` +
 clara y la unidad ("km"/"min") chica y gris, las dos en la MISMA `TextView`
 — es la única forma de mezclar dos tamaños en una línea en RemoteViews, no
 hay manera de hacerlo solo con atributos XML. El fondo (`widget_card_bg.xml`)
-tiene un gradiente diagonal muy sutil en vez de un color plano, para darle
-algo de profundidad sin verse "efecto app genérica". El widget también usa
-`@mipmap/ic_launcher_round` como marca chica en la esquina (ya existe en
-cualquier proyecto generado por `capacitor-assets`, ver el comando en
-`mobile/README.md`) y un punto de color por zona (mismos 5 colores que
-`ZONE_COLORS` en `app.js`) al lado del tipo de sesión. Si alguna vez agregás
-un elemento nuevo al layout, usá solo clases que RemoteViews sabe inflar
-(`TextView`, `ImageView`, `FrameLayout`, `LinearLayout`, etc.) — un `<View>`
-genérico rompe el widget en tiempo de ejecución con "Error inflating class
+es un "mesh gradient" en capas (`layer-list`: degradé diagonal de base +
+resplandor lima tenue arriba a la derecha + sombra tenue abajo a la
+izquierda + borde hairline arriba de todo) en vez de un color plano o un
+gradiente de dos puntas nomás — le da profundidad real sin necesitar una
+imagen de textura. El widget NO tiene ningún ícono de marca (se sacó por
+pedido explícito): la identidad de Zancada queda en el color lima del texto
+y del resplandor del fondo, no en un logo compitiendo con el dato. Tiene
+además un punto de color por zona (mismos 5 colores que `ZONE_COLORS` en
+`app.js`) al lado del tipo de sesión. Si alguna vez agregás un elemento
+nuevo al layout, usá solo clases que RemoteViews sabe inflar (`TextView`,
+`ImageView`, `FrameLayout`, `LinearLayout`, etc.) — un `<View>` genérico
+rompe el widget en tiempo de ejecución con "Error inflating class
 android.view.View" (pasó una vez armando el punto de zona; el layout de esta
 carpeta ya usa `ImageView` en su lugar).
+
+**Sobre el tamaño de la card:** si en algún momento vuelve a sentirse
+desproporcionado (mucho espacio vacío arriba/abajo del texto), no confíes
+en `minHeight`/`targetCellHeight` de `zancada_widget_info.xml` para
+arreglarlo solo — probado en un dispositivo real (Moto E6 Plus, launcher de
+Motorola) que ese launcher ignora esos valores por completo, tanto al
+agregar el widget de cero como después de sacarlo y volver a agregarlo. El
+tamaño final de la card lo decide el launcher de cada usuario, así que el
+único control real y confiable es agrandar el texto (`textSize` en el
+layout, factor del `RelativeSizeSpan` del número hero en el provider) para
+que el contenido llene la card con autoridad sea cual sea el tamaño que le
+toque.
 
 ## 4. Mantenimiento
 

@@ -15,6 +15,10 @@
   grande y en negrita, unidad chica y gris), no acá en el XML: RemoteViews
   no tiene una forma directa de poner dos tamaños de letra en la misma
   línea sin eso.
+
+  Sin ícono de marca (se sacó por pedido explícito): la identidad de
+  Zancada queda solo en el fondo (widget_card_bg.xml) y en el color lima
+  del texto, sin un logo posta compitiendo con el dato real.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
@@ -22,17 +26,6 @@
     android:layout_height="match_parent"
     android:background="@drawable/widget_card_bg"
     android:padding="16dp">
-
-    <!-- Marca chica en la esquina: el mismo ícono redondo del launcher, a
-         muy baja prominencia (como suelen hacer los widgets de iOS: la
-         marca se intuye, no compite con el dato real). -->
-    <ImageView
-        android:layout_width="15dp"
-        android:layout_height="15dp"
-        android:layout_gravity="top|end"
-        android:src="@mipmap/ic_launcher_round"
-        android:alpha="0.55"
-        android:contentDescription="@null" />
 
     <LinearLayout
         android:id="@+id/widget_session_group"
@@ -114,21 +107,14 @@
         android:gravity="center"
         android:visibility="visible">
 
-        <ImageView
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:layout_marginBottom="10dp"
-            android:alpha="0.9"
-            android:src="@mipmap/ic_launcher_round"
-            android:contentDescription="@null" />
-
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Zancada"
-            android:textColor="#EDEFEF"
+            android:textColor="#D6FF3F"
             android:textSize="18sp"
             android:textStyle="bold"
+            android:letterSpacing="0.02"
             android:fontFamily="sans-serif-medium" />
 
         <TextView
