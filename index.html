@@ -808,14 +808,16 @@
   .conn-row{padding-top:18px; margin-top:18px; border-top:1px solid var(--asphalt-3);}
   .conn-row-featured{padding-top:0; margin-top:0; border-top:none;}
   .conn-row-head{display:flex; align-items:center; gap:10px; margin-bottom:12px;}
-  /* Polar y Wahoo no tienen logo en ningún set de íconos de marca abierto (a diferencia
-     de Strava, que sí -- ver Simple Icons) -- se recrea el wordmark real en vez de usar
-     un glifo genérico. Primer intento: un chip blanco fijo detrás del texto (para que
-     no desapareciera sobre el tema oscuro) -- se sacó a pedido del usuario, no le
-     gustaba el parche claro sobre una pantalla oscura. Ahora el texto usa --chalk
-     directo (igual que cualquier otro texto de la app): se adapta solo al tema, sin
-     necesitar ningún fondo de por medio. */
-  .brand-logo-chip{display:inline-flex; align-items:center; gap:7px; flex-shrink:0;}
+  /* Logos reales de cada marca (ver img/brand-logos/FUENTES.md) en vez del glifo/texto
+     genérico que había antes acá. Sin ningún chip de fondo -- ya se probó eso (ver
+     historial) y no le gustaba el parche claro sobre la pantalla oscura -- así que en vez
+     de eso los logos van directo sobre el fondo oscuro, recoloreados a blanco con un
+     filtro CSS (sin tocar el archivo original: la silueta real de cada logo queda
+     intacta, solo cambia de qué color se pinta). Health Connect es la excepción: su
+     ícono ya es a color con fondo propio, así que va sin el filtro.*/
+  .brand-logo-chip{display:inline-flex; align-items:center; flex-shrink:0;}
+  .brand-logo-chip img{height:18px; max-width:96px; width:auto; object-fit:contain; display:block; filter:brightness(0) invert(1);}
+  .brand-logo-chip img.brand-logo-color{filter:none;}
   /* Viñetas breves para la descripción de la sesión (entrada en calor / sesión /
      vuelta a la calma vienen como líneas separadas por \n desde planLabel()) -- se
      listan una debajo de otra con una marca chica, en vez de un párrafo corrido. */
@@ -2216,8 +2218,7 @@
 
       <div class="conn-row conn-row-featured">
         <div class="conn-row-head">
-          <span class="icon-sq" style="width:26px; height:26px; color:#FC4C02; flex-shrink:0;"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg></span>
-          <span class="n" style="font-size:14.5px; font-weight:700;">Strava</span>
+          <span class="brand-logo-chip"><img src="img/brand-logos/strava.svg" alt="Strava"></span>
           <span class="tag tag-trail" data-i18n="perfil_recommended_badge"></span>
           <span id="strava-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
         </div>
@@ -2242,10 +2243,7 @@
 
       <div class="conn-row">
         <div class="conn-row-head">
-          <span class="brand-logo-chip">
-            <svg viewBox="0 0 24 24" width="16" height="16" style="flex-shrink:0;" aria-hidden="true"><path d="M12 2 L21 7.5 V16.5 L12 22 L3 16.5 V7.5 Z" fill="none" stroke="#E31C25" stroke-width="1.8" stroke-linejoin="round"/></svg>
-            <span style="font-weight:800; font-size:14.5px; letter-spacing:.02em; color:var(--chalk);">COROS</span>
-          </span>
+          <span class="brand-logo-chip"><img src="img/brand-logos/coros.png" alt="COROS"></span>
           <span id="coros-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
         </div>
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_coros_desc"></p>
@@ -2264,10 +2262,7 @@
 
       <div class="conn-row">
         <div class="conn-row-head">
-          <span class="brand-logo-chip">
-            <svg viewBox="0 0 24 24" width="15" height="15" style="flex-shrink:0;" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#EE0000"/><rect x="2" y="10.4" width="20" height="3.2" fill="#fff"/></svg>
-            <span style="font-weight:800; font-size:14.5px; letter-spacing:.01em; color:var(--chalk);">POLAR</span>
-          </span>
+          <span class="brand-logo-chip"><img src="img/brand-logos/polar.svg" alt="Polar"></span>
           <span id="polar-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
         </div>
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_polar_desc"></p>
@@ -2288,9 +2283,7 @@
            reloj (ver pushTodayToWahoo() y el botón "Enviar a mi reloj" en Plan). -->
       <div class="conn-row">
         <div class="conn-row-head">
-          <span class="brand-logo-chip">
-            <span style="font-weight:800; font-size:14.5px; letter-spacing:-.01em; color:var(--chalk);">wahoo</span>
-          </span>
+          <span class="brand-logo-chip"><img src="img/brand-logos/wahoo.svg" alt="Wahoo"></span>
           <span id="wahoo-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
         </div>
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_wahoo_desc"></p>
@@ -2314,8 +2307,7 @@
            necesitar una conexión propia por marca. -->
       <div class="conn-row" id="healthconnect-card" style="display:none;">
         <div class="conn-row-head">
-          <span class="icon-sq" style="width:26px; height:26px; color:#E8465C; flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5 5 0 0 0-7.1 0L12 6.3l-1.7-1.7a5 5 0 0 0-7.1 7.1L12 20.3l8.8-8.6a5 5 0 0 0 0-7.1z"/></svg></span>
-          <span class="n" style="font-size:14.5px; font-weight:700; flex:1;" data-i18n="healthconnect_title"></span>
+          <span class="brand-logo-chip" style="gap:8px; flex:1;"><img class="brand-logo-color" src="img/brand-logos/healthconnect.png" alt="" style="height:26px; max-width:26px; border-radius:7px;"><span class="n" style="font-size:14.5px; font-weight:700;" data-i18n="healthconnect_title"></span></span>
           <span id="healthconnect-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
         </div>
         <p class="muted" style="margin-bottom:8px;" data-i18n="healthconnect_desc"></p>
