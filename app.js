@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-30T22:17:31Z';
+const APP_VERSION = '2026-09-30T22:21:18Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
