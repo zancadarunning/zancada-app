@@ -256,6 +256,63 @@ test('maybeAnnounceKm: un salto de más de 1km en un solo fix de GPS no se salta
   assert.equal(announced.length, 2, `debería haber anunciado los 2 km salteados (3 y 4), anunció ${announced.length}: ${JSON.stringify(announced)}`);
 });
 
+test('tickRunTimer: suma el delta real de reloj, no un "+1" ciego (bug confirmado en dispositivo real con tracking en segundo plano)', () => {
+  // Ver el comentario grande junto a tickRunTimer() en app.js: en segundo plano Android frena
+  // el setInterval que la dispara, así que puede tardar minutos en volver a disparar -- si
+  // solo sumara +1 cada disparo, un salto de 80s reales solo sumaría 1s a elapsedSec.
+  const app = loadApp();
+  app.setCurrentUserId('user-de-prueba');
+  app.setTracker({
+    startedAt: Date.now() - 100 * 1000,
+    points: [], distanceKm: 0, hrLog: [], lastAnnouncedKm: 0,
+    elapsedSec: 50,
+    lastSavedSec: 50,
+    running: true, autoPaused: false,
+    lastTickAt: Date.now() - 80 * 1000, // el timer no disparó en los últimos 80s reales (app en 2do plano)
+  });
+
+  app.tickRunTimer();
+
+  assert.equal(app.getTracker().elapsedSec, 130, 'debería sumar los ~80s reales transcurridos de una, no +1');
+});
+
+test('tickRunTimer: no suma nada mientras la carrera está en auto-pausa (quietud) o pausada a mano', () => {
+  const app = loadApp();
+  app.setCurrentUserId('user-de-prueba');
+  app.setTracker({
+    startedAt: Date.now() - 100 * 1000,
+    points: [], distanceKm: 0, hrLog: [], lastAnnouncedKm: 0,
+    elapsedSec: 50, lastSavedSec: 50,
+    running: true, autoPaused: true, // quieto en un semáforo
+    lastTickAt: Date.now() - 10 * 1000,
+  });
+
+  app.tickRunTimer();
+
+  assert.equal(app.getTracker().elapsedSec, 50, 'en auto-pausa no debería avanzar elapsedSec aunque haya pasado tiempo real');
+});
+
+test('tickRunTimer: dispara saveRunProgress al cruzar el umbral de 15s incluso con un salto grande de una sola vez', () => {
+  // saveRunProgress() antes se disparaba con elapsedSec % 15 === 0, que un salto grande de
+  // reloj (ver test de arriba) podía saltarse por completo -- ahora compara contra
+  // lastSavedSec para no perderse el guardado periódico.
+  const app = loadApp();
+  app.setCurrentUserId('user-de-prueba');
+  app.setTracker({
+    startedAt: Date.now() - 100 * 1000,
+    points: [], distanceKm: 0, hrLog: [], lastAnnouncedKm: 0,
+    elapsedSec: 50, lastSavedSec: 50,
+    running: true, autoPaused: false,
+    lastTickAt: Date.now() - 80 * 1000,
+  });
+
+  app.tickRunTimer();
+
+  assert.equal(app.getTracker().lastSavedSec, 130, 'lastSavedSec debería ponerse al día con el nuevo elapsedSec');
+  const saved = app.readRunProgress();
+  assert.equal(saved.elapsedSec, 130, 'el progreso guardado debería reflejar el salto grande, no quedarse atrás esperando un múltiplo de 15');
+});
+
 test('isImplausibleRunSpeed: descarta un salto de posición que implicaría correr a velocidad imposible', () => {
   // onPosition() solo filtraba fixes por accuracy (>50m se descarta entero) -- un fix con
   // accuracy aceptable (ej. 45m) pero un error de multipath típico entre edificios altos podía

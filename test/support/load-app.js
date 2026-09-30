@@ -187,7 +187,7 @@ function loadApp(opts) {
   // actuallyStartRun de verdad (que necesita geolocalización, mapa de Leaflet, etc. -- nada de
   // eso existe en este sandbox mínimo).
   vm.runInContext(
-    'this.__exposed = { state, DAY_KEYS, lang, setCurrentUserId(v){ currentUserId = v; }, getTracker(){ return tracker; }, setTracker(v){ tracker = v; } };',
+    'this.__exposed = { state, DAY_KEYS, lang, setCurrentUserId(v){ currentUserId = v; }, getTracker(){ return tracker; }, setTracker(v){ tracker = v; }, tickRunTimer };',
     sandbox,
     { filename: 'expose-internals.js' }
   );

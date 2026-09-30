@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-30T21:55:42Z';
+const APP_VERSION = '2026-09-30T22:17:31Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7638,6 +7638,30 @@ function stopGeoWatch(handle){
   if(handle.native){ if(hasBackgroundGeo()) Capacitor.Plugins.BackgroundGeolocation.removeWatcher({id: handle.id}).catch(()=>{}); }
   else navigator.geolocation.clearWatch(handle.id);
 }
+// Probado en un dispositivo real con el tracking en segundo plano nuevo: mientras la app está
+// oculta, Android frena el setInterval que dispara esto (puede tardar minutos en volver a
+// disparar, no exactamente cada 1000ms) -- pero el GPS en segundo plano (BackgroundGeolocation)
+// SIGUE entregando fixes real durante ese rato. Antes esto sumaba tracker.elapsedSec++ a
+// ciegas cada vez que el timer disparaba, asumiendo que siempre pasó exactamente 1 segundo
+// real -- con el timer frenado, una carrera con varios minutos en segundo plano terminaba con
+// elapsedSec bien por debajo del tiempo real corrido (confirmado en un dispositivo real: ~90s
+// en segundo plano sumaron ~11s de elapsedSec), lo que además inflaba el ritmo mostrado (mismos
+// km en menos tiempo "oficial" del que en realidad tardaron) y atrasaba tickWorkoutGuide() en
+// sesiones con series/cuestas. Ahora medimos el delta real contra el reloj de pared en cada
+// disparo (se dispare cuando se dispare) en vez de sumar un "+1" ciego -- cuando el timer se
+// pone al día de golpe tras volver de segundo plano, el elapsedSec también se pone al día de
+// golpe. Función nombrada aparte (no una closure inline del setInterval) para poder probarla
+// sin depender de temporizadores reales en los tests.
+function tickRunTimer(){
+  const now = Date.now();
+  const deltaSec = Math.round((now - tracker.lastTickAt) / 1000);
+  tracker.lastTickAt = now;
+  if(isTrackingActive() && deltaSec > 0){
+    tracker.elapsedSec += deltaSec;
+    updateLiveStats(); tickWorkoutGuide();
+    if(tracker.elapsedSec - (tracker.lastSavedSec||0) >= 15){ tracker.lastSavedSec = tracker.elapsedSec; saveRunProgress(); }
+  }
+}
 function startRun(){
   // Evita un doble-tap en "Comenzar a correr": actuallyStartRun() más abajo siempre arma un
   // tracker NUEVO y pide un watchPosition nuevo -- el watchId del anterior, que solo vivía en
@@ -7744,7 +7768,20 @@ function actuallyStartRun(saved){
     if(tracker === startedTracker && tracker.watchId === 'pending') tracker.watchId = handle;
     else stopGeoWatch(handle); // stopRun() (u otra carrera) ya corrió mientras esto resolvía -- no lo dejamos vivo sin nadie que lo pueda parar
   });
-  tracker.timerId = setInterval(()=>{ if(isTrackingActive()){ tracker.elapsedSec++; updateLiveStats(); tickWorkoutGuide(); if(tracker.elapsedSec % 15 === 0) saveRunProgress(); } }, 1000);
+  // Probado en un dispositivo real con el tracking en segundo plano nuevo: mientras la app
+  // está oculta, Android frena este setInterval (puede tardar minutos en volver a disparar,
+  // no exactamente cada 1000ms) -- pero el GPS en segundo plano (BackgroundGeolocation) SIGUE
+  // entregando fixes real durante ese rato. Antes esto sumaba tracker.elapsedSec++ a ciegas
+  // cada vez que el timer disparaba, asumiendo que siempre pasó exactamente 1 segundo real --
+  // con el timer frenado, una carrera con varios minutos en segundo plano terminaba con
+  // elapsedSec bien por debajo del tiempo real corrido (confirmado: ~90s en segundo plano
+  // sumaron ~11s de elapsedSec), lo que además inflaba el ritmo mostrado (mismos km en menos
+  // tiempo "oficial" del que en realidad tardaron) y atrasaba tickWorkoutGuide() en sesiones
+  // con series/cuestas. Ahora medimos el delta real contra el reloj de pared en cada disparo
+  // (se dispare cuando se dispare) en vez de sumar un "+1" ciego -- cuando el timer se pone al
+  // día de golpe tras volver de segundo plano, el elapsedSec también se pone al día de golpe.
+  tracker.lastTickAt = Date.now();
+  tracker.timerId = setInterval(tickRunTimer, 1000);
 }
 function onPosition(pos){
   const {latitude:lat, longitude:lon, accuracy, altitude} = pos.coords;
