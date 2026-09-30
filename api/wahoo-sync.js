@@ -6,6 +6,7 @@
 
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { workoutToRun, mergeWahooRuns, isRunningWorkoutType, refreshWahooToken, fetchFitSplits } = require('./_lib/wahoo-activity-helpers');
+const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { withSentry, reportError } = require('./_lib/sentry');
 
 // Cuántas carreras sin splits reales se completan por cuenta en cada corrida del cron --
@@ -33,7 +34,7 @@ const WORKOUTS_MAX_PAGES = 5;
 async function fetchRecentWahooWorkouts(accessToken) {
   const all = [];
   for (let page = 1; page <= WORKOUTS_MAX_PAGES; page++) {
-    const wRes = await fetch(`https://api.wahooligan.com/v1/workouts?page=${page}&per_page=${WORKOUTS_PER_PAGE}`, {
+    const wRes = await fetchWithTimeout(`https://api.wahooligan.com/v1/workouts?page=${page}&per_page=${WORKOUTS_PER_PAGE}`, {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
     if (!wRes.ok) {
@@ -76,7 +77,7 @@ async function backfillWahooSplits(base, headers, conn, accessToken) {
   const updated = [];
   for (const run of pending) {
     try {
-      const wRes = await fetch(`https://api.wahooligan.com/v1/workouts/${run.wahooId}`, {
+      const wRes = await fetchWithTimeout(`https://api.wahooligan.com/v1/workouts/${run.wahooId}`, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       if (!wRes.ok) continue; // se reintenta en el próximo ciclo, no se marca splitsV
@@ -120,8 +121,17 @@ module.exports = withSentry(async (req, res) => {
     const connsRes = await fetch(`${base}/rest/v1/wahoo_connections?select=*`, { headers });
     const conns = await connsRes.json();
 
-    let synced = 0, errors = 0, backfilled = 0;
-    for (const conn of (Array.isArray(conns) ? conns : [])) {
+    // Auditoría de costos: mismo tope que sync-strava.js/polar-sync.js.
+    const CRON_TIME_BUDGET_MS = 8000;
+    const cronStart = Date.now();
+    let synced = 0, errors = 0, backfilled = 0, skipped = 0;
+    const connsList = Array.isArray(conns) ? conns : [];
+    for (const conn of connsList) {
+      if (Date.now() - cronStart > CRON_TIME_BUDGET_MS) {
+        skipped = connsList.length - synced - errors;
+        console.error(`wahoo-sync (cron): tope de tiempo alcanzado, ${skipped} cuentas quedan para la próxima corrida`);
+        break;
+      }
       try {
         let accessToken = conn.access_token;
         if (conn.expires_at < Math.floor(Date.now() / 1000)) {
@@ -164,7 +174,7 @@ module.exports = withSentry(async (req, res) => {
       }
     }
 
-    res.status(200).json({ synced, errors, backfilled, total: Array.isArray(conns) ? conns.length : 0 });
+    res.status(200).json({ synced, errors, backfilled, skipped, total: connsList.length });
   } catch (err) {
     console.error('wahoo-sync error', err);
     await reportError(err, { endpoint: 'wahoo-sync' });

@@ -1,6 +1,7 @@
 // api/chat.js — función serverless de Vercel.
 const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
+const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 
 // Mensajes que sí le mostramos al corredor tal cual, en su idioma. Antes, cualquier error
 // que no fuera "muy solicitado" (token de sesión faltante/vencido, un error interno de la
@@ -164,11 +165,11 @@ module.exports = withSentry(async (req, res) => {
       // directo a la excepción de más abajo y cortaba los reintentos, aunque fuera exactamente
       // el mismo tipo de falla transitoria que un 429/529 sí reintentaba.
       try {
-        const claudeRes = await fetch(url, {
+        const claudeRes = await fetchWithTimeout(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
           body
-        });
+        }, 25000);
         lastStatus = claudeRes.status;
         data = await claudeRes.json();
       } catch (fetchErr) {

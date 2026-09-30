@@ -1,8 +1,16 @@
 const verifyUser = require('./_lib/verify-user');
 const { activityToRun, mergeStravaRuns, setStravaSyncStatus } = require('./_lib/strava-activity-helpers');
 const { applyCors, isPreflight } = require('./_lib/cors');
+const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 
 const { withSentry, reportError } = require('./_lib/sentry');
+
+// Auditoría de costos: sin esto, alguien apretando "Sincronizar ahora" muy seguido (o un
+// script pegándole directo al endpoint) podía disparar muchos intentos por segundo -- el
+// riesgo real no es solo el costo de Vercel, sino que golpear demasiado rápido a Strava
+// puede hacer que le pongan rate limit a las credenciales de TODA la app. 20s es más que
+// suficiente para un uso normal del botón (que ya se deshabilita mientras sincroniza).
+const SYNC_COOLDOWN_MS = 20000;
 
 module.exports = withSentry(async (req, res) => {
   applyCors(req, res);
@@ -14,6 +22,9 @@ module.exports = withSentry(async (req, res) => {
   const base = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_KEY;
   const headers = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' };
+
+  const allowed = await checkSyncCooldown(base, headers, userId, 'strava', SYNC_COOLDOWN_MS);
+  if (!allowed) return res.status(200).json({ synced: false, reason: 'cooldown' });
 
   try {
     const connRes = await fetch(`${base}/rest/v1/strava_connections?user_id=eq.${userId}&select=*`, { headers });

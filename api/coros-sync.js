@@ -24,8 +24,17 @@ module.exports = withSentry(async (req, res) => {
     const connsRes = await fetch(`${base}/rest/v1/coros_connections?select=*`, { headers });
     const conns = await connsRes.json();
 
-    let synced = 0, errors = 0;
-    for (const conn of (Array.isArray(conns) ? conns : [])) {
+    // Auditoría de costos: mismo tope que sync-strava.js/polar-sync.js/wahoo-sync.js.
+    const CRON_TIME_BUDGET_MS = 8000;
+    const cronStart = Date.now();
+    let synced = 0, errors = 0, skipped = 0;
+    const connsList = Array.isArray(conns) ? conns : [];
+    for (const conn of connsList) {
+      if (Date.now() - cronStart > CRON_TIME_BUDGET_MS) {
+        skipped = connsList.length - synced - errors;
+        console.error(`coros-sync (cron): tope de tiempo alcanzado, ${skipped} cuentas quedan para la próxima corrida`);
+        break;
+      }
       try {
         let accessToken = conn.access_token;
         if (conn.expires_at < Math.floor(Date.now() / 1000)) {
@@ -56,7 +65,7 @@ module.exports = withSentry(async (req, res) => {
       }
     }
 
-    res.status(200).json({ synced, errors, total: Array.isArray(conns) ? conns.length : 0 });
+    res.status(200).json({ synced, errors, skipped, total: connsList.length });
   } catch (err) {
     console.error('coros-sync error', err);
     await reportError(err, { endpoint: 'coros-sync' });

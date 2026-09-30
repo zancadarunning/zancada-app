@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-30T03:53:09Z';
+const APP_VERSION = '2026-09-30T16:03:40Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2076,8 +2076,16 @@ function startConfirmEmailPolling(){
      "Email not confirmed" hasta ese momento) — así detectamos la confirmación sin importar si
      abrió el link de otra pestaña, del celular, o de otra compu, sin depender de que el link de
      confirmación vuelva a esta misma pestaña. */
+  // Tope de 10 minutos (150 intentos x 4s): auditoría de costos -- sin esto, alguien que deja
+  // esta pantalla abierta y nunca confirma el mail (o abandona la pestaña) generaba un intento
+  // real de login contra Supabase Auth cada 4 segundos para siempre, sin límite. Pasado el
+  // tope simplemente dejamos de sondear -- el botón "Reenviar email" y volver a entrar siguen
+  // andando igual, así que no se pierde ninguna funcionalidad real.
+  let attempts = 0;
+  const MAX_ATTEMPTS = 150;
   confirmEmailPollTimer = setInterval(async ()=>{
     if(document.visibilityState !== 'visible') return;
+    if(++attempts > MAX_ATTEMPTS){ stopConfirmEmailPolling(); return; }
     try{
       const { data, error } = await supabaseClient.auth.signInWithPassword({ email: confirmEmailAddr, password: confirmEmailPw });
       if(!error && data.session){

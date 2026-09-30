@@ -36,6 +36,7 @@
 // de querySportRecords).
 
 const { sanitizeActivityNumbers } = require('./activity-sanity.js');
+const { fetchWithTimeout } = require('./fetch-with-timeout');
 
 const MCP_ENDPOINT = 'https://mcp.coros.com/mcp';
 
@@ -45,7 +46,7 @@ const MCP_ENDPOINT = 'https://mcp.coros.com/mcp';
 // protocolo MCP para conexiones con estado -- si en la práctica hiciera falta,
 // va a fallar acá con un error de protocolo visible en los logs.
 async function callCorosMcpTool(accessToken, toolName, args) {
-  const res = await fetch(MCP_ENDPOINT, {
+  const res = await fetchWithTimeout(MCP_ENDPOINT, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -319,7 +320,7 @@ async function purgeCorosRunsForUser(base, headers, userId) {
 // api/coros-init.js -- así que acá no hace falta ni existe un
 // COROS_CLIENT_SECRET.
 async function refreshCorosToken(base, headers, userId, refreshToken) {
-  const tokenRes = await fetch('https://mcpus.coros.com/oauth2/token', {
+  const tokenRes = await fetchWithTimeout('https://mcpus.coros.com/oauth2/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({

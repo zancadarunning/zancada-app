@@ -14,6 +14,7 @@
 // api/_lib/fit-activity-helpers.js para cómo se decodifica.
 
 const { sanitizeActivityNumbers } = require('./activity-sanity.js');
+const { fetchWithTimeout } = require('./fetch-with-timeout');
 
 // IDs de workout_type_id relacionados a running, según la tabla de tipos de
 // la API de Wahoo (cloud-api.wahooligan.com): 1 = running (outdoor), 5 =
@@ -61,7 +62,7 @@ const { decodeFitRecords, buildSplitsAndSeriesFromFitRecords, emptyFitResult } =
 async function fetchFitSplits(fitUrl, accessToken){
   if (!fitUrl) return emptyFitResult();
   try {
-    const res = await fetch(fitUrl, { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} });
+    const res = await fetchWithTimeout(fitUrl, { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} });
     if (!res.ok) return emptyFitResult();
     const buf = Buffer.from(await res.arrayBuffer());
     const records = await decodeFitRecords(buf);
@@ -173,7 +174,7 @@ async function purgeWahooRunsForUser(base, headers, userId){
 // refresh_token también quedó inválido (el usuario revocó el acceso del
 // lado de Wahoo, por ejemplo).
 async function refreshWahooToken(base, headers, userId, refreshToken){
-  const tokenRes = await fetch('https://api.wahooligan.com/oauth/token', {
+  const tokenRes = await fetchWithTimeout('https://api.wahooligan.com/oauth/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({

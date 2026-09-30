@@ -7,6 +7,7 @@
 
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { exerciseToRun, mergePolarRuns, fetchFitSplits } = require('./_lib/polar-activity-helpers');
+const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { withSentry, reportError } = require('./_lib/sentry');
 
 // Cuántas carreras sin splits reales se completan por cuenta en cada corrida del cron.
@@ -69,10 +70,22 @@ module.exports = withSentry(async (req, res) => {
     const connsRes = await fetch(`${base}/rest/v1/polar_connections?select=*`, { headers });
     const conns = await connsRes.json();
 
-    let synced = 0, errors = 0, backfilled = 0;
-    for (const conn of (Array.isArray(conns) ? conns : [])) {
+    // Auditoría de costos: mismo tope que sync-strava.js -- sin esto, este cron (corre cada
+    // 15 min sobre TODAS las cuentas conectadas, en secuencia) eventualmente supera el
+    // límite de duración de la función y Vercel la mata a la mitad. Cortamos antes: lo que
+    // no llegue en esta corrida lo agarra la de dentro de 15 minutos.
+    const CRON_TIME_BUDGET_MS = 8000;
+    const cronStart = Date.now();
+    let synced = 0, errors = 0, backfilled = 0, skipped = 0;
+    const connsList = Array.isArray(conns) ? conns : [];
+    for (const conn of connsList) {
+      if (Date.now() - cronStart > CRON_TIME_BUDGET_MS) {
+        skipped = connsList.length - synced - errors;
+        console.error(`polar-sync (cron): tope de tiempo alcanzado, ${skipped} cuentas quedan para la próxima corrida`);
+        break;
+      }
       try {
-        const exsRes = await fetch('https://www.polaraccesslink.com/v3/exercises', {
+        const exsRes = await fetchWithTimeout('https://www.polaraccesslink.com/v3/exercises', {
           headers: { Authorization: `Bearer ${conn.access_token}` }
         });
         const exsData = await exsRes.json().catch(() => null);
@@ -108,7 +121,7 @@ module.exports = withSentry(async (req, res) => {
       }
     }
 
-    res.status(200).json({ synced, errors, backfilled, total: Array.isArray(conns) ? conns.length : 0 });
+    res.status(200).json({ synced, errors, backfilled, skipped, total: connsList.length });
   } catch (err) {
     console.error('polar-sync error', err);
     await reportError(err, { endpoint: 'polar-sync' });

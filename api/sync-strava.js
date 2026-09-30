@@ -1,5 +1,6 @@
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { activityToRun, mergeStravaRuns, setStravaSyncStatus, fetchStreams } = require('./_lib/strava-activity-helpers');
+const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 
 const { withSentry, reportError } = require('./_lib/sentry');
 
@@ -58,12 +59,28 @@ module.exports = withSentry(async (req, res) => {
     const connsRes = await fetch(`${base}/rest/v1/strava_connections?select=*`, { headers });
     const conns = await connsRes.json();
 
-    let synced = 0, errors = 0, backfilled = 0;
-    for (const conn of (Array.isArray(conns) ? conns : [])) {
+    // Auditoría de costos: este cron corre cada 15 minutos y recorre TODAS las cuentas
+    // conectadas de forma secuencial (varias llamadas de red por cuenta) -- sin este tope,
+    // a medida que crece la cantidad de usuarios el recorrido completo eventualmente
+    // supera el límite de duración de la función serverless y Vercel la mata a la mitad,
+    // pagando ese tiempo igual y sin dejar registro limpio de qué se alcanzó a sincronizar.
+    // Con el tope, cortamos solos ANTES de eso: lo que no llegue a procesarse en esta
+    // corrida lo agarra la corrida de dentro de 15 minutos, igual que ya pasa hoy si el
+    // cron completo llegara a fallar por cualquier otro motivo.
+    const CRON_TIME_BUDGET_MS = 8000;
+    const cronStart = Date.now();
+    let synced = 0, errors = 0, backfilled = 0, skipped = 0;
+    const connsList = Array.isArray(conns) ? conns : [];
+    for (const conn of connsList) {
+      if (Date.now() - cronStart > CRON_TIME_BUDGET_MS) {
+        skipped = connsList.length - synced - errors;
+        console.error(`sync-strava (cron): tope de tiempo alcanzado, ${skipped} cuentas quedan para la próxima corrida`);
+        break;
+      }
       try {
         let accessToken = conn.access_token;
         if (conn.expires_at < Math.floor(Date.now() / 1000)) {
-          const refreshRes = await fetch('https://www.strava.com/oauth/token', {
+          const refreshRes = await fetchWithTimeout('https://www.strava.com/oauth/token', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ client_id: process.env.STRAVA_CLIENT_ID, client_secret: process.env.STRAVA_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: conn.refresh_token })
           });
@@ -78,7 +95,7 @@ module.exports = withSentry(async (req, res) => {
         }
 
         const after = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
-        const actsRes = await fetch(`https://www.strava.com/api/v3/athlete/activities?after=${after}&per_page=30`, {
+        const actsRes = await fetchWithTimeout(`https://www.strava.com/api/v3/athlete/activities?after=${after}&per_page=30`, {
           headers: { Authorization: `Bearer ${accessToken}` }
         });
         // Mismo bug que ya se había arreglado en polar-sync-now.js/wahoo-sync-now.js (ver esos
@@ -125,7 +142,7 @@ module.exports = withSentry(async (req, res) => {
       }
     }
 
-    res.status(200).json({ synced, errors, backfilled, total: Array.isArray(conns) ? conns.length : 0 });
+    res.status(200).json({ synced, errors, backfilled, skipped, total: connsList.length });
   } catch (err) {
     console.error('sync-strava error', err);
     await reportError(err, { endpoint: 'sync-strava' });

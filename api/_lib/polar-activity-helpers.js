@@ -12,6 +12,7 @@
 // decodifica ese archivo.
 
 const { sanitizeActivityNumbers } = require('./activity-sanity.js');
+const { fetchWithTimeout } = require('./fetch-with-timeout');
 
 function isRunningSport(sport) {
   if (!sport) return false;
@@ -62,7 +63,7 @@ const { decodeFitRecords, buildSplitsAndSeriesFromFitRecords, emptyFitResult } =
 // tenía este archivo con el resto de los fetches.
 async function fetchFitSplits(exerciseId, accessToken) {
   try {
-    const res = await fetch(`https://www.polaraccesslink.com/v3/exercises/${exerciseId}/fit`, {
+    const res = await fetchWithTimeout(`https://www.polaraccesslink.com/v3/exercises/${exerciseId}/fit`, {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
     if (!res.ok) return emptyFitResult();

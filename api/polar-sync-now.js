@@ -8,8 +8,12 @@
 const verifyUser = require('./_lib/verify-user');
 const { exerciseToRun, mergePolarRuns } = require('./_lib/polar-activity-helpers');
 const { applyCors, isPreflight } = require('./_lib/cors');
+const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 
 const { withSentry, reportError } = require('./_lib/sentry');
+
+// Auditoría de costos: ver el mismo comentario en strava-sync-now.js.
+const SYNC_COOLDOWN_MS = 20000;
 
 module.exports = withSentry(async (req, res) => {
   applyCors(req, res);
@@ -21,6 +25,9 @@ module.exports = withSentry(async (req, res) => {
   const base = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_KEY;
   const headers = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' };
+
+  const allowed = await checkSyncCooldown(base, headers, userId, 'polar', SYNC_COOLDOWN_MS);
+  if (!allowed) return res.status(200).json({ synced: false, reason: 'cooldown' });
 
   try {
     const connRes = await fetch(`${base}/rest/v1/polar_connections?user_id=eq.${userId}&select=access_token`, { headers });

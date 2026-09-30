@@ -27,6 +27,7 @@
 // datos.
 
 const { sanitizeActivityNumbers } = require('./activity-sanity.js');
+const { fetchWithTimeout } = require('./fetch-with-timeout');
 
 function decodePolyline(encoded) {
   if (!encoded) return [];
@@ -55,7 +56,7 @@ function decodePolyline(encoded) {
 // solo da el ascenso en el resumen de la actividad, no el descenso).
 async function fetchStreams(activityId, accessToken) {
   try {
-    const res = await fetch(`https://www.strava.com/api/v3/activities/${activityId}/streams?keys=time,distance,altitude,heartrate,cadence,velocity_smooth&key_by_type=true`, {
+    const res = await fetchWithTimeout(`https://www.strava.com/api/v3/activities/${activityId}/streams?keys=time,distance,altitude,heartrate,cadence,velocity_smooth&key_by_type=true`, {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
     const streams = await res.json();

@@ -79,7 +79,12 @@ module.exports = withSentry(async (req, res) => {
     // reportó justamente eso: "forEach is not a function" / "is not iterable", dos veces,
     // sin ninguna pista de qué había fallado). Mismo chequeo que ya tienen sync-strava.js/
     // strava-sync-now.js/polar-sync-now.js/wahoo-sync-now.js.
-    const statesRes = await fetch(`${base}/rest/v1/app_state?select=user_id,data`, { headers });
+    // Auditoría de costos: antes pedía "data" completo (historial de carreras, toda la charla
+    // con Zonda, perfil entero) de CADA usuario, cada hora, solo para leer estos 4 campos
+    // chicos. PostgREST permite pedir subcampos de una columna JSON directo en el select
+    // (data->plan, data->>weekStart, etc.), así que el resto de "data" ni sale de la base --
+    // mismo comportamiento exacto de acá para abajo, mucho menos ancho de banda/lectura.
+    const statesRes = await fetch(`${base}/rest/v1/app_state?select=user_id,plan:data->plan,weekStart:data->>weekStart,tz:data->profile->>tz,lang:data->>lang`, { headers });
     if (!statesRes.ok) {
       const body = await statesRes.text().catch(() => '');
       throw new Error(`app_state fetch failed: ${statesRes.status} ${body}`);
@@ -102,8 +107,7 @@ module.exports = withSentry(async (req, res) => {
     for (const row of (states || [])) {
       const subRow = subsByUser[row.user_id];
       if (!subRow) { skipped++; continue; }
-      const data = row.data || {};
-      const plan = data.plan;
+      const plan = row.plan;
       if (!plan || !plan.length) { skipped++; continue; }
 
       // El plan guardado se actualiza a la semana real desde el cliente (checkWeekRollover()
@@ -113,12 +117,12 @@ module.exports = withSentry(async (req, res) => {
       // devolviendo ALGO, pero podría ser un descanso donde hoy en realidad toca entrenar, o
       // al revés -- mejor no mandar nada antes que mandar un aviso equivocado. 10 días de
       // margen (no 7 justos) para no cortar por un caso límite de huso horario.
-      if (data.weekStart) {
-        const staleMs = Date.now() - new Date(data.weekStart + 'T00:00:00Z').getTime();
+      if (row.weekStart) {
+        const staleMs = Date.now() - new Date(row.weekStart + 'T00:00:00Z').getTime();
         if (staleMs > 10 * 86400000) { skipped++; continue; }
       }
 
-      const tz = (data.profile && data.profile.tz) || DEFAULT_TZ;
+      const tz = row.tz || DEFAULT_TZ;
       const { hour, dayIdx } = localHourAndDayIdx(tz);
       if (hour !== REMINDER_HOUR) { skipped++; continue; } // todavía no son las 8am en el huso de ESTE usuario
 
@@ -129,7 +133,7 @@ module.exports = withSentry(async (req, res) => {
       // "Hoy toca: ..." como si no hubiera corrido todavía.
       if (!today || !today.dist || today.status) { skipped++; continue; } // día de descanso o sesión ya resuelta, no molestamos
 
-      const lang = MSGS[data.lang] ? data.lang : 'es';
+      const lang = MSGS[row.lang] ? row.lang : 'es';
       const typeLabel = today.custom ? today.type : (MSGS[lang].types[today.typeKey] || today.typeKey);
       const body = MSGS[lang].body(typeLabel, today.dist);
 

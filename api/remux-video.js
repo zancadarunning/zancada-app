@@ -28,12 +28,19 @@ const crypto = require('crypto');
 const ffmpegPath = require('ffmpeg-static');
 const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
+const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 
 // Vercel ya rechaza pedidos de más de ~4.5MB antes de que lleguen acá (límite
 // de la plataforma para Serverless Functions, no configurable) -- este chequeo
 // es solo una segunda barrera explícita, con un mensaje más claro que el error
 // genérico de la plataforma.
 const MAX_BYTES = 4.5 * 1024 * 1024;
+
+// Auditoría de costos: reprocesar un video con ffmpeg es lo más caro en CPU de
+// todo el backend, y no tenía ningún límite de frecuencia por usuario más allá
+// de estar logueado. Reusa el mismo mecanismo que "Sincronizar ahora" (ver
+// sql/check_sync_cooldown.sql) bajo su propio namespace ('remux').
+const REMUX_COOLDOWN_MS = 20000;
 
 function readRawBody(req){
   // En algunos runtimes de Vercel, req.body ya viene como Buffer para
@@ -71,6 +78,12 @@ module.exports = withSentry(async (req, res) => {
 
   const auth = await verifyUser(req);
   if(!auth.ok){ res.status(auth.status).json({error: auth.error}); return; }
+
+  const base = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_KEY;
+  const cooldownHeaders = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' };
+  const allowed = await checkSyncCooldown(base, cooldownHeaders, auth.userId, 'remux', REMUX_COOLDOWN_MS);
+  if(!allowed){ res.status(429).json({error:'Too many requests, try again shortly'}); return; }
 
   let inPath, outPath;
   try{
