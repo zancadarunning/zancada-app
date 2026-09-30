@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-30T21:37:13Z';
+const APP_VERSION = '2026-09-30T21:55:42Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3488,6 +3488,13 @@ async function deleteAccount(){
       const el = document.getElementById(id);
       if(el) el.style.display = '';
     });
+  }
+  // El aviso "evitá cambiar de app" (run_bg_warning) ya no es cierto donde el GPS sigue
+  // grabando en segundo plano de verdad (ver hasBackgroundGeo()/startGeoWatch()) -- dejarlo
+  // visible ahí sería directamente desinformar al corredor.
+  if(hasBackgroundGeo()){
+    const bgLine = document.getElementById('run-bg-warning-line');
+    if(bgLine) bgLine.style.display = 'none';
   }
   const { data: { session } } = await supabaseClient.auth.getSession();
   if(session && session.user){ await loadUserAndEnter(session.user); }
@@ -7570,6 +7577,67 @@ function recenterMap(){
   liveMapProgrammaticMoveAt = Date.now();
   liveMap.setView(liveMarker.getLatLng(), 17);
 }
+// En Android/iOS nativos usamos @capacitor-community/background-geolocation para que el GPS
+// siga grabando aunque el corredor salga de la app o se le apague la pantalla -- a
+// diferencia de navigator.geolocation (la API web de siempre, que seguimos usando tal cual
+// en el sitio/PWA), el WebView de Android pausa o corta watchPosition en cuanto deja de estar
+// en primer plano. El plugin usa un foreground service con una notificación persistente
+// (obligatoria por Android mientras graba en segundo plano) en vez del permiso especial de
+// ubicación "todo el tiempo", así que no dispara el formulario extra de permisos sensibles
+// de Play Store. Ver mobile/capacitor.config.json (useLegacyBridge, que el propio plugin
+// exige para no cortar la grabación a los 5 minutos) y mobile/android/.../strings.xml (color
+// del canal de la notificación).
+function hasBackgroundGeo(){
+  return typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform && Capacitor.isNativePlatform()
+    && Capacitor.Plugins && Capacitor.Plugins.BackgroundGeolocation;
+}
+// Devuelve un "handle" opaco -- nunca el watchId crudo -- porque las dos APIs son de tipos
+// incompatibles (un number en la web, un string acá) y stopGeoWatch necesita saber cuál de
+// las dos usar para limpiarlo bien.
+async function startGeoWatch(onPos, onErr){
+  if(hasBackgroundGeo()){
+    try{
+      const id = await Capacitor.Plugins.BackgroundGeolocation.addWatcher(
+        {
+          // backgroundMessage es lo que le pide al plugin seguir entregando ubicaciones
+          // con la app en segundo plano -- sin este campo, solo funciona en primer plano,
+          // ni un poco mejor que navigator.geolocation (ver el comentario grande de arriba).
+          backgroundTitle: t('run_bg_notif_title'),
+          backgroundMessage: t('run_bg_notif_body'),
+          requestPermissions: true,
+          stale: false,
+          // 0 (el default) = nos siguen llegando fixes por tiempo, no por distancia mínima
+          // recorrida -- onPosition() ya hace su propio filtrado de precisión/velocidad
+          // implausible/auto-pausa por quietud, y esa auto-pausa necesita fixes seguidos
+          // incluso parado (distancia ~0) para darse cuenta de que el corredor no se mueve.
+          distanceFilter: 0
+        },
+        (location, error) => {
+          if(error){ onErr(error); return; }
+          // Adaptamos la forma del location del plugin (plano: latitude/longitude/...) a la
+          // misma forma que ya arma navigator.geolocation (anidado bajo .coords) para no
+          // tener que tocar nada de onPosition() -- una sola función de procesamiento sirve
+          // para las dos fuentes.
+          onPos({
+            coords: { latitude: location.latitude, longitude: location.longitude, accuracy: location.accuracy, altitude: location.altitude },
+            timestamp: location.time
+          });
+        }
+      );
+      return {native:true, id};
+    }catch(e){
+      console.error('BackgroundGeolocation.addWatcher falló, seguimos con navigator.geolocation', e);
+    }
+  }
+  if(!navigator.geolocation) return null;
+  const id = navigator.geolocation.watchPosition(onPos, onErr, {enableHighAccuracy:true, maximumAge:1000, timeout:15000});
+  return {native:false, id};
+}
+function stopGeoWatch(handle){
+  if(!handle || typeof handle !== 'object') return; // typeof 'object' descarta el sentinel string 'pending' de abajo
+  if(handle.native){ if(hasBackgroundGeo()) Capacitor.Plugins.BackgroundGeolocation.removeWatcher({id: handle.id}).catch(()=>{}); }
+  else navigator.geolocation.clearWatch(handle.id);
+}
 function startRun(){
   // Evita un doble-tap en "Comenzar a correr": actuallyStartRun() más abajo siempre arma un
   // tracker NUEVO y pide un watchPosition nuevo -- el watchId del anterior, que solo vivía en
@@ -7664,7 +7732,18 @@ function actuallyStartRun(saved){
   updateLiveStats();
   setupWorkoutGuide();
   saveRunProgress();
-  tracker.watchId = navigator.geolocation.watchPosition(onPosition, onPosError, {enableHighAccuracy:true, maximumAge:1000, timeout:15000});
+  // Sentinel string (no null) apenas arranca la carrera: el guard de doble-tap de startRun()
+  // (if(tracker && tracker.watchId !== null) return;) tiene que ver ALGO no-null desde este
+  // mismo instante sincrónico -- startGeoWatch() de acá abajo es async (el plugin nativo
+  // resuelve con una Promise), así que sin este sentinel quedaba una ventana real de
+  // milisegundos con watchId todavía en null donde un doble-tap repetía exactamente el bug
+  // grande que describe el comentario de startRun(), esta vez por la parte async.
+  tracker.watchId = 'pending';
+  const startedTracker = tracker;
+  startGeoWatch(onPosition, onPosError).then(handle => {
+    if(tracker === startedTracker && tracker.watchId === 'pending') tracker.watchId = handle;
+    else stopGeoWatch(handle); // stopRun() (u otra carrera) ya corrió mientras esto resolvía -- no lo dejamos vivo sin nadie que lo pueda parar
+  });
   tracker.timerId = setInterval(()=>{ if(isTrackingActive()){ tracker.elapsedSec++; updateLiveStats(); tickWorkoutGuide(); if(tracker.elapsedSec % 15 === 0) saveRunProgress(); } }, 1000);
 }
 function onPosition(pos){
@@ -7768,7 +7847,7 @@ function togglePause(){
 }
 function stopRun(){
   clearInterval(tracker.timerId);
-  if(tracker.watchId!==null) navigator.geolocation.clearWatch(tracker.watchId);
+  if(tracker.watchId!==null) stopGeoWatch(tracker.watchId);
   // Sin esto, tracker.watchId se quedaba con el id ya limpiado (clearWatch no lo pone en
   // null solo) -- el guard contra doble-tap de startRun() (if(tracker.watchId!==null)
   // return;) lo hubiera confundido con una carrera todavía activa, bloqueando arrancar la

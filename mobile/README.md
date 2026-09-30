@@ -35,6 +35,22 @@ Esto genera `mobile/ios/` y `mobile/android/` (no existen hasta que corras esto)
   "Hoy toca: ...") para la app instalada desde la tienda, donde el service
   worker de la PWA web está desactivado a propósito. Ver
   `push-setup/INSTRUCCIONES.md`.
+- **Tracking en segundo plano (Android)** — `@capacitor-community/background-geolocation`
+  (en `package.json`, tracked). A diferencia de los dos ítems de arriba, este no
+  tiene una carpeta `-setup/` propia porque no hay código nativo escrito a mano,
+  es solo el plugin + `capacitor.config.json` (`android.useLegacyBridge: true`,
+  ya tracked) + dos strings en
+  `android/app/src/main/res/values/strings.xml` que SÍ viven dentro de
+  `mobile/android/` (no tracked) y se pierden si esa carpeta se borra y se
+  regenera con `npx cap add android`:
+  ```xml
+  <string name="capacitor_background_geolocation_notification_channel_name">Seguimiento de carrera</string>
+  <string name="capacitor_background_geolocation_notification_color">#D6FF3F</string>
+  ```
+  Sin esto el tracking en segundo plano sigue funcionando igual (son solo el
+  nombre del canal de notificación y su color) -- sólo se pierde la marca.
+  `npx cap sync android` solo, sin recompilar, alcanza para que el plugin quede
+  registrado si `mobile/android/` ya existe.
 
 ## Cada vez que cambia el código web
 
