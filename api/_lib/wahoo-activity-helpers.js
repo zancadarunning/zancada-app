@@ -24,16 +24,23 @@ function isRunningWorkoutType(workoutTypeId){
   return RUNNING_WORKOUT_TYPE_IDS.has(Number(workoutTypeId));
 }
 
-// OJO -- BUG SOSPECHADO, NO CONFIRMADO: getUTCDay() de más abajo (planDayIndex) le da el
-// día de la semana en UTC a partir de workout.starts. Para Strava y Polar esto causaba
-// que una corrida de noche (pasadas las ~21hs en Argentina, UTC-3) se cargara con la
-// fecha del día SIGUIENTE -- ya arreglado en strava-activity-helpers.js/
-// polar-activity-helpers.js, ver esos comentarios para el detalle de cada arreglo.
-// No se tocó acá todavía porque no hay confirmación de si workout.starts de Wahoo viene
-// en UTC puro o ya en la hora local del dispositivo (la documentación de Wahoo menciona
-// un campo separado "time_zone" en algunos endpoints, pero no hay forma de confirmarlo
-// sin probarlo contra una cuenta real conectada). Si un usuario reporta el mismo síntoma
-// con un reloj Wahoo, este es el primer lugar a revisar.
+// BUG SOSPECHADO, ahora arreglado igual que Strava/Polar/COROS: getUTCDay() a partir de
+// workout.starts le daba el día de la semana en UTC, no el local -- una corrida de noche
+// (pasadas las ~21hs en Argentina, UTC-3) se cargaba con la fecha del día SIGUIENTE.
+//
+// Seguía sin tocarse acá porque no hay confirmación de si workout.starts de Wahoo viene
+// en UTC puro o ya en la hora local del dispositivo -- pero da lo mismo para elegir el
+// arreglo: localDatePartFromIso() (mismo helper que ya usa polar-activity-helpers.js)
+// toma los primeros 10 caracteres del string ISO tal cual. Si Wahoo manda la hora local
+// con su offset real (como Polar) o el reloj de pared re-etiquetado como UTC (como
+// Strava), esos primeros 10 caracteres YA son la fecha local correcta. Si en cambio
+// starts fuera un instante UTC puro sin ninguna codificación de hora local (el único
+// caso donde este arreglo no ayuda), el resultado es idéntico al comportamiento actual
+// -- este cambio nunca puede empeorar las cosas, en el peor caso no cambia nada.
+function localDatePartFromIso(iso) {
+  return String(iso || '').slice(0, 10);
+}
+
 function getMondayISO(d){
   const dt = new Date(d);
   const day = dt.getUTCDay();
@@ -73,7 +80,8 @@ async function fetchFitSplits(fitUrl, accessToken){
 async function workoutToRun(workout, accessToken){
   const summary = workout.workout_summary || {};
   const fit = accessToken ? await fetchFitSplits(summary.file && summary.file.url, accessToken) : emptyFitResult();
-  const startDate = new Date(workout.starts);
+  const localDate = localDatePartFromIso(workout.starts);
+  const startDate = new Date(localDate + 'T00:00:00Z');
   const num = (v) => (v != null ? parseFloat(v) : null);
   return sanitizeActivityNumbers({
     id: 'wahoo_' + workout.id,
@@ -123,7 +131,7 @@ async function workoutToRun(workout, accessToken){
     maxPower: fit.maxPower,
     shoeId: null,
     source: 'wahoo',
-    planMonday: getMondayISO(workout.starts),
+    planMonday: getMondayISO(localDate),
     planDayIndex: (startDate.getUTCDay() + 6) % 7
   });
 }

@@ -23,6 +23,7 @@ const { loadApp } = require('./support/load-app');
 
 test('saveRunProgress guarda elapsedSec (no solo distanceKm/points/hrLog)', () => {
   const app = loadApp();
+  app.setCurrentUserId('user-de-prueba'); // runProgressKey() incluye el user_id, ver app.js
   app.setTracker({
     startedAt: Date.now() - 20 * 60 * 1000, // arrancó hace 20 minutos de reloj
     points: [{ lat: 0, lon: 0, t: 0, alt: null }],
@@ -48,6 +49,7 @@ test('saveRunProgress guarda running (para no reanudar corriendo una carrera que
   // mata la app, etc.) y la recuperaba SIEMPRE como si estuviera corriendo, retomando GPS y
   // distancia sin que el corredor tocara nada.
   const app = loadApp();
+  app.setCurrentUserId('user-de-prueba');
   app.setTracker({
     startedAt: Date.now() - 10 * 60 * 1000,
     points: [],
@@ -75,6 +77,7 @@ test('saveRunProgress no guarda nada si no hay una carrera en curso (sin started
 
 test('clearRunProgress borra el progreso guardado', () => {
   const app = loadApp();
+  app.setCurrentUserId('user-de-prueba');
   app.setTracker({ startedAt: Date.now(), points: [], distanceKm: 1, hrLog: [], lastAnnouncedKm: 1, elapsedSec: 300 });
 
   app.saveRunProgress();
@@ -82,6 +85,25 @@ test('clearRunProgress borra el progreso guardado', () => {
 
   app.clearRunProgress();
   assert.equal(app.readRunProgress(), null);
+});
+
+test('la carrera en progreso queda por usuario, no en un mismo cajón para todos', () => {
+  // Reportado en una auditoría: RUN_PROGRESS_KEY era una sola clave global de
+  // localStorage -- en un dispositivo compartido, la Cuenta B podía "recuperar" y seguir
+  // grabando GPS/FC sobre la carrera sin terminar de la Cuenta A, si esta nunca cerró
+  // sesión explícitamente después de que la app se cerrara a la fuerza a mitad de la
+  // carrera. runProgressKey() ahora incluye el user_id, igual que pendingBackupKey().
+  const app = loadApp();
+
+  app.setCurrentUserId('cuenta-a');
+  app.setTracker({ startedAt: Date.now(), points: [], distanceKm: 5, hrLog: [], lastAnnouncedKm: 5, elapsedSec: 1500 });
+  app.saveRunProgress();
+
+  app.setCurrentUserId('cuenta-b');
+  assert.equal(app.readRunProgress(), null, 'la Cuenta B no debería ver la carrera sin terminar de la Cuenta A');
+
+  app.setCurrentUserId('cuenta-a');
+  assert.ok(app.readRunProgress(), 'la Cuenta A sí debería poder recuperar su propia carrera');
 });
 
 test('getDisplaySplits: en modo imperial recalcula los tramos por milla real, no por km relabeleado', () => {

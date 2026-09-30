@@ -18,6 +18,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { loadApp } = require('./support/load-app');
 
 const LOCALES_DIR = path.join(__dirname, '..', 'locales');
 const APP_JS_PATH = path.join(__dirname, '..', 'app.js');
@@ -61,4 +62,17 @@ test('toda clave usada en app.js con t(\'...\') existe en los 6 locales', () => 
       assert.ok(keysByLocale[loc].has(key), `t('${key}') se usa en app.js pero no existe en locales/${loc}.js`);
     }
   }
+});
+
+test('t(key, vars): un valor con patrones de reemplazo de String.replace() ($&, $$, etc.) se inserta literal', () => {
+  // Reportado en una auditoría: t() interpolaba con s.replace('{'+k+'}', vars[k]) -- pasar
+  // el valor directo como STRING de reemplazo hace que "$&", "$$", "$`", "$'" (o "$1") en
+  // ese valor se interpreten como patrones especiales de replace() en vez de insertarse tal
+  // cual. Cualquier texto libre que haya escrito el usuario (nombre de zapatilla, de
+  // carrera/evento) podía disparar esto. El arreglo pasa una FUNCIÓN como reemplazo, cuyo
+  // valor de retorno replace() siempre usa literal.
+  const app = loadApp();
+
+  assert.equal(app.t('confirm_email_lead', { email: '$&' }).includes('$&'), true, 'un valor "$&" debería aparecer tal cual, no expandirse a lo que matcheó "{email}"');
+  assert.equal(app.t('confirm_email_lead', { email: '$$' }).includes('$$'), true, 'un valor "$$" debería insertarse como dos signos "$" literales, no colapsar a uno solo');
 });

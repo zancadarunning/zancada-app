@@ -1,0 +1,8 @@
+{
+  "appId": "org.zancada.app",
+  "appName": "Zancada",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

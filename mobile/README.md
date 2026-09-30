@@ -31,6 +31,10 @@ Esto genera `mobile/ios/` y `mobile/android/` (no existen hasta que corras esto)
   Connect (Android) a Zancada, para relojes que no tienen conexión directa
   propia (ej. Huawei, o cualquier otro que escriba en Health Connect). Ver
   `healthconnect-setup/INSTRUCCIONES.md`.
+- **`push-setup/`** — notificaciones push nativas (el recordatorio diario de
+  "Hoy toca: ...") para la app instalada desde la tienda, donde el service
+  worker de la PWA web está desactivado a propósito. Ver
+  `push-setup/INSTRUCCIONES.md`.
 
 ## Cada vez que cambia el código web
 

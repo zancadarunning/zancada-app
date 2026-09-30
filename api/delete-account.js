@@ -38,19 +38,31 @@ module.exports = withSentry(async (req, res) => {
     // ya no quede rastro de ella (esto un rato NO lo hacíamos para Polar y
     // Wahoo, solo para Strava; quedaba el mismo problema para los otros dos
     // relojes, solo que nadie lo había notado todavía).
+    // Helper para las 4 lecturas de conexión de abajo: si Supabase devuelve un error
+    // transitorio (rate limit, timeout), el body es un objeto {code,message}, no un
+    // array -- connRows[0] en ese objeto da undefined, así que accessToken queda falsy
+    // y la revocación se salteaba en silencio, sin loguear nada (el try/catch de
+    // alrededor nunca se disparaba porque nada tiraba excepción). Mismo chequeo
+    // response.ok que ya usa send-reminders.js para este mismo problema.
+    async function readConnection(table, select) {
+      const connRes = await fetch(`${base}/rest/v1/${table}?user_id=eq.${userId}&select=${select}`, { headers });
+      if (!connRes.ok) {
+        console.error(`delete-account: ${table} fetch failed`, connRes.status, await connRes.text().catch(() => ''));
+        return null;
+      }
+      const rows = await connRes.json();
+      return (Array.isArray(rows) && rows[0]) || null;
+    }
+
     try {
-      const connRes = await fetch(`${base}/rest/v1/strava_connections?user_id=eq.${userId}&select=access_token`, { headers });
-      const connRows = await connRes.json();
-      const accessToken = connRows && connRows[0] && connRows[0].access_token;
-      if (accessToken) {
-        await fetch(`https://www.strava.com/oauth/deauthorize?access_token=${encodeURIComponent(accessToken)}`, { method: 'POST' });
+      const conn = await readConnection('strava_connections', 'access_token');
+      if (conn && conn.access_token) {
+        await fetch(`https://www.strava.com/oauth/deauthorize?access_token=${encodeURIComponent(conn.access_token)}`, { method: 'POST' });
       }
     } catch (e) { console.error('delete-account: strava revoke failed', e); }
 
     try {
-      const connRes = await fetch(`${base}/rest/v1/polar_connections?user_id=eq.${userId}&select=access_token,polar_user_id`, { headers });
-      const connRows = await connRes.json();
-      const conn = connRows && connRows[0];
+      const conn = await readConnection('polar_connections', 'access_token,polar_user_id');
       if (conn && conn.access_token) {
         await fetch(`https://www.polaraccesslink.com/v3/users/${conn.polar_user_id}`, {
           method: 'DELETE',
@@ -60,13 +72,11 @@ module.exports = withSentry(async (req, res) => {
     } catch (e) { console.error('delete-account: polar revoke failed', e); }
 
     try {
-      const connRes = await fetch(`${base}/rest/v1/wahoo_connections?user_id=eq.${userId}&select=access_token`, { headers });
-      const connRows = await connRes.json();
-      const accessToken = connRows && connRows[0] && connRows[0].access_token;
-      if (accessToken) {
+      const conn = await readConnection('wahoo_connections', 'access_token');
+      if (conn && conn.access_token) {
         await fetch('https://api.wahooligan.com/v1/permissions', {
           method: 'DELETE',
-          headers: { Authorization: `Bearer ${accessToken}` }
+          headers: { Authorization: `Bearer ${conn.access_token}` }
         });
       }
     } catch (e) { console.error('delete-account: wahoo revoke failed', e); }
@@ -77,46 +87,34 @@ module.exports = withSentry(async (req, res) => {
     // auth.users) pero nunca le avisaba a COROS, así que el permiso de Zancada seguía
     // apareciendo activo del lado de la cuenta de COROS del usuario para siempre.
     try {
-      const connRes = await fetch(`${base}/rest/v1/coros_connections?user_id=eq.${userId}&select=access_token`, { headers });
-      const connRows = await connRes.json();
-      const accessToken = connRows && connRows[0] && connRows[0].access_token;
-      if (accessToken) {
+      const conn = await readConnection('coros_connections', 'access_token');
+      if (conn && conn.access_token) {
         await fetch('https://mcpus.coros.com/oauth2/revoke', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ token: accessToken, client_id: process.env.COROS_CLIENT_ID })
+          body: new URLSearchParams({ token: conn.access_token, client_id: process.env.COROS_CLIENT_ID })
         });
       }
     } catch (e) { console.error('delete-account: coros revoke failed', e); }
 
-    // Borramos los datos de la app asociados al usuario, tabla por tabla.
-    // Cada una se borra de forma tolerante a errores: si una falla, seguimos
-    // igual con las demás en vez de frenar todo el proceso a mitad de camino.
-    // (No hace falta listar acá polar_connections/wahoo_connections/
-    // coros_connections ni las tablas sociales -- usernames/follows/
-    // run_feed/run_likes -- porque esas 7 tienen su user_id con ON DELETE
-    // CASCADE hacia auth.users (ver sql/create_polar_connections.sql,
-    // sql/create_wahoo_connections.sql, sql/create_coros_connections.sql,
-    // sql/social.sql), así que el borrado del usuario de auth más abajo ya
-    // las limpia solas.
+    // Borramos el usuario de autenticación ANTES que los datos de la app -- a
+    // propósito, en este orden y no al revés. Antes se borraban primero
+    // app_state/push_subscriptions/strava_connections/chat_usage y recién al final
+    // se intentaba borrar el usuario de auth: si ese último paso fallaba (un timeout,
+    // un rate limit del admin API, o dos taps seguidos al botón de borrar cuenta
+    // disparando dos pedidos en paralelo), la cuenta seguía existiendo y el usuario
+    // podía volver a entrar -- pero ya con todos sus datos borrados para siempre, sin
+    // ningún aviso de que eso había pasado. Ahora, si este borrado falla, no se tocó
+    // ninguna fila de datos todavía: el usuario puede simplemente reintentar.
     //
-    // chat_usage (sql/chat_usage.sql) es la excepción: user_id ahí NO tiene
-    // ninguna foreign key hacia auth.users (se armó como PRIMARY KEY
-    // (user_id, usage_date) suelto, sin REFERENCES), así que el borrado del
-    // usuario de auth NO la toca -- sin listarla acá, quedaba huérfana para
-    // siempre una fila por cada día que el usuario borrado haya usado el
-    // chat con el coach. app_state/push_subscriptions/strava_connections se
-    // crearon a mano (no versionadas, ver sql/push_subscriptions_add_platform.sql)
-    // y por las dudas se listan también, aunque tengan cascade.
-    const tables = ['app_state', 'push_subscriptions', 'strava_connections', 'chat_usage'];
-    for (const table of tables) {
-      try {
-        await fetch(`${base}/rest/v1/${table}?user_id=eq.${userId}`, { method: 'DELETE', headers });
-      } catch (e) { console.error(`delete-account: failed to clear ${table}`, e); }
-    }
-
-    // Por último, borramos el usuario de autenticación. Esto es lo que hace
-    // que ya no pueda volver a iniciar sesión con ese email.
+    // Este es también el paso que de verdad limpia la base: strava_connections/
+    // polar_connections/wahoo_connections/coros_connections y las tablas sociales
+    // (usernames/follows/run_feed/run_likes) tienen su user_id con ON DELETE CASCADE
+    // hacia auth.users (ver sql/create_polar_connections.sql, sql/create_wahoo_connections.sql,
+    // sql/create_coros_connections.sql, sql/social.sql), así que este DELETE las limpia
+    // solas. app_state/push_subscriptions/strava_connections se crearon a mano (no
+    // versionadas) y también tienen cascade, pero se vuelven a borrar explícito más
+    // abajo por las dudas.
     const deleteRes = await fetch(`${base}/auth/v1/admin/users/${userId}`, {
       method: 'DELETE',
       headers: { apikey: key, Authorization: `Bearer ${key}` }
@@ -126,6 +124,21 @@ module.exports = withSentry(async (req, res) => {
       console.error('delete-account: failed to delete auth user', errBody);
       res.status(500).json({ error: 'Could not delete account' });
       return;
+    }
+
+    // A partir de acá la cuenta ya no existe (el paso irreversible ya pasó), así que
+    // estos borrados son solo limpieza extra -- tolerantes a errores, si una tabla
+    // falla seguimos con las demás en vez de frenar la respuesta. chat_usage
+    // (sql/chat_usage.sql) es la única que de verdad los necesita: su user_id NO tiene
+    // ninguna foreign key hacia auth.users (PRIMARY KEY (user_id, usage_date) suelto,
+    // sin REFERENCES), así que el borrado de arriba no la toca -- sin este loop
+    // quedaría huérfana para siempre una fila por cada día que el usuario haya usado
+    // el chat con el coach.
+    const tables = ['app_state', 'push_subscriptions', 'strava_connections', 'chat_usage'];
+    for (const table of tables) {
+      try {
+        await fetch(`${base}/rest/v1/${table}?user_id=eq.${userId}`, { method: 'DELETE', headers });
+      } catch (e) { console.error(`delete-account: failed to clear ${table}`, e); }
     }
 
     res.status(200).json({ ok: true });

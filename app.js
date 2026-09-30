@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-29T21:41:27Z';
+const APP_VERSION = '2026-09-30T03:53:09Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -145,7 +145,14 @@ function ensureLocaleLoaded(code){
 }
 function t(key, vars){
   let s = (I18N[lang]&&I18N[lang][key]) || I18N.es[key] || key;
-  if(vars) Object.keys(vars).forEach(k=>{ s = s.replace('{'+k+'}', vars[k]); });
+  // Reportado en una auditoría: pasar vars[k] directo como segundo argumento de replace()
+  // lo trata como un patrón de reemplazo aunque el string de búsqueda sea literal -- "$&",
+  // "$$", "$`", "$'" (o "$1" etc.) dentro de un nombre que escribió el usuario (zapatilla,
+  // carrera/evento) se interpretaban como esos patrones especiales en vez de insertarse tal
+  // cual, corrompiendo el texto mostrado. Con una función como reemplazo, su valor de
+  // retorno se usa siempre literal, sin ningún procesamiento de "$" -- forma estándar de
+  // evitar este problema con String.replace().
+  if(vars) Object.keys(vars).forEach(k=>{ s = s.replace('{'+k+'}', () => String(vars[k])); });
   return s;
 }
 function applyStaticTranslations(){
@@ -1159,11 +1166,22 @@ async function loadUserAndEnter(user, isRetry){
       // borró del todo desde ahí, dejando al servidor con MENOS carreras que las que había acá
       // hace rato), esto pisaba el estado ya actualizado del servidor con datos de este
       // teléfono que en realidad son más viejos -- perdiendo cualquier cambio de perfil/plan
-      // hecho desde el otro dispositivo mientras tanto. Reportado en una auditoría. Ahora
-      // también exige que el backup local sea más NUEVO que la última versión conocida del
-      // servidor, no solo que tenga más carreras.
+      // hecho desde el otro dispositivo mientras tanto. Reportado en una auditoría. Se agregó
+      // que el backup local también sea más NUEVO que la última versión conocida del servidor.
+      //
+      // Segunda vuelta de la misma auditoría: la condición de "más carreras" se había dejado
+      // ADEMÁS del chequeo de fecha (con Y, no en vez de) -- así que una edición offline que no
+      // cambia la cantidad de carreras (perfil, plan, chat, cualquier ajuste de Perfil) nunca
+      // pasaba ese segundo chequeo, aunque el backup fuera genuinamente más nuevo. La app volvía
+      // a cargar el estado viejo del servidor y lo re-guardaba (persist() más abajo), borrando el
+      // cambio offline para siempre -- y de paso limpiando el propio backup pendiente
+      // (clearPendingBackup() dentro de persist()), así que el indicador de "falta sincronizar"
+      // desaparecía como si el cambio SÍ se hubiera guardado. El chequeo de fecha (pending.ts >
+      // remoteTs) ya alcanza solo: si este backup es más nuevo que el updated_at que el propio
+      // servidor acaba de devolver, es porque a esta altura ya venció a lo que había ahí,
+      // tenga más, menos o la misma cantidad de carreras.
       const remoteTs = loadedStateVersion ? new Date(loadedStateVersion).getTime() : 0;
-      if(pending && pending.data && pending.ts > remoteTs && (pending.data.runs||[]).length > (state.runs||[]).length){
+      if(pending && pending.data && pending.ts > remoteTs){
         // había una carrera guardada en el teléfono que no llegó a subirse la última vez -> la recuperamos
         state = pending.data; lang = state.lang || lang;
         persist();
@@ -1255,7 +1273,15 @@ function translateAuthError(error){
   if(msg.includes('Invalid login')) return t('login_err_wrong_password');
   if(msg.includes('already registered') || msg.includes('User already registered')) return t('login_err_exists');
   if(msg.includes('Password should be')) return t('login_err_password');
-  return msg || t('login_err');
+  // Reportado en una auditoría: el fallback devolvía el mensaje CRUDO de Supabase (siempre
+  // en inglés) para cualquier error no listado arriba -- el más común con diferencia es
+  // justo "Email not confirmed" (intentar entrar antes de tocar el link del mail), pero
+  // también cualquier otro (rate limit, email inválido, etc.) en los 6 idiomas. Ahora
+  // "Email not confirmed" reusa login_check_email (mismo texto que ya se muestra en la
+  // pantalla de "confirmá tu cuenta"), y cualquier otro caso no reconocido cae a
+  // generic_error en vez de mostrar el string de Supabase tal cual.
+  if(msg.includes('Email not confirmed')) return t('login_check_email');
+  return msg ? t('generic_error') : t('login_err');
 }
 function togglePasswordVisibility(inputId, btn){
   const input = document.getElementById(inputId);
@@ -1306,8 +1332,7 @@ async function handleGoogleSignIn(btnId){
 // "Sign in with Apple" -- solo se usa en la app nativa de iOS (ver toggle de visibilidad
 // de los botones en init(), más abajo). Usa el plugin @capawesome/capacitor-apple-sign-in,
 // que se registra solo como Capacitor.Plugins.AppleSignIn apenas corre nativo, sin
-// necesitar import ni bundler (mismo patrón que haptic() más arriba). TODO: falta probar
-// este flujo en un dispositivo real una vez armado el proyecto Xcode -- ver mobile/README.md.
+// necesitar import ni bundler (mismo patrón que haptic() más arriba).
 async function handleAppleSignIn(btnId){
   // Mismo motivo que en handleGoogleSignIn: el checkbox solo existe en signup.
   if(btnId === 'signup-apple-btn' && !checkLegalAccepted()) return;
@@ -1316,7 +1341,12 @@ async function handleAppleSignIn(btnId){
     const AppleSignIn = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AppleSignIn;
     if(!AppleSignIn){ showToast(t('login_err'),'error'); return; }
     const nonce = Math.random().toString(36).slice(2) + Date.now().toString(36);
-    const result = await AppleSignIn.signIn({ scopes: ['email', 'fullName'], nonce });
+    // Reportado en una auditoría: este código se escribió sin poder probarlo contra el
+    // plugin real (@capawesome/capacitor-apple-sign-in nunca estuvo instalado -- ver
+    // mobile/package.json). Los scopes adivinados ('email'/'fullName', minúscula) no
+    // coinciden con el enum SignInScope real del plugin ('EMAIL'/'FULL_NAME', ver su
+    // README) -- sin este arreglo, Apple nunca habría devuelto el email ni el nombre.
+    const result = await AppleSignIn.signIn({ scopes: ['EMAIL', 'FULL_NAME'], nonce });
     const idToken = result && result.idToken;
     if(!idToken) throw new Error('Apple sign-in: no idToken en la respuesta');
     const { error } = await supabaseClient.auth.signInWithIdToken({ provider:'apple', token: idToken, nonce });
@@ -2183,6 +2213,41 @@ document.addEventListener('keydown', e=>{
   e.preventDefault();
   el.click();
 });
+// Reportado en una auditoría: ninguno de los 29 paneles .overlay/.overlay-sheet (login,
+// settings, calendario, etc.) tenía semántica de diálogo -- sin role="dialog"/aria-modal,
+// un lector de pantalla no anuncia "se abrió un diálogo", y sin Escape no hay forma de
+// cerrarlo sin tocar la pantalla. Se agrega centralizado acá (en vez de tocar cada una de
+// las ~29 funciones open*Overlay() dispersas por el archivo) con dos partes:
+//
+// 1. Un MutationObserver mira cualquier .overlay/.overlay-sheet que gane la clase
+// overlay-open (así se abren todas, sin importar desde qué función) y le pone role="dialog"
+// aria-modal="true" -- puramente aditivo, no cambia ningún comportamiento existente.
+//
+// 2. Escape busca, DENTRO del overlay abierto, el mismo botón de "atrás" que ya tiene la
+// mayoría (data-i18n-aria="aria_back", el ícono de flecha en la esquina) y le simula un
+// click -- reusa el cierre real de cada overlay (con cualquier guardado/limpieza que haga),
+// en vez de sacarle la clase a mano y arriesgarse a saltear ese cierre propio. Los paneles
+// que no tienen ese botón (login/signup/onboarding, y los modales de confirmar/calificar)
+// se quedan sin Escape a propósito: no tienen un "atrás" al que volver sin perder el
+// progreso, o no deberían cerrarse sin una decisión explícita.
+if(typeof MutationObserver !== 'undefined'){
+  new MutationObserver(muts=>{
+    muts.forEach(m=>{
+      const el = m.target;
+      if(el.classList && el.classList.contains('overlay-open') && (el.classList.contains('overlay') || el.classList.contains('overlay-sheet'))){
+        if(!el.hasAttribute('role')) el.setAttribute('role','dialog');
+        if(!el.hasAttribute('aria-modal')) el.setAttribute('aria-modal','true');
+      }
+    });
+  }).observe(document.body, { attributes:true, attributeFilter:['class'], subtree:true });
+}
+document.addEventListener('keydown', e=>{
+  if(e.key!=='Escape') return;
+  const openOverlay = document.querySelector('.overlay.overlay-open, .overlay-sheet.overlay-open');
+  if(!openOverlay) return;
+  const backBtn = openOverlay.querySelector('[data-i18n-aria="aria_back"]');
+  if(backBtn) backBtn.click();
+});
 document.getElementById('voice-toggle').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('voice-toggle').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
@@ -2290,6 +2355,12 @@ function renderSportChips(ctx){
     row.style.display = sports.length ? 'flex' : 'none';
     row.innerHTML = sports.map(s=>
       `<div class="choice active sport-chip" data-v="${s}">${t('sport_'+s)}<span class="sport-chip-x" onclick="event.stopPropagation(); removeSelectedSport('${ctx}','${s}')">&times;</span></div>`).join('');
+    // Reportado en una auditoría: makeClickablesFocusable() (ver su definición) solo corría
+    // una vez, al cargar la página -- cualquier [onclick] agregado después por un render
+    // dinámico (como este) quedaba sin tabindex/role, inalcanzable por teclado. Se re-corre
+    // acotada a este contenedor cada vez que se re-renderiza. Mismo criterio en
+    // renderSportPickerList/renderPlan/renderHistory/renderCalendar* más abajo.
+    makeClickablesFocusable(row);
   }
   if(btn) btn.textContent = t(sports.length ? 'sport_select_btn_more' : 'sport_select_btn');
   const wrap = document.getElementById(ctx+'-sport-days-wrap');
@@ -2339,6 +2410,7 @@ function renderSportPickerList(){
       <span>${t('sport_'+s)}</span>
       <span class="check-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
     </div>`).join('') : `<p class="muted" style="text-align:center; padding:20px 0;">${t('sport_picker_empty')}</p>`;
+  makeClickablesFocusable(list);
 }
 document.getElementById('ob-sport-days').addEventListener('click', e=>{
   const c=e.target.closest('.day-pill'); if(!c) return;
@@ -2837,6 +2909,7 @@ function renderCalMonths(){
     const isSelected = selMonth===m;
     return `<div class="cal-cell ${isCurrent?'current':''} ${isSelected?'selected':''}" onclick="calSelectMonth(${m})">${label}</div>`;
   }).join('');
+  makeClickablesFocusable(document.getElementById('cal-months-grid'));
 }
 function renderCalYears(){
   calViewMode = 'years';
@@ -2853,6 +2926,7 @@ function renderCalYears(){
     const isSelected = yr===selYear;
     return `<div class="cal-cell ${isCurrent?'current':''} ${isSelected?'selected':''}" onclick="calShowMonths(${yr})">${yr}</div>`;
   }).join('');
+  makeClickablesFocusable(document.getElementById('cal-years-grid'));
 }
 function renderCalendar(){
   calViewMode = 'days';
@@ -2897,6 +2971,7 @@ function renderCalendar(){
     const isDisabled = !calDateAllowed(cellDateStr, bounds);
     return `<div class="cal-day ${isToday?'today':''} ${isSelected?'selected':''} ${isDisabled?'disabled':''}" ${isDisabled?'':`onclick="calSelectDay(${c.day})"`}>${c.day}</div>`;
   }).join('');
+  makeClickablesFocusable(document.getElementById('cal-grid'));
 }
 function calSelectDay(day){
   const y = calViewDate.getFullYear(), m = calViewDate.getMonth();
@@ -3359,7 +3434,18 @@ function openOverlaySheetEl(el){
   void el.offsetHeight;
   el.classList.add('overlay-open');
 }
-async function logout(){ await waitForPendingPersist(); await supabaseClient.auth.signOut(); location.reload(); }
+async function logout(){
+  await waitForPendingPersist();
+  // Ver el comentario de runProgressKey(): sin esto, una carrera sin terminar quedaba
+  // recuperable por la próxima cuenta que inicie sesión en este mismo dispositivo.
+  clearRunProgress();
+  // Limpieza de la clave vieja sin user_id (versiones anteriores a este fix pueden
+  // tener algo ahí guardado en este dispositivo) -- best-effort, no rompe nada si ya
+  // no existe.
+  try{ localStorage.removeItem('zancada_run_in_progress'); }catch(e){}
+  await supabaseClient.auth.signOut();
+  location.reload();
+}
 async function resetApp(){
   if(!(await showConfirm(t('reset_confirm_text'), {danger:true, confirmText:t('delete_word')}))) return;
   await waitForPendingPersist();
@@ -5324,6 +5410,7 @@ function renderPlan(){
       <div class="day-detail" id="detail-${i}"><div>${lblDesc}${zoneDetail}${statusBlock}</div></div>
     </div>`;
   }).join('');
+  makeClickablesFocusable(document.getElementById('plan-list'));
   renderPastWeeks();
 }
 function renderPastWeeks(){
@@ -6003,6 +6090,17 @@ async function refreshStateFromServer(){
         // el servidor tiene menos carreras que las que ya tenemos acá (por ejemplo, una que se guardó sin
         // conexión y todavía no se sincronizó) -> no pisamos lo que ya tenemos, reintentamos guardarlo
         persist();
+      } else if(persistInFlight || persistQueued){
+        // Reportado en una auditoría: el único chequeo de esta función era "el servidor
+        // tiene MENOS carreras", así que un cambio que no cambia la cantidad (borrar una
+        // carrera y agregar otra en el mismo instante, o cualquier edición que no toca
+        // state.runs -- perfil, plan, chat) no lo detectaba, y esta función pisaba state
+        // con una lectura del servidor más vieja que el guardado que todavía está en
+        // vuelo (persist() nunca se espera en varios call sites, ej. deleteRun()). Ahora,
+        // si hay un persist() en curso o encolado (persistInFlight/persistQueued, ver más
+        // arriba), no tocamos state esta vez -- el próximo refresh (cambiar de pestaña,
+        // pull-to-refresh) va a agarrar los datos ya al día, una vez que ese guardado
+        // termine.
       } else {
         const prevRunIds = new Set((state.runs||[]).map(r=>String(r.id)));
         state = data.data;
@@ -6956,11 +7054,19 @@ document.addEventListener('visibilitychange', async ()=>{ if(document.visibility
    y el sistema mata la pestaña, etc.) mientras estás corriendo, esto permite
    recuperar lo ya recorrido en vez de perder el entrenamiento entero. Se
    guarda en el almacenamiento local del teléfono, no en el servidor. */
-const RUN_PROGRESS_KEY = 'zancada_run_in_progress';
+// Con clave global (sin el usuario en el nombre, como quedó al principio) esto se
+// prestaba a un problema serio en un dispositivo compartido: si la Cuenta A cierra la
+// app a la fuerza a mitad de una carrera y después cierra sesión (logout() no la
+// borraba), la Cuenta B podía "recuperar" esa carrera al abrir Correr y seguir grabando
+// GPS/FC encima del entrenamiento de otra persona. Mismo criterio que pendingBackupKey()
+// más arriba: la clave incluye el user_id.
+function runProgressKey(){ return currentUserId ? ('zancada_run_in_progress_'+currentUserId) : null; }
 function saveRunProgress(finished){
   if(!tracker || !tracker.startedAt) return;
+  const key = runProgressKey();
+  if(!key) return;
   try{
-    localStorage.setItem(RUN_PROGRESS_KEY, JSON.stringify({
+    localStorage.setItem(key, JSON.stringify({
       startedAt: tracker.startedAt,
       points: tracker.points,
       distanceKm: tracker.distanceKm,
@@ -6983,9 +7089,11 @@ function saveRunProgress(finished){
     }));
   }catch(e){}
 }
-function clearRunProgress(){ try{ localStorage.removeItem(RUN_PROGRESS_KEY); }catch(e){} }
+function clearRunProgress(){ const key = runProgressKey(); if(!key) return; try{ localStorage.removeItem(key); }catch(e){} }
 function readRunProgress(){
-  try{ const raw = localStorage.getItem(RUN_PROGRESS_KEY); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
+  const key = runProgressKey();
+  if(!key) return null;
+  try{ const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
 }
 function speak(text){
   if(state.voiceEnabled===false || !('speechSynthesis' in window)) return;
@@ -7753,7 +7861,35 @@ function lowerRemainingIntensity(pct){
   // aviso de que el recorte no hizo nada. Un decimal (mismo criterio que intervalActualKm/
   // hillActualKm/fartlekActualKm en el resto del generador) alcanza para que el cambio se
   // note incluso en sesiones de pocos km.
-  state.plan.forEach(d=>{ if(d.dist>0 && !d.status){ d.dist = Math.max(0.1, Math.round(d.dist*factor*10)/10); } });
+  state.plan.forEach(d=>{
+    if(!(d.dist>0) || d.status) return;
+    // Reportado en una auditoría, dos problemas separados en este mismo recorte:
+    //
+    // 1. Nunca marcaba d.custom=true -- preserveLivedDays() (el único guardia contra que
+    // una regeneración del plan pise un día) solo respeta old.custom/old.cancelled. Sin
+    // esto, la PRÓXIMA vez que se regenerara el plan (guardar cualquier cosa en Perfil,
+    // cambiar una carrera en "Próximos eventos", o simplemente que checkPlanAlgoVersion()
+    // detecte un algoritmo nuevo al abrir la app) el recorte por dolor/mala sensación
+    // desaparecía sin ningún aviso, volviendo a la carga completa. Mismo criterio que ya
+    // usan applyMoveSession/applyVolumeAdjust para protegerse de esto.
+    //
+    // 2. Para una sesión con estructura (series/cuestas/fartlek), reescalar SOLO d.dist
+    // dejaba la tarjeta con un número que contradice su propia descripción -- ej. "5.1 km"
+    // arriba pero "6 repeticiones de 1000m" (que suman 6km) en el detalle. Acá, si el día
+    // tiene d.interval, se reescala reps (con un piso de 1 repetición) y se recalcula
+    // d.dist a partir de la estructura YA reducida, con la misma fórmula que usa el propio
+    // generador (intervalActualKm/hillActualKm/fartlekActualKm) -- así el número grande y
+    // la descripción siempre están de acuerdo, para cualquier tipo de sesión.
+    if(d.interval && (d.typeKey==='intervals' || d.typeKey==='hills' || d.typeKey==='fartlek')){
+      d.interval.reps = Math.max(1, Math.round(d.interval.reps*factor));
+      d.dist = d.typeKey==='intervals' ? intervalActualKm(d.interval)
+        : d.typeKey==='hills' ? hillActualKm(d.interval)
+        : fartlekActualKm(d.interval, state.profile);
+    } else {
+      d.dist = Math.max(0.1, Math.round(d.dist*factor*10)/10);
+    }
+    d.custom = true;
+  });
   renderPlan(); renderHome(); persist();
 }
 async function closeSummary(){
@@ -8658,6 +8794,10 @@ function renderHistory(){
   // más arriba) -- ya no hace falta crear/destruir mapas de Leaflet acá ni un
   // IntersectionObserver a mano, el navegador se encarga solo de no pedir la imagen hasta
   // que la tarjeta esté por entrar en pantalla.
+  // Reportado en una auditoría: makeClickablesFocusable() solo corría una vez al cargar la
+  // página -- las .hist-card de esta lista (armadas siempre por este render dinámico) nunca
+  // pasaban por ahí, así que ninguna carrera del historial era alcanzable por teclado.
+  makeClickablesFocusable(el);
   animateHistTrendBars();
 }
 function animateHistTrendBars(){

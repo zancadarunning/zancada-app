@@ -10,6 +10,16 @@
 mobile/*
 !mobile/README.md
 
+# Encontrado en la misma auditoría que llevó a versionar mobile/*-setup/ más abajo: estos
+# tres son configuración escrita/mantenida a mano (qué plugins de Capacitor usa el
+# proyecto, sus versiones exactas, el appId), no output generado -- perderlos es perder
+# de qué plugins depende el wrapper nativo, igual de grave que perder un fix aplicado a
+# mano en mobile/android/. El resto de mobile/node_modules/ sigue afuera (eso sí es
+# instalable de cero con `npm install`, como node_modules/ en la raíz del repo).
+!mobile/package.json
+!mobile/package-lock.json
+!mobile/capacitor.config.json
+
 # Excepción: mobile/*-setup/ (widget-setup, healthconnect-setup, push-setup) NO es
 # código generado -- es la fuente de verdad escrita a mano para funcionalidad nativa
 # (Kotlin/Swift + manifest snippets + guías) que sobrevive a que mobile/android/ o
