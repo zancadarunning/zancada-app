@@ -1483,10 +1483,15 @@
   .coach-fab.pop{animation:mascotPop .5s ease-out;}
   .coach-fab svg{width:74px; height:74px; filter:drop-shadow(0 2px 3px rgba(0,0,0,.3)) drop-shadow(0 8px 14px rgba(0,0,0,.45));}
   .coach-fab .nav-badge-dot{top:2px; right:8px; background:var(--ink); border-color:var(--hivis);}
-  /* Burbuja de "el coach está escribiendo" flotando arriba del personaje -- mientras
-     sendChat() espera la respuesta de /api/chat. Reusa @keyframes blink (ya usado por
-     el indicador ".typing" de adentro del chat) para los 3 puntitos, y el mismo look de
-     tarjeta (asphalt-2/asphalt-4) que el resto de la UI. pointer-events:none porque es
+  /* Burbuja con 3 puntitos flotando arriba del personaje -- doble uso, nunca simultáneo
+     (ver updateMascotBubble en app.js): mientras sendChat() espera la respuesta de
+     /api/chat ("el coach está escribiendo"), O mientras haya un mensaje suyo sin leer
+     (proactivo, o la propia respuesta de sendChat() si llegó con el corredor fuera del
+     chat -- ver savePainLog(), que manda el mensaje sin navegar a la vista del coach).
+     Antes el único aviso de "sin leer" era el puntito chico del badge -- fácil de no
+     notar apenas se sale del chat. Reusa @keyframes blink (ya usado por el indicador
+     ".typing" de adentro del chat) para los 3 puntitos, y el mismo look de tarjeta
+     (asphalt-2/asphalt-4) que el resto de la UI. pointer-events:none porque es
      puramente informativa, no debe robarle el click al botón del mascot debajo. */
   /* right:10px + width:74px (mismo ancho y offset que .coach-fab) en vez de left:50% del wrap
      entero: el wrap ocupa las 480px de ancho de la app, pero el botón vive pegado a la derecha
@@ -1522,6 +1527,15 @@
      mientras que el atributo SVG nativo funciona en cualquier motor con soporte de SVG,
      viejo o nuevo. Por eso ninguna regla CSS de acá abajo toca "transform". */
   .mascot-eye{fill:var(--ink);}
+  /* Brillo (arriba-izq, blanco) + sombra (abajo, negro) superpuestos al círculo lima --
+     ambos son gradientes RADIALES genéricos (ver <defs> en index.html, mascotSheen/
+     mascotShade), no un path/forma tomada de ningún personaje real -- mismo espíritu que
+     el comentario de licencia AGPL de arriba. Le dan volumen de "pelota de goma" en vez
+     del círculo plano de antes, sin tocar el mecanismo de color (setMascotColor() sigue
+     pisando el fill de #mascot-body directo, estos dos círculos van ENCIMA y no les
+     importa qué color tenga el cuerpo debajo). pointer-events:none: son decorativos,
+     el click tiene que seguir yendo al <button> de afuera, no perderse acá.*/
+  .mascot-shade, .mascot-sheen{pointer-events:none;}
 
   .elev-divider{display:flex; align-items:center; gap:8px; margin:22px 0 14px; color:var(--mist-dim);}
   .elev-divider svg{width:60px; height:14px; flex-shrink:0;}
@@ -2820,7 +2834,7 @@
   </nav>
   <div class="coach-fab-wrap" id="coach-fab-wrap" style="display:none;">
     <div class="coach-fab-thinking" id="coach-fab-thinking" aria-hidden="true"><div class="coach-fab-thinking-bubble"><span></span><span></span><span></span></div></div>
-    <button class="coach-fab" onclick="openCoachWithWink()" data-i18n-aria="nav_coach"><svg viewBox="0 0 64 64" aria-hidden="true"><circle id="mascot-body" class="mascot-body" cx="32" cy="32" r="28" fill="var(--hivis)"/><g id="mascot-eyes" class="mascot-eyes"><path id="mascot-eye-l" class="mascot-eye" d="M21.5 25.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z"/><path id="mascot-eye-r" class="mascot-eye" d="M37.5 25.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z"/></g></svg><span class="nav-badge-dot" id="chat-tab-badge"></span></button>
+    <button class="coach-fab" onclick="openCoachWithWink()" data-i18n-aria="nav_coach"><svg viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="mascotSheen" cx="36%" cy="28%" r="60%"><stop offset="0%" stop-color="#fff" stop-opacity=".5"/><stop offset="55%" stop-color="#fff" stop-opacity=".1"/><stop offset="100%" stop-color="#fff" stop-opacity="0"/></radialGradient><radialGradient id="mascotShade" cx="50%" cy="82%" r="55%"><stop offset="0%" stop-color="#000" stop-opacity=".2"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs><circle id="mascot-body" class="mascot-body" cx="32" cy="32" r="28" fill="var(--hivis)"/><circle class="mascot-shade" cx="32" cy="32" r="28" fill="url(#mascotShade)"/><circle class="mascot-sheen" cx="32" cy="32" r="28" fill="url(#mascotSheen)"/><g id="mascot-eyes" class="mascot-eyes"><path id="mascot-eye-l" class="mascot-eye" d="M21.5 25.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z"/><path id="mascot-eye-r" class="mascot-eye" d="M37.5 25.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z"/></g></svg><span class="nav-badge-dot" id="chat-tab-badge"></span></button>
   </div>
 </div>
 <!-- Spacer invisible que garantiza SIEMPRE unos pocos px de overflow real en el

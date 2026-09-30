@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-30T22:30:16Z';
+const APP_VERSION = '2026-09-30T23:55:54Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10609,6 +10609,13 @@ function renderChat(){
 // Puntito en la pestaña del coach cuando hay un mensaje suyo (proactivo o de ajuste
 // automático) que todavía no viste, para no depender de entrar "porque sí" a mirar.
 let mascotBadgeWasVisible = false;
+// true mientras sendChat() está esperando la respuesta de /api/chat -- ver los dos toggles
+// en sendChat() (el que la prende apenas manda el mensaje, el que la apaga al terminar,
+// se cancele, falle la red o llegue bien). Mientras está en true, updateMascotBubble() no
+// toca la burbuja: "pensando" manda por sobre "sin leer" (ver el comentario de la burbuja
+// en index.html) -- evita un parpadeo si un mensaje proactivo llega justo en el medio de
+// una respuesta que ya se está esperando.
+let mascotThinking = false;
 function updateChatBadge(){
   const badge = document.getElementById('chat-tab-badge');
   if(!badge) return;
@@ -10627,6 +10634,14 @@ function updateChatBadge(){
     }
   }
   mascotBadgeWasVisible = hasUnread;
+  updateMascotBubble(hasUnread);
+}
+// Burbuja de 3 puntitos arriba del personaje -- ver el comentario grande junto a
+// .coach-fab-thinking en index.html para el porqué del doble uso (pensando/sin leer).
+function updateMascotBubble(hasUnread){
+  const bubble = document.getElementById('coach-fab-thinking');
+  if(!bubble || mascotThinking) return;
+  bubble.classList.toggle('show', hasUnread);
 }
 // Chips de respuesta rápida con las preguntas más típicas, para no tener que escribir
 // todo siempre (sobre todo recién terminada una corrida). Se muestran una sola vez,
@@ -11511,6 +11526,7 @@ async function sendChat(){
   renderChat();
   document.getElementById('chatLog').insertAdjacentHTML('beforeend', `<div class="msg coach typing msg-enter" id="typing"><span></span><span></span><span></span></div>`);
   scrollChatToBottom();
+  mascotThinking = true;
   document.getElementById('coach-fab-thinking')?.classList.add('show');
 
   // Mandamos como máximo los últimos CHAT_HISTORY_LIMIT mensajes: una charla de meses
@@ -11620,6 +11636,7 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
   chatAbortController = null;
 
   document.getElementById('typing')?.remove();
+  mascotThinking = false;
   document.getElementById('coach-fab-thinking')?.classList.remove('show');
   if(cancelled){
     // El corredor apretó "pausar": no mostramos error ni reintentamos, simplemente
