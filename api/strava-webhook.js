@@ -115,7 +115,7 @@ async function deauthorizeAthlete(athleteId) {
   await purgeStravaRunsForUser(base, headers, userId, (count, lang) => (REVOKED_MSGS[lang] || REVOKED_MSGS.es)(count));
 }
 
-const { withSentry, reportError } = require('./_lib/sentry');
+const { withSentry, reportError, reportSecurityEvent } = require('./_lib/sentry');
 
 module.exports = withSentry(async (req, res) => {
   if (req.method === 'GET') {
@@ -147,6 +147,7 @@ module.exports = withSentry(async (req, res) => {
       const expectedSubId = process.env.STRAVA_SUBSCRIPTION_ID;
       if (!expectedSubId || String(event && event.subscription_id) !== String(expectedSubId)) {
         console.error('strava-webhook: subscription_id no coincide, se ignora el evento', event && event.subscription_id);
+        await reportSecurityEvent('Posible webhook de Strava forjado: subscription_id no coincide', { received: event && event.subscription_id, event }).catch(() => {});
         return;
       }
       // owner_id/object_id se interpolan sin comillas en un filtro PostgREST
@@ -157,8 +158,16 @@ module.exports = withSentry(async (req, res) => {
       // El chequeo de subscription_id es la defensa principal; esto es una segunda capa
       // barata, no confiar en enteros que en teoría "ya vienen bien" de Strava.
       if (event) {
-        if (event.owner_id !== undefined && !Number.isInteger(event.owner_id)) { console.error('strava-webhook: owner_id no numérico, se ignora', event.owner_id); return; }
-        if (event.object_id !== undefined && !Number.isInteger(event.object_id)) { console.error('strava-webhook: object_id no numérico, se ignora', event.object_id); return; }
+        if (event.owner_id !== undefined && !Number.isInteger(event.owner_id)) {
+          console.error('strava-webhook: owner_id no numérico, se ignora', event.owner_id);
+          await reportSecurityEvent('Posible intento de inyección en webhook de Strava: owner_id no numérico', { owner_id: event.owner_id, event }).catch(() => {});
+          return;
+        }
+        if (event.object_id !== undefined && !Number.isInteger(event.object_id)) {
+          console.error('strava-webhook: object_id no numérico, se ignora', event.object_id);
+          await reportSecurityEvent('Posible intento de inyección en webhook de Strava: object_id no numérico', { object_id: event.object_id, event }).catch(() => {});
+          return;
+        }
       }
       if (event && event.object_type === 'activity' && (event.aspect_type === 'create' || event.aspect_type === 'update')) {
         await syncActivity(event.owner_id, event.object_id);

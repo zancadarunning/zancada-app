@@ -108,7 +108,7 @@ async function backfillWahooSplits(base, headers, conn, accessToken) {
 }
 
 module.exports = withSentry(async (req, res) => {
-  if (!requireCronSecret(req)) {
+  if (!(await requireCronSecret(req))) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

@@ -57,7 +57,7 @@ async function backfillPolarSplits(base, headers, conn) {
 }
 
 module.exports = withSentry(async (req, res) => {
-  if (!requireCronSecret(req)) {
+  if (!(await requireCronSecret(req))) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

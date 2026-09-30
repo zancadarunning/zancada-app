@@ -8,7 +8,7 @@ module.exports = withSentry(async (req, res) => {
   // deja mucho más expuesto a quedar guardado en logs del hosting o de
   // proxies intermedios que un header. Ahora, como el resto de los
   // endpoints de cron, va por el header Authorization.
-  if (!requireCronSecret(req)) {
+  if (!(await requireCronSecret(req))) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

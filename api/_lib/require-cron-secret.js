@@ -19,12 +19,25 @@
 //
 //   const requireCronSecret = require('./_lib/require-cron-secret');
 //   module.exports = async (req, res) => {
-//     if (!requireCronSecret(req)) { res.status(401).json({ error: 'Unauthorized' }); return; }
+//     if (!(await requireCronSecret(req))) { res.status(401).json({ error: 'Unauthorized' }); return; }
 //     ...
 //   };
+//
+// Es async (antes no lo era) porque un rechazo acá es una señal fuerte de
+// que alguien está probando estos endpoints sin conocer el secreto -- a
+// diferencia de un token de usuario vencido (común, ruidoso, no vale una
+// alerta), nadie legítimo llega a este chequeo sin el CRON_SECRET correcto.
+// Se reporta a Sentry (ver reportSecurityEvent) además del console.error de
+// siempre, para enterarnos sin tener que ir a revisar Vercel Logs a mano.
+const { reportSecurityEvent } = require('./sentry');
 
-module.exports = function requireCronSecret(req) {
+module.exports = async function requireCronSecret(req) {
   const auth = req.headers['authorization'] || '';
   const secret = process.env.CRON_SECRET;
-  return Boolean(secret) && auth === `Bearer ${secret}`;
+  const ok = Boolean(secret) && auth === `Bearer ${secret}`;
+  if (!ok) {
+    console.error('require-cron-secret: intento con secret ausente o incorrecto —', req.url);
+    await reportSecurityEvent('Intento de acceso a endpoint protegido con CRON_SECRET incorrecto', { url: req.url, method: req.method }).catch(() => {});
+  }
+  return ok;
 };

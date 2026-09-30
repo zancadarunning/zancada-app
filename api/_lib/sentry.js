@@ -56,4 +56,18 @@ async function reportError(err, context) {
   await Sentry.flush(2000).catch(() => {});
 }
 
-module.exports = { Sentry, withSentry, reportError };
+// Para eventos que no son una excepción pero sí valen una alerta -- un intento
+// de forjar el webhook de Strava, un CRON_SECRET incorrecto -- señales de que
+// alguien está probando los endpoints, no un bug nuestro. Antes esto solo
+// quedaba en console.error (Vercel Logs, sin retención ni alerta), así que un
+// intento real de ataque podía pasar desapercibido salvo que alguien fuera a
+// mirar los logs a mano justo ese día. captureMessage (no captureException,
+// no hay ningún Error acá) con level 'warning' para no mezclarlo con los 500
+// de verdad que ya capta withSentry/reportError.
+async function reportSecurityEvent(message, context) {
+  ensureInit();
+  Sentry.captureMessage(message, { level: 'warning', extra: context });
+  await Sentry.flush(2000).catch(() => {});
+}
+
+module.exports = { Sentry, withSentry, reportError, reportSecurityEvent };

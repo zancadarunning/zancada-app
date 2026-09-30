@@ -12,7 +12,7 @@ const { activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool, coro
 const { withSentry, reportError } = require('./_lib/sentry');
 
 module.exports = withSentry(async (req, res) => {
-  if (!requireCronSecret(req)) {
+  if (!(await requireCronSecret(req))) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
