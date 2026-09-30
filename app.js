@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-30T22:21:18Z';
+const APP_VERSION = '2026-09-30T22:30:16Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7591,11 +7591,34 @@ function hasBackgroundGeo(){
   return typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform && Capacitor.isNativePlatform()
     && Capacitor.Plugins && Capacitor.Plugins.BackgroundGeolocation;
 }
+// El foreground service de arriba necesita mostrar su notificación persistente para poder
+// seguir grabando en segundo plano -- pero en Android 13+ (API 33+) mostrar CUALQUIER
+// notificación exige el permiso POST_NOTIFICATIONS en tiempo de ejecución, y el plugin de
+// tracking NO lo pide solo (su requestPermissions:true de más abajo únicamente cubre
+// ubicación). Antes esto solo se pedía si el corredor prendía a mano el toggle de
+// recordatorios push en Perfil -- alguien que nunca toca ese toggle (la mayoría, es opt-in)
+// arrancaba a correr en un Android 13+ sin que el sistema le preguntara nada, y la
+// notificación de "Zancada — Registrando tu carrera" nunca aparecía (el GPS en segundo
+// plano seguía andando igual, pero sin ningún aviso visible ni forma fácil de cancelar
+// desde la notificación). En Android <13 checkPermissions()/requestPermissions() del
+// plugin de push nativo devuelven 'granted' sin preguntar nada (ese permiso ni existe en
+// versiones tan viejas), así que esto no le agrega ningún diálogo de más a esos usuarios.
+async function ensureTrackingNotifPermission(){
+  const nativePush = nativePushPlugin();
+  if(!nativePush) return;
+  try{
+    let status = await nativePush.checkPermissions();
+    if(status.receive === 'prompt' || status.receive === 'prompt-with-rationale'){
+      await nativePush.requestPermissions();
+    }
+  }catch(e){ console.error('no se pudo pedir el permiso de notificaciones para el tracking', e); }
+}
 // Devuelve un "handle" opaco -- nunca el watchId crudo -- porque las dos APIs son de tipos
 // incompatibles (un number en la web, un string acá) y stopGeoWatch necesita saber cuál de
 // las dos usar para limpiarlo bien.
 async function startGeoWatch(onPos, onErr){
   if(hasBackgroundGeo()){
+    await ensureTrackingNotifPermission();
     try{
       const id = await Capacitor.Plugins.BackgroundGeolocation.addWatcher(
         {
