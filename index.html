@@ -594,16 +594,27 @@
   .date-box{transition:border-color .15s ease, box-shadow .15s ease;}
   .date-box:focus-within,.date-box.focused{border-color:var(--hivis); box-shadow:0 0 0 3px var(--hivis-dim);}
   .choice-row{display:flex; gap:8px; flex-wrap:wrap;}
-  .choice{flex:1; min-width:80px; text-align:center; padding:11px 6px; border-radius:var(--radius-sm);
-    border:1.5px solid var(--asphalt-4); background:var(--asphalt-2); color:var(--mist);
-    font-size:12.5px; font-weight:600; cursor:pointer; user-select:none;}
+  /* color:var(--chalk) en vez de --mist (el gris apagado, pensado para texto secundario,
+     quedaba poco legible en una etiqueta que hay que leer para elegir -- reportado en un
+     grupo con muchas opciones, tipo "dónde te duele"). display:flex + align-items:center
+     centra el texto verticalmente aunque la fila lo estire más alto que su contenido (pasa
+     seguido en grupos de muchas opciones: una fila envuelve, la línea de al lado no, y sin
+     esto el texto de la fila más baja quedaba pegado arriba en vez de centrado).
+     word-break:break-word para que una etiqueta larga ("Cadera/Glúteo") envuelva prolijo en
+     vez de desbordar el borde del botón -- antes podía verse cortada a la mitad de la
+     palabra. min-height da un piso parejo para que una fila con etiquetas de 1 línea no
+     quede mucho más baja que la fila de al lado con alguna de 2 líneas. */
+  .choice{flex:1; min-width:84px; min-height:40px; text-align:center; padding:11px 6px; border-radius:var(--radius-sm);
+    border:1.5px solid var(--asphalt-4); background:var(--asphalt-2); color:var(--chalk);
+    font-size:12.5px; font-weight:600; line-height:1.25; cursor:pointer; user-select:none;
+    display:flex; align-items:center; justify-content:center; word-break:break-word;}
   .choice.active{border-color:var(--hivis); color:var(--hivis-text); background:var(--hivis-dim); box-shadow:0 1px 3px var(--hivis-glow);}
   /* Control segmentado de una sola pieza (borde redondeado continuo, sin que cada
      opción sea un botón suelto con su propio borde) -- para grupos chicos de 2-3
      opciones mutuamente excluyentes (sueño, terreno, unidades, voz). Los grupos con
      muchas opciones (dolores, idioma) siguen usando .choice-row sin esta clase. */
   .choice-row.segmented{flex-wrap:nowrap; gap:2px; background:var(--asphalt-3); border-radius:var(--radius-sm); padding:3px;}
-  .choice-row.segmented .choice{min-width:0; border:none; background:none; box-shadow:none; padding:9px 4px; color:var(--mist);}
+  .choice-row.segmented .choice{min-width:0; min-height:0; border:none; background:none; box-shadow:none; padding:9px 4px; color:var(--chalk);}
   .choice-row.segmented .choice.active{background:var(--hivis); color:var(--ink); box-shadow:0 1px 3px var(--hivis-glow);}
   /* Lista con buscador del picker de deportes (#sport-picker-overlay) -- filas apiladas en
      vez de chips en grilla, porque con ~24 deportes un grid de .choice no entra ni se lee. */
