@@ -495,7 +495,7 @@
   }
   .lang-row{display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:28px;}
   .lang-pill{padding:8px 13px; border-radius:999px; border:1.5px solid var(--asphalt-4); background:var(--asphalt-2);
-    color:var(--mist); font-size:12px; font-weight:700; cursor:pointer;}
+    color:var(--chalk); font-size:12px; font-weight:700; cursor:pointer;}
   .lang-pill.active{border-color:var(--hivis); color:var(--hivis-text); background:var(--hivis-dim); box-shadow:0 1px 3px var(--hivis-glow);}
 
   .overlay{position:fixed; inset:0; z-index:50; background:var(--asphalt); max-width:480px; margin:0 auto;
@@ -1103,7 +1103,7 @@
      referencia en vez de quedar como una tarjeta más. */
   .rd-tabs{display:flex; gap:4px; margin:0 -24px 14px; padding:0 24px 2px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; border-bottom:1px solid var(--asphalt-4);}
   .rd-tabs::-webkit-scrollbar{display:none;}
-  .rd-tab-btn{background:none; border:none; color:var(--mist); font-family:inherit; font-size:14px; font-weight:700; padding:8px 12px 12px; cursor:pointer; white-space:nowrap; border-bottom:2.5px solid transparent; flex-shrink:0;}
+  .rd-tab-btn{background:none; border:none; color:var(--chalk); font-family:inherit; font-size:14px; font-weight:700; padding:8px 12px 12px; cursor:pointer; white-space:nowrap; border-bottom:2.5px solid transparent; flex-shrink:0;}
   .rd-tab-btn.active{color:var(--hivis-text); border-bottom-color:var(--hivis);}
   .rd-panel{display:none;}
   .rd-panel.active{display:block;}
@@ -1220,7 +1220,7 @@
   .chat-send:active{transform:scale(.92);}
   .chat-send[data-busy="1"]{background:var(--asphalt-4); color:var(--chalk);}
   .chat-chips{display:flex; flex-wrap:wrap; gap:8px; margin:2px 0 16px;}
-  .chat-chip{background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--mist); font-size:12.5px; font-weight:600; padding:8px 13px; border-radius:999px; cursor:pointer; transition:border-color .12s ease, color .12s ease, transform .1s ease;}
+  .chat-chip{background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); font-size:12.5px; font-weight:600; padding:8px 13px; border-radius:999px; cursor:pointer; transition:border-color .12s ease, color .12s ease, transform .1s ease;}
   .chat-chip:active{transform:scale(.95); border-color:var(--hivis); color:var(--hivis-text);}
   .msg .msg-list{margin:6px 0; padding-left:18px;}
   .msg .msg-list li{margin-bottom:3px;}
@@ -1232,7 +1232,7 @@
 
   .day-picker{display:flex; flex-wrap:wrap; gap:8px;}
   .day-pill{width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-    border:1.5px solid var(--asphalt-4); background:var(--asphalt-2); color:var(--mist); font-size:11px; font-weight:700; cursor:pointer; user-select:none; flex-shrink:0;}
+    border:1.5px solid var(--asphalt-4); background:var(--asphalt-2); color:var(--chalk); font-size:11px; font-weight:700; cursor:pointer; user-select:none; flex-shrink:0;}
   .day-pill.active{border-color:var(--hivis); color:var(--hivis-text); background:var(--hivis-dim); box-shadow:0 1px 3px var(--hivis-glow);}
 
   .hist-card{margin-bottom:12px;}
@@ -1882,7 +1882,7 @@
     <div class="card-shell card-shell-hivis">
     <div class="card card-highlight">
       <h3 id="home-next-card-title" data-i18n="home_next"></h3>
-      <div class="next-session" id="home-next-session" role="button" tabindex="0" onclick="toggleHomeNextDetail()">
+      <div class="next-session" id="home-next-session" role="button" tabindex="0" onclick="toggleHomeNextDetail()" aria-expanded="false" aria-controls="home-next-detail">
         <div style="min-width:0;"><div class="big display" id="home-next-title">—</div></div>
         <div style="text-align:right; flex-shrink:0;"><div class="day-dist" id="home-next-dist" style="font-size:20px;"></div><div id="home-next-zone" style="margin-top:6px;"></div></div>
       </div>
@@ -1891,7 +1891,7 @@
           <div class="next-session-bullets" id="home-next-desc"></div>
         </div>
       </div>
-      <div class="next-session-hint" id="home-next-hint" role="button" tabindex="0" onclick="toggleHomeNextDetail()">
+      <div class="next-session-hint" id="home-next-hint" role="button" tabindex="0" onclick="toggleHomeNextDetail()" aria-expanded="false" aria-controls="home-next-detail">
         <span id="home-next-hint-label" data-i18n="home_next_see_detail"></span>
         <span class="icon-sq" id="home-next-hint-chevron" style="width:13px; height:13px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
       </div>

@@ -421,6 +421,28 @@ test('guardar_nota_coach (zona_cuerpo): deshacer_cambio revierte el recorte de i
   assert.equal(app.state.plan[todayIdx].dist, distBefore, 'deshacer debería restaurar la distancia de antes del recorte');
 });
 
+test('guardar_nota_coach (zona_cuerpo): no duplica el recorte si el formulario de Perfil ya registró la misma molestia', () => {
+  // savePainLog() (Perfil > Molestias) manda el chat sin esperarlo y por su cuenta ya aplica
+  // su propio recorte de -15% -- el coach casi siempre responde a ese mismo mensaje llamando
+  // a esta herramienta con la misma zona, así que sin este chequeo terminaban sumándose dos
+  // recortes de -15% (~28% real) por un solo reporte del corredor.
+  const app = loadApp();
+  app.state.profile = baseProfile(app);
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  app.state.plan = app.DAY_KEYS.map((day, i) => ({ day, typeKey: i === todayIdx ? 'easy' : 'rest', dist: i === todayIdx ? 5 : 0 }));
+  app.state.coachUndoSnapshot = null;
+  app.state.chat = [];
+  // Simula lo que savePainLog() ya hizo un instante antes: su propia entrada activa en
+  // painLog para la misma zona, con un id (timestamp) recién generado.
+  app.state.painLog = [{ id: Date.now(), date: '2026-01-01', bodyPart: 'rodilla', note: '', active: true, checkinSent: false }];
+
+  const distAfterFormCut = app.state.plan[todayIdx].dist; // ya asumimos que el form recortó antes de este punto
+  app.applyCoachNote({ nota: 'me duele la rodilla', zona_cuerpo: 'rodilla' });
+
+  assert.equal(app.state.plan[todayIdx].dist, distAfterFormCut, 'no debería recortar de nuevo si el form ya registró la misma molestia hace segundos');
+  assert.equal(app.state.painLog.length, 1, 'no debería agregar una segunda entrada duplicada al registro de molestias');
+});
+
 test('ajustar meta semanal "ahora" a mitad de semana: el total real de la semana llega a la meta nueva, no se queda pegado en la vieja', (t) => {
   // generatePlan no sabe nada de "cuánto ya se corrió esta semana" -- al subir la meta a
   // mitad de semana, el único día que sobrevivía a preserveLivedDays (los ya hechos quedan

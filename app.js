@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-30T19:06:35Z';
+const APP_VERSION = '2026-09-30T21:37:13Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5448,6 +5448,13 @@ function toggleHomeNextDetail(){
   const isOpen = document.getElementById('home-next-detail').classList.toggle('open');
   document.getElementById('home-next-hint').classList.toggle('open', isOpen);
   document.getElementById('home-next-hint-label').textContent = t(isOpen ? 'home_next_hide_detail' : 'home_next_see_detail');
+  // Encontrado en una auditoría: los dos disparadores (la tarjeta entera y el hint de
+  // "ver detalle") tenían role="button" pero nunca actualizaban aria-expanded, a
+  // diferencia de toggleInstallHelp() que sí lo hace -- un lector de pantalla anunciaba
+  // "botón" sin decir si al activarlo se expande o se colapsa, ni avisar el cambio.
+  const expanded = isOpen ? 'true' : 'false';
+  document.getElementById('home-next-session')?.setAttribute('aria-expanded', expanded);
+  document.getElementById('home-next-hint')?.setAttribute('aria-expanded', expanded);
 }
 function markSession(i, status){
   state.plan[i].status = status;
@@ -11298,26 +11305,33 @@ function applyCoachNote(input){
   // (el mismo tipo de bug que isBeginnerProfile/returningFromBreak tenían antes de esta sesión).
   let plan_updated = false;
   if(input.zona_cuerpo){
-    // A diferencia de la nota en sí (que según el comentario de arriba nunca se tiene que
-    // perder, ni siquiera con deshacer_cambio), esto SÍ mueve el plan -- lowerRemainingIntensity
-    // recorta d.dist de lo que queda de la semana, igual que hacen las otras 5 herramientas que
-    // sí llaman a captureUndoSnapshot(). Sin este llamado, guardar_nota_coach quedaba como la
-    // única herramienta que toca el plan sin dejar cómo estaba antes guardado -- "deshacé eso"
-    // después de "me duele la rodilla" contestaba que no había nada para deshacer (o, peor,
-    // deshacía un cambio más viejo sin relación, dejando el recorte de la molestia sin revertir).
-    captureUndoSnapshot();
-    if(!state.painLog) state.painLog = [];
-    state.painLog.push({id:Date.now(), date:localDateISO(), bodyPart:input.zona_cuerpo, note:String(input.nota).slice(0,200), active:true, checkinSent:false, fromChat:true});
-    // El aumento de cautela (trainingCaution) recién se nota en la PRÓXIMA regeneración del
-    // plan (semana que viene, o cualquier otro guardado que dispare generatePlan) -- para el
-    // resto de ESTA semana, el mismo recorte directo que ya usa savePainLog() desde Perfil
-    // (lowerRemainingIntensity, -15% en lo que queda) es lo que de verdad baja la carga ya
-    // mismo. Antes acá se regeneraba el plan con generatePlan() en su lugar, pero eso da un
-    // efecto mucho más débil para HOY (la cautela recién en 0→1 apenas mueve el volumen de
-    // esta semana) y quedaba inconsistente con lo que pasa cuando la misma molestia se carga
-    // desde el formulario de Perfil -- ahora las dos vías dan la misma protección inmediata.
-    lowerRemainingIntensity(-15);
-    plan_updated = true;
+    // Encontrado en una auditoría: savePainLog() (el formulario de Perfil > Molestias) manda
+    // el chat SIN esperarlo ("Me duele: rodilla.") y de forma independiente le muestra al
+    // corredor su propio cartel de "¿bajo la intensidad?" que, si acepta, llama a
+    // lowerRemainingIntensity(-15) directo. Casi siempre el coach responde a ese mismo mensaje
+    // llamando a ESTA herramienta con la misma zona -- sin este chequeo, las dos vías se
+    // sumaban: -15% del formulario más -15% de acá, quedando un recorte real de ~28% sin que
+    // el corredor entienda por qué, además de una entrada duplicada en el registro de
+    // molestias para el mismo reporte. Si ya hay una entrada activa de esta MISMA zona
+    // guardada hace menos de 2 minutos, asumimos que es este mismo reporte llegando por las
+    // dos vías a la vez y no lo repetimos -- una molestia nueva de verdad en la misma zona,
+    // minutos u horas después, sigue aplicando el recorte normal.
+    const justLogged = (state.painLog || []).some(p => p.bodyPart === input.zona_cuerpo && p.active && (Date.now() - p.id) < 120000);
+    if(!justLogged){
+      captureUndoSnapshot();
+      if(!state.painLog) state.painLog = [];
+      state.painLog.push({id:Date.now(), date:localDateISO(), bodyPart:input.zona_cuerpo, note:String(input.nota).slice(0,200), active:true, checkinSent:false, fromChat:true});
+      // El aumento de cautela (trainingCaution) recién se nota en la PRÓXIMA regeneración del
+      // plan (semana que viene, o cualquier otro guardado que dispare generatePlan) -- para el
+      // resto de ESTA semana, el mismo recorte directo que ya usa savePainLog() desde Perfil
+      // (lowerRemainingIntensity, -15% en lo que queda) es lo que de verdad baja la carga ya
+      // mismo. Antes acá se regeneraba el plan con generatePlan() en su lugar, pero eso da un
+      // efecto mucho más débil para HOY (la cautela recién en 0→1 apenas mueve el volumen de
+      // esta semana) y quedaba inconsistente con lo que pasa cuando la misma molestia se carga
+      // desde el formulario de Perfil -- ahora las dos vías dan la misma protección inmediata.
+      lowerRemainingIntensity(-15);
+      plan_updated = true;
+    }
   }
   persist();
   return plan_updated ? 'Nota guardada, y bajé un 15% lo que queda de la semana por la molestia.' : 'Nota guardada.';
