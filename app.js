@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-30T23:55:54Z';
+const APP_VERSION = '2026-09-30T23:58:27Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -11524,6 +11524,16 @@ async function sendChat(){
   input.value='';
   state.chat.push({role:'user', text, ts:Date.now()});
   renderChat();
+  // Guardamos el mensaje del corredor YA, antes de esperar la respuesta -- si la app se
+  // cierra (no solo se minimiza) mientras el fetch de más abajo todavía está en vuelo, ese
+  // pedido se corta junto con la app y la respuesta del coach se pierde sin remedio, pero
+  // antes la PREGUNTA se perdía también: antes de este fix, el único persist() de esta
+  // función corría recién al final del todo (éxito, cancelado o error de red), así que
+  // cerrar la app a mitad de una espera hacía que ni siquiera quedara registro de que el
+  // corredor había escrito algo. Mismo criterio que ya usa el resto de la app (progreso de
+  // carrera, molestias) -- guardar apenas hay algo real que no se pueda recuperar solo, en
+  // vez de esperar a que termine toda la operación.
+  persist();
   document.getElementById('chatLog').insertAdjacentHTML('beforeend', `<div class="msg coach typing msg-enter" id="typing"><span></span><span></span><span></span></div>`);
   scrollChatToBottom();
   mascotThinking = true;
