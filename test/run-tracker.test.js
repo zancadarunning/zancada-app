@@ -313,6 +313,49 @@ test('tickRunTimer: dispara saveRunProgress al cruzar el umbral de 15s incluso c
   assert.equal(saved.elapsedSec, 130, 'el progreso guardado debería reflejar el salto grande, no quedarse atrás esperando un múltiplo de 15');
 });
 
+test('smoothRouteForDisplay: con muy pocos puntos no toca nada (nada que suavizar)', () => {
+  const app = loadApp();
+  const points = [{lat:0,lon:0},{lat:0.001,lon:0.001},{lat:0.002,lon:0.002}];
+  assert.equal(app.smoothRouteForDisplay(points), points, 'con menos de 5 puntos debería devolver el mismo array, sin copiar ni promediar');
+});
+
+test('smoothRouteForDisplay: el primer y el último punto quedan exactos (el trazado sigue arrancando/terminando donde la carrera de verdad arrancó/terminó)', () => {
+  const app = loadApp();
+  const points = [
+    {lat:10, lon:20}, {lat:10.001, lon:20.001}, {lat:10.002, lon:20.0005},
+    {lat:10.003, lon:20.0015}, {lat:10.004, lon:20.002}, {lat:10.005, lon:20.0025},
+    {lat:10.006, lon:20.003},
+  ];
+  const smoothed = app.smoothRouteForDisplay(points);
+  // .lat/.lon sueltos, no deepEqual del objeto entero -- smoothRouteForDisplay corre adentro
+  // del sandbox vm de loadApp(), un realm de JS distinto al de este test: un objeto literal
+  // creado ahí tiene un Object.prototype distinto al de acá afuera, y deepEqual (estricto)
+  // lo marca como no-igual aunque los valores sean idénticos. Comparar los números sueltos
+  // evita ese falso negativo del todo.
+  assert.equal(smoothed[0].lat, points[0].lat);
+  assert.equal(smoothed[0].lon, points[0].lon);
+  assert.equal(smoothed[smoothed.length-1].lat, points[points.length-1].lat);
+  assert.equal(smoothed[smoothed.length-1].lon, points[points.length-1].lon);
+});
+
+test('smoothRouteForDisplay: reportado por el usuario como "trazado pixelado" -- un quiebre brusco de un solo fix de GPS ruidoso se pareja contra sus vecinos', () => {
+  // Simula el caso real: una recta de puntos (una calle derecha) con UN fix fuera de línea
+  // en el medio (multipath típico entre edificios altos) -- antes esto se dibujaba como un
+  // pico/quiebre recto bien marcado en el mapa; después de suavizar, el pico se reduce
+  // bastante (promedio con sus 4 vecinos a cada lado) sin desaparecer la forma general.
+  const app = loadApp();
+  const points = [];
+  for(let i=0;i<9;i++) points.push({lat:10, lon:20+i*0.001}); // calle derecha (misma lat)
+  points[4] = {lat:10.01, lon:20.004}; // UN fix ruidoso, bien lejos de la línea recta
+  const smoothed = app.smoothRouteForDisplay(points);
+  const noisyPointDeviation = Math.abs(points[4].lat - 10);
+  const smoothedDeviation = Math.abs(smoothed[4].lat - 10);
+  assert.ok(smoothedDeviation < noisyPointDeviation * 0.5, `el pico ruidoso debería reducirse a menos de la mitad al promediar con los vecinos (desvío original ${noisyPointDeviation}, suavizado ${smoothedDeviation})`);
+  // Los puntos lejos del ruido (los extremos) casi no deberían moverse -- el promedio móvil
+  // es local (radius chico), no aplana la calle derecha entera.
+  assert.ok(Math.abs(smoothed[0].lat - 10) < 0.0001, 'el inicio de la calle derecha no debería moverse por un ruido lejano');
+});
+
 test('isImplausibleRunSpeed: descarta un salto de posición que implicaría correr a velocidad imposible', () => {
   // onPosition() solo filtraba fixes por accuracy (>50m se descarta entero) -- un fix con
   // accuracy aceptable (ej. 45m) pero un error de multipath típico entre edificios altos podía

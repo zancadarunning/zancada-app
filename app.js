@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-01T01:49:35Z';
+const APP_VERSION = '2026-10-01T04:52:33Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7537,6 +7537,31 @@ const MAPBOX_ATTRIBUTION = '&copy; <a href="https://www.mapbox.com/about/maps/" 
 // compacto para mandarlo en la URL de un pedido de imagen. Sin librería de por medio:
 // es un algoritmo chico y bien documentado, no vale la pena traer una dependencia entera
 // solo por esto.
+// Suaviza el trazado SOLO para dibujarlo (acá y en buildColoredRouteSegments) -- nunca toca
+// r.points real, que sigue crudo para distancia/ritmo/splits. Reportado por el usuario: el
+// trazado se veía "pixelado" en los giros -- cada fix de GPS conectado con el siguiente por
+// una línea recta hace que el ruido típico de GPS urbano (multipath entre edificios altos,
+// bajo un puente) se note como un camino de quiebres angulosos en vez de una curva natural,
+// más marcado todavía en las esquinas donde el corredor dobla de verdad. Promedio móvil
+// simple en lat/lon (cada punto pasa a ser el promedio de sí mismo y sus `radius` vecinos a
+// cada lado) -- radius chico (2) a propósito, para parejar el ruido fino sin "cortar camino"
+// en una esquina real de 90°. El primer y último punto quedan SIN tocar, así el trazado
+// sigue arrancando y terminando exactamente donde arrancó/terminó la carrera de verdad.
+function smoothRouteForDisplay(points, radius){
+  radius = radius || 2;
+  if(points.length < 5) return points;
+  const out = new Array(points.length);
+  for(let i=0;i<points.length;i++){
+    let sumLat=0, sumLon=0, n=0;
+    for(let j=Math.max(0,i-radius); j<=Math.min(points.length-1,i+radius); j++){
+      sumLat += points[j].lat; sumLon += points[j].lon; n++;
+    }
+    out[i] = {lat: sumLat/n, lon: sumLon/n};
+  }
+  out[0] = {lat: points[0].lat, lon: points[0].lon};
+  out[out.length-1] = {lat: points[points.length-1].lat, lon: points[points.length-1].lon};
+  return out;
+}
 function encodePolylinePoints(points){
   let output = '', prevLat = 0, prevLng = 0;
   const encodeNum = (num) => {
@@ -7578,7 +7603,10 @@ function encodePolylinePoints(points){
 // (no devicePixelRatio directo) para no pedir un archivo innecesariamente pesado en
 // pantallas de densidad rarísima.
 function buildHistMapStaticUrl(r, width, height){
-  const pts = r.points;
+  // Suavizado ANTES de muestrear -- muestrear primero y suavizar después perdería la forma
+  // real del ruido (ya estaría diezmado) y el promedio móvil terminaría promediando puntos
+  // que en el trazado real no eran vecinos directos.
+  const pts = smoothRouteForDisplay(r.points);
   const maxPoints = 120;
   const step = pts.length > maxPoints ? pts.length / maxPoints : 1;
   const sampled = [];
@@ -9226,8 +9254,13 @@ function displaySplitsAreMiles(r, splits){
 function buildColoredRouteSegments(r){
   const points = r.points||[];
   if(points.length<2) return [];
+  // smoothed: mismo largo y orden que points (ver smoothRouteForDisplay), así los índices
+  // startIdx/idx calculados más abajo contra el acumulado de distancia REAL (cum, sobre
+  // points sin suavizar -- tiene que coincidir con split.km tal cual) valen igual para
+  // cortar smoothed en los mismos tramos.
+  const smoothed = smoothRouteForDisplay(points);
   if(!r.splits || !r.splits.length || points.length<3){
-    return [{latlngs:points.map(p=>[p.lat,p.lon]), color: zoneColorVar(3)}];
+    return [{latlngs:smoothed.map(p=>[p.lat,p.lon]), color: zoneColorVar(3)}];
   }
   const cum=[0];
   for(let i=1;i<points.length;i++) cum.push(cum[i-1]+haversine(points[i-1].lat,points[i-1].lon,points[i].lat,points[i].lon));
@@ -9239,14 +9272,14 @@ function buildColoredRouteSegments(r){
     const targetCum = isLast ? cum[cum.length-1] : split.km;
     let idx = startIdx;
     while(idx<cum.length-1 && cum[idx]<targetCum) idx++;
-    const chunk = points.slice(startIdx, idx+1);
+    const chunk = smoothed.slice(startIdx, idx+1);
     if(chunk.length>=2){
       const zone = classifyPaceRelative(split.paceMin, avgPace);
       segs.push({latlngs:chunk.map(p=>[p.lat,p.lon]), color: zoneColorVar(zone)});
     }
     startIdx = idx;
   });
-  return segs.length ? segs : [{latlngs:points.map(p=>[p.lat,p.lon]), color: zoneColorVar(3)}];
+  return segs.length ? segs : [{latlngs:smoothed.map(p=>[p.lat,p.lon]), color: zoneColorVar(3)}];
 }
 function renderRDRuta(panel){
   const {r, paceMin, cal} = rdCurrent;
@@ -9664,7 +9697,17 @@ function closeZonesInfo(){ document.getElementById('zones-info-modal').style.dis
 let deferredInstallPrompt = null;
 const INSTALL_DISMISS_KEY = 'zancada_install_dismissed';
 function isRunningStandalone(){
-  try{ return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true; }catch(e){ return false; }
+  // Reportado por el usuario: en la app nativa de Android (Capacitor) seguía apareciendo
+  // la tarjeta/banner de "cómo instalar la app en tu pantalla de inicio" -- no tenía ningún
+  // sentido, la app ya está instalada de verdad (no es la PWA). El WebView de Capacitor NO
+  // matchea "(display-mode: standalone)" (esa media query es específica de una PWA agregada
+  // a inicio, no de un WebView nativo cualquiera) ni setea navigator.standalone (eso es
+  // solo de Safari/iOS), así que esta función devolvía false ahí y el banner/acordeón de
+  // instalación -- pensados solo para la PWA web -- se colaban en la app nativa.
+  try{
+    if(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return true;
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  }catch(e){ return false; }
 }
 function isIOSDevice(){
   return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -10558,6 +10601,7 @@ function openEditRun(runId){
   const r = state.runs.find(x => String(x.id) === String(runId));
   if(!r) return;
   editingRunId = runId;
+  document.getElementById('edit-run-name').value = r.name || '';
   // localDateISO, no toISOString().slice(0,10): esto último muestra el día en UTC, que
   // para una carrera cargada a última hora de la noche puede ser el día SIGUIENTE al
   // real (ver el comentario junto a localDateISO/getTodayRun).
@@ -10591,6 +10635,7 @@ async function saveEditRun(){
   if(!date || !(dist>0) || !(durMin>0)){ showToast(t('edit_run_invalid'),'error'); return; }
   const hr = parseInt(document.getElementById('edit-run-hr').value);
   const newShoeId = document.getElementById('edit-run-shoe').value || null;
+  const newName = document.getElementById('edit-run-name').value.trim().slice(0,60);
   // checkNewPR(), unas líneas más abajo, recalcula el récord EXCLUYENDO esta misma carrera --
   // si esta carrera YA era el récord vigente de su distancia, excluirla deja como "anterior"
   // a la que le sigue, así que checkNewPR() volvía a anunciarla como marca nueva cada vez que
@@ -10631,6 +10676,7 @@ async function saveEditRun(){
   if(pacedChanged){ r.distanceKm = dist; r.durationSec = Math.round(durMin*60); }
   if(hr>0){ r.avgHr = hr; if(!r.hrLog || r.hrLog.length<=1) r.hrLog = [{t:0,bpm:hr}]; }
   r.shoeId = newShoeId;
+  r.name = newName || null; // vacío cae de vuelta al título por fecha, ver openRunDetail
   // Reclama el día NUEVO si corresponde a esta semana -- antes solo se desvinculaba el día
   // viejo (arriba) y quedaba huérfano para siempre, incluso si el motivo de editar la fecha
   // era justamente corregir a qué día pertenecía de verdad la carrera.
@@ -11664,6 +11710,8 @@ Tenés estas herramientas para aplicar cambios reales en la app. Cuando el corre
 - guardar_nota_coach: para guardar un dato permanente del corredor (una lesión o molestia, una preferencia, una restricción de horario, etc.) apenas lo mencione, aunque no implique cambiar el plan ahora mismo. El historial de la charla no es infinito, así que esto es lo único que te garantiza acordarte de algo importante más adelante. Si lo que cuenta es una lesión o dolor físico nuevo, completá también zona_cuerpo -- eso SÍ hace que el plan se vuelva más conservador de inmediato, no solo que vos lo recuerdes.
 - deshacer_cambio: si el corredor dice que te confundiste, que no era eso, o pide deshacer/revertir el último cambio que hiciste, usá esta herramienta en vez de intentar adivinar manualmente cómo estaba antes -- restaura el plan y el perfil a como estaban justo antes de tu último cambio. Solo deshace UN cambio (el más reciente); si pide deshacer más de uno, avisale que solo podés volver un paso atrás.
 Si el pedido es ambiguo entre "esta semana" y "de ahora en adelante", aplicá el cambio a esta semana con ajustar_volumen_semana para que se note ya, y preguntá si también querés que sea la nueva base con modificar_perfil.
+
+Tu alcance es la app Zancada, el entrenamiento de running/trail, el ejercicio físico y la salud ligada a correr (lesiones, nutrición deportiva, descanso, sueño, etc.). Si el corredor te pregunta algo totalmente ajeno a eso (política, código, tareas de otra app, cultura general, etc.), no lo respondas -- decí con buena onda que solo podés ayudar con su entrenamiento y la app, y ofrecé volver a eso. Esto no te impide charlar con calidez si te saludan o te cuentan cómo están, ni usar ejemplos de la vida cotidiana para explicar algo de entrenamiento -- el límite es responder de lleno un tema sin relación real con correr o la app.
 
 Formato del texto: el chat solo interpreta **negrita** (usala con moderación, para resaltar un dato clave) y guiones "- " al inicio de línea para listas cortas. No uses encabezados (#), links, tablas ni bloques de código: no se muestran bien en el chat.
 

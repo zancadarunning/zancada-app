@@ -2544,6 +2544,11 @@
 
   <div class="overlay" id="edit-run-modal" style="display:none; z-index:55;">
     <h2 class="subtitle" style="font-size:22px;" data-i18n="edit_run_title"></h2>
+    <!-- Pedido por el usuario: antes r.name solo se mostraba (lo trae el reloj/Strava a
+         veces, ver el header del detalle de carrera) pero nunca se podía editar ni cargar a
+         mano desde acá. maxlength 60 -- mismo tope informal que otros campos de texto corto
+         de la app (ej. el nombre de zapatilla). -->
+    <div class="field"><label for="edit-run-name" data-i18n="edit_run_name_label"></label><input type="text" id="edit-run-name" maxlength="60" data-i18n-ph="edit_run_name_ph"></div>
     <div class="field"><label data-i18n="hist_manual_date"></label>
       <div class="date-box" role="button" tabindex="0" data-i18n-aria="hist_manual_date" onclick="openCalendar('edit-run-date')"><span class="date-box-text" id="edit-run-date-text"></span></div>
       <input type="hidden" id="edit-run-date">
