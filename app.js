@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-01T00:12:37Z';
+const APP_VERSION = '2026-10-01T00:21:29Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -112,7 +112,14 @@ function closeWhatsNew(){
    apiUrl(...) es lo único que hace falta para que el mismo app.js sirva a los dos casos. */
 function apiUrl(path){
   const native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-  return native ? ('https://zancada.org' + path) : path;
+  // https://zancada.org (sin "www") redirige (308) a https://www.zancada.org del lado del
+  // servidor -- un navegador/WebView rechaza por completo un redirect durante el PREFLIGHT
+  // de CORS (la petición OPTIONS que dispara cualquier POST con body JSON + Authorization,
+  // como esta), así que apuntar acá al dominio sin "www" rompía TODO pedido nativo a /api/*
+  // con "Failed to fetch", sin más detalle en la app -- confirmado en el chat real de un
+  // dispositivo real vía logcat: "Redirect is not allowed for a preflight request". Apuntar
+  // directo al host final evita el redirect (y el preflight) por completo.
+  return native ? ('https://www.zancada.org' + path) : path;
 }
 const LANG_NAMES={es:"español",en:"English",pt:"português",fr:"français",it:"italiano",de:"Deutsch"};
 // Nombres de idioma capitalizados, como aparecen en las opciones del selector -- LANG_NAMES
