@@ -1028,6 +1028,25 @@
   .gps-status-title{margin:0 0 6px; font-weight:700; font-size:13.5px; color:var(--chalk);}
   .gps-status-bullet{margin:5px 0 0; font-size:12px; line-height:1.4; color:var(--mist); display:flex; gap:6px;}
   .gps-status-bullet::before{content:'—'; color:var(--mist-dim); flex-shrink:0;}
+  /* Elegir entre el ejercicio programado de hoy y correr libre -- ver el comentario largo
+     junto a #run-mode-choice en el HTML. Mismo lenguaje visual que un choice chip normal de
+     la app (asphalt-raised + hairline en reposo, hi-vis dim + borde + glow activo), solo que
+     en tamaño tarjeta porque la opción "programada" necesita mostrar texto real (tipo +
+     resumen de la sesión), no solo una palabra corta como un chip típico. */
+  .run-mode-choice{display:flex; flex-direction:column; gap:10px; margin-top:14px;}
+  .run-mode-card{display:flex; flex-direction:column; align-items:flex-start; gap:3px; text-align:left;
+    width:100%; padding:14px 16px; border-radius:var(--radius-sm); background:var(--asphalt-3);
+    border:1.5px solid var(--asphalt-4); box-shadow:var(--shadow-card); cursor:pointer; transition:border-color .15s ease, background-color .15s ease, box-shadow .15s ease;}
+  .run-mode-card strong{font-size:15px; font-weight:800; color:var(--chalk);}
+  /* Recortada a 2 líneas -- una sesión custom (escrita por el coach) puede traer la
+     descripción entera de entrada en calor + tramo principal + vuelta a la calma en el campo
+     "desc", que en una tarjeta de elección chica empujaba el botón de EMPEZAR fuera de
+     pantalla. Acá solo hace falta reconocer la sesión de un vistazo -- el detalle completo
+     ya se ve en la guía durante la carrera (renderWorkoutGuide()). */
+  .run-mode-card .muted{font-size:12.5px; line-height:1.4; white-space:pre-line;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+  .run-mode-card .tag{margin-bottom:2px;}
+  .run-mode-card.active{border-color:var(--hivis); background:var(--hivis-dim); box-shadow:0 1px 4px var(--hivis-glow);}
   /* Mapa real de "dónde estoy" (ver initIdleMap en app.js): vive en su propia tarjeta,
      en el lugar donde antes iba la ficha del entrenamiento de hoy -- pedido del usuario
      de separar el mapa del botón de arrancar y devolver la pista de atletismo decorativa
@@ -2189,6 +2208,25 @@
           <p class="gps-status-bullet" id="run-bg-warning-line" data-i18n="run_bg_warning"></p>
         </div>
       </div>
+      <!-- Elegir entre el ejercicio programado de hoy y correr libre -- pedido del usuario
+           ("que nos aparezca el ejercicio programado o correr al aire libre, así podemos
+           elegir"). Solo se muestra si hoy hay una sesión real en el plan (ver
+           renderRunModeChoice() en app.js) -- en un día de descanso no hay nada que elegir,
+           sigue siendo directo a correr libre como siempre. selectRunMode() guarda la
+           elección en una variable de módulo (selectedRunMode, no en state: es una elección
+           de "ahora", no algo que tenga sentido recordar entre sesiones) que startRun() lee
+           para decidir si arma la guía/voz del entrenamiento o no. -->
+      <div class="run-mode-choice" id="run-mode-choice" style="display:none;">
+        <button class="run-mode-card" id="run-mode-scheduled" onclick="selectRunMode('scheduled')">
+          <span class="tag tag-asfalto" data-i18n="run_mode_scheduled_tag"></span>
+          <strong id="run-mode-scheduled-type"></strong>
+          <span class="muted" id="run-mode-scheduled-desc"></span>
+        </button>
+        <button class="run-mode-card" id="run-mode-free" onclick="selectRunMode('free')">
+          <strong data-i18n="run_mode_free_title"></strong>
+          <span class="muted" data-i18n="run_mode_free_desc"></span>
+        </button>
+      </div>
       <div class="run-idle-cta">
         <div class="run-bg-route" aria-hidden="true"><svg viewBox="0 0 320 400" preserveAspectRatio="xMidYMid slice">
           <path class="rbr-contour" d="M90,160 A70,70 0 0,1 230,160 L230,300 A70,70 0 0,1 90,300 Z"/>
@@ -2236,18 +2274,35 @@
              dejaba después de la guía quedaba flotando lejos de ella con un salto raro cada
              vez que la guía aparece/desaparece durante la carrera. -->
         <div class="card" id="workout-guide-card" style="display:none; margin-top:14px; text-align:center;">
+          <!-- Objetivo de hoy para una sesión SIN repeticiones (rodaje suave, tempo, tirada
+               larga, progresivo) -- a diferencia de pending/active/done (series/cuestas/
+               fartlek), acá no hay fases que avanzar: es un recordatorio fijo de qué hacer,
+               visible toda la carrera. text-align:left (la tarjeta en sí es center) porque es
+               texto de varias líneas, no un número/tag corto. -->
+          <div id="workout-guide-continuous" style="display:none; text-align:left;">
+            <span class="tag tag-asfalto" id="workout-guide-continuous-type"></span>
+            <p class="muted" id="workout-guide-continuous-desc" style="margin:8px 0 0; font-size:13px; line-height:1.5;"></p>
+          </div>
           <div id="workout-guide-pending">
             <p class="muted" id="workout-guide-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
             <button class="btn btn-primary btn-sm" id="workout-guide-start-btn" onclick="beginWorkoutReps()"></button>
           </div>
+          <!-- target/remaining en números, no solo la barra de progreso -- pedido del
+               usuario: "que se vea en la pantalla que hay que hacer, cuantos metros o
+               tiempo y cuanto queda". Los dos vienen de getWorkoutPhaseTarget()/
+               renderWorkoutGuide() en app.js, el mismo cálculo que decide cuándo avanza
+               la fase -- nunca pueden desincronizarse de cuándo "Faltan 0" en realidad
+               pasa a la fase siguiente. -->
           <div id="workout-guide-active" style="display:none;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <span class="tag" id="workout-guide-phase-tag"></span>
               <span class="mono" id="workout-guide-rep-count" style="font-weight:800; font-size:16px;"></span>
             </div>
-            <div style="height:8px; background:var(--asphalt-3); border-radius:4px; overflow:hidden; margin-top:12px;">
+            <div class="mono" id="workout-guide-target" style="font-size:30px; font-weight:800; margin-top:10px;"></div>
+            <div style="height:8px; background:var(--asphalt-3); border-radius:4px; overflow:hidden; margin-top:10px;">
               <div id="workout-guide-progress-bar" style="height:100%; background:var(--hivis); width:0%; transition:width .25s linear;"></div>
             </div>
+            <p class="muted" id="workout-guide-remaining" style="margin:6px 0 0; font-size:12.5px;"></p>
           </div>
           <div id="workout-guide-done" style="display:none;">
             <span class="icon-sq" style="width:20px; height:20px; color:var(--hivis-text); margin-bottom:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6.5 9 17.5l-5-5"/></svg></span>

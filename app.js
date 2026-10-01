@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-01T15:46:12Z';
+const APP_VERSION = '2026-10-01T19:36:45Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5199,6 +5199,43 @@ function renderRunTodayCard(){
   }
   doneCard.style.display = 'none';
 }
+// Elegir entre el ejercicio programado de hoy y correr libre -- pedido del usuario. Vive en
+// una variable de módulo (no en state): es una elección de "esta vez que voy a arrancar",
+// no algo que tenga sentido recordar entre aperturas de la app -- cada visita a la pantalla
+// de Correr vuelve a elegir el default sola (ver renderRunModeChoice()).
+let selectedRunMode = 'scheduled';
+function getTodayPlanSession(){
+  const idx = (new Date().getDay()+6)%7;
+  const today = state.plan[idx];
+  if(!today || today.typeKey==='rest') return null;
+  return today;
+}
+function renderRunModeChoice(){
+  const wrap = document.getElementById('run-mode-choice');
+  const today = getTodayPlanSession();
+  if(!today){ wrap.style.display = 'none'; return; }
+  wrap.style.display = 'flex';
+  // planLabelBody(), no planLabel(): acá hace falta el resumen de la sesión sola (tipo +
+  // detalle), sin la envoltura de entrada en calor/vuelta a la calma de 3 párrafos que sí
+  // tiene sentido durante la carrera (ver renderWorkoutGuide()) pero sería demasiado texto
+  // para una tarjeta de elección chica.
+  const lbl = planLabelBody(today);
+  document.getElementById('run-mode-scheduled-type').textContent = lbl.type;
+  document.getElementById('run-mode-scheduled-desc').textContent = lbl.desc;
+  // Si ya corrió hoy la sesión programada, el default pasa a "libre" (sigue pudiendo elegir
+  // la programada de nuevo a mano si quiere repetirla) -- si todavía no corrió, el default
+  // es la programada.
+  selectedRunMode = getTodayRun() ? 'free' : 'scheduled';
+  updateRunModeCardStyles();
+}
+function selectRunMode(mode){
+  selectedRunMode = mode;
+  updateRunModeCardStyles();
+}
+function updateRunModeCardStyles(){
+  document.getElementById('run-mode-scheduled').classList.toggle('active', selectedRunMode==='scheduled');
+  document.getElementById('run-mode-free').classList.toggle('active', selectedRunMode==='free');
+}
 function getPlanStartDate(){
   // la fecha más vieja de weekStart que tengamos registrada (historial de semanas + la semana actual)
   // marca desde cuándo existe ESTE plan, sin importar si hay carreras de Strava de antes importadas.
@@ -6924,7 +6961,7 @@ async function showView(v){
     refreshStateFromServer().then(()=>{ if(document.getElementById('view-plan').classList.contains('active')){ renderPlan(); } });
   }
   if(v==='perfil'){ renderPerfilDays(); renderPerfilCrossTraining(); updatePushStatusDisplay(); updateStravaStatusDisplay(); updatePolarStatusDisplay(); updateWahooStatusDisplay(); updateCorosStatusDisplay(); updateHealthConnectStatusDisplay(); }
-  if(v==='correr'){ renderRunTodayCard(); initIdleMap(); }
+  if(v==='correr'){ renderRunTodayCard(); renderRunModeChoice(); initIdleMap(); }
 }
 function goCoachWithPrompt(prefill){
   showView('coach');
@@ -7248,8 +7285,24 @@ function readRunProgress(){
   if(!key) return null;
   try{ const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
 }
+// El WebView nativo de Android NO implementa window.speechSynthesis (es una limitación
+// conocida del WebView del sistema, a diferencia de Chrome de escritorio) -- hasta este
+// cambio, CUALQUIER aviso de voz (éste, los de km, los de fase de series/cuestas/fartlek)
+// hacía if(!('speechSynthesis' in window)) return directo y nunca sonaba nada en el celular
+// real, aunque en una prueba de escritorio pareciera andar. Reportado por un usuario: "cuando
+// pongo comenzar no escucho una voz". @capacitor-community/text-to-speech (agregado en este
+// mismo cambio) usa el motor de TTS real de Android/iOS -- se prueba primero (plataforma
+// nativa + el plugin registrado), y si no está (web/PWA/escritorio) cae al
+// speechSynthesis de siempre, que ahí sí funciona.
 function speak(text){
-  if(state.voiceEnabled===false || !('speechSynthesis' in window)) return;
+  if(state.voiceEnabled===false) return;
+  const isNative = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+  const nativeTTS = isNative && window.Capacitor.Plugins && window.Capacitor.Plugins.TextToSpeech;
+  if(nativeTTS){
+    nativeTTS.speak({text, lang: LOCALE_MAP[lang]}).catch(()=>{});
+    return;
+  }
+  if(!('speechSynthesis' in window)) return;
   try{ const u = new SpeechSynthesisUtterance(text); u.lang = LOCALE_MAP[lang]; window.speechSynthesis.speak(u); }catch(e){}
 }
 function maybeAnnounceKm(){
@@ -7312,27 +7365,46 @@ function maybeAnnounceKm(){
 function getTodayWorkoutStructure(){
   const idx = (new Date().getDay()+6)%7;
   const today = state.plan[idx];
-  if(!today || !today.interval) return null;
-  // Si el corredor entrena "por tiempo", las repeticiones (series/cuestas) se completan
-  // por tiempo transcurrido (repSec) en vez de por distancia GPS (repMeters) -- ver
-  // tickWorkoutGuide() y renderWorkoutGuide(). En modo distancia repSec queda undefined
-  // y el comportamiento es exactamente el de siempre.
-  const repSec = isTimeMode() ? repDurationSec(today.interval.repMeters) : undefined;
-  if(today.typeKey==='intervals') return {typeKey:'intervals', reps:today.interval.reps, repMeters:today.interval.repMeters, repSec, recoveryMin:today.interval.recoveryMin};
-  if(today.typeKey==='hills') return {typeKey:'hills', reps:today.interval.reps, repMeters:today.interval.repMeters, repSec};
-  // Fartlek se completa siempre por TIEMPO en las dos fases, sea que el corredor entrene por
-  // distancia o por tiempo -- a diferencia de series/cuestas, acá no hay una distancia
-  // objetivo por tramo (el ritmo del tramo fuerte es "a sensación", ver
-  // buildFartlekStructure), así que medirlo con GPS no tendría sentido; el minuto/segundo es
-  // el único dato real de la prescripción. Reportado por un usuario: la guía en vivo
-  // funcionaba para series y cuestas pero no hacía nada en un día de fartlek.
-  if(today.typeKey==='fartlek') return {typeKey:'fartlek', reps:today.interval.reps, workSec:Math.round(today.interval.workMin*60), restSec:Math.round(today.interval.restMin*60), restMin:today.interval.restMin};
+  if(!today || today.typeKey==='rest') return null;
+  if(today.interval){
+    // Si el corredor entrena "por tiempo", las repeticiones (series/cuestas) se completan
+    // por tiempo transcurrido (repSec) en vez de por distancia GPS (repMeters) -- ver
+    // tickWorkoutGuide() y renderWorkoutGuide(). En modo distancia repSec queda undefined
+    // y el comportamiento es exactamente el de siempre.
+    const repSec = isTimeMode() ? repDurationSec(today.interval.repMeters) : undefined;
+    if(today.typeKey==='intervals') return {typeKey:'intervals', reps:today.interval.reps, repMeters:today.interval.repMeters, repSec, recoveryMin:today.interval.recoveryMin};
+    if(today.typeKey==='hills') return {typeKey:'hills', reps:today.interval.reps, repMeters:today.interval.repMeters, repSec};
+    // Fartlek se completa siempre por TIEMPO en las dos fases, sea que el corredor entrene por
+    // distancia o por tiempo -- a diferencia de series/cuestas, acá no hay una distancia
+    // objetivo por tramo (el ritmo del tramo fuerte es "a sensación", ver
+    // buildFartlekStructure), así que medirlo con GPS no tendría sentido; el minuto/segundo es
+    // el único dato real de la prescripción. Reportado por un usuario: la guía en vivo
+    // funcionaba para series y cuestas pero no hacía nada en un día de fartlek.
+    if(today.typeKey==='fartlek') return {typeKey:'fartlek', reps:today.interval.reps, workSec:Math.round(today.interval.workMin*60), restSec:Math.round(today.interval.restMin*60), restMin:today.interval.restMin};
+  }
+  // Sesión sin repeticiones (rodaje suave, tempo, tirada larga, progresivo) -- antes esta
+  // función devolvía null acá y la carrera arrancaba sin ninguna guía ni aviso de voz, aunque
+  // el plan SÍ tuviera algo puntual para hoy. Pedido del usuario: "que los ejercicios del
+  // plan se puedan enviar a correr, y que la voz nos diga qué hacer". 'continuous' no
+  // necesita fases/reps -- es un objetivo único que se muestra fijo toda la carrera (ver
+  // renderWorkoutGuide()), con un solo aviso de voz al arrancar (announceContinuousWorkoutStart).
+  if(today.dist>0 || today.zone) return {typeKey:'continuous', label:planLabelBody(today), targetDist:today.dist, zone:today.zone, planTypeKey:today.typeKey};
   return null;
 }
 function setupWorkoutGuide(){
-  const structure = getTodayWorkoutStructure();
-  tracker.workout = structure ? {structure, phase:'pending', currentRep:0, phaseStartDistanceKm:0, phaseStartElapsedSec:0} : null;
+  // selectedRunMode (ver selectRunMode() y el selector en #runIdle) -- "correr libre" nunca
+  // arma guía ni aviso de voz, aunque hoy el plan tenga algo programado.
+  const structure = selectedRunMode==='free' ? null : getTodayWorkoutStructure();
+  tracker.workout = structure ? {structure, phase: structure.typeKey==='continuous' ? 'continuous' : 'pending', currentRep:0, phaseStartDistanceKm:0, phaseStartElapsedSec:0} : null;
   renderWorkoutGuide();
+  if(structure && structure.typeKey==='continuous') announceContinuousWorkoutStart(structure);
+}
+function announceContinuousWorkoutStart(s){
+  const type = t('type_'+s.planTypeKey);
+  const target = isTimeMode()
+    ? fmtDurationShort(planDurationMin({dist:s.targetDist})*60)
+    : `${fmtDist(s.targetDist)} ${distUnit()}`;
+  speak(s.zone ? t('voice_continuous_start_zone', {type, target, zone:s.zone}) : t('voice_continuous_start', {type, target}));
 }
 function beginWorkoutReps(){
   if(!tracker.workout) return;
@@ -7386,24 +7458,35 @@ function advanceWorkoutPhase(){
   haptic([15,40,15]);
   announceWorkoutPhase();
 }
+// Único lugar que sabe "cuánto dura esta fase" para series/cuestas/fartlek -- antes
+// tickWorkoutGuide() y renderWorkoutGuide() tenían cada uno su propia copia de esta misma
+// rama por tipo (intervals/fartlek/hills), con el riesgo real de que se desincronizaran si
+// alguien tocaba una sin la otra. Devuelve {sec} o {meters} (nunca los dos), igual que antes
+// cada rama elegía entre tiempo y distancia según corresponda.
+function getWorkoutPhaseTarget(w){
+  const s = w.structure, isEffort = w.phase==='effort';
+  if(s.typeKey==='intervals'){
+    if(isEffort) return s.repSec!=null ? {sec:s.repSec} : {meters:s.repMeters};
+    return {sec: s.recoveryMin*60};
+  }
+  if(s.typeKey==='fartlek') return {sec: isEffort ? s.workSec : s.restSec}; // ver getTodayWorkoutStructure(): fartlek siempre por tiempo
+  // hills: tanto la subida (esfuerzo) como la bajada trotando (recuperación) se miden con
+  // la misma distancia repMeters -- salvo en modo "por tiempo", donde ambas fases usan repSec.
+  return s.repSec!=null ? {sec:s.repSec} : {meters:s.repMeters};
+}
+function fmtCountdown(sec){
+  sec = Math.max(0, Math.round(sec));
+  return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
+}
 function tickWorkoutGuide(){
   const w = tracker.workout;
-  if(!w || w.phase==='pending' || w.phase==='done') return;
-  const s = w.structure;
-  let complete = false;
-  if(s.typeKey==='intervals'){
-    if(w.phase==='effort') complete = s.repSec!=null ? (tracker.elapsedSec - w.phaseStartElapsedSec) >= s.repSec : (tracker.distanceKm - w.phaseStartDistanceKm)*1000 >= s.repMeters;
-    else complete = (tracker.elapsedSec - w.phaseStartElapsedSec) >= s.recoveryMin*60;
-  } else if(s.typeKey==='fartlek'){
-    // Ver el comentario en getTodayWorkoutStructure(): siempre por tiempo, nunca por GPS.
-    complete = (tracker.elapsedSec - w.phaseStartElapsedSec) >= (w.phase==='effort' ? s.workSec : s.restSec);
-  } else {
-    // hills: tanto la subida (esfuerzo) como la bajada trotando (recuperación) se
-    // miden por la misma distancia repMeters -- ver comentario arriba de
-    // getTodayWorkoutStructure() -- salvo en modo "por tiempo", donde ambas fases
-    // se completan por tiempo transcurrido (repSec) en vez de GPS.
-    complete = s.repSec!=null ? (tracker.elapsedSec - w.phaseStartElapsedSec) >= s.repSec : (tracker.distanceKm - w.phaseStartDistanceKm)*1000 >= s.repMeters;
-  }
+  // 'continuous' (rodaje/tempo/tirada larga/progresivo, ver getTodayWorkoutStructure()) no
+  // tiene fases que avanzar -- es un objetivo único mostrado fijo toda la carrera.
+  if(!w || w.phase==='pending' || w.phase==='done' || w.phase==='continuous') return;
+  const target = getWorkoutPhaseTarget(w);
+  const complete = target.sec!=null
+    ? (tracker.elapsedSec - w.phaseStartElapsedSec) >= target.sec
+    : (tracker.distanceKm - w.phaseStartDistanceKm)*1000 >= target.meters;
   if(complete) advanceWorkoutPhase();
   renderWorkoutGuide();
 }
@@ -7416,10 +7499,18 @@ function renderWorkoutGuide(){
   const pendingEl = document.getElementById('workout-guide-pending');
   const activeEl = document.getElementById('workout-guide-active');
   const doneEl = document.getElementById('workout-guide-done');
+  const continuousEl = document.getElementById('workout-guide-continuous');
   pendingEl.style.display = w.phase==='pending' ? 'block' : 'none';
   activeEl.style.display = (w.phase==='effort' || w.phase==='recovery') ? 'block' : 'none';
   doneEl.style.display = w.phase==='done' ? 'block' : 'none';
-  if(w.phase==='pending'){
+  continuousEl.style.display = w.phase==='continuous' ? 'block' : 'none';
+  if(w.phase==='continuous'){
+    // Objetivo fijo (tipo + detalle) toda la carrera -- sin barra de progreso ni fases,
+    // a diferencia de series/cuestas/fartlek: acá no hay reps que avanzar, es una sola
+    // instrucción que el corredor tiene que tener a mano todo el tiempo que dure la sesión.
+    document.getElementById('workout-guide-continuous-type').textContent = w.structure.label.type;
+    document.getElementById('workout-guide-continuous-desc').textContent = w.structure.label.desc;
+  } else if(w.phase==='pending'){
     const idx = (new Date().getDay()+6)%7;
     const today = state.plan[idx];
     document.getElementById('workout-guide-desc').textContent = today ? planLabel(today).desc : '';
@@ -7431,16 +7522,27 @@ function renderWorkoutGuide(){
     tag.textContent = isEffort ? t('run_guide_tag_effort') : t('run_guide_tag_recovery');
     tag.className = 'tag ' + (isEffort ? 'tag-load-risk' : 'tag-mixto');
     document.getElementById('workout-guide-rep-count').textContent = `${w.currentRep}/${s.reps}`;
-    let pct;
-    if(s.typeKey==='intervals'){
-      pct = isEffort
-        ? (s.repSec!=null ? ((tracker.elapsedSec - w.phaseStartElapsedSec) / s.repSec)*100 : ((tracker.distanceKm - w.phaseStartDistanceKm)*1000 / s.repMeters)*100)
-        : ((tracker.elapsedSec - w.phaseStartElapsedSec) / (s.recoveryMin*60))*100;
-    } else if(s.typeKey==='fartlek'){
-      pct = ((tracker.elapsedSec - w.phaseStartElapsedSec) / (isEffort ? s.workSec : s.restSec))*100;
+    // Objetivo + cuánto falta de ESTA fase, en números -- antes la única referencia era la
+    // barra de progreso (un % visual, sin unidad). Pedido del usuario: "que se vea en la
+    // pantalla... cuantos metros o tiempo y cuanto queda". target.sec/target.meters viene de
+    // getWorkoutPhaseTarget(), el mismo cálculo que ya usa tickWorkoutGuide() para decidir
+    // cuándo termina la fase -- así el número que ve el corredor SIEMPRE coincide con el
+    // momento real en que la fase avanza, nunca puede desincronizarse.
+    const target = getWorkoutPhaseTarget(w);
+    let pct, targetLabel, remainingLabel;
+    if(target.sec!=null){
+      const elapsedInPhase = tracker.elapsedSec - w.phaseStartElapsedSec;
+      pct = (elapsedInPhase / target.sec) * 100;
+      targetLabel = fmtCountdown(target.sec);
+      remainingLabel = fmtCountdown(target.sec - elapsedInPhase);
     } else {
-      pct = s.repSec!=null ? ((tracker.elapsedSec - w.phaseStartElapsedSec) / s.repSec)*100 : ((tracker.distanceKm - w.phaseStartDistanceKm)*1000 / s.repMeters)*100;
+      const progressMeters = (tracker.distanceKm - w.phaseStartDistanceKm) * 1000;
+      pct = (progressMeters / target.meters) * 100;
+      targetLabel = `${target.meters}m`;
+      remainingLabel = `${Math.max(0, Math.round(target.meters - progressMeters))}m`;
     }
+    document.getElementById('workout-guide-target').textContent = targetLabel;
+    document.getElementById('workout-guide-remaining').textContent = t('run_guide_remaining', {value: remainingLabel});
     document.getElementById('workout-guide-progress-bar').style.width = Math.max(0,Math.min(100,pct)) + '%';
   } else if(w.phase==='done'){
     document.getElementById('workout-guide-done-text').textContent = t('voice_workout_done');
