@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-01T00:21:29Z';
+const APP_VERSION = '2026-10-01T00:26:38Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6477,10 +6477,20 @@ if(window.visualViewport){
       nativeKeyboardHeightPx = (info && typeof info.keyboardHeight === 'number') ? info.keyboardHeight : 0;
       openKeyboardUI();
       syncCoachChatLayout();
+      // #coachChatWrap es flex-column con #chatLog como único hijo flex:1 -- al abrir el
+      // teclado, wrap.style.height (seteado arriba, en syncCoachChatLayout) se achica y por
+      // lo tanto #chatLog también, pero su scrollTop (un valor absoluto en px) se queda
+      // como estaba. Si el chat ya estaba pegado al fondo (el caso normal: leíste el último
+      // mensaje y tocás para escribir), ese mismo scrollTop deja de llegar al fondo del
+      // #chatLog más chico -- el último mensaje queda tapado arriba, exactamente lo que
+      // reportó el usuario ("no se va para arriba, se queda donde está"). Mismo mecanismo
+      // que reapplyDuringAnimation ya usa para la versión web/iOS más abajo.
+      scrollChatToBottom();
     });
     nativeKeyboard.addListener('keyboardDidShow', (info) => {
       nativeKeyboardHeightPx = (info && typeof info.keyboardHeight === 'number') ? info.keyboardHeight : nativeKeyboardHeightPx;
       syncCoachChatLayout();
+      scrollChatToBottom();
     });
     nativeKeyboard.addListener('keyboardWillHide', () => {
       closeKeyboardUI();
