@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-01T15:12:33Z';
+const APP_VERSION = '2026-10-01T15:24:33Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7155,7 +7155,20 @@ function updateRecordingLabel(){
   // manual como en la auto-pausa por quietud (ver onPosition()), y el color tiene que
   // reaccionar a las dos, no solo a tocar el botón.
   const runActiveEl = document.getElementById('runActive');
-  if(runActiveEl) runActiveEl.classList.toggle('is-paused', !isTrackingActive());
+  const wasPaused = runActiveEl && runActiveEl.classList.contains('is-paused');
+  const nowPaused = !isTrackingActive();
+  if(runActiveEl) runActiveEl.classList.toggle('is-paused', nowPaused);
+  // El mapa vive en .track-paused-group (ver index.html), escondido con display:none
+  // mientras se corre de verdad -- Leaflet lo inicializa en initLiveMap() con ese
+  // contenedor todavía en 0x0 (una carrera recién arrancada siempre empieza activa, no
+  // pausada), así que se queda con los tiles mal calculados/en blanco hasta que alguien le
+  // avise que el contenedor cambió de tamaño. invalidateSize() recién sirve de algo DESPUÉS
+  // de que el contenedor ya es visible -- por eso se dispara acá, justo al entrar a pausado
+  // (no en cada llamada), con un frame de margen para que el display:none->flex ya haya
+  // aplicado. Mismo patrón que ya usan detailMap/idleMap más abajo en este archivo.
+  if(nowPaused && !wasPaused && liveMap){
+    requestAnimationFrame(()=>{ if(liveMap) liveMap.invalidateSize(); });
+  }
   if(!dot || !label) return;
   if(tracker.autoPaused){
     dot.style.background = 'var(--mist-dim)'; dot.style.animation = 'none';
