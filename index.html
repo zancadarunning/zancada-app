@@ -1138,11 +1138,20 @@
   /* El círculo de pausar/reanudar -- acción central mientras se corre (arriba, solo) y uno de
      los dos círculos de abajo mientras está pausado (junto al de terminar). Fondo lima +
      ícono ink siempre (el mismo par que .btn-primary) -- no necesita invertirse entre estados
-     porque ninguno de los dos fondos (asphalt-3/asphalt) es brillante. */
+     porque ninguno de los dos fondos (asphalt-3/asphalt) es brillante. Tamaño/posición base
+     (72px, pegado al número) pensados para la pareja de .track-paused-actions -- el círculo
+     SOLO de arriba se agranda y se empuja más abajo aparte (.track-active-group .track-
+     pause-circle más abajo), para no agrandar también al de reanudar y desparejarlo del de
+     terminar al lado. */
   .track-pause-circle{display:flex; align-items:center; justify-content:center; width:72px; height:72px; border-radius:50%; margin:30px auto 14px; background:var(--hivis); color:var(--ink);
     border:none; cursor:pointer; box-shadow:0 3px 8px var(--hivis-glow); transition:transform .12s ease, box-shadow .12s ease;}
   .track-pause-circle svg{width:28px; height:28px;}
   .track-pause-circle:active{transform:scale(.94);}
+  /* Más grande y más abajo, pedido del usuario ("como el de nike") -- el botón único mientras
+     se corre es la acción central de toda la pantalla, tiene sentido que pese más que su
+     versión chica de al lado del botón de terminar. */
+  .track-active-group .track-pause-circle{width:100px; height:100px; margin:96px auto 14px;}
+  .track-active-group .track-pause-circle svg{width:38px; height:38px;}
   .map-wrap{position:relative; isolation:isolate; height:260px; border-radius:var(--radius); overflow:hidden; margin-bottom:14px; border:1px solid var(--asphalt-4);
     background:linear-gradient(90deg, var(--asphalt-3) 25%, var(--asphalt-4) 37%, var(--asphalt-3) 63%); background-size:400% 100%; animation:skeletonShine 1.4s ease infinite;}
   #liveMap{height:100%; width:100%; background:var(--asphalt-3);}
