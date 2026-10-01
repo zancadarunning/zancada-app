@@ -1046,7 +1046,22 @@
   .run-mode-card .muted{font-size:12.5px; line-height:1.4; white-space:pre-line;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
   .run-mode-card .tag{margin-bottom:2px;}
-  .run-mode-card.active{border-color:var(--hivis); background:var(--hivis-dim); box-shadow:0 1px 4px var(--hivis-glow);}
+  /* --hivis-dim es translúcido a propósito (rgba, .14 de opacidad) -- pensado para pintarse
+     sobre una superficie YA sólida como la de un chip chico (.lang-pill.active, por ejemplo).
+     Acá, con la textura de #app ahora visible detrás (ver el rediseño de Correr), ese mismo
+     tinte solo dejaba ver la textura DEBAJO atenuada -- el usuario lo marcó como "sigue
+     transparente" por segunda vez. El gradiente apila el tinte lima SOBRE una base sólida
+     asphalt-3 (no reemplaza el color, lo compone encima) -- mismo tinte visual, resultado
+     opaco de verdad -- probado con background-color + background-image por separado
+     (el shorthand con los dos en una lista separada por coma nunca llegó a aplicar el
+     color: el navegador la resolvía con "background-image: ..., none", confirmado por
+     computed style), y SEGUÍA leyéndose débil: el resultado (asphalt-3 con apenas 14% de
+     lima encima) da un verde oliva apagado, parecido en tono/oscuridad a la textura de
+     fondo -- técnicamente opaco, pero sin contraste real contra lo de atrás. El usuario lo
+     marcó como "transparente" otra vez. Acá se abandona el tinte -- un asphalt-4 LISO (el
+     escalón más alto/claro de la escalera de grises) más el borde+glow lima es inequívoco:
+     ninguna cuenta de opacidad de por medio, nada que se pueda leer como "se transparenta". */
+  .run-mode-card.active{border-color:var(--hivis); background:var(--asphalt-4); box-shadow:0 1px 4px var(--hivis-glow);}
   /* Mapa real de "dónde estoy" (ver initIdleMap en app.js): vive en su propia tarjeta,
      en el lugar donde antes iba la ficha del entrenamiento de hoy -- pedido del usuario
      de separar el mapa del botón de arrancar y devolver la pista de atletismo decorativa

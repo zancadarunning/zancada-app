@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-01T19:36:45Z';
+const APP_VERSION = '2026-10-01T19:54:21Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7285,6 +7285,32 @@ function readRunProgress(){
   if(!key) return null;
   try{ const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
 }
+// Caché de la mejor voz nativa encontrada por idioma -- getSupportedVoices() devuelve TODAS
+// las voces instaladas (120+ entre todos los idiomas), así que esto evita pedirla de nuevo
+// antes de cada aviso; una vez resuelta para un idioma, se reusa siempre.
+let bestVoiceIndexCache = {};
+// Preferimos una voz de RED (localService:false) sobre las "embedded" (local, siempre
+// instaladas, pero notoriamente más robóticas) -- reportado por un usuario: "la voz es muy
+// robotica, hacela mas humana". Confirmado en un dispositivo real: con el índice de una voz
+// de red, el motor nativo pasa a pedir síntesis por server (es-us-x-esc-server) en vez de la
+// embedded de siempre, y si de verdad no hay red en ese momento (corriendo afuera, sin
+// señal), el motor mismo ya trae su propio fallback a la embedded -- no hace falta manejar
+// ese caso acá. Sin voz de red para el idioma exacto (no existe ninguna "es-AR" en ningún
+// Android visto, caen todas a es-ES/es-US), probamos el prefijo del idioma nomás, y como
+// último recurso cualquier voz instalada para ese idioma.
+async function getBestVoiceIndex(targetLang){
+  if(targetLang in bestVoiceIndexCache) return bestVoiceIndexCache[targetLang];
+  let idx = null;
+  try{
+    const {voices} = await window.Capacitor.Plugins.TextToSpeech.getSupportedVoices();
+    let found = voices.findIndex(v => v.lang===targetLang && v.localService===false);
+    if(found<0) found = voices.findIndex(v => v.lang.slice(0,2)===targetLang.slice(0,2) && v.localService===false);
+    if(found<0) found = voices.findIndex(v => v.lang===targetLang);
+    idx = found>=0 ? found : null;
+  }catch(e){ idx = null; }
+  bestVoiceIndexCache[targetLang] = idx;
+  return idx;
+}
 // El WebView nativo de Android NO implementa window.speechSynthesis (es una limitación
 // conocida del WebView del sistema, a diferencia de Chrome de escritorio) -- hasta este
 // cambio, CUALQUIER aviso de voz (éste, los de km, los de fase de series/cuestas/fartlek)
@@ -7299,7 +7325,12 @@ function speak(text){
   const isNative = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
   const nativeTTS = isNative && window.Capacitor.Plugins && window.Capacitor.Plugins.TextToSpeech;
   if(nativeTTS){
-    nativeTTS.speak({text, lang: LOCALE_MAP[lang]}).catch(()=>{});
+    const targetLang = LOCALE_MAP[lang];
+    getBestVoiceIndex(targetLang).then(voiceIdx => {
+      const opts = {text, lang: targetLang, rate: 0.95};
+      if(voiceIdx!=null) opts.voice = voiceIdx;
+      nativeTTS.speak(opts).catch(()=>{});
+    });
     return;
   }
   if(!('speechSynthesis' in window)) return;
