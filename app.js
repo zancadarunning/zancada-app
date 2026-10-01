@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-01T01:12:07Z';
+const APP_VERSION = '2026-10-01T01:21:36Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5957,10 +5957,10 @@ function openShoesOverlay(){ openOverlaySheetEl(document.getElementById('shoes-o
 function closeShoesOverlay(){ document.getElementById('shoes-overlay').classList.remove('overlay-open'); }
 function openEventOverlay(){ openOverlaySheetEl(document.getElementById('event-overlay')); }
 function closeEventOverlay(){ document.getElementById('event-overlay').classList.remove('overlay-open'); }
-// Días/Otros deportes/Zonas FC/Idioma consolidados en un solo botón "Configuración" --
-// ver el comentario junto a config-overlay en index.html.
-function openConfigOverlay(){ openOverlaySheetEl(document.getElementById('config-overlay')); }
-function closeConfigOverlay(){ document.getElementById('config-overlay').classList.remove('overlay-open'); }
+// Tema/Unidades/Entrenar por/Avisos de voz consolidados en un solo botón "Preferencias" --
+// ver el comentario junto a preferences-overlay en index.html.
+function openPreferencesOverlay(){ openOverlaySheetEl(document.getElementById('preferences-overlay')); }
+function closePreferencesOverlay(){ document.getElementById('preferences-overlay').classList.remove('overlay-open'); }
 function openLangOverlay(){ openOverlaySheetEl(document.getElementById('lang-overlay')); }
 function closeLangOverlay(){ document.getElementById('lang-overlay').classList.remove('overlay-open'); }
 function openDaysOverlay(){ openOverlaySheetEl(document.getElementById('days-overlay')); }
