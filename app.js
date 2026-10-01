@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-01T14:07:54Z';
+const APP_VERSION = '2026-10-01T14:26:53Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -169,7 +169,7 @@ function applyStaticTranslations(){
   document.querySelectorAll('[data-i18n-aria]').forEach(el=>{ el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
   document.querySelectorAll('a[href^="/privacy.html"]').forEach(el=>{ el.href = apiUrl('/privacy.html?lang=' + lang); });
   document.querySelectorAll('a[href^="/terms.html"]').forEach(el=>{ el.href = apiUrl('/terms.html?lang=' + lang); });
-  document.getElementById('pauseBtn').textContent = tracker.running ? t('run_pause') : t('run_resume');
+  updatePauseBtnIcon();
   [...document.getElementById('perfil-lang-choice').children].forEach(c=>c.classList.toggle('active', c.dataset.v===lang));
   const langSummaryEl = document.getElementById('perfil-lang-summary');
   if(langSummaryEl) langSummaryEl.textContent = LANG_DISPLAY[lang] || lang;
@@ -233,6 +233,8 @@ const ICONS = {
   cross: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
   send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>',
   stop: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4.5" height="14" rx="1.5"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.5"/></svg>',
+  play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.2v13.6a1 1 0 0 0 1.52.85l11-6.8a1 1 0 0 0 0-1.7l-11-6.8A1 1 0 0 0 8 5.2z"/></svg>',
   info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg>',
   eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>',
   eyeOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.8 21.8 0 0 1 5.06-5.94M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 7 11 7a21.8 21.8 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
@@ -7130,9 +7132,28 @@ function isImplausibleRunSpeed(speedMps){
   return speedMps!=null && speedMps > MAX_PLAUSIBLE_SPEED_MPS;
 }
 function isTrackingActive(){ return tracker.running && !tracker.autoPaused; }
+// Ícono (no texto) del círculo grande de pausar/reanudar -- ver .track-pause-circle en
+// index.html. Un solo lugar para los 3 puntos que antes pisaban el texto a mano
+// (applyStaticTranslations, actuallyStartRun, togglePause) -- el aria-label explícito pisa
+// al genérico que ya le puso data-i18n-aria (ver applyStaticTranslations), porque ese no
+// sabe si en este momento corresponde "Pausar" o "Reanudar".
+function updatePauseBtnIcon(){
+  const btn = document.getElementById('pauseBtn');
+  if(!btn) return;
+  const running = tracker && tracker.running;
+  btn.innerHTML = running ? ICONS.pause : ICONS.play;
+  btn.setAttribute('aria-label', running ? t('run_pause') : t('run_resume'));
+}
 function updateRecordingLabel(){
   const dot = document.getElementById('run-rec-dot');
   const label = document.getElementById('run-recording-label');
+  // is-paused maneja el cambio de fondo lima<->carbón de toda la pantalla de carrera en
+  // vivo (ver #runActive en index.html) -- corre acá, no solo en togglePause(), porque
+  // updateRecordingLabel() es el único punto en común que YA se llama tanto en una pausa
+  // manual como en la auto-pausa por quietud (ver onPosition()), y el color tiene que
+  // reaccionar a las dos, no solo a tocar el botón.
+  const runActiveEl = document.getElementById('runActive');
+  if(runActiveEl) runActiveEl.classList.toggle('is-paused', !isTrackingActive());
   if(!dot || !label) return;
   if(tracker.autoPaused){
     dot.style.background = 'var(--mist-dim)'; dot.style.animation = 'none';
@@ -7935,7 +7956,7 @@ function actuallyStartRun(saved){
   document.getElementById('runActive').style.display='block';
   // El botón refleja el estado real restaurado (ver comentario de arriba) -- antes quedaba
   // fijo en "Pausar" sin importar si la carrera se había guardado pausada.
-  document.getElementById('pauseBtn').textContent = restoredRunning ? t('run_pause') : t('run_resume');
+  updatePauseBtnIcon();
   updateRecordingLabel();
   initLiveMap();
   updateLiveStats();
@@ -8059,7 +8080,7 @@ function togglePause(){
     tracker.autoPaused = false;
     tracker.lastMoveMs = Date.now();
   }
-  document.getElementById('pauseBtn').textContent = tracker.running? t('run_pause') : t('run_resume');
+  updatePauseBtnIcon();
   updateRecordingLabel();
   // Guardamos el progreso justo al pausar/reanudar a mano -- si la app se cierra
   // segundos después de tocar "Pausar" (llamada, se apaga el teléfono, etc.), el

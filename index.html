@@ -1094,7 +1094,55 @@
     100%{opacity:0; transform:translateY(100vh) rotate(720deg);}
   }
   @media (prefers-reduced-motion:reduce){ .confetti-piece{display:none;} }
-  .timer-big{font-size:48px; text-align:center; margin:10px 0 14px;}
+  /* ---- Carrera en vivo, estilo Nike Run Club (pedido del usuario, con video de referencia)
+     ----
+     Mientras se corre de VERDAD (ni pausado a mano ni auto-pausado por quietud -- ver
+     isTrackingActive()/updateRecordingLabel() en app.js, que le agrega/saca is-paused a este
+     mismo div) el fondo entero se pone lima sólido, el mismo par fill+texto que ya usa
+     .btn-primary en todo el sistema (hi-vis + --ink, nunca blanco). margin negativo cancela
+     el padding lateral de .view (20px, ver más arriba) para que el color llegue de borde a
+     borde de la columna de 480px -- mismo truco que .rd-map-full ya usa para sangrar su mapa.
+     is-paused vuelve al --asphalt de siempre: Zancada es dark-only por decisión ya tomada
+     (ver DESIGN.md -- "no reintroducir un tema claro, se sacó a pedido del usuario"), así que
+     "pausado" acá NUNCA se pone claro como en la referencia -- volver al carbón de base ya es,
+     puesto al lado del lima activo, el mismo contraste de estado que buscaba la referencia. */
+  #runActive{margin:0 -20px; padding:10px 20px 4px; background:var(--hivis); color:var(--ink); transition:background-color .35s ease, color .35s ease;}
+  #runActive.is-paused{background:var(--asphalt); color:var(--chalk);}
+  .run-rec-row{text-align:center; margin:4px 0 2px;}
+  #runActive:not(.is-paused) .run-rec-row .muted{color:rgba(18,20,21,.62);}
+  /* Tiempo y ritmo -- antes el tiempo era el número gigante de la pantalla; acá bajan a stats
+     chicas arriba, el mismo rol que cumplen en la referencia (Ritmo/PPM/Tiempo chicos arriba
+     del número de distancia). Sin tarjeta/fondo propio -- en la referencia estos números
+     flotan directo sobre el color sólido, no adentro de una caja. */
+  .track-topstats{display:flex; justify-content:center; gap:34px; margin:6px 0 2px;}
+  .track-topstat{text-align:center;}
+  .track-topstat .n{font-size:19px; font-weight:800;}
+  .track-topstat .l{font-size:10px; text-transform:uppercase; letter-spacing:.05em; margin-top:2px;}
+  #runActive:not(.is-paused) .track-topstat .l{color:rgba(18,20,21,.6);}
+  /* El número protagonista: distancia. clamp (no un tamaño fijo) para que una carrera de
+     "12.47" no se desborde en un celular angosto de verdad igual que "0.00" -- ver el mismo
+     criterio ya usado para .go-circle/otros elementos grandes de esta pantalla. */
+  .track-hero{text-align:center; margin:4px 0 2px;}
+  .track-hero-num{font-size:clamp(64px, 20vw, 96px); font-weight:800; line-height:.92; letter-spacing:-.01em;}
+  .track-hero-label{font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-top:2px;}
+  #runActive:not(.is-paused) .track-hero-label{color:rgba(18,20,21,.62);}
+  /* El círculo de pausar/reanudar -- antes un botón de texto chico ("Pausar") perdido entre
+     otros dos; ahora la acción central de la pantalla, como en la referencia. Fondo
+     lima+ícono ink por default (el mismo par que .btn-primary, para que encaje bien en
+     is-paused, donde el fondo de la página vuelve a ser oscuro) -- se invierte más abajo
+     SOLO mientras la página misma ya es lima, para que el botón se siga notando encima. */
+  .track-pause-circle{display:flex; align-items:center; justify-content:center; width:72px; height:72px; border-radius:50%; margin:14px auto; background:var(--hivis); color:var(--ink);
+    border:none; cursor:pointer; box-shadow:0 3px 8px var(--hivis-glow); transition:transform .12s ease, box-shadow .12s ease, background-color .3s ease, color .3s ease;}
+  .track-pause-circle svg{width:28px; height:28px;}
+  .track-pause-circle:active{transform:scale(.94);}
+  #runActive:not(.is-paused) .track-pause-circle{background:var(--ink); color:var(--hivis); box-shadow:0 3px 10px rgba(18,20,21,.35);}
+  /* .btn-danger de siempre (ver más arriba en este archivo) usa un tinte ROJO translúcido --
+     mezclado con el lima sólido de acá atrás da un marrón/mostaza turbio, no un rojo limpio.
+     Mismo borde/texto rojo (la señal de "esto termina la carrera" se mantiene intacta), pero
+     el relleno pasa a un tinte oscuro neutro -- la misma lógica que ya usa la tarjeta de la
+     guía de entrenamiento (una superficie oscura se despega prolijo del lima de cualquier
+     color que tenga el texto encima). */
+  #runActive:not(.is-paused) .run-controls .btn-danger{background:rgba(18,20,21,.14);}
   .map-wrap{position:relative; isolation:isolate; height:260px; border-radius:var(--radius); overflow:hidden; margin-bottom:14px; border:1px solid var(--asphalt-4);
     background:linear-gradient(90deg, var(--asphalt-3) 25%, var(--asphalt-4) 37%, var(--asphalt-3) 63%); background-size:400% 100%; animation:skeletonShine 1.4s ease infinite;}
   #liveMap{height:100%; width:100%; background:var(--asphalt-3);}
@@ -2096,14 +2144,34 @@
     </div>
 
     <div id="runActive">
-      <p style="text-align:center; margin-top:4px;"><span class="rec-dot" id="run-rec-dot"></span><span class="muted" id="run-recording-label" style="text-transform:uppercase; font-size:11px; letter-spacing:.07em;" data-i18n="run_recording"></span></p>
-      <div class="timer-big mono" id="track-timer">00:00:00</div>
-      <div class="map-wrap"><div id="liveMap"></div><button class="map-recenter-btn" onclick="recenterMap()" data-i18n-aria="aria_recenter"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></button></div>
+      <!-- Pantalla de carrera en vivo rediseñada a pedido del usuario (video de referencia de
+           Nike Run Club): mientras se corre de verdad el fondo entero se pone lima sólido (ver
+           #runActive más abajo en el CSS) y la distancia pasa a ser el número protagonista --
+           el tiempo y el ritmo, antes el elemento más grande de la pantalla, bajan a stats
+           chicas arriba. El botón de pausar/reanudar ahora es un círculo grande (como el de
+           Nike), no un botón de texto chico perdido entre otros dos -- ver pauseBtn más abajo
+           y togglePause()/actuallyStartRun() en app.js, que le cambian el ícono. El mapa en
+           vivo SIGUE existiendo (a diferencia de la referencia, que no lo muestra en esta
+           pantalla) -- es una función real que ya tenía la app, sacarla sería un paso atrás
+           solo para parecerse más a la referencia. -->
+      <p class="run-rec-row"><span class="rec-dot" id="run-rec-dot"></span><span class="muted" id="run-recording-label" style="text-transform:uppercase; font-size:11px; letter-spacing:.07em;" data-i18n="run_recording"></span></p>
 
-      <div class="track-stats stat-row">
-        <div class="stat-box"><div class="n mono" id="track-dist">0.00</div><div class="l" id="track-dist-label" data-i18n="run_km"></div></div>
-        <div class="stat-box"><div class="n mono" id="track-pace">—</div><div class="l" id="track-pace-label" data-i18n="run_pace"></div></div>
+      <div class="track-topstats">
+        <div class="track-topstat"><div class="n mono" id="track-timer">00:00:00</div><div class="l" data-i18n="run_time"></div></div>
+        <div class="track-topstat"><div class="n mono" id="track-pace">—</div><div class="l" id="track-pace-label" data-i18n="run_pace"></div></div>
       </div>
+
+      <div class="track-hero">
+        <div class="track-hero-num mono" id="track-dist">0.00</div>
+        <div class="track-hero-label" id="track-dist-label" data-i18n="run_km"></div>
+      </div>
+
+      <!-- innerHTML (ícono de pausa/play) lo pone togglePause()/actuallyStartRun() en app.js --
+           arranca vacío acá porque el estado real (corriendo vs. recuperada ya pausada) recién
+           se sabe ahí. -->
+      <button class="track-pause-circle" id="pauseBtn" onclick="togglePause()" data-i18n-aria="run_pause"></button>
+
+      <div class="map-wrap"><div id="liveMap"></div><button class="map-recenter-btn" onclick="recenterMap()" data-i18n-aria="aria_recenter"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></button></div>
 
       <!-- Guía en vivo para series/subidas -- solo aparece cuando el entrenamiento de hoy
            tiene repeticiones (intervals/hills). Arranca en "pending" (el corredor todavía
@@ -2130,7 +2198,6 @@
       </div>
 
       <div class="run-controls">
-        <button class="btn btn-outline" id="pauseBtn" onclick="togglePause()"></button>
         <button class="btn btn-danger" data-i18n="run_finish" onclick="stopRun()"></button>
       </div>
     </div>
