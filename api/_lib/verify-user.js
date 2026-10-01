@@ -38,7 +38,10 @@ module.exports = async function verifyUser(req) {
     if (!userRes.ok || !user || !user.id) {
       return { ok: false, status: 401, error: 'Invalid session' };
     }
-    return { ok: true, userId: user.id, token };
+    // email: agregado para send-feedback.js (necesita saber a quién responderle sin
+    // confiar en un email que mande el cliente suelto) -- los demás endpoints que ya
+    // usaban este helper solo leían userId, así que esto es puramente aditivo.
+    return { ok: true, userId: user.id, email: user.email, token };
   } catch (e) {
     console.error('verify-user: token verification failed', e);
     return { ok: false, status: 401, error: 'Invalid session' };

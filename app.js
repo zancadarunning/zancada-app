@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-01T00:46:54Z';
+const APP_VERSION = '2026-10-01T01:12:07Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3487,6 +3487,37 @@ async function deleteAccount(){
     showToast(t('delete_account_error'),'error');
   }
 }
+// Formulario "Ayudanos a mejorar" en Perfil -- a diferencia del link mailto de "Contactar
+// soporte" (que depende de que el corredor tenga una app de mail configurada), esto manda
+// el mensaje directo a api/send-feedback.js, que lo reenvía por email. El email del
+// remitente lo saca el backend del propio token de sesión (nunca lo mandamos nosotros
+// desde acá) para que no se pueda falsear mandando cualquier dirección en el body.
+async function sendFeedback(){
+  const textarea = document.getElementById('feedback-message');
+  const message = textarea.value.trim();
+  if(!message) return;
+  const btn = document.getElementById('feedback-send-btn');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = t('perfil_feedback_sending');
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session) throw new Error('no session');
+    const res = await fetch(apiUrl('/api/send-feedback'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
+      body: JSON.stringify({message})
+    });
+    if(!res.ok) throw new Error('send-feedback failed');
+    textarea.value = '';
+    showToast(t('perfil_feedback_sent'));
+  }catch(e){
+    showToast(t('perfil_feedback_error'),'error');
+  }finally{
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
 (async function init(){
   // "Sign in with Apple" solo tiene sentido en la app nativa de iOS (Apple lo exige ahí
   // porque ya ofrecemos login con Google) -- en la web/PWA y en Android el botón queda oculto.
@@ -5926,6 +5957,10 @@ function openShoesOverlay(){ openOverlaySheetEl(document.getElementById('shoes-o
 function closeShoesOverlay(){ document.getElementById('shoes-overlay').classList.remove('overlay-open'); }
 function openEventOverlay(){ openOverlaySheetEl(document.getElementById('event-overlay')); }
 function closeEventOverlay(){ document.getElementById('event-overlay').classList.remove('overlay-open'); }
+// Días/Otros deportes/Zonas FC/Idioma consolidados en un solo botón "Configuración" --
+// ver el comentario junto a config-overlay en index.html.
+function openConfigOverlay(){ openOverlaySheetEl(document.getElementById('config-overlay')); }
+function closeConfigOverlay(){ document.getElementById('config-overlay').classList.remove('overlay-open'); }
 function openLangOverlay(){ openOverlaySheetEl(document.getElementById('lang-overlay')); }
 function closeLangOverlay(){ document.getElementById('lang-overlay').classList.remove('overlay-open'); }
 function openDaysOverlay(){ openOverlaySheetEl(document.getElementById('days-overlay')); }

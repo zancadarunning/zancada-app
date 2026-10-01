@@ -2414,6 +2414,40 @@
     </div>
   </div>
 
+  <!-- Días de entreno, Otros deportes, Zonas de FC e Idioma consolidados acá (antes 4 filas
+       sueltas en la grilla principal de Perfil, ver el comentario junto al botón "Configuración"
+       de ahí) -- este overlay tiene que vivir ANTES que los 4 overlays de abajo en el DOM:
+       todos comparten el mismo z-index (.overlay-sheet, ver index.html), así que cuando este
+       overlay está abierto y el usuario toca una de sus filas (abriendo, por ejemplo,
+       days-overlay ENCIMA de este), el que pinta arriba es el que viene DESPUÉS en el documento
+       -- si este overlay quedara más abajo en el archivo que esos 4, terminaría tapándolos. -->
+  <div class="overlay overlay-sheet" id="config-overlay">
+    <button class="week-nav-btn" onclick="closeConfigOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_config_title"></h2>
+    <div class="settings-grid" style="margin-top:16px;">
+      <div class="card settile" role="button" tabindex="0" onclick="openDaysOverlay()">
+        <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/></svg></span>
+        <h3 data-i18n="perfil_days_title"></h3>
+        <p class="muted" id="perfil-days-summary"></p>
+      </div>
+      <div class="card settile" role="button" tabindex="0" onclick="openCrossTrainingOverlay()">
+        <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 19 8.5 9.5 11.5 14 14.5 7.5 21.5 19Z"/></svg></span>
+        <h3 data-i18n="perfil_crosstraining_title"></h3>
+        <p class="muted" id="perfil-crosstraining-summary"></p>
+      </div>
+      <div class="card settile" role="button" tabindex="0" onclick="openZonesOverlay()">
+        <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span>
+        <h3 data-i18n="perfil_zones_title"></h3>
+        <p class="muted" id="perfil-zones-summary"></p>
+      </div>
+      <div class="card settile" role="button" tabindex="0" onclick="openLangOverlay()">
+        <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M2.5 12h19M12 2.5c2.5 2.6 4 6 4 9.5s-1.5 6.9-4 9.5c-2.5-2.6-4-6-4-9.5s1.5-6.9 4-9.5z"/></svg></span>
+        <h3 data-i18n="perfil_lang"></h3>
+        <p class="muted" id="perfil-lang-summary"></p>
+      </div>
+    </div>
+  </div>
+
   <div class="overlay overlay-sheet" id="lang-overlay">
     <button class="week-nav-btn" onclick="closeLangOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_lang"></h2>
@@ -2718,25 +2752,14 @@
         <h3 data-i18n="perfil_goals_title"></h3>
         <p class="muted" data-i18n="perfil_goals_desc"></p>
       </div>
-      <div class="card settile" role="button" tabindex="0" onclick="openDaysOverlay()">
-        <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/></svg></span>
-        <h3 data-i18n="perfil_days_title"></h3>
-        <p class="muted" id="perfil-days-summary"></p>
-      </div>
-      <div class="card settile" role="button" tabindex="0" onclick="openCrossTrainingOverlay()">
-        <!-- Antes usaba el mismo globo que "Idioma" más abajo (literalmente el mismo ícono
-             para dos filas distintas) -- reportado por el usuario. Una bici es el cross-
-             training más común entre corredores (ciclismo está primero en SPORTS_LIST), así
-             que es un ícono bien reconocible para "otros deportes" sin inventar un glifo
-             genérico nuevo. -->
-        <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M5.5 17.5 10.5 8.5 15.5 8.5M10.5 8.5 13.5 17.5M13.5 17.5 18.5 17.5M13.5 17.5 9 14.5"/><path d="M9 5.5h2.5l1.5 3"/></svg></span>
-        <h3 data-i18n="perfil_crosstraining_title"></h3>
-        <p class="muted" id="perfil-crosstraining-summary"></p>
-      </div>
-      <div class="card settile" role="button" tabindex="0" onclick="openZonesOverlay()">
-        <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span>
-        <h3 data-i18n="perfil_zones_title"></h3>
-        <p class="muted" id="perfil-zones-summary"></p>
+      <!-- Días de entreno, Otros deportes, Zonas de FC e Idioma vivían acá como 4 filas
+           sueltas -- juntadas en un solo botón "Configuración" (ver config-overlay más abajo)
+           a pedido del usuario, para bajarle carga visual a esta grilla. Mismos onclick, mismos
+           ids de resumen dinámico, solo cambió el contenedor que los muestra. -->
+      <div class="card settile" role="button" tabindex="0" onclick="openConfigOverlay()">
+        <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="3.5" y1="7" x2="20.5" y2="7"/><circle cx="9" cy="7" r="2" fill="currentColor" stroke="none"/><line x1="3.5" y1="12.5" x2="20.5" y2="12.5"/><circle cx="16" cy="12.5" r="2" fill="currentColor" stroke="none"/><line x1="3.5" y1="18" x2="20.5" y2="18"/><circle cx="12" cy="18" r="2" fill="currentColor" stroke="none"/></svg></span>
+        <h3 data-i18n="perfil_config_title"></h3>
+        <p class="muted" data-i18n="perfil_config_desc"></p>
       </div>
       <div class="card settile" role="button" tabindex="0" onclick="openPainOverlay()">
         <!-- Corazón + pulso a mano, redibujado (2026-09-30): la versión anterior no era
@@ -2759,11 +2782,6 @@
         <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4.5s2-1.3 4.5-1.3 3.5 1.5 6 1.5 3.5-1 3.5-1v9s-1.5 1-3.5 1-3.5-1.5-6-1.5-4.5 1.3-4.5 1.3z"/></svg></span>
         <h3 data-i18n="perfil_event"></h3>
         <p class="muted" id="perfil-event-summary"></p>
-      </div>
-      <div class="card settile" role="button" tabindex="0" onclick="openLangOverlay()">
-        <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M2.5 12h19M12 2.5c2.5 2.6 4 6 4 9.5s-1.5 6.9-4 9.5c-2.5-2.6-4-6-4-9.5s1.5-6.9 4-9.5z"/></svg></span>
-        <h3 data-i18n="perfil_lang"></h3>
-        <p class="muted" id="perfil-lang-summary"></p>
       </div>
     </div>
 
@@ -2829,6 +2847,16 @@
         <div class="choice active" data-v="on" data-i18n="word_yes"></div>
         <div class="choice" data-v="off" data-i18n="word_no"></div>
       </div>
+    </div>
+
+    <!-- Formulario de feedback -- a diferencia del link mailto de "Contactar soporte" más
+         abajo (que depende de que el corredor tenga una app de mail configurada en el
+         celular), esto manda el mensaje directo desde la app vía api/send-feedback.js. -->
+    <div class="card">
+      <h3 data-i18n="perfil_feedback_title"></h3>
+      <p class="muted" style="font-size:12px; margin:2px 0 10px;" data-i18n="perfil_feedback_hint"></p>
+      <textarea id="feedback-message" rows="3" maxlength="4000" data-i18n-ph="perfil_feedback_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+      <button class="btn btn-outline btn-sm" id="feedback-send-btn" style="margin-top:12px; width:100%;" data-i18n="perfil_feedback_send" onclick="sendFeedback()"></button>
     </div>
 
     <div class="card">
