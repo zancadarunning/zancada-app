@@ -661,7 +661,16 @@
      estaba guardado o no. Ver PERFIL_SAVE_SECTIONS / confirmAndSave en app.js. */
   .perfil-save-btn{display:none;}
   .perfil-save-btn.dirty{display:flex;}
-  .btn-danger{background:var(--danger-dim); color:var(--danger);}
+  /* Reportado por el usuario: "Terminar" (cortar la carrera en vivo) y "Eliminar
+     entrenamiento"/"Eliminar mi cuenta" se veían transparentes. A diferencia de
+     .btn-primary (fondo sólido + glow) y .btn-outline (fondo sólido + borde + sombra),
+     esta clase no tenía NI borde NI sombra -- solo un tinte de fondo al 13-16% de opacidad
+     (--danger-dim), que contra el --asphalt casi negro del fondo prácticamente desaparece
+     en los bordes del botón. Agregado borde sólido (mismo --danger que ya usa el texto) +
+     la misma sombra de tarjeta que .btn-outline, para que se note como botón real sin
+     perder el tinte suave que lo distingue de un botón de acción primaria. */
+  .btn-danger{background:var(--danger-dim); border:1.5px solid var(--danger); color:var(--danger); box-shadow:var(--shadow-card); transition:transform .13s var(--ease-out);}
+  .btn-danger:active{transform:scale(.97);}
   /* Acciones secundarias al pie de Plan (agregar al calendario / pedirle un ajuste al
      coach) -- antes eran botones outline de peso completo, iguales a cualquier acción
      primaria; bajan de escala a un link con ícono, y con más aire antes de la tabbar. */
