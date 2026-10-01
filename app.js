@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-01T20:30:33Z';
+const APP_VERSION = '2026-10-01T20:52:37Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5340,24 +5340,32 @@ function renderPlan(){
   // que tuviera cargada. isEventWeek manda si coinciden las dos (el motivo puntual de esa
   // carrera es más específico que "le toca descarga por ciclo").
   const isPlainCutbackWeek = wd.exists && wd.mode!=='future' && isCutbackWeek(wn) && !isEventWeek;
-  let label = t('plan_week_label',{n:wn});
-  if(wd.exists && (isCutbackWeek(wn) || isEventWeek) && wd.mode!=='future') label += ` · <span class="tag tag-asfalto">${t('plan_cutback')}</span>`;
-  if(wd.mode==='future') label += ` · <span class="tag tag-soon">${t('plan_estimate')}</span>`;
-  if(wd.mode==='past') label += ` · <span class="tag tag-soon">${t('plan_past')}</span>`;
+  // "Semana N" solo -- las etiquetas de estado van en #plan-week-tags, una fila aparte (ver
+  // el comentario largo junto a esa clase en el CSS). Antes se concatenaban todas acá mismo,
+  // en una sola línea con overflow:ellipsis, y un texto largo como "Estimado, puede
+  // ajustarse" terminaba mostrando apenas "..." sin nada legible -- reportado por el usuario.
+  const label = t('plan_week_label',{n:wn});
+  let tagsHtml = '';
+  if(wd.exists && (isCutbackWeek(wn) || isEventWeek) && wd.mode!=='future') tagsHtml += `<span class="tag tag-asfalto">${t('plan_cutback')}</span>`;
+  if(wd.mode==='future') tagsHtml += `<span class="tag tag-soon">${t('plan_estimate')}</span>`;
+  if(wd.mode==='past') tagsHtml += `<span class="tag tag-soon">${t('plan_past')}</span>`;
   const taperMult = (wd.exists && wd.mode!=='past' && wd.weekStart) ? taperMultiplier(state.profile, wd.weekStart) : 1;
   const isTapering = taperMult < 1;
   // el aviso de taper (etiqueta + mensaje) solo se muestra en semanas "firmes" (actual y la que
   // sigue) -- en una semana "estimado, puede ajustarse" no tiene sentido afirmar algo puntual
   // como "acá empieza tu puesta a punto" sobre una proyección que todavía puede cambiar entera
   const showTaperUi = isTapering && wd.mode!=='future';
-  if(showTaperUi) label += ` · <span class="tag tag-asfalto">${t('plan_taper_tag')}</span>`;
+  if(showTaperUi) tagsHtml += `<span class="tag tag-asfalto">${t('plan_taper_tag')}</span>`;
   // La semana de recuperación se recalcula siempre en base a wd.weekStart -- no depende de
   // que state.event siga cargado (isRecoveryWeek() ya contempla que se haya limpiado solo
   // al pasar la fecha, ver autoClearPastEvent()), así que se puede mostrar toda la semana,
   // no solo el día del rollover.
   const showRecoveryUi = wd.exists && wd.mode!=='past' && wd.mode!=='future' && wd.weekStart && isRecoveryWeek(wd.weekStart);
-  if(showRecoveryUi) label += ` · <span class="tag tag-asfalto">${t('plan_recovery_tag')}</span>`;
-  document.getElementById('plan-week-info').innerHTML = label;
+  if(showRecoveryUi) tagsHtml += `<span class="tag tag-asfalto">${t('plan_recovery_tag')}</span>`;
+  document.getElementById('plan-week-info').textContent = label;
+  const tagsRow = document.getElementById('plan-week-tags');
+  tagsRow.innerHTML = tagsHtml;
+  tagsRow.style.display = tagsHtml ? 'flex' : 'none';
   const taperNote = document.getElementById('plan-taper-note');
   if(showTaperUi){
     taperNote.style.display='block';
@@ -5474,8 +5482,13 @@ function renderPlan(){
       const run = d.linkedRunId ? state.runs.find(r=>r.id===d.linkedRunId) : null;
       let doneText = t('plan_status_done');
       if(run){
+        // Clickeable -- pedido del usuario: "si tocamos un ejercicio, que nos manda el
+        // ejercicio del historial". stopPropagation() porque esto vive adentro de
+        // .day-detail, que ya está abierto cuando se ve (toggleDay() en la fila de arriba) --
+        // sin esto, el click también le llegaba al toggle del día entero y lo volvía a
+        // cerrar de golpe en vez de abrir el detalle de la carrera.
         const pMin = run.distanceKm>0.02 ? (run.durationSec/60)/run.distanceKm : 0;
-        doneText += `: ${fmtDist(run.distanceKm)}${distUnit()} · ${fmtPace(pMin)}/${distUnit()}`;
+        doneText += `: <button class="small-link" onclick="event.stopPropagation(); openRunDetail('${run.id}')">${fmtDist(run.distanceKm)}${distUnit()} · ${fmtPace(pMin)}/${distUnit()}</button>`;
       }
       statusBlock = canEdit ? `<p style="color:var(--hivis-text); font-weight:700; margin-top:12px;">${doneText} · <button class="small-link" onclick="markSession(${i},null)">${t('plan_undo')}</button></p>` : `<p style="color:var(--hivis-text); font-weight:700; margin-top:12px;">${doneText}${isPastDay?' · '+t('plan_locked'):''}</p>`;
     }

@@ -1518,13 +1518,22 @@
   .week-nav .week-nav-btn{width:34px; height:34px; background:var(--hivis); color:#0a0a0a; flex-shrink:0; box-shadow:0 1px 3px var(--hivis-glow);}
   .week-nav .week-nav-btn:active{background:var(--hivis); transform:scale(.88);}
   /* Reportado en una auditoría: sin min-width:0 (el default de un item flex es "auto", que
-     nunca lo deja angostarse más que su contenido) ni overflow/text-overflow, una semana que
-     junta las tres etiquetas a la vez (descarga + taper + recuperación -- son independientes
-     entre sí, no se excluyen) desbordaba la cápsula y se montaba sobre los botones de al
-     lado. Con elipsis se corta prolijo en vez de desbordar. */
+     nunca lo deja angostarse más que su contenido), una cápsula angosta desbordaba y se
+     montaba sobre los botones de al lado. overflow/text-overflow quedan como red de
+     seguridad -- ya no deberían activarse nunca en la práctica, porque las etiquetas de
+     estado (descarga/taper/recuperación/etc., antes pegadas ACÁ DENTRO sin wrap) se movieron
+     a su propia fila aparte (#plan-week-tags, más abajo): "Semana 8 · Estimado, puede
+     ajustarse" no entraba ni recortado en los ~160px reales de esta cápsula, y el
+     text-overflow:ellipsis terminaba mostrando apenas "..." sin nada legible detrás --
+     reportado por el usuario en la semana 8 y en las semanas pasadas ("Semana pasada"). */
   .week-nav-label{margin:0; text-align:center; color:var(--chalk); font-size:13px; font-weight:700; flex:1; min-width:0; letter-spacing:.01em; white-space:nowrap;
     overflow:hidden; text-overflow:ellipsis;
     padding:9px 18px; background:var(--asphalt-2); border:1px solid var(--overlay-hairline); border-radius:999px;}
+  /* Fila aparte para las etiquetas de estado de la semana (descarga/estimado/semana
+     pasada/taper/recuperación) -- flex-wrap porque pueden ser más de una a la vez (no se
+     excluyen entre sí, ver el comentario de arriba), centradas, con lugar de sobra para
+     textos largos sin ningún riesgo de recortarse. */
+  .plan-week-tags{display:flex; flex-wrap:wrap; justify-content:center; gap:6px; margin:0 0 14px;}
   .week-nav-btn{width:32px; height:32px; border-radius:50%; background:var(--asphalt-3); border:none; color:var(--chalk);
     display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; padding:0;
     transition:transform .12s ease, background .12s ease, opacity .15s ease;}
@@ -2183,6 +2192,15 @@
       <p class="week-nav-label" id="plan-week-info"></p>
       <button class="week-nav-btn" id="plan-next-btn" onclick="navigateWeek(1)" data-i18n-aria="aria_week_next"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span></button>
     </div>
+    <!-- Antes la etiqueta de estado (Descarga/Estimado, puede ajustarse/Semana pasada/etc.)
+         iba pegada DENTRO de #plan-week-info, en la misma línea sin wrap que "Semana N" --
+         esa cápsula mide ~160px de ancho real entre los dos botones circulares, y un texto
+         largo como "Estimado, puede ajustarse" (25 caracteres) no entraba ni recortado: el
+         text-overflow:ellipsis del contenedor terminaba mostrando apenas "..." sin nada
+         legible atrás (reportado por el usuario en la semana 8 y en las semanas pasadas,
+         que usan la etiqueta "Semana pasada"). Ahora la etiqueta vive en su propia fila
+         aparte, centrada y con lugar de sobra para no recortarse nunca. -->
+    <div class="plan-week-tags" id="plan-week-tags" style="display:none;"></div>
     <p class="muted" style="margin-bottom:14px;" data-i18n="plan_lead"></p>
     <p class="muted" id="plan-taper-note" style="display:none; color:var(--hivis-text); margin-bottom:14px;"></p>
     <p class="muted" id="plan-event-week-note" style="display:none; color:var(--hivis-text); margin-bottom:14px;"></p>
