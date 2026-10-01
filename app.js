@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-01T13:58:57Z';
+const APP_VERSION = '2026-10-01T14:07:54Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7573,6 +7573,37 @@ function smoothRouteForDisplay(points, radius, passes){
   current[current.length-1] = {lat: points[points.length-1].lat, lon: points[points.length-1].lon};
   return current;
 }
+// Pedido por el usuario tras el suavizado de arriba: "que se vea como los de Strava" --
+// Strava no solo despeja el ruido, dibuja una curva de verdad entre los fixes (en vez de
+// segmentos rectos). smoothRouteForDisplay() sigue sin tocar la CANTIDAD de puntos (clave
+// para que buildColoredRouteSegments pueda cortar tramos por índice, ver su comentario) --
+// esta función es el paso aparte que inserta puntos interpolados ENTRE cada par de puntos
+// ya desruidados, sobre una spline de Catmull-Rom (pasa exactamente por cada punto real,
+// a diferencia de una curva de Bézier que solo se acerca -- no queremos que la curva se
+// "despegue" de dónde el GPS dijo que estuvo el corredor). Solo se usa en el mapa
+// interactivo del detalle (nunca en las miniaturas estáticas de Historial: ahí multiplicar
+// la cantidad de puntos puede pasarse del límite de largo de URL/complejidad de la API de
+// Mapbox, y una miniatura de 108px de alto no necesita esta curva para verse bien).
+function catmullRomCurve(points, segmentsPerPoint){
+  segmentsPerPoint = segmentsPerPoint || 6;
+  if(points.length < 3) return points;
+  const n = points.length;
+  const at = (i) => points[Math.max(0, Math.min(n-1, i))];
+  const out = [];
+  for(let i=0; i<n-1; i++){
+    const p0 = at(i-1), p1 = at(i), p2 = at(i+1), p3 = at(i+2);
+    out.push(p1);
+    for(let s=1; s<segmentsPerPoint; s++){
+      const t = s/segmentsPerPoint, t2 = t*t, t3 = t2*t;
+      out.push({
+        lat: 0.5*((2*p1.lat) + (-p0.lat+p2.lat)*t + (2*p0.lat-5*p1.lat+4*p2.lat-p3.lat)*t2 + (-p0.lat+3*p1.lat-3*p2.lat+p3.lat)*t3),
+        lon: 0.5*((2*p1.lon) + (-p0.lon+p2.lon)*t + (2*p0.lon-5*p1.lon+4*p2.lon-p3.lon)*t2 + (-p0.lon+3*p1.lon-3*p2.lon+p3.lon)*t3),
+      });
+    }
+  }
+  out.push(points[n-1]);
+  return out;
+}
 function encodePolylinePoints(points){
   let output = '', prevLat = 0, prevLng = 0;
   const encodeNum = (num) => {
@@ -9271,7 +9302,7 @@ function buildColoredRouteSegments(r){
   // cortar smoothed en los mismos tramos.
   const smoothed = smoothRouteForDisplay(points);
   if(!r.splits || !r.splits.length || points.length<3){
-    return [{latlngs:smoothed.map(p=>[p.lat,p.lon]), color: zoneColorVar(3)}];
+    return [{latlngs:catmullRomCurve(smoothed).map(p=>[p.lat,p.lon]), color: zoneColorVar(3)}];
   }
   const cum=[0];
   for(let i=1;i<points.length;i++) cum.push(cum[i-1]+haversine(points[i-1].lat,points[i-1].lon,points[i].lat,points[i].lon));
@@ -9286,11 +9317,12 @@ function buildColoredRouteSegments(r){
     const chunk = smoothed.slice(startIdx, idx+1);
     if(chunk.length>=2){
       const zone = classifyPaceRelative(split.paceMin, avgPace);
-      segs.push({latlngs:chunk.map(p=>[p.lat,p.lon]), color: zoneColorVar(zone)});
+      const curved = chunk.length>=3 ? catmullRomCurve(chunk) : chunk;
+      segs.push({latlngs:curved.map(p=>[p.lat,p.lon]), color: zoneColorVar(zone)});
     }
     startIdx = idx;
   });
-  return segs.length ? segs : [{latlngs:smoothed.map(p=>[p.lat,p.lon]), color: zoneColorVar(3)}];
+  return segs.length ? segs : [{latlngs:catmullRomCurve(smoothed).map(p=>[p.lat,p.lon]), color: zoneColorVar(3)}];
 }
 function renderRDRuta(panel){
   const {r, paceMin, cal} = rdCurrent;

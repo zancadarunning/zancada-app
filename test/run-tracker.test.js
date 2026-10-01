@@ -356,6 +356,31 @@ test('smoothRouteForDisplay: reportado por el usuario como "trazado pixelado" --
   assert.ok(Math.abs(smoothed[0].lat - 10) < 0.0001, 'el inicio de la calle derecha no debería moverse por un ruido lejano');
 });
 
+test('catmullRomCurve: con menos de 3 puntos no hay nada que curvar, devuelve tal cual', () => {
+  const app = loadApp();
+  const points = [{lat:0,lon:0},{lat:1,lon:1}];
+  assert.equal(app.catmullRomCurve(points), points);
+});
+
+test('catmullRomCurve: pedido por el usuario ("que se vea como los de Strava") -- pasa EXACTO por cada punto real e inserta puntos intermedios entre cada par', () => {
+  // La curva tiene que pasar por los puntos reales tal cual (a diferencia de una Bézier,
+  // que solo se acerca) -- si no, el trazado se "despegaría" de donde el GPS dijo que
+  // estuvo el corredor, mintiendo el recorrido real para verse más lindo.
+  const app = loadApp();
+  const points = [{lat:0,lon:0},{lat:1,lon:0},{lat:1,lon:1},{lat:0,lon:1}];
+  const curved = app.catmullRomCurve(points, 4);
+  // Con segmentsPerPoint=4: 4 puntos originales -> 3 tramos de 4 sub-segmentos cada uno
+  // (4 puntos insertados, incluido el real al principio) + el último punto real al final.
+  assert.equal(curved.length, (points.length-1)*4 + 1, `con 4 puntos y 4 segmentos por tramo debería dar ${(points.length-1)*4 + 1} puntos, dio ${curved.length}`);
+  // Los puntos reales originales tienen que seguir apareciendo, exactos, en la curva --
+  // en los índices 0, 4, 8, 12 (cada segmentsPerPoint pasos).
+  points.forEach((p, i) => {
+    const c = curved[i*4];
+    assert.equal(c.lat, p.lat, `el punto real #${i} debería seguir exacto en la curva`);
+    assert.equal(c.lon, p.lon, `el punto real #${i} debería seguir exacto en la curva`);
+  });
+});
+
 test('isImplausibleRunSpeed: descarta un salto de posición que implicaría correr a velocidad imposible', () => {
   // onPosition() solo filtraba fixes por accuracy (>50m se descarta entero) -- un fix con
   // accuracy aceptable (ej. 45m) pero un error de multipath típico entre edificios altos podía
