@@ -1436,8 +1436,6 @@
     display:flex; padding:9px 6px; flex-shrink:0;
     border-radius:26px; border:1px solid var(--overlay-hairline); box-shadow:var(--shadow-lg); z-index:20;}
   nav.tabbar button{flex:1; background:none; border:none; color:var(--mist); display:flex; flex-direction:column; align-items:center; gap:4px; font-size:10.5px; font-weight:600; cursor:pointer; padding:4px 2px; transition:transform .13s var(--ease-out), color .13s var(--ease-out);}
-  .nav-icon-wrap{position:relative; display:inline-flex;}
-  .nav-badge-dot{position:absolute; top:-2px; right:-4px; width:8px; height:8px; border-radius:50%; background:var(--hivis); border:1.5px solid var(--asphalt); display:none;}
   nav.tabbar button svg{width:22px; height:22px; padding:3px; box-sizing:content-box; border-radius:10px; transition:background .15s var(--ease-out);}
   nav.tabbar button.active{color:var(--hivis-text);}
   nav.tabbar button.active svg{background:var(--hivis-dim);}
@@ -1467,8 +1465,12 @@
   @media (prefers-reduced-motion:reduce){ nav.tabbar button.nav-btn-primary .nav-primary-circle{animation:none;} }
   /* Botón flotante del coach: al sacar Coach de la tabbar (para bajar de 6 a 5
      pestañas, menos saturada), la conversación con el coach pasa a un burbuja
-     flotante siempre a mano -- mismo destino (showView('coach')) y mismo badge
-     de no leídos que tenía el tab, solo que ya no compite por espacio abajo. */
+     flotante siempre a mano -- mismo destino (showView('coach')) que tenía el tab,
+     solo que ya no compite por espacio abajo. El aviso de "mensaje sin leer" que
+     tenía el tab (un puntito chico) se reemplazó del todo por la burbuja de 3
+     puntitos de más abajo (.coach-fab-thinking) -- reportado por el usuario que el
+     puntito, al vivir pegado arriba del personaje, se veía como un elemento suelto
+     de más; la burbuja sola ya cumple el mismo aviso. */
   .coach-fab-wrap{position:fixed; left:0; right:0; bottom:calc(104px + var(--safe-bottom)); max-width:480px; margin:0 auto; pointer-events:none; z-index:21;}
   /* Personaje propio del coach (ver initMascotEyes/setMascotExpression en app.js) -- un
      círculo lima simple (mismo espíritu que un blob con ojitos, género genérico de mascota,
@@ -1488,7 +1490,6 @@
   @keyframes mascotPop{0%{transform:scale(1);} 35%{transform:scale(1.16);} 65%{transform:scale(.95);} 100%{transform:scale(1);}}
   .coach-fab.pop{animation:mascotPop .5s ease-out;}
   .coach-fab svg{width:74px; height:74px; filter:drop-shadow(0 2px 3px rgba(0,0,0,.3)) drop-shadow(0 8px 14px rgba(0,0,0,.45));}
-  .coach-fab .nav-badge-dot{top:2px; right:8px; background:var(--ink); border-color:var(--hivis);}
   /* Burbuja con 3 puntitos flotando arriba del personaje -- doble uso, nunca simultáneo
      (ver updateMascotBubble en app.js): mientras sendChat() espera la respuesta de
      /api/chat ("el coach está escribiendo"), O mientras haya un mensaje suyo sin leer
@@ -1513,9 +1514,15 @@
     display:flex; justify-content:center; opacity:0; transform:scale(.9); pointer-events:none;
     transition:opacity .15s ease, transform .15s ease;}
   .coach-fab-thinking.show{opacity:1; transform:scale(1);}
-  .coach-fab-thinking-bubble{position:relative; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4);
-    border-radius:14px; padding:9px 13px; display:flex; align-items:center; gap:3px; box-shadow:0 1px 3px rgba(0,0,0,.35);}
-  .coach-fab-thinking-bubble span{width:6px; height:6px; border-radius:50%; background:var(--mist); animation:blink 1s infinite;}
+  /* Borde lima + sombra con glow (no el borde/sombra genéricos de tarjeta de antes) --
+     reportado por el usuario: la burbuja "se camuflaba" flotando sobre fondos oscuros
+     variables (el FAB vive sobre cualquier vista, no sobre una tarjeta fija de por medio).
+     El acento lima la liga visualmente al personaje (también lima) y la hace leer como
+     "algo pasa acá" de un vistazo, en vez de un rectángulo gris más perdido en el fondo. */
+  .coach-fab-thinking-bubble{position:relative; background:var(--asphalt-2); border:1.5px solid var(--hivis);
+    border-radius:14px; padding:9px 13px; display:flex; align-items:center; gap:3px;
+    box-shadow:0 2px 10px rgba(214,255,63,.22), 0 1px 3px rgba(0,0,0,.4);}
+  .coach-fab-thinking-bubble span{width:6px; height:6px; border-radius:50%; background:var(--hivis-text); animation:blink 1s infinite;}
   .coach-fab-thinking-bubble span:nth-child(2){animation-delay:.15s;}
   .coach-fab-thinking-bubble span:nth-child(3){animation-delay:.3s;}
   .coach-fab-thinking-bubble::after{content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%);
@@ -2717,7 +2724,12 @@
         <p class="muted" id="perfil-days-summary"></p>
       </div>
       <div class="card settile" role="button" tabindex="0" onclick="openCrossTrainingOverlay()">
-        <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M2.5 12h19M12 2.5c2.5 2.7 4 6.2 4 9.5s-1.5 6.8-4 9.5c-2.5-2.7-4-6.2-4-9.5s1.5-6.8 4-9.5z"/></svg></span>
+        <!-- Antes usaba el mismo globo que "Idioma" más abajo (literalmente el mismo ícono
+             para dos filas distintas) -- reportado por el usuario. Una bici es el cross-
+             training más común entre corredores (ciclismo está primero en SPORTS_LIST), así
+             que es un ícono bien reconocible para "otros deportes" sin inventar un glifo
+             genérico nuevo. -->
+        <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M5.5 17.5 10.5 8.5 15.5 8.5M10.5 8.5 13.5 17.5M13.5 17.5 18.5 17.5M13.5 17.5 9 14.5"/><path d="M9 5.5h2.5l1.5 3"/></svg></span>
         <h3 data-i18n="perfil_crosstraining_title"></h3>
         <p class="muted" id="perfil-crosstraining-summary"></p>
       </div>
@@ -2727,7 +2739,14 @@
         <p class="muted" id="perfil-zones-summary"></p>
       </div>
       <div class="card settile" role="button" tabindex="0" onclick="openPainOverlay()">
-        <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.5-9.5-9C.5 8 2 4.5 5.5 4.5 8 4.5 9.5 6 12 8.5 14.5 6 16 4.5 18.5 4.5 22 4.5 23.5 8 21.5 12c-2.5 4.5-9.5 9-9.5 9z"/><path d="M6 12.5h2.5l1.5-3 2 5 1.5-2.5H16"/></svg></span>
+        <!-- Corazón + pulso a mano, redibujado (2026-09-30): la versión anterior no era
+             simétrica (el lado derecho usaba curvas distintas al izquierdo, nunca reflejadas
+             a propósito) y se veía chueco/desprolijo incluso a los 16px reales que mide acá
+             (ver .settile .icon-sq svg) -- reportado por el usuario. Este path es a propósito
+             dos mitades matemáticamente espejadas sobre x=12 (ambos lóbulos y la bajada hasta
+             la punta inferior), con la línea de pulso centrada igual (sube y baja la misma
+             distancia desde la base). -->
+        <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21C9 18.7 2.5 14 2.5 8.8 2.5 5.7 5 3.3 8 3.3 10 3.3 11.3 4.4 12 6.3 12.7 4.4 14 3.3 16 3.3 19 3.3 21.5 5.7 21.5 8.8 21.5 14 15 18.7 12 21Z"/><path d="M7 12.5H9.5L11 9.5 13 15.5 14.5 12.5H17"/></svg></span>
         <h3 data-i18n="pain_list_title"></h3>
         <p class="muted" id="perfil-pain-summary"></p>
       </div>
@@ -2840,7 +2859,7 @@
   </nav>
   <div class="coach-fab-wrap" id="coach-fab-wrap" style="display:none;">
     <div class="coach-fab-thinking" id="coach-fab-thinking" aria-hidden="true"><div class="coach-fab-thinking-bubble"><span></span><span></span><span></span></div></div>
-    <button class="coach-fab" onclick="openCoachWithWink()" data-i18n-aria="nav_coach"><svg viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="mascotSheen" cx="36%" cy="28%" r="60%"><stop offset="0%" stop-color="#fff" stop-opacity=".5"/><stop offset="55%" stop-color="#fff" stop-opacity=".1"/><stop offset="100%" stop-color="#fff" stop-opacity="0"/></radialGradient><radialGradient id="mascotShade" cx="50%" cy="82%" r="55%"><stop offset="0%" stop-color="#000" stop-opacity=".2"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs><circle id="mascot-body" class="mascot-body" cx="32" cy="32" r="28" fill="var(--hivis)"/><circle class="mascot-shade" cx="32" cy="32" r="28" fill="url(#mascotShade)"/><circle class="mascot-sheen" cx="32" cy="32" r="28" fill="url(#mascotSheen)"/><g id="mascot-eyes" class="mascot-eyes"><path id="mascot-eye-l" class="mascot-eye" d="M21.5 25.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z"/><path id="mascot-eye-r" class="mascot-eye" d="M37.5 25.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z"/></g></svg><span class="nav-badge-dot" id="chat-tab-badge"></span></button>
+    <button class="coach-fab" onclick="openCoachWithWink()" data-i18n-aria="nav_coach"><svg viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="mascotSheen" cx="36%" cy="28%" r="60%"><stop offset="0%" stop-color="#fff" stop-opacity=".5"/><stop offset="55%" stop-color="#fff" stop-opacity=".1"/><stop offset="100%" stop-color="#fff" stop-opacity="0"/></radialGradient><radialGradient id="mascotShade" cx="50%" cy="82%" r="55%"><stop offset="0%" stop-color="#000" stop-opacity=".2"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs><circle id="mascot-body" class="mascot-body" cx="32" cy="32" r="28" fill="var(--hivis)"/><circle class="mascot-shade" cx="32" cy="32" r="28" fill="url(#mascotShade)"/><circle class="mascot-sheen" cx="32" cy="32" r="28" fill="url(#mascotSheen)"/><g id="mascot-eyes" class="mascot-eyes"><path id="mascot-eye-l" class="mascot-eye" d="M21.5 25.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z"/><path id="mascot-eye-r" class="mascot-eye" d="M37.5 25.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z"/></g></svg></button>
   </div>
 </div>
 <!-- Spacer invisible que garantiza SIEMPRE unos pocos px de overflow real en el

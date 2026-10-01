@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-01T00:29:55Z';
+const APP_VERSION = '2026-10-01T00:46:54Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10663,8 +10663,11 @@ function renderChat(){
   scrollChatToBottom();
   updateChatBadge();
 }
-// Puntito en la pestaña del coach cuando hay un mensaje suyo (proactivo o de ajuste
-// automático) que todavía no viste, para no depender de entrar "porque sí" a mirar.
+// Aviso de que hay un mensaje del coach (proactivo o de ajuste automático) que todavía no
+// viste, para no depender de entrar "porque sí" a mirar -- antes era un puntito chico sobre
+// el personaje (nav-badge-dot/chat-tab-badge), reemplazado del todo por la burbuja de 3
+// puntitos (ver updateMascotBubble) después de que el usuario reportara que el puntito se
+// veía como un elemento suelto de más.
 let mascotBadgeWasVisible = false;
 // true mientras sendChat() está esperando la respuesta de /api/chat -- ver los dos toggles
 // en sendChat() (el que la prende apenas manda el mensaje, el que la apaga al terminar,
@@ -10674,11 +10677,8 @@ let mascotBadgeWasVisible = false;
 // una respuesta que ya se está esperando.
 let mascotThinking = false;
 function updateChatBadge(){
-  const badge = document.getElementById('chat-tab-badge');
-  if(!badge) return;
   const lastSeen = state.lastSeenChatTs || 0;
   const hasUnread = (state.chat||[]).some(m => m.role==='coach' && m.ts && m.ts > lastSeen);
-  badge.style.display = hasUnread ? 'block' : 'none';
   // "pop" del personaje solo en la TRANSICIÓN de sin-leer a con-leer -- updateChatBadge()
   // se llama en cada renderChat() (bastante seguido mientras se habla con el coach), así
   // que sin este chequeo el botón pegaría un salto en cada re-render mientras el mensaje
