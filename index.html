@@ -1219,7 +1219,13 @@
   .chat-send{background:var(--hivis); color:var(--ink); border:none; width:44px; height:44px; border-radius:50%; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .12s ease, background .15s ease;}
   .chat-send:active{transform:scale(.92);}
   .chat-send[data-busy="1"]{background:var(--asphalt-4); color:var(--chalk);}
-  .chat-chips{display:flex; flex-wrap:wrap; gap:8px; margin:2px 0 16px;}
+  /* margin-bottom chico (no 16px, como antes) -- el chat-chips es siempre lo ÚLTIMO dentro
+     de #chatLog, así que esos 16px se sumaban a los 10px de padding-bottom de #chatLog MÁS
+     los 10px de padding-top de .chat-input-bar (36px en total) -- un hueco bastante más
+     grande que el que separa dos mensajes comunes entre sí (solo el margin-bottom:10px de
+     .msg). Reportado por el usuario: los chips ("Bajame el volumen", "Me duele algo") se
+     veían "muy separados" de la barra de escribir. */
+  .chat-chips{display:flex; flex-wrap:wrap; gap:8px; margin:2px 0;}
   .chat-chip{background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); font-size:12.5px; font-weight:600; padding:8px 13px; border-radius:999px; cursor:pointer; transition:border-color .12s ease, color .12s ease, transform .1s ease;}
   .chat-chip:active{transform:scale(.95); border-color:var(--hivis); color:var(--hivis-text);}
   .msg .msg-list{margin:6px 0; padding-left:18px;}
