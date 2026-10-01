@@ -1114,6 +1114,11 @@
   .run-rec-row{text-align:center; margin:4px 0 2px;}
   #runActive.is-paused .track-active-group{display:none;}
   #runActive:not(.is-paused) .track-paused-group{display:none;}
+  /* Con el mapa y la tarjeta escondidos mientras se corre, los stats+número+botón quedaban
+     pegados arriba de todo con una pantalla vacía enorme debajo -- el usuario pidió bajarlos
+     un poco (margin-top acá) y separar más el círculo de pausar del número de arriba (su
+     propio margin-top, ver .track-pause-circle más abajo). */
+  .track-active-group{margin-top:56px;}
   /* Tiempo y ritmo -- antes el tiempo era el número gigante de la pantalla; acá bajan a stats
      chicas arriba, el mismo rol que cumplen en la referencia (Ritmo/PPM/Tiempo chicos arriba
      del número de distancia). Sin tarjeta/fondo propio -- en la referencia estos números
@@ -1134,7 +1139,7 @@
      los dos círculos de abajo mientras está pausado (junto al de terminar). Fondo lima +
      ícono ink siempre (el mismo par que .btn-primary) -- no necesita invertirse entre estados
      porque ninguno de los dos fondos (asphalt-3/asphalt) es brillante. */
-  .track-pause-circle{display:flex; align-items:center; justify-content:center; width:72px; height:72px; border-radius:50%; margin:14px auto; background:var(--hivis); color:var(--ink);
+  .track-pause-circle{display:flex; align-items:center; justify-content:center; width:72px; height:72px; border-radius:50%; margin:30px auto 14px; background:var(--hivis); color:var(--ink);
     border:none; cursor:pointer; box-shadow:0 3px 8px var(--hivis-glow); transition:transform .12s ease, box-shadow .12s ease;}
   .track-pause-circle svg{width:28px; height:28px;}
   .track-pause-circle:active{transform:scale(.94);}
