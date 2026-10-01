@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-01T14:43:33Z';
+const APP_VERSION = '2026-10-01T15:12:33Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -169,7 +169,6 @@ function applyStaticTranslations(){
   document.querySelectorAll('[data-i18n-aria]').forEach(el=>{ el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
   document.querySelectorAll('a[href^="/privacy.html"]').forEach(el=>{ el.href = apiUrl('/privacy.html?lang=' + lang); });
   document.querySelectorAll('a[href^="/terms.html"]').forEach(el=>{ el.href = apiUrl('/terms.html?lang=' + lang); });
-  updatePauseBtnIcon();
   [...document.getElementById('perfil-lang-choice').children].forEach(c=>c.classList.toggle('active', c.dataset.v===lang));
   const langSummaryEl = document.getElementById('perfil-lang-summary');
   if(langSummaryEl) langSummaryEl.textContent = LANG_DISPLAY[lang] || lang;
@@ -6855,13 +6854,28 @@ async function doPullRefresh(){
   if(indicator) setTimeout(()=>{ indicator.style.display='none'; }, 500);
   setTimeout(checkPendingRating, 400);
 }
+// El botón flotante del coach se esconde en dos casos: parado sobre su propia vista (v==='coach',
+// taparía el chat) o en medio de un ejercicio (pedido del usuario: "cuando estemos en un
+// ejercicio que no se vea el personaje del chat") -- NO mientras está en runIdle (la pantalla
+// de "Comenzar a correr" antes de arrancar), solo mientras #runActive ya está en pantalla
+// (corriendo o pausado, isTrackingActive() no importa acá porque las dos cuentan como "estar
+// en un ejercicio"). Se llama desde showView() (cambiar de pestaña) y también desde
+// actuallyStartRun()/showRunSummaryUI() directamente, porque arrancar o terminar una carrera
+// no siempre pasa por showView() -- el corredor se queda en la misma pestaña "Correr" todo el
+// tiempo en el caso normal.
+function updateCoachFabVisibility(){
+  // view-coach.active (no un .nav-btn) porque el chat se abre también desde el FAB mismo
+  // (openCoachWithWink()) y otros atajos sin pasar por un tab propio en la tabbar -- esta
+  // vista es la única fuente de verdad confiable sobre si estamos ahí en este momento.
+  const inCoach = document.getElementById('view-coach').classList.contains('active');
+  const inExercise = document.getElementById('runActive').style.display === 'block';
+  document.getElementById('coach-fab-wrap').style.display = (inCoach || inExercise) ? 'none' : 'block';
+}
 async function showView(v){
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   document.getElementById('view-'+v).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.view===v));
-  // El botón flotante del coach abre esa misma vista -- de pie sobre ella no aporta nada
-  // (taparía el chat), así que se esconde mientras ya estamos adentro.
-  document.getElementById('coach-fab-wrap').style.display = (v==='coach') ? 'none' : 'block';
+  updateCoachFabVisibility();
   document.getElementById('chatBar').classList.toggle('active', v==='coach');
   (document.scrollingElement || document.documentElement).scrollTop = 0;
   // syncAppMinHeight() acá también: #view-coach es la única vista sin contenido real
@@ -7132,18 +7146,6 @@ function isImplausibleRunSpeed(speedMps){
   return speedMps!=null && speedMps > MAX_PLAUSIBLE_SPEED_MPS;
 }
 function isTrackingActive(){ return tracker.running && !tracker.autoPaused; }
-// Ícono (no texto) del círculo grande de pausar/reanudar -- ver .track-pause-circle en
-// index.html. Un solo lugar para los 3 puntos que antes pisaban el texto a mano
-// (applyStaticTranslations, actuallyStartRun, togglePause) -- el aria-label explícito pisa
-// al genérico que ya le puso data-i18n-aria (ver applyStaticTranslations), porque ese no
-// sabe si en este momento corresponde "Pausar" o "Reanudar".
-function updatePauseBtnIcon(){
-  const btn = document.getElementById('pauseBtn');
-  if(!btn) return;
-  const running = tracker && tracker.running;
-  btn.innerHTML = running ? ICONS.pause : ICONS.play;
-  btn.setAttribute('aria-label', running ? t('run_pause') : t('run_resume'));
-}
 function updateRecordingLabel(){
   const dot = document.getElementById('run-rec-dot');
   const label = document.getElementById('run-recording-label');
@@ -7910,15 +7912,54 @@ function startRun(){
     // se cerró sola a mitad de un entrenamiento) -> ofrecemos recuperarla en vez
     // de arrancar una nueva y perder lo ya corrido
     showConfirm(t('run_recover_text'), {confirmText:t('run_recover_confirm'), cancelText:t('run_recover_discard')}).then(resume=>{
-      if(!resume) clearRunProgress();
-      actuallyStartRun(resume ? saved : null);
+      // La cuenta regresiva (ver startRunWithCountdown() más abajo) es solo para un arranque
+      // GENUINAMENTE nuevo -- recuperar una carrera ya en curso no es "empezar", es seguir
+      // donde quedó, así que esa rama sigue llamando a actuallyStartRun() directo. Si el
+      // corredor elige descartar el progreso guardado, ahí sí es un arranque nuevo de verdad.
+      if(resume){ actuallyStartRun(saved); } else { clearRunProgress(); startRunWithCountdown(); }
     });
     return;
   }
-  actuallyStartRun(null);
+  startRunWithCountdown();
 }
 function restoreTrackerFromSaved(saved){
   tracker = {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:saved.elapsedSec||0, running:false, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt, autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null};
+}
+// Cuenta regresiva de 3 segundos antes de arrancar a correr (pedido del usuario: "crea una
+// cinemática de 3 segundos cuando comenzamos a correr") -- ver #runCountdown en el CSS/HTML.
+// countdownActive evita que un doble-tap en "Comenzar" (la cuenta regresiva deja #runIdle
+// escondido, pero por las dudas) apile dos secuencias a la vez. El chequeo de
+// view-correr.active al final es defensivo: si el corredor cambia de pestaña a mitad de la
+// cuenta regresiva, no arrancamos una carrera de verdad (GPS + timer) en segundo plano sin que
+// la vea -- en vez de eso, dejamos #runIdle como estaba.
+let countdownActive = false;
+function startRunWithCountdown(){
+  if(countdownActive) return;
+  countdownActive = true;
+  document.getElementById('runIdle').style.display = 'none';
+  const overlay = document.getElementById('runCountdown');
+  const numEl = document.getElementById('countdown-num');
+  overlay.style.display = 'flex';
+  const steps = ['3','2','1', t('run_countdown_go')];
+  let i = 0;
+  function showStep(){
+    numEl.textContent = steps[i];
+    numEl.classList.toggle('go', i === steps.length - 1);
+    numEl.classList.remove('pop'); void numEl.offsetWidth; numEl.classList.add('pop');
+    i++;
+    if(i < steps.length){ setTimeout(showStep, 800); return; }
+    setTimeout(()=>{
+      overlay.style.display = 'none';
+      numEl.classList.remove('go');
+      countdownActive = false;
+      if(document.getElementById('view-correr').classList.contains('active')){
+        actuallyStartRun(null);
+      } else {
+        document.getElementById('runIdle').style.display = '';
+      }
+    }, 600);
+  }
+  showStep();
 }
 function actuallyStartRun(saved){
   // Ojo con elapsedSec al recuperar una carrera guardada: ANTES se recalculaba como
@@ -7954,10 +7995,10 @@ function actuallyStartRun(saved){
   document.getElementById('runIdle').style.display='none';
   document.getElementById('runSummary').style.display='none';
   document.getElementById('runActive').style.display='block';
-  // El botón refleja el estado real restaurado (ver comentario de arriba) -- antes quedaba
-  // fijo en "Pausar" sin importar si la carrera se había guardado pausada.
-  updatePauseBtnIcon();
   updateRecordingLabel();
+  // Mientras se corre (o está pausado) el personaje del chat no se ve -- pedido del usuario,
+  // ver updateCoachFabVisibility().
+  updateCoachFabVisibility();
   initLiveMap();
   updateLiveStats();
   setupWorkoutGuide();
@@ -8061,14 +8102,21 @@ function onPosError(){ document.getElementById('geo-warning').style.display='blo
 function updateRunUnitLabels(){
   const distLbl = distUnit().toUpperCase();
   const paceLbl = `${t('run_pace_word')} /${distUnit()}`;
-  ['track-dist-label','sum-dist-label'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent = distLbl; });
-  ['track-pace-label','sum-pace-label'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent = paceLbl; });
+  ['track-dist-label','track-pdist-label','sum-dist-label'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent = distLbl; });
+  ['track-pace-label','track-ppace-label','sum-pace-label'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent = paceLbl; });
 }
 function updateLiveStats(){
   document.getElementById('track-timer').textContent = fmtTime(tracker.elapsedSec);
   document.getElementById('track-dist').textContent = fmtDist(tracker.distanceKm);
   const paceMin = tracker.distanceKm>0.02 ? (tracker.elapsedSec/60)/tracker.distanceKm : 0;
   document.getElementById('track-pace').textContent = fmtPace(paceMin);
+  // Misma info que arriba, para la grilla de .track-paused-group (ver index.html) -- se
+  // actualiza siempre junto con los stats chicos de arriba, no solo mientras está pausado,
+  // así ya está al día apenas is-paused la muestra en vez de esperar el próximo tick.
+  document.getElementById('track-ptime').textContent = fmtTime(tracker.elapsedSec);
+  document.getElementById('track-pdist').textContent = fmtDist(tracker.distanceKm);
+  document.getElementById('track-ppace').textContent = fmtPace(paceMin);
+  document.getElementById('track-pcal').textContent = Math.round((state.profile.weight||70)*tracker.distanceKm*1.036);
   updateRunUnitLabels();
 }
 function togglePause(){
@@ -8080,7 +8128,6 @@ function togglePause(){
     tracker.autoPaused = false;
     tracker.lastMoveMs = Date.now();
   }
-  updatePauseBtnIcon();
   updateRecordingLabel();
   // Guardamos el progreso justo al pausar/reanudar a mano -- si la app se cierra
   // segundos después de tocar "Pausar" (llamada, se apaga el teléfono, etc.), el
@@ -8110,6 +8157,7 @@ function showRunSummaryUI(){
   document.getElementById('runIdle').style.display='none';
   document.getElementById('runActive').style.display='none';
   document.getElementById('runSummary').style.display='block';
+  updateCoachFabVisibility();
   const paceMin = tracker.distanceKm>0.02 ? (tracker.elapsedSec/60)/tracker.distanceKm : 0;
   document.getElementById('sum-dist').textContent = fmtDist(tracker.distanceKm);
   document.getElementById('sum-time').textContent = fmtTime(tracker.elapsedSec);
