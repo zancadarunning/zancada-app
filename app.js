@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-01T04:52:33Z';
+const APP_VERSION = '2026-10-01T13:58:57Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7547,20 +7547,31 @@ const MAPBOX_ATTRIBUTION = '&copy; <a href="https://www.mapbox.com/about/maps/" 
 // cada lado) -- radius chico (2) a propósito, para parejar el ruido fino sin "cortar camino"
 // en una esquina real de 90°. El primer y último punto quedan SIN tocar, así el trazado
 // sigue arrancando y terminando exactamente donde arrancó/terminó la carrera de verdad.
-function smoothRouteForDisplay(points, radius){
+// passes=2 (antes un solo pase): pedido por el usuario, "afiná un poco más" el trazado.
+// En vez de agrandar el radius de un pase único (eso SÍ corta camino de verdad en una
+// esquina de 90°, porque promedia simétrico contra puntos más lejanos del otro lado del
+// giro), repetimos el mismo pase chico (radius=2) dos veces -- un desenfoque de caja
+// aplicado varias veces se acerca a un desenfoque gaussiano (más suave, sin el "escalón"
+// de un box blur de radius grande) conservando mejor la forma real de los giros.
+function smoothRouteForDisplay(points, radius, passes){
   radius = radius || 2;
+  passes = passes || 2;
   if(points.length < 5) return points;
-  const out = new Array(points.length);
-  for(let i=0;i<points.length;i++){
-    let sumLat=0, sumLon=0, n=0;
-    for(let j=Math.max(0,i-radius); j<=Math.min(points.length-1,i+radius); j++){
-      sumLat += points[j].lat; sumLon += points[j].lon; n++;
+  let current = points;
+  for(let p=0; p<passes; p++){
+    const out = new Array(current.length);
+    for(let i=0;i<current.length;i++){
+      let sumLat=0, sumLon=0, n=0;
+      for(let j=Math.max(0,i-radius); j<=Math.min(current.length-1,i+radius); j++){
+        sumLat += current[j].lat; sumLon += current[j].lon; n++;
+      }
+      out[i] = {lat: sumLat/n, lon: sumLon/n};
     }
-    out[i] = {lat: sumLat/n, lon: sumLon/n};
+    current = out;
   }
-  out[0] = {lat: points[0].lat, lon: points[0].lon};
-  out[out.length-1] = {lat: points[points.length-1].lat, lon: points[points.length-1].lon};
-  return out;
+  current[0] = {lat: points[0].lat, lon: points[0].lon};
+  current[current.length-1] = {lat: points[points.length-1].lat, lon: points[points.length-1].lon};
+  return current;
 }
 function encodePolylinePoints(points){
   let output = '', prevLat = 0, prevLng = 0;
