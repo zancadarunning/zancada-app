@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-01T20:12:25Z';
+const APP_VERSION = '2026-10-01T20:30:33Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -243,7 +243,9 @@ const ICONS = {
   stopwatch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v2"/></svg>',
   heart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-10-9.3C.4 8 1.8 4.5 5 3.5c2-.6 4 .2 5.2 2C11.4 3.7 13.4 2.9 15.4 3.5c3.2 1 4.6 4.5 3 7.7-2.5 4.7-10 9.3-10 9.3z"/></svg>',
   heartFilled: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 20.5s-7.5-4.6-10-9.3C.4 8 1.8 4.5 5 3.5c2-.6 4 .2 5.2 2C11.4 3.7 13.4 2.9 15.4 3.5c3.2 1 4.6 4.5 3 7.7-2.5 4.7-10 9.3-10 9.3z"/></svg>',
-  share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>'
+  share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>',
+  speaker: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a9 9 0 0 1 0 12"/></svg>',
+  speakerMute: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><line x1="16" y1="9" x2="21" y2="14"/><line x1="21" y1="9" x2="16" y2="14"/></svg>'
 };
 
 /* ================= FEEDBACK: toast / confirm / haptics ================= */
@@ -7186,6 +7188,25 @@ function isImplausibleRunSpeed(speedMps){
   return speedMps!=null && speedMps > MAX_PLAUSIBLE_SPEED_MPS;
 }
 function isTrackingActive(){ return tracker.running && !tracker.autoPaused; }
+// Mutear sin salir de la pantalla de Correr -- pedido del usuario ("agrega un boton de
+// mutear por si la persona no quiere escuchar"). Comparte state.voiceEnabled con el toggle
+// de Perfil > Voz (ver el listener de #voice-toggle más arriba en este archivo) en vez de
+// tener su propio flag aparte -- cambiarlo acá también deja a Perfil al día, y viceversa.
+function toggleRunVoice(){
+  state.voiceEnabled = state.voiceEnabled===false;
+  persist();
+  updateRunMuteBtn();
+  const voiceToggle = document.getElementById('voice-toggle');
+  if(voiceToggle) [...voiceToggle.children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.voiceEnabled===false ? 'off' : 'on')));
+}
+function updateRunMuteBtn(){
+  const btn = document.getElementById('run-mute-btn');
+  if(!btn) return;
+  const muted = state.voiceEnabled===false;
+  btn.innerHTML = muted ? ICONS.speakerMute : ICONS.speaker;
+  btn.setAttribute('aria-label', t(muted ? 'run_unmute' : 'run_mute'));
+  btn.classList.toggle('muted', muted);
+}
 function updateRecordingLabel(){
   const dot = document.getElementById('run-rec-dot');
   const label = document.getElementById('run-recording-label');
@@ -7453,19 +7474,32 @@ function beginWorkoutReps(){
   announceWorkoutPhase();
   renderWorkoutGuide();
 }
+// Versión HABLADA de una duración -- distinta de fmtCountdown() (esa da "1:30" para la
+// pantalla, que leído en voz alta por un sintetizador suena como "uno dos puntos tres cero"
+// en vez de "un minuto treinta"). Pedido del usuario: que el aviso de voz diga el objetivo
+// real de la fase ("2da pasada, 200 metros" o el tiempo que corresponda), no solo el número
+// de repetición.
+function fmtDurationSpoken(sec){
+  sec = Math.round(sec);
+  const m = Math.floor(sec/60), s = sec%60;
+  if(m===0) return t('voice_duration_sec', {sec: s});
+  if(s===0) return t('voice_duration_min', {min: m});
+  return t('voice_duration_min_sec', {min: m, sec: s});
+}
 function announceWorkoutPhase(){
   const w = tracker.workout; if(!w) return;
   const s = w.structure;
+  // El objetivo real de ESTA fase (metros o tiempo) -- mismo cálculo que ya usa el cartel en
+  // pantalla (getWorkoutPhaseTarget(), ver más abajo), así el número que se escucha nunca
+  // puede ser distinto del que se ve ("Faltan Xm"/el target grande de la tarjeta).
+  const target = getWorkoutPhaseTarget(w);
+  const targetSpoken = target.sec!=null ? fmtDurationSpoken(target.sec) : t('voice_target_meters', {meters: target.meters});
   if(w.phase==='effort'){
     // "Repetición" (genérico) sirve igual de bien para series y fartlek -- solo cuestas
     // tiene su propia palabra ("Subida").
-    speak(s.typeKey==='hills' ? t('voice_hill_start',{cur:w.currentRep, total:s.reps}) : t('voice_rep_start',{cur:w.currentRep, total:s.reps}));
+    speak(s.typeKey==='hills' ? t('voice_hill_start',{cur:w.currentRep, total:s.reps, target:targetSpoken}) : t('voice_rep_start',{cur:w.currentRep, total:s.reps, target:targetSpoken}));
   } else if(w.phase==='recovery'){
-    if(s.typeKey==='hills') speak(t('voice_hill_recovery',{cur:w.currentRep}));
-    // El fartlek redondea los minutos de recuperación para la voz (pueden ser 1.5) -- decir
-    // "1.5 minutos" en voz alta suena raro; el texto escrito de la sesión sí muestra el
-    // valor preciso (fmtDurationShort).
-    else speak(t('voice_rep_recovery',{cur:w.currentRep, min: s.typeKey==='fartlek' ? Math.round(s.restMin) : s.recoveryMin}));
+    speak(s.typeKey==='hills' ? t('voice_hill_recovery',{cur:w.currentRep, target:targetSpoken}) : t('voice_rep_recovery',{cur:w.currentRep, target:targetSpoken}));
   } else if(w.phase==='done'){
     speak(t('voice_workout_done'));
   }
@@ -8150,6 +8184,7 @@ function actuallyStartRun(saved){
   document.getElementById('runSummary').style.display='none';
   document.getElementById('runActive').style.display='block';
   updateRecordingLabel();
+  updateRunMuteBtn();
   // Mientras se corre (o está pausado) el personaje del chat no se ve -- pedido del usuario,
   // ver updateCoachFabVisibility().
   updateCoachFabVisibility();

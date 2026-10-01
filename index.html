@@ -1146,6 +1146,13 @@
      isTrackingActive()/updateRecordingLabel() en app.js siguen siendo el único lugar que
      decide is-paused -- acá solo quedan los selectores que muestran/esconden cada grupo. */
   .run-rec-row{text-align:center; margin:4px 0 2px;}
+  /* Mutear sin salir de la pantalla -- ver el comentario largo junto a #run-mute-btn en el
+     HTML. vertical-align:middle para alinearlo con el texto de al lado en la misma línea,
+     no como un bloque aparte. */
+  .run-mute-btn{display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; margin-left:8px;
+    padding:0; border:none; background:none; color:var(--mist); cursor:pointer; vertical-align:middle;}
+  .run-mute-btn svg{width:15px; height:15px;}
+  .run-mute-btn.muted{color:var(--mist-dim);}
   #runActive.is-paused .track-active-group{display:none;}
   #runActive:not(.is-paused) .track-paused-group{display:none;}
   /* Con el mapa y la tarjeta escondidos mientras se corre, los stats+número+botón quedaban
@@ -2266,7 +2273,13 @@
            mapa ni tarjetas -- stats chicos arriba, número de distancia protagonista, un solo
            círculo de pausar. Pausado (.track-paused-group) cambia a mapa + grilla de 4 stats
            + dos círculos (terminar/reanudar), como pide la referencia de Nike. -->
-      <p class="run-rec-row"><span class="rec-dot" id="run-rec-dot"></span><span class="muted" id="run-recording-label" style="text-transform:uppercase; font-size:11px; letter-spacing:.07em;" data-i18n="run_recording"></span></p>
+      <!-- Mutear la voz sin salir de la pantalla de Correr -- antes el único control era el
+           toggle de Perfil > Voz, poco práctico a mitad de una carrera. Comparte state.
+           voiceEnabled con ese toggle (ver toggleRunVoice() en app.js) -- cambiarlo acá
+           también actualiza Perfil, y viceversa. innerHTML del ícono lo pone JS
+           (updateRunMuteBtn(), llamado al arrancar la carrera) porque el estado real
+           (silenciado o no) puede venir de una sesión anterior. -->
+      <p class="run-rec-row"><span class="rec-dot" id="run-rec-dot"></span><span class="muted" id="run-recording-label" style="text-transform:uppercase; font-size:11px; letter-spacing:.07em;" data-i18n="run_recording"></span><button class="run-mute-btn" id="run-mute-btn" onclick="toggleRunVoice()"></button></p>
 
       <div class="track-active-group">
         <div class="track-topstats">
