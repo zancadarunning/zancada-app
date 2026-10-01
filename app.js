@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-01T19:54:21Z';
+const APP_VERSION = '2026-10-01T20:12:25Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7291,19 +7291,24 @@ function readRunProgress(){
 let bestVoiceIndexCache = {};
 // Preferimos una voz de RED (localService:false) sobre las "embedded" (local, siempre
 // instaladas, pero notoriamente más robóticas) -- reportado por un usuario: "la voz es muy
-// robotica, hacela mas humana". Confirmado en un dispositivo real: con el índice de una voz
-// de red, el motor nativo pasa a pedir síntesis por server (es-us-x-esc-server) en vez de la
-// embedded de siempre, y si de verdad no hay red en ese momento (corriendo afuera, sin
-// señal), el motor mismo ya trae su propio fallback a la embedded -- no hace falta manejar
-// ese caso acá. Sin voz de red para el idioma exacto (no existe ninguna "es-AR" en ningún
-// Android visto, caen todas a es-ES/es-US), probamos el prefijo del idioma nomás, y como
-// último recurso cualquier voz instalada para ese idioma.
+// robotica, hacela mas humana". El motor de Google en Android instala VARIAS voces de red
+// en español, no una sola (confirmado en un dispositivo real: 7 distintas entre es-ES/es-US,
+// cada una con su propio timbre) -- se le hicieron escuchar las 7 al usuario una por una y
+// "es-us-x-esd-network" fue la que eligió como la más natural, así que esa es la preferida
+// de verdad cuando está disponible (no es solo "cualquier voz de red"). Si el dispositivo no
+// la tiene instalada (otro Android, otra versión), cae a cualquier voz de red del idioma
+// exacto, y si tampoco hay (no existe ninguna "es-AR" en ningún Android visto, caen todas a
+// es-ES/es-US) probamos el prefijo del idioma nomás, y como último recurso cualquier voz
+// instalada para ese idioma. Si de verdad no hay red en el momento de hablar (corriendo
+// afuera, sin señal), el motor nativo mismo ya trae su propio fallback a la voz embedded --
+// no hace falta manejar ese caso acá.
 async function getBestVoiceIndex(targetLang){
   if(targetLang in bestVoiceIndexCache) return bestVoiceIndexCache[targetLang];
   let idx = null;
   try{
     const {voices} = await window.Capacitor.Plugins.TextToSpeech.getSupportedVoices();
-    let found = voices.findIndex(v => v.lang===targetLang && v.localService===false);
+    let found = voices.findIndex(v => v.voiceURI==='es-us-x-esd-network');
+    if(found<0) found = voices.findIndex(v => v.lang===targetLang && v.localService===false);
     if(found<0) found = voices.findIndex(v => v.lang.slice(0,2)===targetLang.slice(0,2) && v.localService===false);
     if(found<0) found = voices.findIndex(v => v.lang===targetLang);
     idx = found>=0 ? found : null;
