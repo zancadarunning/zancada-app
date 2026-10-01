@@ -1096,53 +1096,41 @@
   @media (prefers-reduced-motion:reduce){ .confetti-piece{display:none;} }
   /* ---- Carrera en vivo, estilo Nike Run Club (pedido del usuario, con video de referencia)
      ----
-     Mientras se corre de VERDAD (ni pausado a mano ni auto-pausado por quietud -- ver
-     isTrackingActive()/updateRecordingLabel() en app.js, que le agrega/saca is-paused a este
-     mismo div) el fondo entero se pone lima sólido, el mismo par fill+texto que ya usa
-     .btn-primary en todo el sistema (hi-vis + --ink, nunca blanco). margin negativo cancela
-     el padding lateral de .view (20px, ver más arriba) para que el color llegue de borde a
-     borde de la columna de 480px -- mismo truco que .rd-map-full ya usa para sangrar su mapa.
-     is-paused vuelve al --asphalt de siempre: Zancada es dark-only por decisión ya tomada
-     (ver DESIGN.md -- "no reintroducir un tema claro, se sacó a pedido del usuario"), así que
-     "pausado" acá NUNCA se pone claro como en la referencia -- volver al carbón de base ya es,
-     puesto al lado del lima activo, el mismo contraste de estado que buscaba la referencia. */
-  #runActive{margin:0 -20px; padding:10px 20px 4px; background:var(--hivis); color:var(--ink); transition:background-color .35s ease, color .35s ease;}
-  #runActive.is-paused{background:var(--asphalt); color:var(--chalk);}
+     Primer intento usaba lima sólido de fondo mientras se corre -- el usuario lo rechazó
+     ("se ve horrible, nada contrasta, quita el verde y pone el gris"). Ahora el estado activo
+     sube un escalón en la escalera de grises ya existente (--asphalt-3, superficie "elevada")
+     y pausado baja al --asphalt de base -- mismo mecanismo de isTrackingActive()/
+     updateRecordingLabel() en app.js (agrega/saca is-paused a este div), pero sin invertir
+     texto a --ink: --chalk/--mist ya tienen buen contraste probado contra ambos grises, el
+     mismo par que usa el resto de la app. margin negativo cancela el padding lateral de .view
+     (20px) para que el color llegue de borde a borde -- mismo truco que .rd-map-full. */
+  #runActive{margin:0 -20px; padding:10px 20px 4px; background:var(--asphalt-3); transition:background-color .35s ease;}
+  #runActive.is-paused{background:var(--asphalt);}
   .run-rec-row{text-align:center; margin:4px 0 2px;}
-  #runActive:not(.is-paused) .run-rec-row .muted{color:rgba(18,20,21,.62);}
   /* Tiempo y ritmo -- antes el tiempo era el número gigante de la pantalla; acá bajan a stats
      chicas arriba, el mismo rol que cumplen en la referencia (Ritmo/PPM/Tiempo chicos arriba
      del número de distancia). Sin tarjeta/fondo propio -- en la referencia estos números
-     flotan directo sobre el color sólido, no adentro de una caja. */
+     flotan directo sobre el color sólido, no adentro de una caja. Ancho fijo e igual en las
+     dos columnas (antes "TIEMPO" de 8 dígitos vs "RITMO /KM" de 4 quedaban centradas como
+     par pero con pesos visuales distintos, leyendo como asimétrico -- el usuario lo notó). */
   .track-topstats{display:flex; justify-content:center; gap:34px; margin:6px 0 2px;}
-  .track-topstat{text-align:center;}
+  .track-topstat{text-align:center; width:108px;}
   .track-topstat .n{font-size:19px; font-weight:800;}
-  .track-topstat .l{font-size:10px; text-transform:uppercase; letter-spacing:.05em; margin-top:2px;}
-  #runActive:not(.is-paused) .track-topstat .l{color:rgba(18,20,21,.6);}
+  .track-topstat .l{font-size:10px; text-transform:uppercase; letter-spacing:.05em; margin-top:2px; color:var(--mist);}
   /* El número protagonista: distancia. clamp (no un tamaño fijo) para que una carrera de
      "12.47" no se desborde en un celular angosto de verdad igual que "0.00" -- ver el mismo
      criterio ya usado para .go-circle/otros elementos grandes de esta pantalla. */
   .track-hero{text-align:center; margin:4px 0 2px;}
   .track-hero-num{font-size:clamp(64px, 20vw, 96px); font-weight:800; line-height:.92; letter-spacing:-.01em;}
-  .track-hero-label{font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-top:2px;}
-  #runActive:not(.is-paused) .track-hero-label{color:rgba(18,20,21,.62);}
+  .track-hero-label{font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-top:2px; color:var(--mist);}
   /* El círculo de pausar/reanudar -- antes un botón de texto chico ("Pausar") perdido entre
-     otros dos; ahora la acción central de la pantalla, como en la referencia. Fondo
-     lima+ícono ink por default (el mismo par que .btn-primary, para que encaje bien en
-     is-paused, donde el fondo de la página vuelve a ser oscuro) -- se invierte más abajo
-     SOLO mientras la página misma ya es lima, para que el botón se siga notando encima. */
+     otros dos; ahora la acción central de la pantalla, como en la referencia. Fondo lima +
+     ícono ink siempre (el mismo par que .btn-primary) -- ya no necesita invertirse entre
+     estados porque ninguno de los dos fondos (asphalt-3/asphalt) es brillante. */
   .track-pause-circle{display:flex; align-items:center; justify-content:center; width:72px; height:72px; border-radius:50%; margin:14px auto; background:var(--hivis); color:var(--ink);
-    border:none; cursor:pointer; box-shadow:0 3px 8px var(--hivis-glow); transition:transform .12s ease, box-shadow .12s ease, background-color .3s ease, color .3s ease;}
+    border:none; cursor:pointer; box-shadow:0 3px 8px var(--hivis-glow); transition:transform .12s ease, box-shadow .12s ease;}
   .track-pause-circle svg{width:28px; height:28px;}
   .track-pause-circle:active{transform:scale(.94);}
-  #runActive:not(.is-paused) .track-pause-circle{background:var(--ink); color:var(--hivis); box-shadow:0 3px 10px rgba(18,20,21,.35);}
-  /* .btn-danger de siempre (ver más arriba en este archivo) usa un tinte ROJO translúcido --
-     mezclado con el lima sólido de acá atrás da un marrón/mostaza turbio, no un rojo limpio.
-     Mismo borde/texto rojo (la señal de "esto termina la carrera" se mantiene intacta), pero
-     el relleno pasa a un tinte oscuro neutro -- la misma lógica que ya usa la tarjeta de la
-     guía de entrenamiento (una superficie oscura se despega prolijo del lima de cualquier
-     color que tenga el texto encima). */
-  #runActive:not(.is-paused) .run-controls .btn-danger{background:rgba(18,20,21,.14);}
   .map-wrap{position:relative; isolation:isolate; height:260px; border-radius:var(--radius); overflow:hidden; margin-bottom:14px; border:1px solid var(--asphalt-4);
     background:linear-gradient(90deg, var(--asphalt-3) 25%, var(--asphalt-4) 37%, var(--asphalt-3) 63%); background-size:400% 100%; animation:skeletonShine 1.4s ease infinite;}
   #liveMap{height:100%; width:100%; background:var(--asphalt-3);}
