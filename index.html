@@ -1115,9 +1115,10 @@
   #runActive.is-paused .track-active-group{display:none;}
   #runActive:not(.is-paused) .track-paused-group{display:none;}
   /* Con el mapa y la tarjeta escondidos mientras se corre, los stats+número+botón quedaban
-     pegados arriba de todo con una pantalla vacía enorme debajo -- el usuario pidió bajarlos
-     un poco (margin-top acá) y separar más el círculo de pausar del número de arriba (su
-     propio margin-top, ver .track-pause-circle más abajo). */
+     pegados arriba de todo con una pantalla vacía enorme debajo -- el usuario pidió bajar los
+     números un poco (margin-top acá). El botón de pausar en sí NO se baja con margin -- ver
+     el comentario largo junto a .track-active-group .track-pause-circle más abajo, usa
+     position:fixed. */
   .track-active-group{margin-top:56px;}
   /* Tiempo y ritmo -- antes el tiempo era el número gigante de la pantalla; acá bajan a stats
      chicas arriba, el mismo rol que cumplen en la referencia (Ritmo/PPM/Tiempo chicos arriba
@@ -1127,8 +1128,8 @@
      par pero con pesos visuales distintos, leyendo como asimétrico -- el usuario lo notó). */
   .track-topstats{display:flex; justify-content:center; gap:34px; margin:6px 0 2px;}
   .track-topstat{text-align:center; width:108px;}
-  .track-topstat .n{font-size:19px; font-weight:800;}
-  .track-topstat .l{font-size:10px; text-transform:uppercase; letter-spacing:.05em; margin-top:2px; color:var(--mist);}
+  .track-topstat .n{font-size:27px; font-weight:800;}
+  .track-topstat .l{font-size:12.5px; text-transform:uppercase; letter-spacing:.05em; margin-top:3px; color:var(--mist);}
   /* El número protagonista: distancia. clamp (no un tamaño fijo) para que una carrera de
      "12.47" no se desborde en un celular angosto de verdad igual que "0.00" -- ver el mismo
      criterio ya usado para .go-circle/otros elementos grandes de esta pantalla. */
@@ -1147,10 +1148,20 @@
     border:none; cursor:pointer; box-shadow:0 3px 8px var(--hivis-glow); transition:transform .12s ease, box-shadow .12s ease;}
   .track-pause-circle svg{width:28px; height:28px;}
   .track-pause-circle:active{transform:scale(.94);}
-  /* Más grande y más abajo, pedido del usuario ("como el de nike") -- el botón único mientras
-     se corre es la acción central de toda la pantalla, tiene sentido que pese más que su
-     versión chica de al lado del botón de terminar. */
-  .track-active-group .track-pause-circle{width:100px; height:100px; margin:96px auto 14px;}
+  /* Más grande y pegado contra el borde de abajo, pedido del usuario ("como el de nike" / "casi
+     abajo del todo"). Se probaron dos formas de empujarlo al fondo con margin-top:auto
+     adentro de una columna flex (#runActive/.track-active-group estirados al 100% de la
+     vista) -- en la práctica el alto de #runActive nunca terminaba de resolver en 100% real
+     (el margin:auto no tenía espacio libre que absorber y el botón se quedaba pegado al
+     número de arriba, no al fondo). position:fixed es mucho más directo y es EXACTAMENTE el
+     mismo truco que ya usa .coach-fab-wrap más abajo para flotar sobre la tabbar: fixed +
+     left:0/right:0 + max-width:480px + margin:0 auto recorta el ancho a la columna de la app
+     aunque el viewport sea más ancho, bottom usa la misma --tabbar-h/--safe-bottom reales que
+     ya mide syncTabbarHeight() en app.js (no un número fijo adivinado para "dónde termina la
+     pantalla"). Sale del flujo normal -- no le hace falta nada de .track-active-group para
+     esto, solo necesita que #runActive (su ancestro) esté visible. */
+  .track-active-group .track-pause-circle{position:fixed; left:0; right:0; max-width:480px; margin:0 auto;
+    bottom:calc(var(--tabbar-h, 86px) + 24px + var(--safe-bottom)); width:100px; height:100px; z-index:20;}
   .track-active-group .track-pause-circle svg{width:38px; height:38px;}
   .map-wrap{position:relative; isolation:isolate; height:260px; border-radius:var(--radius); overflow:hidden; margin-bottom:14px; border:1px solid var(--asphalt-4);
     background:linear-gradient(90deg, var(--asphalt-3) 25%, var(--asphalt-4) 37%, var(--asphalt-3) 63%); background-size:400% 100%; animation:skeletonShine 1.4s ease infinite;}
@@ -2215,13 +2226,15 @@
           <div class="track-hero-label" id="track-dist-label" data-i18n="run_km"></div>
         </div>
 
-        <button class="track-pause-circle" onclick="togglePause()" data-i18n-aria="run_pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4.5" height="14" rx="1.5"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.5"/></svg></button>
-
         <!-- Guía en vivo para series/subidas -- solo aparece cuando el entrenamiento de hoy
              tiene repeticiones (intervals/hills). Arranca en "pending" (el corredor todavía
              está calentando) y pasa a "active" recién cuando toca el botón, porque no hay
              forma automática de saber cuándo terminó de calentar. Solo mientras se corre de
-             verdad -- la guía de ritmo no tiene sentido mientras está pausado. -->
+             verdad -- la guía de ritmo no tiene sentido mientras está pausado. Va ANTES del
+             círculo de pausar (que antes estaba acá, antes que la guía) -- el círculo se
+             empuja al fondo de la pantalla con margin-top:auto (ver CSS), así que si se
+             dejaba después de la guía quedaba flotando lejos de ella con un salto raro cada
+             vez que la guía aparece/desaparece durante la carrera. -->
         <div class="card" id="workout-guide-card" style="display:none; margin-top:14px; text-align:center;">
           <div id="workout-guide-pending">
             <p class="muted" id="workout-guide-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
@@ -2241,6 +2254,8 @@
             <p class="muted" id="workout-guide-done-text" style="margin:0; font-size:13px; line-height:1.5;"></p>
           </div>
         </div>
+
+        <button class="track-pause-circle" onclick="togglePause()" data-i18n-aria="run_pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4.5" height="14" rx="1.5"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.5"/></svg></button>
       </div>
 
       <div class="track-paused-group">

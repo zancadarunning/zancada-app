@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-01T15:32:54Z';
+const APP_VERSION = '2026-10-01T15:46:12Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6868,7 +6868,10 @@ function updateCoachFabVisibility(){
   // (openCoachWithWink()) y otros atajos sin pasar por un tab propio en la tabbar -- esta
   // vista es la única fuente de verdad confiable sobre si estamos ahí en este momento.
   const inCoach = document.getElementById('view-coach').classList.contains('active');
-  const inExercise = document.getElementById('runActive').style.display === 'block';
+  // !== 'none' (no === 'block'/'flex') -- actuallyStartRun() pone 'flex' (columna flex, ver
+  // CSS), no 'block'; comparar contra un valor exacto de display es frágil, esto no depende
+  // de cuál sea.
+  const inExercise = document.getElementById('runActive').style.display !== 'none' && document.getElementById('runActive').style.display !== '';
   document.getElementById('coach-fab-wrap').style.display = (inCoach || inExercise) ? 'none' : 'block';
 }
 async function showView(v){
