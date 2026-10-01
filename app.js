@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-09-30T23:58:27Z';
+const APP_VERSION = '2026-10-01T00:12:37Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6333,6 +6333,19 @@ document.addEventListener('touchend', e=>{
 // Alto del teclado nativo en píxeles, reportado por el plugin Keyboard de Capacitor
 // (ver el IIFE más abajo) -- 0 cuando está cerrado. Solo tiene sentido en la app nativa.
 let nativeKeyboardHeightPx = 0;
+// Último window.innerHeight medido con el teclado CERRADO -- de referencia para el chequeo
+// de abajo (¿el WebView ya se achicó solo?). OJO: a propósito esto NO se actualiza en cada
+// corrida de syncCoachChatLayout() con kbOpen=false -- esta función también se llama desde
+// el listener genérico de "resize" (ver más abajo), que en un WebView con resize real puede
+// dispararse al toque de que el teclado empieza a abrirse, ANTES de que llegue el evento
+// keyboardWillShow del plugin (que es el que recién agrega la clase chat-kb-open). Capturar
+// acá adentro alcanzaba a guardarse el alto YA achicado como si fuera "sin teclado", lo que
+// rompía por completo el chequeo de abajo (primera versión de este mismo fix, encontrada
+// con el mismo bug todavía presente en un dispositivo real). En cambio, solo se actualiza
+// desde los dos lugares que de verdad garantizan "el teclado está confirmado cerrado": una
+// vez al cargar (ver el IIFE de más abajo) y en keyboardDidHide (la animación de cierre ya
+// terminó del todo).
+let nativeFullHeightPx = 0;
 function syncCoachChatLayout(){
   const wrap = document.getElementById('coachChatWrap');
   const header = document.getElementById('mainHeader');
@@ -6350,9 +6363,26 @@ function syncCoachChatLayout(){
     // con un valor viejo pegado) -- exactamente los síntomas que veníamos persiguiendo
     // sin poder resolver del todo. En su lugar, el plugin nativo Keyboard nos avisa con
     // eventos reales (keyboardWillShow/Hide) y nos da el alto exacto del teclado, que
-    // guardamos en nativeKeyboardHeightPx -- restamos eso de window.innerHeight, que en
-    // la app nativa SÍ es estable y no se ve afectado por el teclado.
-    viewportH = window.innerHeight - (kbOpen ? nativeKeyboardHeightPx : 0);
+    // guardamos en nativeKeyboardHeightPx.
+    if(!kbOpen){
+      viewportH = window.innerHeight;
+    } else {
+      // Antes esto siempre restaba nativeKeyboardHeightPx de window.innerHeight, asumiendo
+      // que ese valor queda "estable" (sin achicarse solo) mientras el teclado está
+      // abierto -- cierto en algunos WebView, pero NO en todos: confirmado en un Moto E6
+      // Plus real (Android 9) que, en esta versión de la app, window.innerHeight YA baja
+      // de ~810 a ~522 con el teclado abierto (un resize de verdad del WebView, no una
+      // medida "estable"). Restarle ADEMÁS nativeKeyboardHeightPx (336px en ese caso)
+      // encima de un valor que ya venía achicado dejaba un viewportH de apenas 186px --
+      // la barra de escribir quedaba apretada pegada abajo del header, con un hueco negro
+      // enorme entre ella y el teclado, y el chat prácticamente invisible (exactamente el
+      // mismo síntoma que el comentario de más abajo describe para Safari/iOS, pero acá
+      // en Android nativo). Comparamos contra nativeFullHeightPx (la última medida con el
+      // teclado confirmado cerrado) para detectar cuál de los dos comportamientos tiene
+      // este WebView en este momento, en vez de asumir uno fijo para siempre.
+      const alreadyShrunk = nativeFullHeightPx > 0 && (nativeFullHeightPx - window.innerHeight) >= nativeKeyboardHeightPx * 0.5;
+      viewportH = alreadyShrunk ? window.innerHeight : window.innerHeight - nativeKeyboardHeightPx;
+    }
     viewportOffsetTop = 0;
   } else {
     // Versión web (Safari / PWA agregada a inicio): acá visualViewport sí es la fuente
@@ -6432,6 +6462,10 @@ if(window.visualViewport){
     // IMPORTANTE: esto requiere que la app nativa tenga instalado @capacitor/keyboard
     // (ver mobile/package.json) y se haya vuelto a compilar con Xcode -- actualizar
     // solo estos archivos JS no alcanza para que este plugin exista en la app.
+    //
+    // Captura inicial de nativeFullHeightPx -- en este punto el teclado todavía no se tocó
+    // nunca, así que window.innerHeight es, con seguridad, la medida real sin teclado.
+    nativeFullHeightPx = window.innerHeight;
     nativeKeyboard.addListener('keyboardWillShow', (info) => {
       nativeKeyboardHeightPx = (info && typeof info.keyboardHeight === 'number') ? info.keyboardHeight : 0;
       openKeyboardUI();
@@ -6448,6 +6482,12 @@ if(window.visualViewport){
     });
     nativeKeyboard.addListener('keyboardDidHide', () => {
       nativeKeyboardHeightPx = 0;
+      // Acá sí es seguro recapturar nativeFullHeightPx -- la animación de cierre ya terminó
+      // del todo (a diferencia de keyboardWillHide, que recién empieza a cerrarse), así que
+      // window.innerHeight ya volvió a su valor real sin teclado. También cubre sola un
+      // cambio real de tamaño de pantalla (rotación, modo split-screen) entre una apertura
+      // de teclado y la siguiente.
+      nativeFullHeightPx = window.innerHeight;
       syncCoachChatLayout();
       // WKWebView es motor WebKit igual que Safari, así que el mismo bug de "elementos
       // position:fixed que quedan congelados tras el teclado" podría darse acá también
