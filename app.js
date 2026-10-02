@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-02T01:14:11Z';
+const APP_VERSION = '2026-10-02T01:23:40Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5320,15 +5320,12 @@ function getWeekData(offset){
   if(offset > 12) return { plan: [], weekNumber: wn, editable: false, exists: false, mode:'future', weekStart: futureStartIso };
   return { plan: generatePlan(state.profile, wn, futureStartIso), weekNumber: wn, editable: false, exists: true, mode:'future', weekStart: futureStartIso };
 }
-// Extraído de renderPlan() para poder mostrar el detalle día-por-día de una semana
-// cualquiera (ver openWeekDetail) sin tocar viewingWeekOffset ni el navegador de semana
-// de la pestaña Plan -- antes, tocar una semana pasada en "Semanas anteriores" reescribía
-// viewingWeekOffset y volvía a pintar la pestaña Plan entera con esa semana, lo cual
-// pisaba la semana que el usuario tenía abierta ahí. idPrefix separa los ids de
-// #detail-N (y el toggle que los abre) entre la lista de Plan y esta vista de solo
-// lectura, que puede estar en el DOM al mismo tiempo que la de Plan.
-function buildDayListHtml(wd, idPrefix){
-  idPrefix = idPrefix || '';
+// Extraído de renderPlan() -- sigue siendo el día-por-día completo y editable de la
+// pestaña Plan. La pantalla de "Semanas anteriores" (ver openWeekDetail/
+// buildWeekDoneListHtml más abajo) NO reusa esto: pedido explícito del usuario, esa
+// pantalla muestra solo los ejercicios hechos, sin el resto de la semana ni el
+// desplegado de detalle.
+function buildDayListHtml(wd){
   const z = state.profile.hrZones;
   const todayIdx = (new Date().getDay()+6)%7;
   return wd.plan.map((d,i)=>{
@@ -5434,7 +5431,7 @@ function buildDayListHtml(wd, idPrefix){
       statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;"><button class="btn btn-outline btn-sm" onclick="markSession(${i},'done')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.check}</span> ${t('plan_mark_done')}</button><button class="btn btn-outline btn-sm" onclick="markSession(${i},'skipped')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.cross}</span> ${t('plan_mark_skipped')}</button>${showSyncBtn?`<button class="btn btn-outline btn-sm" id="sync-today-btn" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}${showWahooPushBtn?`<button class="btn btn-outline btn-sm" id="wahoo-push-btn" onclick="pushTodayToWahoo()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.send}</span> ${t('wahoo_push_button')}</button>`:''}</div>`;
     }
     return `<div>
-      <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" onclick="toggleDay(${i},'${idPrefix}')">
+      <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" onclick="toggleDay(${i})">
         <div class="day-badge"><div class="d">${t('day_'+d.day).slice(0,3)}</div>${dateLbl?`<div class="mono muted" style="font-size:10px; margin-top:2px;">${dateLbl}</div>`:''}</div>
         <div class="day-info">
           <div class="day-info-title-row"><span class="t">${lblType}</span>${isEventDay?(eventAmountText?`<span class="day-km-inline">${eventAmountText}</span>`:''):(d.dist>0?`<span class="day-km-inline">${planAmountText(d)}</span>`:(extraRunAmountText?`<span class="day-km-inline">${extraRunAmountText}</span>`:''))}</div>
@@ -5442,7 +5439,7 @@ function buildDayListHtml(wd, idPrefix){
         </div>
         <div class="day-row-end">${statusIcon}</div>
       </div>
-      <div class="day-detail" id="detail-${idPrefix}${i}"><div>${lblDesc}${zoneDetail}${statusBlock}</div></div>
+      <div class="day-detail" id="detail-${i}"><div>${lblDesc}${zoneDetail}${statusBlock}</div></div>
     </div>`;
   }).join('');
 }
@@ -5526,7 +5523,7 @@ function renderPlan(){
     return;
   }
 
-  document.getElementById('plan-list').innerHTML = buildDayListHtml(wd, '');
+  document.getElementById('plan-list').innerHTML = buildDayListHtml(wd);
   makeClickablesFocusable(document.getElementById('plan-list'));
   renderPastWeeks();
 }
@@ -5551,21 +5548,52 @@ function renderPastWeeks(){
     </div>`;
   }).join('');
 }
-// Pantalla de solo lectura para una semana pasada (ver buildDayListHtml) -- separada de
-// viewingWeekOffset/renderPlan a propósito: tocar una semana en "Semanas anteriores" NO debe
-// cambiar la semana que se ve en la pestaña Plan, solo mostrar la de esa semana en una
-// pantalla aparte, de la que se puede volver atrás sin haber modificado nada arriba.
+// Lista de "lo que hice" para la pantalla de una semana pasada (ver openWeekDetail) --
+// pedido explícito del usuario: NO el día-por-día completo de la semana (con descansos y
+// el desplegado de detalle, como en Plan), solo una fila por cada ejercicio con
+// status==='done', mostrando el día y lo que se hizo. Tocar la fila manda derecho a
+// Historial (openRunDetail) -- sin un paso intermedio de desplegar el día primero, que es
+// justo lo que el usuario pidió sacar.
+function buildWeekDoneListHtml(wd){
+  const doneDays = wd.plan.map((d,i)=>({d,i})).filter(({d}) => d.status==='done');
+  if(!doneDays.length) return `<p class="muted" style="margin:0;">${t('plan_week_detail_empty')}</p>`;
+  return doneDays.map(({d,i})=>{
+    const lbl = planLabel(d);
+    let lblType = d.custom ? escapeHtml(lbl.type) : lbl.type;
+    // Mismo criterio que en buildDayListHtml: un día sin nada planeado pero con una
+    // corrida vinculada (extra, fuera del plan) se llama "Carrera extra", no el nombre
+    // del día de descanso.
+    const extraRun = !(d.dist>0) && !d.raceDay && d.linkedRunId ? state.runs.find(r=>r.id===d.linkedRunId) : null;
+    if(extraRun) lblType = t('plan_extra_run_title');
+    let dateLbl = '';
+    if(wd.weekStart){
+      const dt = new Date(wd.weekStart+'T00:00:00'); dt.setDate(dt.getDate()+i);
+      dateLbl = `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}`;
+    }
+    const run = d.linkedRunId ? state.runs.find(r=>r.id===d.linkedRunId) : null;
+    const pMin = run && run.distanceKm>0.02 ? (run.durationSec/60)/run.distanceKm : 0;
+    const summary = run ? `${fmtDist(run.distanceKm)}${distUnit()} · ${fmtPace(pMin)}/${distUnit()}` : t('plan_status_done');
+    return `<div style="padding:12px 0; border-bottom:1px solid var(--asphalt-3);${run?' cursor:pointer;':''}"${run?` onclick="openRunDetail('${run.id}')"`:''}>
+      <div style="display:flex; justify-content:space-between; align-items:baseline;"><span style="font-weight:700;">${lblType}</span><span class="muted mono" style="font-size:11.5px;">${t('day_'+d.day).slice(0,3)} ${dateLbl}</span></div>
+      <p class="muted mono" style="margin-top:4px; font-size:13px;">${summary}</p>
+    </div>`;
+  }).join('');
+}
+// Pantalla de solo lectura para una semana pasada -- separada de viewingWeekOffset/
+// renderPlan a propósito: tocar una semana en "Semanas anteriores" NO debe cambiar la
+// semana que se ve en la pestaña Plan, solo mostrar la de esa semana en una pantalla
+// aparte, de la que se puede volver atrás sin haber modificado nada arriba.
 function openWeekDetail(weekNumber){
   const offset = weekNumber - (state.weekNumber||1);
   const wd = getWeekData(offset);
   document.getElementById('week-detail-title').textContent = t('plan_week_label',{n:weekNumber});
-  document.getElementById('week-detail-list').innerHTML = wd.exists ? buildDayListHtml(wd, 'wk-') : `<p class="muted" style="margin:0;">${t('plan_no_data')}</p>`;
+  document.getElementById('week-detail-list').innerHTML = wd.exists ? buildWeekDoneListHtml(wd) : `<p class="muted" style="margin:0;">${t('plan_no_data')}</p>`;
   openOverlaySheetEl(document.getElementById('week-detail-modal'));
 }
 function closeWeekDetail(){
   document.getElementById('week-detail-modal').classList.remove('overlay-open');
 }
-function toggleDay(i, prefix){ if(planSwipeSuppressClick) return; document.getElementById('detail-'+(prefix||'')+i).classList.toggle('open'); }
+function toggleDay(i){ if(planSwipeSuppressClick) return; document.getElementById('detail-'+i).classList.toggle('open'); }
 // Tarjeta de "próxima sesión" en Inicio: colapsada solo muestra tipo + km (pedido del
 // usuario -- antes mostraba siempre la descripción completa, mucho texto para lo que en
 // general es solo un vistazo rápido). "Ver detalle" avisa que hay más para tocar; mismo
