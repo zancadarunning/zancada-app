@@ -18,6 +18,9 @@ on:
       - '.github/workflows/android-apk.yml'
       - '.github/scripts/patch-android.py'
 
+permissions:
+  contents: write # para publicar el APK como release "prueba-android"
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -76,3 +79,17 @@ jobs:
           name: zancada-prueba-apk
           path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
+
+      # Además del artifact (que GitHub entrega en .zip), un link directo al .apk, cómodo
+      # para bajarlo e instalarlo desde el celular: Releases → "Zancada de prueba (Android)".
+      # Se pisa en cada build, así que el link siempre trae la última versión.
+      - name: Publicar como release "prueba-android"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp mobile/android/app/build/outputs/apk/debug/app-debug.apk zancada-prueba.apk
+          gh release delete prueba-android --yes --cleanup-tag || true
+          gh release create prueba-android zancada-prueba.apk \
+            --prerelease --target "${{ github.sha }}" \
+            --title "Zancada de prueba (Android)" \
+            --notes "APK de prueba compilado automáticamente desde ${{ github.ref_name }} (${{ github.sha }}). Se instala al lado de la app de la tienda como \"Zancada (prueba)\"."
