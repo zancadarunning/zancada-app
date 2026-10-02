@@ -34,7 +34,8 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - uses: android-actions/setup-android@v3
+      # Sin android-actions/setup-android: ubuntu-latest ya trae el SDK de Android
+      # (ANDROID_HOME) y esa action falla al querer reinstalar el paquete 'tools'.
 
       - name: Instalar dependencias de mobile/
         working-directory: mobile
