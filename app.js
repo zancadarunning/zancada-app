@@ -1057,6 +1057,7 @@ let persistQueued = false;
 let persistSettledResolvers = [];
 async function persist(){
   if(!currentUserId) return;
+  scheduleDeviceCalendarSync(); // calendario del teléfono (app nativa), si está activado
   if(persistInFlight){ persistQueued = true; return; }
   persistInFlight = true;
   try{
@@ -3291,6 +3292,7 @@ function enterApp(){
   setTimeout(maybeShowInstallBanner, 1200);
   setTimeout(maybeShowWhatsNew, 1800);
   refreshDeviceConnections();
+  scheduleDeviceCalendarSync();
 }
 // checkWeekRollover/autoSkipPastDays/autoClearPastEvent dependen de la fecha real, y antes
 // solo corrían una vez, al entrar a la app (dentro de enterApp()). El problema: una PWA que
@@ -3468,6 +3470,7 @@ async function logout(){
   // tener algo ahí guardado en este dispositivo) -- best-effort, no rompe nada si ya
   // no existe.
   try{ localStorage.removeItem('zancada_run_in_progress'); }catch(e){}
+  await removeDeviceCalendar(); // los eventos de este plan no tienen que quedarle al próximo usuario
   await supabaseClient.auth.signOut();
   location.reload();
 }
@@ -3477,6 +3480,7 @@ async function resetApp(){
   if(currentUserId){
     try{ await supabaseClient.from('app_state').delete().eq('user_id', currentUserId); }catch(e){}
   }
+  await removeDeviceCalendar();
   await supabaseClient.auth.signOut();
   location.reload();
 }
@@ -3491,6 +3495,7 @@ async function deleteAccount(){
       headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
     });
     if(!res.ok) throw new Error('delete-account failed');
+    await removeDeviceCalendar();
     await supabaseClient.auth.signOut();
     location.reload();
   }catch(e){
@@ -4947,6 +4952,201 @@ async function shareCalendarLink(){
   }catch(e){ /* sin Share API ni Clipboard API no queda más que dejarlo seleccionable en pantalla */ }
 }
 
+/* ---- calendario del teléfono, escrito directo (app nativa) -----
+   Pedido del usuario: "como en Huawei Health: toco un botón y aparecen, y cuando elimino el
+   plan se borra todo del calendario" -- sin bajar archivos ni suscribirse a nada. Eso solo se
+   puede desde una app nativa con permiso de calendario (la web/PWA no tiene ninguna API para
+   escribir en el calendario del sistema), así que en la app de la tienda usamos el plugin
+   @ebarooni/capacitor-calendar (ver mobile/package.json y mobile/calendar-setup/) y hacemos lo
+   mismo que Huawei: un calendario propio "Zancada" adentro del teléfono, con un evento de día
+   completo por sesión de esta semana y la próxima.
+   - Se mantiene solo: cada persist() (cualquier cambio de plan, del coach, una sesión hecha o
+     salteada) y cada entrada a la app (cambio de semana) re-sincronizan, con un pequeño
+     debounce. Solo se tocan los eventos que cambiaron (firma por día).
+   - Las semanas ya pasadas quedan como registro (no se re-tocan); al desactivar, cerrar sesión
+     o borrar los datos se elimina el calendario "Zancada" entero, y con él todos sus eventos.
+   - Lo que quedó escrito vive en localStorage, no en state: son ids de ESTE teléfono (otro
+     dispositivo de la misma cuenta tiene su propio calendario con otros ids).
+   Si el plugin no está (web, o un build viejo de la app sin el plugin) todo esto no hace nada
+   y el botón cae al flujo de feed/suscripción de siempre (openCalendarSubscribe). */
+const DEVICE_CAL_KEY = 'zancada_device_calendar';
+const DEVICE_CAL_COLOR = '#D6FF3F';
+function deviceCalendarPlugin(){
+  const native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  return native && window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorCalendar || null;
+}
+function readDeviceCal(){
+  try{ const v = JSON.parse(localStorage.getItem(DEVICE_CAL_KEY) || 'null'); return v && typeof v === 'object' ? v : null; }catch(e){ return null; }
+}
+function writeDeviceCal(v){
+  try{ if(v) localStorage.setItem(DEVICE_CAL_KEY, JSON.stringify(v)); else localStorage.removeItem(DEVICE_CAL_KEY); }catch(e){}
+}
+function deviceCalendarEnabled(){
+  const c = readDeviceCal();
+  return !!(c && c.calId && c.userId === currentUserId && deviceCalendarPlugin());
+}
+// Fecha local (medianoche) de un día del plan, en ms -- el plugin normaliza un evento de día
+// completo a partir del día LOCAL de este timestamp (Android: UTC midnight de ese día).
+function localDayMs(iso){
+  const [y,m,d] = iso.split('-').map(Number);
+  return new Date(y, m-1, d).getTime();
+}
+// Qué debería haber en el calendario ahora: un evento por sesión con distancia (o día de
+// carrera) de esta semana y la siguiente; las salteadas no aparecen (ya no van a pasar), las
+// hechas llevan ✓. `sig` resume todo lo visible del evento para saber si hay que reescribirlo.
+function deviceCalendarEntries(){
+  const weeks = [];
+  if(state.weekStart) weeks.push({ plan: state.plan, weekStart: state.weekStart });
+  try{
+    const nw = getNextWeekPlan();
+    if(nw && nw.weekStart && (!state.weekStart || nw.weekStart > state.weekStart)) weeks.push(nw);
+  }catch(e){ /* sin la semana siguiente sigue funcionando con la actual */ }
+  const out = [];
+  weeks.forEach(w => {
+    (w.plan || []).forEach(d => {
+      if(!d || d.status === 'skipped') return;
+      if(!(d.dist > 0) && !d.raceDay) return;
+      const idx = DAY_KEYS.indexOf(d.day);
+      if(idx < 0) return;
+      const date = addDaysToIsoLocal(w.weekStart, idx);
+      let title, desc;
+      if(d.raceDay){
+        title = [t('plan_race_day_type'), d.raceEventName].filter(Boolean).join(' · ');
+        desc = '';
+      } else {
+        const lbl = planLabel(d);
+        title = `${lbl.type} · ${planAmountText(d)}`;
+        desc = lbl.desc || '';
+      }
+      if(d.status === 'done') title = `✓ ${title}`;
+      desc = [desc, 'Zancada'].filter(Boolean).join('\n\n');
+      out.push({ date, title, desc, sig: `${title}|${desc}` });
+    });
+  });
+  return out;
+}
+async function ensureDeviceCalendarId(Cal, saved){
+  if(saved && saved.calId){
+    try{
+      const { result } = await Cal.listCalendars();
+      if((result || []).some(c => String(c.id) === String(saved.calId))) return saved.calId;
+    }catch(e){ return saved.calId; } // sin poder listar, asumimos que sigue ahí
+  }
+  // No existía (primera vez) o el usuario lo borró a mano desde la app de Calendario.
+  const { id } = await Cal.createCalendar({ title:'Zancada', color:DEVICE_CAL_COLOR, accountName:'Zancada', ownerAccount:'Zancada' });
+  return id;
+}
+let deviceCalSyncInFlight = false;
+let deviceCalSyncQueued = false;
+async function syncDeviceCalendar(){
+  const Cal = deviceCalendarPlugin();
+  const saved = readDeviceCal();
+  if(!Cal || !saved || !saved.calId || saved.userId !== currentUserId) return;
+  if(deviceCalSyncInFlight){ deviceCalSyncQueued = true; return; }
+  deviceCalSyncInFlight = true;
+  try{
+    const calId = await ensureDeviceCalendarId(Cal, saved);
+    // Si el calendario se tuvo que recrear, los ids viejos ya no existen.
+    const prev = calId === saved.calId ? (saved.events || {}) : {};
+    const thisWeek = state.weekStart || getMondayISO(new Date());
+    const wanted = {};
+    deviceCalendarEntries().forEach(e => { wanted[e.date] = e; });
+    const next = {};
+    const toDelete = [];
+    Object.keys(prev).forEach(date => {
+      // Semanas ya pasadas: quedan como registro en el calendario, dejamos de seguirlas.
+      if(date < thisWeek) return;
+      if(wanted[date] && wanted[date].sig === prev[date].sig) next[date] = prev[date];
+      else toDelete.push(prev[date].id);
+    });
+    if(toDelete.length){
+      try{ await Cal.deleteEventsById({ ids: toDelete }); }catch(e){ /* ya borrados a mano: nada que hacer */ }
+    }
+    for(const date of Object.keys(wanted)){
+      if(next[date]) continue;
+      const e = wanted[date];
+      const ms = localDayMs(date);
+      const { id } = await Cal.createEvent({
+        title: e.title, description: e.desc, calendarId: String(calId),
+        isAllDay: true, startDate: ms, endDate: ms,
+        availability: 1 // FREE: un entrenamiento de día completo no marca "ocupado" todo el día
+      });
+      if(id) next[date] = { id: String(id), sig: e.sig };
+    }
+    writeDeviceCal({ userId: currentUserId, calId: String(calId), events: next });
+  }catch(e){
+    console.error('device calendar sync error', e); // permiso revocado, etc.: reintenta en el próximo cambio
+  }finally{
+    deviceCalSyncInFlight = false;
+    if(deviceCalSyncQueued){ deviceCalSyncQueued = false; syncDeviceCalendar(); }
+  }
+}
+let deviceCalSyncTimer = null;
+function scheduleDeviceCalendarSync(){
+  if(!deviceCalendarEnabled()) return;
+  clearTimeout(deviceCalSyncTimer);
+  deviceCalSyncTimer = setTimeout(syncDeviceCalendar, 1500);
+}
+async function enableDeviceCalendar(){
+  const Cal = deviceCalendarPlugin();
+  if(!Cal) return false;
+  if(!state.plan.some(d=>d.dist>0)){ showToast(t('plan_export_ics_empty'),'error'); return false; }
+  try{
+    const { result } = await Cal.requestFullCalendarAccess();
+    if(result !== 'granted'){ showToast(t('cal_device_denied'),'error'); return false; }
+    // Otro usuario dejó su calendario en este teléfono (logout sin limpiar): se va primero.
+    const old = readDeviceCal();
+    if(old && old.calId && old.userId !== currentUserId) await removeDeviceCalendar();
+    const calId = await ensureDeviceCalendarId(Cal, old && old.userId === currentUserId ? old : null);
+    writeDeviceCal({ userId: currentUserId, calId: String(calId), events: (old && old.userId === currentUserId && String(old.calId) === String(calId)) ? (old.events || {}) : {} });
+    await syncDeviceCalendar();
+    showToast(t('cal_device_added'));
+    renderCalendarButton();
+    return true;
+  }catch(e){
+    console.error('device calendar enable error', e);
+    showToast(t('generic_error'),'error');
+    return false;
+  }
+}
+// Borra el calendario "Zancada" entero del teléfono (y con él todos sus eventos, también los
+// de semanas pasadas). Best-effort: se usa también al cerrar sesión/borrar datos.
+async function removeDeviceCalendar(){
+  const Cal = deviceCalendarPlugin();
+  const saved = readDeviceCal();
+  clearTimeout(deviceCalSyncTimer);
+  writeDeviceCal(null);
+  if(Cal && saved && saved.calId){
+    try{ await Cal.deleteCalendar({ id: String(saved.calId) }); }
+    catch(e){
+      // Sin poder borrar el calendario (raro), al menos los eventos que seguíamos.
+      const ids = Object.values(saved.events || {}).map(e => e.id);
+      if(ids.length){ try{ await Cal.deleteEventsById({ ids }); }catch(e2){} }
+    }
+  }
+  renderCalendarButton();
+}
+// Botón "Agregar a mi calendario" de Plan: en la app nativa con el plugin es un solo toque
+// (o, si ya está activo, ofrece quitarlo); en cualquier otro lado abre el feed de siempre.
+async function onPlanCalendarButton(){
+  if(!deviceCalendarPlugin()){ openCalendarSubscribe(); return; }
+  if(deviceCalendarEnabled()){
+    if(await showConfirm(t('cal_device_remove_confirm'), {danger:true, confirmText:t('cal_device_remove_btn')})){
+      await removeDeviceCalendar();
+      showToast(t('cal_device_removed'));
+    }
+    return;
+  }
+  await enableDeviceCalendar();
+}
+function renderCalendarButton(){
+  const label = document.getElementById('plan-calendar-btn-label');
+  if(!label) return;
+  const key = deviceCalendarEnabled() ? 'cal_device_synced' : 'plan_export_ics';
+  label.setAttribute('data-i18n', key);
+  label.textContent = t(key);
+}
+
 /* ================= RENDER ================= */
 function renderAll(){ renderHome(); renderPlan(); renderPerfil(); }
 
@@ -5513,6 +5713,7 @@ function buildDayListHtml(wd){
   }).join('');
 }
 function renderPlan(){
+  renderCalendarButton();
   const wd = getWeekData(viewingWeekOffset);
   const wn = wd.weekNumber;
 

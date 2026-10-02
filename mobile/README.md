@@ -31,6 +31,10 @@ Esto genera `mobile/ios/` y `mobile/android/` (no existen hasta que corras esto)
   Connect (Android) a Zancada, para relojes que no tienen conexión directa
   propia (ej. Huawei, o cualquier otro que escriba en Health Connect). Ver
   `healthconnect-setup/INSTRUCCIONES.md`.
+- **`calendar-setup/`** — "Agregar a mi calendario" con un solo toque: crea un
+  calendario "Zancada" en el teléfono con el plan, se actualiza solo y se borra
+  entero al quitarlo (como Huawei Health). Plugin de npm, sin código nativo propio;
+  solo faltan los permisos. Ver `calendar-setup/INSTRUCCIONES.md`.
 - **`push-setup/`** — notificaciones push nativas (el recordatorio diario de
   "Hoy toca: ...") para la app instalada desde la tienda, donde el service
   worker de la PWA web está desactivado a propósito. Ver

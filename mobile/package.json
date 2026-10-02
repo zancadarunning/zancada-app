@@ -17,7 +17,8 @@
     "@capacitor/keyboard": "^8.0.0",
     "@capacitor/push-notifications": "^8.0.0",
     "@capacitor/share": "^8.0.0",
-    "@capawesome/capacitor-apple-sign-in": "^0.1.4"
+    "@capawesome/capacitor-apple-sign-in": "^0.1.4",
+    "@ebarooni/capacitor-calendar": "^8.7.1"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
