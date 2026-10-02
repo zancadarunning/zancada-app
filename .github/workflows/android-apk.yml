@@ -1,0 +1,77 @@
+# Compila un APK de PRUEBA de la app Android (Capacitor) en los servidores de GitHub, sin
+# Android Studio: genera el proyecto nativo de cero, le aplica lo que piden las guías de
+# mobile/*-setup/ (ver .github/scripts/patch-android.py) y deja el APK para bajar en la
+# pestaña Actions → la corrida → "Artifacts" → zancada-prueba-apk.
+# Es un build de debug (firma de prueba, applicationId org.zancada.app.test): se instala al
+# lado de la app de la tienda, no la reemplaza. No sirve para subir a Play Store.
+name: Android APK de prueba
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['claude/**', 'main']
+    paths:
+      - 'app.js'
+      - 'index.html'
+      - 'locales/**'
+      - 'mobile/**'
+      - '.github/workflows/android-apk.yml'
+      - '.github/scripts/patch-android.py'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Instalar dependencias de mobile/
+        working-directory: mobile
+        run: npm ci --no-audit --no-fund
+
+      - name: Copiar la web a mobile/www
+        run: |
+          mkdir -p mobile/www
+          cp app.js index.html manifest.json privacy.html terms.html mobile/www/
+          cp -r locales img brand mobile/www/
+          cp icon-192.png icon-512.png icon-512-maskable.png mobile/www/
+
+      - name: Generar el proyecto Android
+        working-directory: mobile
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Ícono de Zancada
+        working-directory: mobile
+        continue-on-error: true
+        run: |
+          mkdir -p resources
+          cp ../icon-512.png resources/icon.png
+          npx capacitor-assets generate --android --splashBackgroundColor '#0A0A0A' --splashBackgroundColorDark '#0A0A0A'
+
+      - name: Aplicar las guías de mobile/*-setup/
+        run: python3 .github/scripts/patch-android.py
+
+      - name: Compilar APK
+        working-directory: mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zancada-prueba-apk
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
