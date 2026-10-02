@@ -1399,12 +1399,6 @@
   .day-pill.active{border-color:var(--hivis); color:var(--hivis-text); background:var(--hivis-dim); box-shadow:0 1px 3px var(--hivis-glow);}
 
   .hist-card{margin-bottom:12px;}
-  .type-breakdown-row{display:flex; align-items:center; gap:10px; margin-bottom:9px;}
-  .type-breakdown-row:last-child{margin-bottom:0;}
-  .type-breakdown-label{width:92px; flex-shrink:0; font-size:12.5px; color:var(--mist); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .type-breakdown-bar-wrap{flex:1; height:8px; background:var(--asphalt-3); border-radius:99px; overflow:hidden;}
-  .type-breakdown-bar{height:100%; background:var(--hivis); border-radius:99px;}
-  .type-breakdown-count{width:18px; text-align:right; font-size:12.5px; font-weight:700; color:var(--chalk); flex-shrink:0;}
   .swipe-item{position:relative; overflow:hidden;}
   #history-list .swipe-item{border-radius:var(--radius); margin-bottom:12px;}
   #history-list .swipe-item .hist-card{margin-bottom:0;}
@@ -2425,6 +2419,18 @@
     <input type="text" id="hist-search" data-i18n-ph="hist_search_ph" data-i18n-aria="hist_search_ph" oninput="renderHistory()" style="width:100%; margin-bottom:14px; background:var(--asphalt-2); border:1px solid var(--overlay-hairline); color:var(--chalk); padding:8px 14px; border-radius:999px; font-size:13.5px; font-family:inherit;">
     <div id="history-list"></div>
   </section>
+
+  <!-- Pantalla de solo lectura de "Semanas anteriores" (ver openWeekDetail en app.js) --
+       deliberadamente separada de la pestaña Plan: antes tocar una semana pasada ahí
+       reescribía viewingWeekOffset y pisaba la semana que el usuario tenía abierta arriba.
+       Va ANTES que run-detail-modal a propósito: un ejercicio tocado acá abre Historial
+       encima (mismo z-index:50 que esta -- en un empate, gana el que está después en el
+       DOM), y Historial tiene que quedar arriba, no tapado por esta pantalla. -->
+  <div class="overlay overlay-sheet" id="week-detail-modal">
+    <button class="week-nav-btn" onclick="closeWeekDetail()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="subtitle" style="font-size:22px;" id="week-detail-title"></h2>
+    <div class="card" id="week-detail-list" style="margin-top:16px;"></div>
+  </div>
 
   <div class="overlay" id="run-detail-modal" style="display:none;">
     <button class="week-nav-btn" onclick="closeRunDetail()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>

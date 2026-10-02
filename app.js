@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-01T20:52:37Z';
+const APP_VERSION = '2026-10-02T01:14:11Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5320,89 +5320,18 @@ function getWeekData(offset){
   if(offset > 12) return { plan: [], weekNumber: wn, editable: false, exists: false, mode:'future', weekStart: futureStartIso };
   return { plan: generatePlan(state.profile, wn, futureStartIso), weekNumber: wn, editable: false, exists: true, mode:'future', weekStart: futureStartIso };
 }
-function renderPlan(){
+// Extraído de renderPlan() para poder mostrar el detalle día-por-día de una semana
+// cualquiera (ver openWeekDetail) sin tocar viewingWeekOffset ni el navegador de semana
+// de la pestaña Plan -- antes, tocar una semana pasada en "Semanas anteriores" reescribía
+// viewingWeekOffset y volvía a pintar la pestaña Plan entera con esa semana, lo cual
+// pisaba la semana que el usuario tenía abierta ahí. idPrefix separa los ids de
+// #detail-N (y el toggle que los abre) entre la lista de Plan y esta vista de solo
+// lectura, que puede estar en el DOM al mismo tiempo que la de Plan.
+function buildDayListHtml(wd, idPrefix){
+  idPrefix = idPrefix || '';
   const z = state.profile.hrZones;
-  const wd = getWeekData(viewingWeekOffset);
-  const wn = wd.weekNumber;
-
-  document.getElementById('plan-prev-btn').disabled = !getWeekData(viewingWeekOffset-1).exists;
-  document.getElementById('plan-next-btn').disabled = !(viewingWeekOffset < 12);
-
-  // Semana en la que cae la carrera cargada en "Próximos eventos" (si hay una) -- baja el
-  // volumen igual que una semana de descarga común, así que reusa la misma etiqueta visual
-  // (ver isEventRaceWeek/eventRaceWeekMultiplier), pero con su propio texto aclaratorio abajo
-  // para que quede claro que es por esa carrera puntual y no por el ciclo de descarga normal.
-  const isEventWeek = wd.exists && wd.mode!=='future' && wd.mode!=='past' && wd.weekStart && isEventRaceWeek(wd.weekStart);
-  // La descarga PERIÓDICA (cada 3-4 semanas, ver isCutbackWeek/weekMultiplier) es un ciclo
-  // normal del plan, sin relación con ninguna carrera cargada -- antes no tenía ningún texto
-  // aclaratorio (a diferencia de taper/recuperación/carrera), así que un corredor que la veía
-  // aparecer no tenía forma de saber por qué, y podía confundirla con un efecto de una carrera
-  // que tuviera cargada. isEventWeek manda si coinciden las dos (el motivo puntual de esa
-  // carrera es más específico que "le toca descarga por ciclo").
-  const isPlainCutbackWeek = wd.exists && wd.mode!=='future' && isCutbackWeek(wn) && !isEventWeek;
-  // "Semana N" solo -- las etiquetas de estado van en #plan-week-tags, una fila aparte (ver
-  // el comentario largo junto a esa clase en el CSS). Antes se concatenaban todas acá mismo,
-  // en una sola línea con overflow:ellipsis, y un texto largo como "Estimado, puede
-  // ajustarse" terminaba mostrando apenas "..." sin nada legible -- reportado por el usuario.
-  const label = t('plan_week_label',{n:wn});
-  let tagsHtml = '';
-  if(wd.exists && (isCutbackWeek(wn) || isEventWeek) && wd.mode!=='future') tagsHtml += `<span class="tag tag-asfalto">${t('plan_cutback')}</span>`;
-  if(wd.mode==='future') tagsHtml += `<span class="tag tag-soon">${t('plan_estimate')}</span>`;
-  if(wd.mode==='past') tagsHtml += `<span class="tag tag-soon">${t('plan_past')}</span>`;
-  const taperMult = (wd.exists && wd.mode!=='past' && wd.weekStart) ? taperMultiplier(state.profile, wd.weekStart) : 1;
-  const isTapering = taperMult < 1;
-  // el aviso de taper (etiqueta + mensaje) solo se muestra en semanas "firmes" (actual y la que
-  // sigue) -- en una semana "estimado, puede ajustarse" no tiene sentido afirmar algo puntual
-  // como "acá empieza tu puesta a punto" sobre una proyección que todavía puede cambiar entera
-  const showTaperUi = isTapering && wd.mode!=='future';
-  if(showTaperUi) tagsHtml += `<span class="tag tag-asfalto">${t('plan_taper_tag')}</span>`;
-  // La semana de recuperación se recalcula siempre en base a wd.weekStart -- no depende de
-  // que state.event siga cargado (isRecoveryWeek() ya contempla que se haya limpiado solo
-  // al pasar la fecha, ver autoClearPastEvent()), así que se puede mostrar toda la semana,
-  // no solo el día del rollover.
-  const showRecoveryUi = wd.exists && wd.mode!=='past' && wd.mode!=='future' && wd.weekStart && isRecoveryWeek(wd.weekStart);
-  if(showRecoveryUi) tagsHtml += `<span class="tag tag-asfalto">${t('plan_recovery_tag')}</span>`;
-  document.getElementById('plan-week-info').textContent = label;
-  const tagsRow = document.getElementById('plan-week-tags');
-  tagsRow.innerHTML = tagsHtml;
-  tagsRow.style.display = tagsHtml ? 'flex' : 'none';
-  const taperNote = document.getElementById('plan-taper-note');
-  if(showTaperUi){
-    taperNote.style.display='block';
-    taperNote.textContent = taperMult <= 0.55 ? t('plan_taper_note_final') : t('plan_taper_note_early');
-  } else {
-    taperNote.style.display='none';
-  }
-  const eventWeekNote = document.getElementById('plan-event-week-note');
-  if(isEventWeek && state.event){
-    eventWeekNote.style.display='block';
-    eventWeekNote.textContent = t('plan_event_week_note', {name: state.event.name});
-  } else {
-    eventWeekNote.style.display='none';
-  }
-  const cutbackNote = document.getElementById('plan-cutback-note');
-  if(isPlainCutbackWeek){
-    cutbackNote.style.display='block';
-    cutbackNote.textContent = t('plan_cutback_note');
-  } else {
-    cutbackNote.style.display='none';
-  }
-  const recoveryNote = document.getElementById('plan-recovery-note');
-  if(showRecoveryUi){
-    recoveryNote.style.display='block';
-    recoveryNote.textContent = t('plan_recovery_note');
-  } else {
-    recoveryNote.style.display='none';
-  }
-
-  if(!wd.exists){
-    document.getElementById('plan-list').innerHTML = `<div style="text-align:center; padding:24px 0;"><svg viewBox="0 0 60 14" style="width:80px; height:19px; margin:0 auto 12px; display:block; opacity:.6;"><polyline points="0,12 10,12 16,4 22,10 28,2 34,9 40,12 60,12" fill="none" stroke="#C06A2E" stroke-width="1.6"/></svg><p class="muted" style="margin:0;">${t('plan_no_data')}</p></div>`;
-    renderPastWeeks();
-    return;
-  }
-
   const todayIdx = (new Date().getDay()+6)%7;
-  document.getElementById('plan-list').innerHTML = wd.plan.map((d,i)=>{
+  return wd.plan.map((d,i)=>{
     const lbl = planLabel(d);
     // d.custom viene de texto libre que el coach (IA) escribió a partir de un pedido del
     // usuario (modificar_sesion / ajuste de volumen) -- a diferencia de las descripciones
@@ -5505,7 +5434,7 @@ function renderPlan(){
       statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;"><button class="btn btn-outline btn-sm" onclick="markSession(${i},'done')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.check}</span> ${t('plan_mark_done')}</button><button class="btn btn-outline btn-sm" onclick="markSession(${i},'skipped')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.cross}</span> ${t('plan_mark_skipped')}</button>${showSyncBtn?`<button class="btn btn-outline btn-sm" id="sync-today-btn" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}${showWahooPushBtn?`<button class="btn btn-outline btn-sm" id="wahoo-push-btn" onclick="pushTodayToWahoo()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.send}</span> ${t('wahoo_push_button')}</button>`:''}</div>`;
     }
     return `<div>
-      <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" onclick="toggleDay(${i})">
+      <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" onclick="toggleDay(${i},'${idPrefix}')">
         <div class="day-badge"><div class="d">${t('day_'+d.day).slice(0,3)}</div>${dateLbl?`<div class="mono muted" style="font-size:10px; margin-top:2px;">${dateLbl}</div>`:''}</div>
         <div class="day-info">
           <div class="day-info-title-row"><span class="t">${lblType}</span>${isEventDay?(eventAmountText?`<span class="day-km-inline">${eventAmountText}</span>`:''):(d.dist>0?`<span class="day-km-inline">${planAmountText(d)}</span>`:(extraRunAmountText?`<span class="day-km-inline">${extraRunAmountText}</span>`:''))}</div>
@@ -5513,9 +5442,91 @@ function renderPlan(){
         </div>
         <div class="day-row-end">${statusIcon}</div>
       </div>
-      <div class="day-detail" id="detail-${i}"><div>${lblDesc}${zoneDetail}${statusBlock}</div></div>
+      <div class="day-detail" id="detail-${idPrefix}${i}"><div>${lblDesc}${zoneDetail}${statusBlock}</div></div>
     </div>`;
   }).join('');
+}
+function renderPlan(){
+  const wd = getWeekData(viewingWeekOffset);
+  const wn = wd.weekNumber;
+
+  document.getElementById('plan-prev-btn').disabled = !getWeekData(viewingWeekOffset-1).exists;
+  document.getElementById('plan-next-btn').disabled = !(viewingWeekOffset < 12);
+
+  // Semana en la que cae la carrera cargada en "Próximos eventos" (si hay una) -- baja el
+  // volumen igual que una semana de descarga común, así que reusa la misma etiqueta visual
+  // (ver isEventRaceWeek/eventRaceWeekMultiplier), pero con su propio texto aclaratorio abajo
+  // para que quede claro que es por esa carrera puntual y no por el ciclo de descarga normal.
+  const isEventWeek = wd.exists && wd.mode!=='future' && wd.mode!=='past' && wd.weekStart && isEventRaceWeek(wd.weekStart);
+  // La descarga PERIÓDICA (cada 3-4 semanas, ver isCutbackWeek/weekMultiplier) es un ciclo
+  // normal del plan, sin relación con ninguna carrera cargada -- antes no tenía ningún texto
+  // aclaratorio (a diferencia de taper/recuperación/carrera), así que un corredor que la veía
+  // aparecer no tenía forma de saber por qué, y podía confundirla con un efecto de una carrera
+  // que tuviera cargada. isEventWeek manda si coinciden las dos (el motivo puntual de esa
+  // carrera es más específico que "le toca descarga por ciclo").
+  const isPlainCutbackWeek = wd.exists && wd.mode!=='future' && isCutbackWeek(wn) && !isEventWeek;
+  // "Semana N" solo -- las etiquetas de estado van en #plan-week-tags, una fila aparte (ver
+  // el comentario largo junto a esa clase en el CSS). Antes se concatenaban todas acá mismo,
+  // en una sola línea con overflow:ellipsis, y un texto largo como "Estimado, puede
+  // ajustarse" terminaba mostrando apenas "..." sin nada legible -- reportado por el usuario.
+  const label = t('plan_week_label',{n:wn});
+  let tagsHtml = '';
+  if(wd.exists && (isCutbackWeek(wn) || isEventWeek) && wd.mode!=='future') tagsHtml += `<span class="tag tag-asfalto">${t('plan_cutback')}</span>`;
+  if(wd.mode==='future') tagsHtml += `<span class="tag tag-soon">${t('plan_estimate')}</span>`;
+  if(wd.mode==='past') tagsHtml += `<span class="tag tag-soon">${t('plan_past')}</span>`;
+  const taperMult = (wd.exists && wd.mode!=='past' && wd.weekStart) ? taperMultiplier(state.profile, wd.weekStart) : 1;
+  const isTapering = taperMult < 1;
+  // el aviso de taper (etiqueta + mensaje) solo se muestra en semanas "firmes" (actual y la que
+  // sigue) -- en una semana "estimado, puede ajustarse" no tiene sentido afirmar algo puntual
+  // como "acá empieza tu puesta a punto" sobre una proyección que todavía puede cambiar entera
+  const showTaperUi = isTapering && wd.mode!=='future';
+  if(showTaperUi) tagsHtml += `<span class="tag tag-asfalto">${t('plan_taper_tag')}</span>`;
+  // La semana de recuperación se recalcula siempre en base a wd.weekStart -- no depende de
+  // que state.event siga cargado (isRecoveryWeek() ya contempla que se haya limpiado solo
+  // al pasar la fecha, ver autoClearPastEvent()), así que se puede mostrar toda la semana,
+  // no solo el día del rollover.
+  const showRecoveryUi = wd.exists && wd.mode!=='past' && wd.mode!=='future' && wd.weekStart && isRecoveryWeek(wd.weekStart);
+  if(showRecoveryUi) tagsHtml += `<span class="tag tag-asfalto">${t('plan_recovery_tag')}</span>`;
+  document.getElementById('plan-week-info').textContent = label;
+  const tagsRow = document.getElementById('plan-week-tags');
+  tagsRow.innerHTML = tagsHtml;
+  tagsRow.style.display = tagsHtml ? 'flex' : 'none';
+  const taperNote = document.getElementById('plan-taper-note');
+  if(showTaperUi){
+    taperNote.style.display='block';
+    taperNote.textContent = taperMult <= 0.55 ? t('plan_taper_note_final') : t('plan_taper_note_early');
+  } else {
+    taperNote.style.display='none';
+  }
+  const eventWeekNote = document.getElementById('plan-event-week-note');
+  if(isEventWeek && state.event){
+    eventWeekNote.style.display='block';
+    eventWeekNote.textContent = t('plan_event_week_note', {name: state.event.name});
+  } else {
+    eventWeekNote.style.display='none';
+  }
+  const cutbackNote = document.getElementById('plan-cutback-note');
+  if(isPlainCutbackWeek){
+    cutbackNote.style.display='block';
+    cutbackNote.textContent = t('plan_cutback_note');
+  } else {
+    cutbackNote.style.display='none';
+  }
+  const recoveryNote = document.getElementById('plan-recovery-note');
+  if(showRecoveryUi){
+    recoveryNote.style.display='block';
+    recoveryNote.textContent = t('plan_recovery_note');
+  } else {
+    recoveryNote.style.display='none';
+  }
+
+  if(!wd.exists){
+    document.getElementById('plan-list').innerHTML = `<div style="text-align:center; padding:24px 0;"><svg viewBox="0 0 60 14" style="width:80px; height:19px; margin:0 auto 12px; display:block; opacity:.6;"><polyline points="0,12 10,12 16,4 22,10 28,2 34,9 40,12 60,12" fill="none" stroke="#C06A2E" stroke-width="1.6"/></svg><p class="muted" style="margin:0;">${t('plan_no_data')}</p></div>`;
+    renderPastWeeks();
+    return;
+  }
+
+  document.getElementById('plan-list').innerHTML = buildDayListHtml(wd, '');
   makeClickablesFocusable(document.getElementById('plan-list'));
   renderPastWeeks();
 }
@@ -5530,14 +5541,31 @@ function renderPastWeeks(){
     const doneCount = w.plan.filter(d=>d.dist>0 && d.status==='done').length;
     const totalSessions = w.plan.filter(d=>d.dist>0).length;
     const plannedAmount = isTimeMode() ? `${w.plan.reduce((a,d)=>a+planDurationMin(d),0)} ${t('time_unit_min')}` : `${fmtDist(w.plan.reduce((a,d)=>a+d.dist,0),1)}${distUnit()}`;
-    const offset = w.weekNumber - (state.weekNumber||1);
-    return `<div style="padding:10px 0; border-bottom:1px solid var(--asphalt-3); cursor:pointer;" onclick="viewingWeekOffset=${offset}; renderPlan();">
+    // Antes esto hacía onclick="viewingWeekOffset=${offset}; renderPlan();", que pisaba la
+    // semana que el usuario tenía abierta en la pestaña Plan -- pedido explícito del usuario:
+    // tocar una semana pasada debe abrir una pantalla aparte (ver openWeekDetail), sin tocar
+    // el navegador de semana de arriba.
+    return `<div style="padding:10px 0; border-bottom:1px solid var(--asphalt-3); cursor:pointer;" onclick="openWeekDetail(${w.weekNumber})">
       <div style="display:flex; justify-content:space-between;"><span style="font-weight:700;">${t('plan_week_label',{n:w.weekNumber})}</span><span class="muted mono" style="font-size:11.5px;">${w.weekStart}</span></div>
       <p class="muted" style="margin-top:4px; font-size:12.5px;">${doneCount}/${totalSessions} ${t('home_sessions').toLowerCase()} · ${plannedAmount} ${t('home_km_planned').toLowerCase()}</p>
     </div>`;
   }).join('');
 }
-function toggleDay(i){ if(planSwipeSuppressClick) return; document.getElementById('detail-'+i).classList.toggle('open'); }
+// Pantalla de solo lectura para una semana pasada (ver buildDayListHtml) -- separada de
+// viewingWeekOffset/renderPlan a propósito: tocar una semana en "Semanas anteriores" NO debe
+// cambiar la semana que se ve en la pestaña Plan, solo mostrar la de esa semana en una
+// pantalla aparte, de la que se puede volver atrás sin haber modificado nada arriba.
+function openWeekDetail(weekNumber){
+  const offset = weekNumber - (state.weekNumber||1);
+  const wd = getWeekData(offset);
+  document.getElementById('week-detail-title').textContent = t('plan_week_label',{n:weekNumber});
+  document.getElementById('week-detail-list').innerHTML = wd.exists ? buildDayListHtml(wd, 'wk-') : `<p class="muted" style="margin:0;">${t('plan_no_data')}</p>`;
+  openOverlaySheetEl(document.getElementById('week-detail-modal'));
+}
+function closeWeekDetail(){
+  document.getElementById('week-detail-modal').classList.remove('overlay-open');
+}
+function toggleDay(i, prefix){ if(planSwipeSuppressClick) return; document.getElementById('detail-'+(prefix||'')+i).classList.toggle('open'); }
 // Tarjeta de "próxima sesión" en Inicio: colapsada solo muestra tipo + km (pedido del
 // usuario -- antes mostraba siempre la descripción completa, mucho texto para lo que en
 // general es solo un vistazo rápido). "Ver detalle" avisa que hay más para tocar; mismo
@@ -8626,32 +8654,6 @@ function computeTrends(){
   const totalKm = (state.runs||[]).reduce((a,r)=>a+r.distanceKm,0);
   return {totalKm, totalRuns: (state.runs||[]).length};
 }
-function getQualitySessionBreakdown(daysBack){
-  // Cuenta las sesiones fuertes COMPLETADAS (series, tempo, fartlek, cuestas,
-  // progresivo) de los últimos `daysBack` días, mirando tanto el plan actual como
-  // el historial de semanas ya cerradas (planHistory). Sirve para que el corredor
-  // vea si el coach le está dando variedad real o siempre lo mismo.
-  daysBack = daysBack || 30;
-  const cutoff = Date.now() - daysBack*86400000;
-  const qualityTypes = ['intervals','tempo','fartlek','hills','progression'];
-  const counts = {};
-  const consider = (weekStart, plan) => {
-    if(!weekStart || !plan || !plan.length) return;
-    const start = new Date(weekStart+'T00:00:00');
-    if(isNaN(start.getTime())) return;
-    plan.forEach((d,i)=>{
-      if(d.status!=='done') return;
-      const dt = new Date(start); dt.setDate(dt.getDate()+i);
-      if(dt.getTime() < cutoff) return;
-      if(!qualityTypes.includes(d.typeKey)) return;
-      counts[d.typeKey] = (counts[d.typeKey]||0) + 1;
-    });
-  };
-  (state.planHistory||[]).forEach(h => consider(h.weekStart, h.plan));
-  consider(state.weekStart, state.plan);
-  return counts;
-}
-
 /* ---- Récords personales ---- */
 // Distancias estándar contra las que medimos marcas. Un run cuenta para una de estas
 // solo si su distancia real está a menos del 6% de la distancia estándar -- así no
@@ -8673,8 +8675,8 @@ function nearestPRBucket(km){
 }
 // Para la "devolución" que se muestra en cada tarjeta del historial (para qué sirvió esa
 // sesión). Cuando la carrera está vinculada a un día real del plan usamos su tipo real
-// (mirando tanto la semana actual como planHistory, igual que getQualitySessionBreakdown,
-// para no perder el tipo real de una carrera de una semana ya cerrada); si no está vinculada
+// (mirando tanto la semana actual como planHistory, para no perder el tipo real de una
+// carrera de una semana ya cerrada); si no está vinculada
 // a ningún día (carga manual, importada de Strava sin vincular), la clasificamos por
 // distancia/ritmo relativos al resto del historial -- no es una ciencia exacta, pero da una
 // devolución razonable.
@@ -9306,26 +9308,13 @@ function renderHistory(){
       return `<div class="trend-col"><div class="trend-stroke ${cls}" data-h="${h}" style="height:0px; transition-delay:${i*30}ms;"></div><div class="trend-lbl">${x.day}</div></div>`;
     }).join('')}</div>
   </div>`;
-  const qualityCounts = getQualitySessionBreakdown(30);
-  const qualityEntries = Object.entries(qualityCounts).filter(([,c])=>c>0).sort((a,b)=>b[1]-a[1]);
-  const maxQualityCount = qualityEntries.length ? qualityEntries[0][1] : 0;
-  const mixCard = qualityEntries.length ? `<div class="card">
-    <h3>${t('hist_quality_mix_title')}</h3>
-    <p class="muted" style="margin:0 0 12px; font-size:12px;">${t('hist_quality_mix_subtitle')}</p>
-    <div class="type-breakdown-list">${qualityEntries.map(([key,count])=>`
-      <div class="type-breakdown-row">
-        <span class="type-breakdown-label">${t('type_'+key)}</span>
-        <div class="type-breakdown-bar-wrap"><div class="type-breakdown-bar" style="width:${Math.round((count/maxQualityCount)*100)}%"></div></div>
-        <span class="type-breakdown-count">${count}</span>
-      </div>`).join('')}</div>
-  </div>` : '';
   // Los récords personales se muestran ahora en Logros (Perfil), junto con el resto de
   // los hitos del corredor -- ver renderPersonalRecordsCard() y openAchievements().
   // El icono generico de "historial" (reloj+flecha) no decia nada de running -- se
   // reemplaza por el mismo perfil de elevacion que ya es la firma visual de la app
   // (hoy usado como separador en Perfil), agrandado como pieza central acá: "todavia
   // no recorriste este camino" en vez de un ícono de reloj cualquiera.
-  if(!state.runs || state.runs.length===0){ el.innerHTML = stravaSyncCard + trendsCard + mixCard + `<div class="card" style="text-align:center; padding:32px 18px;"><svg viewBox="0 0 60 14" style="width:90px; height:21px; margin:0 auto 14px; display:block; opacity:.7;"><polyline points="0,12 10,12 16,4 22,10 28,2 34,9 40,12 60,12" fill="none" stroke="#C06A2E" stroke-width="1.6"/></svg><p class="muted" style="margin:0;">${t('hist_empty')}</p></div>`; animateHistTrendBars(); return; }
+  if(!state.runs || state.runs.length===0){ el.innerHTML = stravaSyncCard + trendsCard + `<div class="card" style="text-align:center; padding:32px 18px;"><svg viewBox="0 0 60 14" style="width:90px; height:21px; margin:0 auto 14px; display:block; opacity:.7;"><polyline points="0,12 10,12 16,4 22,10 28,2 34,9 40,12 60,12" fill="none" stroke="#C06A2E" stroke-width="1.6"/></svg><p class="muted" style="margin:0;">${t('hist_empty')}</p></div>`; animateHistTrendBars(); return; }
   // Buscador simple + encabezados de mes -- con varios meses de historial cargado, una
   // lista plana se vuelve incómoda de recorrer. El buscador filtra por lo que se ve en
   // cada tarjeta (fecha, zapatilla, "manual"/Strava); los encabezados de mes se insertan
@@ -9340,12 +9329,12 @@ function renderHistory(){
     return haystack.includes(query);
   });
   if(query && !filteredRuns.length){
-    el.innerHTML = stravaSyncCard + trendsCard + mixCard + `<div class="card" style="text-align:center; padding:32px 18px;"><p class="muted" style="margin:0;">${t('hist_search_empty')}</p></div>`;
+    el.innerHTML = stravaSyncCard + trendsCard + `<div class="card" style="text-align:center; padding:32px 18px;"><p class="muted" style="margin:0;">${t('hist_search_empty')}</p></div>`;
     animateHistTrendBars();
     return;
   }
   let lastMonthKey = null;
-  el.innerHTML = stravaSyncCard + trendsCard + mixCard + filteredRuns.map(r=>{
+  el.innerHTML = stravaSyncCard + trendsCard + filteredRuns.map(r=>{
     const shoe = state.shoes.find(s=>String(s.id)===String(r.shoeId));
     const paceMin = r.distanceKm>0.02 ? (r.durationSec/60)/r.distanceKm : 0;
     const avgHr = r.avgHr || (r.hrLog && r.hrLog.length ? Math.round(r.hrLog.reduce((a,h)=>a+h.bpm,0)/r.hrLog.length) : null);
@@ -11579,9 +11568,9 @@ function applyPlanChange(input){
     // (que sigue reaccionando a cómo termine esta semana) hasta que se promueva a semana actual
     if(!state.nextWeekOverrides) state.nextWeekOverrides = {};
     // typeKey en el override (además de type/desc, que son el texto que ve el corredor) es lo
-    // que le permite a getQualitySessionBreakdown()/runBenefitKey() reconocer esta sesión como
-    // lo que realmente es (series, tempo, etc.) en vez de arrastrar el typeKey del día base --
-    // ver applyPlanChange y el comentario en getNextWeekPlan.
+    // que le permite a runBenefitKey() reconocer esta sesión como lo que realmente es (series,
+    // tempo, etc.) en vez de arrastrar el typeKey del día base -- ver applyPlanChange y el
+    // comentario en getNextWeekPlan.
     const override = { type: input.tipo, desc: input.descripcion, typeKey: input.tipo_categoria };
     const effectiveDistKm = resolvePlanDistKm(input);
     if(effectiveDistKm!==null) override.dist = effectiveDistKm;
