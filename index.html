@@ -2202,7 +2202,7 @@
     <p class="muted" id="plan-recovery-note" style="display:none; color:var(--hivis-text); margin-bottom:14px;"></p>
     <div class="card" id="plan-list"></div>
     <div class="plan-secondary-actions">
-      <button class="plan-secondary-btn" onclick="exportWeekToCalendar()"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/></svg></span><span data-i18n="plan_export_ics"></span></button>
+      <button class="plan-secondary-btn" onclick="openCalendarSubscribe()"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/></svg></span><span data-i18n="plan_export_ics"></span></button>
       <button class="plan-secondary-btn" onclick="goCoachWithPrompt('')"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v11H8l-4 4v-4H4z"/></svg></span><span data-i18n="plan_adjust"></span></button>
     </div>
     <div class="card" id="past-weeks-card" style="display:none; margin-top:14px;">
@@ -2430,6 +2430,21 @@
     <button class="week-nav-btn" onclick="closeWeekDetail()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" id="week-detail-title"></h2>
     <div class="card" id="week-detail-list" style="margin-top:16px;"></div>
+  </div>
+
+  <!-- Suscripción al calendario (ver ensureCalendarToken/openCalendarSubscribe en app.js) --
+       reemplaza el viejo "bajar un .ics de esta semana", que generaba un evento suelto
+       nuevo cada vez que se tocaba (sin forma de borrar los anteriores, nunca hubo permiso
+       de escritura sobre el calendario del usuario). Esta URL es la misma siempre -- el
+       propio Calendario del usuario la vuelve a pedir solo. -->
+  <div class="overlay overlay-sheet" id="calendar-sub-modal">
+    <button class="week-nav-btn" onclick="closeCalendarSubscribe()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="cal_sub_title"></h2>
+    <p class="muted" style="margin-top:10px;" data-i18n="cal_sub_desc"></p>
+    <div class="card mono" id="cal-sub-link" style="margin-top:16px; font-size:12.5px; word-break:break-all; color:var(--mist);"></div>
+    <button class="btn btn-primary" style="width:100%; margin-top:20px;" onclick="subscribeToCalendarIOS()" data-i18n="cal_sub_btn_ios"></button>
+    <button class="btn btn-outline" style="width:100%; margin-top:12px;" onclick="shareCalendarLink()" data-i18n="cal_sub_btn_share"></button>
+    <p class="muted" style="margin-top:16px; font-size:12.5px;" data-i18n="cal_sub_android_hint"></p>
   </div>
 
   <div class="overlay" id="run-detail-modal" style="display:none;">

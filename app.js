@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-02T01:23:40Z';
+const APP_VERSION = '2026-10-02T01:50:48Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4845,52 +4845,63 @@ function planLabel(d){
   return {type:lbl.type, desc};
 }
 
-/* ---- exportar la semana como archivo .ics -----
-   Para que el corredor vea sus sesiones en Google/Apple Calendar sin depender de abrir
-   la app. Son eventos de día completo (sin hora fija, porque el plan no define una) --
-   así evitamos meternos con huso horario y cada uno lo agenda a la hora que le sirva. */
-function icsEscape(str){
-  return String(str||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
+/* ---- suscripción al calendario (webcal://) -----
+   Antes "Agregar semana al calendario" bajaba un .ics nuevo cada vez que se tocaba el
+   botón. Apple/Google Calendar tratan un .ics importado como eventos sueltos, no como una
+   fuente que se pueda refrescar -- cada semana exportada se sumaba a las anteriores en vez
+   de reemplazarlas, y la app nunca tuvo (ni puede tener) permiso para borrar lo que ya
+   quedó adentro del Calendario del usuario. Reportado por el usuario: después de varios
+   cambios de plan, terminó con un montón de eventos viejos pegoteados sin forma de
+   limpiarlos desde acá.
+   La solución de raíz es un feed SUSCRIBIBLE (ver api/calendar-feed.js): en vez de un
+   archivo de una sola vez, es una URL que el propio Calendario del usuario vuelve a pedir
+   solo, periódicamente. Como siempre devuelve el estado actual de la semana en curso con
+   los mismos UID de siempre, un evento que ya no aplica (semana vieja, día cambiado)
+   simplemente deja de aparecer en el próximo refresco, en vez de quedar duplicado para
+   siempre. state.calendarToken identifica al usuario en esa URL pública sin necesitar
+   login (ningún cliente de calendario sabe autenticarse) -- se genera una sola vez y viaja
+   con el resto de state a app_state.data, igual que cualquier otro campo. */
+function ensureCalendarToken(){
+  if(!state.calendarToken){
+    state.calendarToken = (typeof crypto!=='undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+    persist();
+  }
+  return state.calendarToken;
 }
-function icsDateStamp(dateObj){
-  const y = dateObj.getFullYear();
-  const m = String(dateObj.getMonth()+1).padStart(2,'0');
-  const d = String(dateObj.getDate()).padStart(2,'0');
-  return `${y}${m}${d}`;
+function calendarFeedUrl(){
+  return `https://zancada.org/api/calendar-feed?t=${ensureCalendarToken()}`;
 }
-function generateWeekICS(){
-  const monday = new Date(state.weekStart+'T00:00:00');
-  const nowStamp = icsDateStamp(new Date());
-  const events = state.plan.filter(d=>d.dist>0).map(d=>{
-    const idx = DAY_KEYS.indexOf(d.day);
-    const date = new Date(monday); date.setDate(monday.getDate()+idx);
-    const nextDate = new Date(date); nextDate.setDate(date.getDate()+1);
-    const lbl = planLabel(d);
-    const summary = `${lbl.type} · ${planAmountText(d)}`;
-    const uid = `zancada-${state.weekStart}-${d.day}@zancada.app`;
-    return ['BEGIN:VEVENT',
-      `UID:${uid}`,
-      `DTSTAMP:${nowStamp}T000000Z`,
-      `DTSTART;VALUE=DATE:${icsDateStamp(date)}`,
-      `DTEND;VALUE=DATE:${icsDateStamp(nextDate)}`,
-      `SUMMARY:${icsEscape(summary)}`,
-      `DESCRIPTION:${icsEscape(lbl.desc)}`,
-      'END:VEVENT'].join('\r\n');
-  });
-  return ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Zancada//Plan Semanal//ES','CALSCALE:GREGORIAN',
-    ...events,'END:VCALENDAR'].join('\r\n');
-}
-function exportWeekToCalendar(){
+function openCalendarSubscribe(){
   if(!state.plan.some(d=>d.dist>0)){ showToast(t('plan_export_ics_empty'),'error'); return; }
-  const blob = new Blob([generateWeekICS()], {type:'text/calendar;charset=utf-8'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `zancada-semana-${state.weekStart}.ics`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+  document.getElementById('cal-sub-link').textContent = calendarFeedUrl();
+  openOverlaySheetEl(document.getElementById('calendar-sub-modal'));
+}
+function closeCalendarSubscribe(){
+  document.getElementById('calendar-sub-modal').classList.remove('overlay-open');
+}
+// webcal:// es el esquema que Calendario de iOS/macOS reconoce para abrir directo su
+// pantalla nativa de "Suscribirse" -- en Android, en general ningún cliente de calendario
+// lo maneja, por eso el botón de abajo ("Compartir enlace") es la vía que de verdad
+// funciona ahí (pegar la URL en Google Calendar > Configuración > Agregar calendario >
+// Desde URL).
+function subscribeToCalendarIOS(){
+  window.location.href = calendarFeedUrl().replace('https://','webcal://');
+}
+async function shareCalendarLink(){
+  const url = calendarFeedUrl();
+  const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  const Share = isNative && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
+  if(Share){
+    try{ await Share.share({ url, title:'Zancada' }); }catch(e){ /* usuario canceló el panel nativo */ }
+    return;
+  }
+  if(navigator.share){
+    try{ await navigator.share({ url, title:'Zancada' }); return; }catch(e){ /* canceló -- cae a copiar */ }
+  }
+  try{
+    await navigator.clipboard.writeText(url);
+    showToast(t('cal_sub_copied'));
+  }catch(e){ /* sin Share API ni Clipboard API no queda más que dejarlo seleccionable en pantalla */ }
 }
 
 /* ================= RENDER ================= */
