@@ -2472,9 +2472,13 @@
     <h2 class="subtitle" style="font-size:22px;" data-i18n="cal_sub_title"></h2>
     <p class="muted" style="margin-top:10px;" data-i18n="cal_sub_desc"></p>
     <div class="card mono" id="cal-sub-link" style="margin-top:16px; font-size:12.5px; word-break:break-all; color:var(--mist);"></div>
-    <button class="btn btn-primary" style="width:100%; margin-top:20px;" onclick="subscribeToCalendarIOS()" data-i18n="cal_sub_btn_ios"></button>
-    <button class="btn btn-outline" style="width:100%; margin-top:12px;" onclick="shareCalendarLink()" data-i18n="cal_sub_btn_share"></button>
-    <p class="muted" style="margin-top:16px; font-size:12.5px;" data-i18n="cal_sub_android_hint"></p>
+    <!-- webcal:// (subscribeToCalendarIOS) solo lo abre de verdad Calendario de iOS/Safari --
+         en Android, tocarlo no hace nada (ningún cliente de calendario está registrado para
+         ese esquema), así que openCalendarSubscribe() en app.js lo esconde entero ahí y deja
+         "Compartir enlace" como el único botón, marcado primary. -->
+    <button class="btn btn-primary" id="cal-sub-btn-ios" style="width:100%; margin-top:20px;" onclick="subscribeToCalendarIOS()" data-i18n="cal_sub_btn_ios"></button>
+    <button class="btn btn-outline" id="cal-sub-btn-share" style="width:100%; margin-top:12px;" onclick="shareCalendarLink()" data-i18n="cal_sub_btn_share"></button>
+    <p id="cal-sub-android-hint" style="margin-top:16px; font-size:13.5px; line-height:1.5; color:var(--chalk);" data-i18n="cal_sub_android_hint"></p>
   </div>
 
   <div class="overlay" id="run-detail-modal" style="display:none;">

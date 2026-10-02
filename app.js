@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-02T02:11:11Z';
+const APP_VERSION = '2026-10-02T04:53:16Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4880,6 +4880,20 @@ function calendarFeedUrl(){
 function openCalendarSubscribe(){
   if(!state.plan.some(d=>d.dist>0)){ showToast(t('plan_export_ics_empty'),'error'); return; }
   document.getElementById('cal-sub-link').textContent = calendarFeedUrl();
+  // Reportado por el usuario: el botón "Agregar a Calendario" (webcal://) no hacía nada al
+  // tocarlo en Android -- esperable, ese esquema solo lo abre Calendario de iOS/Safari,
+  // ningún cliente de calendario de Android está registrado para manejarlo. isIOSDevice()
+  // (no Capacitor.getPlatform()) a propósito: hoy no existe build nativo de iOS (ver
+  // memoria del proyecto), así que un iPhone real llega acá por Safari/PWA, no por una app
+  // nativa -- getPlatform() ahí daría 'web', no 'ios'. Fuera de iOS, el botón se esconde
+  // entero (tocarlo no hacía nada, confuso) y "Compartir enlace" pasa a ser la única
+  // acción, marcada primary.
+  const ios = isIOSDevice();
+  document.getElementById('cal-sub-btn-ios').style.display = ios ? '' : 'none';
+  const shareBtn = document.getElementById('cal-sub-btn-share');
+  shareBtn.classList.toggle('btn-primary', !ios);
+  shareBtn.classList.toggle('btn-outline', ios);
+  document.getElementById('cal-sub-android-hint').style.display = ios ? 'none' : '';
   openOverlaySheetEl(document.getElementById('calendar-sub-modal'));
 }
 function closeCalendarSubscribe(){
