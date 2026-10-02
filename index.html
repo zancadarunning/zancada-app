@@ -125,7 +125,14 @@
        el borde (--overlay-hairline) queda como un detalle apenas insinuado, no como el
        recurso principal. */
     --asphalt:#0A0A0A; --asphalt-2:#18181B; --asphalt-3:#202023; --asphalt-4:#2C2C30;
-    --chalk:#EDEFEF; --mist:#8B9296; --mist-dim:#7E8588;
+    --chalk:#EDEFEF; --mist:#8B9296;
+    /* #7E8588 daba 4.34:1 contra --asphalt-3 -- por debajo del 4.5:1 que pide AA para
+       texto chico. El peor caso real: .pr-medal-locked ("Te faltan X km" en una medalla
+       bloqueada) usa --asphalt-3 como fondo de la medalla, más oscuro que el fondo de
+       página general. Mismo bug, mismo criterio de arreglo que ya se había aplicado para
+       el tema claro (ver ese comentario) -- #878D90 da 4.84:1 contra ese mismo fondo,
+       sin alejarse del gris original. */
+    --mist-dim:#878D90;
     --hivis:#D6FF3F; --hivis-dim:rgba(214,255,63,.14); --hivis-text:#D6FF3F; --ink:#121415;
     --clay:#C06A2E; --clay-dim:rgba(192,106,46,.16);
     --danger:#FF3B30; --danger-dim:rgba(255,59,48,.16);
@@ -542,7 +549,12 @@
 
   .ob-progress-wrap{display:flex; align-items:center; gap:10px; margin-bottom:22px;}
   .ob-progress{flex:1; height:5px; background:var(--asphalt-3); border-radius:999px; overflow:hidden;}
-  .ob-progress-fill{height:100%; width:20%; background:var(--hivis); border-radius:999px; transition:width .3s ease;}
+  <!-- width->transform: encontrado en una auditoría, las 3 barras de progreso de la app
+       animaban "width" directo, que fuerza un recálculo de layout en cada cuadro. El ancho
+       real queda fijo en 100% del track (que ya tiene overflow:hidden) y el progreso visual
+       lo da transform:scaleX (compositing puro, sin tocar layout) -- mismo resultado visual,
+       mismo número en pantalla, solo que no fuerza reflow. -->
+  .ob-progress-fill{height:100%; width:100%; transform:scaleX(.2); transform-origin:left; background:var(--hivis); border-radius:999px; transition:transform .3s ease;}
   .ob-step{display:none;}
   .ob-step.active{display:block; animation:viewFadeIn .22s ease;}
 
@@ -635,7 +647,10 @@
   .sport-chip-x:hover{opacity:1;}
   .switch{position:relative; display:inline-block; width:51px; height:31px; flex-shrink:0;}
   .switch input{opacity:0; width:0; height:0; position:absolute;}
-  .switch-slider{position:absolute; cursor:pointer; inset:0; background:var(--asphalt-4); transition:.2s; border-radius:31px;}
+  <!-- 999px (no 31px): encontrado en una auditoría -- 31px era un cálculo a mano de "la
+       mitad del alto de la pista" que el token de píldora ya documentado (999px) logra
+       exactamente igual, sin un número mágico suelto. -->
+  .switch-slider{position:absolute; cursor:pointer; inset:0; background:var(--asphalt-4); transition:.2s; border-radius:999px;}
   .switch-slider:before{content:""; position:absolute; height:27px; width:27px; left:2px; top:2px; background:#fff; transition:.2s; border-radius:50%; box-shadow:0 2px 4px rgba(0,0,0,.3);}
   .switch input:checked + .switch-slider{background:var(--hivis);}
   .switch input:checked + .switch-slider:before{transform:translateX(20px);}
@@ -1640,8 +1655,17 @@
      drop-shadow (filter, no box-shadow) sigue la silueta real del círculo en vez de la caja
      rectangular del botón. */
   .coach-fab{position:absolute; right:10px; bottom:0; width:74px; height:74px; background:none; border:none; pointer-events:auto;
-    display:flex; align-items:center; justify-content:center; cursor:pointer; transition:transform .12s ease;}
+    display:flex; align-items:center; justify-content:center; cursor:pointer; transition:transform .12s ease, opacity .15s ease;
+    transform-origin:bottom right;}
   .coach-fab:active{transform:scale(.92);}
+  /* Encontrado en una auditoría: al ser position:fixed, este personaje tapa lo que sea que
+     esté scrolleado justo ahí en ese momento -- confirmado tapando contenido real en Inicio,
+     Historial y Perfil según cuánto haya bajado cada pantalla. En vez de reacomodar el
+     layout de cada pantalla a mano (frágil: cualquier tarjeta nueva podría volver a caer
+     ahí), se achica y atenúa SOLO mientras se está scrolleando -- el único momento en que de
+     verdad tapa algo que el usuario está mirando o por tocar -- y vuelve a su tamaño
+     normal en cuanto el scroll se detiene (ver el listener de scroll en app.js). */
+  .coach-fab-wrap.coach-fab-scrolling .coach-fab{opacity:.3; transform:scale(.8);}
   /* "Pop" cuando llega un mensaje nuevo del coach (ver updateChatBadge en app.js) -- en el
      propio botón HTML, no en el SVG de adentro, porque acá SÍ hace falta una transición CSS
      de verdad (a diferencia del seguimiento de mirada/parpadeo, que usa el atributo SVG
@@ -2061,8 +2085,8 @@
 
     <div class="home-section-label" data-i18n="home_section_today"></div>
 
-    <div class="card-shell card-shell-hivis">
-    <div class="card card-highlight">
+    <div class="card-shell card-shell-hivis" id="home-next-card-shell">
+    <div class="card card-highlight" id="home-next-card">
       <h3 id="home-next-card-title" data-i18n="home_next"></h3>
       <div class="next-session" id="home-next-session" role="button" tabindex="0" onclick="toggleHomeNextDetail()" aria-expanded="false" aria-controls="home-next-detail">
         <div style="min-width:0;"><div class="big display" id="home-next-title">—</div></div>
@@ -2143,7 +2167,7 @@
         <span class="mono" id="goal-progress-pct" style="font-weight:800; color:var(--hivis-text);">0%</span>
       </div>
       <div style="height:10px; background:var(--asphalt-3); border-radius:5px; overflow:hidden;">
-        <div id="goal-progress-bar" style="height:100%; background:var(--hivis); width:0%; transition:width .3s;"></div>
+        <div id="goal-progress-bar" style="height:100%; background:var(--hivis); width:100%; transform:scaleX(0); transform-origin:left; transition:transform .3s;"></div>
       </div>
     </div>
 
@@ -2340,7 +2364,7 @@
             </div>
             <div class="mono" id="workout-guide-target" style="font-size:30px; font-weight:800; margin-top:10px;"></div>
             <div style="height:8px; background:var(--asphalt-3); border-radius:4px; overflow:hidden; margin-top:10px;">
-              <div id="workout-guide-progress-bar" style="height:100%; background:var(--hivis); width:0%; transition:width .25s linear;"></div>
+              <div id="workout-guide-progress-bar" style="height:100%; background:var(--hivis); width:100%; transform:scaleX(0); transform-origin:left; transition:transform .25s linear;"></div>
             </div>
             <p class="muted" id="workout-guide-remaining" style="margin:6px 0 0; font-size:12.5px;"></p>
           </div>
@@ -2416,7 +2440,13 @@
       <div class="field"><label for="man-shoe" data-i18n="run_summary_shoe_q"></label><select id="man-shoe"></select></div>
       <button class="btn btn-primary btn-sm" id="man-save-btn" style="width:100%; margin-top:6px;" data-i18n="hist_manual_save" onclick="saveManualRun()"></button>
     </div>
-    <input type="text" id="hist-search" data-i18n-ph="hist_search_ph" data-i18n-aria="hist_search_ph" oninput="renderHistory()" style="width:100%; margin-bottom:14px; background:var(--asphalt-2); border:1px solid var(--overlay-hairline); color:var(--chalk); padding:8px 14px; border-radius:999px; font-size:13.5px; font-family:inherit;">
+    <!-- Encontrado en una auditoría: este buscador tenía su propio border/padding/font-size
+         de un pixelado distinto al resto de los inputs del sistema, incluyendo un font-size
+         de 13.5px que reintroducía justo el bug de auto-zoom de iOS Safari que el resto de
+         los inputs evita a propósito con 16px (ver el comentario grande de .field input).
+         Mantiene la forma píldora (999px, un token válido) pero ahora respeta el mismo
+         borde/padding/tamaño de fuente que cualquier otro campo de texto de la app. -->
+    <input type="text" id="hist-search" data-i18n-ph="hist_search_ph" data-i18n-aria="hist_search_ph" oninput="renderHistory()" style="width:100%; margin-bottom:14px; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px 16px; border-radius:999px; font-size:16px; font-family:inherit;">
     <div id="history-list"></div>
   </section>
 

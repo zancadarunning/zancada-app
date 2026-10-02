@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-02T01:50:48Z';
+const APP_VERSION = '2026-10-02T02:11:11Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -386,19 +386,26 @@ function setMascotExpression(name, {duration=2200, priority=1}={}){
 // Color del cuerpo: lima de siempre (neutral), un dorado cálido cuando pasa algo bueno
 // (marca personal, meta semanal, racha de semanas), y un tono arcilla cuando pasa algo que
 // conviene tomarse con calma (durmió mal, cargó una molestia/lesión) -- reusa colores que
-// la app ya usa en otro lado (--zone3 es el dorado de la zona de esfuerzo "constante",
-// --clay es el mismo tono que ya usan las etiquetas de terreno asfalto) en vez de inventar
-// hex nuevos sueltos. Sin sistema de prioridad (a diferencia de las expresiones): son pocos
-// disparadores, ninguno realmente compite entre sí, así que "el último que llamó gana y
-// reinicia el timer" alcanza.
-const MASCOT_BODY_COLORS = { neutral: 'var(--hivis)', good: 'var(--zone3)', bad: 'var(--clay)' };
+// la app ya usa en otro lado en vez de inventar hex nuevos sueltos: --clay es el mismo
+// tono que ya usan las etiquetas de terreno asfalto. "good" usaba antes --zone3 (el
+// dorado de la zona de esfuerzo "constante") -- encontrado en una auditoría: las 5 zonas
+// de esfuerzo son una escala de datos fija (ver DESIGN.md), nunca un color de marca para
+// pedir prestado, así que un corredor que ya aprendió "ese dorado es zona 3" lo veía
+// significar otra cosa en la cara de la mascota. "good" ahora usa el mismo lima que el
+// estado neutral (lima YA es la señal de "esto es bueno/lo único que importa" en toda la
+// app, ver la regla de la única señal) y se distingue del reposo normal con el mismo
+// brillo que ya usan los botones primarios (--hivis-glow), no con un color nuevo. Sin
+// sistema de prioridad (a diferencia de las expresiones): son pocos disparadores, ninguno
+// realmente compite entre sí, así que "el último que llamó gana y reinicia el timer" alcanza.
+const MASCOT_BODY_COLORS = { neutral: 'var(--hivis)', good: 'var(--hivis)', bad: 'var(--clay)' };
 let mascotColorTimer = null;
 function setMascotColor(name, {duration=4000}={}){
   const body = document.getElementById('mascot-body');
   if(!body || !MASCOT_BODY_COLORS[name]) return;
   body.setAttribute('fill', MASCOT_BODY_COLORS[name]);
+  body.style.filter = name === 'good' ? 'drop-shadow(0 0 6px var(--hivis-glow))' : '';
   clearTimeout(mascotColorTimer);
-  mascotColorTimer = setTimeout(()=>{ body.setAttribute('fill', MASCOT_BODY_COLORS.neutral); }, duration);
+  mascotColorTimer = setTimeout(()=>{ body.setAttribute('fill', MASCOT_BODY_COLORS.neutral); body.style.filter = ''; }, duration);
 }
 // Guiño (un solo ojo, no los dos -- eso ya es el parpadeo normal) apenas se toca el botón,
 // antes de entrar al chat -- showView('coach') esconde coach-fab-wrap en el mismo instante
@@ -721,7 +728,6 @@ const SPORTS_LIST = ['futbol','basquet','voley','criquet','tenis_padel','beisbol
   'futbol_americano','handball','hockey_cesped','hockey_hielo','golf','boxeo','artes_marciales',
   'natacion','ciclismo','remo','escalada','surf','esqui_snowboard','patin_skate',
   'yoga_pilates','otro'];
-const ZONE_COLORS = {1:'#5B9BFF',2:'#4ADE80',3:'#FACC15',4:'#FB923C',5:'#FF6B5D'};
 const MI_PER_KM = 0.621371, KM_PER_MI = 1.609344, LB_PER_KG = 2.20462, FT_PER_CM = 0.0328084, CM_PER_FT = 30.48;
 function isImperial(){ return state.profile && state.profile.units === 'imperial'; }
 function distUnit(){ return isImperial() ? 'mi' : 'km'; }
@@ -3028,7 +3034,7 @@ function resetOnboardSteps(){
 function obGotoStep(n){
   obCurrentStep = n;
   document.querySelectorAll('.ob-step').forEach(el=>el.classList.toggle('active', parseInt(el.dataset.step,10)===n));
-  document.getElementById('ob-progress-fill').style.width = ((n/OB_STEP_COUNT)*100)+'%';
+  document.getElementById('ob-progress-fill').style.transform = `scaleX(${n/OB_STEP_COUNT})`;
   document.getElementById('ob-back-btn').style.display = n>1 ? 'flex' : 'none';
   document.getElementById('onboard').scrollTop = 0;
 }
@@ -5074,6 +5080,15 @@ function renderHome(){
   // Si ya corrimos hoy, mostramos el resumen de esa sesión en lugar del cartel de
   // "próxima sesión" -- ver getTodayRun().
   const todayRun = getTodayRun();
+  // Encontrado en una auditoría: esta tarjeta tenía SIEMPRE el brillo lima completo, incluso
+  // en un día de descanso sin nada que hacer -- la regla de la única señal (ver DESIGN.md)
+  // dice que el lima significa "esto es lo único para actuar ahora", y gastarlo en un
+  // descanso le resta peso al resto de la app. Ahora el brillo queda reservado para un día
+  // con una sesión real planeada, o un día de descanso donde igual se corrió algo extra
+  // (todayRun sin sesión planeada) -- ahí sí hay algo que celebrar.
+  const cardEarnsGlow = today.dist > 0 || !!todayRun;
+  document.getElementById('home-next-card-shell').classList.toggle('card-shell-hivis', cardEarnsGlow);
+  document.getElementById('home-next-card').classList.toggle('card-highlight', cardEarnsGlow);
   const doneBlock = document.getElementById('home-session-done-block');
   const nextSessionBlock = document.getElementById('home-next-session');
   const nextDetailBlock = document.getElementById('home-next-detail');
@@ -5130,7 +5145,7 @@ function renderHome(){
     const rawPct = (doneKm / state.profile.weeklyGoalKm) * 100;
     const pct = Math.min(100, Math.round(rawPct));
     document.getElementById('goal-progress-pct').textContent = pct + '%';
-    document.getElementById('goal-progress-bar').style.width = pct + '%';
+    document.getElementById('goal-progress-bar').style.transform = `scaleX(${pct/100})`;
     if(rawPct >= 100 && state.weekStart && state.lastGoalCelebratedWeek !== state.weekStart){
       state.lastGoalCelebratedWeek = state.weekStart;
       haptic([15,40,15,40,25]);
@@ -5154,6 +5169,7 @@ function renderHome(){
   const todayIdx = (new Date().getDay()+6)%7;
   const maxPlanDist = Math.max(...state.plan.map(d=>d.dist||0), 1);
   const barsEl = document.getElementById('home-week-bars');
+  barsEl.setAttribute('role', 'list');
   barsEl.innerHTML = state.plan.map((d,i)=>{
     const isRest = d.dist===0;
     const isToday = i===todayIdx;
@@ -5162,9 +5178,14 @@ function renderHome(){
     // así .wd-col.today sigue pudiendo pisarlo por cascada normal (mismo criterio que
     // ya usaba esta tira: hoy siempre se destaca en lima, sin importar la zona del día).
     const zc = (!isRest && d.zone) ? `--zc:var(--zone${d.zone})` : '';
-    return `<div class="wd-col ${isRest?'rest':'training'} ${isToday?'today':''}">
-      <div class="wd-bar-wrap"><div class="wd-bar" style="height:${h}px; ${zc}"></div></div>
-      <div class="wd-lbl">${t('day_'+d.day).slice(0,2)}</div>
+    // Encontrado en una auditoría: esta tira codificaba todo (día, distancia, zona) solo con
+    // la altura y el color de un <div> -- un lector de pantalla no tenía forma de saber qué
+    // entrenamiento había cada día. dayLabel repite en texto exactamente lo que el ojo ya ve.
+    const dayName = t('day_'+d.day);
+    const dayLabel = isRest ? `${dayName}: ${planLabel(d).type}` : `${dayName}: ${planAmountText(d)}${d.zone ? ', '+t('zone_word')+' '+d.zone : ''}`;
+    return `<div class="wd-col ${isRest?'rest':'training'} ${isToday?'today':''}" role="listitem" aria-label="${escapeHtml(dayLabel)}">
+      <div class="wd-bar-wrap" aria-hidden="true"><div class="wd-bar" style="height:${h}px; ${zc}"></div></div>
+      <div class="wd-lbl" aria-hidden="true">${t('day_'+d.day).slice(0,2)}</div>
     </div>`;
   }).join('');
 
@@ -5811,7 +5832,10 @@ function renderPainLog(){
   const entries = (state.painLog||[]).slice().reverse();
   const activeCount = entries.filter(p=>p.active).length;
   const summaryEl = document.getElementById('perfil-pain-summary');
-  if(summaryEl) summaryEl.textContent = !entries.length ? t('perfil_pain_summary_empty') : (activeCount ? t('perfil_pain_summary_active', {n: activeCount}) : t('perfil_pain_summary_none_active'));
+  // Encontrado en una auditoría: con activeCount===1 esto mostraba "1 molestias activas"
+  // (y el mismo problema de plural en las otras 5 traducciones) -- perfil_pain_summary_active
+  // nunca tenía una forma singular propia.
+  if(summaryEl) summaryEl.textContent = !entries.length ? t('perfil_pain_summary_empty') : (activeCount === 1 ? t('perfil_pain_summary_active_one') : activeCount ? t('perfil_pain_summary_active', {n: activeCount}) : t('perfil_pain_summary_none_active'));
   if(!el) return;
   if(!entries.length){ el.innerHTML = `<p class="muted" style="text-align:center; padding:8px 0;">${t('pain_list_empty')}</p>`; return; }
   el.innerHTML = entries.map(p=>{
@@ -6993,6 +7017,20 @@ function updateCoachFabVisibility(){
   const inExercise = document.getElementById('runActive').style.display !== 'none' && document.getElementById('runActive').style.display !== '';
   document.getElementById('coach-fab-wrap').style.display = (inCoach || inExercise) ? 'none' : 'block';
 }
+// Ver el comentario junto a .coach-fab-scrolling en el CSS: el personaje se achica y
+// atenúa mientras la página se mueve, y vuelve a su tamaño normal 300ms después del
+// último evento de scroll (no instantáneo, para no parpadear entre scrolleos cortos
+// seguidos).
+(function(){
+  const fabWrap = document.getElementById('coach-fab-wrap');
+  if(!fabWrap) return;
+  let scrollEndTimer = null;
+  window.addEventListener('scroll', ()=>{
+    fabWrap.classList.add('coach-fab-scrolling');
+    clearTimeout(scrollEndTimer);
+    scrollEndTimer = setTimeout(()=>fabWrap.classList.remove('coach-fab-scrolling'), 300);
+  }, {passive:true});
+})();
 async function showView(v){
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   document.getElementById('view-'+v).classList.add('active');
@@ -7693,7 +7731,7 @@ function renderWorkoutGuide(){
     }
     document.getElementById('workout-guide-target').textContent = targetLabel;
     document.getElementById('workout-guide-remaining').textContent = t('run_guide_remaining', {value: remainingLabel});
-    document.getElementById('workout-guide-progress-bar').style.width = Math.max(0,Math.min(100,pct)) + '%';
+    document.getElementById('workout-guide-progress-bar').style.transform = `scaleX(${Math.max(0,Math.min(100,pct))/100})`;
   } else if(w.phase==='done'){
     document.getElementById('workout-guide-done-text').textContent = t('voice_workout_done');
   }
@@ -9090,7 +9128,7 @@ function openAchievements(){
     <h2 class="display" style="font-size:20px; margin-bottom:2px;">${t('ach_title')}</h2>
     <p class="muted" style="margin:0 0 4px;">${t('ach_subtitle')}</p>
     <p style="margin:0 0 8px; font-weight:800; color:var(--hivis-text); font-size:13px;">${t('ach_unlocked_count', {unlocked:unlockedCount, total:totalCount})}</p>
-    <div class="ob-progress" style="margin-bottom:16px;"><div class="ob-progress-fill" style="width:${pct}%;"></div></div>
+    <div class="ob-progress" style="margin-bottom:16px;"><div class="ob-progress-fill" style="width:100%; transform:scaleX(${pct/100}); transform-origin:left;"></div></div>
     ${renderPersonalRecordsCard()}
     <div class="card"><h3>${t('ach_section_distance')}</h3>${renderAchievementBadgeGrid(distanceBadges)}</div>
     <div class="card"><h3>${t('ach_section_runs')}</h3>${renderAchievementBadgeGrid(runBadges)}</div>

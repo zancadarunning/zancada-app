@@ -8,7 +8,7 @@ colors:
   asphalt-4: "#2C2C30"
   chalk: "#EDEFEF"
   mist: "#8B9296"
-  mist-dim: "#5C6366"
+  mist-dim: "#878D90"
   hivis: "#D6FF3F"
   hivis-dim: "rgba(214,255,63,.14)"
   ink: "#121415"
@@ -21,6 +21,21 @@ colors:
   zone3: "#D4B356"
   zone4: "#CC8A56"
   zone5: "#C9695C"
+  light-asphalt: "#F0F1EE"
+  light-asphalt-2: "#FFFFFF"
+  light-asphalt-3: "#E7E8E3"
+  light-asphalt-4: "#D9DAD3"
+  light-chalk: "#14161A"
+  light-mist: "#5C6166"
+  light-mist-dim: "#5F6365"
+  light-hivis-text: "#5E7000"
+  light-clay: "#A84E1C"
+  light-danger: "#D6291C"
+  light-zone1: "#2A4F84"
+  light-zone2: "#29653C"
+  light-zone3: "#7B6014"
+  light-zone4: "#8B5023"
+  light-zone5: "#96382C"
 typography:
   display:
     fontFamily: "'Bebas Neue', sans-serif"
@@ -42,6 +57,7 @@ typography:
     fontFamily: "'JetBrains Mono', monospace"
     fontWeight: 400
 rounded:
+  xs: "8px"
   sm: "18px"
   md: "26px"
   pill: "999px"
@@ -82,12 +98,12 @@ components:
 
 **Creative North Star: "La Pista Nocturna" (The Night Track)**
 
-Zancada is built for running before the sun's up or after it's down — the hours when a runner's own visibility is the thing keeping them safe. The interface is genuinely dark, not a "dark mode" toggle bolted onto a light design: near-black carbon (`#0A0A0A`) is the only background this app has, by deliberate, confirmed decision (a light theme existed and was removed at the user's request). Out of that darkness, one color does real work the way hi-vis gear does in real life: a lime-green accent (`#D6FF3F`) that exists to be seen, not to decorate. It marks the thing that's active, the button that matters, the number that's live right now — everywhere else, the screen stays quiet.
+Zancada is built for running before the sun's up or after it's down — the hours when a runner's own visibility is the thing keeping them safe. Near-black carbon (`#0A0A0A`) is the committed default and the only theme every design decision in this document is written against: nothing here is "dark mode" bolted onto a light design. A light theme exists too (see [Themes](#themes) below) — it was built once, removed entirely at the user's request, and later re-requested by that same user, so it now ships as a real, maintained second surface rather than an experiment. It is not a second design language: every rule, token role, and named rule in this document applies identically in both themes, just through each theme's own token values. Out of the dark theme's carbon, one color does real work the way hi-vis gear does in real life: a lime-green accent (`#D6FF3F`) that exists to be seen, not to decorate. It marks the thing that's active, the button that matters, the number that's live right now — everywhere else, the screen stays quiet.
 
 Surfaces separate from each other by luminosity, not by borders. Cards sit a few steps lighter than the page behind them; hairline strokes exist only as a faint finishing touch, never as the primary way two surfaces tell each other apart. Numbers — pace, distance, time, splits, percentages — always render in a monospaced face, so a runner glancing down mid-stride reads a tabular, precise, GPS-watch kind of number, visually distinct from the conversational prose around it. Everything else about the shape language is built for a hand that might be tired, sweaty, or moving: big pill buttons, generous 26px card corners, and a tab bar that floats like a HUD, its center pinned by a raised circular "Correr" button that has to be visibly gravity-defying to earn the interruption of stopping your day to start a run.
 
 **Key Characteristics:**
-- Single, deliberate dark theme — carbon-black ground, no light variant, ever.
+- Dark is the committed default — carbon-black ground, every surface and rule in this document specified against it first. A real, maintained light theme exists as an opt-in (system-preference or manual toggle), using the same tokens re-valued for contrast on white, never a second design language.
 - Depth from luminosity layering, not from borders — hairlines are a whisper, not the boundary.
 - One accent color, hi-vis lime, used with the same restraint and purpose as real reflective gear.
 - Every number on screen renders in JetBrains Mono; every heading renders in Bebas Neue.
@@ -112,7 +128,7 @@ A near-monochrome carbon scale carries almost the entire interface; a single hi-
 - **Asphalt Stroke** (`#2C2C30`): input borders and other structural strokes where a border is actually load-bearing (form fields), as opposed to the near-invisible hairline.
 - **Chalk** (`#EDEFEF`): primary text and icon color on dark surfaces.
 - **Mist** (`#8B9296`): secondary text — labels, captions, muted body copy.
-- **Mist Dim** (`#5C6366`): tertiary/disabled text, placeholder text, the least emphasis available.
+- **Mist Dim** (`#878D90`): tertiary/disabled text, placeholder text, the least emphasis available. Tuned specifically to clear 4.5:1 against the darkest surface it ever sits on (`--asphalt-3`, e.g. a locked achievement medal's "X km to go" label) — a lighter value would fail AA there even though it would pass against the page background alone.
 - **Overlay Hairline** (`rgba(255,255,255,.045)`): the only border most cards and buttons get — intentionally almost invisible; it's a finishing detail, not the mechanism that separates surfaces.
 
 ### Effort Zones (semantic, not brand)
@@ -122,6 +138,27 @@ A near-monochrome carbon scale carries almost the entire interface; a single hi-
 **The Luminosity-Not-Line Rule.** Two adjacent surfaces separate because one is measurably lighter than the other, not because a hard border was drawn between them. Reach for a lighter Asphalt step before reaching for a stroke.
 
 **The One Signal Rule.** Hi-Vis lime means "active" or "this is the one thing to act on" — never used as a decorative accent, never applied to more than the thing currently earning attention. If everything is lime, nothing is. This governs status badges, tags, and fills (a card, a chip, a bar) — anywhere lime stands in for "this is the answer." It does not govern the leading icon inside a row-nav card (Perfil's list rows, and the equivalent icon slot elsewhere): every such icon is tinted Hi-Vis-Text consistently, on every screen, as a confirmed identity choice, not a signal — treat that tint as a fixed property of the icon slot itself, the same way its size and stroke weight are fixed, not as an instance of "the one thing to act on."
+
+## Themes
+
+Dark is the default and the theme every other section of this document describes first. Light is a fully supported second theme, not a fallback or an afterthought — reached automatically when the OS is set to light mode (`prefers-color-scheme: light`) and overridable by hand with a three-way toggle in Perfil → Preferencias (System / Dark / Light), which forces `data-theme="light"` or `"dark"` and wins over the OS setting. Both paths redefine the exact same token names; nothing downstream (components, named rules, spacing, shapes) needs to know which theme is active.
+
+### Light Theme Colors
+- **Asphalt** (`#F0F1EE`) / **Asphalt Raised** (`#FFFFFF`) / **Asphalt Recessed** (`#E7E8E3`) / **Asphalt Stroke** (`#D9DAD3`): the same luminosity-ladder roles as dark, inverted — Asphalt Raised goes fully white so cards read as the lightest surface, the opposite relationship from dark theme's "cards are lighter than the page."
+- **Chalk** (`#14161A`), **Mist** (`#5C6166`), **Mist Dim** (`#5F6365`): re-tuned, not simply inverted — Mist Dim in particular was raised from an initial `#707476` (4.16:1, failing AA) to `#5F6365` (4.93:1) against its worst-case surface, the same locked-achievement-medal case documented for dark theme above.
+- **Hi-Vis** stays `#D6FF3F` as a solid **fill** in both themes — it's the brand mark, not a mode-dependent color. As **text** (`Hi-Vis-Text`) it darkens to `#5E7000`: the pure lime fails contrast as text on white, so the system carries two roles (fill vs. text) precisely so the fill never has to compromise for legibility.
+- **Clay** (`#A84E1C`) and **Danger** (`#D6291C`) darken the same way Hi-Vis-Text does — same hue, saturated enough to stay recognizable as the same color, dark enough to read as text on white.
+- **Effort Zones**: re-darkened per zone (4.8–8.2:1 contrast) rather than auto-inverted, specifically to avoid landing on generic saturated Tailwind-style blue/green/amber/orange/red — the desaturated, carbon-and-clay register of the dark-theme zone scale is a deliberate brand property, not an accident of dark-mode rendering, so the light values were hand-picked to preserve that same moody register rather than just "the same hex, lighter."
+- **Zone *-Fill*** variants exist separately from the text-oriented Zone colors above: the light theme needs a tone dark enough to read as *text* on white, but that same dark tone has too little contrast to work as a *solid background* with Ink text on top (donut chart segments, the live route line). The `-fill` tokens keep the dark theme's original saturated hues for exactly those solid-background contexts, in both themes.
+
+### Named Rules
+**The Fill-Stays-Text-Adapts Rule.** Any color used as a solid fill (Hi-Vis buttons, Zone-fill chart segments) keeps its brand hue across both themes unchanged. The same color used as *text* gets its own theme-specific, contrast-driven value (Hi-Vis-Text, the darkened Clay/Danger, the darkened per-zone text colors). Never assume a single token value covers both uses — that's why fill and text roles are separate tokens, not one color read two ways.
+
+### Map & Telemetry Colors
+The live-run and history route maps (Leaflet + Mapbox tiles) use their own small, hardcoded palette — `#0B5D2E` (route polyline), `#4ADE80` (start-point marker fill), `#fff` (start-point marker stroke) — that is deliberately **not** drawn from the app's own token system. These render on top of real street-map imagery (beige roads, blue water, green parks), not the app's carbon/lime chrome, so they're chosen for legibility against map tiles rather than for brand consistency. Treat this as a scoped, intentional exception: don't "fix" a map color to match a UI token, and don't extend the brand palette's hi-vis/clay colors onto the map layer, where they'd clash with or disappear into the basemap.
+
+### Light-Theme Hand Blends
+`.card-highlight`, `.confirm-card`, `.card-shell-hivis`, and `.card-shell-clay` use hand-written `rgba(...)` values in their light-theme CSS (not a token) because they need to blend with frosted-glass/gradient backgrounds — the same opacities tuned to disappear subtly into dark theme's carbon (3–4% alpha) would be nearly invisible, or render wrong, against white. These are a documented exception, not drift: don't move them onto token variables, since their whole purpose is a one-off blend tuned per-surface.
 
 ## Typography
 
@@ -162,6 +199,8 @@ Depth comes from two complementary systems working together, not shadows alone: 
 ## Shapes
 
 Two radius steps, both generous, plus a hard pill for anything you tap to act: `18px` (`--radius-sm`) for inputs, chips, tags, and secondary surfaces; `26px` (`--radius`) for cards, confirm dialogs, and the splash panel; `999px` for every button, the tab bar itself, switches, and the language pills. Corners get rounder as an element gets more "actionable" — a card corner is generous, a button corner is total. No sharp (0px) corners appear anywhere in the system.
+
+A third, smaller step — `8px` (`rounded.xs`) — is documented for compact inline controls that are visibly too small to carry the full 18px scale (a tiny icon thumbnail, a dense number input, a small secondary action button inside a list row). Found in an audit: roughly 14 such spots across the codebase currently use ad-hoc values between 2px and 16px instead of this token, because no compact tier existed to reach for. This token exists so *new* compact controls have a documented value to use — normalizing the existing scattered spots to it is follow-up work, since several of them need a visual check (not just a find-and-replace) to confirm 8px is right for that specific element before changing it.
 
 ## Components
 
@@ -207,9 +246,10 @@ A small hand-drawn line — five short climbs and descents ending flat, `viewBox
 - **Do** keep shadows soft and ambient (large blur, no offset drama); depth should feel like the surface is lit, not like it's casting a directional shadow.
 
 ### Don't:
-- **Don't** reintroduce a light theme or a theme toggle — this was built, shipped, and deliberately removed at the user's request; the product is dark-only by decision, not by default.
+- **Don't** treat the light theme as a quick invert of dark values — every re-tuned color (Mist Dim, Hi-Vis-Text, Clay, Danger, the Effort Zones) was chosen against a specific contrast target or to preserve the system's desaturated register, not derived mechanically. Changing a dark-theme color without checking whether light theme needs its own re-tuned value is how this document went stale the first time.
+- **Don't** design a feature against dark theme only and assume light theme "just works" — verify both, since they're two maintained surfaces now, not one canonical theme plus a toggle nobody uses.
 - **Don't** use hard borders as the primary way two surfaces read as separate; the hairline (`rgba(255,255,255,.045)`) is a finishing touch, not a boundary.
 - **Don't** spend the Hi-Vis accent on more than one "this is the active/primary thing" per screen — it loses its meaning (and its resemblance to real hi-vis gear) the moment it's decorative.
 - **Don't** repurpose the five effort-zone colors (Zone 1–5) for anything other than heart-rate/pace zone data — they're a fixed semantic scale, not a brand palette to draw from.
-- **Don't** use a sharp 0px corner anywhere; the system's smallest radius is 18px.
+- **Don't** use a sharp 0px corner anywhere; the system's smallest radius is 8px (`rounded.xs`, reserved for compact inline controls — see Shapes), and 18px for anything larger than that.
 - **Don't** put prose or labels in JetBrains Mono, and don't put a measurement in Inter — the mono/sans split is how the interface tells data from language.

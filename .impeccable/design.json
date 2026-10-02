@@ -12,14 +12,29 @@
       "asphalt-4": { "role": "neutral", "displayName": "Asphalt Stroke", "canonical": "#2C2C30" },
       "chalk": { "role": "neutral", "displayName": "Chalk", "canonical": "#EDEFEF" },
       "mist": { "role": "neutral", "displayName": "Mist", "canonical": "#8B9296" },
-      "mist-dim": { "role": "neutral", "displayName": "Mist Dim", "canonical": "#5C6366" },
+      "mist-dim": { "role": "neutral", "displayName": "Mist Dim", "canonical": "#878D90" },
       "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#121415" },
       "danger": { "role": "error", "displayName": "Danger Red", "canonical": "#FF3B30", "tonalRamp": ["#3A0805", "#5C0F0A", "#82150E", "#A81C12", "#CC2A1E", "#FF3B30", "#FF7A72", "#FFC0BB"] },
       "zone1": { "role": "data", "displayName": "Zone 1 — Easy", "canonical": "#7B9BC9" },
       "zone2": { "role": "data", "displayName": "Zone 2 — Aerobic", "canonical": "#7CB88F" },
       "zone3": { "role": "data", "displayName": "Zone 3 — Tempo", "canonical": "#D4B356" },
       "zone4": { "role": "data", "displayName": "Zone 4 — Threshold", "canonical": "#CC8A56" },
-      "zone5": { "role": "data", "displayName": "Zone 5 — Max", "canonical": "#C9695C" }
+      "zone5": { "role": "data", "displayName": "Zone 5 — Max", "canonical": "#C9695C" },
+      "light-asphalt": { "role": "neutral", "displayName": "Light Asphalt", "canonical": "#F0F1EE" },
+      "light-asphalt-2": { "role": "neutral", "displayName": "Light Asphalt Raised", "canonical": "#FFFFFF" },
+      "light-asphalt-3": { "role": "neutral", "displayName": "Light Asphalt Recessed", "canonical": "#E7E8E3" },
+      "light-asphalt-4": { "role": "neutral", "displayName": "Light Asphalt Stroke", "canonical": "#D9DAD3" },
+      "light-chalk": { "role": "neutral", "displayName": "Light Chalk", "canonical": "#14161A" },
+      "light-mist": { "role": "neutral", "displayName": "Light Mist", "canonical": "#5C6166" },
+      "light-mist-dim": { "role": "neutral", "displayName": "Light Mist Dim", "canonical": "#5F6365" },
+      "light-hivis-text": { "role": "primary", "displayName": "Light Hi-Vis Text", "canonical": "#5E7000" },
+      "light-clay": { "role": "secondary", "displayName": "Light Clay", "canonical": "#A84E1C" },
+      "light-danger": { "role": "error", "displayName": "Light Danger", "canonical": "#D6291C" },
+      "light-zone1": { "role": "data", "displayName": "Light Zone 1 — Easy", "canonical": "#2A4F84" },
+      "light-zone2": { "role": "data", "displayName": "Light Zone 2 — Aerobic", "canonical": "#29653C" },
+      "light-zone3": { "role": "data", "displayName": "Light Zone 3 — Tempo", "canonical": "#7B6014" },
+      "light-zone4": { "role": "data", "displayName": "Light Zone 4 — Threshold", "canonical": "#8B5023" },
+      "light-zone5": { "role": "data", "displayName": "Light Zone 5 — Max", "canonical": "#96382C" }
     },
     "typographyMeta": {
       "display": { "displayName": "Display (Bebas Neue)", "purpose": "Hero moments only: splash wordmark, the 4 tab-view titles, login/signup/onboarding, standout stat numbers (e.g. days-to-race)." },
@@ -118,11 +133,12 @@
       "Do keep shadows soft and ambient (large blur, no offset drama); depth should feel like the surface is lit, not like it's casting a directional shadow."
     ],
     "donts": [
-      "Don't reintroduce a light theme or a theme toggle — this was built, shipped, and deliberately removed at the user's request; the product is dark-only by decision, not by default.",
+      "Don't treat the light theme as a quick invert of dark values — every re-tuned color (Mist Dim, Hi-Vis-Text, Clay, Danger, the Effort Zones) was chosen against a specific contrast target or to preserve the system's desaturated register, not derived mechanically.",
+      "Don't design a feature against dark theme only and assume light theme \"just works\" — verify both, since they're two maintained surfaces now, not one canonical theme plus an unused toggle.",
       "Don't use hard borders as the primary way two surfaces read as separate; the hairline (rgba(255,255,255,.045)) is a finishing touch, not a boundary.",
       "Don't spend the Hi-Vis accent on more than one \"this is the active/primary thing\" per screen — it loses its meaning (and its resemblance to real hi-vis gear) the moment it's decorative.",
       "Don't repurpose the five effort-zone colors (Zone 1–5) for anything other than heart-rate/pace zone data — they're a fixed semantic scale, not a brand palette to draw from.",
-      "Don't use a sharp 0px corner anywhere; the system's smallest radius is 18px.",
+      "Don't use a sharp 0px corner anywhere; the system's smallest radius is 8px (rounded.xs, for compact inline controls), 18px for anything larger.",
       "Don't put prose or labels in JetBrains Mono, and don't put a measurement in Inter — the mono/sans split is how the interface tells data from language."
     ]
   }
