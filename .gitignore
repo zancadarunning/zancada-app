@@ -20,7 +20,7 @@ mobile/*
 !mobile/package-lock.json
 !mobile/capacitor.config.json
 
-# Excepción: mobile/*-setup/ (widget-setup, healthconnect-setup, push-setup) NO es
+# Excepción: mobile/*-setup/ (widget-setup, healthconnect-setup, push-setup, calendar-setup) NO es
 # código generado -- es la fuente de verdad escrita a mano para funcionalidad nativa
 # (Kotlin/Swift + manifest snippets + guías) que sobrevive a que mobile/android/ o
 # mobile/ios/ se borren y regeneren desde cero con `npx cap add`. Si esto quedara
@@ -33,6 +33,8 @@ mobile/*
 !mobile/healthconnect-setup/**
 !mobile/push-setup/
 !mobile/push-setup/**
+!mobile/calendar-setup/
+!mobile/calendar-setup/**
 
 # mobile/secrets/ SÍ se queda afuera de la excepción de arriba -- son credenciales
 # reales (ej. firebase-service-account.json), nunca deben versionarse.
