@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-02T04:53:16Z';
+const APP_VERSION = '2026-10-02T12:05:31Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1082,6 +1082,7 @@ async function persist(){
     }
     if(!skipWrite){
       const nowIso = new Date().toISOString();
+      refreshCalendarCache();
       await supabaseClient.from('app_state').upsert({ user_id: currentUserId, data: state, updated_at: nowIso });
       loadedStateVersion = nowIso; // este guardado ya es la versión más nueva que conocemos
       clearPendingBackup();
@@ -4874,25 +4875,42 @@ function ensureCalendarToken(){
   }
   return state.calendarToken;
 }
+// www. directo (zancada.org redirige ahí con un 308): un cliente de calendario que no sigue
+// bien redirecciones de un feed (Google Calendar, según el caso) fallaría en silencio.
 function calendarFeedUrl(){
-  return `https://zancada.org/api/calendar-feed?t=${ensureCalendarToken()}`;
+  return `https://www.zancada.org/api/calendar-feed?t=${ensureCalendarToken()}`;
+}
+// La semana siguiente solo se puede calcular acá (generatePlan()/getNextWeekPlan() viven en
+// el cliente) -- el feed del servidor no puede regenerarla, así que se deja ya resuelta
+// dentro de state en cada guardado (ver persist()), solo para quien ya tiene un enlace de
+// calendario. Se guardan únicamente los campos que el feed necesita, no el plan entero.
+function refreshCalendarCache(){
+  if(!state.calendarToken) return;
+  try{
+    const nw = getNextWeekPlan();
+    state.calendarNextWeek = {
+      weekStart: nw.weekStart,
+      plan: nw.plan.map(d => ({ day:d.day, dist:d.dist, typeKey:d.typeKey, zone:d.zone, custom:!!d.custom, type:d.custom ? d.type : undefined }))
+    };
+  }catch(e){ /* sin la semana siguiente el feed sigue funcionando con la actual */ }
 }
 function openCalendarSubscribe(){
   if(!state.plan.some(d=>d.dist>0)){ showToast(t('plan_export_ics_empty'),'error'); return; }
   document.getElementById('cal-sub-link').textContent = calendarFeedUrl();
-  // Reportado por el usuario: el botón "Agregar a Calendario" (webcal://) no hacía nada al
-  // tocarlo en Android -- esperable, ese esquema solo lo abre Calendario de iOS/Safari,
-  // ningún cliente de calendario de Android está registrado para manejarlo. isIOSDevice()
-  // (no Capacitor.getPlatform()) a propósito: hoy no existe build nativo de iOS (ver
-  // memoria del proyecto), así que un iPhone real llega acá por Safari/PWA, no por una app
-  // nativa -- getPlatform() ahí daría 'web', no 'ios'. Fuera de iOS, el botón se esconde
-  // entero (tocarlo no hacía nada, confuso) y "Compartir enlace" pasa a ser la única
-  // acción, marcada primary.
+  // Cada plataforma tiene un botón primario que sí funciona con un toque:
+  // - iOS: webcal:// abre directo la pantalla nativa de "Suscribirse" de Calendario, y queda
+  //   suscripto (se actualiza solo).
+  // - Android: ningún calendario está registrado para webcal:// (reportado: el botón no hacía
+  //   nada) y la app de Google Calendar tampoco acepta suscribirse por URL desde el celular
+  //   (probado en un dispositivo real: ignora el parámetro cid). Lo que sí funciona con un
+  //   toque es bajar el .ics y abrirlo con Calendar (importa esta semana y la próxima, una
+  //   sola vez, sin actualizarse) -- la suscripción real queda como alternativa.
+  // isIOSDevice() (no Capacitor.getPlatform()) a propósito: hoy no existe build nativo de iOS,
+  // así que un iPhone real llega acá por Safari/PWA y getPlatform() daría 'web', no 'ios'.
   const ios = isIOSDevice();
   document.getElementById('cal-sub-btn-ios').style.display = ios ? '' : 'none';
-  const shareBtn = document.getElementById('cal-sub-btn-share');
-  shareBtn.classList.toggle('btn-primary', !ios);
-  shareBtn.classList.toggle('btn-outline', ios);
+  document.getElementById('cal-sub-btn-android').style.display = ios ? 'none' : '';
+  document.getElementById('cal-sub-ios-note').style.display = ios ? '' : 'none';
   document.getElementById('cal-sub-android-hint').style.display = ios ? 'none' : '';
   openOverlaySheetEl(document.getElementById('calendar-sub-modal'));
 }
@@ -4906,6 +4924,11 @@ function closeCalendarSubscribe(){
 // Desde URL).
 function subscribeToCalendarIOS(){
   window.location.href = calendarFeedUrl().replace('https://','webcal://');
+}
+// Android: el mismo feed con ?dl=1 (Content-Disposition: attachment, ver api/calendar-feed.js)
+// -- el navegador del sistema lo baja como zancada.ics y Calendar ofrece importarlo.
+function addCalendarFileAndroid(){
+  window.location.href = calendarFeedUrl() + '&dl=1';
 }
 async function shareCalendarLink(){
   const url = calendarFeedUrl();
