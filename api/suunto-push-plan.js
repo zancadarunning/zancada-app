@@ -1,8 +1,9 @@
 // api/suunto-push-plan.js
 //
-// Manda las próximas sesiones del plan al reloj Suunto del usuario como "SuuntoPlus Guides"
-// (pasos, repeticiones y objetivos de pulso que el reloj muestra durante el entreno). La guía
-// aparece primero en la app de Suunto y baja al reloj cuando éste se sincroniza.
+// Mantiene al día, en la cuenta de Suunto del usuario, las próximas sesiones del plan como
+// "SuuntoPlus Guides" (pasos, repeticiones y objetivos de pulso que el reloj muestra durante el
+// entreno). La guía aparece primero en la app de Suunto y baja al reloj cuando éste se
+// sincroniza. Requiere un reloj Suunto compatible emparejado para verse en la app.
 //
 // A diferencia de wahoo-push-workout.js (un workout simple), acá sí van los intervalos
 // estructurados -- ver api/_lib/suunto-guide-builder.js para el formato.
@@ -11,23 +12,30 @@
 // series/cuestas/fartlek, zonas de pulso propias del corredor): este endpoint no repite esa
 // lógica, solo valida lo que llega, arma el ZIP y lo sube con el token guardado.
 //
-// Cada guía lleva externalId "zancada-<fecha>": si ya existe una para esa fecha (el usuario
-// tocó el botón dos veces, o cambió el plan), se ACTUALIZA en vez de duplicarla (Suunto
-// responde 409 si se intenta crear una con el mismo externalId). Las guías de Zancada de
-// fechas pasadas se borran para no ocupar el espacio limitado del reloj.
+// DOS MODOS (los dos usan externalId "zancada-<fecha>" para reconocer cada guía):
+//   - Manual (reconcile ausente): sube/actualiza los `days` recibidos y borra las guías de
+//     Zancada de fechas ANTERIORES a `today` (el reloj tiene espacio limitado).
+//   - Reconcile (reconcile:true): es el que usa la sincronización automática. `keepDates` es el
+//     conjunto COMPLETO de fechas que tienen que existir; `days` trae solo las que cambiaron
+//     desde el último envío. Se suben/actualizan esos `days` y se BORRA toda guía de Zancada
+//     cuya fecha ya no esté en keepDates (sesión cancelada, hecha, movida, semana nueva) --
+//     incluso si keepDates viene vacío. Así el plan en Suunto sigue al plan de Zancada sin que
+//     nadie tenga que tocar nada.
+//
+// Cuida la cuota de la Developer API de Suunto (200 llamadas por semana): 1 llamada de listado
+// + 1 por guía que cambió + 1 por guía que sobra.
+//
+// Las guías se suben de la fecha MÁS LEJANA a la más cercana: Suunto borra solo las guías más
+// viejas cuando el reloj se queda sin espacio, así que las de hoy y mañana son las últimas en
+// llegar y las que más tardan en ser desplazadas.
 
 const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
-const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
-const {
-  SUUNTO_API_BASE, suuntoApiHeaders, ensureFreshSuuntoToken
-} = require('./_lib/suunto-activity-helpers');
-const { buildGuide, buildGuideZip } = require('./_lib/suunto-guide-builder');
+const { ensureFreshSuuntoToken } = require('./_lib/suunto-activity-helpers');
+const { listZancadaGuides, syncGuides, DATE_RE } = require('./_lib/suunto-guides-sync');
 const { withSentry, reportError } = require('./_lib/sentry');
 
-const GUIDES = `${SUUNTO_API_BASE}/v2/guides`;
-const MAX_DAYS = 7;
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_DAYS = 14;
 
 function cleanZones(zones) {
   const out = {};
@@ -66,11 +74,6 @@ function cleanDay(d) {
   };
 }
 
-async function guidesRequest(path, accessToken, init) {
-  const headers = Object.assign(suuntoApiHeaders(accessToken), init && init.headers);
-  return fetchWithTimeout(`${GUIDES}${path}`, Object.assign({}, init, { headers }), 10000);
-}
-
 module.exports = withSentry(async (req, res) => {
   applyCors(req, res);
   if (isPreflight(req, res)) return;
@@ -81,8 +84,13 @@ module.exports = withSentry(async (req, res) => {
   const userId = auth.userId;
 
   const body = req.body || {};
+  const reconcile = body.reconcile === true;
   const days = (Array.isArray(body.days) ? body.days : []).slice(0, MAX_DAYS).map(cleanDay).filter(Boolean);
-  if (!days.length) { res.status(400).json({ error: 'No hay sesiones válidas para enviar' }); return; }
+  const keepDates = reconcile
+    ? new Set((Array.isArray(body.keepDates) ? body.keepDates : []).filter(d => DATE_RE.test(String(d))).slice(0, MAX_DAYS))
+    : null;
+  // En reconcile, una lista vacía de `days` es válida (puede haber solo cosas para borrar).
+  if (!days.length && !reconcile) { res.status(400).json({ error: 'No hay sesiones válidas para enviar' }); return; }
   const zones = cleanZones(body.zones);
   const labels = cleanLabels(body.labels);
   const today = DATE_RE.test(String(body.today || '')) ? body.today : null;
@@ -98,44 +106,27 @@ module.exports = withSentry(async (req, res) => {
     const accessToken = await ensureFreshSuuntoToken(base, headers, conns[0]);
     if (!accessToken) { res.status(200).json({ pushed: 0, reason: 'token_expired' }); return; }
 
-    // Guías que ya tiene el usuario (para actualizar en vez de duplicar, y limpiar las viejas).
-    let existing = [];
-    const listRes = await guidesRequest('/items', accessToken, { method: 'GET' });
-    if (listRes.status === 403) { res.status(200).json({ pushed: 0, reason: 'guides_forbidden' }); return; }
-    if (listRes.ok) {
-      const listData = await listRes.json().catch(() => null);
-      existing = (listData && Array.isArray(listData.payload)) ? listData.payload : [];
-    }
-    const mine = existing.filter(g => g && g.owner === 'Zancada' && typeof g.externalId === 'string' && g.externalId.startsWith('zancada-'));
+    // Guías que ya tiene el usuario (para actualizar en vez de duplicar, y limpiar las que sobran).
+    // Sin la lista no se puede reconciliar con seguridad (se podrían duplicar guías): se corta
+    // y la sincronización automática lo reintenta en el próximo cambio.
+    const found = await listZancadaGuides(accessToken);
+    if (found.forbidden) { res.status(200).json({ pushed: 0, reason: 'guides_forbidden' }); return; }
+    if (!found.ok) { res.status(200).json({ pushed: 0, reason: 'suunto_error' }); return; }
 
-    let pushed = 0, failed = 0, firstError = null;
-    for (const day of days) {
-      const guide = buildGuide(day, zones, labels);
-      const zip = buildGuideZip(guide);
-      const prior = mine.find(g => g.externalId === guide.externalId);
-      const r = await guidesRequest(prior ? `/files/${encodeURIComponent(prior.id)}` : '/files', accessToken, {
-        method: prior ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/zip' },
-        body: zip
-      });
-      if (r.ok) { pushed++; continue; }
-      failed++;
-      if (!firstError) firstError = { status: r.status, body: (await r.text().catch(() => '')).slice(0, 300) };
-      console.error('suunto-push-plan: guide upload failed', guide.externalId, r.status);
-    }
+    const out = await syncGuides(accessToken, { days, zones, labels, keepDates, today, existing: found });
+    const { pushed, failed, removed, pushedDates, firstError } = out;
 
-    // Limpieza: guías de Zancada de fechas anteriores a hoy (el reloj tiene espacio limitado).
-    if (today) {
-      for (const g of mine) {
-        const ext = String(g.externalId).slice('zancada-'.length);
-        if (DATE_RE.test(ext) && ext < today) {
-          await guidesRequest(`/files/${encodeURIComponent(g.id)}`, accessToken, { method: 'DELETE' }).catch(() => {});
-        }
-      }
+    // Marca la semana ya reconciliada: el cron de los lunes (suunto-guides-cron.js) la usa para
+    // no repetir el trabajo. Si la columna todavía no existe (sql/suunto_guides_week.sql sin
+    // correr) el error se ignora.
+    if (reconcile && DATE_RE.test(String(body.weekStart || '')) && !failed) {
+      await fetch(`${base}/rest/v1/suunto_connections?user_id=eq.${userId}`, {
+        method: 'PATCH', headers, body: JSON.stringify({ guides_week: body.weekStart })
+      }).catch(() => {});
     }
 
     if (firstError) await reportError(new Error(`suunto guide upload failed: ${firstError.status} ${firstError.body}`), { endpoint: 'suunto-push-plan' });
-    res.status(200).json({ pushed, failed, reason: pushed ? undefined : 'suunto_error' });
+    res.status(200).json({ pushed, failed, removed, pushedDates, reason: (pushed || removed || !days.length) ? undefined : 'suunto_error' });
   } catch (err) {
     console.error('suunto-push-plan error', err);
     await reportError(err, { endpoint: 'suunto-push-plan' });

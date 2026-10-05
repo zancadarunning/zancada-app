@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-05T23:47:07Z';
+const APP_VERSION = '2026-10-05T23:57:14Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1084,6 +1084,7 @@ async function persist(){
       const nowIso = new Date().toISOString();
       refreshCalendarCache();
       scheduleNativeCalendarSync();
+      scheduleSuuntoSync();
       await supabaseClient.from('app_state').upsert({ user_id: currentUserId, data: state, updated_at: nowIso });
       loadedStateVersion = nowIso; // este guardado ya es la versión más nueva que conocemos
       clearPendingBackup();
@@ -1469,6 +1470,7 @@ async function refreshDeviceConnections(){
       supabaseClient.from('suunto_connections').select('user_id').eq('user_id', currentUserId).maybeSingle()
     ]);
     deviceConnections = { strava: !!s.data, polar: !!p.data, wahoo: !!w.data, coros: !!c.data, suunto: !!su.data };
+    scheduleSuuntoSync();
   }catch(e){ console.error(e); }
   renderPlan();
   if(document.getElementById('perfil-devices-summary')) renderPerfil();
@@ -1762,6 +1764,7 @@ async function updateSuuntoStatusDisplay(){
   try{
     const { data } = await supabaseClient.from('suunto_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
     deviceConnections.suunto = !!data;
+    if(data) scheduleSuuntoSync(); // recién conectada (o al abrir Perfil): deja la semana en Suunto
     // Candado mientras la app use la Developer API de Suunto (200 llamadas por semana): la
     // tarjeta solo se ve entrando una vez con ?suunto=1 (queda recordado en este navegador) o
     // si la cuenta ya está conectada. Quitar esto cuando aprueben la Production API.
@@ -1823,6 +1826,8 @@ async function disconnectSuunto(){
     console.error(e);
     try{ await supabaseClient.from('suunto_connections').delete().eq('user_id', currentUserId); }catch(e2){}
   }
+  deviceConnections.suunto = false; clearTimeout(suuntoSyncTimer);
+  if(state.suuntoSent || state.suuntoPlan){ state.suuntoSent = null; state.suuntoPlan = null; state.suuntoPlanSig = null; state.suuntoWeek = null; persist(); }
   if(state.runs && state.runs.some(r=>r.source==='suunto')){
     state.runs = state.runs.filter(r=>r.source!=='suunto');
     if(state.shoes){
@@ -1835,41 +1840,126 @@ async function disconnectSuunto(){
   }
   await updateSuuntoStatusDisplay();
 }
-// Manda al reloj las próximas sesiones de la semana en curso (hoy y hasta 2 más con
-// distancia, sin marcar como hechas/salteadas) como guías SuuntoPlus. Toda la lógica que
-// decide qué se le pide al corredor (descripción, series, zona, modo por tiempo/distancia)
-// ya vive acá en el cliente -- el backend solo la valida y arma el ZIP de la guía.
-async function pushPlanToSuunto(){
-  const todayIdx = (new Date().getDay()+6)%7;
-  const start = new Date(state.weekStart+'T00:00:00');
-  const days = [];
-  for(let i=todayIdx; i<(state.plan||[]).length && days.length<3; i++){
-    const d = state.plan[i];
-    if(!d || !(d.dist>0) || d.raceDay || d.status==='done' || d.status==='skipped') continue;
-    const lbl = planLabel(d);
-    const date = new Date(start); date.setDate(date.getDate()+i);
-    const iso = date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');
-    days.push({
-      date: iso, name: lbl.type, typeKey: d.typeKey, zone: d.zone||null, distKm: d.dist,
-      desc: lbl.desc, interval: d.interval||null,
-      repSec: (isTimeMode() && d.interval && d.interval.repMeters) ? Math.round(repDurationSec(d.interval.repMeters)) : 0
+/* ---- plan -> Suunto, automático -----
+   Pedido del usuario: que los ejercicios de la SEMANA se suban solos a la app de Suunto, que si
+   el plan cambia se borren los viejos y se suban los nuevos, y que la gente no tenga que
+   sincronizar nada a mano. Cada cambio (persist), cada vez que se abre la app y al conectar la
+   cuenta, syncPlanToSuunto() arma las sesiones de HOY hasta el DOMINGO y le pide al backend
+   (api/suunto-push-plan.js, modo "reconcile") que deje en Suunto exactamente esas: sube las que
+   cambiaron, actualiza las modificadas y borra las que ya no corresponden (sesión hecha,
+   salteada, cancelada, movida o de la semana pasada). state.suuntoSent recuerda una firma de lo
+   ya enviado por fecha, así que sin cambios no se hace ninguna llamada (la Developer API de
+   Suunto tiene cuota). state.suuntoPlan guarda las sesiones de esta semana Y de la que viene ya
+   armadas: con eso el cron del backend (api/suunto-guides-cron.js) sube la semana nueva el lunes
+   a las 2 am aunque nadie abra la app. */
+function suuntoLabels(){
+  return { warmup:t('suunto_guide_warmup'), cooldown:t('suunto_guide_cooldown'), work:t('suunto_guide_work'), rest:t('suunto_guide_rest') };
+}
+function suuntoHash(str){
+  let h = 5381;
+  for(let i=0; i<str.length; i++){ h = ((h<<5) + h + str.charCodeAt(i)) | 0; }
+  return (h>>>0).toString(36);
+}
+function suuntoDayPayload(d, date){
+  const lbl = planLabel(d);
+  return {
+    date, name: lbl.type, typeKey: d.typeKey, zone: d.zone||null, distKm: d.dist,
+    desc: lbl.desc, interval: d.interval||null,
+    repSec: (isTimeMode() && d.interval && d.interval.repMeters) ? Math.round(repDurationSec(d.interval.repMeters)) : 0
+  };
+}
+// Sesiones con distancia desde hoy en adelante (semana actual + la que viene), sin las ya
+// hechas/salteadas ni el día de carrera.
+function buildSuuntoPlanDays(){
+  const today = todayLocalISO();
+  const out = [];
+  const addWeek = (plan, weekStart) => {
+    if(!plan || !weekStart) return;
+    plan.forEach((d, i) => {
+      const date = addDaysToIsoLocal(weekStart, i);
+      if(date < today) return;
+      if(!d || !(d.dist>0) || d.raceDay || d.status==='done' || d.status==='skipped') return;
+      out.push(suuntoDayPayload(d, date));
     });
-  }
-  if(!days.length){ showToast(t('suunto_push_nothing'),'error'); return; }
+  };
+  addWeek(state.plan, state.weekStart);
+  try{ const nw = getNextWeekPlan(); addWeek(nw.plan, nw.weekStart); }catch(e){ /* sin la semana próxima alcanza con la actual */ }
+  return out;
+}
+let suuntoSyncTimer = null, suuntoSyncRunning = false, suuntoSyncAgain = false;
+// Se llama desde persist(), al abrir/volver a la app y al conectar: espera unos segundos para
+// juntar varios cambios seguidos en un solo envío.
+function scheduleSuuntoSync(){
+  if(!deviceConnections.suunto || state.suuntoAutoPush===false || !state.weekStart || !state.profile) return;
+  clearTimeout(suuntoSyncTimer);
+  suuntoSyncTimer = setTimeout(()=>{ syncPlanToSuunto(false).catch(e=>console.error('suunto sync', e)); }, 4000);
+}
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') scheduleSuuntoSync(); });
+// force=true reenvía todo (botón manual). Devuelve la respuesta del backend o null si no hizo nada.
+async function syncPlanToSuunto(force){
+  if(!deviceConnections.suunto || !state.weekStart || !state.profile) return null;
+  if(suuntoSyncRunning){ suuntoSyncAgain = true; return null; }
+  suuntoSyncRunning = true;
   try{
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if(!session){ showToast(t('suunto_connect_error'),'error'); return; }
-    const res = await fetch(apiUrl('/api/suunto-push-plan'), {
-      method:'POST',
-      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
-      body: JSON.stringify({
-        days, today: todayLocalISO(), zones: state.profile.hrZones,
-        labels: { warmup:t('suunto_guide_warmup'), cooldown:t('suunto_guide_cooldown'), work:t('suunto_guide_work'), rest:t('suunto_guide_rest') }
-      })
-    });
-    const result = await res.json().catch(()=>null);
+    const all = buildSuuntoPlanDays();
+    const zones = state.profile.hrZones, labels = suuntoLabels();
+    const weekStart = state.weekStart, weekEnd = addDaysToIsoLocal(weekStart, 6);
+    const win = all.filter(d => d.date <= weekEnd);
+    const ctx = JSON.stringify([zones, labels]);
+    const sigOf = d => suuntoHash(JSON.stringify(d) + ctx);
+    let dirty = false;
+
+    // Copia lista para el cron de los lunes (esta semana + la que viene).
+    const planSig = suuntoHash(JSON.stringify(all) + ctx);
+    if(state.suuntoPlanSig !== planSig){
+      state.suuntoPlan = { zones, labels, days: all.map(d => Object.assign({}, d, { desc: String(d.desc||'').slice(0, 400) })) };
+      state.suuntoPlanSig = planSig;
+      dirty = true;
+    }
+
+    const sent = state.suuntoSent || {};
+    const keep = win.map(d => d.date);
+    const changed = win.filter(d => force || sent[d.date] !== sigOf(d));
+    const stale = Object.keys(sent).filter(dt => !keep.includes(dt));
+    let result = null;
+    if(changed.length || stale.length || state.suuntoWeek !== weekStart || force){
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if(session){
+        const res = await fetch(apiUrl('/api/suunto-push-plan'), {
+          method:'POST',
+          headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
+          body: JSON.stringify({ reconcile:true, days:changed, keepDates:keep, weekStart, today:todayLocalISO(), zones, labels })
+        });
+        result = await res.json().catch(()=>null);
+        if(result){
+          const ok = !result.reason && !result.failed;
+          const next = {};
+          keep.forEach(dt => { if(sent[dt] && !changed.some(c=>c.date===dt)) next[dt] = sent[dt]; });
+          changed.forEach(d => { if((result.pushedDates||[]).includes(d.date)) next[d.date] = sigOf(d); });
+          // Si algo falló no se dan por enviadas las que no llegaron (el próximo cambio lo reintenta)
+          // ni se olvidan las que sobran todavía.
+          if(!ok) stale.forEach(dt => { if(sent[dt]) next[dt] = sent[dt]; });
+          state.suuntoSent = next;
+          if(ok) state.suuntoWeek = weekStart;
+          dirty = true;
+        }
+      }
+    }
+    if(dirty) persist();
+    return result;
+  }finally{
+    suuntoSyncRunning = false;
+    if(suuntoSyncAgain){ suuntoSyncAgain = false; scheduleSuuntoSync(); }
+  }
+}
+// Botón "Enviar a mi Suunto" (Plan): fuerza el reenvío de toda la semana.
+async function pushPlanToSuunto(){
+  if(!buildSuuntoPlanDays().some(d => d.date <= addDaysToIsoLocal(state.weekStart, 6))){ showToast(t('suunto_push_nothing'),'error'); return; }
+  try{
+    const result = await syncPlanToSuunto(true);
     if(result && result.pushed>0){ showToast(t('suunto_push_success', {count: result.pushed}),'success'); }
     else if(result && result.reason==='not_connected'){ showToast(t('suunto_connect_error'),'error'); }
+    else if(result && !result.reason && !result.failed){ showToast(t('suunto_push_success', {count: 0}),'success'); }
     else { showToast(t('suunto_push_error'),'error'); }
   }catch(e){
     console.error(e);

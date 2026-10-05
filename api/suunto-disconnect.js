@@ -7,7 +7,8 @@
 
 const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
-const { purgeSuuntoRunsForUser } = require('./_lib/suunto-activity-helpers');
+const { purgeSuuntoRunsForUser, ensureFreshSuuntoToken, suuntoApiHeaders, SUUNTO_API_BASE } = require('./_lib/suunto-activity-helpers');
+const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 
 const { withSentry, reportError } = require('./_lib/sentry');
 
@@ -25,6 +26,27 @@ module.exports = withSentry(async (req, res) => {
 
   try {
     const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
+
+    // Antes de perder el token, borramos de la cuenta de Suunto las guías que Zancada había
+    // subido (si no, quedarían huérfanas en el reloj sin forma de actualizarse). Best-effort:
+    // si falla, la desconexión sigue igual.
+    try {
+      const connRes = await fetch(`${base}/rest/v1/suunto_connections?user_id=eq.${userId}&select=*`, { headers });
+      const conns = await connRes.json();
+      if (Array.isArray(conns) && conns.length) {
+        const accessToken = await ensureFreshSuuntoToken(base, headers, conns[0]);
+        if (accessToken) {
+          const listRes = await fetchWithTimeout(`${SUUNTO_API_BASE}/v2/guides/items`, { headers: suuntoApiHeaders(accessToken) }, 8000);
+          const data = listRes.ok ? await listRes.json().catch(() => null) : null;
+          const mine = ((data && data.payload) || []).filter(g => g && g.owner === 'Zancada' && String(g.externalId || '').startsWith('zancada-'));
+          for (const g of mine) {
+            await fetchWithTimeout(`${SUUNTO_API_BASE}/v2/guides/files/${encodeURIComponent(g.id)}`, { method: 'DELETE', headers: suuntoApiHeaders(accessToken) }, 8000).catch(() => {});
+          }
+        }
+      }
+    } catch (e) {
+      console.error('suunto-disconnect: no se pudieron borrar las guías', e && e.message);
+    }
 
     const delRes = await fetch(`${base}/rest/v1/suunto_connections?user_id=eq.${userId}`, { method: 'DELETE', headers });
     if (!delRes.ok) {
