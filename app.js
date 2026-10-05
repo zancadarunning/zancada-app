@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-05T23:19:13Z';
+const APP_VERSION = '2026-10-05T23:22:24Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1748,8 +1748,9 @@ async function connectSuunto(){
 (function(){
   try{
     if(/[?&]suunto_connect=error(&|$)/.test(location.search)){
+      const why = (location.search.match(/[?&]why=([A-Za-z0-9_.-]{1,40})/)||[])[1];
       history.replaceState(null, '', location.pathname);
-      setTimeout(()=>{ try{ showToast(t('suunto_connect_error'),'error'); }catch(e){} }, 2000);
+      setTimeout(()=>{ try{ showToast(t('suunto_connect_error') + (why ? ' (' + why + ')' : ''),'error'); }catch(e){} }, 2000);
     }
   }catch(e){}
 })();
