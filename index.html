@@ -2476,7 +2476,13 @@
          en app.js): webcal:// solo lo abre Calendario de iOS/Safari; en Android lo que anda con
          un toque es bajar el .ics y abrirlo con Calendar. "Compartir enlace" es siempre la
          alternativa para suscribirse desde otro dispositivo. -->
-    <button class="btn btn-primary" id="cal-sub-btn-ios" style="width:100%; margin-top:20px;" onclick="subscribeToCalendarIOS()" data-i18n="cal_sub_btn_ios"></button>
+    <!-- App nativa de Android: escribe directo en el calendario del teléfono (permiso de
+         Calendario) como Huawei Health y otras -- un toque, sin archivos ni enlaces. Los otros
+         botones de abajo son para iPhone (webcal://) y para Android sin la app. -->
+    <button class="btn btn-primary" id="cal-sub-btn-native" style="width:100%; margin-top:20px;" onclick="enableNativeCalendar()" data-i18n="cal_native_add"></button>
+    <button class="btn btn-outline" id="cal-sub-btn-native-remove" style="width:100%; margin-top:12px;" onclick="disableNativeCalendar()" data-i18n="cal_native_remove"></button>
+    <p id="cal-sub-native-note" style="margin-top:16px; font-size:13.5px; line-height:1.5; color:var(--chalk);" data-i18n="cal_native_note"></p>
+    <button class="btn btn-primary" id="cal-sub-btn-ios"style="width:100%; margin-top:20px;" onclick="subscribeToCalendarIOS()" data-i18n="cal_sub_btn_ios"></button>
     <button class="btn btn-primary" id="cal-sub-btn-android" style="width:100%; margin-top:20px;" onclick="addCalendarFileAndroid()" data-i18n="cal_sub_btn_android"></button>
     <button class="btn btn-outline" id="cal-sub-btn-share" style="width:100%; margin-top:12px;" onclick="shareCalendarLink()" data-i18n="cal_sub_btn_share"></button>
     <p id="cal-sub-ios-note" style="margin-top:16px; font-size:13.5px; line-height:1.5; color:var(--chalk);" data-i18n="cal_sub_ios_note"></p>

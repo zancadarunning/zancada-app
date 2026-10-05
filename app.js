@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-02T12:05:31Z';
+const APP_VERSION = '2026-10-05T19:48:53Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1083,6 +1083,7 @@ async function persist(){
     if(!skipWrite){
       const nowIso = new Date().toISOString();
       refreshCalendarCache();
+      scheduleNativeCalendarSync();
       await supabaseClient.from('app_state').upsert({ user_id: currentUserId, data: state, updated_at: nowIso });
       loadedStateVersion = nowIso; // este guardado ya es la versión más nueva que conocemos
       clearPendingBackup();
@@ -3461,6 +3462,7 @@ function openOverlaySheetEl(el){
 }
 async function logout(){
   await waitForPendingPersist();
+  await clearNativeCalendarQuietly();
   // Ver el comentario de runProgressKey(): sin esto, una carrera sin terminar quedaba
   // recuperable por la próxima cuenta que inicie sesión en este mismo dispositivo.
   clearRunProgress();
@@ -3474,6 +3476,7 @@ async function logout(){
 async function resetApp(){
   if(!(await showConfirm(t('reset_confirm_text'), {danger:true, confirmText:t('delete_word')}))) return;
   await waitForPendingPersist();
+  await clearNativeCalendarQuietly();
   if(currentUserId){
     try{ await supabaseClient.from('app_state').delete().eq('user_id', currentUserId); }catch(e){}
   }
@@ -3484,6 +3487,7 @@ async function deleteAccount(){
   if(!(await showConfirm(t('delete_account_confirm_text'), {danger:true, confirmText:t('delete_account_confirm_btn')}))) return;
   try{
     await waitForPendingPersist();
+    await clearNativeCalendarQuietly();
     const { data: { session } } = await supabaseClient.auth.getSession();
     if(!session){ showToast(t('delete_account_error'),'error'); return; }
     const res = await fetch(apiUrl('/api/delete-account'), {
@@ -4894,6 +4898,87 @@ function refreshCalendarCache(){
     };
   }catch(e){ /* sin la semana siguiente el feed sigue funcionando con la actual */ }
 }
+/* ---- calendario del teléfono (solo app nativa de Android) -----
+   Pedido del usuario: como Huawei Health y otras apps de running -- tocar UN botón y que los
+   entrenamientos aparezcan en el calendario, sin bajar archivos ni copiar enlaces, y que
+   desaparezcan solos al quitar el plan. Eso solo se puede escribiendo directo en el calendario
+   del teléfono (permiso de Calendario), no con un .ics ni un enlace. ZancadaCalendarPlugin.kt
+   guarda todo en un calendario propio "Zancada": sync() reemplaza su contenido entero en cada
+   cambio de plan (nunca duplica) y clear() lo borra completo. state.calendarNative recuerda
+   que el usuario lo activó, así se mantiene al día solo (ver persist()). */
+function nativeCalendarPlugin(){
+  const cap = window.Capacitor;
+  if(!(cap && cap.isNativePlatform && cap.isNativePlatform() && cap.getPlatform && cap.getPlatform() === 'android')) return null;
+  return (cap.Plugins && cap.Plugins.ZancadaCalendar) || null;
+}
+function buildNativeCalendarEvents(){
+  const out = [];
+  const addWeek = (plan, weekStart) => {
+    if(!plan || !weekStart) return;
+    plan.forEach((d, i) => {
+      if(!(d.dist > 0) || d.status === 'skipped') return;
+      const lbl = planLabel(d);
+      out.push({
+        date: addDaysToIsoLocal(weekStart, i),
+        title: `${d.status === 'done' ? '✓ ' : ''}${lbl.type} · ${planAmountText(d)}`,
+        description: ['Zancada', d.zone ? `${t('zone_word')} ${d.zone}` : '', lbl.desc].filter(Boolean).join('\n')
+      });
+    });
+  };
+  addWeek(state.plan, state.weekStart);
+  try{ const nw = getNextWeekPlan(); addWeek(nw.plan, nw.weekStart); }catch(e){ /* sin la semana próxima, la actual alcanza */ }
+  return out;
+}
+let nativeCalLastSig = null;
+let nativeCalTimer = null;
+async function syncNativeCalendar(force){
+  const plugin = nativeCalendarPlugin();
+  if(!plugin || !state.calendarNative) return null;
+  const events = buildNativeCalendarEvents();
+  const sig = JSON.stringify(events);
+  if(!force && sig === nativeCalLastSig) return null;
+  const res = await plugin.sync({ events });
+  nativeCalLastSig = sig;
+  return res;
+}
+// Llamada desde persist(): se espera un momento para juntar varios guardados seguidos en una
+// sola escritura al calendario, y no hace nada si el permiso no está dado en este dispositivo
+// (state.calendarNative viaja con la cuenta, el permiso no).
+function scheduleNativeCalendarSync(){
+  if(!state.calendarNative || !nativeCalendarPlugin()) return;
+  clearTimeout(nativeCalTimer);
+  nativeCalTimer = setTimeout(()=>{ syncNativeCalendar(false).catch(()=>{}); }, 1500);
+}
+async function enableNativeCalendar(){
+  const plugin = nativeCalendarPlugin();
+  if(!plugin) return;
+  try{
+    const access = await plugin.requestAccess();
+    if(!access.granted){ showToast(t('cal_native_denied'), 'error'); return; }
+    state.calendarNative = true;
+    persist();
+    const res = await syncNativeCalendar(true);
+    showToast(t('cal_native_added', {n: (res && res.added) || 0}));
+    renderCalendarSubscribeMode();
+  }catch(e){ showToast(t('cal_native_failed'), 'error'); }
+}
+async function disableNativeCalendar(){
+  const plugin = nativeCalendarPlugin();
+  state.calendarNative = false;
+  nativeCalLastSig = null;
+  clearTimeout(nativeCalTimer);
+  persist();
+  try{ if(plugin) await plugin.clear(); }catch(e){}
+  showToast(t('cal_native_removed'));
+  renderCalendarSubscribeMode();
+}
+// Al cerrar sesión / reiniciar / borrar la cuenta: lo que la app agregó no se queda huérfano
+// en el calendario del teléfono.
+async function clearNativeCalendarQuietly(){
+  const plugin = nativeCalendarPlugin();
+  if(!plugin) return;
+  try{ await plugin.clear(); }catch(e){}
+}
 function openCalendarSubscribe(){
   if(!state.plan.some(d=>d.dist>0)){ showToast(t('plan_export_ics_empty'),'error'); return; }
   document.getElementById('cal-sub-link').textContent = calendarFeedUrl();
@@ -4907,12 +4992,23 @@ function openCalendarSubscribe(){
   //   sola vez, sin actualizarse) -- la suscripción real queda como alternativa.
   // isIOSDevice() (no Capacitor.getPlatform()) a propósito: hoy no existe build nativo de iOS,
   // así que un iPhone real llega acá por Safari/PWA y getPlatform() daría 'web', no 'ios'.
-  const ios = isIOSDevice();
-  document.getElementById('cal-sub-btn-ios').style.display = ios ? '' : 'none';
-  document.getElementById('cal-sub-btn-android').style.display = ios ? 'none' : '';
-  document.getElementById('cal-sub-ios-note').style.display = ios ? '' : 'none';
-  document.getElementById('cal-sub-android-hint').style.display = ios ? 'none' : '';
+  renderCalendarSubscribeMode();
   openOverlaySheetEl(document.getElementById('calendar-sub-modal'));
+}
+// Tres modos: 'native' (app de Android: escribe directo en el calendario del teléfono, ver
+// ZancadaCalendarPlugin.kt), 'ios' (webcal://) y 'web' (Android sin la app: baja el .ics).
+function renderCalendarSubscribeMode(){
+  const mode = nativeCalendarPlugin() ? 'native' : (isIOSDevice() ? 'ios' : 'web');
+  const show = (id, on) => { document.getElementById(id).style.display = on ? '' : 'none'; };
+  show('cal-sub-link', mode !== 'native');
+  show('cal-sub-btn-native', mode === 'native');
+  show('cal-sub-btn-native-remove', mode === 'native' && !!state.calendarNative);
+  show('cal-sub-native-note', mode === 'native');
+  show('cal-sub-btn-ios', mode === 'ios');
+  show('cal-sub-ios-note', mode === 'ios');
+  show('cal-sub-btn-android', mode === 'web');
+  show('cal-sub-android-hint', mode === 'web');
+  show('cal-sub-btn-share', mode !== 'native');
 }
 function closeCalendarSubscribe(){
   document.getElementById('calendar-sub-modal').classList.remove('overlay-open');
