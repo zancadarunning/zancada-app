@@ -15,6 +15,16 @@ const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 
 const REDIRECT_URI = 'https://zancada.org/api/suunto-auth';
 
+// Huella NO reversible de cómo le llegan las credenciales a la función (largo de cada una, si
+// tienen espacios o saltos de línea, y 6 caracteres de un hash del secret). Sirve para
+// diagnosticar un invalid_client sin exponer ningún valor: un client_id de API Zone tiene 36
+// caracteres; un espacio al final de una variable de Vercel es la causa clásica.
+function credentialFingerprint() {
+  const cid = String(process.env.SUUNTO_CLIENT_ID || ''), sec = String(process.env.SUUNTO_CLIENT_SECRET || '');
+  const ws = /\s/.test(cid) || /\s/.test(sec) ? 1 : 0;
+  return 'c' + cid.length + 's' + sec.length + 'w' + ws + 'f' + crypto.createHash('sha256').update(sec).digest('hex').slice(0, 6);
+}
+
 function verifyState(state) {
   const secret = process.env.SUUNTO_STATE_SECRET;
   if (!secret || !state) return null;
@@ -39,10 +49,11 @@ const { withSentry, reportError } = require('./_lib/sentry');
 // ?suunto_connect=error (app.js muestra un aviso) y queda registrado en Sentry. Antes, un fallo
 // al guardar la conexión se veía idéntico a una conexión exitosa, y la integración todavía no
 // se probó con muchas cuentas reales.
-async function failGracefully(res, reason, detail, code) {
+async function failGracefully(res, reason, detail, code, diag) {
   console.error('suunto-auth: ' + reason, detail || '');
   await reportError(new Error('suunto-auth: ' + reason), { detail: detail == null ? null : String(detail).slice(0, 300) }).catch(() => {});
-  res.writeHead(302, { Location: '/?suunto_connect=error&why=' + encodeURIComponent(String(code || 'unknown').replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 40)) });
+  res.writeHead(302, { Location: '/?suunto_connect=error&why=' + encodeURIComponent(String(code || 'unknown').replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 60))
+    + (diag ? '&dx=' + encodeURIComponent(String(diag).replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 40)) : '') });
   res.end();
 }
 
@@ -63,7 +74,7 @@ module.exports = withSentry(async (req, res) => {
       body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI })
     });
     const tokenData = await tokenRes.json().catch(() => ({}));
-    if (!tokenData.access_token || !tokenData.refresh_token) { await failGracefully(res, 'token exchange failed', 'status ' + tokenRes.status + ' ' + JSON.stringify({ error: tokenData.error, description: tokenData.error_description || tokenData.message, hasAccess: !!tokenData.access_token, hasRefresh: !!tokenData.refresh_token }), 'token_' + tokenRes.status + (tokenData.error ? '_' + tokenData.error : '')); return; }
+    if (!tokenData.access_token || !tokenData.refresh_token) { await failGracefully(res, 'token exchange failed', 'status ' + tokenRes.status + ' ' + JSON.stringify({ error: tokenData.error, description: tokenData.error_description || tokenData.message, hasAccess: !!tokenData.access_token, hasRefresh: !!tokenData.refresh_token }), 'token_' + tokenRes.status + (tokenData.error ? '_' + tokenData.error : ''), credentialFingerprint()); return; }
 
     const base = process.env.SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_KEY;
