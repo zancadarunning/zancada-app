@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-05T19:48:53Z';
+const APP_VERSION = '2026-10-05T23:01:53Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1391,6 +1391,7 @@ async function confirmMultiDeviceConnect(newBrand){
   if(deviceConnections.polar && newBrand!=='Polar') others.push('Polar');
   if(deviceConnections.wahoo && newBrand!=='Wahoo') others.push('Wahoo');
   if(deviceConnections.coros && newBrand!=='COROS') others.push('COROS');
+  if(deviceConnections.suunto && newBrand!=='Suunto') others.push('Suunto');
   // Faltaba Health Connect acá -- reportado en una auditoría. No vive en deviceConnections
   // (ver el comentario grande arriba de esa variable: Health Connect se lee directo de
   // state.healthConnectConnected, no se cachea ahí), así que había que agregarlo aparte.
@@ -1456,17 +1457,18 @@ async function connectStrava(){
 // false a propósito: mejor no mostrar el botón un instante y que aparezca cuando se
 // confirme una conexión real, que mostrarlo de entrada y tener que ocultarlo después
 // (ver refreshDeviceConnections(), llamada una vez al entrar a la app).
-let deviceConnections = { strava:false, polar:false, wahoo:false, coros:false };
+let deviceConnections = { strava:false, polar:false, wahoo:false, coros:false, suunto:false };
 async function refreshDeviceConnections(){
   if(!currentUserId) return;
   try{
-    const [s, p, w, c] = await Promise.all([
+    const [s, p, w, c, su] = await Promise.all([
       supabaseClient.from('strava_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
       supabaseClient.from('polar_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
       supabaseClient.from('wahoo_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
-      supabaseClient.from('coros_connections').select('user_id').eq('user_id', currentUserId).maybeSingle()
+      supabaseClient.from('coros_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
+      supabaseClient.from('suunto_connections').select('user_id').eq('user_id', currentUserId).maybeSingle()
     ]);
-    deviceConnections = { strava: !!s.data, polar: !!p.data, wahoo: !!w.data, coros: !!c.data };
+    deviceConnections = { strava: !!s.data, polar: !!p.data, wahoo: !!w.data, coros: !!c.data, suunto: !!su.data };
   }catch(e){ console.error(e); }
   renderPlan();
   if(document.getElementById('perfil-devices-summary')) renderPerfil();
@@ -1715,6 +1717,131 @@ async function pushTodayToWahoo(){
   }
 }
 
+/* ---- Suunto -----
+   Mismo patrón OAuth que Strava/Polar/Wahoo, con dos diferencias: (1) las carreras NO se
+   buscan con un cron cada 15 minutos sino que Suunto avisa por webhook apenas se sube un
+   entreno (ver api/suunto-webhook.js); (2) el plan se puede mandar AL reloj como "guía"
+   SuuntoPlus con intervalos y objetivos de pulso (ver pushPlanToSuunto() y
+   api/_lib/suunto-guide-builder.js). El client_id lo devuelve suunto-init (no es secreto). */
+async function connectSuunto(){
+  if(!(await confirmMultiDeviceConnect('Suunto'))) return;
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session){ showToast(t('suunto_connect_error'),'error'); return; }
+    const res = await fetch(apiUrl('/api/suunto-init'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
+    });
+    if(!res.ok) throw new Error('suunto-init failed');
+    const { state, clientId } = await res.json();
+    if(!clientId) throw new Error('suunto-init: sin clientId');
+    const redirectUri = 'https://zancada.org/api/suunto-auth';
+    const url = `https://cloudapi-oauth.suunto.com/oauth/authorize?response_type=code&client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
+    window.location.href = url;
+  }catch(e){
+    console.error(e);
+    showToast(t('suunto_connect_error'),'error');
+  }
+}
+async function updateSuuntoStatusDisplay(){
+  const el = document.getElementById('suunto-status');
+  const btn = document.getElementById('suunto-connect-btn');
+  if(!el || !currentUserId) return;
+  try{
+    const { data } = await supabaseClient.from('suunto_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
+    deviceConnections.suunto = !!data;
+    // Candado mientras la app use la Developer API de Suunto (200 llamadas por semana): la
+    // tarjeta solo se ve entrando una vez con ?suunto=1 (queda recordado en este navegador) o
+    // si la cuenta ya está conectada. Quitar esto cuando aprueben la Production API.
+    let suuntoUnlocked = !!data;
+    try{
+      if(/[?&]suunto=1(&|$)/.test(location.search)) localStorage.setItem('zancada_suunto','1');
+      if(localStorage.getItem('zancada_suunto')==='1') suuntoUnlocked = true;
+    }catch(e){}
+    const suuntoCard = document.getElementById('suunto-card');
+    if(suuntoCard) suuntoCard.style.display = suuntoUnlocked ? '' : 'none';
+    if(data){
+      el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
+      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectSuunto; }
+    } else {
+      el.textContent = t('perfil_native'); el.className = 'tag tag-asfalto';
+      if(btn){ btn.textContent = t('suunto_connect'); btn.onclick = connectSuunto; }
+    }
+    renderPlan();
+  }catch(e){}
+}
+async function disconnectSuunto(){
+  if(!currentUserId) return;
+  if(!(await confirmKeepDataBeforeDisconnect('Suunto', 'suunto', 'suuntoId'))) return;
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(session){
+      const res = await fetch(apiUrl('/api/suunto-disconnect'), {
+        method:'POST',
+        headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
+      });
+      if(!res.ok) throw new Error('suunto-disconnect failed');
+    } else {
+      await supabaseClient.from('suunto_connections').delete().eq('user_id', currentUserId);
+    }
+  }catch(e){
+    console.error(e);
+    try{ await supabaseClient.from('suunto_connections').delete().eq('user_id', currentUserId); }catch(e2){}
+  }
+  if(state.runs && state.runs.some(r=>r.source==='suunto')){
+    state.runs = state.runs.filter(r=>r.source!=='suunto');
+    if(state.shoes){
+      state.shoes.forEach(shoe=>{
+        shoe.km = state.runs.filter(r=>String(r.shoeId)===String(shoe.id)).reduce((a,r)=>a+(r.distanceKm||0),0);
+      });
+      checkShoeWearAlerts();
+    }
+    renderHistory(); renderHome(); renderPerfil(); persist();
+  }
+  await updateSuuntoStatusDisplay();
+}
+// Manda al reloj las próximas sesiones de la semana en curso (hoy y hasta 2 más con
+// distancia, sin marcar como hechas/salteadas) como guías SuuntoPlus. Toda la lógica que
+// decide qué se le pide al corredor (descripción, series, zona, modo por tiempo/distancia)
+// ya vive acá en el cliente -- el backend solo la valida y arma el ZIP de la guía.
+async function pushPlanToSuunto(){
+  const todayIdx = (new Date().getDay()+6)%7;
+  const start = new Date(state.weekStart+'T00:00:00');
+  const days = [];
+  for(let i=todayIdx; i<(state.plan||[]).length && days.length<3; i++){
+    const d = state.plan[i];
+    if(!d || !(d.dist>0) || d.raceDay || d.status==='done' || d.status==='skipped') continue;
+    const lbl = planLabel(d);
+    const date = new Date(start); date.setDate(date.getDate()+i);
+    const iso = date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');
+    days.push({
+      date: iso, name: lbl.type, typeKey: d.typeKey, zone: d.zone||null, distKm: d.dist,
+      desc: lbl.desc, interval: d.interval||null,
+      repSec: (isTimeMode() && d.interval && d.interval.repMeters) ? Math.round(repDurationSec(d.interval.repMeters)) : 0
+    });
+  }
+  if(!days.length){ showToast(t('suunto_push_nothing'),'error'); return; }
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session){ showToast(t('suunto_connect_error'),'error'); return; }
+    const res = await fetch(apiUrl('/api/suunto-push-plan'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
+      body: JSON.stringify({
+        days, today: todayLocalISO(), zones: state.profile.hrZones,
+        labels: { warmup:t('suunto_guide_warmup'), cooldown:t('suunto_guide_cooldown'), work:t('suunto_guide_work'), rest:t('suunto_guide_rest') }
+      })
+    });
+    const result = await res.json().catch(()=>null);
+    if(result && result.pushed>0){ showToast(t('suunto_push_success', {count: result.pushed}),'success'); }
+    else if(result && result.reason==='not_connected'){ showToast(t('suunto_connect_error'),'error'); }
+    else { showToast(t('suunto_push_error'),'error'); }
+  }catch(e){
+    console.error(e);
+    showToast(t('suunto_push_error'),'error');
+  }
+}
+
 // A diferencia de Strava/Polar/Wahoo (OAuth clásico con un client_id/secret creados
 // en un panel de developers), COROS usa OAuth 2.1 + PKCE contra su servidor MCP, con
 // registro dinámico de cliente -- ver el comentario grande en api/coros-init.js. El
@@ -1825,7 +1952,7 @@ function healthConnectExerciseToRun(ex){
 // Antes Historial solo reconocía r.source==='strava' para la insignia y la búsqueda --
 // Polar/Wahoo/Health Connect quedaban con carreras "sin marca" (sin insignia, invisibles
 // para el buscador) aunque llegaran de un reloj sincronizado igual que las de Strava.
-const SOURCE_LABELS = {strava:'Strava', polar:'Polar', wahoo:'Wahoo', coros:'COROS', healthconnect:'Health Connect'};
+const SOURCE_LABELS = {strava:'Strava', polar:'Polar', wahoo:'Wahoo', coros:'COROS', suunto:'Suunto', healthconnect:'Health Connect'};
 function sourceBadgeHtml(source, withMargin){
   const label = SOURCE_LABELS[source];
   if(!label) return '';
@@ -3859,15 +3986,16 @@ async function callSyncEndpoint(path, session){
 async function syncTodayNow(){
   const btn = document.getElementById('sync-today-btn');
   if(btn){ btn.disabled = true; btn.innerHTML = `<span class="icon-sq spin-icon" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_syncing')}`; }
-  let stravaResult = null, polarResult = null, wahooResult = null, corosResult = null;
+  let stravaResult = null, polarResult = null, wahooResult = null, corosResult = null, suuntoResult = null;
   try{
     const { data: { session } } = await supabaseClient.auth.getSession();
     if(session && session.access_token){
-      [stravaResult, polarResult, wahooResult, corosResult] = await Promise.all([
+      [stravaResult, polarResult, wahooResult, corosResult, suuntoResult] = await Promise.all([
         callSyncEndpoint('/api/strava-sync-now', session),
         callSyncEndpoint('/api/polar-sync-now', session),
         callSyncEndpoint('/api/wahoo-sync-now', session),
-        callSyncEndpoint('/api/coros-sync-now', session)
+        callSyncEndpoint('/api/coros-sync-now', session),
+        callSyncEndpoint('/api/suunto-sync-now', session)
       ]);
     }
   }catch(e){ console.error('sync-now error', e); }
@@ -3881,11 +4009,11 @@ async function syncTodayNow(){
   if(state.healthConnectConnected) hcResult = await syncHealthConnectNow();
   if(relinkTodayRun() || (hcResult && hcResult.synced)) persist();
   renderPlan(); renderHome(); renderHistory();
-  const anySynced = (stravaResult && stravaResult.synced) || (polarResult && polarResult.synced) || (wahooResult && wahooResult.synced) || (corosResult && corosResult.synced) || (hcResult && hcResult.synced);
-  const allDisconnected = (!stravaResult || stravaResult.reason==='not_connected') && (!polarResult || polarResult.reason==='not_connected') && (!wahooResult || wahooResult.reason==='not_connected') && (!corosResult || corosResult.reason==='not_connected') && !state.healthConnectConnected;
+  const anySynced = (stravaResult && stravaResult.synced) || (polarResult && polarResult.synced) || (wahooResult && wahooResult.synced) || (corosResult && corosResult.synced) || (suuntoResult && suuntoResult.synced) || (hcResult && hcResult.synced);
+  const allDisconnected = (!stravaResult || stravaResult.reason==='not_connected') && (!polarResult || polarResult.reason==='not_connected') && (!wahooResult || wahooResult.reason==='not_connected') && (!corosResult || corosResult.reason==='not_connected') && (!suuntoResult || suuntoResult.reason==='not_connected') && !state.healthConnectConnected;
   if(!anySynced){
-    const anyError = (stravaResult && stravaResult.error) || (polarResult && polarResult.error) || (wahooResult && wahooResult.error) || (corosResult && corosResult.error) || (hcResult && hcResult.error);
-    const reasonMsg = allDisconnected ? 'Tu cuenta no está conectada a Strava, Polar, Wahoo, COROS ni Health Connect.' : anyError ? `Error: ${anyError}` : 'No encontramos actividades nuevas.';
+    const anyError = (stravaResult && stravaResult.error) || (polarResult && polarResult.error) || (wahooResult && wahooResult.error) || (corosResult && corosResult.error) || (suuntoResult && suuntoResult.error) || (hcResult && hcResult.error);
+    const reasonMsg = allDisconnected ? 'Tu cuenta no está conectada a Strava, Polar, Wahoo, COROS, Suunto ni Health Connect.' : anyError ? `Error: ${anyError}` : 'No encontramos actividades nuevas.';
     showToast(reasonMsg,'error');
   }
   if(btn){ btn.disabled = false; btn.innerHTML = `<span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}`; }
@@ -5590,10 +5718,11 @@ function buildDayListHtml(wd){
       // conectado, era confuso: tocarlo no traía nada y no explicaba por qué. Mismo
       // criterio para "Enviar a mi reloj", pero solo mirando Wahoo (es la única que
       // recibe datos). Ver deviceConnections / refreshDeviceConnections() más arriba.
-      const anyDeviceConnected = deviceConnections.strava || deviceConnections.polar || deviceConnections.wahoo || deviceConnections.coros || !!state.healthConnectConnected;
+      const anyDeviceConnected = deviceConnections.strava || deviceConnections.polar || deviceConnections.wahoo || deviceConnections.coros || deviceConnections.suunto || !!state.healthConnectConnected;
       const showSyncBtn = isToday && anyDeviceConnected;
       const showWahooPushBtn = isToday && deviceConnections.wahoo;
-      statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;"><button class="btn btn-outline btn-sm" onclick="markSession(${i},'done')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.check}</span> ${t('plan_mark_done')}</button><button class="btn btn-outline btn-sm" onclick="markSession(${i},'skipped')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.cross}</span> ${t('plan_mark_skipped')}</button>${showSyncBtn?`<button class="btn btn-outline btn-sm" id="sync-today-btn" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}${showWahooPushBtn?`<button class="btn btn-outline btn-sm" id="wahoo-push-btn" onclick="pushTodayToWahoo()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.send}</span> ${t('wahoo_push_button')}</button>`:''}</div>`;
+      const showSuuntoPushBtn = isToday && deviceConnections.suunto;
+      statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;"><button class="btn btn-outline btn-sm" onclick="markSession(${i},'done')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.check}</span> ${t('plan_mark_done')}</button><button class="btn btn-outline btn-sm" onclick="markSession(${i},'skipped')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.cross}</span> ${t('plan_mark_skipped')}</button>${showSyncBtn?`<button class="btn btn-outline btn-sm" id="sync-today-btn" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}${showWahooPushBtn?`<button class="btn btn-outline btn-sm" id="wahoo-push-btn" onclick="pushTodayToWahoo()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.send}</span> ${t('wahoo_push_button')}</button>`:''}${showSuuntoPushBtn?`<button class="btn btn-outline btn-sm" id="suunto-push-btn" onclick="pushPlanToSuunto()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.send}</span> ${t('suunto_push_button')}</button>`:''}</div>`;
     }
     return `<div>
       <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" onclick="toggleDay(${i})">
@@ -6201,6 +6330,7 @@ function renderPerfil(){
     if(deviceConnections.strava) connectedNames.push('Strava');
     if(deviceConnections.polar) connectedNames.push('Polar');
     if(deviceConnections.wahoo) connectedNames.push('Wahoo');
+    if(deviceConnections.suunto) connectedNames.push('Suunto');
     if(deviceConnections.coros) connectedNames.push('COROS');
     if(state.healthConnectConnected) connectedNames.push('Health Connect');
     devicesSummaryEl.textContent = connectedNames.length ? connectedNames.join(', ') : t('perfil_devices_none');
@@ -7213,7 +7343,7 @@ async function showView(v){
     viewingWeekOffset = 0; renderPlan();
     refreshStateFromServer().then(()=>{ if(document.getElementById('view-plan').classList.contains('active')){ renderPlan(); } });
   }
-  if(v==='perfil'){ renderPerfilDays(); renderPerfilCrossTraining(); updatePushStatusDisplay(); updateStravaStatusDisplay(); updatePolarStatusDisplay(); updateWahooStatusDisplay(); updateCorosStatusDisplay(); updateHealthConnectStatusDisplay(); }
+  if(v==='perfil'){ renderPerfilDays(); renderPerfilCrossTraining(); updatePushStatusDisplay(); updateStravaStatusDisplay(); updatePolarStatusDisplay(); updateWahooStatusDisplay(); updateCorosStatusDisplay(); updateSuuntoStatusDisplay(); updateHealthConnectStatusDisplay(); }
   if(v==='correr'){ renderRunTodayCard(); renderRunModeChoice(); initIdleMap(); }
 }
 function goCoachWithPrompt(prefill){

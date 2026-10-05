@@ -4,7 +4,8 @@
     { "path": "/api/sync-strava", "schedule": "*/15 * * * *" },
     { "path": "/api/coros-sync", "schedule": "*/15 * * * *" },
     { "path": "/api/wahoo-sync", "schedule": "*/15 * * * *" },
-    { "path": "/api/polar-sync", "schedule": "*/15 * * * *" }
+    { "path": "/api/polar-sync", "schedule": "*/15 * * * *" },
+    { "path": "/api/suunto-sync", "schedule": "0 6 * * *" }
   ],
   "headers": [
     {

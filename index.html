@@ -2690,6 +2690,32 @@
         </div>
       </div>
 
+      <!-- Suunto (OCULTA por defecto mientras la app use la Developer API de Suunto, limitada a 200
+           llamadas por semana: solo la ve quien entró una vez con ?suunto=1 o ya está conectado --
+           ver updateSuuntoStatusDisplay(); se quita el candado cuando aprueben la Production API).
+           Recibe las carreras al instante por webhook y puede mandar las próximas
+           sesiones del plan AL reloj como guías SuuntoPlus (ver pushPlanToSuunto() y el botón
+           "Enviar a mi reloj" en Plan). Sin logo todavía: Suunto exige usar SUS assets de marca
+           (media.suunto.com) y recién se pueden bajar con la cuenta de partner aprobada. -->
+      <div class="conn-row" id="suunto-card" style="display:none;">
+        <div class="conn-row-head">
+          <span class="brand-logo-chip" style="gap:8px; flex:1;"><span class="n" style="font-size:14.5px; font-weight:700;">Suunto</span></span>
+          <span id="suunto-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
+        </div>
+        <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_suunto_desc"></p>
+        <button class="btn btn-outline btn-sm" id="suunto-connect-btn" style="margin-top:10px; width:100%;" onclick="connectSuunto()"></button>
+        <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
+          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleRememberList(event,'suunto')" aria-expanded="false" aria-controls="suunto-remember-list">
+            <span data-i18n="perfil_remember_title"></span>
+            <span class="icon-sq" id="suunto-remember-chevron" style="width:13px; height:13px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+          </button>
+          <ul id="suunto-remember-list" style="display:none; margin:10px 0 0; padding-left:18px; color:var(--mist); font-size:13px; line-height:1.7;">
+            <li data-i18n="perfil_remember_4"></li>
+            <li data-i18n="perfil_remember_generic_check_app"></li>
+          </ul>
+        </div>
+      </div>
+
       <!-- Health Connect solo tiene sentido en la app nativa de Android (no existe en
            la web ni en iOS) -- arranca oculta y JS la muestra si corresponde, ver el
            chequeo de window.Capacitor.getPlatform() al final de showView(). Cubre
