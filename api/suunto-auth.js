@@ -35,17 +35,22 @@ const { withSentry, reportError } = require('./_lib/sentry');
 
 // Ver el comentario igual a este en strava-auth.js: sin esto, cada rama de error dejaba al
 // usuario en una página muerta sin ningún link de vuelta a la app.
-function failGracefully(res, reason, detail) {
+// A diferencia de las otras marcas, acá el fallo NO es silencioso: vuelve a la app con
+// ?suunto_connect=error (app.js muestra un aviso) y queda registrado en Sentry. Antes, un fallo
+// al guardar la conexión se veía idéntico a una conexión exitosa, y la integración todavía no
+// se probó con muchas cuentas reales.
+async function failGracefully(res, reason, detail) {
   console.error('suunto-auth: ' + reason, detail || '');
-  res.writeHead(302, { Location: '/' });
+  await reportError(new Error('suunto-auth: ' + reason), { detail: detail == null ? null : String(detail).slice(0, 300) }).catch(() => {});
+  res.writeHead(302, { Location: '/?suunto_connect=error' });
   res.end();
 }
 
 module.exports = withSentry(async (req, res) => {
   const { code, state: rawState } = req.query;
-  if (!code || !rawState) { failGracefully(res, 'falta code o state'); return; }
+  if (!code || !rawState) { await failGracefully(res, 'falta code o state'); return; }
   const userId = verifyState(rawState);
-  if (!userId) { failGracefully(res, 'state inválido o vencido'); return; }
+  if (!userId) { await failGracefully(res, 'state inválido o vencido'); return; }
 
   try {
     const tokenRes = await fetchWithTimeout(`${SUUNTO_OAUTH_BASE}/oauth/token`, {
@@ -58,7 +63,7 @@ module.exports = withSentry(async (req, res) => {
       body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI })
     });
     const tokenData = await tokenRes.json().catch(() => ({}));
-    if (!tokenData.access_token || !tokenData.refresh_token) { failGracefully(res, 'token exchange failed', tokenRes.status); return; }
+    if (!tokenData.access_token || !tokenData.refresh_token) { await failGracefully(res, 'token exchange failed', 'status ' + tokenRes.status + ' ' + JSON.stringify({ error: tokenData.error, description: tokenData.error_description || tokenData.message, hasAccess: !!tokenData.access_token, hasRefresh: !!tokenData.refresh_token })); return; }
 
     const base = process.env.SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_KEY;
@@ -75,13 +80,13 @@ module.exports = withSentry(async (req, res) => {
         expires_at: expiresAt
       })
     });
-    if (!saveRes.ok) { failGracefully(res, 'no se pudo guardar la conexión', await saveRes.text().catch(() => '')); return; }
+    if (!saveRes.ok) { await failGracefully(res, 'no se pudo guardar la conexión', await saveRes.text().catch(() => '')); return; }
 
     res.writeHead(302, { Location: '/' });
     res.end();
   } catch (err) {
     console.error('suunto-auth error', err);
     await reportError(err, { endpoint: 'suunto-auth' });
-    failGracefully(res, 'excepción no controlada', err.message);
+    await failGracefully(res, 'excepción no controlada', err.message);
   }
 });

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-05T23:01:53Z';
+const APP_VERSION = '2026-10-05T23:19:13Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1743,6 +1743,16 @@ async function connectSuunto(){
     showToast(t('suunto_connect_error'),'error');
   }
 }
+// Si el callback de OAuth (api/suunto-auth.js) falló, vuelve acá con ?suunto_connect=error: se
+// limpia el parámetro y se avisa, en vez de dejar al usuario creyendo que se conectó.
+(function(){
+  try{
+    if(/[?&]suunto_connect=error(&|$)/.test(location.search)){
+      history.replaceState(null, '', location.pathname);
+      setTimeout(()=>{ try{ showToast(t('suunto_connect_error'),'error'); }catch(e){} }, 2000);
+    }
+  }catch(e){}
+})();
 async function updateSuuntoStatusDisplay(){
   const el = document.getElementById('suunto-status');
   const btn = document.getElementById('suunto-connect-btn');
