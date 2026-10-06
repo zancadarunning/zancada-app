@@ -71,7 +71,8 @@ async function backfillWahooSplits(base, headers, conn, accessToken) {
   if (!stateRows || !stateRows.length) return 0;
   const data = stateRows[0].data || {};
   const runs = data.runs || [];
-  const pending = runs.filter(r => r.source === 'wahoo' && r.wahooId && r.splitsV !== 3).slice(0, BACKFILL_BATCH);
+  // Pendientes: sin parciales todavía (splitsV !== 3), o sin ruta GPS / pulso máximo (salvo que ya se sepa que no tiene GPS: noGps).
+  const pending = runs.filter(r => r.source === 'wahoo' && r.wahooId && (r.splitsV !== 3 || (!(r.points && r.points.length > 1) && !r.noGps))).slice(0, BACKFILL_BATCH);
   if (!pending.length) return 0;
 
   const updated = [];
@@ -91,6 +92,9 @@ async function backfillWahooSplits(base, headers, conn, accessToken) {
       if (fit.avgCadence != null) run.avgCadence = fit.avgCadence;
       if (fit.avgPower != null) run.avgPower = fit.avgPower;
       if (fit.maxPower != null) run.maxPower = fit.maxPower;
+      if (fit.maxHr != null && run.maxHr == null) run.maxHr = fit.maxHr;
+      if (fit.avgHr != null && run.avgHr == null) run.avgHr = fit.avgHr;
+      if (fit.points && fit.points.length > 1) run.points = fit.points; else run.noGps = true;
       run.splitsV = 3;
       updated.push(run);
     } catch (e) {

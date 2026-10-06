@@ -130,8 +130,8 @@ function workoutToRun(workout, fit) {
     durationSec,
     elevationGain: fit.elevationGain != null ? fit.elevationGain : Math.round(Number(workout.totalAscent) || 0),
     elevationLoss: fit.elevationLoss != null ? fit.elevationLoss : (workout.totalDescent != null ? Math.round(Number(workout.totalDescent) || 0) : null),
-    avgHr: Number(hr.workoutAvgHR) > 0 ? Math.round(Number(hr.workoutAvgHR)) : null,
-    maxHr: Number(hr.workoutMaxHR) > 0 ? Math.round(Number(hr.workoutMaxHR)) : null,
+    avgHr: Number(hr.workoutAvgHR) > 0 ? Math.round(Number(hr.workoutAvgHR)) : (fit.avgHr != null ? fit.avgHr : null),
+    maxHr: Number(hr.workoutMaxHR) > 0 ? Math.round(Number(hr.workoutMaxHR)) : (fit.maxHr != null ? fit.maxHr : null),
     // Cadencia en pasos por minuto: del FIT si hay; si no, pasos totales / minutos.
     avgCadence: fit.avgCadence != null ? fit.avgCadence : (steps > 0 && durationSec > 0 ? Math.round(steps / (durationSec / 60)) : null),
     calories: Number(workout.energyConsumption) > 0 ? Math.round(Number(workout.energyConsumption)) : null,

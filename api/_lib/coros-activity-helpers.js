@@ -343,7 +343,53 @@ async function refreshCorosToken(base, headers, userId, refreshToken) {
   return { accessToken: tokenData.access_token, expiresAt };
 }
 
+// SONDEO (temporal): describe la ESTRUCTURA -- nombres de campos y tipos, sin ningún valor -- de lo que devuelven las tools
+// de detalle de COROS (getActivityDetail / queryActivityLapData), para poder escribir su parser con datos reales en vez de
+// adivinar (ver el comentario grande de arriba). Nunca se manda un valor: ni coordenadas, ni pulso, ni fechas.
+function describeShape(v, depth) {
+  depth = depth || 0;
+  if (v === null) return 'null';
+  if (Array.isArray(v)) return v.length ? `array(${v.length}) de ${depth < 4 ? JSON.stringify(describeShape(v[0], depth + 1)) : '...'}` : 'array(0)';
+  if (typeof v === 'object') {
+    if (depth >= 4) return 'object';
+    const out = {};
+    for (const k of Object.keys(v).slice(0, 40)) out[k] = describeShape(v[k], depth + 1);
+    return out;
+  }
+  if (typeof v === 'string') return v.length > 40 ? `string(${v.length})` : 'string';
+  return typeof v;
+}
+// Si la respuesta es un reporte de texto (como querySportRecords), se manda el texto con los dígitos enmascarados: queda la
+// plantilla (etiquetas, unidades) pero no los valores.
+function maskText(t) { return String(t).slice(0, 700).replace(/[0-9]/g, '#'); }
+
+async function probeCorosDetailShapes(accessToken, labelId) {
+  const out = {};
+  const attempts = [
+    ['getActivityDetail', [{ labelId }, { activityId: labelId }, { id: labelId }]],
+    ['queryActivityLapData', [{ labelId }, { activityId: labelId }, { id: labelId }]]
+  ];
+  for (const [tool, argVariants] of attempts) {
+    out[tool] = { tried: [] };
+    for (const args of argVariants) {
+      const argNames = Object.keys(args).join(',');
+      try {
+        const r = await callCorosMcpTool(accessToken, tool, args);
+        out[tool].ok = argNames;
+        out[tool].shape = typeof r === 'string' ? { text: maskText(r) } : describeShape(r);
+        break;
+      } catch (e) {
+        // El mensaje de error de COROS suele decir qué argumentos espera: sirve tal cual (sin valores del usuario).
+        out[tool].tried.push({ args: argNames, error: String(e && e.message).slice(0, 300).replace(/[0-9]{6,}/g, '#') });
+      }
+    }
+  }
+  return out;
+}
+
 module.exports = {
+  describeShape,
+  probeCorosDetailShapes,
   callCorosMcpTool,
   isRunningSportCode,
   corosDateRangeArgs,

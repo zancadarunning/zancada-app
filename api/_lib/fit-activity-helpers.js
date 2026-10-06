@@ -48,7 +48,7 @@ function loadFitSdk() {
 // Estado "sin datos" -- se devuelve una copia nueva en cada llamada (en vez de una
 // constante compartida) para que a nadie se le ocurra mutar el objeto que le devolvimos.
 function emptyFitResult() {
-  return { splits: [], series: null, elevationGain: null, elevationLoss: null, avgCadence: null, avgPower: null, maxPower: null };
+  return { splits: [], series: null, elevationGain: null, elevationLoss: null, avgCadence: null, avgPower: null, maxPower: null, avgHr: null, maxHr: null, points: [] };
 }
 
 // buffer: un Buffer con el contenido crudo del archivo .fit. Devuelve el array de
@@ -246,7 +246,17 @@ function buildSplitsAndSeriesFromFitRecords(records) {
     }
   }
 
-  return { splits, series, elevationGain, elevationLoss, avgCadence, avgPower, maxPower };
+  // Pulso promedio y máximo de TODA la actividad, a partir de las muestras crudas (no de `series`, ya reducida a ~120
+  // puntos). Sirven de respaldo cuando el resumen del proveedor no los trae (Wahoo no trae el máximo).
+  let avgHr = null, maxHr = null;
+  if (hrArr) {
+    const cleanHr = hrArr.filter(v => v != null && v >= 30 && v <= 250);
+    if (cleanHr.length) {
+      avgHr = Math.round(cleanHr.reduce((a, b) => a + b, 0) / cleanHr.length);
+      maxHr = Math.round(cleanHr.reduce((a, b) => Math.max(a, b), -Infinity));
+    }
+  }
+  return { splits, series, elevationGain, elevationLoss, avgCadence, avgPower, maxPower, avgHr, maxHr, points: [] };
 }
 
 // Ruta GPS a partir de los mensajes "record" del FIT: [{ lat, lon, t, alt }] en grados, como el resto de la app

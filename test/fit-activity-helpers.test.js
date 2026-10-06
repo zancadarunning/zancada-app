@@ -37,7 +37,7 @@ function buildRecords(n, { speedMs = 4, withHr = false, withCadence = false, wit
 
 test('buildSplitsAndSeriesFromFitRecords: con menos de 2 muestras válidas, devuelve el estado vacío', () => {
   const result = buildSplitsAndSeriesFromFitRecords([{ timestamp: new Date(), distance: 0 }]);
-  assert.deepEqual(result, { splits: [], series: null, elevationGain: null, elevationLoss: null, avgCadence: null, avgPower: null, maxPower: null });
+  assert.deepEqual(result, { splits: [], series: null, elevationGain: null, elevationLoss: null, avgCadence: null, avgPower: null, maxPower: null, avgHr: null, maxHr: null, points: [] });
 });
 
 test('buildSplitsAndSeriesFromFitRecords: ignora registros sin timestamp Date o sin distancia', () => {
@@ -289,4 +289,17 @@ test('buildPointsFromFitRecords: una carrera larga se reduce a maxPoints reparti
   assert.equal(pts.length, 100);
   assert.equal(pts[0].t, 0);
   assert.equal(pts[99].t, 4999);
+});
+
+test('buildSplitsAndSeriesFromFitRecords: pulso promedio y máximo de toda la actividad (descarta valores imposibles)', () => {
+  const t0 = Date.parse('2026-09-21T10:00:00Z');
+  const hr = [140, 150, 160, 170, 0, 255, 150];
+  const records = hr.map((h, i) => ({ timestamp: new Date(t0 + i * 1000), distance: i * 3, heartRate: h }));
+  const r = buildSplitsAndSeriesFromFitRecords(records);
+  assert.equal(r.maxHr, 170, '0 y 255 son lecturas inválidas y no cuentan');
+  assert.equal(r.avgHr, Math.round((140 + 150 + 160 + 170 + 150) / 5));
+  // sin sensor de pulso: null, no 0
+  const sin = buildSplitsAndSeriesFromFitRecords([0, 1, 2].map(i => ({ timestamp: new Date(t0 + i * 1000), distance: i * 3 })));
+  assert.equal(sin.maxHr, null);
+  assert.equal(sin.avgHr, null);
 });

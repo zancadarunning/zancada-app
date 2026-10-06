@@ -50,6 +50,8 @@ async function syncOneConnection(base, headers, conn) {
     if (fit.avgCadence != null) run.avgCadence = fit.avgCadence;
     if (fit.avgPower != null) run.avgPower = fit.avgPower;
     if (fit.maxPower != null) run.maxPower = fit.maxPower;
+    if (fit.maxHr != null && run.maxHr == null) run.maxHr = fit.maxHr;
+    if (fit.avgHr != null && run.avgHr == null) run.avgHr = fit.avgHr;
     if (fit.points && fit.points.length > 1) run.points = fit.points; else run.noGps = true;
     run.splitsV = 3;
     updated.push(run);

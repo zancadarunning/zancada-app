@@ -9,7 +9,9 @@
 
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool, corosDateRangeArgs, getCorosRunRecords, getCorosRecordId } = require('./_lib/coros-activity-helpers');
-const { withSentry, reportError } = require('./_lib/sentry');
+const { withSentry, reportError, reportDiagnostic } = require('./_lib/sentry');
+const { checkSyncCooldown } = require('./_lib/sync-cooldown');
+const { probeCorosDetailShapes } = require('./_lib/coros-activity-helpers');
 
 module.exports = withSentry(async (req, res) => {
   if (!(await requireCronSecret(req))) {
@@ -28,6 +30,7 @@ module.exports = withSentry(async (req, res) => {
     const CRON_TIME_BUDGET_MS = 8000;
     const cronStart = Date.now();
     let synced = 0, errors = 0, skipped = 0;
+    let probedThisRun = false;
     const connsList = Array.isArray(conns) ? conns : [];
     for (const conn of connsList) {
       if (Date.now() - cronStart > CRON_TIME_BUDGET_MS) {
@@ -47,6 +50,17 @@ module.exports = withSentry(async (req, res) => {
         // querySportRecords devuelve un reporte de texto (no JSON) cuando hay actividades --
         // confirmado en producción, ver parseCorosSportRecordsText en coros-activity-helpers.js.
         const runRecords = getCorosRunRecords(records);
+
+        // TEMPORAL: una vez por semana y por cuenta, se registra en Sentry la ESTRUCTURA (sin valores) que devuelven las tools de
+        // detalle de COROS, para poder traer parciales, mapa, desnivel y cadencia como en las otras marcas.
+        if (runRecords.length && !probedThisRun) {
+          probedThisRun = true;
+          if (await checkSyncCooldown(base, headers, conn.user_id, 'coros-probe', 7 * 86400000)) {
+            const labelId = getCorosRecordId(runRecords[0]);
+            const shapes = await probeCorosDetailShapes(accessToken, labelId).catch(e => ({ error: String(e && e.message).slice(0, 200) }));
+            await reportDiagnostic('diag coros-detail-shapes', shapes).catch(() => {});
+          }
+        }
 
         if (runRecords.length) {
           const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${conn.user_id}&select=data`, { headers });

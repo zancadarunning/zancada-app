@@ -50,7 +50,7 @@ function getMondayISO(d){
   return dt.toISOString().slice(0, 10);
 }
 
-const { decodeFitRecords, buildSplitsAndSeriesFromFitRecords, emptyFitResult } = require('./fit-activity-helpers');
+const { decodeFitRecords, buildSplitsAndSeriesFromFitRecords, buildPointsFromFitRecords, emptyFitResult } = require('./fit-activity-helpers');
 
 // Baja y decodifica el archivo FIT de un workout puntual para sacarle
 // splits/series/potencia. fitUrl es workout.workout_summary.file.url -- no hay
@@ -66,7 +66,9 @@ async function fetchFitSplits(fitUrl, accessToken){
     if (!res.ok) return emptyFitResult();
     const buf = Buffer.from(await res.arrayBuffer());
     const records = await decodeFitRecords(buf);
-    return buildSplitsAndSeriesFromFitRecords(records);
+    const result = buildSplitsAndSeriesFromFitRecords(records);
+    result.points = buildPointsFromFitRecords(records); // ruta GPS para el mapa
+    return result;
   } catch (e) {
     console.error('wahoo fetchFitSplits: no se pudo leer el FIT de', fitUrl, e && e.message);
     return emptyFitResult();
@@ -107,11 +109,12 @@ async function workoutToRun(workout, accessToken){
     // verdad. Acá se parsea PRIMERO con num() y se chequea el NÚMERO ya parseado (0 es
     // falsy de verdad ahí), mismo criterio que ya usa activityToRun de Strava para esto.
     avgHr: num(summary.heart_rate_avg) ? Math.round(num(summary.heart_rate_avg)) : null,
-    maxHr: null,
+    // El resumen de Wahoo no trae el máximo: sale del FIT cuando está disponible.
+    maxHr: fit.maxHr != null ? fit.maxHr : null,
     avgCadence: num(summary.cadence_avg) ? Math.round(num(summary.cadence_avg)) : null,
     calories: num(summary.calories_accum) ? Math.round(num(summary.calories_accum)) : null,
     hrLog: [],
-    points: [],
+    points: fit.points || [],
     splits: fit.splits,
     // splitsV:3 significa "ya se buscaron los splits reales de verdad" (ver
     // api/wahoo-sync.js, que usa esto para saber qué carreras todavía necesitan

@@ -53,7 +53,7 @@ function localDatePartFromIso(iso) {
   return String(iso || '').slice(0, 10);
 }
 
-const { decodeFitRecords, buildSplitsAndSeriesFromFitRecords, emptyFitResult } = require('./fit-activity-helpers');
+const { decodeFitRecords, buildSplitsAndSeriesFromFitRecords, buildPointsFromFitRecords, emptyFitResult } = require('./fit-activity-helpers');
 
 // Baja y decodifica el archivo FIT de un ejercicio puntual para sacarle
 // splits/series/potencia -- ver el comentario grande al principio del archivo y el de
@@ -69,7 +69,9 @@ async function fetchFitSplits(exerciseId, accessToken) {
     if (!res.ok) return emptyFitResult();
     const buf = Buffer.from(await res.arrayBuffer());
     const records = await decodeFitRecords(buf);
-    return buildSplitsAndSeriesFromFitRecords(records);
+    const result = buildSplitsAndSeriesFromFitRecords(records);
+    result.points = buildPointsFromFitRecords(records); // ruta GPS para el mapa
+    return result;
   } catch (e) {
     console.error('polar fetchFitSplits: no se pudo leer el FIT de', exerciseId, e && e.message);
     return emptyFitResult();
@@ -98,14 +100,15 @@ async function exerciseToRun(exercise, accessToken) {
     // hubo FIT disponible -- mismo criterio que ya usa Strava en activityToRun.
     elevationGain: fit.elevationGain != null ? fit.elevationGain : 0,
     elevationLoss: fit.elevationLoss,
-    avgHr: exercise.heart_rate && exercise.heart_rate.average ? Math.round(exercise.heart_rate.average) : null,
-    maxHr: exercise.heart_rate && exercise.heart_rate.maximum ? Math.round(exercise.heart_rate.maximum) : null,
+    // El resumen de Polar manda; el FIT completa lo que falte.
+    avgHr: exercise.heart_rate && exercise.heart_rate.average ? Math.round(exercise.heart_rate.average) : (fit.avgHr != null ? fit.avgHr : null),
+    maxHr: exercise.heart_rate && exercise.heart_rate.maximum ? Math.round(exercise.heart_rate.maximum) : (fit.maxHr != null ? fit.maxHr : null),
     // Antes quedaba siempre null -- el resumen de Polar no trae cadencia, pero el FIT sí
     // (ver buildSplitsAndSeriesFromFitRecords), solo faltaba usarlo acá.
     avgCadence: fit.avgCadence,
     calories: exercise.calories || null,
     hrLog: [],
-    points: [],
+    points: fit.points || [],
     splits: fit.splits,
     // splitsV:3 significa "ya se buscaron los splits reales de verdad" (ver
     // api/polar-sync.js, que usa esto para saber qué carreras todavía necesitan
