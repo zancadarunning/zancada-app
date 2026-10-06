@@ -144,6 +144,7 @@ function parseCorosSportRecordsText(text) {
     const hr = chunk.match(/Avg HR:\s*(\d+)\s*bpm/);
     const cal = chunk.match(/Calories:\s*(\d+)\s*kcal/);
     const id = chunk.match(/LabelId:\s*(\d+)/);
+    const sport = chunk.match(/SportType:\s*(\d+)/);
     if (!header || !time || !id) return null;
     return {
       title: header[1].trim(),
@@ -154,7 +155,8 @@ function parseCorosSportRecordsText(text) {
       distanceKm: durDist ? Number(durDist[2]) : 0,
       avgHr: hr ? Number(hr[1]) : null,
       calories: cal ? Number(cal[1]) : null,
-      labelId: id[1]
+      labelId: id[1],
+      sportType: sport ? Number(sport[1]) : undefined
     };
   }).filter(Boolean);
 }
@@ -363,11 +365,11 @@ function describeShape(v, depth) {
 // plantilla (etiquetas, unidades) pero no los valores.
 function maskText(t) { return String(t).slice(0, 700).replace(/[0-9]/g, '#'); }
 
-async function probeCorosDetailShapes(accessToken, labelId) {
+async function probeCorosDetailShapes(accessToken, labelId, sportType) {
   const out = {};
   const attempts = [
-    ['getActivityDetail', [{ labelId }, { activityId: labelId }, { id: labelId }]],
-    ['queryActivityLapData', [{ labelId }, { activityId: labelId }, { id: labelId }]]
+    ['getActivityDetail', [{ labelId, sportType }, { labelId, sportType: String(sportType) }]],
+    ['queryActivityLapData', [{ labelId, sportType }, { labelId, sportType: String(sportType) }]]
   ];
   for (const [tool, argVariants] of attempts) {
     out[tool] = { tried: [] };

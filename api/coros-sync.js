@@ -55,9 +55,9 @@ module.exports = withSentry(async (req, res) => {
         // detalle de COROS, para poder traer parciales, mapa, desnivel y cadencia como en las otras marcas.
         if (runRecords.length && !probedThisRun) {
           probedThisRun = true;
-          if (await checkSyncCooldown(base, headers, conn.user_id, 'coros-probe', 7 * 86400000)) {
+          if (await checkSyncCooldown(base, headers, conn.user_id, 'coros-probe-2', 7 * 86400000)) {
             const labelId = getCorosRecordId(runRecords[0]);
-            const shapes = await probeCorosDetailShapes(accessToken, labelId).catch(e => ({ error: String(e && e.message).slice(0, 200) }));
+            const shapes = await probeCorosDetailShapes(accessToken, labelId, runRecords[0].sportType).catch(e => ({ error: String(e && e.message).slice(0, 200) }));
             await reportDiagnostic('diag coros-detail-shapes', shapes).catch(() => {});
           }
         }
