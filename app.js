@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T13:26:02Z';
+const APP_VERSION = '2026-10-06T13:34:00Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5320,6 +5320,7 @@ function renderCalendarSubscribeMode(){
   show('cal-sub-btn-native-remove', mode === 'native' && !!state.calendarNative);
   show('cal-sub-native-note', mode === 'native');
   show('cal-sub-btn-ios', mode === 'ios');
+  show('cal-sub-btn-ios-file', mode === 'ios');
   show('cal-sub-ios-note', mode === 'ios');
   show('cal-sub-btn-android', mode === 'web');
   show('cal-sub-android-hint', mode === 'web');
@@ -5333,8 +5334,48 @@ function closeCalendarSubscribe(){
 // lo maneja, por eso el botón de abajo ("Compartir enlace") es la vía que de verdad
 // funciona ahí (pegar la URL en Google Calendar > Configuración > Agregar calendario >
 // Desde URL).
+// Se abre con un <a> real tocado desde el gesto del usuario, no con location.href: dentro de la
+// PWA instalada (standalone) de iPhone, asignar un esquema externo desde JS suele no hacer
+// nada, mientras que un enlace sí se entrega al sistema. Si pasado un momento la app sigue
+// al frente (Calendario no se abrió), se avisa y se ofrece el archivo .ics como alternativa.
 function subscribeToCalendarIOS(){
-  window.location.href = calendarFeedUrl().replace('https://','webcal://');
+  let left = false;
+  const mark = () => { left = true; };
+  document.addEventListener('visibilitychange', mark, {once:true});
+  window.addEventListener('pagehide', mark, {once:true});
+  window.addEventListener('blur', mark, {once:true});
+  const a = document.createElement('a');
+  a.href = calendarFeedUrl().replace('https://','webcal://');
+  a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>{
+    document.removeEventListener('visibilitychange', mark);
+    window.removeEventListener('pagehide', mark);
+    window.removeEventListener('blur', mark);
+    if(!left && document.visibilityState === 'visible') showToast(t('cal_sub_ios_fallback'), 'error');
+  }, 1800);
+}
+// iPhone, vía alternativa: baja el feed (mismo origen que la app, sin CORS) y lo entrega como
+// archivo .ics por el panel de compartir, donde iOS ofrece abrirlo con Calendario -- se importa
+// una sola vez (no se actualiza solo), por eso es la alternativa y no el botón principal.
+async function addCalendarFileIOS(){
+  const path = '/api/calendar-feed?t=' + ensureCalendarToken();
+  let text = '';
+  try{
+    let res = await fetch(path);
+    if(!res.ok) res = await fetch(calendarFeedUrl());
+    if(!res.ok) throw new Error('feed ' + res.status);
+    text = await res.text();
+  }catch(e){ showToast(t('cal_native_failed'), 'error'); return; }
+  const blob = new Blob([text], {type:'text/calendar;charset=utf-8'});
+  const file = new File([blob], 'zancada.ics', {type:'text/calendar'});
+  if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file], title:'Zancada'}); }catch(e){ /* usuario canceló */ }
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  window.location.href = url;
+  setTimeout(()=>URL.revokeObjectURL(url), 10000);
 }
 // Android: el mismo feed con ?dl=1 (Content-Disposition: attachment, ver api/calendar-feed.js)
 // -- el navegador del sistema lo baja como zancada.ics y Calendar ofrece importarlo.
