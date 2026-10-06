@@ -20,48 +20,21 @@
 
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { ensureFreshSuuntoToken } = require('./_lib/suunto-activity-helpers');
-const { syncGuides, localDateParts, addDaysIso, mondayOfIso, DATE_RE } = require('./_lib/suunto-guides-sync');
+const { syncGuides, localDateParts, addDaysIso, mondayOfIso } = require('./_lib/suunto-guides-sync');
+const { cleanZones, cleanLabels, cleanDay: cleanStoredDay } = require('./_lib/watch-plan-clean');
 const { withSentry, reportError } = require('./_lib/sentry');
 
 const FIRST_HOUR = 2; // hora local (2:00 am) desde la cual se sube la semana nueva
-
-// Valida lo que la app dejó guardado (un cliente podría haber guardado cualquier cosa).
-function cleanStoredDay(d) {
-  if (!d || !DATE_RE.test(String(d.date || ''))) return null;
-  const distKm = Number(d.distKm);
-  if (!(distKm > 0) || distKm > 500) return null;
-  const iv = d.interval && typeof d.interval === 'object' ? {
-    reps: Number(d.interval.reps), repMeters: Number(d.interval.repMeters),
-    recoveryMin: Number(d.interval.recoveryMin), workMin: Number(d.interval.workMin), restMin: Number(d.interval.restMin)
-  } : null;
-  return {
-    date: d.date, name: String(d.name || '').slice(0, 60), typeKey: String(d.typeKey || '').slice(0, 30),
-    zone: d.zone == null ? null : Number(d.zone), distKm, desc: String(d.desc || '').slice(0, 2000),
-    interval: iv, repSec: Number(d.repSec) > 0 ? Number(d.repSec) : 0
-  };
-}
-function cleanZones(zones) {
-  const out = {};
-  for (let n = 1; n <= 5; n++) {
-    const z = zones && zones[n];
-    if (z && Number.isFinite(Number(z.min)) && Number.isFinite(Number(z.max))) out[n] = { min: Number(z.min), max: Number(z.max) };
-  }
-  return out;
-}
-function cleanLabels(labels) {
-  const out = {};
-  for (const k of ['warmup', 'cooldown', 'work', 'rest', 'main']) if (labels && typeof labels[k] === 'string') out[k] = labels[k].slice(0, 40);
-  return out;
-}
 
 async function processConnection(base, headers, conn, nowMs) {
   // Sin la columna guides_week (sql/suunto_guides_week.sql sin correr) no hay forma de recordar qué semana
   // ya se hizo, y el cron repetiría el trabajo TODAS las horas gastando la cuota de Suunto: mejor no hacer nada.
   if (!('guides_week' in conn)) return 'nocolumn';
-  const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${conn.user_id}&select=plan:data->suuntoPlan,tz:data->profile->>tz,auto:data->>suuntoAutoPush`, { headers });
+  const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${conn.user_id}&select=plan:data->watchPlan,legacy:data->suuntoPlan,tz:data->profile->>tz,auto:data->>suuntoAutoPush,autoAll:data->>watchAutoPush`, { headers });
   const rows = await stateRes.json();
   const row = Array.isArray(rows) && rows[0];
-  if (!row || !row.plan || row.auto === 'false') return 'skip';
+  if (row) row.plan = row.plan || row.legacy; // compatibilidad con el nombre anterior del plan guardado
+  if (!row || !row.plan || row.auto === 'false' || row.autoAll === 'false') return 'skip';
 
   const { date: localDate, hour } = localDateParts(row.tz || 'UTC', nowMs);
   if (hour < FIRST_HOUR) return 'early';

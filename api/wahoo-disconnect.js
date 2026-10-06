@@ -7,6 +7,7 @@
 const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { purgeWahooRunsForUser } = require('./_lib/wahoo-activity-helpers');
+const { removeAllZancada } = require('./_lib/wahoo-plans-sync');
 
 const { withSentry, reportError } = require('./_lib/sentry');
 
@@ -30,6 +31,8 @@ module.exports = withSentry(async (req, res) => {
       const connRows = await connRes.json();
       const accessToken = connRows && connRows[0] && connRows[0].access_token;
       if (accessToken) {
+        // Antes de revocar el permiso, se borran los entrenamientos que Zancada había subido (best-effort).
+        try { await removeAllZancada(accessToken, userId); } catch (e) { console.error('wahoo-disconnect: no se pudieron borrar los entrenamientos', e && e.message); }
         await fetch('https://api.wahooligan.com/v1/permissions', {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${accessToken}` }

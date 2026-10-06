@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T00:40:10Z';
+const APP_VERSION = '2026-10-06T00:55:13Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1084,7 +1084,7 @@ async function persist(){
       const nowIso = new Date().toISOString();
       refreshCalendarCache();
       scheduleNativeCalendarSync();
-      scheduleSuuntoSync();
+      scheduleWatchSync();
       await supabaseClient.from('app_state').upsert({ user_id: currentUserId, data: state, updated_at: nowIso });
       loadedStateVersion = nowIso; // este guardado ya es la versión más nueva que conocemos
       clearPendingBackup();
@@ -1469,8 +1469,10 @@ async function refreshDeviceConnections(){
       supabaseClient.from('coros_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
       supabaseClient.from('suunto_connections').select('user_id').eq('user_id', currentUserId).maybeSingle()
     ]);
-    deviceConnections = { strava: !!s.data, polar: !!p.data, wahoo: !!w.data, coros: !!c.data, suunto: await fetchSuuntoConnected(!!su.data) };
-    scheduleSuuntoSync();
+    const srv = await fetchServerConnections();
+    const pick = (brand, direct) => (srv && typeof srv[brand] === 'boolean') ? srv[brand] : !!direct;
+    deviceConnections = { strava: pick('strava', s.data), polar: pick('polar', p.data), wahoo: pick('wahoo', w.data), coros: pick('coros', c.data), suunto: pick('suunto', su.data) };
+    scheduleWatchSync();
   }catch(e){ console.error(e); }
   renderPlan();
   if(document.getElementById('perfil-devices-summary')) renderPerfil();
@@ -1648,8 +1650,10 @@ async function updateWahooStatusDisplay(){
   if(!el || !currentUserId) return;
   try{
     const { data } = await supabaseClient.from('wahoo_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
-    deviceConnections.wahoo = !!data;
-    if(data){
+    const wahooConnected = await fetchWahooConnected(!!data);
+    deviceConnections.wahoo = wahooConnected;
+    if(wahooConnected) scheduleWahooSync(); // recién conectada (o al abrir Perfil): deja la semana en Wahoo
+    if(wahooConnected){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
       if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectWahoo; }
     } else {
@@ -1677,6 +1681,8 @@ async function disconnectWahoo(){
     console.error(e);
     try{ await supabaseClient.from('wahoo_connections').delete().eq('user_id', currentUserId); }catch(e2){}
   }
+  deviceConnections.wahoo = false; clearTimeout(wahooSyncTimer);
+  if(state.wahooSent || state.wahooWeek){ state.wahooSent = null; state.wahooWeek = null; persist(); }
   if(state.runs && state.runs.some(r=>r.source==='wahoo')){
     state.runs = state.runs.filter(r=>r.source!=='wahoo');
     if(state.shoes){
@@ -1689,29 +1695,17 @@ async function disconnectWahoo(){
   }
   await updateWahooStatusDisplay();
 }
-// Manda la sesión de HOY (la misma que ya se ve en Inicio) al calendario de
-// Wahoo del usuario -- ver el comentario grande en api/wahoo-push-workout.js
-// sobre el alcance de esta primera versión (sin intervalos estructurados).
+// Botón "Enviar a mi reloj" (Plan): reenvía a Wahoo TODA la semana con intervalos y objetivos de
+// pulso (ver syncPlanToWahoo() más abajo). Antes mandaba solo la sesión de hoy como un workout simple
+// (api/wahoo-push-workout.js, que sigue ahí por si queda abierta una versión vieja de la app).
 async function pushTodayToWahoo(){
-  const idx = (new Date().getDay()+6)%7;
-  const today = state.plan[idx];
-  if(!today || !(today.dist>0)){ showToast(t('wahoo_push_nothing'),'error'); return; }
-  const lbl = planLabel(today);
-  const durMin = today.durMin || Math.round((today.dist / 10) * 60); // estimación si no hay duración explícita
+  if(!watchWindow().win.length){ showToast(t('wahoo_push_nothing'),'error'); return; }
   try{
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if(!session){ showToast(t('wahoo_connect_error'),'error'); return; }
-    const now = new Date();
-    const startsISO = now.toISOString();
-    const res = await fetch(apiUrl('/api/wahoo-push-workout'), {
-      method:'POST',
-      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
-      body: JSON.stringify({ name: lbl.type, startsISO, minutes: durMin })
-    });
-    const result = await res.json().catch(()=>null);
-    if(result && result.alreadyExists){ showToast(t('wahoo_push_already'),'success'); }
-    else if(result && result.pushed){ showToast(t('wahoo_push_success'),'success'); }
+    const result = await syncPlanToWahoo(true);
+    if(result && result.reason==='reconnect_needed'){ showToast(t('wahoo_reconnect_needed'),'error'); }
+    else if(result && result.reason==='rate_limited'){ showToast(t('wahoo_push_rate_limited'),'error'); }
     else if(result && result.reason==='not_connected'){ showToast(t('wahoo_connect_error'),'error'); }
+    else if(result && !result.reason && !result.failed){ showToast(t('wahoo_push_success'),'success'); }
     else { showToast(t('wahoo_push_error'),'error'); }
   }catch(e){
     console.error(e);
@@ -1757,20 +1751,36 @@ async function connectSuunto(){
     }
   }catch(e){}
 })();
-// ¿La cuenta tiene Suunto conectado? Lo responde el servidor (ver api/suunto-status.js);
-// fallback = lo que dijo la consulta directa si el servidor no pudo responder.
+// ¿Qué marcas tiene conectadas la cuenta? Lo responde el SERVIDOR (api/device-status.js): la consulta
+// directa de cada tabla desde el navegador devolvió vacío SIN error en el iPhone aunque la cuenta
+// estaba conectada. Devuelve { strava, polar, wahoo, coros, suunto } con true/false/null (null = no se
+// pudo saber, usar la consulta directa) o null si el servidor no respondió. Cache de unos segundos
+// para no repetir el pedido cuando varias pantallas lo piden juntas.
+let serverConnCache = { at: 0, promise: null };
+function fetchServerConnections(){
+  if(serverConnCache.promise && Date.now() - serverConnCache.at < 5000) return serverConnCache.promise;
+  serverConnCache.at = Date.now();
+  serverConnCache.promise = (async()=>{
+    try{
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if(!session) return null;
+      const res = await fetch(apiUrl('/api/device-status'), {
+        method:'POST',
+        headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
+      });
+      if(!res.ok) return null;
+      return await res.json();
+    }catch(e){ return null; }
+  })();
+  return serverConnCache.promise;
+}
 async function fetchSuuntoConnected(fallback){
-  try{
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if(!session) return !!fallback;
-    const res = await fetch(apiUrl('/api/suunto-status'), {
-      method:'POST',
-      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
-    });
-    if(!res.ok) return !!fallback;
-    const j = await res.json();
-    return !!(j && j.connected);
-  }catch(e){ return !!fallback; }
+  const srv = await fetchServerConnections();
+  return (srv && typeof srv.suunto === 'boolean') ? srv.suunto : !!fallback;
+}
+async function fetchWahooConnected(fallback){
+  const srv = await fetchServerConnections();
+  return (srv && typeof srv.wahoo === 'boolean') ? srv.wahoo : !!fallback;
 }
 async function updateSuuntoStatusDisplay(){
   const el = document.getElementById('suunto-status');
@@ -1849,18 +1859,20 @@ async function disconnectSuunto(){
   }
   await updateSuuntoStatusDisplay();
 }
-/* ---- plan -> Suunto, automático -----
-   Pedido del usuario: que los ejercicios de la SEMANA se suban solos a la app de Suunto, que si
-   el plan cambia se borren los viejos y se suban los nuevos, y que la gente no tenga que
-   sincronizar nada a mano. Cada cambio (persist), cada vez que se abre la app y al conectar la
-   cuenta, syncPlanToSuunto() arma las sesiones de HOY hasta el DOMINGO y le pide al backend
-   (api/suunto-push-plan.js, modo "reconcile") que deje en Suunto exactamente esas: sube las que
-   cambiaron, actualiza las modificadas y borra las que ya no corresponden (sesión hecha,
-   salteada, cancelada, movida o de la semana pasada). state.suuntoSent recuerda una firma de lo
-   ya enviado por fecha, así que sin cambios no se hace ninguna llamada (la Developer API de
-   Suunto tiene cuota). state.suuntoPlan guarda las sesiones de esta semana Y de la que viene ya
-   armadas: con eso el cron del backend (api/suunto-guides-cron.js) sube la semana nueva el lunes
-   a las 2 am aunque nadie abra la app. */
+/* ---- plan -> relojes (Suunto y Wahoo), automático -----
+   Pedido del usuario: que los ejercicios de la SEMANA se suban solos a la app de cada marca que
+   acepta recibirlos, que si el plan cambia se borren los viejos y se suban los nuevos, y que la
+   gente no tenga que sincronizar nada a mano. Cada cambio (persist), cada vez que se abre la app y
+   al conectar la cuenta, scheduleWatchSync() arma las sesiones de HOY hasta el DOMINGO y le pide a
+   cada backend (api/suunto-push-plan.js y api/wahoo-sync-plan.js, modo "reconcile") que deje en la
+   cuenta exactamente esas: sube las que cambiaron, actualiza las modificadas y borra las que ya no
+   corresponden (sesión hecha, salteada, cancelada, movida o de la semana pasada). Una firma por fecha
+   (state.suuntoSent / state.wahooSent) recuerda lo ya enviado, así que sin cambios no se hace ninguna
+   llamada (las dos APIs tienen cuota). state.watchPlan guarda las sesiones de esta semana Y de la que
+   viene ya armadas: con eso los crons del backend (suunto-guides-cron.js / wahoo-plans-cron.js)
+   suben la semana nueva el lunes a las 2 am aunque nadie abra la app.
+   Quién acepta ejercicios: Suunto (guías SuuntoPlus) y Wahoo (planes estructurados). Strava y Polar no
+   tienen ninguna API para recibirlos; COROS y Garmin no están disponibles para terceros. */
 function suuntoLabels(){
   return { warmup:t('suunto_guide_warmup'), cooldown:t('suunto_guide_cooldown'), work:t('suunto_guide_work'), rest:t('suunto_guide_rest') };
 }
@@ -1869,17 +1881,18 @@ function suuntoHash(str){
   for(let i=0; i<str.length; i++){ h = ((h<<5) + h + str.charCodeAt(i)) | 0; }
   return (h>>>0).toString(36);
 }
-function suuntoDayPayload(d, date){
+function watchDayPayload(d, date){
   const lbl = planLabel(d);
   return {
     date, name: lbl.type, typeKey: d.typeKey, zone: d.zone||null, distKm: d.dist,
+    durMin: planDurationMin(d),
     desc: lbl.desc, interval: d.interval||null,
     repSec: (isTimeMode() && d.interval && d.interval.repMeters) ? Math.round(repDurationSec(d.interval.repMeters)) : 0
   };
 }
 // Sesiones con distancia desde hoy en adelante (semana actual + la que viene), sin las ya
 // hechas/salteadas ni el día de carrera.
-function buildSuuntoPlanDays(){
+function buildWatchPlanDays(){
   const today = todayLocalISO();
   const out = [];
   const addWeek = (plan, weekStart) => {
@@ -1888,43 +1901,58 @@ function buildSuuntoPlanDays(){
       const date = addDaysToIsoLocal(weekStart, i);
       if(date < today) return;
       if(!d || !(d.dist>0) || d.raceDay || d.status==='done' || d.status==='skipped') return;
-      out.push(suuntoDayPayload(d, date));
+      out.push(watchDayPayload(d, date));
     });
   };
   addWeek(state.plan, state.weekStart);
   try{ const nw = getNextWeekPlan(); addWeek(nw.plan, nw.weekStart); }catch(e){ /* sin la semana próxima alcanza con la actual */ }
   return out;
 }
+// Copia lista para los crons de los lunes (esta semana + la que viene). Devuelve true si cambió.
+function storeWatchPlanCopy(all, zones, labels){
+  const sig = suuntoHash(JSON.stringify(all) + JSON.stringify([zones, labels]));
+  if(state.watchPlanSig === sig) return false;
+  state.watchPlan = { zones, labels, days: all.map(d => Object.assign({}, d, { desc: String(d.desc||'').slice(0, 400) })) };
+  state.watchPlanSig = sig;
+  return true;
+}
+function watchWindow(){
+  const weekStart = state.weekStart, weekEnd = addDaysToIsoLocal(weekStart, 6);
+  const all = buildWatchPlanDays();
+  return { all, win: all.filter(d => d.date <= weekEnd), weekStart, weekEnd };
+}
 let suuntoSyncTimer = null, suuntoSyncRunning = false, suuntoSyncAgain = false;
+let wahooSyncTimer = null, wahooSyncRunning = false, wahooSyncAgain = false;
+// Wahoo dijo que el permiso de planes falta (token viejo sin plans_write): no se reintenta solo hasta la
+// próxima vez que se abre la app (cada intento gastaría cuota para recibir el mismo 403).
+let wahooSyncBlocked = false;
+function watchSyncReady(){ return !!(state.weekStart && state.profile && state.profile.hrZones) && state.watchAutoPush!==false; }
 // Se llama desde persist(), al abrir/volver a la app y al conectar: espera unos segundos para
 // juntar varios cambios seguidos en un solo envío.
 function scheduleSuuntoSync(){
-  if(!deviceConnections.suunto || state.suuntoAutoPush===false || !state.weekStart || !state.profile) return;
+  if(!deviceConnections.suunto || !watchSyncReady()) return;
   clearTimeout(suuntoSyncTimer);
   suuntoSyncTimer = setTimeout(()=>{ syncPlanToSuunto(false).catch(e=>console.error('suunto sync', e)); }, 4000);
 }
-document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') scheduleSuuntoSync(); });
+function scheduleWahooSync(delayMs){
+  if(!deviceConnections.wahoo || wahooSyncBlocked || !watchSyncReady()) return;
+  clearTimeout(wahooSyncTimer);
+  wahooSyncTimer = setTimeout(()=>{ syncPlanToWahoo(false).catch(e=>console.error('wahoo sync', e)); }, delayMs || 4000);
+}
+function scheduleWatchSync(){ scheduleSuuntoSync(); scheduleWahooSync(); }
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') scheduleWatchSync(); });
+
 // force=true reenvía todo (botón manual). Devuelve la respuesta del backend o null si no hizo nada.
 async function syncPlanToSuunto(force){
-  if(!deviceConnections.suunto || !state.weekStart || !state.profile) return null;
+  if(!deviceConnections.suunto || !watchSyncReady()) return null;
   if(suuntoSyncRunning){ suuntoSyncAgain = true; return null; }
   suuntoSyncRunning = true;
   try{
-    const all = buildSuuntoPlanDays();
+    const { all, win, weekStart } = watchWindow();
     const zones = state.profile.hrZones, labels = suuntoLabels();
-    const weekStart = state.weekStart, weekEnd = addDaysToIsoLocal(weekStart, 6);
-    const win = all.filter(d => d.date <= weekEnd);
     const ctx = JSON.stringify([zones, labels]);
     const sigOf = d => suuntoHash(JSON.stringify(d) + ctx);
-    let dirty = false;
-
-    // Copia lista para el cron de los lunes (esta semana + la que viene).
-    const planSig = suuntoHash(JSON.stringify(all) + ctx);
-    if(state.suuntoPlanSig !== planSig){
-      state.suuntoPlan = { zones, labels, days: all.map(d => Object.assign({}, d, { desc: String(d.desc||'').slice(0, 400) })) };
-      state.suuntoPlanSig = planSig;
-      dirty = true;
-    }
+    let dirty = storeWatchPlanCopy(all, zones, labels);
 
     const sent = state.suuntoSent || {};
     const keep = win.map(d => d.date);
@@ -1962,9 +1990,70 @@ async function syncPlanToSuunto(force){
     if(suuntoSyncAgain){ suuntoSyncAgain = false; scheduleSuuntoSync(); }
   }
 }
+// Wahoo: igual que Suunto, pero cada fecha recuerda además los ids que Wahoo le dio al
+// entrenamiento y a su plan (state.wahooSent[fecha] = { sig, workoutId, planId }): hacen falta para
+// actualizar o borrar ese entrenamiento más adelante sin tener que listar la cuenta de Wahoo.
+async function syncPlanToWahoo(force){
+  if(!deviceConnections.wahoo || !watchSyncReady() || (wahooSyncBlocked && !force)) return null;
+  if(wahooSyncRunning){ wahooSyncAgain = true; return null; }
+  wahooSyncRunning = true;
+  try{
+    const { all, win, weekStart } = watchWindow();
+    const zones = state.profile.hrZones, labels = suuntoLabels();
+    const ctx = JSON.stringify([zones, labels]);
+    const sigOf = d => suuntoHash(JSON.stringify(d) + ctx);
+    let dirty = storeWatchPlanCopy(all, zones, labels);
+
+    const sent = state.wahooSent || {};
+    const keep = win.map(d => d.date);
+    const changed = win.filter(d => force || !sent[d.date] || sent[d.date].sig !== sigOf(d));
+    const stale = Object.keys(sent).filter(dt => !keep.includes(dt));
+    let result = null;
+    if(changed.length || stale.length || state.wahooWeek !== weekStart || force){
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if(session){
+        const known = {};
+        changed.map(d=>d.date).concat(stale).forEach(dt => { if(sent[dt] && sent[dt].workoutId) known[dt] = { workoutId: sent[dt].workoutId, planId: sent[dt].planId || null }; });
+        const res = await fetch(apiUrl('/api/wahoo-sync-plan'), {
+          method:'POST',
+          headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
+          body: JSON.stringify({ days:changed, removeDates:stale, known, zones, labels, tzOffsetMin:new Date().getTimezoneOffset(), weekStart })
+        });
+        result = await res.json().catch(()=>null);
+        if(result){
+          if(result.reason === 'not_connected'){ deviceConnections.wahoo = false; }
+          if(result.reason === 'reconnect_needed'){
+            wahooSyncBlocked = true;
+            if(!force) showToast(t('wahoo_reconnect_needed'),'error'); // en el envío manual ya lo avisa el botón
+          }
+          const ok = !result.reason && !result.failed;
+          const next = {};
+          keep.forEach(dt => { if(sent[dt] && !changed.some(c=>c.date===dt)) next[dt] = sent[dt]; });
+          changed.forEach(d => {
+            const m = result.pushedMap && result.pushedMap[d.date];
+            if(m) next[d.date] = { sig: sigOf(d), workoutId: m.workoutId, planId: m.planId };
+            else if(sent[d.date]) next[d.date] = sent[d.date]; // no llegó: se conserva lo viejo y se reintenta
+          });
+          stale.forEach(dt => { if(!(result.removedDates||[]).includes(dt) && sent[dt]) next[dt] = sent[dt]; });
+          state.wahooSent = next;
+          if(ok) state.wahooWeek = weekStart;
+          dirty = true;
+          // Cuota de Wahoo agotada (la app en modo sandbox permite 25 llamadas cada 5 minutos): se
+          // reintenta solo un poco después.
+          if(result.reason === 'rate_limited') scheduleWahooSync(5.5*60*1000);
+        }
+      }
+    }
+    if(dirty) persist();
+    return result;
+  }finally{
+    wahooSyncRunning = false;
+    if(wahooSyncAgain){ wahooSyncAgain = false; scheduleWahooSync(); }
+  }
+}
 // Botón "Enviar a mi Suunto" (Plan): fuerza el reenvío de toda la semana.
 async function pushPlanToSuunto(){
-  if(!buildSuuntoPlanDays().some(d => d.date <= addDaysToIsoLocal(state.weekStart, 6))){ showToast(t('suunto_push_nothing'),'error'); return; }
+  if(!watchWindow().win.length){ showToast(t('suunto_push_nothing'),'error'); return; }
   try{
     const result = await syncPlanToSuunto(true);
     if(result && result.pushed>0){ showToast(t('suunto_push_success', {count: result.pushed}),'success'); }

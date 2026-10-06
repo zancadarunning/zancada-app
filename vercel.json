@@ -6,7 +6,8 @@
     { "path": "/api/wahoo-sync", "schedule": "*/15 * * * *" },
     { "path": "/api/polar-sync", "schedule": "*/15 * * * *" },
     { "path": "/api/suunto-sync", "schedule": "0 6 * * *" },
-    { "path": "/api/suunto-guides-cron", "schedule": "20 * * * *" }
+    { "path": "/api/suunto-guides-cron", "schedule": "20 * * * *" },
+    { "path": "/api/wahoo-plans-cron", "schedule": "40 * * * *" }
   ],
   "headers": [
     {
