@@ -404,8 +404,25 @@ function describeShape(v, depth) {
 // plantilla (etiquetas, unidades) pero no los valores.
 function maskText(t) { return String(t).slice(0, 700).replace(/[0-9]/g, '#'); }
 
-async function probeCorosDetailShapes(accessToken, labelId, sportType) {
+// Lista las tools que expone el servidor MCP de COROS (nombre, descripción corta y nombres de sus argumentos) -- sin datos del usuario.
+async function listCorosMcpTools(accessToken) {
+  const res = await fetchWithTimeout(MCP_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream', 'Authorization': `Bearer ${accessToken}` },
+    body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method: 'tools/list', params: {} })
+  });
+  let text = await res.text();
+  if ((res.headers.get('content-type') || '').includes('text/event-stream')) {
+    text = text.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trim()).join('');
+  }
+  const tools = (JSON.parse(text).result || {}).tools || [];
+  return tools.map(t => ({ name: t.name, desc: String(t.description || '').slice(0, 140), args: Object.keys((t.inputSchema && t.inputSchema.properties) || {}) }));
+}
+
+async function probeCorosDetailShapes(accessToken, labelId, sportType, record) {
   const out = {};
+  try { out.tools = JSON.stringify(await listCorosMcpTools(accessToken)); } catch (e) { out.tools = 'error: ' + String(e && e.message).slice(0, 150); }
+  if (record) out.recordRef = JSON.stringify({ distanceKm: record.distanceKm, durationSec: record.durationSec, avgHr: record.avgHr, title: record.title });
   const attempts = [
     ['getActivityDetail', [{ labelId, sportType }, { labelId, sportType: String(sportType) }]],
     ['queryActivityLapData', [{ labelId, sportType }, { labelId, sportType: String(sportType) }]]
@@ -428,6 +445,10 @@ async function probeCorosDetailShapes(accessToken, labelId, sportType) {
               lapShape: g && Array.isArray(g.laps) && g.laps[0] ? describeShape(g.laps[0], 2) : null
             })) : null
           });
+        }
+        if (tool === 'queryActivityLapData' && r && Array.isArray(r.lapGroups)) {
+          // Valores numéricos de la primera vuelta de cada grupo (solo métricas, sin coordenadas) para deducir las unidades.
+          out[tool].lapSample = JSON.stringify(r.lapGroups.map(g => ({ type: g && g.type, lapDistance: g && g.lapDistance, nLaps: Array.isArray(g && g.laps) ? g.laps.length : 0, first: g && Array.isArray(g.laps) ? g.laps[0] : null })));
         }
         break;
       } catch (e) {
