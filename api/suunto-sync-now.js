@@ -9,7 +9,7 @@ const verifyUser = require('./_lib/verify-user');
 const { isRunningActivity, workoutToRun, mergeSuuntoRuns, ensureFreshSuuntoToken, listSuuntoWorkouts, fetchSuuntoFit } = require('./_lib/suunto-activity-helpers');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
-const { withSentry, reportError, reportDiagnostic } = require('./_lib/sentry');
+const { withSentry, reportError } = require('./_lib/sentry');
 
 const SYNC_COOLDOWN_MS = 20000;
 const LOOKBACK_DAYS = 30;
@@ -45,11 +45,6 @@ module.exports = withSentry(async (req, res) => {
       return res.status(200).json({ synced: false, reason: 'no_new_activity' });
     }
     const runWorkouts = workouts.filter(w => isRunningActivity(w.activityId));
-    // TEMPORAL: qué devolvió Suunto (cantidad, tipo de actividad y fecha de cada entrenamiento).
-    await reportDiagnostic('diag suunto-sync-now', {
-      listed: workouts.length, running: runWorkouts.length,
-      workouts: workouts.slice(0, 12).map(w => ({ activityId: w.activityId, startTime: w.startTime, iso: Number.isFinite(Number(w.startTime)) ? new Date(Number(w.startTime)).toISOString() : null, key: String(w.workoutKey || w.key || '').slice(0, 8), dist: w.totalDistance }))
-    }).catch(() => {});
     if (!runWorkouts.length) return res.status(200).json({ synced: false, reason: 'no_new_activity' });
 
     const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${userId}&select=data`, { headers });
