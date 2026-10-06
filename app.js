@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T00:29:49Z';
+const APP_VERSION = '2026-10-06T00:36:13Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1469,7 +1469,7 @@ async function refreshDeviceConnections(){
       supabaseClient.from('coros_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
       supabaseClient.from('suunto_connections').select('user_id').eq('user_id', currentUserId).maybeSingle()
     ]);
-    deviceConnections = { strava: !!s.data, polar: !!p.data, wahoo: !!w.data, coros: !!c.data, suunto: !!su.data || !!(state.suuntoWeek || state.suuntoPlan || state.suuntoSent) };
+    deviceConnections = { strava: !!s.data, polar: !!p.data, wahoo: !!w.data, coros: !!c.data, suunto: await fetchSuuntoConnected(!!su.data) };
     scheduleSuuntoSync();
   }catch(e){ console.error(e); }
   renderPlan();
@@ -1757,20 +1757,42 @@ async function connectSuunto(){
     }
   }catch(e){}
 })();
+// ¿La cuenta tiene Suunto conectado? Lo responde el servidor (ver api/suunto-status.js);
+// fallback = lo que dijo la consulta directa si el servidor no pudo responder.
+async function fetchSuuntoConnected(fallback){
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session) return !!fallback;
+    const res = await fetch(apiUrl('/api/suunto-status'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
+    });
+    if(!res.ok) return !!fallback;
+    const j = await res.json();
+    return !!(j && j.connected);
+  }catch(e){ return !!fallback; }
+}
 async function updateSuuntoStatusDisplay(){
   const el = document.getElementById('suunto-status');
   const btn = document.getElementById('suunto-connect-btn');
   if(!el || !currentUserId) return;
   try{
     const { data, error: suuntoErr } = await supabaseClient.from('suunto_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
-    // El estado de la cuenta (state) viaja a todos los dispositivos: si en cualquiera ya se
-    // sincronizó el plan con Suunto, trae estas marcas (y se borran al desconectar). En el iPhone
-    // (app de pantalla de inicio) la consulta de arriba devolvió vacía SIN error aunque la cuenta
-    // estaba conectada -- encontrado con el aviso de diagnóstico a Sentry -- así que la conexión
-    // se da por válida si CUALQUIERA de las dos fuentes la confirma.
+    // La verdad la dice el SERVIDOR (api/suunto-status.js). La consulta directa de arriba devolvió
+    // vacía SIN error en el iPhone aunque la cuenta estaba conectada (encontrado con el aviso de
+    // diagnóstico a Sentry), y las marcas que el plan deja en state pueden quedar viejas: otro
+    // dispositivo con el estado anterior en memoria las vuelve a guardar después de desconectar
+    // (así volvió a aparecer "Conectado" en una cuenta ya desconectada). Si el servidor no
+    // responde, se usa la consulta directa.
     const suuntoInState = !!(state.suuntoWeek || state.suuntoPlan || state.suuntoSent);
-    const connected = !!data || suuntoInState;
+    const connected = await fetchSuuntoConnected(!!data);
     deviceConnections.suunto = connected;
+    // Marcas viejas de una conexión que ya no existe: se limpian (así no se reenvía nada a Suunto
+    // ni el cron de los lunes usa un plan guardado de una cuenta desconectada).
+    if(!connected && suuntoInState){
+      state.suuntoSent = null; state.suuntoPlan = null; state.suuntoPlanSig = null; state.suuntoWeek = null;
+      persist();
+    }
     if(connected) scheduleSuuntoSync(); // recién conectada (o al abrir Perfil): deja la semana en Suunto
 
     // DIAGNÓSTICO TEMPORAL (api/client-diag.js): una vez por carga, solo si la cuenta tiene algo de
@@ -1945,6 +1967,7 @@ async function syncPlanToSuunto(force){
         });
         result = await res.json().catch(()=>null);
         if(result){
+          if(result.reason === 'not_connected'){ deviceConnections.suunto = false; }
           const ok = !result.reason && !result.failed;
           const next = {};
           keep.forEach(dt => { if(sent[dt] && !changed.some(c=>c.date===dt)) next[dt] = sent[dt]; });
