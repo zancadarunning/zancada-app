@@ -13,7 +13,7 @@
 
 const { fetchWithTimeout } = require('./fetch-with-timeout');
 const { sanitizeActivityNumbers } = require('./activity-sanity.js');
-const { decodeFitRecords, buildSplitsAndSeriesFromFitRecords, emptyFitResult } = require('./fit-activity-helpers');
+const { decodeFitRecords, buildSplitsAndSeriesFromFitRecords, buildPointsFromFitRecords, emptyFitResult } = require('./fit-activity-helpers');
 
 const SUUNTO_OAUTH_BASE = 'https://cloudapi-oauth.suunto.com';
 const SUUNTO_API_BASE = 'https://cloudapi.suunto.com';
@@ -75,7 +75,10 @@ async function fetchSuuntoFit(workoutKey, accessToken) {
     if (!res.ok) return Object.assign(emptyFitResult(), { _failed: true });
     const buf = Buffer.from(await res.arrayBuffer());
     const records = await decodeFitRecords(buf);
-    return buildSplitsAndSeriesFromFitRecords(records);
+    const result = buildSplitsAndSeriesFromFitRecords(records);
+    // La ruta GPS (para el mapa) también sale del FIT: el resumen del entreno que manda Suunto no la trae.
+    result.points = buildPointsFromFitRecords(records);
+    return result;
   } catch (e) {
     console.error('suunto fetchSuuntoFit: no se pudo leer el FIT de', workoutKey, e && e.message);
     return Object.assign(emptyFitResult(), { _failed: true });
@@ -133,7 +136,7 @@ function workoutToRun(workout, fit) {
     avgCadence: fit.avgCadence != null ? fit.avgCadence : (steps > 0 && durationSec > 0 ? Math.round(steps / (durationSec / 60)) : null),
     calories: Number(workout.energyConsumption) > 0 ? Math.round(Number(workout.energyConsumption)) : null,
     hrLog: [],
-    points: [],
+    points: fit.points || [],
     splits: fit.splits,
     splitsV: fit.splits && fit.splits.length ? 3 : undefined,
     series: fit.series,

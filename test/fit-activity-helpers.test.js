@@ -256,3 +256,37 @@ test('decodeFitRecords: un archivo truncado (descarga cortada a mitad) no revien
   assert.ok(records.length < 250, 'el archivo truncado no puede tener los 250 registros completos');
   assert.ok(loggedCalls.some(args => String(args[0]).includes('errores')), 'el corte debería quedar registrado en los logs, antes se descartaba en silencio');
 });
+
+const { buildPointsFromFitRecords } = require('../api/_lib/fit-activity-helpers');
+const SEMI_PER_DEG = 2147483648 / 180;
+
+test('buildPointsFromFitRecords: convierte semicírculos a grados y arma {lat, lon, t, alt}', () => {
+  const t0 = new Date('2026-09-21T10:00:00Z');
+  const recs = [
+    { timestamp: t0, positionLat: Math.round(40.785 * SEMI_PER_DEG), positionLong: Math.round(-73.963 * SEMI_PER_DEG), altitude: 41.23 },
+    { timestamp: new Date(t0.getTime() + 5000), positionLat: Math.round(40.786 * SEMI_PER_DEG), positionLong: Math.round(-73.962 * SEMI_PER_DEG), enhancedAltitude: 42 }
+  ];
+  const pts = buildPointsFromFitRecords(recs);
+  assert.equal(pts.length, 2);
+  assert.ok(Math.abs(pts[0].lat - 40.785) < 1e-5 && Math.abs(pts[0].lon + 73.963) < 1e-5);
+  assert.deepEqual([pts[0].t, pts[1].t], [0, 5]);
+  assert.equal(pts[0].alt, 41.2);
+  assert.equal(pts[1].alt, 42);
+});
+
+test('buildPointsFromFitRecords: sin GPS (cinta/interior) o con posiciones inválidas devuelve []', () => {
+  assert.deepEqual(buildPointsFromFitRecords([{ timestamp: new Date(), distance: 10 }, { timestamp: new Date(), positionLat: null, positionLong: null }]), []);
+  assert.deepEqual(buildPointsFromFitRecords([{ timestamp: new Date(), positionLat: 0, positionLong: 0 }]), []); // 0,0 = sin fix
+  assert.deepEqual(buildPointsFromFitRecords([{ timestamp: new Date(), positionLat: 2147483000, positionLong: 0 }]), []); // lat > 90 grados
+  assert.deepEqual(buildPointsFromFitRecords(null), []);
+});
+
+test('buildPointsFromFitRecords: una carrera larga se reduce a maxPoints repartidos parejo, con el primero y el último', () => {
+  const t0 = Date.parse('2026-09-21T10:00:00Z');
+  const recs = [];
+  for (let i = 0; i < 5000; i++) recs.push({ timestamp: new Date(t0 + i * 1000), positionLat: Math.round((40 + i * 1e-5) * SEMI_PER_DEG), positionLong: Math.round(-73 * SEMI_PER_DEG) });
+  const pts = buildPointsFromFitRecords(recs, 100);
+  assert.equal(pts.length, 100);
+  assert.equal(pts[0].t, 0);
+  assert.equal(pts[99].t, 4999);
+});

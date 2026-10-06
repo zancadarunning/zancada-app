@@ -6,7 +6,7 @@
 // cada carrera (el cron diario suunto-sync.js completa splits/series).
 
 const verifyUser = require('./_lib/verify-user');
-const { isRunningActivity, workoutToRun, mergeSuuntoRuns, ensureFreshSuuntoToken, listSuuntoWorkouts } = require('./_lib/suunto-activity-helpers');
+const { isRunningActivity, workoutToRun, mergeSuuntoRuns, ensureFreshSuuntoToken, listSuuntoWorkouts, fetchSuuntoFit } = require('./_lib/suunto-activity-helpers');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 const { withSentry, reportError, reportDiagnostic } = require('./_lib/sentry');
@@ -57,9 +57,18 @@ module.exports = withSentry(async (req, res) => {
     if (!stateRows || !stateRows.length) return res.status(200).json({ synced: false });
     const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.suuntoId));
 
-    const newRuns = runWorkouts
+    // Se baja el FIT (ruta GPS para el mapa y parciales) solo de las 2 carreras nuevas más recientes: cada FIT es
+    // una llamada más de la cuota de la Developer API de Suunto y un pedido más dentro de este request. El
+    // resto queda para la sincronización diaria (suunto-sync.js), que completa lo que falte.
+    const MAX_FIT_NOW = 2;
+    const fresh = runWorkouts
       .filter(w => !knownIds.has(String(w.workoutKey || w.key)))
-      .map(w => workoutToRun(w, null));
+      .sort((a, b) => Number(b.startTime) - Number(a.startTime));
+    const newRuns = [];
+    for (let i = 0; i < fresh.length; i++) {
+      const fit = i < MAX_FIT_NOW ? await fetchSuuntoFit(String(fresh[i].workoutKey || fresh[i].key), accessToken) : null;
+      newRuns.push(workoutToRun(fresh[i], fit && !fit._failed ? fit : null));
+    }
     if (newRuns.length) await mergeSuuntoRuns(base, headers, userId, newRuns, 'skip');
 
     res.status(200).json({ synced: newRuns.length > 0 });

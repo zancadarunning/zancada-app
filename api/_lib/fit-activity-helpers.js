@@ -249,4 +249,34 @@ function buildSplitsAndSeriesFromFitRecords(records) {
   return { splits, series, elevationGain, elevationLoss, avgCadence, avgPower, maxPower };
 }
 
-module.exports = { decodeFitRecords, buildSplitsAndSeriesFromFitRecords, emptyFitResult };
+// Ruta GPS a partir de los mensajes "record" del FIT: [{ lat, lon, t, alt }] en grados, como el resto de la app
+// (tracker propio y Strava). El SDK de Garmin entrega posiciones en "semicírculos" (enteros de 32 bits):
+// grados = semicírculos * 180 / 2^31. Se descartan muestras sin posición o fuera de rango (un reloj
+// sin GPS -- cinta, interior -- simplemente no trae posición: devuelve []) y se reduce a como máximo
+// maxPoints puntos repartidos parejo (una carrera larga a 1 muestra/segundo son decenas de miles de puntos y
+// el mapa no gana nada con eso, mientras que cada carrera se guarda entera dentro de app_state).
+function buildPointsFromFitRecords(records, maxPoints) {
+  const SEMI = 180 / 2147483648;
+  const max = maxPoints || 500;
+  const valid = [];
+  let t0 = null;
+  for (const r of records || []) {
+    if (!r || r.positionLat == null || r.positionLong == null) continue;
+    const lat = r.positionLat * SEMI, lon = r.positionLong * SEMI;
+    if (!(Math.abs(lat) <= 90) || !(Math.abs(lon) <= 180) || (lat === 0 && lon === 0)) continue;
+    if (t0 == null && r.timestamp instanceof Date) t0 = r.timestamp.getTime();
+    const alt = altitudeOf(r);
+    valid.push({
+      lat: Math.round(lat * 1e6) / 1e6,
+      lon: Math.round(lon * 1e6) / 1e6,
+      t: (r.timestamp instanceof Date && t0 != null) ? Math.round((r.timestamp.getTime() - t0) / 1000) : null,
+      alt: typeof alt === 'number' && !isNaN(alt) ? Math.round(alt * 10) / 10 : null
+    });
+  }
+  if (valid.length <= max) return valid;
+  const out = [];
+  for (let i = 0; i < max; i++) out.push(valid[Math.round(i * (valid.length - 1) / (max - 1))]);
+  return out;
+}
+
+module.exports = { decodeFitRecords, buildSplitsAndSeriesFromFitRecords, buildPointsFromFitRecords, emptyFitResult };

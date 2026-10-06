@@ -36,7 +36,9 @@ async function syncOneConnection(base, headers, conn) {
   }
 
   // 2) Completar splits/series de carreras guardadas sin el FIT (splitsV !== 3).
-  const pending = runs.filter(r => r.source === 'suunto' && r.suuntoId && r.splitsV !== 3).slice(0, FIT_BACKFILL_BATCH);
+  // Pendientes: sin parciales todavía (splitsV !== 3) o sin ruta GPS para el mapa -- salvo que ya se sepa que el
+  // entreno no tiene GPS (noGps: cinta, interior), para no pedir su FIT todos los días para siempre.
+  const pending = runs.filter(r => r.source === 'suunto' && r.suuntoId && (r.splitsV !== 3 || (!(r.points && r.points.length > 1) && !r.noGps))).slice(0, FIT_BACKFILL_BATCH);
   const updated = [];
   for (const run of pending) {
     const fit = await fetchSuuntoFit(run.suuntoId, accessToken);
@@ -48,6 +50,7 @@ async function syncOneConnection(base, headers, conn) {
     if (fit.avgCadence != null) run.avgCadence = fit.avgCadence;
     if (fit.avgPower != null) run.avgPower = fit.avgPower;
     if (fit.maxPower != null) run.maxPower = fit.maxPower;
+    if (fit.points && fit.points.length > 1) run.points = fit.points; else run.noGps = true;
     run.splitsV = 3;
     updated.push(run);
   }
