@@ -140,3 +140,96 @@ test('applyLevelTestResult: marca el test como hecho, guarda ritmos y rehace el 
   assert.ok(app.state.plan.filter(d => d.typeKey === 'test' && !d.status).length === 0);
   assert.ok(app.state.chat.length === 1 && /2\.40 km/.test(app.state.chat[0].text));
 });
+
+function appWithPlan(profileOverrides) {
+  const app = loadApp();
+  ['renderAll', 'renderHistory', 'renderZones', 'renderChat', 'persist', 'showToast'].forEach(fn => { app[fn] = () => {}; });
+  const p = setup(app, baseProfile(Object.assign({ trainBy: 'time', trainingDays: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] }, profileOverrides || {})));
+  app.state.chat = []; app.state.onboarded = true;
+  app.state.weekStart = app.getMondayISO(new Date());
+  app.state.weekNumber = 3;
+  app.state.nextWeekOverrides = {};
+  app.state.plan = app.generatePlan(p, 3, app.state.weekStart);
+  return app;
+}
+
+test('agendar el test un día de esta semana: reemplaza la sesión y sobrevive a rehacer el plan', () => {
+  const app = appWithPlan();
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  const before = app.state.plan[todayIdx];
+  assert.ok(before.dist > 0 && before.typeKey !== 'test');
+  app.scheduleLevelTestOn('cur', todayIdx);
+  assert.equal(app.state.plan[todayIdx].typeKey, 'test');
+  assert.equal(app.state.plan[todayIdx].userTest, true);
+  // rehacer el plan (cambiar de modo, guardar el perfil...) no lo pisa
+  app.state.plan = app.preserveLivedDays(app.state.plan, app.generatePlan(app.state.profile, 3));
+  assert.equal(app.state.plan[todayIdx].typeKey, 'test');
+  // y no se agrega otro test automático
+  assert.equal(app.state.plan.filter(d => d.typeKey === 'test').length, 1);
+});
+
+test('agendar el test la semana que viene: queda como override, aparece en esa semana y es uno solo', () => {
+  const app = appWithPlan();
+  app.scheduleLevelTestOn('next', 3); // jueves de la semana que viene
+  assert.equal(app.state.nextWeekOverrides.thu.userTest, true);
+  const nw = app.getNextWeekPlan();
+  assert.equal(nw.plan[3].typeKey, 'test');
+  assert.equal(nw.plan[3].custom, false);
+  assert.equal(nw.plan.filter(d => d.typeKey === 'test').length, 1);
+  // si después lo agenda esta semana, el de la semana que viene se saca
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  app.scheduleLevelTestOn('cur', todayIdx);
+  assert.equal(Object.keys(app.state.nextWeekOverrides).filter(k => app.state.nextWeekOverrides[k].userTest).length, 0);
+  assert.equal(app.getNextWeekPlan().plan.filter(d => d.typeKey === 'test').length, 0);
+});
+
+test('con el test obligatorio pendiente, uno agendado a mano evita que se ponga otro automático', () => {
+  const app = appWithPlan({ levelTest: { required: true, done: false } });
+  app.scheduleLevelTestOn('next', 4);
+  assert.equal(app.state.plan.filter(d => d.typeKey === 'test').length, 0);
+  assert.equal(app.getNextWeekPlan().plan.filter(d => d.typeKey === 'test').length, 1);
+});
+
+test('autoReadLevelTest: la carrera de ~12 min vinculada a la sesión del test se lee sola', () => {
+  const app = appWithPlan({ levelTest: { required: true, done: false } });
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  app.scheduleLevelTestOn('cur', todayIdx);
+  app.state.runs = [{ id: 77, date: new Date().toISOString(), distanceKm: 2.4, durationSec: 720, hrLog: [], points: [], maxHr: 178 }];
+  app.state.plan[todayIdx].status = 'done';
+  app.state.plan[todayIdx].linkedRunId = 77;
+  app.autoReadLevelTest();
+  const lt = app.state.profile.levelTest;
+  assert.equal(lt.done, true);
+  assert.equal(lt.distanceM, 2400);
+  assert.equal(lt.maxHr, 178);
+  assert.equal(app.state.plan[todayIdx].testRead, true);
+  // no se vuelve a leer
+  lt.distanceM = 1;
+  app.autoReadLevelTest();
+  assert.equal(app.state.profile.levelTest.distanceM, 1);
+});
+
+test('autoReadLevelTest: una carrera de otra duración no se usa como test; sin carrera todavía, espera', () => {
+  const app = appWithPlan({ levelTest: { required: true, done: false } });
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  app.scheduleLevelTestOn('cur', todayIdx);
+  app.state.plan[todayIdx].status = 'done';
+  app.state.plan[todayIdx].linkedRunId = 88;
+  app.autoReadLevelTest(); // la carrera todavía no está en state.runs
+  assert.equal(app.state.plan[todayIdx].testRead, undefined);
+  app.state.runs = [{ id: 88, date: new Date().toISOString(), distanceKm: 5, durationSec: 1800 }];
+  app.autoReadLevelTest();
+  assert.equal(app.state.profile.levelTest.done, false);
+  assert.equal(app.state.plan[todayIdx].testRead, true);
+});
+
+test('autoReadLevelTest: una carrera de 12:30 se escala a 12:00', () => {
+  const app = appWithPlan({ levelTest: { required: true, done: false } });
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  app.scheduleLevelTestOn('cur', todayIdx);
+  app.state.runs = [{ id: 99, date: new Date().toISOString(), distanceKm: 2.5, durationSec: 750 }];
+  app.state.plan[todayIdx].status = 'done';
+  app.state.plan[todayIdx].linkedRunId = 99;
+  app.autoReadLevelTest();
+  assert.equal(app.state.profile.levelTest.distanceM, 2400); // 2500 m * 720/750
+});

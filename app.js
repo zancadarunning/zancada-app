@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T14:44:34Z';
+const APP_VERSION = '2026-10-06T15:37:00Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2883,6 +2883,8 @@ function preserveLivedDays(oldPlan, newPlan){
     // corredor. Reportado por el usuario: canceló martes y viernes, dejó miércoles y jueves en
     // 6km cada uno, y al rato martes y viernes volvieron a aparecer con un entrenamiento nuevo.
     if(old && (old.custom || old.cancelled)) return old;
+    // El test que el corredor agendó a propósito (Perfil -> test de nivel) tampoco se pisa mientras no se haya hecho.
+    if(old && old.userTest && !old.status) return old;
     return newDay;
   });
 }
@@ -4345,6 +4347,8 @@ function getNextWeekPlan(){
     const ov = overrides[d.day];
     if(!ov) return d;
     if(ov.cancelled) return Object.assign({}, d, ov, {custom:false, cancelled:true, typeKey:'rest', type:undefined, desc:undefined, interval:undefined});
+    // el test de nivel agendado: es una sesión normal del plan (no un texto libre), por eso custom:false
+    if(ov.userTest) return Object.assign({}, d, ov, {custom:false, interval:undefined, runWalk:undefined});
     return Object.assign({}, d, ov, {custom:true});
   });
   return { plan, weekNumber: wn, weekStart: nextStartIso };
@@ -5168,6 +5172,9 @@ function paceHintFor(d){
 // tiene un test vivo (se pasó el día sin hacerlo): así nunca hay dos tests pendientes a la vez.
 function applyLevelTestDay(days, p, weekStartDate, beginner){
   if(!levelTestPending(p)) return days;
+  const scheduled = (state.plan || []).some(d => d && d.typeKey === 'test' && d.status !== 'skipped' && (d.userTest || d.status === 'done'))
+    || Object.values(state.nextWeekOverrides || {}).some(o => o && o.userTest);
+  if(scheduled) return days;
   const curMonday = getMondayISO(new Date());
   const ws = weekStartDate || state.weekStart;
   if(!ws || ws < curMonday) return days;
@@ -5388,6 +5395,8 @@ function applyLevelTestResult(distM, maxHr){
   // El día del test queda como hecho (si estaba pendiente en la semana actual) antes de regenerar el plan.
   const td = (state.plan || []).find(d => d && d.typeKey === 'test' && !d.status);
   if(td) td.status = 'done';
+  (state.plan || []).forEach(d => { if(d && d.typeKey === 'test' && d.status === 'done') d.testRead = true; });
+  Object.keys(state.nextWeekOverrides || {}).forEach(k => { const o = state.nextWeekOverrides[k]; if(o && o.userTest) delete state.nextWeekOverrides[k]; });
   state.plan = preserveLivedDays(state.plan, generatePlan(p, state.weekNumber || 1));
   const unit = distUnit();
   const easy = fmtPaceRange(ev.paces.easy), tempo = fmtPaceRange(ev.paces.tempo), interval = fmtPaceRange(ev.paces.interval);
@@ -5401,6 +5410,18 @@ function applyLevelTestResult(distM, maxHr){
 function renderLevelTestUI(){
   const p = state.profile;
   if(!p) return;
+  const sched = document.getElementById('perfil-ltest-sched');
+  if(sched){
+    let iso = null;
+    const i = (state.plan || []).findIndex(d => d && d.typeKey === 'test' && !d.status && !d.testRead);
+    if(i >= 0) iso = addDaysToIsoLocal(state.weekStart, i);
+    else {
+      const k = Object.keys(state.nextWeekOverrides || {}).find(x => state.nextWeekOverrides[x] && state.nextWeekOverrides[x].userTest);
+      if(k) iso = addDaysToIsoLocal(addDaysToIsoLocal(state.weekStart, 7), DAY_KEYS.indexOf(k));
+    }
+    sched.textContent = iso ? t('ltest_perfil_scheduled', {day: new Date(iso + 'T12:00:00').toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'short'})}) : '';
+    sched.style.display = iso ? 'block' : 'none';
+  }
   const banner = document.getElementById('home-test-banner');
   if(banner) banner.style.display = levelTestPending(p) ? 'block' : 'none';
   const txt = document.getElementById('perfil-ltest-text');
@@ -5416,6 +5437,104 @@ function renderLevelTestUI(){
       txt.textContent = t('ltest_perfil_none');
     }
   }
+}
+
+/* ---- agendar el test en el plan y leerlo cuando se hace ----
+   Desde Perfil el corredor elige QUÉ DÍA quiere hacer el test: se carga al plan como una sesión más (userTest:true, que
+   preserveLivedDays respeta) y reemplaza lo que hubiera ese día. Una vez hecha la carrera de ese día, autoReadLevelTest()
+   lee la carrera vinculada a la sesión del test (la grabada en la app o la que llegó de un reloj) y calcula el resultado
+   sin que haya que cargar nada a mano. */
+function makeLevelTestDay(dayKey, beginner){
+  const pace = estimateBasePaceMinPerKm(state.profile);
+  return {day: dayKey, typeKey:'test', dist: Math.max(0.5, Math.round(12 / pace * 10) / 10), durMin: 12, timeBased: true, terrain:'asfalto', zone:null, beginner: !!beginner, userTest: true};
+}
+function levelTestSessionLabel(d){
+  if(!d || !(d.dist > 0)) return t('type_rest');
+  const lbl = planLabelBody(d);
+  const amount = planAmountText(d);
+  return amount ? `${lbl.type} · ${amount}` : lbl.type;
+}
+// Hoy y los días que quedan de esta semana, más la semana que viene (el plan solo guarda esas dos).
+function levelTestScheduleOptions(){
+  const out = [];
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  (state.plan || []).forEach((d, i) => {
+    if(i < todayIdx) return;
+    const locked = !!(d && (d.status === 'done' || d.status === 'skipped'));
+    out.push({week:'cur', idx:i, iso: addDaysToIsoLocal(state.weekStart, i), dayKey: d.day, label: levelTestSessionLabel(d), hasSession: !!(d && d.dist > 0 && d.typeKey !== 'test'), isTest: d.typeKey === 'test', locked, today: i === todayIdx});
+  });
+  try{
+    const nw = getNextWeekPlan();
+    nw.plan.forEach((d, i) => {
+      out.push({week:'next', idx:i, iso: addDaysToIsoLocal(nw.weekStart, i), dayKey: d.day, label: levelTestSessionLabel(d), hasSession: !!(d && d.dist > 0 && d.typeKey !== 'test'), isTest: d.typeKey === 'test', locked:false, today:false});
+    });
+  }catch(e){ /* sin la semana próxima alcanzan los días de esta semana */ }
+  return out;
+}
+function closeLevelTestSchedule(){
+  const m = document.getElementById('level-test-day-modal');
+  if(m) m.classList.remove('overlay-open');
+}
+function openLevelTestSchedule(){
+  const modal = document.getElementById('level-test-day-modal');
+  if(!modal) return;
+  const list = document.getElementById('ltest-day-list');
+  const fmt = iso => new Date(iso + 'T12:00:00').toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'short'});
+  list.innerHTML = levelTestScheduleOptions().map(o => {
+    const sub = o.locked ? t('ltest_day_locked') : o.isTest ? t('ltest_day_current') : o.hasSession ? t('ltest_day_replace', {session: escapeHtml(o.label)}) : t('ltest_day_free');
+    return `<button class="btn btn-outline" ${o.locked ? 'disabled' : ''} style="width:100%; margin-top:10px; text-align:left; display:block; padding:12px 16px;" onclick="scheduleLevelTestOn('${o.week}', ${o.idx})">
+      <span style="display:block; font-weight:700; text-transform:capitalize;">${fmt(o.iso)}${o.today ? ' · ' + t('ltest_day_today') : ''}</span>
+      <span style="display:block; font-size:12.5px; opacity:.75; margin-top:2px;">${sub}</span></button>`;
+  }).join('');
+  openOverlaySheetEl(modal);
+}
+function scheduleLevelTestOn(week, idx){
+  const beginner = isBeginnerProfile(state.profile);
+  // un solo test agendado a la vez: se saca cualquier otro que siga pendiente
+  const dropPendingTests = () => {
+    Object.keys(state.nextWeekOverrides || {}).forEach(k => { const o = state.nextWeekOverrides[k]; if(o && o.userTest) delete state.nextWeekOverrides[k]; });
+    (state.plan || []).forEach((d, i) => { if(d && d.typeKey === 'test' && !d.status){ state.plan[i] = {day: d.day, typeKey:'rest', dist:0, terrain:null, zone:null, beginner: d.beginner}; } });
+  };
+  if(week === 'cur'){
+    const old = state.plan[idx];
+    if(!old || old.status === 'done' || old.status === 'skipped') return;
+    dropPendingTests();
+    state.plan[idx] = makeLevelTestDay(old.day, beginner);
+    // lo que había en los demás días se rehace igual que siempre (los del test y los personalizados se respetan)
+    state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber || 1));
+  } else {
+    dropPendingTests();
+    if(!state.nextWeekOverrides) state.nextWeekOverrides = {};
+    // el test de la semana que viene se carga ANTES de rehacer esta semana: así generatePlan sabe que ya hay uno agendado
+    state.nextWeekOverrides[DAY_KEYS[idx]] = makeLevelTestDay(DAY_KEYS[idx], beginner);
+    state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber || 1));
+  }
+  closeLevelTestSchedule();
+  renderAll(); persist();
+  const iso = week === 'cur' ? addDaysToIsoLocal(state.weekStart, idx) : addDaysToIsoLocal(addDaysToIsoLocal(state.weekStart, 7), idx);
+  showToast(t('ltest_scheduled_toast', {day: new Date(iso + 'T12:00:00').toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'short'})}), 'success');
+}
+// Busca la sesión del test (hecha, con carrera vinculada) que todavía no se leyó y calcula el resultado.
+let levelTestReading = false;
+function autoReadLevelTest(){
+  if(levelTestReading || !state || !state.onboarded || !state.profile || !Array.isArray(state.plan)) return;
+  const d = state.plan.find(x => x && x.typeKey === 'test' && x.status === 'done' && x.linkedRunId && !x.testRead);
+  if(!d) return;
+  const run = (state.runs || []).find(r => String(r.id) === String(d.linkedRunId));
+  if(!run) return; // la carrera todavía no llegó (reloj sin sincronizar): se vuelve a mirar en el próximo render
+  levelTestReading = true;
+  try{
+    d.testRead = true;
+    const sec = run.durationSec || 0, km = run.distanceKm || 0;
+    if(sec >= 660 && sec <= 810 && km * 1000 >= LEVEL_TEST_MIN_M && km * 1000 <= LEVEL_TEST_MAX_M){
+      // la carrera dura ~12 min: se escala a 12:00 exactos (11:30 -> 12:00 suma ese tramo a la distancia)
+      const maxHr = run.maxHr || ((run.hrLog && run.hrLog.length) ? Math.max.apply(null, run.hrLog.map(h => (h && typeof h === 'object') ? (h.bpm || h.hr || 0) : (Number(h) || 0))) : 0);
+      applyLevelTestResult(km * 1000 * 720 / sec, (maxHr >= 100 && maxHr <= 230) ? Math.round(maxHr) : null);
+    } else {
+      persist();
+      showToast(t('ltest_run_mismatch', {min: Math.round(sec / 60)}), 'error');
+    }
+  } finally { levelTestReading = false; }
 }
 
 /* ---- entrenar por distancia vs. por tiempo -----
@@ -5823,7 +5942,7 @@ async function shareCalendarLink(){
 }
 
 /* ================= RENDER ================= */
-function renderAll(){ renderHome(); renderPlan(); renderPerfil(); renderLevelTestUI(); }
+function renderAll(){ autoReadLevelTest(); renderHome(); renderPlan(); renderPerfil(); renderLevelTestUI(); }
 
 const DAILY_TIPS = {
   es: ["Cada kilómetro cuenta, aunque sea lento.","El descanso también es parte del entrenamiento.","Los días difíciles construyen corredores fuertes.","Correr suave hoy es correr mejor mañana.","Escuchá a tu cuerpo — el dolor no es lo mismo que la incomodidad.","La constancia le gana a la intensidad, casi siempre.","El mejor ritmo es el que podés sostener y disfrutar.","Un buen calentamiento evita una mala lesión.","Dormí bien: es el entrenamiento invisible.","La motivación te hace empezar, el hábito te hace terminar.","No compares tu progreso con el de otro corredor.","Tu peor día corriendo sigue siendo mejor que uno en el sillón.","No necesitás motivación todos los días, necesitás un hábito.","El cuerpo se adapta a lo que le pedís, dale tiempo.","Correr bajo la lluvia también cuenta — y te vas a acordar de ese día.","Cada carrera que terminás te hace un poco más fuerte que ayer.","La zapatilla más rápida es la que ya te pusiste.","No hace falta correr rápido todos los días, hace falta correr seguido.","El primer kilómetro siempre cuesta más que el último.","Progresar no es lineal: hay semanas de subida y semanas de meseta.","Nadie corrió un maratón sin antes correr un metro.","La disciplina te lleva a donde la motivación no llega sola.","Un mal entrenamiento no borra diez buenos.","Correr es la única carrera donde ganás simplemente por terminar.","Tu ritmo de hoy no tiene que ser el de ayer, ni el de mañana.","El aire frío de la mañana es gratis y funciona mejor que cualquier café.","A veces el logro más grande del día es haber salido a la calle.","Cada gota de sudor es una decisión que tomaste por vos mismo.","Correr no te cambia el cuerpo primero, te cambia la cabeza primero.","Nadie te va a aplaudir en el kilómetro 3 de un martes cualquiera, y está bien: es tuyo.","El descanso de hoy es la velocidad de mañana.","No corrés contra nadie, corrés con vos de antes.","Los kilómetros lentos de hoy son los que te bancan en el kilómetro 30.","Ponerte las zapatillas ya es el 50% del entrenamiento.","El clima no decide si salís a correr, vos decidís.","Cada semana que sumás kilómetros es una inversión en la versión futura de vos.","No es magia, es constancia disfrazada de kilómetros.","Cuando dudes si podés, acordate de todas las veces que ya pudiste.","El running no perdona la impaciencia, pero premia la paciencia siempre.","Tu peor excusa de hoy es más débil que tu peor entrenamiento.","Un rodaje suave bien hecho vale más que uno rápido mal hecho.","Correr te enseña a estar incómodo sin entrar en pánico — eso sirve para todo lo demás también.","No hay atajos para la resistencia, solo kilómetros acumulados.","Cada carrera empieza con la decisión de salir por la puerta.","El corredor de hoy agradece al corredor que decidió empezar.","La meta no es correr sin parar, es no dejar de intentarlo.","Los días que menos ganas tenés son los que más te enseñan.","Vas a tener entrenamientos malos — no son el final, son parte del camino.","Cuidar el cuerpo hoy es poder seguir corriendo mañana.","Cada corredor que ves en la calle también tuvo un primer día difícil."],
@@ -6374,7 +6493,7 @@ function buildDayListHtml(wd){
       const planBtns = `${showSyncBtn?`<button class="btn btn-outline btn-sm" id="sync-today-btn" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}`;
       if(planBtns) statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">${planBtns}</div>`;
     }
-    if(d.typeKey==='test' && levelTestPending()) statusBlock += `<div style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openLevelTest()">${t('ltest_load_btn')}</button></div>`;
+    if(d.typeKey==='test' && !d.testRead && d.status!=='skipped') statusBlock += `<div style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openLevelTest()">${t('ltest_load_btn')}</button></div>`;
     return `<div>
       <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" onclick="toggleDay(${i})">
         <div class="day-badge"><div class="d">${t('day_'+d.day).slice(0,3)}</div>${dateLbl?`<div class="mono muted" style="font-size:10px; margin-top:2px;">${dateLbl}</div>`:''}</div>

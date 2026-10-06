@@ -2515,6 +2515,14 @@
        nuevo cada vez que se tocaba (sin forma de borrar los anteriores, nunca hubo permiso
        de escritura sobre el calendario del usuario). Esta URL es la misma siempre -- el
        propio Calendario del usuario la vuelve a pedir solo. -->
+  <div class="overlay overlay-sheet" id="level-test-day-modal">
+    <button class="week-nav-btn" onclick="closeLevelTestSchedule()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="ltest_day_title"></h2>
+    <p class="muted" style="margin-top:10px; line-height:1.5;" data-i18n="ltest_day_desc"></p>
+    <div id="ltest-day-list" style="margin-top:8px;"></div>
+    <button class="btn btn-outline" style="width:100%; margin-top:18px;" onclick="closeLevelTestSchedule(); openLevelTest()" data-i18n="ltest_day_manual"></button>
+  </div>
+
   <div class="overlay overlay-sheet" id="level-test-modal">
     <button class="week-nav-btn" onclick="closeLevelTest()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="ltest_title"></h2>
@@ -2858,7 +2866,8 @@
     <div class="card" id="perfil-ltest-card">
       <h3 data-i18n="ltest_perfil_title"></h3>
       <p class="muted" id="perfil-ltest-text" style="margin-top:8px; font-size:13px; line-height:1.5;"></p>
-      <button class="btn btn-outline" style="width:100%; margin-top:12px;" onclick="openLevelTest()" data-i18n="ltest_perfil_btn"></button>
+      <p id="perfil-ltest-sched" style="display:none; margin-top:8px; font-size:13px; font-weight:700; color:var(--hivis-text);"></p>
+      <button class="btn btn-outline" style="width:100%; margin-top:12px;" onclick="openLevelTestSchedule()" data-i18n="ltest_perfil_btn"></button>
     </div>
     <div class="card">
       <h3 data-i18n="perfil_voice_label"></h3>
