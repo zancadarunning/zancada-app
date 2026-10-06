@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T04:12:48Z';
+const APP_VERSION = '2026-10-06T13:22:47Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5943,7 +5943,8 @@ function buildDayListHtml(wd){
       const showSyncBtn = isToday && anyDeviceConnected;
       const showWahooPushBtn = isToday && deviceConnections.wahoo;
       const showSuuntoPushBtn = isToday && deviceConnections.suunto;
-      statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;"><button class="btn btn-outline btn-sm" onclick="markSession(${i},'done')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.check}</span> ${t('plan_mark_done')}</button><button class="btn btn-outline btn-sm" onclick="markSession(${i},'skipped')"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.cross}</span> ${t('plan_mark_skipped')}</button>${showSyncBtn?`<button class="btn btn-outline btn-sm" id="sync-today-btn" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}${showWahooPushBtn?`<button class="btn btn-outline btn-sm" id="wahoo-push-btn" onclick="pushTodayToWahoo()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.send}</span> ${t('wahoo_push_button')}</button>`:''}${showSuuntoPushBtn?`<button class="btn btn-outline btn-sm" id="suunto-push-btn" onclick="pushPlanToSuunto()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.send}</span> ${t('suunto_push_button')}</button>`:''}</div>`;
+      const planBtns = `${showSyncBtn?`<button class="btn btn-outline btn-sm" id="sync-today-btn" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}${showWahooPushBtn?`<button class="btn btn-outline btn-sm" id="wahoo-push-btn" onclick="pushTodayToWahoo()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.send}</span> ${t('wahoo_push_button')}</button>`:''}${showSuuntoPushBtn?`<button class="btn btn-outline btn-sm" id="suunto-push-btn" onclick="pushPlanToSuunto()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.send}</span> ${t('suunto_push_button')}</button>`:''}`;
+      if(planBtns) statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">${planBtns}</div>`;
     }
     return `<div>
       <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" onclick="toggleDay(${i})">
