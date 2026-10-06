@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T00:06:26Z';
+const APP_VERSION = '2026-10-06T00:15:49Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1765,6 +1765,30 @@ async function updateSuuntoStatusDisplay(){
   try{
     const { data, error: suuntoErr } = await supabaseClient.from('suunto_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
     // DIAGNÓSTICO TEMPORAL: ver el id (primeros 8 caracteres), la versión y lo que respondió la base.
+    // Además se le avisa a Sentry (api/client-diag.js), una vez por carga de la app, para poder ver
+    // qué pasa en un celular sin tenerlo a mano.
+    if(!window.__suuntoDiagSent){
+      window.__suuntoDiagSent = true;
+      (async()=>{
+        try{
+          const { data: { session } } = await supabaseClient.auth.getSession();
+          if(!session) return;
+          let flag = 'n/a'; try{ flag = localStorage.getItem('zancada_suunto') || '-'; }catch(e){}
+          fetch(apiUrl('/api/client-diag'), {
+            method:'POST',
+            headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
+            body: JSON.stringify({ topic:'suunto-card', data:{
+              user: String(currentUserId).slice(0,8), connectionRow: !!data,
+              queryError: suuntoErr ? ((suuntoErr.code||'') + ' ' + (suuntoErr.message||'')) : '',
+              flag, inState: !!(state.suuntoWeek || state.suuntoPlan || state.suuntoSent),
+              standalone: !!(window.navigator && window.navigator.standalone), version: APP_VERSION,
+              platform: (window.Capacitor && window.Capacitor.getPlatform) ? window.Capacitor.getPlatform() : 'web',
+              cardInDom: !!document.getElementById('suunto-card')
+            }})
+          }).catch(()=>{});
+        }catch(e){}
+      })();
+    }
     if(diagEl){
       let flag = 'n/a'; try{ flag = localStorage.getItem('zancada_suunto') || '-'; }catch(e){}
       diagEl.textContent = 'diag: usuario ' + String(currentUserId).slice(0,8) + ' · suunto: ' + (data ? 'conectado' : (suuntoErr ? 'ERROR ' + (suuntoErr.code||'') + ' ' + (suuntoErr.message||'') : 'sin conexion')) + ' · flag ' + flag + ' · v ' + APP_VERSION.slice(5,16);
@@ -1779,6 +1803,11 @@ async function updateSuuntoStatusDisplay(){
       if(/[?&]suunto=1(&|$)/.test(location.search)) localStorage.setItem('zancada_suunto','1');
       if(localStorage.getItem('zancada_suunto')==='1') suuntoUnlocked = true;
     }catch(e){}
+    // Otra señal que NO depende de este navegador ni de la consulta de arriba: si en cualquier
+    // dispositivo de la cuenta ya se sincronizó el plan con Suunto, state (que viaja con la cuenta)
+    // trae esas marcas -- así la tarjeta también se ve en el iPhone / ícono de pantalla de inicio.
+    const suuntoInState = !!(state.suuntoWeek || state.suuntoPlan || state.suuntoSent);
+    if(suuntoInState) suuntoUnlocked = true;
     const suuntoCard = document.getElementById('suunto-card');
     if(suuntoCard) suuntoCard.style.display = suuntoUnlocked ? '' : 'none';
     const guidesBtn = document.getElementById('suunto-guides-btn');
