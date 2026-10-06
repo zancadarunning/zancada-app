@@ -475,85 +475,8 @@ async function refreshCorosToken(base, headers, userId, refreshToken) {
   return { accessToken: tokenData.access_token, expiresAt };
 }
 
-// SONDEO (temporal): describe la ESTRUCTURA -- nombres de campos y tipos, sin ningún valor -- de lo que devuelven las tools
-// de detalle de COROS (getActivityDetail / queryActivityLapData), para poder escribir su parser con datos reales en vez de
-// adivinar (ver el comentario grande de arriba). Nunca se manda un valor: ni coordenadas, ni pulso, ni fechas.
-function describeShape(v, depth) {
-  depth = depth || 0;
-  if (v === null) return 'null';
-  if (Array.isArray(v)) return v.length ? `array(${v.length}) de ${depth < 4 ? JSON.stringify(describeShape(v[0], depth + 1)) : '...'}` : 'array(0)';
-  if (typeof v === 'object') {
-    if (depth >= 4) return 'object';
-    const out = {};
-    for (const k of Object.keys(v).slice(0, 40)) out[k] = describeShape(v[k], depth + 1);
-    return out;
-  }
-  if (typeof v === 'string') return v.length > 40 ? `string(${v.length})` : 'string';
-  return typeof v;
-}
-// Si la respuesta es un reporte de texto (como querySportRecords), se manda el texto con los dígitos enmascarados: queda la
-// plantilla (etiquetas, unidades) pero no los valores.
+// Enmascara dígitos para registrar una respuesta rara sin datos del usuario.
 function maskText(t) { return String(t).slice(0, 700).replace(/[0-9]/g, '#'); }
-
-// Lista las tools que expone el servidor MCP de COROS (nombre, descripción corta y nombres de sus argumentos) -- sin datos del usuario.
-async function listCorosMcpTools(accessToken) {
-  const res = await fetchWithTimeout(MCP_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream', 'Authorization': `Bearer ${accessToken}` },
-    body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method: 'tools/list', params: {} })
-  });
-  let text = await res.text();
-  if ((res.headers.get('content-type') || '').includes('text/event-stream')) {
-    text = text.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trim()).join('');
-  }
-  const tools = (JSON.parse(text).result || {}).tools || [];
-  return tools.map(t => ({ name: t.name, desc: String(t.description || '').slice(0, 140), args: Object.keys((t.inputSchema && t.inputSchema.properties) || {}) }));
-}
-
-async function probeCorosDetailShapes(accessToken, labelId, sportType, record) {
-  const out = {};
-  try { out.tools = JSON.stringify(await listCorosMcpTools(accessToken)); } catch (e) { out.tools = 'error: ' + String(e && e.message).slice(0, 150); }
-  try {
-    const f = await fetchCorosFit(accessToken, labelId, sportType);
-    out.fitTry = f.fit ? JSON.stringify({ ok: true, points: (f.fit.points || []).length, splits: (f.fit.splits || []).length, hasSeries: !!f.fit.series, elevGain: f.fit.elevationGain, maxHr: f.fit.maxHr }) : JSON.stringify({ ok: false, error: f.error });
-  } catch (e) { out.fitTry = 'error: ' + shortErr(e); }
-  if (record) out.recordRef = JSON.stringify({ distanceKm: record.distanceKm, durationSec: record.durationSec, avgHr: record.avgHr, title: record.title });
-  const attempts = [
-    ['getActivityDetail', [{ labelId, sportType }, { labelId, sportType: String(sportType) }]],
-    ['queryActivityLapData', [{ labelId, sportType }, { labelId, sportType: String(sportType) }]]
-  ];
-  for (const [tool, argVariants] of attempts) {
-    out[tool] = { tried: [] };
-    for (const args of argVariants) {
-      const argNames = Object.keys(args).join(',');
-      try {
-        const r = await callCorosMcpTool(accessToken, tool, args);
-        out[tool].ok = argNames;
-        out[tool].shape = typeof r === 'string' ? { text: maskText(r) } : describeShape(r);
-        if (tool === 'queryActivityLapData' && r && typeof r === 'object') {
-          // Solo nombres de campos y tipos: columnas (name/label) y la forma de una vuelta de cada grupo.
-          out[tool].lapDetail = JSON.stringify({
-            columns: Array.isArray(r.columns) ? r.columns.slice(0, 40).map(c => ({ name: c && c.name, label: c && c.label })) : null,
-            groups: Array.isArray(r.lapGroups) ? r.lapGroups.map(g => ({
-              type: g && g.type,
-              nLaps: Array.isArray(g && g.laps) ? g.laps.length : 0,
-              lapShape: g && Array.isArray(g.laps) && g.laps[0] ? describeShape(g.laps[0], 2) : null
-            })) : null
-          });
-        }
-        if (tool === 'queryActivityLapData' && r && Array.isArray(r.lapGroups)) {
-          // Valores numéricos de la primera vuelta de cada grupo (solo métricas, sin coordenadas) para deducir las unidades.
-          out[tool].lapSample = JSON.stringify(r.lapGroups.map(g => ({ type: g && g.type, lapDistance: g && g.lapDistance, nLaps: Array.isArray(g && g.laps) ? g.laps.length : 0, first: g && Array.isArray(g.laps) ? g.laps[0] : null })));
-        }
-        break;
-      } catch (e) {
-        // El mensaje de error de COROS suele decir qué argumentos espera: sirve tal cual (sin valores del usuario).
-        out[tool].tried.push({ args: argNames, error: String(e && e.message).slice(0, 300).replace(/[0-9]{6,}/g, '#') });
-      }
-    }
-  }
-  return out;
-}
 
 module.exports = {
   parseCorosActivityDetailText,
@@ -561,8 +484,6 @@ module.exports = {
   parseCorosLapSplits,
   applyCorosEnrichmentToRun,
   fetchCorosFit,
-  describeShape,
-  probeCorosDetailShapes,
   callCorosMcpTool,
   isRunningSportCode,
   corosDateRangeArgs,
