@@ -40,7 +40,9 @@ function cleanDay(d) {
     durMin: Number(d.durMin) > 0 ? Math.min(600, Number(d.durMin)) : 0,
     desc: String(d.desc || '').slice(0, 2000),
     interval: iv,
-    repSec: Number(d.repSec) > 0 ? Number(d.repSec) : 0
+    repSec: Number(d.repSec) > 0 ? Number(d.repSec) : 0,
+    restSec: Number(d.restSec) > 0 ? Math.min(3600, Number(d.restSec)) : 0,
+    timeBased: !!d.timeBased
   };
 }
 

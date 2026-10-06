@@ -64,8 +64,9 @@ function buildWahooPlan(day, zones, labels) {
       const repMeters = posInt(iv.repMeters, 20, 20000, 400);
       const useTime = Number(day.repSec) > 0;
       workIv = useTime ? interval(L('work', 'Hard'), 'time', Math.round(day.repSec), 'active', work) : interval(L('work', 'Hard'), 'distance', repMeters, 'active', work);
+      const restSecV = Number(day.restSec) > 0 ? day.restSec : day.repSec; // plan por tiempo: la bajada dura lo que dice el plan
       if (day.typeKey === 'hills') {
-        restIv = useTime ? interval(L('rest', 'Easy'), 'time', Math.round(day.repSec), 'recover', rest) : interval(L('rest', 'Easy'), 'distance', repMeters, 'recover', rest);
+        restIv = useTime ? interval(L('rest', 'Easy'), 'time', Math.round(restSecV), 'recover', rest) : interval(L('rest', 'Easy'), 'distance', repMeters, 'recover', rest);
       } else {
         restIv = interval(L('rest', 'Easy'), 'time', Math.round((Number(iv.recoveryMin) || 1) * 60), 'recover', rest);
       }
@@ -75,7 +76,7 @@ function buildWahooPlan(day, zones, labels) {
     if (coolMin > 0) intervals.push(interval(L('cooldown', 'Cool down'), 'time', coolMin * 60, 'cd', easy));
   } else {
     const distM = Math.round((Number(day.distKm) || 0) * 1000);
-    if (distM > 0) intervals.push(interval(L('main', day.name || 'Run'), 'distance', distM, 'active', work));
+    if (distM > 0 && !(day.timeBased && Number(day.durMin) > 0)) intervals.push(interval(L('main', day.name || 'Run'), 'distance', distM, 'active', work));
     else intervals.push(interval(L('main', day.name || 'Run'), 'time', Math.max(300, posInt(day.durMin, 5, 600, 30) * 60), 'active', work));
   }
 

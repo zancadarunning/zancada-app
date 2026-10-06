@@ -2051,6 +2051,7 @@
           <div class="choice active" data-v="distance" data-i18n="ob_trainby_distance"></div>
           <div class="choice" data-v="time" data-i18n="ob_trainby_time"></div>
         </div>
+        <p class="muted" style="margin-top:8px; font-size:12.5px; line-height:1.5;" data-i18n="trainby_tip"></p>
       </div>
       <div class="field"><button class="btn btn-primary" data-i18n="login_continue" onclick="obNextStep()"></button></div>
     </div>
@@ -2095,6 +2096,7 @@
         <input type="hidden" id="ob-racedate">
         <p class="muted" style="margin-top:6px;" data-i18n="ob_racedate_hint"></p>
       </div>
+      <p class="muted" style="margin:4px 0 14px; font-size:13px; line-height:1.5;" data-i18n="ob_test_note"></p>
       <div class="field"><button class="btn btn-primary" data-i18n="ob_submit" onclick="finishOnboard()"></button></div>
     </div>
   </div>
@@ -2114,6 +2116,12 @@
     <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:14px 0 4px;">
       <p class="greeting" style="margin:0;"><span data-i18n="home_hi"></span> <span id="home-name" style="font-weight:800;">—</span> 👋</p>
       <div class="streak-badge" id="home-streak-badge" style="display:none;"></div>
+    </div>
+
+    <div class="card" id="home-test-banner" style="display:none; border-color:var(--hivis);">
+      <h3 style="margin:0 0 6px;" data-i18n="ltest_banner_title"></h3>
+      <p class="muted" style="margin:0 0 12px; font-size:13px; line-height:1.5;" data-i18n="ltest_banner_desc"></p>
+      <button class="btn btn-primary" style="width:100%;" onclick="openLevelTest()" data-i18n="ltest_banner_btn"></button>
     </div>
 
     <div class="card" id="install-banner" style="display:none; align-items:center; gap:12px;">
@@ -2507,6 +2515,31 @@
        nuevo cada vez que se tocaba (sin forma de borrar los anteriores, nunca hubo permiso
        de escritura sobre el calendario del usuario). Esta URL es la misma siempre -- el
        propio Calendario del usuario la vuelve a pedir solo. -->
+  <div class="overlay overlay-sheet" id="level-test-modal">
+    <button class="week-nav-btn" onclick="closeLevelTest()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="ltest_title"></h2>
+    <p class="muted" style="margin-top:10px; line-height:1.5;" data-i18n="ltest_intro"></p>
+    <div class="card" style="margin-top:16px;">
+      <p style="margin:0 0 10px; font-size:14px; line-height:1.5;" data-i18n="ltest_step1"></p>
+      <p style="margin:0 0 10px; font-size:14px; line-height:1.5;" data-i18n="ltest_step2"></p>
+      <p style="margin:0; font-size:14px; line-height:1.5;" data-i18n="ltest_step3"></p>
+    </div>
+    <p class="muted" style="margin-top:12px; font-size:12.5px; line-height:1.5;" data-i18n="ltest_safety"></p>
+    <div class="card" id="ltest-suggest" style="display:none; margin-top:16px;">
+      <p id="ltest-suggest-text" style="margin:0 0 10px; font-size:14px; line-height:1.5;"></p>
+      <button class="btn btn-outline btn-sm" id="ltest-suggest-btn" data-i18n="ltest_suggest_use"></button>
+    </div>
+    <div class="field" style="margin-top:18px;">
+      <label for="ltest-dist" id="ltest-dist-label"></label>
+      <input type="number" id="ltest-dist" step="0.01" min="0" inputmode="decimal" placeholder="2.40">
+    </div>
+    <div class="field">
+      <label for="ltest-hr" data-i18n="ltest_hr_label"></label>
+      <input type="number" id="ltest-hr" step="1" min="0" inputmode="numeric" placeholder="185">
+    </div>
+    <button class="btn btn-primary" style="width:100%; margin-top:8px;" onclick="submitLevelTest()" data-i18n="ltest_save"></button>
+  </div>
+
   <div class="overlay overlay-sheet" id="calendar-sub-modal">
     <button class="week-nav-btn" onclick="closeCalendarSubscribe()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="cal_sub_title"></h2>
@@ -2820,6 +2853,12 @@
         <div class="choice active" data-v="distance" data-i18n="ob_trainby_distance"></div>
         <div class="choice" data-v="time" data-i18n="ob_trainby_time"></div>
       </div>
+      <p class="muted" style="margin-top:10px; font-size:12.5px; line-height:1.5;" data-i18n="trainby_tip"></p>
+    </div>
+    <div class="card" id="perfil-ltest-card">
+      <h3 data-i18n="ltest_perfil_title"></h3>
+      <p class="muted" id="perfil-ltest-text" style="margin-top:8px; font-size:13px; line-height:1.5;"></p>
+      <button class="btn btn-outline" style="width:100%; margin-top:12px;" onclick="openLevelTest()" data-i18n="ltest_perfil_btn"></button>
     </div>
     <div class="card">
       <h3 data-i18n="perfil_voice_label"></h3>

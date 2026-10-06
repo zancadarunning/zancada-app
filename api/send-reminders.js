@@ -46,12 +46,12 @@ function localHourAndDayIdx(tz){
 
 // Mensajes cortos por idioma — no necesita el diccionario completo de la app.
 const MSGS = {
-  es: { types:{easy:'Rodaje suave',intervals:'Series',tempo:'Ritmo medio',long:'Tirada larga'}, body:(type,km)=>`Hoy toca: ${type} · ${km}km` },
-  en: { types:{easy:'Easy run',intervals:'Intervals',tempo:'Tempo run',long:'Long run'}, body:(type,km)=>`Today: ${type} · ${km}km` },
-  pt: { types:{easy:'Corrida leve',intervals:'Tiros',tempo:'Ritmo médio',long:'Longão'}, body:(type,km)=>`Hoje: ${type} · ${km}km` },
-  fr: { types:{easy:'Footing',intervals:'Fractionné',tempo:'Allure soutenue',long:'Sortie longue'}, body:(type,km)=>`Aujourd'hui : ${type} · ${km}km` },
-  it: { types:{easy:'Corsa lenta',intervals:'Ripetute',tempo:'Ritmo medio',long:'Lungo'}, body:(type,km)=>`Oggi: ${type} · ${km}km` },
-  de: { types:{easy:'Lockerer Lauf',intervals:'Intervalle',tempo:'Tempolauf',long:'Langer Lauf'}, body:(type,km)=>`Heute: ${type} · ${km}km` }
+  es: { types:{easy:'Rodaje suave',intervals:'Series',tempo:'Ritmo medio',long:'Tirada larga',test:'Test de nivel'}, body:(type,km)=>`Hoy toca: ${type} · ${km}km` },
+  en: { types:{easy:'Easy run',intervals:'Intervals',tempo:'Tempo run',long:'Long run',test:'Fitness test'}, body:(type,km)=>`Today: ${type} · ${km}km` },
+  pt: { types:{easy:'Corrida leve',intervals:'Tiros',tempo:'Ritmo médio',long:'Longão',test:'Teste de nível'}, body:(type,km)=>`Hoje: ${type} · ${km}km` },
+  fr: { types:{easy:'Footing',intervals:'Fractionné',tempo:'Allure soutenue',long:'Sortie longue',test:'Test de niveau'}, body:(type,km)=>`Aujourd'hui : ${type} · ${km}km` },
+  it: { types:{easy:'Corsa lenta',intervals:'Ripetute',tempo:'Ritmo medio',long:'Lungo',test:'Test di livello'}, body:(type,km)=>`Oggi: ${type} · ${km}km` },
+  de: { types:{easy:'Lockerer Lauf',intervals:'Intervalle',tempo:'Tempolauf',long:'Langer Lauf',test:'Leistungstest'}, body:(type,km)=>`Heute: ${type} · ${km}km` }
 };
 
 const { withSentry, reportError } = require('./_lib/sentry');

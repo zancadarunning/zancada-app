@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T13:52:13Z';
+const APP_VERSION = '2026-10-06T14:40:46Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1908,7 +1908,9 @@ function watchDayPayload(d, date){
     date, name: lbl.type, typeKey: d.typeKey, zone: d.zone||null, distKm: d.dist,
     durMin: planDurationMin(d),
     desc: lbl.desc, interval: d.interval||null,
-    repSec: (isTimeMode() && d.interval && d.interval.repMeters) ? Math.round(repDurationSec(d.interval.repMeters)) : 0
+    repSec: (d.interval && d.interval.repSec>0) ? Math.round(d.interval.repSec) : ((isTimeMode() && d.interval && d.interval.repMeters) ? Math.round(repDurationSec(d.interval.repMeters)) : 0),
+    restSec: (d.interval && d.interval.recSec>0) ? Math.round(d.interval.recSec) : 0,
+    timeBased: !!(d.timeBased && isTimeMode())
   };
 }
 // Sesiones con distancia desde hoy en adelante (semana actual + la que viene), sin las ya
@@ -1921,7 +1923,7 @@ function buildWatchPlanDays(){
     plan.forEach((d, i) => {
       const date = addDaysToIsoLocal(weekStart, i);
       if(date < today) return;
-      if(!d || !(d.dist>0) || d.raceDay || d.status==='done' || d.status==='skipped') return;
+      if(!d || !(d.dist>0) || d.raceDay || d.typeKey==='test' || d.status==='done' || d.status==='skipped') return;
       out.push(watchDayPayload(d, date));
     });
   };
@@ -2566,7 +2568,14 @@ document.getElementById('ob-gender').addEventListener('click', e=>{
 document.getElementById('perfil-trainby-toggle').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('perfil-trainby-toggle').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
+  const wasTime = state.profile.trainBy === 'time';
+  const nowTime = c.dataset.v === 'time';
   state.profile.trainBy = c.dataset.v;
+  // Cada modo arma su propio plan (ver buildTimePlanDays): al cambiar se rehace lo que falta de la semana.
+  if(wasTime !== nowTime){
+    state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
+    showToast(t(nowTime ? 'trainby_switched_time' : 'trainby_switched_distance'), 'success');
+  }
   renderAll(); renderHistory(); persist();
 });
 document.getElementById('ob-runnertype').addEventListener('click', e=>{
@@ -3522,6 +3531,7 @@ async function finishOnboard(){
   if(healthNotes){
     state.painLog = [{id:Date.now(), date:todayLocalISO(), bodyPart:'otro', note:healthNotes, active:true, checkinSent:false, fromOnboarding:true}];
   }
+  state.profile.levelTest = {required:true, done:false};
   state.profile.weeklyKm = calcWeeklyKm(state.profile);
   state.weekNumber = 1;
   state.weekStart = getMondayISO(new Date());
@@ -4444,7 +4454,7 @@ function computeReturnFromBreakAdjustment(gapWeeks){
 // merge seguro de siempre (preserveLivedDays: nunca toca un día ya vivido, cancelado, o
 // editado a mano por el chat -- solo refresca los días de acá en adelante que el algoritmo
 // generó sin que nadie los haya tocado).
-const PLAN_ALGO_VERSION = 3;
+const PLAN_ALGO_VERSION = 4;
 function checkPlanAlgoVersion(){
   if(!state.onboarded || !state.plan || !state.plan.length) return;
   if(state.planAlgoVersion === PLAN_ALGO_VERSION) return;
@@ -4967,6 +4977,11 @@ function generatePlan(p, weekNumber, weekStartDate){
     const heavyTypes = ['intervals','tempo','fartlek','hills','progression','long'];
     Object.keys(sessionMap).forEach(day=>{ if(heavyTypes.includes(sessionMap[day])) sessionMap[day] = 'easy'; });
   }
+  // Entrenar POR TIEMPO ya no es el plan en km convertido a minutos: se arma aparte, directo en minutos
+  // (ver buildTimePlanDays) -- con trote/caminata para principiantes, series y cuestas por duración, etc.
+  if(p.trainBy === 'time'){
+    return applyLevelTestDay(buildTimePlanDays({p, weekNumber, mult, beginner, easyOnly, caution, sessionMap, trainingDays, effectiveWeeklyKm, zoneMap}), p, weekStartDate, beginner);
+  }
   // Reparto del volumen semanal entre las sesiones que de verdad va a tener esta semana, en
   // vez de calcular cada tipo de sesión por separado con una proporción fija (0.85x a 1.5x)
   // de un "per" que no tenía en cuenta cuántas sesiones había esa semana. Esa cuenta vieja
@@ -5043,7 +5058,7 @@ function generatePlan(p, weekNumber, weekStartDate){
   // un dato informativo nada más, así que ese día recibe una sesión de entrenamiento normal
   // como cualquier otro (ver isEventRaceWeek/eventRaceWeekMultiplier más arriba para el único
   // efecto real que sigue teniendo sobre el plan: bajar el volumen esa semana puntual).
-  return DAY_KEYS.map((day)=>{
+  const kmDays = DAY_KEYS.map((day)=>{
     const typeKey = sessionMap[day];
     if(!typeKey) return {day, typeKey:'rest', dist:0, terrain:null, zone:null, beginner};
     const terrain = typeKey==='intervals' ? 'asfalto' : p.terrain;
@@ -5062,7 +5077,340 @@ function generatePlan(p, weekNumber, weekStartDate){
     }
     return dayObj;
   });
+  return applyLevelTestDay(kmDays, p, weekStartDate, beginner);
 }
+/* ================= TEST DE NIVEL + PLAN POR TIEMPO PROPIO =================
+   Dos cosas que se agregaron juntas porque se apoyan una en la otra:
+
+   1) TEST DE NIVEL (Cooper de 12 minutos). Correr lo más lejos posible en 12 minutos es un test de
+      campo clásico (Cooper, 1968) que cualquiera puede hacer sin equipo, y su resultado correlaciona
+      muy bien con la capacidad aeróbica. Con la distancia sacamos el VDOT (ecuaciones de Daniels/Gilbert:
+      consumo de oxígeno de la velocidad media y el % del máximo que se sostiene en 12 minutos) y de ahí los
+      ritmos de entrenamiento: suave (62-74% del VO2max), tempo (86-90%) y series (95-100%). Esos ritmos se
+      guardan en profile.levelTest.paces y mejoran tanto la conversión tiempo<->distancia como los ritmos
+      que se muestran en cada sesión. Es obligatorio al crear el plan (profile.levelTest.required): la primera
+      sesión del plan es el test, hasta que se cargue el resultado.
+
+   2) PLAN POR TIEMPO DE VERDAD. Antes "entrenar por tiempo" era generar el plan en km y convertir cada
+      sesión a minutos con el ritmo del corredor -- el mismo entrenamiento con otra unidad. Ahora
+      buildTimePlanDays() arma las sesiones directo en minutos, con estructuras que se piensan en tiempo:
+      principiantes con trote/caminata que progresa semana a semana, series y cuestas por duración,
+      tempo como un bloque continuo, tirada larga por minutos. d.durMin es la fuente de verdad en ese modo
+      (d.dist queda solo como estimación para estadísticas, calendario y relojes). */
+const LEVEL_TEST_SECONDS = 720;
+const LEVEL_TEST_MIN_M = 800, LEVEL_TEST_MAX_M = 4500;
+function levelTestPending(p){
+  p = p || (typeof state !== 'undefined' && state.profile);
+  return !!(p && p.levelTest && p.levelTest.required && !p.levelTest.done);
+}
+// VDOT a partir de lo recorrido en 12 minutos (Daniels/Gilbert): VO2 de la velocidad media dividido
+// por la fracción del VO2max que se puede sostener durante 12 minutos.
+function vdotFromCooper(distanceM){
+  const v = distanceM / 12; // m/min
+  const vo2 = -4.60 + 0.182258 * v + 0.000104 * v * v;
+  const frac = 0.8 + 0.1894393 * Math.exp(-0.012778 * 12) + 0.2989558 * Math.exp(-0.1932605 * 12);
+  return vo2 / frac;
+}
+// Ritmo (min/km) al que se consume un VO2 dado: resuelve 0.000104 v^2 + 0.182258 v - (4.6 + vo2) = 0.
+function paceMinPerKmAtVo2(vo2){
+  const a = 0.000104, b = 0.182258, c = -(4.60 + vo2);
+  const v = (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a); // m/min
+  return 1000 / v;
+}
+// Cada rango es [más rápido, más lento] en min/km.
+function trainingPacesFromVdot(vdot){
+  const at = f => paceMinPerKmAtVo2(vdot * f);
+  const r = x => Math.round(x * 100) / 100;
+  return {
+    easy: [r(at(0.74)), r(Math.min(at(0.62), 12.5))],
+    tempo: [r(at(0.90)), r(at(0.86))],
+    interval: [r(at(1.00)), r(at(0.95))]
+  };
+}
+function evaluateLevelTest(distanceM){
+  const vdot = vdotFromCooper(distanceM);
+  return {
+    distanceM: Math.round(distanceM),
+    vdot: Math.round(vdot * 10) / 10,
+    paces: trainingPacesFromVdot(vdot),
+    // 12 minutos de trote seguido recorren como mínimo ~1.7 km: por debajo, el corredor caminó/trotó
+    // a ratos y conviene seguir con trote-caminata en las primeras semanas
+    continuousOk: distanceM >= 1700
+  };
+}
+function fmtPaceRange(range){
+  return fmtPace(range[0]) + '–' + fmtPace(range[1]);
+}
+// Línea de ritmo orientativo según el tipo de sesión -- solo si ya hay test hecho. Las cuestas y el fartlek
+// van por sensación/zona (el ritmo cambia con la pendiente o el tramo), y el trote-caminata no tiene ritmo.
+function paceHintFor(d){
+  const lt = state.profile && state.profile.levelTest;
+  if(!lt || !lt.done || !lt.paces || d.custom || d.runWalk) return '';
+  const P = lt.paces;
+  const unit = distUnit();
+  switch(d.typeKey){
+    case 'easy': case 'long': return ' ' + t('desc_pace_hint', {range: fmtPaceRange(P.easy), unit});
+    case 'tempo': return ' ' + t('desc_pace_hint', {range: fmtPaceRange(P.tempo), unit});
+    case 'progression': return ' ' + t('desc_pace_hint', {range: fmtPaceRange([P.tempo[0], P.easy[1]]), unit});
+    case 'intervals': return ' ' + t('desc_pace_hint_work', {range: fmtPaceRange(P.interval), unit});
+  }
+  return '';
+}
+// Pone el test en el primer día de entrenamiento disponible de la semana (desde hoy, si es la semana
+// actual) mientras el corredor no lo haya hecho. Una semana futura solo lo recibe si la actual ya no
+// tiene un test vivo (se pasó el día sin hacerlo): así nunca hay dos tests pendientes a la vez.
+function applyLevelTestDay(days, p, weekStartDate, beginner){
+  if(!levelTestPending(p)) return days;
+  const curMonday = getMondayISO(new Date());
+  const ws = weekStartDate || state.weekStart;
+  if(!ws || ws < curMonday) return days;
+  let startIdx = 0;
+  if(ws === curMonday){
+    startIdx = (new Date().getDay() + 6) % 7;
+  } else if((state.plan || []).some(d => d && d.typeKey === 'test' && d.status !== 'skipped')){
+    return days;
+  }
+  let idx = -1;
+  for(let i = startIdx; i < days.length; i++){
+    if(days[i] && days[i].dist > 0 && days[i].typeKey !== 'rest'){ idx = i; break; }
+  }
+  if(idx < 0) return days;
+  const pace = estimateBasePaceMinPerKm(p);
+  const out = days.slice();
+  out[idx] = {day: days[idx].day, typeKey:'test', dist: Math.max(0.5, Math.round(12 / pace * 10) / 10), durMin: 12, timeBased: true, terrain:'asfalto', zone:null, beginner:!!beginner};
+  return out;
+}
+
+/* ---- plan por tiempo: estructuras pensadas en minutos ---- */
+// Trote/caminata para quien arranca de cero: sube un escalón por semana (la tirada larga va un escalón
+// adelante). Cada escalón = repeticiones de [trote, caminata] en segundos. Pasado el último, trote continuo.
+const RUNWALK_STAGES = [
+  {reps:7, run:60,  walk:120},
+  {reps:6, run:120, walk:120},
+  {reps:5, run:180, walk:120},
+  {reps:5, run:240, walk:120},
+  {reps:4, run:300, walk:120},
+  {reps:3, run:480, walk:120},
+  {reps:3, run:600, walk:120},
+  {reps:2, run:900, walk:120}
+];
+function runWalkStageFor(weekNumber, isLong){
+  let wn = weekNumber || 1;
+  if(isCutbackWeek(wn)) wn = Math.max(1, wn - 1); // semana de descarga: se repite el escalón anterior
+  const idx = wn - 1 + (isLong ? 1 : 0);
+  return idx >= RUNWALK_STAGES.length ? null : RUNWALK_STAGES[idx];
+}
+// Duración exacta para leer en pantalla (1 min 30 seg), a diferencia de fmtDurationShort que redondea a 15 seg.
+function fmtDurExact(sec){
+  sec = Math.round(sec);
+  if(sec < 60) return `${sec} ${t('time_unit_sec')}`;
+  const m = Math.floor(sec / 60), r = sec % 60;
+  return r ? `${m} ${t('time_unit_min')} ${r} ${t('time_unit_sec')}` : `${m} ${t('time_unit_min')}`;
+}
+function roundMin5(x, floorMin){ return Math.max(floorMin || 10, Math.round(x / 5) * 5); }
+// mainMin = minutos de la parte principal (sin entrada en calor ni vuelta a la calma, igual que los km).
+function buildTimeIntervalStructure(mainMin, caution, weekNumber, pace){
+  let opts;
+  if(mainMin <= 20) opts = [{w:60, r:90}, {w:90, r:90}];
+  else if(mainMin <= 30) opts = [{w:120, r:90}, {w:90, r:75}];
+  else if(mainMin <= 40) opts = [{w:180, r:120}, {w:120, r:90}];
+  else opts = [{w:240, r:150}, {w:180, r:120}];
+  const {w, r} = opts[((weekNumber || 1) - 1) % opts.length];
+  const maxReps = caution && caution.level >= 2 ? 8 : caution && caution.level >= 1 ? 10 : 12;
+  const reps = Math.max(4, Math.min(maxReps, Math.round(mainMin * 60 / (w + r))));
+  return {
+    reps, repSec: w, recSec: r, timeBased: true,
+    // campos de siempre, para quien los lea sin conocer repSec (guía en vivo vieja, relojes)
+    recoveryMin: r / 60,
+    repMeters: Math.max(50, Math.round(w / 60 / pace * 1000 / 50) * 50)
+  };
+}
+function buildTimeHillStructure(mainMin, caution, pace){
+  const up = mainMin <= 20 ? 45 : mainMin <= 30 ? 60 : 90;
+  const down = Math.round(up * 1.5); // bajar trotando suave lleva más que subir
+  const maxReps = caution && caution.level >= 2 ? 5 : caution && caution.level >= 1 ? 7 : 10;
+  const reps = Math.max(4, Math.min(maxReps, Math.round(mainMin * 60 / (up + down))));
+  return {reps, repSec: up, recSec: down, timeBased: true, repMeters: Math.max(50, Math.round(up / 60 / pace * 1000 / 50) * 50)};
+}
+function buildTimeFartlekStructure(mainMin, weekNumber){
+  const options = [{workMin:3, restMin:1.5}, {workMin:2, restMin:1}, {workMin:4, restMin:2}];
+  const {workMin, restMin} = options[((weekNumber || 1) - 1) % options.length];
+  const reps = Math.max(4, Math.min(10, Math.round(mainMin / (workMin + restMin))));
+  return {reps, workMin, restMin};
+}
+const TIME_MIN_BY_TYPE = {easy:20, intervals:20, tempo:20, long:30, fartlek:20, hills:20, progression:30};
+// Tope por sesión (parte principal): un tempo continuo de más de ~35 min ya no es tempo, y las series/cuestas largas lesionan.
+const TIME_MAX_BY_TYPE = {easy:90, intervals:40, tempo:35, long:150, fartlek:40, hills:30, progression:60};
+function buildTimePlanDays(ctx){
+  const {p, weekNumber, mult, beginner, easyOnly, caution, sessionMap, trainingDays, effectiveWeeklyKm, zoneMap} = ctx;
+  const pace = estimateBasePaceMinPerKm(p);
+  const RATIO_T = {easy:EASY_SESSION_RATIO, intervals:1.0, tempo:0.85, long:beginner ? BEGINNER_LONG_RATIO : 1.5, fartlek:1.0, hills:0.9, progression:1.0};
+  const usedTypes = trainingDays.map(d => sessionMap[d]).filter(Boolean);
+  const minMap = {};
+  if(beginner){
+    // Sesión base de ~20 minutos que crece con la progresión semanal (mult), como beginnerPerSessionKm en km.
+    const per = 20 * (hasCrossTrainingBase(p) ? CROSS_TRAINING_BASE_BOOST : 1) * mult;
+    Object.keys(RATIO_T).forEach(k => { minMap[k] = per * RATIO_T[k]; });
+  } else {
+    const weightSum = usedTypes.reduce((a, type) => a + (RATIO_T[type] || 1), 0);
+    const targetTotal = Math.max(9 * pace, effectiveWeeklyKm * pace) * mult; // minutos de la semana
+    const perUnit = weightSum > 0 ? targetTotal / weightSum : 0;
+    Object.keys(RATIO_T).forEach(k => { minMap[k] = perUnit * RATIO_T[k]; });
+    // misma regla que en km: una sola sesión de alto impacto no puede comerse más del 30% de la semana
+    const occurrences = {};
+    usedTypes.forEach(type => { occurrences[type] = (occurrences[type] || 0) + 1; });
+    ['hills', 'intervals'].forEach(type => {
+      const occ = occurrences[type] || 0;
+      if(!occ || minMap[type] <= 0) return;
+      const cap = Math.max(10, targetTotal * HIGH_IMPACT_SHARE_CAP);
+      if(minMap[type] <= cap) return;
+      const totalExcess = (minMap[type] - cap) * occ;
+      minMap[type] = cap;
+      const remainingWeight = weightSum - (RATIO_T[type] || 1) * occ;
+      if(remainingWeight > 0){
+        Object.keys(occurrences).forEach(k => {
+          if(k === type) return;
+          minMap[k] += totalExcess * (RATIO_T[k] || 1) / remainingWeight;
+        });
+      }
+    });
+  }
+  const availCap = p.availableMinPerSession > 0 ? Math.max(10, p.availableMinPerSession - 20) : null;
+  const continuousBeginner = !!(p.levelTest && p.levelTest.continuousOk);
+  return DAY_KEYS.map(day => {
+    const typeKey = sessionMap[day];
+    if(!typeKey) return {day, typeKey:'rest', dist:0, terrain:null, zone:null, beginner};
+    const terrain = typeKey === 'intervals' ? 'asfalto' : p.terrain;
+    const maxM = typeKey === 'long' && beginner ? 60 : TIME_MAX_BY_TYPE[typeKey];
+    const minM = typeKey === 'long' && beginner ? 25 : TIME_MIN_BY_TYPE[typeKey];
+    let m = Math.min(maxM, Math.max(minM, roundMin5(minMap[typeKey], minM)));
+    if(availCap && typeKey !== 'long') m = Math.min(m, availCap);
+    const dayObj = {day, typeKey, terrain, zone: zoneMap[typeKey], beginner, durMin: m, timeBased: true};
+    if((typeKey === 'easy' || typeKey === 'long') && beginner && !continuousBeginner){
+      const st = runWalkStageFor(weekNumber, typeKey === 'long');
+      if(st){
+        dayObj.runWalk = {reps: st.reps, runSec: st.run, walkSec: st.walk};
+        dayObj.durMin = Math.round(st.reps * (st.run + st.walk) / 60);
+      }
+    }
+    if(typeKey === 'intervals' && !easyOnly){
+      dayObj.interval = buildTimeIntervalStructure(m, caution, weekNumber, pace);
+      dayObj.durMin = Math.round(dayObj.interval.reps * (dayObj.interval.repSec + dayObj.interval.recSec) / 60);
+    }
+    if(typeKey === 'hills' && !easyOnly){
+      dayObj.interval = buildTimeHillStructure(m, caution, pace);
+      dayObj.durMin = Math.round(dayObj.interval.reps * (dayObj.interval.repSec + dayObj.interval.recSec) / 60);
+    }
+    if(typeKey === 'fartlek' && !easyOnly){
+      dayObj.interval = buildTimeFartlekStructure(m, weekNumber);
+      dayObj.durMin = Math.round(dayObj.interval.reps * (dayObj.interval.workMin + dayObj.interval.restMin));
+    }
+    dayObj.dist = Math.max(0.1, Math.round(dayObj.durMin / pace * 10) / 10); // estimación, para estadísticas y relojes
+    return dayObj;
+  });
+}
+
+/* ---- test de nivel: pantalla, resultado y avisos ---- */
+function closeLevelTest(){
+  const m = document.getElementById('level-test-modal');
+  if(m) m.classList.remove('overlay-open');
+}
+// Una carrera reciente de ~12 minutos probablemente ES el test (se grabó como carrera libre y se frenó a los 12:00).
+function findLevelTestCandidateRun(){
+  const cutoff = Date.now() - 3 * 86400000;
+  return (state.runs || []).slice().reverse().find(r =>
+    r && r.durationSec >= 660 && r.durationSec <= 780 && r.distanceKm * 1000 >= LEVEL_TEST_MIN_M && r.distanceKm * 1000 <= LEVEL_TEST_MAX_M &&
+    new Date(r.date).getTime() >= cutoff) || null;
+}
+function fillLevelTestFromRun(runId){
+  const r = (state.runs || []).find(x => String(x.id) === String(runId));
+  if(!r) return;
+  const v = isImperial() ? r.distanceKm / KM_PER_MI : r.distanceKm;
+  document.getElementById('ltest-dist').value = v.toFixed(2);
+  const maxHr = r.maxHr || (r.hrLog && r.hrLog.length ? Math.max.apply(null, r.hrLog.map(h => (h && typeof h === 'object') ? (h.bpm || h.hr || 0) : (Number(h) || 0))) : 0);
+  if(maxHr >= 100 && maxHr <= 230) document.getElementById('ltest-hr').value = Math.round(maxHr);
+  document.getElementById('ltest-suggest').style.display = 'none';
+}
+function renderLevelTestSuggestion(){
+  const box = document.getElementById('ltest-suggest');
+  if(!box) return;
+  const r = findLevelTestCandidateRun();
+  if(!r){ box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  document.getElementById('ltest-suggest-text').textContent = t('ltest_suggest', {min: Math.round(r.durationSec / 60), dist: `${fmtDist(r.distanceKm, 2)} ${distUnit()}`});
+  document.getElementById('ltest-suggest-btn').onclick = () => fillLevelTestFromRun(r.id);
+}
+function openLevelTest(prefillRunId){
+  const modal = document.getElementById('level-test-modal');
+  if(!modal) return;
+  document.getElementById('ltest-dist-label').textContent = t('ltest_dist_label', {unit: distUnit()});
+  document.getElementById('ltest-dist').value = '';
+  document.getElementById('ltest-hr').value = '';
+  renderLevelTestSuggestion();
+  if(prefillRunId) fillLevelTestFromRun(prefillRunId);
+  openOverlaySheetEl(modal);
+}
+// Al cerrar el resumen de una carrera: si dura ~12 minutos y el test sigue pendiente, se ofrece cargarlo.
+function maybePromptLevelTestFromRun(runId){
+  if(!levelTestPending()) return;
+  const r = (state.runs || []).find(x => String(x.id) === String(runId));
+  if(!r || r.durationSec < 660 || r.durationSec > 780) return;
+  if(r.distanceKm * 1000 < LEVEL_TEST_MIN_M || r.distanceKm * 1000 > LEVEL_TEST_MAX_M) return;
+  openLevelTest(runId);
+}
+function submitLevelTest(){
+  const km = parseDistInput(document.getElementById('ltest-dist').value);
+  const distM = km * 1000;
+  if(!(distM >= LEVEL_TEST_MIN_M && distM <= LEVEL_TEST_MAX_M)){
+    showToast(t('ltest_error_range', {min: fmtDist(LEVEL_TEST_MIN_M / 1000, 1), max: fmtDist(LEVEL_TEST_MAX_M / 1000, 1), unit: distUnit()}), 'error');
+    return;
+  }
+  const hrRaw = parseInt(document.getElementById('ltest-hr').value);
+  applyLevelTestResult(distM, (hrRaw >= 100 && hrRaw <= 230) ? hrRaw : null);
+  closeLevelTest();
+}
+function applyLevelTestResult(distM, maxHr){
+  const p = state.profile;
+  const ev = evaluateLevelTest(distM);
+  p.levelTest = Object.assign({}, ev, {required: !!(p.levelTest && p.levelTest.required), done: true, date: todayLocalISO(), maxHr: maxHr || null});
+  // Un pulso máximo medido en un esfuerzo así es una referencia real: si supera la FC máxima que teníamos
+  // (estimada por edad), pasa a ser la nueva -- salvo que el corredor haya cargado sus zonas a mano.
+  if(maxHr && !p.hrZonesCustom && maxHr > (p.hrMax || 0)){
+    p.hrMax = maxHr; p.hrKnown = true; p.hrZones = computeZones(maxHr);
+  }
+  // El día del test queda como hecho (si estaba pendiente en la semana actual) antes de regenerar el plan.
+  const td = (state.plan || []).find(d => d && d.typeKey === 'test' && !d.status);
+  if(td) td.status = 'done';
+  state.plan = preserveLivedDays(state.plan, generatePlan(p, state.weekNumber || 1));
+  const unit = distUnit();
+  const easy = fmtPaceRange(ev.paces.easy), tempo = fmtPaceRange(ev.paces.tempo), interval = fmtPaceRange(ev.paces.interval);
+  state.chat = state.chat || [];
+  state.chat.push({role: 'coach', text: t('ltest_coach_msg', {dist: `${fmtDist(distM / 1000, 2)} ${unit}`, easy, tempo, interval, unit}), ts: Date.now()});
+  renderAll(); renderHistory(); renderZones();
+  try{ renderChat(); }catch(e){}
+  persist();
+  showToast(t('ltest_done_toast', {easy, tempo, interval, unit}), 'success');
+}
+function renderLevelTestUI(){
+  const p = state.profile;
+  if(!p) return;
+  const banner = document.getElementById('home-test-banner');
+  if(banner) banner.style.display = levelTestPending(p) ? 'block' : 'none';
+  const txt = document.getElementById('perfil-ltest-text');
+  if(txt){
+    const lt = p.levelTest;
+    if(lt && lt.done && lt.paces){
+      txt.textContent = t('ltest_perfil_done', {
+        date: lt.date ? new Date(lt.date + 'T12:00:00').toLocaleDateString(LOCALE_MAP[lang], {day:'numeric', month:'short'}) : '',
+        dist: `${fmtDist(lt.distanceM / 1000, 2)} ${distUnit()}`,
+        easy: fmtPaceRange(lt.paces.easy), tempo: fmtPaceRange(lt.paces.tempo), interval: fmtPaceRange(lt.paces.interval), unit: distUnit()
+      });
+    } else {
+      txt.textContent = t('ltest_perfil_none');
+    }
+  }
+}
+
 /* ---- entrenar por distancia vs. por tiempo -----
    Por defecto todo el plan es 100% en km (generatePlan, buildIntervalStructure, etc. no
    cambian). Si el corredor eligió "por tiempo" en el onboarding o en el Perfil, en vez de
@@ -5078,6 +5426,9 @@ function estimateBasePaceMinPerKm(profile){
     const paces = recent.map(r=>(r.durationSec/60)/r.distanceKm);
     return paces.reduce((a,b)=>a+b,0)/paces.length;
   }
+  // Con el test de nivel hecho, el ritmo suave medio sale de ahí (mejor dato que cualquier estimación genérica)
+  const lt = profile.levelTest;
+  if(lt && lt.done && lt.paces && lt.paces.easy) return Math.round((lt.paces.easy[0] + lt.paces.easy[1]) / 2 * 100) / 100;
   // Sin carreras registradas todavía, usamos la marca de referencia que haya cargado en
   // el onboarding (ob-refrace-dist/min) antes de caer al valor genérico por perfil -- así
   // alguien con una marca real conocida arranca con ritmos calibrados desde el día 1, en
@@ -5092,6 +5443,7 @@ function estimateBasePaceMinPerKm(profile){
 }
 function planDurationMin(d, profile){
   if(!(d.dist>0)) return 0;
+  if(d.durMin>0) return d.durMin; // plan por tiempo: ya viene en minutos
   const pace = estimateBasePaceMinPerKm(profile);
   return Math.max(5, Math.round((d.dist*pace)/5)*5);
 }
@@ -5123,6 +5475,7 @@ function repMetersFromMin(min, profile){
 }
 function planAmountText(d){
   if(!(d.dist>0)) return '';
+  if(d.typeKey==='test') return `12 ${t('time_unit_min')}`;
   return isTimeMode() ? `${planDurationMin(d)} ${t('time_unit_min')}` : `${fmtDist(d.dist,1)} ${distUnit()}`;
 }
 // Separada de planLabel() (más abajo) para que quien necesite guardar el texto de una sesión
@@ -5163,9 +5516,17 @@ function planLabelBody(d){
     return {type:d.type, desc:body};
   }
   const timeMode = isTimeMode();
+  if(d.typeKey==='test') return {type:t('type_test'), desc:t('desc_test')};
+  const nativeTime = timeMode && d.timeBased;
   const suf = d.beginner && (d.typeKey==='easy'||d.typeKey==='long'||d.typeKey==='rest') ? '_beginner' : '';
   let desc = t('desc_'+d.typeKey+suf);
-  if(d.typeKey==='intervals' && d.interval){
+  if(d.runWalk && d.runWalk.reps>0){
+    desc = t('desc_runwalk', {reps:d.runWalk.reps, run:fmtDurExact(d.runWalk.runSec), walk:fmtDurExact(d.runWalk.walkSec)});
+  } else if(d.typeKey==='intervals' && d.interval && d.interval.repSec>0 && nativeTime){
+    desc = t('desc_intervals_time_native', {reps:d.interval.reps, dur:fmtDurExact(d.interval.repSec), rest:fmtDurExact(d.interval.recSec), zone:d.zone});
+  } else if(d.typeKey==='hills' && d.interval && d.interval.repSec>0 && nativeTime){
+    desc = t('desc_hills_time_native', {reps:d.interval.reps, dur:fmtDurExact(d.interval.repSec), rest:fmtDurExact(d.interval.recSec), zone:d.zone});
+  } else if(d.typeKey==='intervals' && d.interval){
     desc = timeMode
       ? t('desc_intervals_detail_time', {reps:d.interval.reps, dur:fmtDurationShort(repDurationSec(d.interval.repMeters)), rest:d.interval.recoveryMin, zone:d.zone})
       : t('desc_intervals_detail', {reps:d.interval.reps, meters:d.interval.repMeters, rest:d.interval.recoveryMin, zone:d.zone});
@@ -5194,6 +5555,10 @@ function planLabelBody(d){
     desc = timeMode
       ? t('desc_fartlek_detail_time', {reps:d.interval.reps, work:fmtDurationShort(d.interval.workMin*60), rest:fmtDurationShort(d.interval.restMin*60), zone:d.zone})
       : t('desc_fartlek_detail', {reps:d.interval.reps, work:repMetersFromMin(d.interval.workMin, state.profile), rest:repMetersFromMin(d.interval.restMin, state.profile), zone:d.zone});
+  } else if(nativeTime && d.typeKey==='tempo' && d.durMin>0){
+    desc = t('desc_tempo_time', {block:`${d.durMin} ${t('time_unit_min')}`, zone:d.zone});
+  } else if(nativeTime && d.typeKey==='long' && !suf){
+    desc = t('desc_long_time') + t('desc_zone_suffix', {zone:d.zone});
   } else if(d.zone && d.dist>0 && d.typeKey!=='intervals' && d.typeKey!=='fartlek'){
     // el fartlek SIN estructura (sesiones viejas guardadas antes de este cambio, o un
     // custom del coach) sigue siendo "alternar ritmos por sensación" -- decirle "mantenete
@@ -5202,6 +5567,7 @@ function planLabelBody(d){
     // caso nunca se llega a evaluar para un fartlek nuevo.
     desc += t('desc_zone_suffix', {zone:d.zone});
   }
+  desc += paceHintFor(d);
   return {type:t('type_'+d.typeKey), desc};
 }
 function planLabel(d){
@@ -5450,7 +5816,7 @@ async function shareCalendarLink(){
 }
 
 /* ================= RENDER ================= */
-function renderAll(){ renderHome(); renderPlan(); renderPerfil(); }
+function renderAll(){ renderHome(); renderPlan(); renderPerfil(); renderLevelTestUI(); }
 
 const DAILY_TIPS = {
   es: ["Cada kilómetro cuenta, aunque sea lento.","El descanso también es parte del entrenamiento.","Los días difíciles construyen corredores fuertes.","Correr suave hoy es correr mejor mañana.","Escuchá a tu cuerpo — el dolor no es lo mismo que la incomodidad.","La constancia le gana a la intensidad, casi siempre.","El mejor ritmo es el que podés sostener y disfrutar.","Un buen calentamiento evita una mala lesión.","Dormí bien: es el entrenamiento invisible.","La motivación te hace empezar, el hábito te hace terminar.","No compares tu progreso con el de otro corredor.","Tu peor día corriendo sigue siendo mejor que uno en el sillón.","No necesitás motivación todos los días, necesitás un hábito.","El cuerpo se adapta a lo que le pedís, dale tiempo.","Correr bajo la lluvia también cuenta — y te vas a acordar de ese día.","Cada carrera que terminás te hace un poco más fuerte que ayer.","La zapatilla más rápida es la que ya te pusiste.","No hace falta correr rápido todos los días, hace falta correr seguido.","El primer kilómetro siempre cuesta más que el último.","Progresar no es lineal: hay semanas de subida y semanas de meseta.","Nadie corrió un maratón sin antes correr un metro.","La disciplina te lleva a donde la motivación no llega sola.","Un mal entrenamiento no borra diez buenos.","Correr es la única carrera donde ganás simplemente por terminar.","Tu ritmo de hoy no tiene que ser el de ayer, ni el de mañana.","El aire frío de la mañana es gratis y funciona mejor que cualquier café.","A veces el logro más grande del día es haber salido a la calle.","Cada gota de sudor es una decisión que tomaste por vos mismo.","Correr no te cambia el cuerpo primero, te cambia la cabeza primero.","Nadie te va a aplaudir en el kilómetro 3 de un martes cualquiera, y está bien: es tuyo.","El descanso de hoy es la velocidad de mañana.","No corrés contra nadie, corrés con vos de antes.","Los kilómetros lentos de hoy son los que te bancan en el kilómetro 30.","Ponerte las zapatillas ya es el 50% del entrenamiento.","El clima no decide si salís a correr, vos decidís.","Cada semana que sumás kilómetros es una inversión en la versión futura de vos.","No es magia, es constancia disfrazada de kilómetros.","Cuando dudes si podés, acordate de todas las veces que ya pudiste.","El running no perdona la impaciencia, pero premia la paciencia siempre.","Tu peor excusa de hoy es más débil que tu peor entrenamiento.","Un rodaje suave bien hecho vale más que uno rápido mal hecho.","Correr te enseña a estar incómodo sin entrar en pánico — eso sirve para todo lo demás también.","No hay atajos para la resistencia, solo kilómetros acumulados.","Cada carrera empieza con la decisión de salir por la puerta.","El corredor de hoy agradece al corredor que decidió empezar.","La meta no es correr sin parar, es no dejar de intentarlo.","Los días que menos ganas tenés son los que más te enseñan.","Vas a tener entrenamientos malos — no son el final, son parte del camino.","Cuidar el cuerpo hoy es poder seguir corriendo mañana.","Cada corredor que ves en la calle también tuvo un primer día difícil."],
@@ -6001,6 +6367,7 @@ function buildDayListHtml(wd){
       const planBtns = `${showSyncBtn?`<button class="btn btn-outline btn-sm" id="sync-today-btn" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}`;
       if(planBtns) statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">${planBtns}</div>`;
     }
+    if(d.typeKey==='test' && levelTestPending()) statusBlock += `<div style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openLevelTest()">${t('ltest_load_btn')}</button></div>`;
     return `<div>
       <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" onclick="toggleDay(${i})">
         <div class="day-badge"><div class="d">${t('day_'+d.day).slice(0,3)}</div>${dateLbl?`<div class="mono muted" style="font-size:10px; margin-top:2px;">${dateLbl}</div>`:''}</div>
@@ -8086,9 +8453,9 @@ function getTodayWorkoutStructure(){
     // por tiempo transcurrido (repSec) en vez de por distancia GPS (repMeters) -- ver
     // tickWorkoutGuide() y renderWorkoutGuide(). En modo distancia repSec queda undefined
     // y el comportamiento es exactamente el de siempre.
-    const repSec = isTimeMode() ? repDurationSec(today.interval.repMeters) : undefined;
+    const repSec = today.interval.repSec>0 ? today.interval.repSec : (isTimeMode() ? repDurationSec(today.interval.repMeters) : undefined);
     if(today.typeKey==='intervals') return {typeKey:'intervals', reps:today.interval.reps, repMeters:today.interval.repMeters, repSec, recoveryMin:today.interval.recoveryMin};
-    if(today.typeKey==='hills') return {typeKey:'hills', reps:today.interval.reps, repMeters:today.interval.repMeters, repSec};
+    if(today.typeKey==='hills') return {typeKey:'hills', reps:today.interval.reps, repMeters:today.interval.repMeters, repSec, restSec: today.interval.recSec>0 ? today.interval.recSec : undefined};
     // Fartlek se completa siempre por TIEMPO en las dos fases, sea que el corredor entrene por
     // distancia o por tiempo -- a diferencia de series/cuestas, acá no hay una distancia
     // objetivo por tramo (el ritmo del tramo fuerte es "a sensación", ver
@@ -8103,7 +8470,7 @@ function getTodayWorkoutStructure(){
   // plan se puedan enviar a correr, y que la voz nos diga qué hacer". 'continuous' no
   // necesita fases/reps -- es un objetivo único que se muestra fijo toda la carrera (ver
   // renderWorkoutGuide()), con un solo aviso de voz al arrancar (announceContinuousWorkoutStart).
-  if(today.dist>0 || today.zone) return {typeKey:'continuous', label:planLabelBody(today), targetDist:today.dist, zone:today.zone, planTypeKey:today.typeKey};
+  if(today.dist>0 || today.zone) return {typeKey:'continuous', label:planLabelBody(today), targetDist:today.dist, targetDurMin:today.durMin, zone:today.zone, planTypeKey:today.typeKey};
   return null;
 }
 function setupWorkoutGuide(){
@@ -8117,7 +8484,7 @@ function setupWorkoutGuide(){
 function announceContinuousWorkoutStart(s){
   const type = t('type_'+s.planTypeKey);
   const target = isTimeMode()
-    ? fmtDurationShort(planDurationMin({dist:s.targetDist})*60)
+    ? fmtDurationShort(planDurationMin({dist:s.targetDist, durMin:s.targetDurMin})*60)
     : `${fmtDist(s.targetDist)} ${distUnit()}`;
   speak(s.zone ? t('voice_continuous_start_zone', {type, target, zone:s.zone}) : t('voice_continuous_start', {type, target}));
 }
@@ -8200,6 +8567,7 @@ function getWorkoutPhaseTarget(w){
   if(s.typeKey==='fartlek') return {sec: isEffort ? s.workSec : s.restSec}; // ver getTodayWorkoutStructure(): fartlek siempre por tiempo
   // hills: tanto la subida (esfuerzo) como la bajada trotando (recuperación) se miden con
   // la misma distancia repMeters -- salvo en modo "por tiempo", donde ambas fases usan repSec.
+  if(!isEffort && s.restSec>0) return {sec:s.restSec}; // cuestas por tiempo: la bajada dura lo que dice el plan
   return s.repSec!=null ? {sec:s.repSec} : {meters:s.repMeters};
 }
 function fmtCountdown(sec){
@@ -9167,6 +9535,7 @@ async function closeSummary(){
   setMascotExpression('happy', {priority:1, duration:2200});
   haptic([15,40,15]);
   setTimeout(checkPendingRating, 500);
+  setTimeout(()=>maybePromptLevelTestFromRun(runId), 1200);
 }
 function autoMarkSessionDone(dateIso, runId){
   const monday = getMondayISO(new Date(dateIso));
@@ -11900,6 +12269,15 @@ function buildContext(){
   ctx += isTimeMode()
     ? ` Este corredor entrena POR TIEMPO, no por distancia: todas las sesiones, series/pasadas y descansos que le describas o modifiques tienen que estar en minutos (o segundos si son cortos), nunca en km/metros.`
     : ` Este corredor entrena por distancia (km), como es el modo por defecto.`;
+  {
+    const lt = p.levelTest;
+    const unit = distUnit();
+    if(lt && lt.done && lt.paces){
+      ctx += ` Test de nivel (Cooper de 12 minutos) hecho el ${lt.date}: ${lt.distanceM} m. Sus ritmos de referencia por ${unit}: suave ${fmtPaceRange(lt.paces.easy)}, tempo ${fmtPaceRange(lt.paces.tempo)}, series ${fmtPaceRange(lt.paces.interval)}. Si habla de ritmos usá estos, no inventes otros.`;
+    } else if(levelTestPending(p)){
+      ctx += ' Todavía NO hizo el test de nivel obligatorio (Cooper de 12 minutos, es la primera sesión de su plan): sin ese dato los ritmos son estimados. Recordáselo si pregunta por ritmos o zonas.';
+    }
+  }
   // Antes estos dos planes iban uno pegado al otro, en el mismo párrafo, con el mismo
   // formato denso -- reportado por un usuario: el coach terminaba mezclando los km de la
   // semana que viene con los de esta semana (le decía "hoy te toca 6km" cuando ese 6km en

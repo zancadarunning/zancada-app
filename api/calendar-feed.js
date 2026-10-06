@@ -43,12 +43,12 @@ const DAY_KEYS = ['mon','tue','wed','thu','fri','sat','sun'];
 // para una etiqueta corta de evento de calendario -- si el typeKey no está acá, se muestra
 // tal cual en vez de romper.
 const TYPE_LABELS = {
-  es: {easy:'Rodaje suave', long:'Tirada larga', intervals:'Series', tempo:'Ritmo medio', hills:'Cuestas', fartlek:'Fartlek', progression:'Progresivo', recovery:'Trote regenerativo', race:'Carrera'},
-  en: {easy:'Easy run', long:'Long run', intervals:'Intervals', tempo:'Tempo run', hills:'Hill repeats', fartlek:'Fartlek', progression:'Progression run', recovery:'Recovery jog', race:'Race'},
-  pt: {easy:'Corrida leve', long:'Longão', intervals:'Tiros', tempo:'Ritmo médio', hills:'Subidas', fartlek:'Fartlek', progression:'Progressivo', recovery:'Trote regenerativo', race:'Prova'},
-  fr: {easy:'Footing', long:'Sortie longue', intervals:'Fractionné', tempo:'Allure soutenue', hills:'Côtes', fartlek:'Fartlek', progression:'Progressif', recovery:'Footing de récupération', race:'Course'},
-  it: {easy:'Corsa lenta', long:'Lungo', intervals:'Ripetute', tempo:'Ritmo medio', hills:'Salite', fartlek:'Fartlek', progression:'Progressivo', recovery:'Corsa di recupero', race:'Gara'},
-  de: {easy:'Lockerer Lauf', long:'Langer Lauf', intervals:'Intervalle', tempo:'Tempolauf', hills:'Bergläufe', fartlek:'Fartlek', progression:'Steigerungslauf', recovery:'Regenerationslauf', race:'Wettkampf'}
+  es: {easy:'Rodaje suave', long:'Tirada larga', intervals:'Series', tempo:'Ritmo medio', hills:'Cuestas', fartlek:'Fartlek', progression:'Progresivo', recovery:'Trote regenerativo', race:'Carrera', test:'Test de nivel'},
+  en: {easy:'Easy run', long:'Long run', intervals:'Intervals', tempo:'Tempo run', hills:'Hill repeats', fartlek:'Fartlek', progression:'Progression run', recovery:'Recovery jog', race:'Race', test:'Fitness test'},
+  pt: {easy:'Corrida leve', long:'Longão', intervals:'Tiros', tempo:'Ritmo médio', hills:'Subidas', fartlek:'Fartlek', progression:'Progressivo', recovery:'Trote regenerativo', race:'Prova', test:'Teste de nível'},
+  fr: {easy:'Footing', long:'Sortie longue', intervals:'Fractionné', tempo:'Allure soutenue', hills:'Côtes', fartlek:'Fartlek', progression:'Progressif', recovery:'Footing de récupération', race:'Course', test:'Test de niveau'},
+  it: {easy:'Corsa lenta', long:'Lungo', intervals:'Ripetute', tempo:'Ritmo medio', hills:'Salite', fartlek:'Fartlek', progression:'Progressivo', recovery:'Corsa di recupero', race:'Gara', test:'Test di livello'},
+  de: {easy:'Lockerer Lauf', long:'Langer Lauf', intervals:'Intervalle', tempo:'Tempolauf', hills:'Bergläufe', fartlek:'Fartlek', progression:'Steigerungslauf', recovery:'Regenerationslauf', race:'Wettkampf', test:'Leistungstest'}
 };
 const ZONE_WORD = { es:'Zona', en:'Zone', pt:'Zona', fr:'Zone', it:'Zona', de:'Zone' };
 function typeLabel(d, lang){

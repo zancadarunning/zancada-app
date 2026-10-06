@@ -92,9 +92,10 @@ function buildGuide(day, zones, labels) {
       const useTime = Number(day.repSec) > 0; // el corredor entrena por tiempo
       const workCountdown = useTime ? { type: 'stepDurationCountdown', value: Math.round(day.repSec), title: 'time' } : { type: 'stepDistanceCountdown', value: repMeters, title: 'dist' };
       workStep = fieldsStep(L('work', 'Hard'), [workCountdown, hr, pace, workTarget], [useTime ? T.duration(day.repSec) : T.distance(repMeters)], L('work', 'Hard'));
+      const restSecV = Number(day.restSec) > 0 ? day.restSec : day.repSec; // plan por tiempo: la bajada dura lo que dice el plan
       if (day.typeKey === 'hills') {
         // bajar trotando suave cubre más o menos el mismo tramo que se subió fuerte
-        restStep = fieldsStep(L('rest', 'Easy'), [useTime ? { type: 'stepDurationCountdown', value: Math.round(day.repSec), title: 'time' } : { type: 'stepDistanceCountdown', value: repMeters, title: 'dist' }, hr, hrTarget(zones, 1)], [useTime ? T.duration(day.repSec) : T.distance(repMeters)], L('rest', 'Easy'));
+        restStep = fieldsStep(L('rest', 'Easy'), [useTime ? { type: 'stepDurationCountdown', value: Math.round(restSecV), title: 'time' } : { type: 'stepDistanceCountdown', value: repMeters, title: 'dist' }, hr, hrTarget(zones, 1)], [useTime ? T.duration(restSecV) : T.distance(repMeters)], L('rest', 'Easy'));
       } else {
         const restSec = Math.round((Number(iv.recoveryMin) || 1) * 60);
         restStep = fieldsStep(L('rest', 'Easy'), [{ type: 'stepDurationCountdown', value: restSec, title: 'time' }, hr, hrTarget(zones, 1)], [T.duration(restSec)], L('rest', 'Easy'));
@@ -107,7 +108,7 @@ function buildGuide(day, zones, labels) {
     // distancia/tiempo acumulados, pulso, ritmo y -- si el plan indica zona -- el objetivo de pulso.
     const distM = Math.round((Number(day.distKm) || 0) * 1000);
     const fields = [
-      distM > 0 ? { type: 'stepDistanceCountdown', value: distM, title: 'to go' } : { type: 'duration', window: 'workout', title: 'time' },
+      distM > 0 && !(day.timeBased && Number(day.durMin) > 0) ? { type: 'stepDistanceCountdown', value: distM, title: 'to go' } : { type: 'duration', window: 'workout', title: 'time' },
       { type: 'distance', window: 'workout', title: 'dist' },
       hr, pace, workTarget
     ];
