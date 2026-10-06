@@ -420,14 +420,14 @@ async function probeCorosDetailShapes(accessToken, labelId, sportType) {
         out[tool].shape = typeof r === 'string' ? { text: maskText(r) } : describeShape(r);
         if (tool === 'queryActivityLapData' && r && typeof r === 'object') {
           // Solo nombres de campos y tipos: columnas (name/label) y la forma de una vuelta de cada grupo.
-          out[tool].lapDetail = {
+          out[tool].lapDetail = JSON.stringify({
             columns: Array.isArray(r.columns) ? r.columns.slice(0, 40).map(c => ({ name: c && c.name, label: c && c.label })) : null,
             groups: Array.isArray(r.lapGroups) ? r.lapGroups.map(g => ({
               type: g && g.type,
               nLaps: Array.isArray(g && g.laps) ? g.laps.length : 0,
               lapShape: g && Array.isArray(g.laps) && g.laps[0] ? describeShape(g.laps[0], 2) : null
             })) : null
-          };
+          });
         }
         break;
       } catch (e) {
