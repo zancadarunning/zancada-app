@@ -58,7 +58,8 @@ module.exports = withSentry(async (req, res) => {
 
     // entre 10 y 25 días atrás y a una hora distinta cada vez
     const startDate = new Date(Date.now() - (10 + Math.floor(Math.random() * 15)) * 86400000 - Math.floor(Math.random() * 6 * 3600000));
-    const fit = await buildTestRunFit(startDate);
+    // distancia y duración distintas en cada prueba (entre ~2 y ~5 km, 15 a 35 minutos)
+    const fit = await buildTestRunFit(startDate, { scale: 0.75 + Math.random() * 1.1, durationMin: 15 + Math.floor(Math.random() * 20) });
 
     const initRes = await fetchWithTimeout(`${SUUNTO_API_BASE}/v2/upload`, {
       method: 'POST',

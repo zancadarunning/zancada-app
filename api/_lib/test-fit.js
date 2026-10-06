@@ -12,17 +12,21 @@
 
 const SEMICIRCLES = 2 ** 31 / 180;
 
-async function buildTestRunFit(startDate) {
+// opts.scale agranda/achica la vuelta (distancia) y opts.durationMin cambia el tiempo: cada prueba sale distinta para que
+// nunca se confunda con una carrera anterior (Zancada descarta como duplicada la de misma hora, distancia y duración).
+async function buildTestRunFit(startDate, opts) {
+  opts = opts || {};
   const { Encoder, Profile } = await import('@garmin/fitsdk');
   const enc = new Encoder();
   const start = new Date(startDate);
-  const durationSec = 20 * 60;
+  const durationSec = Math.round((opts.durationMin || 20) * 60);
   const stepSec = 5;
   const records = durationSec / stepSec;
 
   // Elipse de ~3 km alrededor del reservorio (centro 40.7850, -73.9630).
   const center = { lat: 40.7850, lon: -73.9630 };
-  const rLat = 0.0040, rLon = 0.0053;
+  const scale = opts.scale || 1;
+  const rLat = 0.0040 * scale, rLon = 0.0053 * scale;
   const perim = 2 * Math.PI * Math.sqrt((Math.pow(rLat * 111320, 2) + Math.pow(rLon * 111320 * Math.cos(center.lat * Math.PI / 180), 2)) / 2);
   const totalDistance = Math.round(perim); // una vuelta
   const speed = totalDistance / durationSec;
