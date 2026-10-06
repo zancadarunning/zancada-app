@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T00:15:49Z';
+const APP_VERSION = '2026-10-06T00:23:16Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1469,7 +1469,7 @@ async function refreshDeviceConnections(){
       supabaseClient.from('coros_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
       supabaseClient.from('suunto_connections').select('user_id').eq('user_id', currentUserId).maybeSingle()
     ]);
-    deviceConnections = { strava: !!s.data, polar: !!p.data, wahoo: !!w.data, coros: !!c.data, suunto: !!su.data };
+    deviceConnections = { strava: !!s.data, polar: !!p.data, wahoo: !!w.data, coros: !!c.data, suunto: !!su.data || !!(state.suuntoWeek || state.suuntoPlan || state.suuntoSent) };
     scheduleSuuntoSync();
   }catch(e){ console.error(e); }
   renderPlan();
@@ -1760,14 +1760,23 @@ async function connectSuunto(){
 async function updateSuuntoStatusDisplay(){
   const el = document.getElementById('suunto-status');
   const btn = document.getElementById('suunto-connect-btn');
-  const diagEl = document.getElementById('suunto-diag');
-  if(!el || !currentUserId){ if(diagEl) diagEl.textContent = 'diag: sin usuario (' + !!el + ')'; return; }
+  if(!el || !currentUserId) return;
   try{
     const { data, error: suuntoErr } = await supabaseClient.from('suunto_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
-    // DIAGNÓSTICO TEMPORAL: ver el id (primeros 8 caracteres), la versión y lo que respondió la base.
-    // Además se le avisa a Sentry (api/client-diag.js), una vez por carga de la app, para poder ver
-    // qué pasa en un celular sin tenerlo a mano.
-    if(!window.__suuntoDiagSent){
+    // El estado de la cuenta (state) viaja a todos los dispositivos: si en cualquiera ya se
+    // sincronizó el plan con Suunto, trae estas marcas (y se borran al desconectar). En el iPhone
+    // (app de pantalla de inicio) la consulta de arriba devolvió vacía SIN error aunque la cuenta
+    // estaba conectada -- encontrado con el aviso de diagnóstico a Sentry -- así que la conexión
+    // se da por válida si CUALQUIERA de las dos fuentes la confirma.
+    const suuntoInState = !!(state.suuntoWeek || state.suuntoPlan || state.suuntoSent);
+    const connected = !!data || suuntoInState;
+    deviceConnections.suunto = connected;
+    if(connected) scheduleSuuntoSync(); // recién conectada (o al abrir Perfil): deja la semana en Suunto
+
+    // DIAGNÓSTICO TEMPORAL (api/client-diag.js): una vez por carga, solo si la cuenta tiene algo de
+    // Suunto, le avisa a Sentry qué respondió la base en ESTE dispositivo. Se quita cuando se
+    // entienda por qué la consulta vuelve vacía en el iPhone.
+    if(connected && !window.__suuntoDiagSent){
       window.__suuntoDiagSent = true;
       (async()=>{
         try{
@@ -1780,39 +1789,29 @@ async function updateSuuntoStatusDisplay(){
             body: JSON.stringify({ topic:'suunto-card', data:{
               user: String(currentUserId).slice(0,8), connectionRow: !!data,
               queryError: suuntoErr ? ((suuntoErr.code||'') + ' ' + (suuntoErr.message||'')) : '',
-              flag, inState: !!(state.suuntoWeek || state.suuntoPlan || state.suuntoSent),
+              flag, inState: suuntoInState, hasSession: true,
+              tokenExp: session.expires_at || '', now: Math.floor(Date.now()/1000),
               standalone: !!(window.navigator && window.navigator.standalone), version: APP_VERSION,
-              platform: (window.Capacitor && window.Capacitor.getPlatform) ? window.Capacitor.getPlatform() : 'web',
-              cardInDom: !!document.getElementById('suunto-card')
+              platform: (window.Capacitor && window.Capacitor.getPlatform) ? window.Capacitor.getPlatform() : 'web'
             }})
           }).catch(()=>{});
         }catch(e){}
       })();
     }
-    if(diagEl){
-      let flag = 'n/a'; try{ flag = localStorage.getItem('zancada_suunto') || '-'; }catch(e){}
-      diagEl.textContent = 'diag: usuario ' + String(currentUserId).slice(0,8) + ' · suunto: ' + (data ? 'conectado' : (suuntoErr ? 'ERROR ' + (suuntoErr.code||'') + ' ' + (suuntoErr.message||'') : 'sin conexion')) + ' · flag ' + flag + ' · v ' + APP_VERSION.slice(5,16);
-    }
-    deviceConnections.suunto = !!data;
-    if(data) scheduleSuuntoSync(); // recién conectada (o al abrir Perfil): deja la semana en Suunto
+
     // Candado mientras la app use la Developer API de Suunto (200 llamadas por semana): la
     // tarjeta solo se ve entrando una vez con ?suunto=1 (queda recordado en este navegador) o
     // si la cuenta ya está conectada. Quitar esto cuando aprueben la Production API.
-    let suuntoUnlocked = !!data;
+    let suuntoUnlocked = connected;
     try{
       if(/[?&]suunto=1(&|$)/.test(location.search)) localStorage.setItem('zancada_suunto','1');
       if(localStorage.getItem('zancada_suunto')==='1') suuntoUnlocked = true;
     }catch(e){}
-    // Otra señal que NO depende de este navegador ni de la consulta de arriba: si en cualquier
-    // dispositivo de la cuenta ya se sincronizó el plan con Suunto, state (que viaja con la cuenta)
-    // trae esas marcas -- así la tarjeta también se ve en el iPhone / ícono de pantalla de inicio.
-    const suuntoInState = !!(state.suuntoWeek || state.suuntoPlan || state.suuntoSent);
-    if(suuntoInState) suuntoUnlocked = true;
     const suuntoCard = document.getElementById('suunto-card');
     if(suuntoCard) suuntoCard.style.display = suuntoUnlocked ? '' : 'none';
     const guidesBtn = document.getElementById('suunto-guides-btn');
-    if(guidesBtn) guidesBtn.style.display = data ? '' : 'none';
-    if(data){
+    if(guidesBtn) guidesBtn.style.display = connected ? '' : 'none';
+    if(connected){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
       if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectSuunto; }
     } else {
