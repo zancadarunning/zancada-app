@@ -99,3 +99,23 @@ test('activityToRun usa el FIT de COROS (mapa, parciales, desnivel y pulso máxi
   assert.equal(run.maxPower, 300);
   assert.ok(run.series && run.series.hr[0] === 120);
 });
+
+test('applyCorosEnrichmentToRun: completa una carrera guardada con FIT, o con vueltas, y limita los reintentos', () => {
+  const { applyCorosEnrichmentToRun } = require('../api/_lib/coros-activity-helpers');
+  const run = { id: 'coros_1', corosId: '1', source: 'coros', points: [], splits: [], maxHr: null };
+  const ok = applyCorosEnrichmentToRun(run, { avgCadence: 160.4, elevationGain: 12, fit: { points: [{ lat: 1, lon: 1 }, { lat: 1.1, lon: 1.1 }], splits: [{ km: 1 }], series: null, maxHr: 170 } });
+  assert.equal(ok, true);
+  assert.equal(run.points.length, 2);
+  assert.equal(run.avgCadence, 160);
+  assert.equal(run.maxHr, 170);
+  assert.equal(run.splitsV, 3);
+  assert.equal(run.corosBackfillTries, 1);
+  // FIT sin GPS (cinta): se marca noGps para no volver a intentar
+  const treadmill = { id: 'coros_2', corosId: '2', points: [] };
+  applyCorosEnrichmentToRun(treadmill, { fit: { points: [], splits: [] } });
+  assert.equal(treadmill.noGps, true);
+  // sin nada nuevo: devuelve false pero igual cuenta el intento
+  const none = { id: 'coros_3', corosId: '3' };
+  assert.equal(applyCorosEnrichmentToRun(none, {}), false);
+  assert.equal(none.corosBackfillTries, 1);
+});

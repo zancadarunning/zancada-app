@@ -305,6 +305,31 @@ async function enrichCorosRecord(accessToken, record) {
   return record;
 }
 
+// Completa una carrera YA guardada (sin mapa/parciales porque se sincronizó antes de que existiera el FIT) con lo que
+// trajo enrichCorosRecord. Devuelve true si consiguió algo; corosBackfillTries evita reintentar para siempre.
+function applyCorosEnrichmentToRun(run, rec) {
+  run.corosBackfillTries = (run.corosBackfillTries || 0) + 1;
+  const fit = rec.fit;
+  if (fit) {
+    run.splits = fit.splits || [];
+    run.series = fit.series || null;
+    if (fit.elevationGain != null) run.elevationGain = fit.elevationGain;
+    if (fit.elevationLoss != null) run.elevationLoss = fit.elevationLoss;
+    if (fit.maxHr != null && run.maxHr == null) run.maxHr = fit.maxHr;
+    if (fit.avgPower != null) run.avgPower = fit.avgPower;
+    if (fit.maxPower != null) run.maxPower = fit.maxPower;
+    if (fit.points && fit.points.length > 1) run.points = fit.points; else run.noGps = true;
+  } else if (rec.lapSplits) {
+    run.splits = rec.lapSplits;
+  }
+  if (rec.avgCadence) run.avgCadence = Math.round(rec.avgCadence);
+  if (rec.avgPower && run.avgPower == null) run.avgPower = Math.round(rec.avgPower);
+  if (rec.elevationGain != null && !(fit && fit.elevationGain != null)) run.elevationGain = rec.elevationGain;
+  if (rec.elevationLoss != null && !(fit && fit.elevationLoss != null)) run.elevationLoss = rec.elevationLoss;
+  run.splitsV = 3;
+  return !!(fit || rec.lapSplits || rec.avgCadence || rec.elevationGain != null);
+}
+
 // record: una actividad ya normalizada por getCorosRunRecords() -- en el caso real y
 // confirmado (el reporte de texto de querySportRecords, ver parseCorosSportRecordsText),
 // trae dateStr/startTimestamp/endTimestamp/durationSec/distanceKm/avgHr/calories/labelId.
@@ -534,6 +559,7 @@ module.exports = {
   parseCorosActivityDetailText,
   enrichCorosRecord,
   parseCorosLapSplits,
+  applyCorosEnrichmentToRun,
   fetchCorosFit,
   describeShape,
   probeCorosDetailShapes,

@@ -11,7 +11,7 @@ const requireCronSecret = require('./_lib/require-cron-secret');
 const { activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool, corosDateRangeArgs, getCorosRunRecords, getCorosRecordId } = require('./_lib/coros-activity-helpers');
 const { withSentry, reportError, reportDiagnostic } = require('./_lib/sentry');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
-const { probeCorosDetailShapes, enrichCorosRecord } = require('./_lib/coros-activity-helpers');
+const { probeCorosDetailShapes, enrichCorosRecord, applyCorosEnrichmentToRun } = require('./_lib/coros-activity-helpers');
 
 module.exports = withSentry(async (req, res) => {
   if (!(await requireCronSecret(req))) {
@@ -71,6 +71,19 @@ module.exports = withSentry(async (req, res) => {
             for (const rec of newRecs.slice(0, 3)) await enrichCorosRecord(accessToken, rec);
             const newRuns = newRecs.map(record => activityToRun(record));
             if (newRuns.length) await mergeCorosRuns(base, headers, conn.user_id, newRuns, 'skip');
+
+            // Carreras que ya estaban guardadas sin mapa/parciales/cadencia (se sincronizaron antes de que se leyera el
+            // FIT y el detalle de COROS): se completa UNA por corrida de cron, y como máximo 3 intentos por carrera.
+            // Solo se pueden completar las de los últimos 30 días (las que devuelve querySportRecords: ahí está el sportType).
+            const stateRuns = (stateRows[0].data && stateRows[0].data.runs) || [];
+            const pendingRun = stateRuns.find(r => r && r.source === 'coros' && r.corosId && !(r.points && r.points.length > 1) && !r.noGps
+              && (r.corosBackfillTries || 0) < 3 && runRecords.some(x => getCorosRecordId(x) === r.corosId));
+            if (pendingRun) {
+              const rec = runRecords.find(x => getCorosRecordId(x) === pendingRun.corosId);
+              await enrichCorosRecord(accessToken, rec);
+              applyCorosEnrichmentToRun(pendingRun, rec);
+              await mergeCorosRuns(base, headers, conn.user_id, [pendingRun], 'upsert');
+            }
           }
         }
 
