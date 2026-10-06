@@ -88,8 +88,10 @@
      haberse solapado desde el principio. crossorigin es obligatorio acá porque las
      fuentes se piden con CORS. -->
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"></noscript>
+<link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"></noscript>
 <style>
   /* ---- Tema oscuro (default) + tema claro ----
      Hubo un modo claro antes, se sacó entero a pedido del usuario, y ahora vuelve a
@@ -1750,8 +1752,46 @@
   .settile h3{font-size:12.5px; text-transform:none; letter-spacing:0; color:var(--chalk); margin:0 0 2px;}
   .settile p{margin:0; font-size:11px; line-height:1.35;}
 </style>
+<style id="boot-css">
+/* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
+   -- igual que el splash nativo de Android, para que el paso de uno al otro no se note. La marca ocupa
+   exactamente la misma posicion y tamano (150px de ancho, centrada). Se retira desde zcBootDone(). */
+#boot{position:fixed;inset:0;z-index:2147483000;background:#0A0A0A;display:flex;align-items:center;justify-content:center;
+  opacity:1;transition:opacity .34s cubic-bezier(.23,1,.32,1);}
+#boot.zc-boot-out{opacity:0;pointer-events:none;}
+#boot .boot-mark{width:150px;height:auto;display:block;transition:transform .34s cubic-bezier(.23,1,.32,1);}
+#boot.zc-boot-out .boot-mark{transform:scale(1.035);}
+#boot .boot-bar{position:absolute;left:50%;top:calc(50% + 74px);width:56px;height:2px;margin-left:-28px;border-radius:2px;
+  background:rgba(214,255,63,.14);overflow:hidden;opacity:0;animation:boot-bar-in .3s ease-out .55s forwards;}
+#boot .boot-bar::after{content:"";position:absolute;inset:0;width:40%;border-radius:2px;background:#D6FF3F;
+  animation:boot-bar-run 1.15s cubic-bezier(.65,0,.35,1) infinite;}
+@keyframes boot-bar-in{to{opacity:1}}
+@keyframes boot-bar-run{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+@media (prefers-reduced-motion:reduce){#boot .boot-bar::after{animation:none;width:100%;opacity:.55}#boot,#boot .boot-mark{transition-duration:.01s}}
+</style>
 </head>
 <body>
+<div id="boot" aria-hidden="true"><img class="boot-mark" src="/img/boot-mark.png" width="150" height="119" alt=""><div class="boot-bar"></div></div>
+<script>
+/* zcBootDone(): retira la pantalla de arranque. Lo llama app.js cuando ya hay algo real para mostrar (la app, el
+   login o el onboarding). Espera a las tipografias (maximo 500 ms) para que el texto no "salte" al destaparse, y a un
+   minimo de 350 ms para que no parpadee si la carga fue instantanea. Red de seguridad: a los 12 s se retira igual. */
+(function(){
+  var t0 = Date.now(), done = false;
+  function remove(){
+    var b = document.getElementById('boot'); if(!b) return;
+    b.classList.add('zc-boot-out');
+    setTimeout(function(){ if(b.parentNode) b.parentNode.removeChild(b); }, 420);
+  }
+  window.zcBootDone = function(){
+    if(done) return; done = true;
+    var wait = Math.max(0, 350 - (Date.now() - t0));
+    var fonts = (document.fonts && document.fonts.ready) ? Promise.race([document.fonts.ready, new Promise(function(r){ setTimeout(r, 500); })]) : Promise.resolve();
+    fonts.then(function(){ setTimeout(remove, wait); }, function(){ setTimeout(remove, wait); });
+  };
+  setTimeout(function(){ window.zcBootDone(); }, 12000);
+})();
+</script>
 <div id="app">
   <div class="app-grain" aria-hidden="true"></div>
 
@@ -3233,8 +3273,8 @@
      0 de ancho visible y comparte el fondo de la página. -->
 <div id="scrollNudgeSpacer" style="height:4px; width:1px; background:var(--asphalt); pointer-events:none;" aria-hidden="true"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <!-- Diccionarios de traducción: antes se cargaban los 6 siempre (~75KB comprimidos
      tirados a la basura en cada carga para el 100% de la gente que usa un solo idioma),
      nada más para que el selector de idioma en Perfil pudiera cambiar sin pedir nada a
@@ -3253,6 +3293,6 @@
   document.write('<script src="/locales/' + initial + '.js"><\/script>');
 })();
 </script>
-<script src="/app.js"></script>
+<script defer src="/app.js"></script>
 </body>
 </html>

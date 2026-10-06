@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T03:46:03Z';
+const APP_VERSION = '2026-10-06T04:12:48Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1256,12 +1256,14 @@ async function loadUserAndEnter(user, isRetry){
     document.getElementById('login').style.display='none';
     document.getElementById('onboard').style.display='block';
     resetOnboardSteps();
+    if(window.zcBootDone) window.zcBootDone();
   }catch(e){
     console.error('load error', e);
     // OJO: nunca caemos al onboarding por un error de red/consulta — si lo hiciéramos, un usuario
     // con historial real podría terminar viendo la pantalla de "usuario nuevo" y, al completarla,
     // pisar sus datos guardados. Reintentamos una vez y, si sigue fallando, mostramos un error real.
     if(!isRetry){ setTimeout(()=>loadUserAndEnter(user, true), 1500); return; }
+    if(window.zcBootDone) window.zcBootDone();
     const retry = await showConfirm(t('load_error_text'), {confirmText:t('load_error_retry'), cancelText:t('perfil_logout')});
     if(retry) loadUserAndEnter(user);
     else { await supabaseClient.auth.signOut(); location.reload(); }
@@ -3637,6 +3639,7 @@ function enterApp(){
   setTimeout(maybeShowInstallBanner, 1200);
   setTimeout(maybeShowWhatsNew, 1800);
   refreshDeviceConnections();
+  if(window.zcBootDone) window.zcBootDone();
 }
 // checkWeekRollover/autoSkipPastDays/autoClearPastEvent dependen de la fecha real, y antes
 // solo corrían una vez, al entrar a la app (dentro de enterApp()). El problema: una PWA que
@@ -3902,7 +3905,7 @@ async function sendFeedback(){
   // había sesión real (token vencido, storage corrupto, lo que sea), esa clase se queda
   // pegada y splash/login nunca vuelven a aparecer -- el corredor queda mirando una
   // pantalla en blanco sin ninguna forma de iniciar sesión. Sacarla acá cubre ese caso.
-  else { document.documentElement.classList.remove('zc-maybe-session'); }
+  else { document.documentElement.classList.remove('zc-maybe-session'); if(window.zcBootDone) window.zcBootDone(); }
 })();
 
 /* ================= PLAN GENERATION (con progresión semana a semana) ================= */
