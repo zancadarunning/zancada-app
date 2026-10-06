@@ -2,10 +2,16 @@
   "appId": "org.zancada.app",
   "appName": "Zancada",
   "webDir": "www",
+  "backgroundColor": "#0A0A0A",
   "server": {
     "androidScheme": "https"
   },
   "android": {
     "useLegacyBridge": true
+  },
+  "plugins": {
+    "SystemBars": {
+      "style": "DARK"
+    }
   }
 }
