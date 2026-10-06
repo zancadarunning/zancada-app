@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T01:06:23Z';
+const APP_VERSION = '2026-10-06T02:35:14Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1805,6 +1805,13 @@ async function updateSuuntoStatusDisplay(){
     }
     if(connected) scheduleSuuntoSync(); // recién conectada (o al abrir Perfil): deja la semana en Suunto
 
+    // TEMPORAL: botón de prueba de recepción de carreras (api/suunto-test-upload.js), solo para quien
+    // entró una vez con ?dev=1 y tiene Suunto conectado.
+    try{
+      if(/[?&]dev=1(&|$)/.test(location.search)) localStorage.setItem('zancada_dev','1');
+      const testBtn = document.getElementById('suunto-test-btn');
+      if(testBtn) testBtn.style.display = (connected && localStorage.getItem('zancada_dev')==='1') ? '' : 'none';
+    }catch(e){}
     if(connected){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
       if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectSuunto; }
@@ -1814,6 +1821,36 @@ async function updateSuuntoStatusDisplay(){
     }
     renderPlan();
   }catch(e){}
+}
+// TEMPORAL -- prueba de recepción de carreras: sube a TU cuenta de Suunto una carrera falsa (2,8 km, de hace
+// 14 días, ruta en Central Park) con la Upload API y espera a que Suunto la procese. Después Suunto avisa por
+// webhook y la carrera debería aparecer en Historial. Se quita junto con api/suunto-test-upload.js.
+async function devSuuntoTestUpload(){
+  const call = async (payload)=>{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const res = await fetch(apiUrl('/api/suunto-test-upload'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
+      body: JSON.stringify(payload)
+    });
+    return res.json().catch(()=>null);
+  };
+  try{
+    showToast('Subiendo carrera de prueba a Suunto…','success');
+    const start = await call({action:'start'});
+    if(!start || !start.ok){ showToast('No se pudo subir: ' + (start ? (start.reason || (start.step + ' ' + start.httpStatus)) : 'sin respuesta'),'error'); console.error('suunto test upload', start); return; }
+    for(let i=0; i<12; i++){
+      await new Promise(r=>setTimeout(r, 4000));
+      const st = await call({action:'status', uploadId:start.uploadId});
+      console.log('suunto upload status', st);
+      if(st && st.status && /PROCESSED/i.test(st.status)){ showToast('Suunto la procesó. Si el aviso llegó, ya está en Historial (si no, tocá Sincronizar).','success'); return; }
+      if(st && st.status && /ERROR|FAIL/i.test(st.status)){ showToast('Suunto rechazó el archivo: ' + (st.message||st.status),'error'); return; }
+    }
+    showToast('Suunto todavía la está procesando. Revisá el Historial en un minuto.','success');
+  }catch(e){
+    console.error(e);
+    showToast('Error en la prueba: ' + (e && e.message),'error');
+  }
 }
 async function disconnectSuunto(){
   if(!currentUserId) return;
