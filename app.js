@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T00:23:16Z';
+const APP_VERSION = '2026-10-06T00:29:49Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1804,13 +1804,13 @@ async function updateSuuntoStatusDisplay(){
     // si la cuenta ya está conectada. Quitar esto cuando aprueben la Production API.
     let suuntoUnlocked = connected;
     try{
-      if(/[?&]suunto=1(&|$)/.test(location.search)) localStorage.setItem('zancada_suunto','1');
+      // Una vez que la tarjeta se vio (por el link o por estar conectada) se recuerda en este
+      // dispositivo: si no, al DESCONECTAR volvía a esconderse y no había forma de reconectar.
+      if(/[?&]suunto=1(&|$)/.test(location.search) || connected) localStorage.setItem('zancada_suunto','1');
       if(localStorage.getItem('zancada_suunto')==='1') suuntoUnlocked = true;
     }catch(e){}
     const suuntoCard = document.getElementById('suunto-card');
     if(suuntoCard) suuntoCard.style.display = suuntoUnlocked ? '' : 'none';
-    const guidesBtn = document.getElementById('suunto-guides-btn');
-    if(guidesBtn) guidesBtn.style.display = connected ? '' : 'none';
     if(connected){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
       if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectSuunto; }
@@ -1820,27 +1820,6 @@ async function updateSuuntoStatusDisplay(){
     }
     renderPlan();
   }catch(e){}
-}
-// Le pregunta a Suunto qué guías de Zancada tiene la cuenta (api/suunto-list-guides.js) -- para
-// confirmar que lo enviado quedó guardado aunque la app de Suunto no lo muestre (sin un reloj
-// compatible emparejado puede no mostrar la sección de guías).
-async function listSuuntoGuides(){
-  try{
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if(!session){ showToast(t('suunto_connect_error'),'error'); return; }
-    const res = await fetch(apiUrl('/api/suunto-list-guides'), {
-      method:'POST',
-      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
-    });
-    const result = await res.json().catch(()=>null);
-    if(!result || !result.ok){ showToast(t('suunto_guides_error'),'error'); return; }
-    if(!result.guides.length){ showToast(t('suunto_guides_none'),'error'); return; }
-    const list = result.guides.slice(0,4).map(g=>(g.localDate?g.localDate+': ':'')+String(g.name||'').replace(/^Zancada - /,'')).join(' · ');
-    showToast(t('suunto_guides_result',{count:result.guides.length, list}),'success');
-  }catch(e){
-    console.error(e);
-    showToast(t('suunto_guides_error'),'error');
-  }
 }
 async function disconnectSuunto(){
   if(!currentUserId) return;
