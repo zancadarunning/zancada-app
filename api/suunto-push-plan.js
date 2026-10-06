@@ -125,7 +125,7 @@ module.exports = withSentry(async (req, res) => {
       }).catch(() => {});
     }
 
-    if (firstError) await reportError(new Error(`suunto guide upload failed: ${firstError.status} ${firstError.body}`), { endpoint: 'suunto-push-plan' });
+    if (firstError) await reportError(new Error(`suunto guide upload failed: ${firstError.method} ${firstError.externalId} -> ${firstError.status} ${firstError.body}`), { endpoint: 'suunto-push-plan' });
     res.status(200).json({ pushed, failed, removed, pushedDates, reason: (pushed || removed || !days.length) ? undefined : 'suunto_error' });
   } catch (err) {
     console.error('suunto-push-plan error', err);

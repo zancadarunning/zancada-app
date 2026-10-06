@@ -78,6 +78,36 @@ test('syncGuides (manual): solo borra las anteriores a hoy', async () => {
   assert.ok(!calls.includes('DELETE /files/future'));
 });
 
+test('syncGuides: PUT 404 (la guía ya no existe) la vuelve a crear con POST', async () => {
+  const calls = [];
+  global.fetch = async (url, opts = {}) => {
+    const u = String(url), m = opts.method || 'GET';
+    calls.push(m + ' ' + u.replace('https://cloudapi.suunto.com/v2/guides', ''));
+    if (u.endsWith('/items')) return { ok: true, status: 200, json: async () => ({ payload: [g('gone', '2026-10-07')] }) };
+    if (m === 'PUT') return { ok: false, status: 404, text: async () => '{"error":{"code":"404"}}', json: async () => ({}) };
+    return { ok: true, status: 201, text: async () => '', json: async () => ({}) };
+  };
+  const out = await syncGuides('tok', { days: [day('2026-10-07', 'Mie')], zones: ZONES, labels: LABELS, keepDates: new Set(['2026-10-07']) });
+  assert.strictEqual(out.pushed, 1);
+  assert.strictEqual(out.failed, 0);
+  assert.deepStrictEqual(calls.filter(c => c.startsWith('PUT') || c.startsWith('POST')), ['PUT /files/gone', 'POST /files']);
+});
+
+test('syncGuides: POST 409 (ya existía) re-lista y la actualiza con PUT', async () => {
+  const calls = [];
+  let listCount = 0;
+  global.fetch = async (url, opts = {}) => {
+    const u = String(url), m = opts.method || 'GET';
+    calls.push(m + ' ' + u.replace('https://cloudapi.suunto.com/v2/guides', ''));
+    if (u.endsWith('/items')) { listCount++; return { ok: true, status: 200, json: async () => ({ payload: listCount === 1 ? [] : [g('late', '2026-10-07')] }) }; }
+    if (m === 'POST') return { ok: false, status: 409, text: async () => 'dup', json: async () => ({}) };
+    return { ok: true, status: 200, text: async () => '', json: async () => ({}) };
+  };
+  const out = await syncGuides('tok', { days: [day('2026-10-07', 'Mie')], zones: ZONES, labels: LABELS, keepDates: new Set(['2026-10-07']) });
+  assert.strictEqual(out.pushed, 1);
+  assert.ok(calls.includes('PUT /files/late'));
+});
+
 test('syncGuides: si no se puede listar, no sube nada (evita duplicar)', async () => {
   global.fetch = async () => ({ ok: false, status: 500, json: async () => ({}), text: async () => '' });
   const out = await syncGuides('tok', { days: [day('2026-10-07', 'x')], zones: ZONES, labels: LABELS, keepDates: new Set(['2026-10-07']) });

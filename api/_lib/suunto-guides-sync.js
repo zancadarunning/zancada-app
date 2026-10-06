@@ -40,19 +40,36 @@ async function syncGuides(accessToken, { days, zones, labels, keepDates, today, 
   const ordered = days.slice().sort((a, b) => b.date.localeCompare(a.date));
   let pushed = 0, failed = 0, firstError = null;
   const pushedDates = [];
+
+  const send = (method, id, zip) => guidesRequest(method === 'POST' ? '/files' : `/files/${encodeURIComponent(id)}`, accessToken, {
+    method, headers: { 'Content-Type': 'application/zip' }, body: zip
+  });
+
   for (const day of ordered) {
     const guide = buildGuide(day, zones, labels);
     const zip = buildGuideZip(guide);
     const prior = mine.find(g => g.externalId === guide.externalId);
-    const r = await guidesRequest(prior ? `/files/${encodeURIComponent(prior.id)}` : '/files', accessToken, {
-      method: prior ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/zip' },
-      body: zip
-    });
+    let method = prior ? 'PUT' : 'POST';
+    let r = await send(method, prior && prior.id, zip);
+
+    // Dos dispositivos (o el cron y la app) pueden sincronizar a la vez, o el usuario puede borrar
+    // una guía a mano: la lista que leímos puede estar desactualizada. Se corrige en el momento:
+    //   - PUT 404 = la guía ya no existe -> se crea de nuevo.
+    //   - POST 409 = ya existe una con ese externalId -> se vuelve a listar y se actualiza.
+    if (!r.ok && method === 'PUT' && r.status === 404) {
+      method = 'POST';
+      r = await send('POST', null, zip);
+    }
+    if (!r.ok && method === 'POST' && r.status === 409) {
+      const again = await listZancadaGuides(accessToken);
+      const existingNow = again.ok && again.mine.find(g => g.externalId === guide.externalId);
+      if (existingNow) { method = 'PUT'; r = await send('PUT', existingNow.id, zip); }
+    }
+
     if (r.ok) { pushed++; pushedDates.push(day.date); continue; }
     failed++;
-    if (!firstError) firstError = { status: r.status, body: (await r.text().catch(() => '')).slice(0, 300) };
-    console.error('suunto-guides-sync: guide upload failed', guide.externalId, r.status);
+    if (!firstError) firstError = { status: r.status, method, externalId: guide.externalId, body: (await r.text().catch(() => '')).slice(0, 300) };
+    console.error('suunto-guides-sync: guide upload failed', method, guide.externalId, r.status);
   }
 
   let removed = 0;
