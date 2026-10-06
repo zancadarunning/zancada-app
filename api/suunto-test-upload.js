@@ -18,6 +18,7 @@ const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 const { SUUNTO_API_BASE, suuntoApiHeaders, ensureFreshSuuntoToken } = require('./_lib/suunto-activity-helpers');
 const { buildTestRunFit } = require('./_lib/test-fit');
+const crypto = require('crypto');
 const { withSentry, reportError } = require('./_lib/sentry');
 
 module.exports = withSentry(async (req, res) => {
@@ -47,6 +48,36 @@ module.exports = withSentry(async (req, res) => {
       const r = await fetchWithTimeout(`${SUUNTO_API_BASE}/v2/upload/${id}`, { headers: suuntoApiHeaders(accessToken) }, 8000);
       const data = await r.json().catch(() => null);
       res.status(200).json({ ok: r.ok, httpStatus: r.status, status: data && data.status, message: data && data.message, workoutKey: data && data.workoutKey });
+      return;
+    }
+
+    // Simula el aviso (webhook) de Suunto: arma un WORKOUT_CREATED con el mismo formato que documenta Suunto, lo FIRMA con
+    // el notification secret (HMAC-SHA256 hex del body crudo, header X-HMAC-SHA256-Signature) y se lo manda a nuestro propio
+    // webhook. Prueba el camino completo de recepción (firma, búsqueda del usuario, guardado, Historial) sin depender de
+    // que Suunto llame. Es una carrera inventada, de una fecha vieja distinta cada vez.
+    if (body.action === 'simulate') {
+      const secret = process.env.SUUNTO_NOTIFICATION_SECRET;
+      if (!secret) { res.status(200).json({ ok: false, reason: 'no_secret' }); return; }
+      const username = conns[0].suunto_username;
+      if (!username) { res.status(200).json({ ok: false, reason: 'no_username' }); return; }
+      const startTime = Date.now() - (10 + Math.floor(Math.random() * 15)) * 86400000 - Math.floor(Math.random() * 6 * 3600000);
+      const totalTime = (15 + Math.floor(Math.random() * 20)) * 60;
+      const totalDistance = Math.round(2000 + Math.random() * 3000);
+      const payload = {
+        type: 'WORKOUT_CREATED', username,
+        workout: {
+          workoutKey: crypto.randomBytes(12).toString('hex'), activityId: 1, startTime, totalTime, totalDistance,
+          energyConsumption: Math.round(totalDistance * 0.075), stepCount: Math.round(totalTime / 60 * 160), totalAscent: 12, totalDescent: 12,
+          hrdata: { workoutAvgHR: 150, workoutMaxHR: 172 }, avgSpeed: totalDistance / totalTime, maxSpeed: 4.5, timeOffsetInMinutes: -180
+        },
+        gear: { manufacturer: 'Suunto', name: 'Simulated (Zancada test)', productType: 'SPORT_WATCH' }
+      };
+      const raw = JSON.stringify(payload);
+      const signature = crypto.createHmac('sha256', secret).update(raw).digest('hex');
+      const r = await fetchWithTimeout('https://www.zancada.org/api/suunto-webhook', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-HMAC-SHA256-Signature': signature }, body: raw
+      }, 8000);
+      res.status(200).json({ ok: r.ok, webhookStatus: r.status, webhookBody: (await r.text().catch(() => '')).slice(0, 200), distanceM: totalDistance, startedAt: new Date(startTime).toISOString() });
       return;
     }
 

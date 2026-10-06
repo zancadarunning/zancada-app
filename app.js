@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T02:51:24Z';
+const APP_VERSION = '2026-10-06T03:11:08Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1811,6 +1811,8 @@ async function updateSuuntoStatusDisplay(){
       if(/[?&]dev=1(&|$)/.test(location.search)) localStorage.setItem('zancada_dev','1');
       const testBtn = document.getElementById('suunto-test-btn');
       if(testBtn) testBtn.style.display = (connected && localStorage.getItem('zancada_dev')==='1') ? '' : 'none';
+      const simBtn = document.getElementById('suunto-sim-btn');
+      if(simBtn) simBtn.style.display = (connected && localStorage.getItem('zancada_dev')==='1') ? '' : 'none';
     }catch(e){}
     if(connected){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
@@ -1850,6 +1852,28 @@ async function devSuuntoTestUpload(){
   }catch(e){
     console.error(e);
     showToast('Error en la prueba: ' + (e && e.message),'error');
+  }
+}
+// TEMPORAL -- simula el aviso (webhook) de Suunto desde el servidor y, si respondió bien, trae la lista del Historial
+// sin tocar Sincronizar (refreshStateFromServer): prueba la recepción completa sin depender de que Suunto llame.
+async function devSuuntoSimulateWebhook(){
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    showToast('Simulando aviso de Suunto…','success');
+    const res = await fetch(apiUrl('/api/suunto-test-upload'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
+      body: JSON.stringify({action:'simulate'})
+    });
+    const out = await res.json().catch(()=>null);
+    console.log('suunto simulate', out);
+    if(!out || !out.ok){ showToast('El webhook respondió ' + (out ? (out.webhookStatus || out.reason) : 'nada') + (out && out.webhookBody ? ' ' + out.webhookBody : ''),'error'); return; }
+    showToast('El webhook aceptó el aviso (' + (out.distanceM/1000).toFixed(2) + ' km). Actualizando Historial…','success');
+    await refreshStateFromServer();
+    renderHistory(); renderHome();
+  }catch(e){
+    console.error(e);
+    showToast('Error en la simulación: ' + (e && e.message),'error');
   }
 }
 async function disconnectSuunto(){
