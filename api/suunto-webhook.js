@@ -20,7 +20,7 @@
 
 const crypto = require('crypto');
 const { isRunningActivity, workoutToRun, mergeSuuntoRuns } = require('./_lib/suunto-activity-helpers');
-const { withSentry, reportError, reportSecurityEvent } = require('./_lib/sentry');
+const { withSentry, reportError, reportSecurityEvent, reportDiagnostic } = require('./_lib/sentry');
 
 function readRawBody(req) {
   return new Promise((resolve, reject) => {
@@ -66,6 +66,8 @@ const handler = withSentry(async (req, res) => {
   // Solo entrenos de correr -- el resto (rutas, 24/7) se ignora con un 200 para que
   // Suunto no los reintente.
   const workout = body && body.workout;
+  // TEMPORAL: se registra cada aviso válido (tipo, actividad, fecha) para verificar la recepción de carreras.
+  reportDiagnostic('diag suunto-webhook', { type: body && body.type, activityId: workout && workout.activityId, startTime: workout && workout.startTime, hasUser: !!(body && body.username), dist: workout && workout.totalDistance }).catch(() => {});
   if (!body || body.type !== 'WORKOUT_CREATED' || !workout || !body.username) { res.status(200).json({ ok: true, ignored: 'type' }); return; }
   if (!isRunningActivity(workout.activityId)) { res.status(200).json({ ok: true, ignored: 'activity' }); return; }
 

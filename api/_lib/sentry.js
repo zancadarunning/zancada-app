@@ -70,4 +70,12 @@ async function reportSecurityEvent(message, context) {
   await Sentry.flush(2000).catch(() => {});
 }
 
-module.exports = { Sentry, withSentry, reportError, reportSecurityEvent };
+// Diagnóstico puntual (nivel info, no es un error): para ver qué está llegando desde un proveedor
+// cuando algo no aparece como debería (TEMPORAL mientras se verifica la recepción de carreras de Suunto).
+async function reportDiagnostic(message, context) {
+  ensureInit();
+  Sentry.captureMessage(message, { level: 'info', extra: context });
+  await Sentry.flush(2000).catch(() => {});
+}
+
+module.exports = { Sentry, withSentry, reportError, reportSecurityEvent, reportDiagnostic };
