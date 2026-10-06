@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T00:36:13Z';
+const APP_VERSION = '2026-10-06T00:40:10Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1794,32 +1794,6 @@ async function updateSuuntoStatusDisplay(){
       persist();
     }
     if(connected) scheduleSuuntoSync(); // recién conectada (o al abrir Perfil): deja la semana en Suunto
-
-    // DIAGNÓSTICO TEMPORAL (api/client-diag.js): una vez por carga, solo si la cuenta tiene algo de
-    // Suunto, le avisa a Sentry qué respondió la base en ESTE dispositivo. Se quita cuando se
-    // entienda por qué la consulta vuelve vacía en el iPhone.
-    if(connected && !window.__suuntoDiagSent){
-      window.__suuntoDiagSent = true;
-      (async()=>{
-        try{
-          const { data: { session } } = await supabaseClient.auth.getSession();
-          if(!session) return;
-          let flag = 'n/a'; try{ flag = localStorage.getItem('zancada_suunto') || '-'; }catch(e){}
-          fetch(apiUrl('/api/client-diag'), {
-            method:'POST',
-            headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
-            body: JSON.stringify({ topic:'suunto-card', data:{
-              user: String(currentUserId).slice(0,8), connectionRow: !!data,
-              queryError: suuntoErr ? ((suuntoErr.code||'') + ' ' + (suuntoErr.message||'')) : '',
-              flag, inState: suuntoInState, hasSession: true,
-              tokenExp: session.expires_at || '', now: Math.floor(Date.now()/1000),
-              standalone: !!(window.navigator && window.navigator.standalone), version: APP_VERSION,
-              platform: (window.Capacitor && window.Capacitor.getPlatform) ? window.Capacitor.getPlatform() : 'web'
-            }})
-          }).catch(()=>{});
-        }catch(e){}
-      })();
-    }
 
     // Candado mientras la app use la Developer API de Suunto (200 llamadas por semana): la
     // tarjeta solo se ve entrando una vez con ?suunto=1 (queda recordado en este navegador) o

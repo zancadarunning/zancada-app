@@ -70,12 +70,4 @@ async function reportSecurityEvent(message, context) {
   await Sentry.flush(2000).catch(() => {});
 }
 
-// Diagnóstico puntual (nivel info, no es un error): lo usa api/client-diag.js para que la app
-// pueda avisar "esto es lo que veo en este dispositivo" cuando algo no se muestra como debería.
-async function reportDiagnostic(message, context) {
-  ensureInit();
-  Sentry.captureMessage(message, { level: 'info', extra: context });
-  await Sentry.flush(2000).catch(() => {});
-}
-
-module.exports = { Sentry, withSentry, reportError, reportSecurityEvent, reportDiagnostic };
+module.exports = { Sentry, withSentry, reportError, reportSecurityEvent };
