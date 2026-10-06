@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T02:42:48Z';
+const APP_VERSION = '2026-10-06T02:51:24Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1805,6 +1805,13 @@ async function updateSuuntoStatusDisplay(){
     }
     if(connected) scheduleSuuntoSync(); // recién conectada (o al abrir Perfil): deja la semana en Suunto
 
+    // TEMPORAL: botón de prueba de recepción de carreras (api/suunto-test-upload.js), solo para quien
+    // entró una vez con ?dev=1 y tiene Suunto conectado.
+    try{
+      if(/[?&]dev=1(&|$)/.test(location.search)) localStorage.setItem('zancada_dev','1');
+      const testBtn = document.getElementById('suunto-test-btn');
+      if(testBtn) testBtn.style.display = (connected && localStorage.getItem('zancada_dev')==='1') ? '' : 'none';
+    }catch(e){}
     if(connected){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
       if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectSuunto; }
@@ -1814,6 +1821,36 @@ async function updateSuuntoStatusDisplay(){
     }
     renderPlan();
   }catch(e){}
+}
+// TEMPORAL -- prueba de recepción de carreras: sube a TU cuenta de Suunto una carrera falsa (2,8 km, de hace
+// 14 días, ruta en Central Park) con la Upload API y espera a que Suunto la procese. Después Suunto avisa por
+// webhook y la carrera debería aparecer en Historial. Se quita junto con api/suunto-test-upload.js.
+async function devSuuntoTestUpload(){
+  const call = async (payload)=>{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const res = await fetch(apiUrl('/api/suunto-test-upload'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
+      body: JSON.stringify(payload)
+    });
+    return res.json().catch(()=>null);
+  };
+  try{
+    showToast('Subiendo carrera de prueba a Suunto…','success');
+    const start = await call({action:'start'});
+    if(!start || !start.ok){ showToast('No se pudo subir: ' + (start ? (start.reason || (start.step + ' ' + start.httpStatus)) : 'sin respuesta'),'error'); console.error('suunto test upload', start); return; }
+    for(let i=0; i<12; i++){
+      await new Promise(r=>setTimeout(r, 4000));
+      const st = await call({action:'status', uploadId:start.uploadId});
+      console.log('suunto upload status', st);
+      if(st && st.status && /PROCESSED/i.test(st.status)){ showToast('Suunto la procesó. Si el aviso llegó, ya está en Historial (si no, tocá Sincronizar).','success'); return; }
+      if(st && st.status && /ERROR|FAIL/i.test(st.status)){ showToast('Suunto rechazó el archivo: ' + (st.message||st.status),'error'); return; }
+    }
+    showToast('Suunto todavía la está procesando. Revisá el Historial en un minuto.','success');
+  }catch(e){
+    console.error(e);
+    showToast('Error en la prueba: ' + (e && e.message),'error');
+  }
 }
 async function disconnectSuunto(){
   if(!currentUserId) return;
@@ -5054,7 +5091,7 @@ function generatePlan(p, weekNumber, weekStartDate){
 function isTimeMode(){ return state.profile.trainBy === 'time'; }
 function estimateBasePaceMinPerKm(profile){
   profile = profile || state.profile;
-  const recent = (state.runs||[]).filter(r=>r.distanceKm>0.5 && r.durationSec>0).slice(-10);
+  const recent = runsByDateAsc().filter(r=>r.distanceKm>0.5 && r.durationSec>0).slice(-10);
   if(recent.length>=3){
     const paces = recent.map(r=>(r.durationSec/60)/r.distanceKm);
     return paces.reduce((a,b)=>a+b,0)/paces.length;
@@ -8341,6 +8378,10 @@ function computePaceSeriesFromPoints(points){
 const MAPBOX_TOKEN = 'pk.eyJ1IjoiemFuY2FkYSIsImEiOiJjbXU0cm9sbGEwM2tzMndwczE4emExdzVnIn0.kzrV4ltOY_PjTd_YIuh1vQ';
 const MAPBOX_STYLE = 'streets-v12';
 const MAPBOX_TILE_URL = `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/tiles/256/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`;
+// Mapbox y OpenStreetMap EXIGEN que su atribución (y el logo de Mapbox en las imágenes estáticas) quede visible:
+// no se puede quitar ni recortar. Lo único que sí se saca es el prefijo propio de Leaflet (el texto "Leaflet" con
+// la bandera), que no es parte de ninguna de esas obligaciones. El tamaño y el fondo del recuadro se ajustan en el CSS.
+function slimMapAttribution(map){ try{ map.attributionControl.setPrefix(false); }catch(e){} }
 const MAPBOX_ATTRIBUTION = '&copy; <a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noopener">Mapbox</a> &copy; OpenStreetMap contributors';
 // Implementación del "Encoded Polyline Algorithm Format" (el mismo que usan Google Maps y
 // la API de imágenes estáticas de Mapbox) -- codifica un array de puntos GPS en un string
@@ -8473,6 +8514,7 @@ function initLiveMap(){
   if(liveMap){ liveMap.remove(); liveMap=null; }
   liveMap = L.map('liveMap', {zoomControl:false, attributionControl:true}).setView([0,0], 15);
   L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20, detectRetina:true, attribution:MAPBOX_ATTRIBUTION}).addTo(liveMap);
+  slimMapAttribution(liveMap);
   livePolyline = L.polyline([], {color:'#0B5D2E', weight:5, lineCap:'round', lineJoin:'round'}).addTo(liveMap);
   liveMarker = null; startMarker = null;
   liveMapFollowing = true;
@@ -8529,6 +8571,7 @@ function initIdleMap(){
       idleMap = L.map('idleMap', {zoomControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, touchZoom:false, boxZoom:false, keyboard:false, tap:false, attributionControl:true})
         .setView([latitude, longitude], 16);
       L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20, detectRetina:true, attribution:MAPBOX_ATTRIBUTION}).addTo(idleMap);
+      slimMapAttribution(idleMap);
       const dotIcon = L.divIcon({
         className: '',
         html: '<div class="idle-map-dot-ring" style="position:absolute; inset:0;"></div><div class="idle-map-dot" style="position:absolute; inset:0; margin:auto;"></div>',
@@ -9843,6 +9886,15 @@ function buildStravaSyncBanner(){
     </div>
   </div>`;
 }
+// state.runs queda en el orden en que se GUARDARON las carreras, no en el de su fecha: una carrera que se
+// importa tarde con fecha vieja (una sincronización que recupera historial, o una carga de varias semanas
+// atrás) queda al final del array. Todo lo que necesite "las más recientes" o mostrarlas de nueva a vieja
+// tiene que ordenar por fecha. Devuelve una copia (la más vieja primero); el sort es estable, así que las
+// de la misma fecha mantienen el orden en que se guardaron.
+function runsByDateAsc(){
+  const ts = r => { const x = new Date(r.date).getTime(); return isNaN(x) ? 0 : x; };
+  return (state.runs||[]).slice().sort((a,b)=>ts(a)-ts(b));
+}
 function renderHistory(){
   const el = document.getElementById('history-list');
   const stravaSyncCard = buildStravaSyncBanner();
@@ -9879,7 +9931,7 @@ function renderHistory(){
   // solos al detectar un cambio de mes en la lista ya ordenada de más nueva a más vieja.
   const searchEl = document.getElementById('hist-search');
   const query = searchEl ? searchEl.value.trim().toLowerCase() : '';
-  const allRunsDesc = state.runs.slice().reverse();
+  const allRunsDesc = runsByDateAsc().reverse();
   const filteredRuns = !query ? allRunsDesc : allRunsDesc.filter(r=>{
     const shoe = state.shoes.find(s=>String(s.id)===String(r.shoeId));
     const longDateStr = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long', year:'numeric'});
@@ -10184,6 +10236,7 @@ function renderRDRuta(panel){
     if(detailMap){ detailMap.remove(); detailMap=null; }
     detailMap = L.map('rd-route-map', {zoomControl:false, attributionControl:true});
     L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20, detectRetina:true, attribution:MAPBOX_ATTRIBUTION}).addTo(detailMap);
+    slimMapAttribution(detailMap);
     const segs = buildColoredRouteSegments(r);
     const allLatLngs = [];
     segs.forEach(seg=>{ L.polyline(seg.latlngs, {color:seg.color, weight:5, lineCap:'round', lineJoin:'round'}).addTo(detailMap); allLatLngs.push(...seg.latlngs); });
@@ -11803,7 +11856,7 @@ function buildContext(){
     // últimas corridas con ritmo y cuánto volumen acumulado hay en las últimas semanas.
     // Así puede responder con criterio si le preguntan "¿cómo vengo?" o "¿mejoré el ritmo?",
     // en vez de solo reaccionar a lo último que pasó.
-    const recent = state.runs.slice(-5);
+    const recent = runsByDateAsc().slice(-5);
     const runsSummary = recent.map(r=>`${localDateISO(r.date)}: ${r.distanceKm.toFixed(2)}km en ${fmtTime(r.durationSec)} (ritmo ${paceMinPerKmOf(r)}/km)`).join('; ');
     const cutoff = Date.now() - 28*86400000;
     const last4wKm = state.runs.filter(r=>new Date(r.date).getTime() >= cutoff).reduce((s,r)=>s+r.distanceKm,0);

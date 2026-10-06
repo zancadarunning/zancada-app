@@ -347,3 +347,20 @@ test('getAchievementSections: sin ninguna carrera, nada está desbloqueado', () 
   const sections = app.getAchievementSections();
   assert.equal(sections.unlockedCount, 0);
 });
+
+test('runsByDateAsc: una carrera importada tarde con fecha vieja no se cuela entre las más recientes', () => {
+  const app = loadApp();
+  // Orden de GUARDADO: la de septiembre se importó DESPUÉS de las de octubre (queda al final del array).
+  app.state.runs = [
+    { id: 'a', date: '2026-10-02T12:00:00.000Z', distanceKm: 5 },
+    { id: 'b', date: '2026-09-25T12:00:00.000Z', distanceKm: 6 },
+    { id: 'c', date: '2026-09-21T01:00:00.000Z', distanceKm: 2.8 }
+  ];
+  assert.deepEqual(app.runsByDateAsc().map(r => r.id), ['c', 'b', 'a']);
+  assert.deepEqual(app.runsByDateAsc().slice(-2).map(r => r.id), ['b', 'a'], 'las 2 más recientes por fecha');
+  // no modifica el orden de guardado
+  assert.deepEqual(app.state.runs.map(r => r.id), ['a', 'b', 'c']);
+  // fechas inválidas no rompen el orden
+  app.state.runs.push({ id: 'd', date: 'no-es-fecha', distanceKm: 1 });
+  assert.equal(app.runsByDateAsc().length, 4);
+});

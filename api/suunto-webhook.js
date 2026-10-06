@@ -66,11 +66,15 @@ const handler = withSentry(async (req, res) => {
   // Solo entrenos de correr -- el resto (rutas, 24/7) se ignora con un 200 para que
   // Suunto no los reintente.
   const workout = body && body.workout;
-  // TEMPORAL: se registra cada aviso válido (tipo, actividad, fecha) para verificar la recepción de carreras.
-  reportDiagnostic('diag suunto-webhook', { type: body && body.type, activityId: workout && workout.activityId, startTime: workout && workout.startTime, hasUser: !!(body && body.username), dist: workout && workout.totalDistance }).catch(() => {});
   if (!body || body.type !== 'WORKOUT_CREATED' || !workout || !body.username) { res.status(200).json({ ok: true, ignored: 'type' }); return; }
-  if (!isRunningActivity(workout.activityId)) { res.status(200).json({ ok: true, ignored: 'activity' }); return; }
+  if (!isRunningActivity(workout.activityId)) { await reportDiagnostic('diag suunto-webhook', { outcome: 'ignored activity', activityId: workout.activityId }).catch(() => {}); res.status(200).json({ ok: true, ignored: 'activity' }); return; }
 
+  // TEMPORAL: se registra cada aviso válido (tipo, actividad, fecha y resultado) para verificar la recepción de carreras.
+  // Se espera como máximo 700 ms: Suunto exige respuesta en menos de 2 segundos.
+  const diag = (outcome) => Promise.race([
+    reportDiagnostic('diag suunto-webhook', { outcome, type: body.type, activityId: workout.activityId, startTime: workout.startTime, dist: workout.totalDistance }).catch(() => {}),
+    new Promise(r => setTimeout(r, 700))
+  ]);
   try {
     const base = process.env.SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_KEY;
@@ -78,12 +82,13 @@ const handler = withSentry(async (req, res) => {
 
     const connRes = await fetch(`${base}/rest/v1/suunto_connections?suunto_username=eq.${encodeURIComponent(String(body.username))}&select=user_id`, { headers });
     const conns = await connRes.json().catch(() => []);
-    if (!Array.isArray(conns) || !conns.length) { res.status(200).json({ ok: true, ignored: 'unknown user' }); return; }
+    if (!Array.isArray(conns) || !conns.length) { await diag('unknown user'); res.status(200).json({ ok: true, ignored: 'unknown user' }); return; }
 
     const run = workoutToRun(workout, null);
     for (const c of conns) {
       await mergeSuuntoRuns(base, headers, c.user_id, [run], 'skip');
     }
+    await diag('saved');
     res.status(200).json({ ok: true });
   } catch (err) {
     console.error('suunto-webhook error', err);
