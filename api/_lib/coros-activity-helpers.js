@@ -37,6 +37,7 @@
 
 const { sanitizeActivityNumbers } = require('./activity-sanity.js');
 const { fetchWithTimeout } = require('./fetch-with-timeout');
+const { decodeFitRecords, buildSplitsAndSeriesFromFitRecords, buildPointsFromFitRecords } = require('./fit-activity-helpers');
 
 const MCP_ENDPOINT = 'https://mcp.coros.com/mcp';
 
@@ -226,17 +227,81 @@ function parseCorosActivityDetailText(text) {
     elevationLoss: eg ? Math.round(Math.abs(Number(eg[2]))) : null
   };
 }
-// Completa un record de querySportRecords con el detalle de la actividad. Nunca rompe el sync: si la tool falla o
-// cambia de formato, el record queda como estaba.
+// CONFIRMADO (2026-10-06, sonda de Sentry): queryActivityLapData devuelve JSON con lapGroups; el grupo type 2 son las vueltas
+// por km (lapDistance 100000 = 1 km, o sea la distancia viene en CENTÍMETROS) y el type -1 el resumen total. Cada vuelta trae
+// distance (cm), time (seg), avgPace (seg/km), avgHr, avgCadence, elevGain... Con eso se arman los parciales cuando no hay FIT.
+function parseCorosLapSplits(r) {
+  const g = r && Array.isArray(r.lapGroups) ? r.lapGroups.find(x => x && x.type === 2 && Array.isArray(x.laps) && x.laps.length) : null;
+  if (!g) return [];
+  const out = [];
+  let fullKm = 0;
+  for (const l of g.laps) {
+    const km = Number(l && l.distance) / 100000;
+    if (!(km > 0.05)) continue;
+    const sec = Number(l.time) || 0;
+    const paceMin = Number(l.avgPace) > 0 ? Number(l.avgPace) / 60 : (sec > 0 ? (sec / 60) / km : 0);
+    const isFull = km >= 0.98;
+    out.push({
+      km: isFull ? ++fullKm : Math.round(km * 100) / 100,
+      paceMin: Math.round(paceMin * 100) / 100,
+      elevGain: 0,
+      avgHr: Number(l.avgHr) > 0 ? Math.round(Number(l.avgHr)) : null,
+      avgCadence: Number(l.avgCadence) > 0 ? Math.round(Number(l.avgCadence)) : null
+    });
+  }
+  return out;
+}
+function findFirstUrl(v) {
+  const s = typeof v === 'string' ? v : JSON.stringify(v || '');
+  const m = s.match(/https?:\/\/[^\s"'<>\\)\]]+/i);
+  return m ? m[0] : null;
+}
+function shortErr(e) { return String(e && e.message || e).slice(0, 200).replace(/[0-9]{6,}/g, '#'); }
+// FIT original de la actividad (mismo formato que usan Wahoo/Suunto/Polar): de ahí salen mapa, pulso por tiempo, parciales,
+// desnivel y potencia reales. La tool devuelve una URL de descarga como texto. Cualquier fallo se degrada a "sin FIT".
+async function fetchCorosFit(accessToken, labelId, sportType) {
+  let raw;
+  try {
+    raw = await callCorosMcpTool(accessToken, 'queryActivityFitFileDownloadUrls', { labelId, sportType, limit: 1 });
+  } catch (e) { return { error: 'urls: ' + shortErr(e) }; }
+  const url = findFirstUrl(raw);
+  if (!url) return { error: 'sin url: ' + maskText(typeof raw === 'string' ? raw : JSON.stringify(raw)) };
+  try {
+    const res = await fetchWithTimeout(url, {});
+    if (!res.ok) return { error: 'http ' + res.status };
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length > 4 && buf[0] === 0x50 && buf[1] === 0x4b) return { error: 'zip (no soportado todavía)' };
+    const records = await decodeFitRecords(buf);
+    const result = buildSplitsAndSeriesFromFitRecords(records);
+    result.points = buildPointsFromFitRecords(records);
+    return { fit: result };
+  } catch (e) { return { error: 'fit: ' + shortErr(e) }; }
+}
+// Completa un record de querySportRecords con todo lo que COROS da de la actividad: detalle en texto (cadencia, potencia,
+// desnivel), el FIT (mapa, pulso, parciales) o, si no hay FIT, las vueltas por km. Nunca rompe el sync: si algo falla, el
+// record queda como estaba (con lo que ya traía el resumen).
 async function enrichCorosRecord(accessToken, record) {
   if (!record || record.sportType == null || !record.labelId) return record;
-  try {
-    const raw = await callCorosMcpTool(accessToken, 'getActivityDetail', { labelId: record.labelId, sportType: record.sportType });
-    if (typeof raw === 'string') {
-      const d = parseCorosActivityDetailText(raw);
-      for (const k of Object.keys(d)) if (d[k] != null) record[k] = d[k];
+  const [detail, fitRes] = await Promise.all([
+    callCorosMcpTool(accessToken, 'getActivityDetail', { labelId: record.labelId, sportType: record.sportType }).catch(() => null),
+    fetchCorosFit(accessToken, record.labelId, record.sportType).catch(e => ({ error: shortErr(e) }))
+  ]);
+  if (typeof detail === 'string') {
+    const d = parseCorosActivityDetailText(detail);
+    for (const k of Object.keys(d)) if (d[k] != null) record[k] = d[k];
+  }
+  if (fitRes && fitRes.fit) {
+    record.fit = fitRes.fit;
+  } else {
+    try {
+      const laps = await callCorosMcpTool(accessToken, 'queryActivityLapData', { labelId: record.labelId, sportType: record.sportType });
+      const splits = parseCorosLapSplits(laps);
+      if (splits.length) record.lapSplits = splits;
+    } catch (e) { /* sin vueltas */ }
+    if (fitRes && fitRes.error) {
+      try { await require('./sentry').reportDiagnostic('diag coros-fit', { error: fitRes.error }); } catch (e) { /* diagnóstico opcional */ }
     }
-  } catch (e) { /* sin detalle, queda el resumen */ }
+  }
   return record;
 }
 
@@ -263,18 +328,19 @@ function activityToRun(record, detail) {
       name: record.title || null,
       distanceKm: Number(record.distanceKm) || 0,
       durationSec: Math.round(Number(record.durationSec) || 0),
-      elevationGain: Math.round(Number(record.elevationGain) || 0),
-      elevationLoss: record.elevationLoss != null ? Math.round(Number(record.elevationLoss)) : null,
+      elevationGain: record.fit && record.fit.elevationGain != null ? record.fit.elevationGain : Math.round(Number(record.elevationGain) || 0),
+      elevationLoss: record.fit && record.fit.elevationLoss != null ? record.fit.elevationLoss : (record.elevationLoss != null ? Math.round(Number(record.elevationLoss)) : null),
       avgHr: record.avgHr || null,
-      maxHr: null,
+      maxHr: record.fit && record.fit.maxHr != null ? record.fit.maxHr : null,
       avgCadence: record.avgCadence ? Math.round(Number(record.avgCadence)) : null,
-      avgPower: record.avgPower ? Math.round(Number(record.avgPower)) : undefined,
+      avgPower: record.avgPower ? Math.round(Number(record.avgPower)) : (record.fit && record.fit.avgPower != null ? record.fit.avgPower : undefined),
+      maxPower: record.fit && record.fit.maxPower != null ? record.fit.maxPower : undefined,
       calories: record.calories || null,
       hrLog: [],
-      points: [],
-      splits: [],
+      points: record.fit ? (record.fit.points || []) : [],
+      splits: record.fit ? (record.fit.splits || []) : (record.lapSplits || []),
       splitsV: 3,
-      series: null,
+      series: record.fit ? (record.fit.series || null) : null,
       shoeId: null,
       source: 'coros',
       planMonday: getMondayISO(record.dateStr),
@@ -422,6 +488,10 @@ async function listCorosMcpTools(accessToken) {
 async function probeCorosDetailShapes(accessToken, labelId, sportType, record) {
   const out = {};
   try { out.tools = JSON.stringify(await listCorosMcpTools(accessToken)); } catch (e) { out.tools = 'error: ' + String(e && e.message).slice(0, 150); }
+  try {
+    const f = await fetchCorosFit(accessToken, labelId, sportType);
+    out.fitTry = f.fit ? JSON.stringify({ ok: true, points: (f.fit.points || []).length, splits: (f.fit.splits || []).length, hasSeries: !!f.fit.series, elevGain: f.fit.elevationGain, maxHr: f.fit.maxHr }) : JSON.stringify({ ok: false, error: f.error });
+  } catch (e) { out.fitTry = 'error: ' + shortErr(e); }
   if (record) out.recordRef = JSON.stringify({ distanceKm: record.distanceKm, durationSec: record.durationSec, avgHr: record.avgHr, title: record.title });
   const attempts = [
     ['getActivityDetail', [{ labelId, sportType }, { labelId, sportType: String(sportType) }]],
@@ -463,6 +533,8 @@ async function probeCorosDetailShapes(accessToken, labelId, sportType, record) {
 module.exports = {
   parseCorosActivityDetailText,
   enrichCorosRecord,
+  parseCorosLapSplits,
+  fetchCorosFit,
   describeShape,
   probeCorosDetailShapes,
   callCorosMcpTool,
