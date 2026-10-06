@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T00:55:13Z';
+const APP_VERSION = '2026-10-06T01:06:23Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1805,18 +1805,6 @@ async function updateSuuntoStatusDisplay(){
     }
     if(connected) scheduleSuuntoSync(); // recién conectada (o al abrir Perfil): deja la semana en Suunto
 
-    // Candado mientras la app use la Developer API de Suunto (200 llamadas por semana): la
-    // tarjeta solo se ve entrando una vez con ?suunto=1 (queda recordado en este navegador) o
-    // si la cuenta ya está conectada. Quitar esto cuando aprueben la Production API.
-    let suuntoUnlocked = connected;
-    try{
-      // Una vez que la tarjeta se vio (por el link o por estar conectada) se recuerda en este
-      // dispositivo: si no, al DESCONECTAR volvía a esconderse y no había forma de reconectar.
-      if(/[?&]suunto=1(&|$)/.test(location.search) || connected) localStorage.setItem('zancada_suunto','1');
-      if(localStorage.getItem('zancada_suunto')==='1') suuntoUnlocked = true;
-    }catch(e){}
-    const suuntoCard = document.getElementById('suunto-card');
-    if(suuntoCard) suuntoCard.style.display = suuntoUnlocked ? '' : 'none';
     if(connected){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
       if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectSuunto; }
@@ -1922,6 +1910,10 @@ function watchWindow(){
   return { all, win: all.filter(d => d.date <= weekEnd), weekStart, weekEnd };
 }
 let suuntoSyncTimer = null, suuntoSyncRunning = false, suuntoSyncAgain = false;
+// La Developer API de Suunto permite solo 200 llamadas por semana EN TOTAL (para todos los usuarios
+// de la app): si Suunto responde que se agotó, no se insiste durante una hora (cada intento gastaría
+// cuota para recibir el mismo error y le restaría a los demás).
+let suuntoBlockedUntil = 0;
 let wahooSyncTimer = null, wahooSyncRunning = false, wahooSyncAgain = false;
 // Wahoo dijo que el permiso de planes falta (token viejo sin plans_write): no se reintenta solo hasta la
 // próxima vez que se abre la app (cada intento gastaría cuota para recibir el mismo 403).
@@ -1930,7 +1922,7 @@ function watchSyncReady(){ return !!(state.weekStart && state.profile && state.p
 // Se llama desde persist(), al abrir/volver a la app y al conectar: espera unos segundos para
 // juntar varios cambios seguidos en un solo envío.
 function scheduleSuuntoSync(){
-  if(!deviceConnections.suunto || !watchSyncReady()) return;
+  if(!deviceConnections.suunto || !watchSyncReady() || Date.now() < suuntoBlockedUntil) return;
   clearTimeout(suuntoSyncTimer);
   suuntoSyncTimer = setTimeout(()=>{ syncPlanToSuunto(false).catch(e=>console.error('suunto sync', e)); }, 4000);
 }
@@ -1944,7 +1936,7 @@ document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState=
 
 // force=true reenvía todo (botón manual). Devuelve la respuesta del backend o null si no hizo nada.
 async function syncPlanToSuunto(force){
-  if(!deviceConnections.suunto || !watchSyncReady()) return null;
+  if(!deviceConnections.suunto || !watchSyncReady() || (Date.now() < suuntoBlockedUntil && !force)) return null;
   if(suuntoSyncRunning){ suuntoSyncAgain = true; return null; }
   suuntoSyncRunning = true;
   try{
@@ -1970,6 +1962,7 @@ async function syncPlanToSuunto(force){
         result = await res.json().catch(()=>null);
         if(result){
           if(result.reason === 'not_connected'){ deviceConnections.suunto = false; }
+          if(result.reason === 'rate_limited'){ suuntoBlockedUntil = Date.now() + 60*60*1000; }
           const ok = !result.reason && !result.failed;
           const next = {};
           keep.forEach(dt => { if(sent[dt] && !changed.some(c=>c.date===dt)) next[dt] = sent[dt]; });
@@ -2058,6 +2051,7 @@ async function pushPlanToSuunto(){
     const result = await syncPlanToSuunto(true);
     if(result && result.pushed>0){ showToast(t('suunto_push_success', {count: result.pushed}),'success'); }
     else if(result && result.reason==='not_connected'){ showToast(t('suunto_connect_error'),'error'); }
+    else if(result && result.reason==='rate_limited'){ showToast(t('suunto_push_rate_limited'),'error'); }
     else if(result && !result.reason && !result.failed){ showToast(t('suunto_push_success', {count: 0}),'success'); }
     else { showToast(t('suunto_push_error'),'error'); }
   }catch(e){

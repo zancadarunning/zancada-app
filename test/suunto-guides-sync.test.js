@@ -108,6 +108,21 @@ test('syncGuides: POST 409 (ya existía) re-lista y la actualiza con PUT', async
   assert.ok(calls.includes('PUT /files/late'));
 });
 
+test('syncGuides: 429 (cuota de Suunto agotada) corta el envío y no borra nada', async () => {
+  const calls = [];
+  global.fetch = async (url, opts = {}) => {
+    const u = String(url), m = opts.method || 'GET';
+    calls.push(m + ' ' + u.replace('https://cloudapi.suunto.com/v2/guides', ''));
+    if (u.endsWith('/items')) return { ok: true, status: 200, json: async () => ({ payload: [g('old', '2026-10-04')] }) };
+    return { ok: false, status: 429, text: async () => 'too many', json: async () => ({}) };
+  };
+  const out = await syncGuides('tok', { days: [day('2026-10-07', 'A'), day('2026-10-08', 'B')], zones: ZONES, labels: LABELS, keepDates: new Set(['2026-10-07', '2026-10-08']) });
+  assert.strictEqual(out.rateLimited, true);
+  assert.strictEqual(out.removed, 0);
+  assert.strictEqual(calls.filter(c => c.startsWith('POST') || c.startsWith('PUT')).length, 1, 'no sigue insistiendo');
+  assert.ok(!calls.some(c => c.startsWith('DELETE')));
+});
+
 test('syncGuides: si no se puede listar, no sube nada (evita duplicar)', async () => {
   global.fetch = async () => ({ ok: false, status: 500, json: async () => ({}), text: async () => '' });
   const out = await syncGuides('tok', { days: [day('2026-10-07', 'x')], zones: ZONES, labels: LABELS, keepDates: new Set(['2026-10-07']) });

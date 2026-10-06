@@ -21,7 +21,7 @@ function guidesRequest(path, accessToken, init) {
 async function listZancadaGuides(accessToken) {
   const r = await guidesRequest('/items', accessToken, { method: 'GET' });
   if (r.status === 403) return { ok: false, forbidden: true, mine: [] };
-  if (!r.ok) return { ok: false, forbidden: false, mine: [] };
+  if (!r.ok) return { ok: false, forbidden: false, rateLimited: r.status === 429, mine: [] };
   const data = await r.json().catch(() => null);
   const items = (data && Array.isArray(data.payload)) ? data.payload : [];
   const mine = items.filter(g => g && g.owner === 'Zancada' && typeof g.externalId === 'string' && g.externalId.startsWith('zancada-'));
@@ -34,7 +34,7 @@ async function listZancadaGuides(accessToken) {
 // el reloj se queda sin espacio, así las de hoy/mañana son las últimas en llegar.
 async function syncGuides(accessToken, { days, zones, labels, keepDates, today, existing }) {
   const found = existing || await listZancadaGuides(accessToken);
-  if (!found.ok) return { listFailed: true, forbidden: found.forbidden, pushed: 0, failed: 0, removed: 0, pushedDates: [] };
+  if (!found.ok) return { listFailed: true, forbidden: found.forbidden, rateLimited: !!found.rateLimited, pushed: 0, failed: 0, removed: 0, pushedDates: [] };
   const mine = found.mine;
 
   const ordered = days.slice().sort((a, b) => b.date.localeCompare(a.date));
@@ -67,6 +67,9 @@ async function syncGuides(accessToken, { days, zones, labels, keepDates, today, 
     }
 
     if (r.ok) { pushed++; pushedDates.push(day.date); continue; }
+    // 429 = se agotó la cuota de la API (200 por semana en total en modo desarrollo): se corta, sin
+    // seguir gastando llamadas y sin borrar nada.
+    if (r.status === 429) return { listFailed: false, forbidden: false, rateLimited: true, pushed, failed: failed + 1, removed: 0, pushedDates, firstError: { status: 429, method, externalId: guide.externalId, body: 'rate limited' } };
     failed++;
     if (!firstError) firstError = { status: r.status, method, externalId: guide.externalId, body: (await r.text().catch(() => '')).slice(0, 300) };
     console.error('suunto-guides-sync: guide upload failed', method, guide.externalId, r.status);

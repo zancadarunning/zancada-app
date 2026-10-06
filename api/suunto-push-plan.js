@@ -75,10 +75,11 @@ module.exports = withSentry(async (req, res) => {
     // y la sincronización automática lo reintenta en el próximo cambio.
     const found = await listZancadaGuides(accessToken);
     if (found.forbidden) { res.status(200).json({ pushed: 0, reason: 'guides_forbidden' }); return; }
-    if (!found.ok) { res.status(200).json({ pushed: 0, reason: 'suunto_error' }); return; }
+    if (!found.ok) { res.status(200).json({ pushed: 0, reason: found.rateLimited ? 'rate_limited' : 'suunto_error' }); return; }
 
     const out = await syncGuides(accessToken, { days, zones, labels, keepDates, today, existing: found });
     const { pushed, failed, removed, pushedDates, firstError } = out;
+    if (out.rateLimited) { res.status(200).json({ pushed, failed, removed: 0, pushedDates, reason: 'rate_limited' }); return; }
 
     // Marca la semana ya reconciliada: el cron de los lunes (suunto-guides-cron.js) la usa para
     // no repetir el trabajo. Si la columna todavía no existe (sql/suunto_guides_week.sql sin
