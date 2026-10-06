@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T13:34:00Z';
+const APP_VERSION = '2026-10-06T13:47:16Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -191,12 +191,61 @@ async function setLang(code){
   renderSportChips('ob');
   if(state.onboarded){
     renderAll(); renderHistory(); renderZones(); renderPerfilDays(); renderPerfilCrossTraining(); persist();
+    translateCustomPlanTexts(code);
     // Mismo motivo que en handleSignUp: sincronizamos el idioma al user_metadata de
     // Supabase Auth para que los emails de autenticación lo puedan usar. Es best-effort
     // (no bloquea la UI ni avisa si falla) -- si no llega a guardarse, el email cae al
     // español por default, no rompe nada.
     try{ supabaseClient.auth.updateUser({ data: { lang: code } }); }catch(e){}
   }
+}
+/* ---- días personalizados del plan en otro idioma -----
+   Una sesión que el coach (IA) escribió por chat, o que se "congeló" al moverla/ajustarla, guarda su
+   texto (d.type/d.desc) YA escrito en el idioma de ese momento -- a diferencia del resto del plan,
+   que sale de t() y cambia solo. Al pasar la app a otro idioma esos días quedaban en el idioma viejo
+   (reportado: un ejercicio cambiado por el coach en español seguía en español en inglés).
+   Acá se los traduce con el mismo servidor del coach (/api/chat, sin herramientas) y se guarda
+   d.textLang para no volver a pedirlo. Si falla (sin red, límite diario), el texto queda como estaba y
+   se reintenta la próxima vez que se abra la app o se cambie de idioma. */
+const LANG_NAME_EN = {es:'Spanish (Rioplatense, voseo)', en:'English', pt:'Brazilian Portuguese', fr:'French', it:'Italian', de:'German'};
+let customI18nRunning = false;
+function collectCustomTextHolders(target){
+  const holders = [];
+  (state.plan || []).forEach(d=>{ if(d && d.custom && d.type && d.textLang !== target) holders.push(d); });
+  Object.values(state.nextWeekOverrides || {}).forEach(o=>{ if(o && !o.cancelled && o.type && o.textLang !== target) holders.push(o); });
+  return holders;
+}
+async function translateCustomPlanTexts(target){
+  if(customI18nRunning || !state || !state.onboarded) return;
+  const holders = collectCustomTextHolders(target);
+  if(!holders.length) return;
+  customI18nRunning = true;
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session) return;
+    const items = holders.map((h, i)=>({ i, type: h.type, desc: h.desc || '' }));
+    const system = 'You translate short running-workout texts for a running app. Translate the "type" and "desc" of every item into ' + (LANG_NAME_EN[target] || target) + '. Keep numbers, units, paces, heart-rate zones and line breaks exactly as they are. If a text is already in that language, return it unchanged. Reply with ONLY a JSON array like [{"i":0,"type":"...","desc":"..."}] and nothing else, no markdown.';
+    const res = await fetch(apiUrl('/api/chat'), {
+      method:'POST', headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
+      body: JSON.stringify({ system, messages:[{role:'user', content: JSON.stringify(items)}], lang: target })
+    });
+    const data = await res.json();
+    if(data.error) return;
+    const text = (data.content || []).filter(b=>b.type==='text').map(b=>b.text).join('').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    const out = JSON.parse(text);
+    if(!Array.isArray(out) || lang !== target) return; // si mientras tanto cambió otra vez de idioma, no aplicamos nada
+    let changed = false;
+    out.forEach(r=>{
+      const h = holders[r && r.i];
+      if(!h || typeof r.type !== 'string' || !r.type.trim()) return;
+      h.type = r.type.trim();
+      if(h.desc !== undefined && typeof r.desc === 'string') h.desc = r.desc;
+      h.textLang = target;
+      changed = true;
+    });
+    if(changed){ persist(); renderPlan(); renderHome(); try{ renderRunTodayCard(); }catch(e){} }
+  }catch(e){ console.error('custom plan translation failed', e); }
+  finally{ customI18nRunning = false; }
 }
 document.getElementById('perfil-lang-choice').addEventListener('click', e=>{
   const c = e.target.closest('.choice'); if(!c) return;
@@ -3605,6 +3654,7 @@ function enterApp(){
   setTimeout(maybeShowInstallBanner, 1200);
   setTimeout(maybeShowWhatsNew, 1800);
   refreshDeviceConnections();
+  setTimeout(()=>translateCustomPlanTexts(lang), 2500);
   if(window.zcBootDone) window.zcBootDone();
 }
 // checkWeekRollover/autoSkipPastDays/autoClearPastEvent dependen de la fecha real, y antes
@@ -12154,7 +12204,7 @@ function applyPlanChange(input){
     // que le permite a runBenefitKey() reconocer esta sesión como lo que realmente es (series,
     // tempo, etc.) en vez de arrastrar el typeKey del día base -- ver applyPlanChange y el
     // comentario en getNextWeekPlan.
-    const override = { type: input.tipo, desc: input.descripcion, typeKey: input.tipo_categoria };
+    const override = { type: input.tipo, desc: input.descripcion, typeKey: input.tipo_categoria, textLang: lang };
     const effectiveDistKm = resolvePlanDistKm(input);
     if(effectiveDistKm!==null) override.dist = effectiveDistKm;
     const zone = resolveZone(input.zona);
@@ -12186,7 +12236,7 @@ function applyPlanChange(input){
   captureUndoSnapshot();
   d.custom = true;
   d.cancelled = false; // si venía de cancelar_sesion, esta sesión nueva reemplaza esa cancelación
-  d.type = input.tipo; d.desc = input.descripcion;
+  d.type = input.tipo; d.desc = input.descripcion; d.textLang = lang;
   // Sin esto, un día que antes era descanso (u otro tipo) quedaba con el typeKey viejo --
   // las estadísticas de variedad de sesiones de calidad y el tag de beneficio del entrenamiento
   // en el historial (que leen d.typeKey, no d.type) seguían viendo el tipo anterior.
@@ -12264,7 +12314,7 @@ function applyMoveSession(input){
   [origDay, destDay].forEach(d=>{
     if(d.cancelled || d.custom) return;
     const lbl = planLabelBody(d);
-    d.type = lbl.type; d.desc = lbl.desc;
+    d.type = lbl.type; d.desc = lbl.desc; d.textLang = lang;
     delete d.interval;
     d.custom = true;
   });
@@ -12372,7 +12422,7 @@ function applyVolumeAdjust(input){
         // guardara ya envuelta se duplicaría en el próximo render), antes de tocar nada, ya
         // deja los números reales (reps, metros, minutos) incrustados como texto en desc.
         const lbl = planLabelBody(d);
-        d.type = lbl.type; d.desc = lbl.desc;
+        d.type = lbl.type; d.desc = lbl.desc; d.textLang = lang;
         delete d.interval;
         d.custom = true;
       }
