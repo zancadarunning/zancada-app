@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T14:40:46Z';
+const APP_VERSION = '2026-10-06T14:44:34Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4458,6 +4458,13 @@ const PLAN_ALGO_VERSION = 4;
 function checkPlanAlgoVersion(){
   if(!state.onboarded || !state.plan || !state.plan.length) return;
   if(state.planAlgoVersion === PLAN_ALGO_VERSION) return;
+  // v3 -> v4 solo cambió el plan POR TIEMPO (ahora se arma aparte, ver buildTimePlanDays) y sumó el test de nivel: a quien
+  // entrena por distancia no se le rehace la semana (se perderían sus ajustes automáticos de volumen), solo se anota la versión.
+  if(state.planAlgoVersion === 3 && state.profile && state.profile.trainBy !== 'time'){
+    state.planAlgoVersion = PLAN_ALGO_VERSION;
+    persist();
+    return;
+  }
   state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
   state.planAlgoVersion = PLAN_ALGO_VERSION;
   persist();
