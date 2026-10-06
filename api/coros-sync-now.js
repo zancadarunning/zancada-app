@@ -6,7 +6,7 @@
 // falta, igual que Wahoo.
 
 const verifyUser = require('./_lib/verify-user');
-const { activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool, corosDateRangeArgs, getCorosRunRecords, getCorosRecordId } = require('./_lib/coros-activity-helpers');
+const { enrichCorosRecord, activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool, corosDateRangeArgs, getCorosRunRecords, getCorosRecordId } = require('./_lib/coros-activity-helpers');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 
@@ -64,6 +64,7 @@ module.exports = withSentry(async (req, res) => {
 
     // El reporte de querySportRecords ya trae todo lo necesario (distancia, duración, FC
     // promedio, calorías) -- no hace falta getActivityDetail para armar un run decente.
+    for (const rec of newRecords.slice(0, 5)) await enrichCorosRecord(conn.access_token, rec);
     const newRuns = newRecords.map(record => activityToRun(record));
 
     if (newRuns.length) {

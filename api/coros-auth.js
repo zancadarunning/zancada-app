@@ -14,7 +14,7 @@
 // eligiendo el host según de dónde sea el usuario (no hay forma de saberlo
 // de antemano, antes de que intente conectar).
 const crypto = require('crypto');
-const { activityToRun, mergeCorosRuns, callCorosMcpTool, corosDateRangeArgs, getCorosRunRecords, getCorosRecordId } = require('./_lib/coros-activity-helpers');
+const { enrichCorosRecord, activityToRun, mergeCorosRuns, callCorosMcpTool, corosDateRangeArgs, getCorosRunRecords, getCorosRecordId } = require('./_lib/coros-activity-helpers');
 
 const REDIRECT_URI = 'https://zancada.org/api/coros-auth';
 const REGION_HOST = 'mcpus.coros.com';
@@ -96,7 +96,9 @@ module.exports = withSentry(async (req, res) => {
         const stateRows = await stateRes.json();
         if (stateRows && stateRows.length) {
           const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.corosId));
-          const newRuns = runRecords.filter(r => !knownIds.has(getCorosRecordId(r))).map(record => activityToRun(record));
+          const newRecs = runRecords.filter(r => !knownIds.has(getCorosRecordId(r)));
+          for (const rec of newRecs.slice(0, 5)) await enrichCorosRecord(tokenData.access_token, rec);
+          const newRuns = newRecs.map(record => activityToRun(record));
           if (newRuns.length) await mergeCorosRuns(base, plainHeaders, userId, newRuns, 'skip');
         }
       }

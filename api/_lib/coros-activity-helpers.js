@@ -202,6 +202,44 @@ function getMondayISO(d) {
   return dt.toISOString().slice(0, 10);
 }
 
+// CONFIRMADO en producción (2026-10-06, sonda de Sentry): getActivityDetail (con labelId + sportType, ambos
+// obligatorios) devuelve OTRO reporte de texto, con esta forma (acá con los valores enmascarados):
+//
+//   🏃 Outdoor Run Activity Details
+//   Workout Time: #:##   Distance: #.## km   Total Time: #:##
+//   Average Pace: #:## /km   Moving Average Pace: #:## /km   Adjusted Pace: #:## /km
+//   Average Heart Rate: ### bpm   Average Cadence: ### spm   Average Stride Length: #.## m
+//   Average Power: ### W   Elevation Gain / Loss: # m / # m   Calories: ## kcal
+//   Training Load: #   Aerobic TE: #.#   Anaerobic TE: #.#   Performance: -#
+//
+// (una línea por dato). De ahí salen cadencia, potencia y desnivel, que el resumen de querySportRecords no trae.
+function parseCorosActivityDetailText(text) {
+  const t = String(text || '');
+  const num = (re) => { const m = t.match(re); if (!m) return null; const v = Number(m[1]); return Number.isFinite(v) && v > 0 ? v : null; };
+  const eg = t.match(/Elevation Gain\s*\/\s*Loss:\s*(-?\d+(?:\.\d+)?)\s*m\s*\/\s*(-?\d+(?:\.\d+)?)\s*m/i);
+  return {
+    avgCadence: num(/Average Cadence:\s*(\d+(?:\.\d+)?)\s*spm/i),
+    avgPower: num(/Average Power:\s*(\d+(?:\.\d+)?)\s*W/i),
+    avgStrideM: num(/Average Stride Length:\s*(\d+(?:\.\d+)?)\s*m/i),
+    avgHr: num(/Average Heart Rate:\s*(\d+)\s*bpm/i),
+    elevationGain: eg ? Math.round(Math.abs(Number(eg[1]))) : null,
+    elevationLoss: eg ? Math.round(Math.abs(Number(eg[2]))) : null
+  };
+}
+// Completa un record de querySportRecords con el detalle de la actividad. Nunca rompe el sync: si la tool falla o
+// cambia de formato, el record queda como estaba.
+async function enrichCorosRecord(accessToken, record) {
+  if (!record || record.sportType == null || !record.labelId) return record;
+  try {
+    const raw = await callCorosMcpTool(accessToken, 'getActivityDetail', { labelId: record.labelId, sportType: record.sportType });
+    if (typeof raw === 'string') {
+      const d = parseCorosActivityDetailText(raw);
+      for (const k of Object.keys(d)) if (d[k] != null) record[k] = d[k];
+    }
+  } catch (e) { /* sin detalle, queda el resumen */ }
+  return record;
+}
+
 // record: una actividad ya normalizada por getCorosRunRecords() -- en el caso real y
 // confirmado (el reporte de texto de querySportRecords, ver parseCorosSportRecordsText),
 // trae dateStr/startTimestamp/endTimestamp/durationSec/distanceKm/avgHr/calories/labelId.
@@ -225,11 +263,12 @@ function activityToRun(record, detail) {
       name: record.title || null,
       distanceKm: Number(record.distanceKm) || 0,
       durationSec: Math.round(Number(record.durationSec) || 0),
-      elevationGain: 0,
-      elevationLoss: null,
+      elevationGain: Math.round(Number(record.elevationGain) || 0),
+      elevationLoss: record.elevationLoss != null ? Math.round(Number(record.elevationLoss)) : null,
       avgHr: record.avgHr || null,
       maxHr: null,
-      avgCadence: null,
+      avgCadence: record.avgCadence ? Math.round(Number(record.avgCadence)) : null,
+      avgPower: record.avgPower ? Math.round(Number(record.avgPower)) : undefined,
       calories: record.calories || null,
       hrLog: [],
       points: [],
@@ -379,6 +418,17 @@ async function probeCorosDetailShapes(accessToken, labelId, sportType) {
         const r = await callCorosMcpTool(accessToken, tool, args);
         out[tool].ok = argNames;
         out[tool].shape = typeof r === 'string' ? { text: maskText(r) } : describeShape(r);
+        if (tool === 'queryActivityLapData' && r && typeof r === 'object') {
+          // Solo nombres de campos y tipos: columnas (name/label) y la forma de una vuelta de cada grupo.
+          out[tool].lapDetail = {
+            columns: Array.isArray(r.columns) ? r.columns.slice(0, 40).map(c => ({ name: c && c.name, label: c && c.label })) : null,
+            groups: Array.isArray(r.lapGroups) ? r.lapGroups.map(g => ({
+              type: g && g.type,
+              nLaps: Array.isArray(g && g.laps) ? g.laps.length : 0,
+              lapShape: g && Array.isArray(g.laps) && g.laps[0] ? describeShape(g.laps[0], 2) : null
+            })) : null
+          };
+        }
         break;
       } catch (e) {
         // El mensaje de error de COROS suele decir qué argumentos espera: sirve tal cual (sin valores del usuario).
@@ -390,6 +440,8 @@ async function probeCorosDetailShapes(accessToken, labelId, sportType) {
 }
 
 module.exports = {
+  parseCorosActivityDetailText,
+  enrichCorosRecord,
   describeShape,
   probeCorosDetailShapes,
   callCorosMcpTool,

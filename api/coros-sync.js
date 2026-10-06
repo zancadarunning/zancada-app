@@ -11,7 +11,7 @@ const requireCronSecret = require('./_lib/require-cron-secret');
 const { activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool, corosDateRangeArgs, getCorosRunRecords, getCorosRecordId } = require('./_lib/coros-activity-helpers');
 const { withSentry, reportError, reportDiagnostic } = require('./_lib/sentry');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
-const { probeCorosDetailShapes } = require('./_lib/coros-activity-helpers');
+const { probeCorosDetailShapes, enrichCorosRecord } = require('./_lib/coros-activity-helpers');
 
 module.exports = withSentry(async (req, res) => {
   if (!(await requireCronSecret(req))) {
@@ -55,7 +55,7 @@ module.exports = withSentry(async (req, res) => {
         // detalle de COROS, para poder traer parciales, mapa, desnivel y cadencia como en las otras marcas.
         if (runRecords.length && !probedThisRun) {
           probedThisRun = true;
-          if (await checkSyncCooldown(base, headers, conn.user_id, 'coros-probe-2', 7 * 86400000)) {
+          if (await checkSyncCooldown(base, headers, conn.user_id, 'coros-probe-3', 7 * 86400000)) {
             const labelId = getCorosRecordId(runRecords[0]);
             const shapes = await probeCorosDetailShapes(accessToken, labelId, runRecords[0].sportType).catch(e => ({ error: String(e && e.message).slice(0, 200) }));
             await reportDiagnostic('diag coros-detail-shapes', shapes).catch(() => {});
@@ -67,7 +67,9 @@ module.exports = withSentry(async (req, res) => {
           const stateRows = await stateRes.json();
           if (stateRows && stateRows.length) {
             const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.corosId));
-            const newRuns = runRecords.filter(r => !knownIds.has(getCorosRecordId(r))).map(record => activityToRun(record));
+            const newRecs = runRecords.filter(r => !knownIds.has(getCorosRecordId(r)));
+            for (const rec of newRecs.slice(0, 3)) await enrichCorosRecord(accessToken, rec);
+            const newRuns = newRecs.map(record => activityToRun(record));
             if (newRuns.length) await mergeCorosRuns(base, headers, conn.user_id, newRuns, 'skip');
           }
         }
