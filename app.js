@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T13:47:16Z';
+const APP_VERSION = '2026-10-06T13:52:13Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -11828,7 +11828,7 @@ function buildContext(){
   };
   const todaySessionDesc = describePlanDayForCtx(state.plan[todayIdx]);
   const tomorrowSessionDesc = describePlanDayForCtx(tomorrowIsNextWeek ? nw.plan[tomorrowIdx] : state.plan[tomorrowIdx]);
-  let ctx = `HOY es ${todayLabel}, ${nowTimeLabel} hs (código de día: ${DAY_KEYS[todayIdx]}). Mañana es ${t('day_'+DAY_KEYS[tomorrowIdx])} (código: ${DAY_KEYS[tomorrowIdx]})${tomorrowNote}. Usá esto como la referencia exacta para cualquier pedido con "hoy", "mañana", "ayer" u otro día relativo, y para saber si es de mañana/tarde/noche -- nunca lo adivines mirando el estado del plan NI un "hoy es..." que vos mismo hayas dicho en un mensaje anterior de esta charla: los mensajes viejos pueden ser de otro día, así que este dato (el de ESTE mensaje) manda siempre, incluso si contradice algo que dijiste antes. La sesión de HOY es: ${todaySessionDesc}. La sesión de MAÑANA es: ${tomorrowSessionDesc}. Estos dos datos ya están resueltos -- no hace falta que los recalcules ni los cruces contra el resto del plan más abajo, y si contradicen algo que vos mismo dijiste antes en esta charla, estos mandan siempre.${yesterdayNote}${p.tz ? ` Zona horaria del corredor: ${p.tz} (usala para inferir de qué país/región es -- por ejemplo para saber si está en el hemisferio sur o norte a la hora de hablar de estaciones del año, clima o época de carreras).` : ''} `;
+  let ctx = `HOY es ${todayLabel}, ${nowTimeLabel} hs (código de día: ${DAY_KEYS[todayIdx]}). Mañana es ${t('day_'+DAY_KEYS[tomorrowIdx])} (código: ${DAY_KEYS[tomorrowIdx]})${tomorrowNote}. Usá esto como la referencia exacta para cualquier pedido con "hoy", "mañana", "ayer" u otro día relativo, y para saber si es de mañana/tarde/noche -- nunca lo adivines mirando el estado del plan NI un "hoy es..." que vos mismo hayas dicho en un mensaje anterior de esta charla: los mensajes viejos pueden ser de otro día, así que este dato (el de ESTE mensaje) manda siempre, incluso si contradice algo que dijiste antes. Los mensajes anteriores de esta charla que empiezan con una fecha entre corchetes, como [lunes 5 de octubre], son de ESE día, no de hoy: nunca copies de ellos qué día es, y jamás escribas esos corchetes en tus respuestas. La sesión de HOY es: ${todaySessionDesc}. La sesión de MAÑANA es: ${tomorrowSessionDesc}. Estos dos datos ya están resueltos -- no hace falta que los recalcules ni los cruces contra el resto del plan más abajo, y si contradicen algo que vos mismo dijiste antes en esta charla, estos mandan siempre.${yesterdayNote}${p.tz ? ` Zona horaria del corredor: ${p.tz} (usala para inferir de qué país/región es -- por ejemplo para saber si está en el hemisferio sur o norte a la hora de hablar de estaciones del año, clima o época de carreras).` : ''} `;
   const ageForCtx = ageFromBirth(p.birth);
   ctx += `Nombre: ${p.name}.${ageForCtx !== null ? ` Edad aprox: ${ageForCtx}.` : ''} Peso: ${p.weight}kg. Altura: ${p.height}cm. Corre ${p.weeklyKm}km/semana (calculado automáticamente según objetivo y fecha de carrera). Terreno: ${p.terrain}. Objetivo: ${t('ob_goal_'+p.goal)}. Zonas de FC (bpm): ${JSON.stringify(p.hrZones)}.`;
   // El plan generado (generatePlan) YA sabe si es principiante y le arma sesiones en
@@ -12618,8 +12618,22 @@ async function sendChat(){
   // necesidad. Los datos importantes de largo plazo (lesiones, preferencias) no dependen
   // de este historial: quedan guardados aparte con guardar_nota_coach.
   const CHAT_HISTORY_LIMIT = 40;
-  let messages = state.chat.filter(m=>m.role==='user'||m.role==='coach').slice(0,-1).slice(-CHAT_HISTORY_LIMIT).map(m=>({role: m.role==='user'?'user':'assistant', content:m.text}));
-  messages.push({role:'user', content:text});
+  // Cada mensaje viejo de OTRO día lleva su fecha adelante ("[lunes 5 de octubre]"). Sin eso el
+  // modelo veía una charla de varios días mezclada, con frases como "hoy es lunes" dichas el lunes,
+  // y a veces las repetía como si fueran de hoy (reportado: el coach decía que era lunes un martes).
+  // Lo de hoy va sin marca. La fecha de ahora además se repite pegada al mensaje nuevo, que es lo
+  // último que lee el modelo.
+  const dayKeyOfTs = ts => { const x = new Date(ts); return x.getFullYear()+'-'+x.getMonth()+'-'+x.getDate(); };
+  const nowDate = new Date();
+  const todayKeyNow = dayKeyOfTs(nowDate.getTime());
+  const dateLabelOfTs = ts => new Date(ts).toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
+  let messages = state.chat.filter(m=>m.role==='user'||m.role==='coach').slice(0,-1).slice(-CHAT_HISTORY_LIMIT).map(m=>({
+    role: m.role==='user'?'user':'assistant',
+    content: (m.ts && dayKeyOfTs(m.ts) !== todayKeyNow) ? `[${dateLabelOfTs(m.ts)}] ${m.text}` : m.text
+  }));
+  const nowLabelFull = nowDate.toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
+  const nowClock = nowDate.toLocaleTimeString(LOCALE_MAP[lang], {hour:'2-digit', minute:'2-digit', hour12:false});
+  messages.push({role:'user', content: text + `\n\n[Dato automático de la app, no lo escribió el corredor: ahora es ${nowLabelFull}, ${nowClock} hs. HOY es ${nowDate.toLocaleDateString(LOCALE_MAP[lang], {weekday:'long'})}.]`});
 
   const system = `Sos "Zonda", el entrenador virtual dentro de la app Zancada (el nombre viene del viento cálido y seco típico del oeste argentino -- podés mencionar el origen del nombre si el corredor pregunta, pero no hace falta explicarlo de entrada). Hablás con calidez y honestidad, como un entrenador real de running (no un chatbot genérico). Respondé siempre en ${LANG_NAMES[lang]}. Datos del corredor: ${buildContext()}. Ayudás a definir ejercicios, responder dudas de entrenamiento en calle y trail, y personalizar el plan según los gustos del corredor.
 
