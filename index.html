@@ -1955,6 +1955,7 @@
       <div class="field"><label data-i18n="ob_birth_label"></label>
         <div class="date-box" role="button" tabindex="0" data-i18n-aria="ob_birth_label" onclick="openCalendar('ob-birth','ob-birth-text')"><span class="date-box-text" id="ob-birth-text"></span></div>
         <input type="hidden" id="ob-birth">
+        <p class="muted" style="margin:6px 0 0; font-size:12px; line-height:1.4;" data-i18n="ob_birth_hint"></p>
       </div>
       <div class="field">
         <label id="ob-gender-label" data-i18n="ob_gender_label"></label>
@@ -2515,39 +2516,6 @@
        nuevo cada vez que se tocaba (sin forma de borrar los anteriores, nunca hubo permiso
        de escritura sobre el calendario del usuario). Esta URL es la misma siempre -- el
        propio Calendario del usuario la vuelve a pedir solo. -->
-  <div class="overlay overlay-sheet" id="level-test-day-modal">
-    <button class="week-nav-btn" onclick="closeLevelTestSchedule()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
-    <h2 class="subtitle" style="font-size:22px;" data-i18n="ltest_day_title"></h2>
-    <p class="muted" style="margin-top:10px; line-height:1.5;" data-i18n="ltest_day_desc"></p>
-    <div id="ltest-day-list" style="margin-top:8px;"></div>
-    <button class="btn btn-outline" style="width:100%; margin-top:18px;" onclick="closeLevelTestSchedule(); openLevelTest()" data-i18n="ltest_day_manual"></button>
-  </div>
-
-  <div class="overlay overlay-sheet" id="level-test-modal">
-    <button class="week-nav-btn" onclick="closeLevelTest()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
-    <h2 class="subtitle" style="font-size:22px;" data-i18n="ltest_title"></h2>
-    <p class="muted" style="margin-top:10px; line-height:1.5;" data-i18n="ltest_intro"></p>
-    <div class="card" style="margin-top:16px;">
-      <p style="margin:0 0 10px; font-size:14px; line-height:1.5;" data-i18n="ltest_step1"></p>
-      <p style="margin:0 0 10px; font-size:14px; line-height:1.5;" data-i18n="ltest_step2"></p>
-      <p style="margin:0; font-size:14px; line-height:1.5;" data-i18n="ltest_step3"></p>
-    </div>
-    <p class="muted" style="margin-top:12px; font-size:12.5px; line-height:1.5;" data-i18n="ltest_safety"></p>
-    <div class="card" id="ltest-suggest" style="display:none; margin-top:16px;">
-      <p id="ltest-suggest-text" style="margin:0 0 10px; font-size:14px; line-height:1.5;"></p>
-      <button class="btn btn-outline btn-sm" id="ltest-suggest-btn" data-i18n="ltest_suggest_use"></button>
-    </div>
-    <div class="field" style="margin-top:18px;">
-      <label for="ltest-dist" id="ltest-dist-label"></label>
-      <input type="number" id="ltest-dist" step="0.01" min="0" inputmode="decimal" placeholder="2.40">
-    </div>
-    <div class="field">
-      <label for="ltest-hr" data-i18n="ltest_hr_label"></label>
-      <input type="number" id="ltest-hr" step="1" min="0" inputmode="numeric" placeholder="185">
-    </div>
-    <button class="btn btn-primary" style="width:100%; margin-top:8px;" onclick="submitLevelTest()" data-i18n="ltest_save"></button>
-  </div>
-
   <div class="overlay overlay-sheet" id="calendar-sub-modal">
     <button class="week-nav-btn" onclick="closeCalendarSubscribe()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="cal_sub_title"></h2>
@@ -2867,7 +2835,7 @@
       <h3 data-i18n="ltest_perfil_title"></h3>
       <p class="muted" id="perfil-ltest-text" style="margin-top:8px; font-size:13px; line-height:1.5;"></p>
       <p id="perfil-ltest-sched" style="display:none; margin-top:8px; font-size:13px; font-weight:700; color:var(--hivis-text);"></p>
-      <button class="btn btn-outline" style="width:100%; margin-top:12px;" onclick="openLevelTestSchedule()" data-i18n="ltest_perfil_btn"></button>
+      <button class="btn btn-primary" style="width:100%; margin-top:12px;" onclick="openLevelTestSchedule()" data-i18n="ltest_perfil_btn"></button>
     </div>
     <div class="card">
       <h3 data-i18n="perfil_voice_label"></h3>
@@ -2891,6 +2859,42 @@
         <div class="choice" data-v="de">Deutsch</div>
       </div>
     </div>
+  </div>
+
+  <!-- Estos dos modales del test de nivel se abren desde una tarjeta que vive DENTRO de preferences-overlay
+       (mismo z-index:50): tienen que ir DESPUÉS en el DOM, si no quedan tapados por Preferencias y recién
+       aparecen al volver atrás. -->
+  <div class="overlay overlay-sheet" id="level-test-day-modal">
+    <button class="week-nav-btn" onclick="closeLevelTestSchedule()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="ltest_day_title"></h2>
+    <p class="muted" style="margin-top:10px; line-height:1.5;" data-i18n="ltest_day_desc"></p>
+    <div id="ltest-day-list" style="margin-top:8px;"></div>
+    <button class="btn btn-outline" style="width:100%; margin-top:18px;" onclick="closeLevelTestSchedule(); openLevelTest()" data-i18n="ltest_day_manual"></button>
+  </div>
+
+  <div class="overlay overlay-sheet" id="level-test-modal">
+    <button class="week-nav-btn" onclick="closeLevelTest()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="subtitle" style="font-size:22px;" data-i18n="ltest_title"></h2>
+    <p class="muted" style="margin-top:10px; line-height:1.5;" data-i18n="ltest_intro"></p>
+    <div class="card" style="margin-top:16px;">
+      <p style="margin:0 0 10px; font-size:14px; line-height:1.5;" data-i18n="ltest_step1"></p>
+      <p style="margin:0 0 10px; font-size:14px; line-height:1.5;" data-i18n="ltest_step2"></p>
+      <p style="margin:0; font-size:14px; line-height:1.5;" data-i18n="ltest_step3"></p>
+    </div>
+    <p class="muted" style="margin-top:12px; font-size:12.5px; line-height:1.5;" data-i18n="ltest_safety"></p>
+    <div class="card" id="ltest-suggest" style="display:none; margin-top:16px;">
+      <p id="ltest-suggest-text" style="margin:0 0 10px; font-size:14px; line-height:1.5;"></p>
+      <button class="btn btn-outline btn-sm" id="ltest-suggest-btn" data-i18n="ltest_suggest_use"></button>
+    </div>
+    <div class="field" style="margin-top:18px;">
+      <label for="ltest-dist" id="ltest-dist-label"></label>
+      <input type="number" id="ltest-dist" step="0.01" min="0" inputmode="decimal" placeholder="2.40">
+    </div>
+    <div class="field">
+      <label for="ltest-hr" data-i18n="ltest_hr_label"></label>
+      <input type="number" id="ltest-hr" step="1" min="0" inputmode="numeric" placeholder="185">
+    </div>
+    <button class="btn btn-primary" style="width:100%; margin-top:8px;" onclick="submitLevelTest()" data-i18n="ltest_save"></button>
   </div>
 
   <div class="overlay overlay-sheet" id="days-overlay">

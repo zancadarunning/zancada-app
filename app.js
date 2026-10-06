@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T15:37:00Z';
+const APP_VERSION = '2026-10-06T16:11:10Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3220,7 +3220,8 @@ function calBoundsFor(inputId){
   // una fecha de nacimiento de hace, por ejemplo, 200 años, que después alimentaba
   // estimateHrMax/trainingCaution con una edad sin ningún chequeo de plausibilidad (a
   // diferencia de refRace, que sí valida su rango).
-  if(inputId === 'ob-birth') return { max: today, min: `${Number(today.slice(0,4))-120}-01-01` }; // nadie nace en el futuro ni hace más de 120 años
+  // max: 16 años atrás -- los Términos (sección 3) y la Política (sección 13) dicen que Zancada no es para menores de 16, así que la fecha no se puede elegir más reciente que eso
+  if(inputId === 'ob-birth') return { max: `${Number(today.slice(0,4))-16}${today.slice(4)}`, min: `${Number(today.slice(0,4))-120}-01-01` }; // nadie nace hace más de 120 años
   if(inputId === 'ob-racedate' || inputId === 'perfil-racedate' || inputId === 'ev-date') return { min: today }; // una carrera objetivo/próxima ya pasada no tiene sentido cargarla como futura
   if(inputId === 'man-date' || inputId === 'edit-run-date') return { max: today }; // no se puede cargar una carrera que todavía no corriste
   return {};
