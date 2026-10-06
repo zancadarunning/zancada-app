@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-06T13:22:47Z';
+const APP_VERSION = '2026-10-06T13:26:02Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1624,7 +1624,7 @@ async function disconnectPolar(){
    Wahoo vencen (2hs) -- el refresh vive del lado del backend (ver
    refreshWahooToken en api/_lib/wahoo-activity-helpers.js), acá no hace
    falta manejarlo. Wahoo además soporta mandar entrenamientos AL reloj
-   (workouts_write) -- ver pushTodayToWahoo() más abajo. */
+   (workouts_write) -- ver syncPlanToWahoo() más abajo. */
 const WAHOO_CLIENT_ID = 'WH3lkrMmnMc9vrsIzK5ihi2_FxV2W0zB_LaAxl0EZ-Q';
 async function connectWahoo(){
   if(!(await confirmMultiDeviceConnect('Wahoo'))) return;
@@ -1697,29 +1697,11 @@ async function disconnectWahoo(){
   }
   await updateWahooStatusDisplay();
 }
-// Botón "Enviar a mi reloj" (Plan): reenvía a Wahoo TODA la semana con intervalos y objetivos de
-// pulso (ver syncPlanToWahoo() más abajo). Antes mandaba solo la sesión de hoy como un workout simple
-// (api/wahoo-push-workout.js, que sigue ahí por si queda abierta una versión vieja de la app).
-async function pushTodayToWahoo(){
-  if(!watchWindow().win.length){ showToast(t('wahoo_push_nothing'),'error'); return; }
-  try{
-    const result = await syncPlanToWahoo(true);
-    if(result && result.reason==='reconnect_needed'){ showToast(t('wahoo_reconnect_needed'),'error'); }
-    else if(result && result.reason==='rate_limited'){ showToast(t('wahoo_push_rate_limited'),'error'); }
-    else if(result && result.reason==='not_connected'){ showToast(t('wahoo_connect_error'),'error'); }
-    else if(result && !result.reason && !result.failed){ showToast(t('wahoo_push_success'),'success'); }
-    else { showToast(t('wahoo_push_error'),'error'); }
-  }catch(e){
-    console.error(e);
-    showToast(t('wahoo_push_error'),'error');
-  }
-}
-
 /* ---- Suunto -----
    Mismo patrón OAuth que Strava/Polar/Wahoo, con dos diferencias: (1) las carreras NO se
    buscan con un cron cada 15 minutos sino que Suunto avisa por webhook apenas se sube un
    entreno (ver api/suunto-webhook.js); (2) el plan se puede mandar AL reloj como "guía"
-   SuuntoPlus con intervalos y objetivos de pulso (ver pushPlanToSuunto() y
+   SuuntoPlus con intervalos y objetivos de pulso (ver syncPlanToSuunto() y
    api/_lib/suunto-guide-builder.js). El client_id lo devuelve suunto-init (no es secreto). */
 async function connectSuunto(){
   if(!(await confirmMultiDeviceConnect('Suunto'))) return;
@@ -2046,22 +2028,6 @@ async function syncPlanToWahoo(force){
     if(wahooSyncAgain){ wahooSyncAgain = false; scheduleWahooSync(); }
   }
 }
-// Botón "Enviar a mi Suunto" (Plan): fuerza el reenvío de toda la semana.
-async function pushPlanToSuunto(){
-  if(!watchWindow().win.length){ showToast(t('suunto_push_nothing'),'error'); return; }
-  try{
-    const result = await syncPlanToSuunto(true);
-    if(result && result.pushed>0){ showToast(t('suunto_push_success', {count: result.pushed}),'success'); }
-    else if(result && result.reason==='not_connected'){ showToast(t('suunto_connect_error'),'error'); }
-    else if(result && result.reason==='rate_limited'){ showToast(t('suunto_push_rate_limited'),'error'); }
-    else if(result && !result.reason && !result.failed){ showToast(t('suunto_push_success', {count: 0}),'success'); }
-    else { showToast(t('suunto_push_error'),'error'); }
-  }catch(e){
-    console.error(e);
-    showToast(t('suunto_push_error'),'error');
-  }
-}
-
 // A diferencia de Strava/Polar/Wahoo (OAuth clásico con un client_id/secret creados
 // en un panel de developers), COROS usa OAuth 2.1 + PKCE contra su servidor MCP, con
 // registro dinámico de cliente -- ver el comentario grande en api/coros-init.js. El
@@ -5941,9 +5907,7 @@ function buildDayListHtml(wd){
       // recibe datos). Ver deviceConnections / refreshDeviceConnections() más arriba.
       const anyDeviceConnected = deviceConnections.strava || deviceConnections.polar || deviceConnections.wahoo || deviceConnections.coros || deviceConnections.suunto || !!state.healthConnectConnected;
       const showSyncBtn = isToday && anyDeviceConnected;
-      const showWahooPushBtn = isToday && deviceConnections.wahoo;
-      const showSuuntoPushBtn = isToday && deviceConnections.suunto;
-      const planBtns = `${showSyncBtn?`<button class="btn btn-outline btn-sm" id="sync-today-btn" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}${showWahooPushBtn?`<button class="btn btn-outline btn-sm" id="wahoo-push-btn" onclick="pushTodayToWahoo()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.send}</span> ${t('wahoo_push_button')}</button>`:''}${showSuuntoPushBtn?`<button class="btn btn-outline btn-sm" id="suunto-push-btn" onclick="pushPlanToSuunto()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.send}</span> ${t('suunto_push_button')}</button>`:''}`;
+      const planBtns = `${showSyncBtn?`<button class="btn btn-outline btn-sm" id="sync-today-btn" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}`;
       if(planBtns) statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">${planBtns}</div>`;
     }
     return `<div>
