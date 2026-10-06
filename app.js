@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-05T23:57:14Z';
+const APP_VERSION = '2026-10-06T00:06:26Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1760,9 +1760,15 @@ async function connectSuunto(){
 async function updateSuuntoStatusDisplay(){
   const el = document.getElementById('suunto-status');
   const btn = document.getElementById('suunto-connect-btn');
-  if(!el || !currentUserId) return;
+  const diagEl = document.getElementById('suunto-diag');
+  if(!el || !currentUserId){ if(diagEl) diagEl.textContent = 'diag: sin usuario (' + !!el + ')'; return; }
   try{
-    const { data } = await supabaseClient.from('suunto_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
+    const { data, error: suuntoErr } = await supabaseClient.from('suunto_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
+    // DIAGNÓSTICO TEMPORAL: ver el id (primeros 8 caracteres), la versión y lo que respondió la base.
+    if(diagEl){
+      let flag = 'n/a'; try{ flag = localStorage.getItem('zancada_suunto') || '-'; }catch(e){}
+      diagEl.textContent = 'diag: usuario ' + String(currentUserId).slice(0,8) + ' · suunto: ' + (data ? 'conectado' : (suuntoErr ? 'ERROR ' + (suuntoErr.code||'') + ' ' + (suuntoErr.message||'') : 'sin conexion')) + ' · flag ' + flag + ' · v ' + APP_VERSION.slice(5,16);
+    }
     deviceConnections.suunto = !!data;
     if(data) scheduleSuuntoSync(); // recién conectada (o al abrir Perfil): deja la semana en Suunto
     // Candado mientras la app use la Developer API de Suunto (200 llamadas por semana): la
