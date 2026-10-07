@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-07T20:18:55Z';
+const APP_VERSION = '2026-10-07T20:24:19Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -9079,28 +9079,61 @@ function initIdleMap(){
   // no tiene sentido pedir geolocalización ni armar un mapa que nadie va a ver.
   if(!container || document.getElementById('runIdle').style.display === 'none') return;
   if(idleMap){ idleMap.remove(); idleMap = null; }
+  // iPhone con la web agregada a la pantalla de inicio (PWA): iOS no recuerda el permiso de ubicación de
+  // esas apps y lo vuelve a preguntar cada vez que se lo pide -- si lo pedíamos acá, el cartel salía cada
+  // vez que se abría la pestaña Correr, aunque el corredor todavía no fuera a correr. Ahí el mapa se arma
+  // con la última posición conocida (guardada en las carreras anteriores) y el permiso se pide recién al
+  // arrancar la carrera, que es cuando hace falta de verdad.
+  if(isIosStandalonePwa()){
+    const last = readLastKnownPosition();
+    if(last) drawIdleMap(last.lat, last.lng);
+    return;
+  }
   if(!('geolocation' in navigator)) return;
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       // La pestaña pudo haberse cerrado/cambiado mientras esperábamos el fix de GPS.
       if(!document.getElementById('idleMap') || document.getElementById('runIdle').style.display === 'none') return;
       const { latitude, longitude } = pos.coords;
-      idleMap = L.map('idleMap', {zoomControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, touchZoom:false, boxZoom:false, keyboard:false, tap:false, attributionControl:true})
-        .setView([latitude, longitude], 16);
-      L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20, detectRetina:true, attribution:MAPBOX_ATTRIBUTION}).addTo(idleMap);
-      slimMapAttribution(idleMap);
-      const dotIcon = L.divIcon({
-        className: '',
-        html: '<div class="idle-map-dot-ring" style="position:absolute; inset:0;"></div><div class="idle-map-dot" style="position:absolute; inset:0; margin:auto;"></div>',
-        iconSize: [16,16],
-      });
-      L.marker([latitude, longitude], {icon: dotIcon, interactive:false}).addTo(idleMap);
-      setTimeout(()=>{ if(idleMap) idleMap.invalidateSize(); }, 200);
+      saveLastKnownPosition(latitude, longitude);
+      drawIdleMap(latitude, longitude);
     },
     () => { /* sin permiso, sin señal, lo que sea -- el mapa se queda vacío (el fondo
               oscuro de .idle-map ya cubre ese caso) en vez de romper la pantalla */ },
     {enableHighAccuracy:true, timeout:8000, maximumAge:30000}
   );
+}
+function isIosStandalonePwa(){
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = navigator.standalone === true || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  return ios && standalone && !(typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
+}
+const LAST_POS_KEY = 'zancada_last_pos';
+function saveLastKnownPosition(lat, lng){
+  try{ localStorage.setItem(LAST_POS_KEY, JSON.stringify({lat, lng, ts: Date.now()})); }catch(e){}
+}
+function readLastKnownPosition(){
+  try{
+    const p = JSON.parse(localStorage.getItem(LAST_POS_KEY) || 'null');
+    // más de 30 días: probablemente ya no está ahí, mejor no mostrar un mapa de otro lado
+    if(p && Number.isFinite(p.lat) && Number.isFinite(p.lng) && Date.now() - p.ts < 30 * 86400000) return p;
+  }catch(e){}
+  return null;
+}
+function drawIdleMap(latitude, longitude){
+  if(!document.getElementById('idleMap') || document.getElementById('runIdle').style.display === 'none') return;
+  if(idleMap){ idleMap.remove(); idleMap = null; }
+  idleMap = L.map('idleMap', {zoomControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, touchZoom:false, boxZoom:false, keyboard:false, tap:false, attributionControl:true})
+    .setView([latitude, longitude], 16);
+  L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20, detectRetina:true, attribution:MAPBOX_ATTRIBUTION}).addTo(idleMap);
+  slimMapAttribution(idleMap);
+  const dotIcon = L.divIcon({
+    className: '',
+    html: '<div class="idle-map-dot-ring" style="position:absolute; inset:0;"></div><div class="idle-map-dot" style="position:absolute; inset:0; margin:auto;"></div>',
+    iconSize: [16,16],
+  });
+  L.marker([latitude, longitude], {icon: dotIcon, interactive:false}).addTo(idleMap);
+  setTimeout(()=>{ if(idleMap) idleMap.invalidateSize(); }, 200);
 }
 function recenterMap(){
   if(!liveMap || !liveMarker) return;
@@ -9149,6 +9182,16 @@ async function ensureTrackingNotifPermission(){
 // incompatibles (un number en la web, un string acá) y stopGeoWatch necesita saber cuál de
 // las dos usar para limpiarlo bien.
 async function startGeoWatch(onPos, onErr){
+  // Recuerda la última posición (como mucho una vez por minuto) para dibujar el mapa de "Correr" sin tener que
+  // pedir la ubicación de nuevo (ver initIdleMap / isIosStandalonePwa).
+  const handlePos = onPos;
+  let lastSavedAt = 0;
+  onPos = (p) => {
+    try{
+      if(p && p.coords && Date.now() - lastSavedAt > 60000){ lastSavedAt = Date.now(); saveLastKnownPosition(p.coords.latitude, p.coords.longitude); }
+    }catch(e){}
+    handlePos(p);
+  };
   if(hasBackgroundGeo()){
     await ensureTrackingNotifPermission();
     try{
