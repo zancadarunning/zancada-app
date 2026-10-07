@@ -13,6 +13,7 @@
 // Sin la columna plans_week no hace nada (si no, repetiría el trabajo TODAS las horas).
 
 const requireCronSecret = require('./_lib/require-cron-secret');
+const { rotateForFairness } = require('./_lib/cron-rotation');
 const { refreshWahooToken } = require('./_lib/wahoo-activity-helpers');
 const { syncWahooPlans } = require('./_lib/wahoo-plans-sync');
 const { localDateParts, addDaysIso, mondayOfIso } = require('./_lib/suunto-guides-sync');
@@ -82,7 +83,7 @@ module.exports = withSentry(async (req, res) => {
   try {
     const connsRes = await fetch(`${base}/rest/v1/wahoo_connections?select=*`, { headers });
     const conns = await connsRes.json();
-    const list = Array.isArray(conns) ? conns : [];
+    const list = rotateForFairness(Array.isArray(conns) ? conns : [], 3600 * 1000);
 
     const CRON_TIME_BUDGET_MS = 8000;
     const start = Date.now();

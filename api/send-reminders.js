@@ -15,6 +15,9 @@ const { sendFcmPush } = require('./_lib/fcm');
 // manda nada en esta corrida; le va a tocar en otra, cuando sea su 8am. Con esto cada
 // corredor recibe el aviso a las 8 de la mañana, hora suya, sea cual sea el país.
 const REMINDER_HOUR = 8;
+// Cuántos user_id van por consulta a app_state (la URL no puede crecer sin límite).
+const STATE_BATCH = 100;
+const SEND_CONCURRENCY = 10;
 // Corredores que ya tenían la cuenta creada antes de que existiera profile.tz (o algún
 // caso raro donde no se pudo detectar el huso del navegador) caen acá -- el
 // comportamiento de siempre, hora de Argentina, en vez de romper el envío.
@@ -42,6 +45,17 @@ function localHourAndDayIdx(tz){
     if(tz === DEFAULT_TZ) return { hour: -1, dayIdx: 0 }; // corta la recursión si hasta el default fallara
     return localHourAndDayIdx(DEFAULT_TZ);
   }
+}
+// Construir un Intl.DateTimeFormat es lo más caro de este cron (decenas de microsegundos cada vez) y hay un puñado de usos
+// horarios para miles de usuarios: se calcula una vez por huso y se reutiliza durante toda la corrida.
+function makeLocalClock(){
+  const cache = new Map();
+  return tz => {
+    const k = tz || DEFAULT_TZ;
+    let v = cache.get(k);
+    if(!v){ v = localHourAndDayIdx(k); cache.set(k, v); }
+    return v;
+  };
 }
 
 // Mensajes cortos por idioma — no necesita el diccionario completo de la app.
@@ -84,18 +98,28 @@ module.exports = withSentry(async (req, res) => {
     // chicos. PostgREST permite pedir subcampos de una columna JSON directo en el select
     // (data->plan, data->>weekStart, etc.), así que el resto de "data" ni sale de la base --
     // mismo comportamiento exacto de acá para abajo, mucho menos ancho de banda/lectura.
-    const statesRes = await fetch(`${base}/rest/v1/app_state?select=user_id,plan:data->plan,weekStart:data->>weekStart,tz:data->profile->>tz,lang:data->>lang`, { headers });
-    if (!statesRes.ok) {
-      const body = await statesRes.text().catch(() => '');
-      throw new Error(`app_state fetch failed: ${statesRes.status} ${body}`);
-    }
-    const states = await statesRes.json();
+    // Consultas dirigidas (antes: TODA la tabla app_state, de todos los usuarios, cada hora, para después descartar en JS a
+    // los que no tienen notificaciones activadas). Primero las suscripciones (una fila chica por usuario con push), y recién
+    // después el plan de ESOS usuarios, de a lotes por id.
     const subsRes = await fetch(`${base}/rest/v1/push_subscriptions?select=user_id,subscription,platform`, { headers });
     if (!subsRes.ok) {
       const body = await subsRes.text().catch(() => '');
       throw new Error(`push_subscriptions fetch failed: ${subsRes.status} ${body}`);
     }
     const subs = await subsRes.json();
+    const subUserIds = (Array.isArray(subs) ? subs : []).map(x => x.user_id).filter(Boolean);
+    const states = [];
+    for (let i = 0; i < subUserIds.length; i += STATE_BATCH) {
+      const ids = subUserIds.slice(i, i + STATE_BATCH).map(encodeURIComponent).join(',');
+      const statesRes = await fetch(`${base}/rest/v1/app_state?user_id=in.(${ids})&select=user_id,plan:data->plan,weekStart:data->>weekStart,tz:data->profile->>tz,lang:data->>lang`, { headers });
+      if (!statesRes.ok) {
+        const body = await statesRes.text().catch(() => '');
+        throw new Error(`app_state fetch failed: ${statesRes.status} ${body}`);
+      }
+      const chunk = await statesRes.json();
+      if (Array.isArray(chunk)) states.push(...chunk);
+    }
+    const localClock = makeLocalClock();
 
     const subsByUser = {};
     // platform puede venir null en filas viejas si la columna se agregó sin DEFAULT en algún
@@ -104,6 +128,7 @@ module.exports = withSentry(async (req, res) => {
     (subs || []).forEach(s => { subsByUser[s.user_id] = { subscription: s.subscription, platform: s.platform || 'web' }; });
 
     let sent = 0, skipped = 0, failed = 0;
+    const due = [];
     for (const row of (states || [])) {
       const subRow = subsByUser[row.user_id];
       if (!subRow) { skipped++; continue; }
@@ -123,7 +148,7 @@ module.exports = withSentry(async (req, res) => {
       }
 
       const tz = row.tz || DEFAULT_TZ;
-      const { hour, dayIdx } = localHourAndDayIdx(tz);
+      const { hour, dayIdx } = localClock(tz);
       if (hour !== REMINDER_HOUR) { skipped++; continue; } // todavía no son las 8am en el huso de ESTE usuario
 
       const today = plan[dayIdx];
@@ -137,6 +162,12 @@ module.exports = withSentry(async (req, res) => {
       const typeLabel = today.custom ? today.type : (MSGS[lang].types[today.typeKey] || today.typeKey);
       const body = MSGS[lang].body(typeLabel, today.dist);
 
+      due.push({ row, subRow, body });
+    }
+
+    // El envío (una llamada de red por usuario) va en paralelo, de a SEND_CONCURRENCY: a las 8 am de un huso populoso pueden
+    // juntarse cientos de avisos en la misma corrida y, de a uno, la función se quedaba sin tiempo antes de terminar.
+    async function sendOne({ row, subRow, body }) {
       try {
         if (subRow.platform === 'android' || subRow.platform === 'ios') {
           // App nativa (Capacitor) -- acá subscription es {token: '<token de FCM>'}, no una
@@ -145,7 +176,7 @@ module.exports = withSentry(async (req, res) => {
           if (dead) {
             await fetch(`${base}/rest/v1/push_subscriptions?user_id=eq.${row.user_id}`, { method: 'DELETE', headers });
             failed++;
-            continue;
+            return;
           }
         } else {
           await webpush.sendNotification(subRow.subscription, JSON.stringify({ title: 'Zancada', body }));
@@ -158,6 +189,11 @@ module.exports = withSentry(async (req, res) => {
         }
       }
     }
+    let nextDue = 0;
+    const workers = Array.from({ length: Math.min(SEND_CONCURRENCY, due.length) }, async () => {
+      while (nextDue < due.length) { await sendOne(due[nextDue++]); }
+    });
+    await Promise.all(workers);
 
     res.status(200).json({ sent, skipped, failed });
   } catch (err) {

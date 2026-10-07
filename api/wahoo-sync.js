@@ -5,6 +5,7 @@
 // ahora Wahoo solo se sincronizaba con el botón "Sincronizar" manual de wahoo-sync-now.js.
 
 const requireCronSecret = require('./_lib/require-cron-secret');
+const { rotateForFairness } = require('./_lib/cron-rotation');
 const { workoutToRun, mergeWahooRuns, isRunningWorkoutType, refreshWahooToken, fetchFitSplits } = require('./_lib/wahoo-activity-helpers');
 const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { withSentry, reportError } = require('./_lib/sentry');
@@ -129,7 +130,7 @@ module.exports = withSentry(async (req, res) => {
     const CRON_TIME_BUDGET_MS = 8000;
     const cronStart = Date.now();
     let synced = 0, errors = 0, backfilled = 0, skipped = 0;
-    const connsList = Array.isArray(conns) ? conns : [];
+    const connsList = rotateForFairness(Array.isArray(conns) ? conns : [], 15 * 60 * 1000);
     for (const conn of connsList) {
       if (Date.now() - cronStart > CRON_TIME_BUDGET_MS) {
         skipped = connsList.length - synced - errors;

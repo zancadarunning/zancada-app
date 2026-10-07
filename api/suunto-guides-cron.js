@@ -19,6 +19,7 @@
 // guides_week), y este cron no repite nada.
 
 const requireCronSecret = require('./_lib/require-cron-secret');
+const { rotateForFairness } = require('./_lib/cron-rotation');
 const { ensureFreshSuuntoToken } = require('./_lib/suunto-activity-helpers');
 const { syncGuides, localDateParts, addDaysIso, mondayOfIso } = require('./_lib/suunto-guides-sync');
 const { cleanZones, cleanLabels, cleanDay: cleanStoredDay } = require('./_lib/watch-plan-clean');
@@ -68,7 +69,7 @@ module.exports = withSentry(async (req, res) => {
   try {
     const connsRes = await fetch(`${base}/rest/v1/suunto_connections?select=*`, { headers });
     const conns = await connsRes.json();
-    const list = Array.isArray(conns) ? conns : [];
+    const list = rotateForFairness(Array.isArray(conns) ? conns : [], 3600 * 1000);
 
     const CRON_TIME_BUDGET_MS = 8000;
     const start = Date.now();

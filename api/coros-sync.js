@@ -8,6 +8,7 @@
 // usuario que nunca tocó ese botón -- no hay forma de que alguien nuevo sepa que existe.
 
 const requireCronSecret = require('./_lib/require-cron-secret');
+const { rotateForFairness } = require('./_lib/cron-rotation');
 const { activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool, corosDateRangeArgs, getCorosRunRecords, getCorosRecordId } = require('./_lib/coros-activity-helpers');
 const { withSentry, reportError } = require('./_lib/sentry');
 const { enrichCorosRecord, applyCorosEnrichmentToRun } = require('./_lib/coros-activity-helpers');
@@ -29,7 +30,7 @@ module.exports = withSentry(async (req, res) => {
     const CRON_TIME_BUDGET_MS = 8000;
     const cronStart = Date.now();
     let synced = 0, errors = 0, skipped = 0;
-    const connsList = Array.isArray(conns) ? conns : [];
+    const connsList = rotateForFairness(Array.isArray(conns) ? conns : [], 15 * 60 * 1000);
     for (const conn of connsList) {
       if (Date.now() - cronStart > CRON_TIME_BUDGET_MS) {
         skipped = connsList.length - synced - errors;

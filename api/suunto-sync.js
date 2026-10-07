@@ -8,6 +8,7 @@
 // por cuenta, 1 llamada de listado + el FIT de hasta FIT_BACKFILL_BATCH carreras.
 
 const requireCronSecret = require('./_lib/require-cron-secret');
+const { rotateForFairness } = require('./_lib/cron-rotation');
 const {
   isRunningActivity, workoutToRun, mergeSuuntoRuns, ensureFreshSuuntoToken, listSuuntoWorkouts, fetchSuuntoFit
 } = require('./_lib/suunto-activity-helpers');
@@ -71,7 +72,7 @@ module.exports = withSentry(async (req, res) => {
   try {
     const connsRes = await fetch(`${base}/rest/v1/suunto_connections?select=*`, { headers });
     const conns = await connsRes.json();
-    const list = Array.isArray(conns) ? conns : [];
+    const list = rotateForFairness(Array.isArray(conns) ? conns : [], 24 * 3600 * 1000);
 
     const CRON_TIME_BUDGET_MS = 8000;
     const start = Date.now();

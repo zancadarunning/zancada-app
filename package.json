@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js test/perf/*.test.js",
+    "loadtest": "node loadtest/run.js"
   },
   "dependencies": {
     "@garmin/fitsdk": "^21.214.0",
