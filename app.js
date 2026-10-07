@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-07T20:24:19Z';
+const APP_VERSION = '2026-10-07T20:39:01Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3847,6 +3847,7 @@ async function logout(){
   // tener algo ahí guardado en este dispositivo) -- best-effort, no rompe nada si ya
   // no existe.
   try{ localStorage.removeItem('zancada_run_in_progress'); }catch(e){}
+  clearLastKnownPosition();
   await supabaseClient.auth.signOut();
   location.reload();
 }
@@ -3857,6 +3858,7 @@ async function resetApp(){
   if(currentUserId){
     try{ await supabaseClient.from('app_state').delete().eq('user_id', currentUserId); }catch(e){}
   }
+  clearLastKnownPosition();
   await supabaseClient.auth.signOut();
   location.reload();
 }
@@ -3872,6 +3874,7 @@ async function deleteAccount(){
       headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
     });
     if(!res.ok) throw new Error('delete-account failed');
+    clearLastKnownPosition();
     await supabaseClient.auth.signOut();
     location.reload();
   }catch(e){
@@ -9111,6 +9114,11 @@ function isIosStandalonePwa(){
 const LAST_POS_KEY = 'zancada_last_pos';
 function saveLastKnownPosition(lat, lng){
   try{ localStorage.setItem(LAST_POS_KEY, JSON.stringify({lat, lng, ts: Date.now()})); }catch(e){}
+}
+// La posición exacta es un dato personal: se borra al cerrar sesión, borrar los datos o borrar la cuenta (si no, la próxima
+// cuenta que entre en este mismo iPhone vería el mapa de dónde corría la anterior).
+function clearLastKnownPosition(){
+  try{ localStorage.removeItem(LAST_POS_KEY); }catch(e){}
 }
 function readLastKnownPosition(){
   try{

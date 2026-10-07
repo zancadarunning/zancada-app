@@ -65,11 +65,15 @@ module.exports = withSentry(async (req, res) => {
             const stateRuns = (stateRows[0].data && stateRows[0].data.runs) || [];
             const pendingRun = stateRuns.find(r => r && r.source === 'coros' && r.corosId && !(r.points && r.points.length > 1) && !r.noGps
               && (r.corosBackfillTries || 0) < 3 && runRecords.some(x => getCorosRecordId(x) === r.corosId));
-            if (pendingRun) {
+            // Si COROS ya cortó los FIT del día (límite diario), no se intenta ni se gasta un intento de esta carrera: espera a mañana.
+            const fitLimited = newRecs.some(r => r._fitRateLimited);
+            if (pendingRun && !fitLimited) {
               const rec = runRecords.find(x => getCorosRecordId(x) === pendingRun.corosId);
               await enrichCorosRecord(accessToken, rec);
-              applyCorosEnrichmentToRun(pendingRun, rec);
-              await mergeCorosRuns(base, headers, conn.user_id, [pendingRun], 'upsert');
+              if (!rec._fitRateLimited) {
+                applyCorosEnrichmentToRun(pendingRun, rec);
+                await mergeCorosRuns(base, headers, conn.user_id, [pendingRun], 'upsert');
+              }
             }
           }
         }

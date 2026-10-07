@@ -263,7 +263,10 @@ async function fetchCorosFit(accessToken, labelId, sportType) {
   let raw;
   try {
     raw = await callCorosMcpTool(accessToken, 'queryActivityFitFileDownloadUrls', { labelId, sportType, limit: 1 });
-  } catch (e) { return { error: 'urls: ' + shortErr(e) }; }
+  } catch (e) {
+    // COROS limita a 50 FIT por día y cuenta: no es un fallo de esta actividad, se reintenta en otra corrida sin gastar un intento.
+    return { error: 'urls: ' + shortErr(e), rateLimited: /daily limit|rate limit|too many/i.test(String(e && e.message)) };
+  }
   const url = findFirstUrl(raw);
   if (!url) return { error: 'sin url: ' + maskText(typeof raw === 'string' ? raw : JSON.stringify(raw)) };
   try {
@@ -286,6 +289,7 @@ async function enrichCorosRecord(accessToken, record) {
     callCorosMcpTool(accessToken, 'getActivityDetail', { labelId: record.labelId, sportType: record.sportType }).catch(() => null),
     fetchCorosFit(accessToken, record.labelId, record.sportType).catch(e => ({ error: shortErr(e) }))
   ]);
+  if (fitRes && fitRes.rateLimited) record._fitRateLimited = true;
   if (typeof detail === 'string') {
     const d = parseCorosActivityDetailText(detail);
     for (const k of Object.keys(d)) if (d[k] != null) record[k] = d[k];
@@ -298,7 +302,7 @@ async function enrichCorosRecord(accessToken, record) {
       const splits = parseCorosLapSplits(laps);
       if (splits.length) record.lapSplits = splits;
     } catch (e) { /* sin vueltas */ }
-    if (fitRes && fitRes.error) {
+    if (fitRes && fitRes.error && !fitRes.rateLimited) {
       try { await require('./sentry').reportDiagnostic('diag coros-fit', { error: fitRes.error }); } catch (e) { /* diagnóstico opcional */ }
     }
   }
