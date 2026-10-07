@@ -880,6 +880,9 @@
   .brand-logo-chip{display:inline-flex; align-items:center; flex-shrink:0;}
   .brand-logo-chip img{height:18px; max-width:96px; width:auto; object-fit:contain; display:block; filter:brightness(0) invert(1);}
   .brand-logo-chip img.brand-logo-color{filter:none;}
+  /* Logo oficial de Suunto: es negro + rojo, no se recolorea (sus reglas de marca) -- va sobre una placa blanca para que se lea en el tema oscuro. */
+  .brand-logo-plate{background:#fff; border-radius:8px; padding:6px 11px;}
+  .brand-logo-plate img{height:21px; max-width:none; width:auto;}
   /* Viñetas breves para la descripción de la sesión (entrada en calor / sesión /
      vuelta a la calma vienen como líneas separadas por \n desde planLabel()) -- se
      listan una debajo de otra con una marca chica, en vez de un párrafo corrido. */
@@ -2742,11 +2745,10 @@
 
       <!-- Suunto: recibe las carreras al instante por webhook y puede mandar las sesiones de la semana
            AL reloj como guías SuuntoPlus (ver syncPlanToSuunto() y el botón "Enviar a mi Suunto" en Plan).
-           Sin logo todavía: Suunto exige usar SUS assets de marca (media.suunto.com) y recién se pueden
-           bajar con la cuenta de partner aprobada. -->
+           Logo oficial de media.suunto.com (img/brand-logos/suunto.png), sin modificar colores. -->
       <div class="conn-row" id="suunto-card">
         <div class="conn-row-head">
-          <span class="brand-logo-chip" style="gap:8px; flex:1;"><span class="n" style="font-size:14.5px; font-weight:700;">Suunto</span></span>
+          <span class="brand-logo-chip brand-logo-plate" style="flex:none;"><img class="brand-logo-color" src="img/brand-logos/suunto.png" alt="Suunto" width="600" height="213"></span><span style="flex:1;"></span>
           <span id="suunto-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
         </div>
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_suunto_desc"></p>

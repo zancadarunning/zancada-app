@@ -23,3 +23,5 @@ los logos oficiales reales de cada marca (no recreados a mano) — bajados de es
   vectorial/wordmark (Health Connect no tiene uno propio, es una app de sistema Android).
 
 Si alguna marca cambia su logo o publica un kit de marca más específico, actualizar acá.
+
+- `suunto.png`: logo oficial de Suunto bajado del material de marca (media.suunto.com, cuenta de partner) el 2026-10-07; solo se recortó el margen y se achicó a 600 px de ancho, sin cambiar colores. Se muestra sobre una placa blanca (`.brand-logo-plate`).
