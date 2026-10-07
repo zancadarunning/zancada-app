@@ -138,7 +138,7 @@
     --hivis:#D6FF3F; --hivis-dim:rgba(214,255,63,.14); --hivis-text:#D6FF3F; --ink:#121415;
     --clay:#C06A2E; --clay-dim:rgba(192,106,46,.16);
     --danger:#FF3B30; --danger-dim:rgba(255,59,48,.16);
-    --radius:26px; --radius-sm:18px;
+    --radius:20px; --radius-sm:14px;
     --press:rgba(255,255,255,.045); --overlay-hairline:rgba(255,255,255,.045);
     --contour-line:rgba(255,255,255,.045);
     /* Curva con leve rebote (spring), para el puñado de momentos que se benefician
@@ -161,7 +161,7 @@
        (48-93ms, 95-100% de frames trabados). Un blur chico (2-6px) sigue leyéndose como
        "con presencia" -- un borde luminoso más ajustado en vez de un halo difuso grande --
        pero cuesta lo mismo (casi nada) que no tener sombra. */
-    --shadow-card:0 2px 4px rgba(0,0,0,.4); --shadow-lg:0 3px 6px rgba(0,0,0,.55);
+    --shadow-card:none; --shadow-lg:0 3px 6px rgba(0,0,0,.55);
     --hivis-glow:rgba(214,255,63,.32);
     /* Colores de zona (ritmo/FC) del tema oscuro: se probó una versión pastel
        más suave y se volvió atrás a pedido del usuario -- estos son los
@@ -190,14 +190,14 @@
      abajo para cuando sí forzó). Misma lista de variables que :root, valores nuevos. */
   @media (prefers-color-scheme:light){
     :root:not([data-theme="dark"]){
-      --asphalt:#F0F1EE; --asphalt-2:#FFFFFF; --asphalt-3:#E7E8E3; --asphalt-4:#D9DAD3;
+      --asphalt:#F5F5F7; --asphalt-2:#FFFFFF; --asphalt-3:#EDEDF0; --asphalt-4:#D2D2D7;
       /* --mist-dim más oscuro que el original (#707476 daba 4.16:1 contra el fondo de
          página, por debajo del 4.5:1 que pide AA para texto chico -- etiquetas como
          "Preferencias", los encabezados de mes en Historial, y "Sin marca"/"Te faltan
          X km" en los logros bloqueados quedaban todos por debajo del mínimo, éste último
          caso el peor porque esas medallas usan --asphalt-3 como fondo, más oscuro que el
          fondo de página general). #5F6365 da 4.93:1 incluso contra ese fondo más oscuro. */
-      --chalk:#14161A; --mist:#5C6166; --mist-dim:#5F6365;
+      --chalk:#1D1D1F; --mist:#5C6166; --mist-dim:#5F6365;
       --hivis:#D6FF3F; --hivis-dim:rgba(107,138,0,.16); --hivis-text:#5E7000; --ink:#121415;
       --clay:#A84E1C; --clay-dim:rgba(168,78,28,.15);
       --danger:#D6291C; --danger-dim:rgba(214,41,28,.13);
@@ -206,7 +206,7 @@
       --tabbar-bg:rgba(255,255,255,.88);
       --toast-error-bg:#FDEBEA; --toast-error-fg:#B0241A;
       /* Mismo achique de blur que la versión oscura de arriba -- ver ese comentario. */
-      --shadow-card:0 2px 4px rgba(20,22,18,.10); --shadow-lg:0 3px 6px rgba(20,22,18,.15);
+      --shadow-card:none; --shadow-lg:0 3px 6px rgba(20,22,18,.15);
       --hivis-glow:rgba(150,186,0,.32);
       /* Las 5 zonas del modo oscuro (azul pizarra → verde salvia → dorado apagado →
          terracota → ladrillo apagado, ver el comentario grande junto a --zone1 de :root)
@@ -259,8 +259,8 @@
   }
   /* Tema claro forzado a mano (toggle en Perfil) -- gana pase lo que pase el sistema. */
   :root[data-theme="light"]{
-    --asphalt:#F0F1EE; --asphalt-2:#FFFFFF; --asphalt-3:#E7E8E3; --asphalt-4:#D9DAD3;
-    --chalk:#14161A; --mist:#5C6166; --mist-dim:#5F6365;
+    --asphalt:#F5F5F7; --asphalt-2:#FFFFFF; --asphalt-3:#EDEDF0; --asphalt-4:#D2D2D7;
+    --chalk:#1D1D1F; --mist:#5C6166; --mist-dim:#5F6365;
     --hivis:#D6FF3F; --hivis-dim:rgba(107,138,0,.16); --hivis-text:#5E7000; --ink:#121415;
     --clay:#A84E1C; --clay-dim:rgba(168,78,28,.15);
     --danger:#D6291C; --danger-dim:rgba(214,41,28,.13);
@@ -269,7 +269,7 @@
     --tabbar-bg:rgba(255,255,255,.88);
     --toast-error-bg:#FDEBEA; --toast-error-fg:#B0241A;
     /* Mismo achique de blur que la versión oscura -- ver ese comentario. */
-    --shadow-card:0 2px 4px rgba(20,22,18,.10); --shadow-lg:0 3px 6px rgba(20,22,18,.15);
+    --shadow-card:none; --shadow-lg:0 3px 6px rgba(20,22,18,.15);
     --hivis-glow:rgba(150,186,0,.32);
     /* Mismas 5 zonas que en el bloque de arriba (@media prefers-color-scheme:light) --
        ver ese comentario grande para el porqué de oscurecer estos tonos en vez de usar
@@ -307,7 +307,7 @@
      que el texto se vea más grande de lo diseñado, sin poder controlarlo desde el CSS. */
   html{-webkit-text-size-adjust:100%; text-size-adjust:100%;}
   html,body{margin:0; padding:0; background:var(--asphalt); height:100%;}
-  body{font-family:'Inter',-apple-system,sans-serif; color:var(--chalk); overscroll-behavior-y:none;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',system-ui,sans-serif; color:var(--chalk); overscroll-behavior-y:none; letter-spacing:-0.011em; -webkit-font-smoothing:antialiased;}
   .display{font-family:'Bebas Neue',sans-serif; letter-spacing:.02em;}
   /* Bebas Neue queda reservada para momentos hero (splash, los 4 títulos de pestaña,
      login/onboarding, números grandes) -- .subtitle es el mismo rol de "título de
@@ -315,7 +315,7 @@
      carrera, etc.), en Inter bien cargado en vez de la tipografía cartel. Antes todos
      usaban Bebas Neue por igual, así que dejaba de sentirse especial en los momentos
      que sí importan. */
-  .subtitle{font-family:'Inter',-apple-system,sans-serif; font-weight:800; letter-spacing:-0.01em;}
+  .subtitle{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter',system-ui,sans-serif; font-weight:700; letter-spacing:-0.022em;}
   .mono{font-family:'JetBrains Mono',monospace;}
   h1,h2,h3,p{margin:0;}
   button,input,select{font-family:inherit;}
@@ -664,13 +664,13 @@
   .legal-checkbox-row input[type="checkbox"]{margin-top:2px; width:17px; height:17px; flex-shrink:0; accent-color:var(--hivis); cursor:pointer;}
   .legal-checkbox-row span{font-size:11.5px; line-height:1.5; color:var(--mist);}
 
-  .btn{border:none; border-radius:999px; padding:15px 22px; font-weight:700; font-size:15px; cursor:pointer;
+  .btn{border:none; border-radius:999px; padding:15px 22px; font-weight:600; font-size:15px; cursor:pointer;
     width:100%; display:flex; align-items:center; justify-content:center; gap:8px;}
-  .btn-primary{background:var(--hivis); color:var(--ink); box-shadow:0 2px 5px var(--hivis-glow); transition:transform .13s var(--ease-out), box-shadow .13s var(--ease-out), background .13s ease, color .13s ease;}
-  .btn-primary:active{transform:scale(.97); box-shadow:0 1px 3px var(--hivis-glow);}
+  .btn-primary{background:var(--hivis); color:var(--ink); box-shadow:none; transition:transform .13s var(--ease-out), box-shadow .13s var(--ease-out), background .13s ease, color .13s ease;}
+  .btn-primary:active{transform:scale(.97);}
   .btn-primary:disabled{background:var(--asphalt-3); color:var(--mist-dim); box-shadow:none; cursor:not-allowed;}
   .btn-primary:disabled:active{transform:none;}
-  .btn-outline{background:var(--asphalt-2); border:1.5px solid var(--overlay-hairline); color:var(--chalk); box-shadow:var(--shadow-card); transition:transform .13s var(--ease-out), background .13s var(--ease-out);}
+  .btn-outline{background:transparent; border:1px solid var(--asphalt-4); color:var(--chalk); box-shadow:none; transition:transform .13s var(--ease-out), background .13s var(--ease-out);}
   .btn-outline:active{transform:scale(.97); background:var(--press);}
   .btn-saved-flash{background:var(--hivis) !important; border-color:var(--hivis) !important; color:var(--ink) !important; transition:background .15s ease, color .15s ease;}
   /* Los botones "Guardar" de Perfil quedan ocultos hasta que el usuario modifica algo en
@@ -775,7 +775,7 @@
      radiales de fondo de #app filtrando por debajo, para que cada tarjeta se sienta
      parte de la misma atmósfera en vez de un rectángulo neutro cualquiera. */
   .card{background:var(--asphalt-2); border-radius:var(--radius); padding:22px; margin-bottom:20px; border:1px solid var(--overlay-hairline);
-    box-shadow:var(--shadow-card), inset 0 1px 0 rgba(255,255,255,.03), 0 5px 8px -5px rgba(214,255,63,.06);}
+    box-shadow:none;}
   .card[onclick]{cursor:pointer; transition:transform .13s var(--ease-out);}
   .card[onclick]:active{transform:scale(.98);}
   /* El ícono principal de cada fila-botón (Datos personales, Objetivos, Zapatillas...
@@ -788,7 +788,7 @@
     content:''; position:absolute; inset:-9px; border-radius:50%; background:var(--asphalt-3); z-index:-1;}
   .card[role="button"] > .icon-sq:last-child{transition:transform .15s var(--ease-out);}
   .card[role="button"]:active > .icon-sq:last-child{transform:translateX(2px);}
-  .card h3{font-size:11.5px; text-transform:uppercase; letter-spacing:.09em; color:var(--mist); font-weight:700; margin-bottom:12px;}
+  .card h3{font-size:15px; letter-spacing:-0.016em; color:var(--chalk); font-weight:600; margin-bottom:10px;}
   .muted{color:var(--mist); font-size:13.5px; line-height:1.5; white-space:pre-line;}
 
   /* Encabezados de zona en Inicio (Hoy / Esta semana / Más) -- separan visualmente lo

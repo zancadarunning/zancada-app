@@ -21,11 +21,11 @@ colors:
   zone3: "#D4B356"
   zone4: "#CC8A56"
   zone5: "#C9695C"
-  light-asphalt: "#F0F1EE"
+  light-asphalt: "#F5F5F7"
   light-asphalt-2: "#FFFFFF"
-  light-asphalt-3: "#E7E8E3"
-  light-asphalt-4: "#D9DAD3"
-  light-chalk: "#14161A"
+  light-asphalt-3: "#EDEDF0"
+  light-asphalt-4: "#D2D2D7"
+  light-chalk: "#1D1D1F"
   light-mist: "#5C6166"
   light-mist-dim: "#5F6365"
   light-hivis-text: "#5E7000"
@@ -58,8 +58,8 @@ typography:
     fontWeight: 400
 rounded:
   xs: "8px"
-  sm: "18px"
-  md: "26px"
+  sm: "14px"
+  md: "20px"
   pill: "999px"
 spacing:
   card-padding: "22px"
@@ -94,6 +94,7 @@ components:
 
 # Design System: Zancada
 
+<!-- 2026-10-07: pasada "Apple" -- neutros del tema claro de Apple (#F5F5F7 / #1D1D1F / hairline #D2D2D7), tarjetas planas sin sombra, radios 20/14, tipografía del sistema (SF en iPhone) con tracking negativo, botones 600, secundario de línea fina, títulos de tarjeta en minúscula. Se conserva la identidad: Bebas Neue en momentos hero y el lima #D6FF3F como único acento. -->
 ## Overview
 
 **Creative North Star: "La Pista Nocturna" (The Night Track)**
