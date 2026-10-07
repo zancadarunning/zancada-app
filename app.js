@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-07T21:15:19Z';
+const APP_VERSION = '2026-10-07T21:20:55Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10421,7 +10421,12 @@ function renderPaceCalcResults(){
 function getStravaSyncIssue(){
   const sync = state.stravaSync;
   if(!sync) return null; // nunca se conectó Strava, o nunca corrió ningún intento todavía
-  if(sync.lastError) return {severity:'error', title:t('hist_strava_sync_error_title'), detail:sync.lastError};
+  // lastError es el texto crudo que devolvió Strava/el servidor (a veces un JSON entero): el corredor ve un mensaje claro, el detalle queda en Sentry
+  if(sync.lastError){
+    const raw = String(sync.lastError);
+    const detail = /403|forbidden|inactive/i.test(raw) ? t('hist_strava_unavailable') : t('hist_strava_generic_error');
+    return {severity:'error', title:t('hist_strava_sync_error_title'), detail};
+  }
   if(sync.lastSuccessAt){
     const hoursSince = (Date.now() - new Date(sync.lastSuccessAt).getTime()) / 3600000;
     if(hoursSince >= 36){

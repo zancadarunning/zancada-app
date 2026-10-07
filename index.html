@@ -551,11 +551,11 @@
 
   .ob-progress-wrap{display:flex; align-items:center; gap:10px; margin-bottom:22px;}
   .ob-progress{flex:1; height:5px; background:var(--asphalt-3); border-radius:999px; overflow:hidden;}
-  <!-- width->transform: encontrado en una auditoría, las 3 barras de progreso de la app
+  /* width->transform: encontrado en una auditoría, las 3 barras de progreso de la app
        animaban "width" directo, que fuerza un recálculo de layout en cada cuadro. El ancho
        real queda fijo en 100% del track (que ya tiene overflow:hidden) y el progreso visual
        lo da transform:scaleX (compositing puro, sin tocar layout) -- mismo resultado visual,
-       mismo número en pantalla, solo que no fuerza reflow. -->
+       mismo número en pantalla, solo que no fuerza reflow. */
   .ob-progress-fill{height:100%; width:100%; transform:scaleX(.2); transform-origin:left; background:var(--hivis); border-radius:999px; transition:transform .3s ease;}
   .ob-step{display:none;}
   .ob-step.active{display:block; animation:viewFadeIn .22s ease;}
@@ -649,9 +649,9 @@
   .sport-chip-x:hover{opacity:1;}
   .switch{position:relative; display:inline-block; width:51px; height:31px; flex-shrink:0;}
   .switch input{opacity:0; width:0; height:0; position:absolute;}
-  <!-- 999px (no 31px): encontrado en una auditoría -- 31px era un cálculo a mano de "la
+  /* 999px (no 31px): encontrado en una auditoría -- 31px era un cálculo a mano de "la
        mitad del alto de la pista" que el token de píldora ya documentado (999px) logra
-       exactamente igual, sin un número mágico suelto. -->
+       exactamente igual, sin un número mágico suelto. */
   .switch-slider{position:absolute; cursor:pointer; inset:0; background:var(--asphalt-4); transition:.2s; border-radius:999px;}
   .switch-slider:before{content:""; position:absolute; height:27px; width:27px; left:2px; top:2px; background:#fff; transition:.2s; border-radius:50%; box-shadow:0 2px 4px rgba(0,0,0,.3);}
   .switch input:checked + .switch-slider{background:var(--hivis);}
