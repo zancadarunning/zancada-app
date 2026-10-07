@@ -18,6 +18,7 @@ async function syncActivity(athleteId, activityId) {
   const key = process.env.SUPABASE_SERVICE_KEY;
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
+  if (!Number.isInteger(athleteId)) return; // se interpola en un filtro PostgREST: solo enteros (segunda capa, ver el chequeo de owner_id/object_id abajo)
   const connRes = await fetch(`${base}/rest/v1/strava_connections?athlete_id=eq.${athleteId}&select=*`, { headers });
   const conns = await connRes.json();
   if (!conns || !conns.length) return;
@@ -85,6 +86,7 @@ async function deleteActivity(athleteId, activityId) {
   const key = process.env.SUPABASE_SERVICE_KEY;
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
+  if (!Number.isInteger(athleteId)) return; // se interpola en un filtro PostgREST: solo enteros (segunda capa, ver el chequeo de owner_id/object_id abajo)
   const connRes = await fetch(`${base}/rest/v1/strava_connections?athlete_id=eq.${athleteId}&select=user_id`, { headers });
   const conns = await connRes.json();
   if (!conns || !conns.length) return;
@@ -106,6 +108,7 @@ async function deauthorizeAthlete(athleteId) {
   const key = process.env.SUPABASE_SERVICE_KEY;
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
+  if (!Number.isInteger(athleteId)) return; // se interpola en un filtro PostgREST: solo enteros (segunda capa, ver el chequeo de owner_id/object_id abajo)
   const connRes = await fetch(`${base}/rest/v1/strava_connections?athlete_id=eq.${athleteId}&select=user_id`, { headers });
   const conns = await connRes.json();
   if (!conns || !conns.length) return;

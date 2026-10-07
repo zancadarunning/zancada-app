@@ -14,6 +14,10 @@
 const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { withSentry, reportError } = require('./_lib/sentry');
+const { checkSyncCooldown } = require('./_lib/sync-cooldown');
+
+// Un mensaje por minuto y por usuario: cada uno manda un email real.
+const FEEDBACK_COOLDOWN_MS = 60 * 1000;
 
 // Tope generoso para un mensaje de feedback -- bastante más que cualquier queja o idea
 // real, pero corta un abuso deliberado (igual que MAX_INPUT_CHARS en chat.js).
@@ -32,6 +36,14 @@ module.exports = withSentry(async (req, res) => {
 
   const message = ((req.body && req.body.message) || '').toString().trim().slice(0, MAX_MESSAGE_CHARS);
   if (!message) { res.status(400).json({ error: 'Empty message' }); return; }
+
+  const sbBase = process.env.SUPABASE_URL;
+  const sbKey = process.env.SUPABASE_SERVICE_KEY;
+  const sbHeaders = { apikey: sbKey, Authorization: `Bearer ${sbKey}`, 'Content-Type': 'application/json' };
+  if (!(await checkSyncCooldown(sbBase, sbHeaders, auth.userId, 'feedback', FEEDBACK_COOLDOWN_MS))) {
+    res.status(429).json({ error: 'Too many requests' });
+    return;
+  }
 
   const toEmail = process.env.FEEDBACK_TO_EMAIL;
   const apiKey = process.env.RESEND_API_KEY;

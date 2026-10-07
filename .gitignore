@@ -52,3 +52,9 @@ scratch/
 # Dependencias de Node -- Vercel las instala solas en cada deploy a partir de
 # package.json/package-lock.json, no hace falta (ni conviene) versionarlas.
 node_modules/
+
+# Variables de entorno locales (claves reales): NUNCA se versionan. Las de produccion viven en Vercel.
+# .env.example (solo los NOMBRES, sin valores) si se versiona.
+.env
+.env.*
+!.env.example
