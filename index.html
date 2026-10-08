@@ -2184,6 +2184,14 @@
   .quote-card{display:block; padding:14px 18px 16px;}
   .quote-card .quote-label{margin:0 0 6px; font-size:10.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--hivis-text);}
   .quote-card p{font-size:15px;}
+
+  /* Marcas estimadas: tarjeta desplegable */
+  .pred-head{display:flex; align-items:center; justify-content:space-between; width:100%; background:none; border:none; padding:0; color:inherit; font:inherit; text-align:left; cursor:pointer;}
+  .pred-head h3{margin:0;}
+  .pred-chev{display:flex; width:30px; height:30px; border-radius:50%; background:var(--asphalt-3); color:var(--hivis-text); align-items:center; justify-content:center; flex:none; transition:transform .2s var(--ease-out);}
+  .pred-chev svg{width:16px; height:16px;}
+  .pred-head[aria-expanded="true"] .pred-chev{transform:rotate(180deg);}
+  .pred-body{margin-top:10px;} .pred-body[hidden]{display:none;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura

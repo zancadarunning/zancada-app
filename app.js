@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T23:30:56Z';
+const APP_VERSION = '2026-10-08T23:32:50Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10433,6 +10433,11 @@ function computeRacePredictions(){
     return {key: tg.key, km: tg.km, sec: best, needKm: Math.ceil(tg.km / 4.2)};
   });
 }
+function togglePredictions(btn){
+  const body = btn.nextElementSibling, open = btn.getAttribute('aria-expanded') !== 'true';
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  body.hidden = !open;
+}
 function renderRacePredictionsCard(){
   const rows = computeRacePredictions().map(p => {
     if(p.sec){
@@ -10441,7 +10446,7 @@ function renderRacePredictionsCard(){
     }
     return '<div class="pred-row"><span class="pred-label">' + t('pr_label_' + p.key) + '</span><span class="pred-need">' + t('pred_need', {km: fmtDist(p.needKm, 0) + ' ' + distUnit()}) + '</span></div>';
   }).join('');
-  return '<div class="card"><h3>' + t('pred_title') + '</h3>' + rows + '<p class="muted pred-note">' + t('pred_note') + '</p></div>';
+  return '<div class="card pred-card"><button class="pred-head" aria-expanded="false" onclick="togglePredictions(this)"><h3>' + t('pred_title') + '</h3><span class="pred-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></button><div class="pred-body" hidden>' + rows + '<p class="muted pred-note">' + t('pred_note') + '</p></div></div>';
 }
 
 // ---- Importar historial de relojes y apps (Strava, Polar, Wahoo, Suunto, COROS, Health Connect) ----
