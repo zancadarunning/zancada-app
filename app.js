@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T21:44:51Z';
+const APP_VERSION = '2026-10-08T22:15:46Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -763,7 +763,7 @@ function showToast(message, type){
   // necesita insertar HTML de verdad, así que escapar siempre acá adentro
   // es más seguro que confiar en que cada call-site se acuerde de escapar
   // los datos del usuario que le pasa.
-  wrap.innerHTML = `<div class="toast ${type}" id="toast-el">${icon?`<span class="icon-sq" style="width:16px; height:16px; flex-shrink:0;">${icon}</span>`:''}<span>${escapeHtml(message)}</span></div>`;
+  wrap.innerHTML = `<div class="toast ${type}" id="toast-el">${icon?`<span class="toast-ic"><span class="icon-sq">${icon}</span></span>`:''}<span>${escapeHtml(message)}</span></div>`;
   const el = document.getElementById('toast-el');
   requestAnimationFrame(()=>el.classList.add('show'));
   if(type==='error') haptic(35);
@@ -3458,7 +3458,7 @@ function renderCalendar(){
   document.getElementById('cal-months-grid').style.display = 'none';
   document.getElementById('cal-years-grid').style.display = 'none';
   const y = calViewDate.getFullYear(), m = calViewDate.getMonth();
-  document.getElementById('cal-month-label').textContent = new Date(y,m,1).toLocaleDateString(LOCALE_MAP[lang], {month:'long', year:'numeric'});
+  { const ml = new Date(y,m,1).toLocaleDateString(LOCALE_MAP[lang], {month:'long', year:'numeric'}); document.getElementById('cal-month-label').textContent = ml.charAt(0).toUpperCase() + ml.slice(1); }
 
   const weekdayBase = new Date(2024,0,1); // lunes
   const weekdayLabels = [];
@@ -5612,9 +5612,13 @@ function openLevelTestSchedule(){
   const fmt = iso => new Date(iso + 'T12:00:00').toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'short'});
   list.innerHTML = levelTestScheduleOptions().map(o => {
     const sub = o.locked ? t('ltest_day_locked') : o.isTest ? t('ltest_day_current') : o.hasSession ? t('ltest_day_replace', {session: escapeHtml(o.label)}) : t('ltest_day_free');
-    return `<button class="btn btn-outline" ${o.locked ? 'disabled' : ''} style="width:100%; margin-top:10px; text-align:left; display:block; padding:12px 16px;" onclick="scheduleLevelTestOn('${o.week}', ${o.idx})">
-      <span style="display:block; font-weight:700; text-transform:capitalize;">${fmt(o.iso)}${o.today ? ' · ' + t('ltest_day_today') : ''}</span>
-      <span style="display:block; font-size:12.5px; opacity:.75; margin-top:2px;">${sub}</span></button>`;
+    const dd = new Date(o.iso + 'T12:00:00');
+    const wd = dd.toLocaleDateString(LOCALE_MAP[lang], {weekday:'short'}).replace('.', '');
+    const tail = o.isTest ? ICONS.check : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>';
+    return `<button class="lt-opt${o.isTest ? ' current' : ''}${o.today ? ' today' : ''}" ${o.locked ? 'disabled' : ''} onclick="scheduleLevelTestOn('${o.week}', ${o.idx})">
+      <span class="lt-badge"><b>${dd.getDate()}</b><i>${wd}</i></span>
+      <span class="lt-info"><strong>${fmt(o.iso)}${o.today ? ' · ' + t('ltest_day_today') : ''}</strong><small>${sub}</small></span>
+      <span class="lt-tail">${tail}</span></button>`;
   }).join('');
   openOverlaySheetEl(modal);
 }
@@ -10545,9 +10549,8 @@ function buildPRShareImageBlob(bucketKey, rec){
       ctx.font = '700 40px "JetBrains Mono", monospace';
       ctx.fillText(`${fmtPace(paceMin)}/${distUnit()}`, W/2, 1155);
 
-      ctx.fillStyle = '#D6FF3F';
-      ctx.font = '400 76px "Bebas Neue", Arial, sans-serif';
-      ctx.fillText('ZANCADA', W/2, 1350);
+      drawTrackEmblem(ctx, W/2, 1255, 200, 84);
+      drawBrandWord(ctx, W/2, 1395, 80);
 
       canvas.toBlob((blob)=>resolve(blob||null), 'image/png');
     }catch(e){ resolve(null); }
@@ -11675,9 +11678,8 @@ function buildShareImageBlob(r){
       ctx.shadowOffsetY = 3;
 
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#D6FF3F';
-      ctx.font = '400 80px "Bebas Neue", Arial, sans-serif';
-      ctx.fillText('ZANCADA', W/2, 500);
+      drawTrackEmblem(ctx, W/2, 395, 200, 84);
+      drawBrandWord(ctx, W/2, 515, 84);
 
       const paceMin = r.distanceKm>0.02 ? (r.durationSec/60)/r.distanceKm : 0;
       const stats = [
@@ -11694,6 +11696,7 @@ function buildShareImageBlob(r){
         ctx.fillStyle = '#EDEFEF';
         ctx.font = '700 28px "Inter", Arial, sans-serif';
         ctx.fillText(s[1], W/2, top + 148);
+        if(i < stats.length - 1){ ctx.save(); ctx.fillStyle = 'rgba(214,255,63,0.7)'; ctx.shadowColor = 'rgba(214,255,63,0.5)'; ctx.shadowBlur = 10; ctx.fillRect(W/2 - 54, top + 192, 108, 3); ctx.restore(); }
       });
 
       if(r.points && r.points.length>1){
@@ -11733,9 +11736,8 @@ function buildWeeklyShareImageBlob(){
       ctx.shadowOffsetY = 3;
 
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#D6FF3F';
-      ctx.font = '400 80px "Bebas Neue", Arial, sans-serif';
-      ctx.fillText('ZANCADA', W/2, 480);
+      drawTrackEmblem(ctx, W/2, 370, 200, 84);
+      drawBrandWord(ctx, W/2, 490, 84);
       ctx.fillStyle = '#EDEFEF';
       ctx.font = '700 42px "Inter", Arial, sans-serif';
       ctx.fillText(t('share_week_word').toUpperCase(), W/2, 555);
@@ -11775,6 +11777,38 @@ function buildWeeklyShareImageBlob(){
     }catch(e){ resolve(null); }
   });
 }
+// Pista de atletismo en miniatura (4 carriles): la marca de Zancada en las tarjetas para compartir. Los sticker son transparentes a propósito.
+function drawTrackEmblem(ctx, cx, cy, w, h){
+  ctx.save();
+  ctx.strokeStyle = '#D6FF3F';
+  ctx.lineWidth = 5;
+  ctx.shadowColor = 'rgba(214,255,63,0.65)';
+  ctx.shadowBlur = 18;
+  ctx.shadowOffsetY = 0;
+  const g = h * 0.13;
+  for(let i = 0; i < 4; i++){
+    const x = cx - w / 2 + i * g, y = cy - h / 2 + i * g, ww = w - 2 * i * g, hh = h - 2 * i * g, r = hh / 2;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.lineTo(x + ww - r, y);
+    ctx.arc(x + ww - r, y + r, r, -Math.PI / 2, Math.PI / 2);
+    ctx.lineTo(x + r, y + hh);
+    ctx.arc(x + r, y + r, r, Math.PI / 2, Math.PI * 1.5);
+    ctx.closePath();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+// Texto de marca (ZANCADA) con un resplandor lima suave.
+function drawBrandWord(ctx, x, y, size){
+  ctx.save();
+  ctx.fillStyle = '#D6FF3F';
+  ctx.font = '400 ' + size + 'px "Bebas Neue", Arial, sans-serif';
+  ctx.shadowColor = 'rgba(214,255,63,0.55)';
+  ctx.shadowBlur = 26;
+  ctx.shadowOffsetY = 0;
+  ctx.fillText('ZANCADA', x, y);
+  ctx.restore();
+}
 function drawRouteSilhouette(ctx, points, x, y, w, h, lineWidth, dotRadius){
   lineWidth = lineWidth || 11;
   dotRadius = dotRadius || 13;
@@ -11794,11 +11828,16 @@ function drawRouteSilhouette(ctx, points, x, y, w, h, lineWidth, dotRadius){
     const py = offsetY + (maxLat-p.lat)*scale;
     if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
   });
+  ctx.save();
   ctx.strokeStyle = '#D6FF3F';
   ctx.lineWidth = lineWidth;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
+  ctx.shadowColor = 'rgba(214,255,63,0.7)';
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 0;
   ctx.stroke();
+  ctx.restore();
 
   const startPx = offsetX + (points[0].lon-minLon)*scale;
   const startPy = offsetY + (maxLat-points[0].lat)*scale;

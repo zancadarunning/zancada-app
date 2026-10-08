@@ -2048,6 +2048,48 @@
   .skel-line{position:relative; overflow:hidden; background:var(--asphalt-3); animation:none;}
   .skel-line::after{content:''; position:absolute; inset:0; background:linear-gradient(90deg,transparent,var(--sk-hl),transparent); transform:translateX(-100%); animation:skSweep 1.5s ease-in-out infinite;}
   @media (prefers-reduced-motion:reduce){ #devices-overlay.conn-loading .conn-row-head .tag::after, .skel-line::after{animation:none;} }
+
+  /* ===== Avisos y confirmaciones con el estilo nuevo ===== */
+  /* Aviso: cápsula con aspecto de vidrio líquido, sin contorno; el ícono va en un círculo (lima para éxito, rojo para error). */
+  :root:root .toast{background:linear-gradient(135deg, var(--liq-top) 0%, transparent 50%, var(--liq-bot) 100%), var(--asphalt-2); color:var(--chalk); border:none; padding:10px 18px; box-shadow:0 14px 30px -10px var(--liq-shadow);}
+  :root:root .toast:has(.toast-ic){padding:9px 18px 9px 10px; gap:10px;}
+  .toast-ic{width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .toast-ic .icon-sq{width:14px; height:14px;}
+  .toast.success .toast-ic{background:var(--hivis); color:var(--ink); box-shadow:var(--neon-press);}
+  .toast.error .toast-ic{background:var(--danger); color:#fff;}
+  /* Confirmación: hoja que sube desde abajo (como las de iPhone), con la acción principal arriba y "Cancelar" en gris. */
+  .confirm-backdrop{align-items:flex-end; padding:0; background:rgba(0,0,0,.52);}
+  :root:root .confirm-card{max-width:480px; width:100%; border-radius:28px 28px 0 0; padding:12px 20px calc(22px + var(--safe-bottom)); background:var(--asphalt-2); -webkit-backdrop-filter:none; backdrop-filter:none; border:none; box-shadow:0 -24px 50px -22px rgba(0,0,0,.6); animation:sheetUp .28s var(--ease-out);}
+  .confirm-card::before{content:''; display:block; width:38px; height:5px; border-radius:3px; background:var(--asphalt-4); margin:0 auto 18px;}
+  .confirm-card p{text-align:center; font-size:15px; margin:0 4px 22px;}
+  .confirm-actions{flex-direction:column-reverse; gap:10px;}
+  .confirm-actions .btn{width:100%; flex:none;}
+  #confirm-cancel-btn{background:var(--asphalt-3); border:none; color:var(--chalk);}
+  @keyframes sheetUp{from{transform:translateY(36px); opacity:0;} to{transform:translateY(0); opacity:1;}}
+  @media (prefers-reduced-motion:reduce){ :root:root .confirm-card{animation:none;} }
+
+  /* ===== Test de nivel: lista de días como filas-botón ===== */
+  .lt-opt{display:flex; align-items:center; gap:14px; width:100%; margin-top:10px; padding:10px 16px 10px 10px; background:var(--asphalt-2); border:none; border-radius:var(--radius-sm); color:var(--chalk); text-align:left; cursor:pointer; font:inherit; transition:background .12s ease, transform .12s ease;}
+  .lt-opt:active{background:var(--press); transform:scale(.985);}
+  .lt-opt:disabled{opacity:.45; cursor:not-allowed; transform:none;}
+  .lt-opt.current{box-shadow:inset 0 0 0 1.5px var(--hivis);}
+  .lt-badge{width:46px; height:52px; border-radius:12px; background:var(--asphalt-3); display:flex; flex-direction:column; align-items:center; justify-content:center; flex-shrink:0;}
+  .lt-badge b{font-family:'JetBrains Mono',monospace; font-size:17px; line-height:1;}
+  .lt-badge i{font-style:normal; font-size:10px; text-transform:uppercase; color:var(--mist); margin-top:4px;}
+  .lt-opt.today .lt-badge{background:var(--hivis-dim);} .lt-opt.today .lt-badge i{color:var(--hivis-text);}
+  .lt-info{flex:1; min-width:0;} .lt-info strong{display:block; font-size:15px; font-weight:700; text-transform:capitalize;} .lt-info small{display:block; font-size:12.5px; color:var(--mist); margin-top:3px;}
+  .lt-tail{display:flex; width:16px; height:16px; color:var(--mist-dim); flex-shrink:0;} .lt-tail svg{width:100%; height:100%;} .lt-opt.current .lt-tail{color:var(--hivis-text);}
+
+  /* ===== Test de nivel (pasos numerados) y calendario ===== */
+  .lt-step{display:flex; align-items:flex-start; gap:12px; margin-bottom:14px;}
+  .lt-step:last-child{margin-bottom:0;}
+  .lt-step p{margin:0; font-size:14px; line-height:1.5;}
+  .lt-n{width:26px; height:26px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:var(--hivis); color:var(--ink); font-family:'JetBrains Mono',monospace; font-weight:800; font-size:13px; box-shadow:var(--neon-press);}
+  .cal-day{transition:background .12s ease, transform .12s ease;}
+  .cal-day:active{background:var(--press); transform:scale(.92);}
+  .cal-day.today{border:1.5px solid var(--hivis); color:var(--hivis-text); font-weight:800;}
+  .cal-day.selected{box-shadow:var(--neon-press);}
+  .cal-cell.current{border-color:var(--hivis);} .cal-cell.selected{box-shadow:var(--neon-press);}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -3255,9 +3297,9 @@
     <h2 class="subtitle" style="font-size:22px;" data-i18n="ltest_title"></h2>
     <p class="muted" style="margin-top:10px; line-height:1.5;" data-i18n="ltest_intro"></p>
     <div class="card" style="margin-top:16px;">
-      <p style="margin:0 0 10px; font-size:14px; line-height:1.5;" data-i18n="ltest_step1"></p>
-      <p style="margin:0 0 10px; font-size:14px; line-height:1.5;" data-i18n="ltest_step2"></p>
-      <p style="margin:0; font-size:14px; line-height:1.5;" data-i18n="ltest_step3"></p>
+      <div class="lt-step"><span class="lt-n">1</span><p data-i18n="ltest_step1"></p></div>
+      <div class="lt-step"><span class="lt-n">2</span><p data-i18n="ltest_step2"></p></div>
+      <div class="lt-step"><span class="lt-n">3</span><p data-i18n="ltest_step3"></p></div>
     </div>
     <p class="muted" style="margin-top:12px; font-size:12.5px; line-height:1.5;" data-i18n="ltest_safety"></p>
     <div class="card" id="ltest-suggest" style="display:none; margin-top:16px;">
@@ -3486,14 +3528,14 @@
   <div class="overlay" id="calendar-modal" style="display:none; z-index:60;">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
       <button id="cal-prev-btn" class="week-nav-btn" onclick="calNavigate(-1)" data-i18n-aria="aria_week_prev"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
-      <button id="cal-month-label" onclick="calShowYears()" style="font-weight:800; font-size:18px; text-transform:capitalize;"></button>
+      <button id="cal-month-label" onclick="calShowYears()" style="font-weight:800; font-size:18px;"></button>
       <button id="cal-next-btn" class="week-nav-btn" onclick="calNavigate(1)" data-i18n-aria="aria_week_next"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span></button>
     </div>
     <div class="cal-weekdays" id="cal-weekdays"></div>
     <div class="cal-grid" id="cal-grid"></div>
     <div class="cal-months-grid" id="cal-months-grid" style="display:none;"></div>
     <div class="cal-years-grid" id="cal-years-grid" style="display:none;"></div>
-    <button class="btn btn-outline" style="width:100%; margin-top:24px;" onclick="closeCalendar()" data-i18n="cancel_word"></button>
+    <button class="btn btn-gray" style="width:100%; margin-top:24px;" onclick="closeCalendar()" data-i18n="cancel_word"></button>
   </div>
 
   <section class="view" id="view-coach">
