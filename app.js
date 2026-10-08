@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T19:46:14Z';
+const APP_VERSION = '2026-10-08T19:48:27Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6292,7 +6292,7 @@ function renderHome(){
 
   const goalWrap = document.getElementById('goal-progress-wrap');
   if(state.profile.weeklyGoalKm > 0){
-    goalWrap.style.display = 'block';
+    goalWrap.style.display = 'none'; // la barra "Meta semanal" se retiró a pedido; igual se festeja al llegar a la meta
     const rawPct = (doneKm / state.profile.weeklyGoalKm) * 100;
     const pct = Math.min(100, Math.round(rawPct));
     document.getElementById('goal-progress-pct').textContent = pct + '%';
