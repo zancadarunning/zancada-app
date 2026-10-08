@@ -236,6 +236,15 @@ A third, smaller step — `8px` (`rounded.xs`) — is documented for compact inl
 ### The Elevation Squiggle (signature motif)
 A small hand-drawn line — five short climbs and descents ending flat, `viewBox="0 0 60 14"`, stroked in Clay (`#C06A2E`), never filled — is the one purely decorative, non-functional mark in the whole system: a miniature elevation profile, the one piece of "running" imagery that isn't a stat or an icon. It appears as a section-divider glyph (before "Conectividad," "Preferencias") paired with an uppercase label and a trailing hairline, and, enlarged and dimmed to ~60-70% opacity, as the centerpiece of empty states that are specifically about *not having run yet* (an empty Historial, a Plan week with no data) — "here's the shape of the road ahead" rather than a generic clock or folder icon. Reuse this exact path when a new empty state or section break needs a running-specific touch; do not invent a second decorative glyph alongside it.
 
+
+### Neon pass (2026-10-08)
+- **Neon rim on lime fills.** Every Hi-Vis-filled button (primary, Empezar, the raised Correr circle, pause, chat send, week arrows, active segmented choice) carries `--neon`: a 1.5px light-lime ring plus two soft lime glows (`--neon-press` is the smaller version used when pressed and on small controls). Disabled buttons stay unlit. This supersedes the flat-button note above for lime fills only; cards and neutral buttons stay flat.
+- **Ambient light.** `--ambient` / `--ambient-card` drive a faint lime halo rising from the tab bar (`#app::after`) and a soft glow around the Today card when it has a real session.
+- **Weekly progress ring.** Inicio's week card shows an SVG ring (done vs planned, km or minutes) with a neon stroke; the three week stats sit beside it as a list.
+- **Today card numbers.** Session title 52px and distance 44px in Bebas Neue (hero numbers); everything else on that card stays Inter/mono per the Data-Is-Mono rule.
+- **Tab transitions.** Views slide 18px in the direction of travel (right when moving forward along the tab bar, left when going back), 200ms ease-out; disabled under reduced motion.
+- **Icon stroke.** Line icons render at 1.8px; small glyphs (chevrons, plus, check) at 2.2px. Enforced by a CSS rule on `svg[stroke="currentColor"]`, so new icons need no per-icon stroke-width.
+
 ## Do's and Don'ts
 
 ### Do:

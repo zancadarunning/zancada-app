@@ -163,7 +163,7 @@
        pero cuesta lo mismo (casi nada) que no tener sombra. */
     --shadow-card:none; --shadow-lg:0 3px 6px rgba(0,0,0,.55);
     --hivis-glow:rgba(214,255,63,.32);
-    --neon-rim:#F4FFA8; --neon:0 0 0 1.5px var(--neon-rim), 0 0 9px 1px rgba(214,255,63,.7), 0 0 22px 3px rgba(214,255,63,.3); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(214,255,63,.6), 0 0 12px 1px rgba(214,255,63,.25);
+    --ambient:rgba(214,255,63,.13); --ambient-card:rgba(214,255,63,.2); --neon-rim:#F4FFA8; --neon:0 0 0 1.5px var(--neon-rim), 0 0 9px 1px rgba(214,255,63,.7), 0 0 22px 3px rgba(214,255,63,.3); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(214,255,63,.6), 0 0 12px 1px rgba(214,255,63,.25);
     /* Colores de zona (ritmo/FC) del tema oscuro: se probó una versión pastel
        más suave y se volvió atrás a pedido del usuario -- estos son los
        saturados/"neon" originales. El tema claro de acá abajo se deja como
@@ -209,7 +209,7 @@
       /* Mismo achique de blur que la versión oscura de arriba -- ver ese comentario. */
       --shadow-card:none; --shadow-lg:0 3px 6px rgba(20,22,18,.15);
       --hivis-glow:rgba(150,186,0,.32);
-    --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 9px 1px rgba(150,186,0,.5), 0 0 20px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
+    --ambient:rgba(150,186,0,.12); --ambient-card:rgba(150,186,0,.2); --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 9px 1px rgba(150,186,0,.5), 0 0 20px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
       /* Las 5 zonas del modo oscuro (azul pizarra → verde salvia → dorado apagado →
          terracota → ladrillo apagado, ver el comentario grande junto a --zone1 de :root)
          son un registro deliberadamente desaturado -- "para que las cinco lean como parte
@@ -273,7 +273,7 @@
     /* Mismo achique de blur que la versión oscura -- ver ese comentario. */
     --shadow-card:none; --shadow-lg:0 3px 6px rgba(20,22,18,.15);
     --hivis-glow:rgba(150,186,0,.32);
-    --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 9px 1px rgba(150,186,0,.5), 0 0 20px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
+    --ambient:rgba(150,186,0,.12); --ambient-card:rgba(150,186,0,.2); --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 9px 1px rgba(150,186,0,.5), 0 0 20px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
     /* Mismas 5 zonas que en el bloque de arriba (@media prefers-color-scheme:light) --
        ver ese comentario grande para el porqué de oscurecer estos tonos en vez de usar
        los saturados tipo Tailwind que tenía antes. */
@@ -687,6 +687,34 @@
   .set-row{display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; min-height:48px; padding:0; background:none; border:none; border-bottom:1px solid var(--asphalt-4); color:var(--chalk); font:inherit; font-size:15px; text-align:left; text-decoration:none; cursor:pointer;}
   .set-row:active{background:var(--press);}
   .set-row .set-chev{width:14px; height:14px; color:var(--mist-dim); flex-shrink:0;}
+
+  /* ===== Pasada de diseño 2026-10-08 ===== */
+  /* (5) Íconos de línea con un solo grosor (1.8); los glifos chicos (chevron, +, tilde) quedan en 2.2 para no afinarse de más. */
+  svg[stroke="currentColor"]{stroke-width:1.8;}
+  svg[stroke="currentColor"][stroke-width="2.2"], svg[stroke="currentColor"][stroke-width="2.3"], svg[stroke="currentColor"][stroke-width="2.5"], svg[stroke="currentColor"][stroke-width="3"]{stroke-width:2.2;}
+  /* (1) Luz ambiente: un halo lima tenue que sube desde la barra inferior, como si el neón del botón de Correr iluminara el fondo. */
+  #app::after{content:''; position:fixed; left:0; right:0; bottom:0; height:300px; max-width:480px; margin:0 auto; pointer-events:none; z-index:2;
+    background:radial-gradient(70% 100% at 50% 100%, var(--ambient), transparent 72%);}
+  /* (2) Tarjeta de Hoy: borde lima fino, resplandor suave y números grandes en Bebas Neue. */
+  .card.card-highlight{border:1.5px solid var(--hivis); box-shadow:0 0 0 1px var(--ambient-card), 0 0 26px -4px var(--ambient-card);}
+  .card-shell-hivis{box-shadow:0 0 40px -10px var(--ambient-card);}
+  .next-session .big{font-size:52px;}
+  .next-session .day-dist{font-family:'Bebas Neue',sans-serif; font-weight:400; font-size:44px !important; line-height:.9; letter-spacing:.02em; color:var(--hivis-text);}
+  /* (3) Anillo de progreso semanal */
+  .week-ring{display:flex; align-items:center; gap:20px;}
+  .week-ring-fig{position:relative; width:108px; height:108px; flex-shrink:0;}
+  .week-ring-fig svg{width:108px; height:108px; transform:rotate(-90deg); overflow:visible;}
+  .week-ring-fig .wr-track{fill:none; stroke:var(--asphalt-3); stroke-width:9;}
+  .week-ring-fig .wr-fill{fill:none; stroke:var(--hivis); stroke-width:9; stroke-linecap:round; stroke-dasharray:276.46; stroke-dashoffset:276.46;
+    filter:drop-shadow(0 0 5px var(--ambient-card)); transition:stroke-dashoffset .9s var(--ease-out);}
+  :root:not([data-theme="dark"]) .week-ring-fig .wr-fill{stroke:#9CCB00;}
+  .week-ring-fig .wr-label{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-weight:800; font-size:21px; color:var(--chalk);}
+  .week-ring-stats{flex:1; min-width:0; display:flex; flex-direction:column;}
+  .ws-row{display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--asphalt-4);}
+  .ws-row:last-child{border-bottom:none;}
+  .ws-row .n{font-family:'JetBrains Mono',monospace; font-size:19px; font-weight:800;}
+  .ws-row .l{font-size:10.5px; color:var(--mist); text-transform:uppercase; letter-spacing:.05em; text-align:right;}
+  @media (prefers-reduced-motion:reduce){ .week-ring-fig .wr-fill{transition:none;} }
   .btn-gray{background:var(--asphalt-3); color:var(--chalk); border:none; box-shadow:none; transition:transform .13s var(--ease-out), background .13s var(--ease-out);}
   .btn-gray:active{transform:scale(.97); background:var(--asphalt-4);}
   .btn-gray:disabled{opacity:.6; cursor:not-allowed;}
@@ -759,7 +787,11 @@
      (basado en su contenido real -- si el contenido ya es más alto que la pantalla,
      esto no lo achica, así que las vistas largas siguen scrolleando igual que
      siempre). */
-  .view.active{display:block; flex:1 1 auto; animation:viewFadeIn .32s var(--ease-spring);}
+  .view.active{display:block; flex:1 1 auto; animation:viewSlideFwd .2s var(--ease-out);}
+  html[data-nav-dir="back"] .view.active{animation-name:viewSlideBack;}
+  @keyframes viewSlideFwd{from{opacity:0; transform:translateX(18px);} to{opacity:1; transform:translateX(0);}}
+  @keyframes viewSlideBack{from{opacity:0; transform:translateX(-18px);} to{opacity:1; transform:translateX(0);}}
+  @media (prefers-reduced-motion:reduce){ .view.active{animation:none;} }
   @keyframes viewFadeIn{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
   /* #view-coach usa una animación sin transform (solo opacity): un transform en este
      elemento crearía un "containing block" nuevo para su hijo #coachChatWrap
@@ -2163,7 +2195,7 @@
       <h3 id="home-next-card-title" data-i18n="home_next"></h3>
       <div class="next-session" id="home-next-session" role="button" tabindex="0" onclick="toggleHomeNextDetail()" aria-expanded="false" aria-controls="home-next-detail">
         <div style="min-width:0;"><div class="big display" id="home-next-title">—</div></div>
-        <div style="text-align:right; flex-shrink:0;"><div class="day-dist" id="home-next-dist" style="font-size:20px;"></div><div id="home-next-zone" style="margin-top:6px;"></div></div>
+        <div style="text-align:right; flex-shrink:0;"><div class="day-dist" id="home-next-dist"></div><div id="home-next-zone" style="margin-top:6px;"></div></div>
       </div>
       <div class="next-session-detail" id="home-next-detail">
         <div>
@@ -2218,10 +2250,16 @@
     </div>
 
     <div class="card">
-      <div class="stat-row-divided">
-        <div class="stat-cell"><span class="n" id="home-week-done-km">0</span><span class="l" data-i18n="home_km_done"></span></div>
-        <div class="stat-cell"><span class="n" id="home-week-km">0</span><span class="l" data-i18n="home_km_planned"></span></div>
-        <div class="stat-cell"><span class="n" id="home-week-sessions">0</span><span class="l" data-i18n="home_sessions"></span></div>
+      <div class="week-ring">
+        <div class="week-ring-fig" role="img" aria-label="">
+          <svg viewBox="0 0 100 100" aria-hidden="true"><circle class="wr-track" cx="50" cy="50" r="44"/><circle class="wr-fill" id="home-week-ring" cx="50" cy="50" r="44"/></svg>
+          <div class="wr-label" id="home-week-ring-pct">0%</div>
+        </div>
+        <div class="week-ring-stats">
+          <div class="ws-row"><span class="n" id="home-week-done-km">0</span><span class="l" data-i18n="home_km_done"></span></div>
+          <div class="ws-row"><span class="n" id="home-week-km">0</span><span class="l" data-i18n="home_km_planned"></span></div>
+          <div class="ws-row"><span class="n" id="home-week-sessions">0</span><span class="l" data-i18n="home_sessions"></span></div>
+        </div>
       </div>
       <div class="week-days" id="home-week-bars"></div>
     </div>

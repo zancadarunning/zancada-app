@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T18:34:26Z';
+const APP_VERSION = '2026-10-08T18:41:21Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6238,9 +6238,11 @@ function renderHome(){
   const weekRuns = (state.runs||[]).filter(r => getMondayISO(new Date(r.date)) === state.weekStart);
   const doneKm = weekRuns.reduce((a,r)=>a+r.distanceKm, 0);
   const weekKm = state.plan.reduce((a,d)=>a+d.dist,0);
+  let ringRatio = weekKm > 0 ? doneKm / weekKm : 0;
   if(isTimeMode()){
     const doneMin = weekRuns.reduce((a,r)=>a+(r.durationSec||0),0)/60;
     const plannedMin = state.plan.reduce((a,d)=>a+planDurationMin(d),0);
+    ringRatio = plannedMin > 0 ? doneMin / plannedMin : 0;
     animateCountUp(document.getElementById('home-week-done-km'), doneMin, 0);
     animateCountUp(document.getElementById('home-week-km'), plannedMin, 0);
   } else {
@@ -6250,6 +6252,16 @@ function renderHome(){
     animateCountUp(document.getElementById('home-week-km'), weekKmDisplay, 1);
   }
   animateCountUp(document.getElementById('home-week-sessions'), state.plan.filter(d=>d.dist>0).length, 0);
+  {
+    // Anillo de progreso semanal (lo hecho vs. lo planeado de la semana): se llena con el neon.
+    const ring = document.getElementById('home-week-ring');
+    const pct = Math.max(0, Math.min(100, Math.round(ringRatio * 100)));
+    if(ring) ring.style.strokeDashoffset = String(276.46 * (1 - pct / 100));
+    const pctEl = document.getElementById('home-week-ring-pct');
+    if(pctEl) pctEl.textContent = pct + '%';
+    const fig = pctEl && pctEl.parentElement;
+    if(fig && fig.setAttribute) fig.setAttribute('aria-label', pct + '%');
+  }
   document.getElementById('home-runs-count').textContent = weekRuns.length;
 
   const goalWrap = document.getElementById('goal-progress-wrap');
@@ -8157,7 +8169,14 @@ function updateCoachFabVisibility(){
     scrollEndTimer = setTimeout(()=>fabWrap.classList.remove('coach-fab-scrolling'), 300);
   }, {passive:true});
 })();
+const VIEW_ORDER = ['inicio','plan','correr','history','perfil','coach'];
+let lastViewName = null;
 async function showView(v){
+  // Direccion de la transicion (ver .view.active en el CSS): hacia la derecha si la pestana nueva esta mas adelante en la barra.
+  if(lastViewName && lastViewName !== v){
+    document.documentElement.setAttribute('data-nav-dir', VIEW_ORDER.indexOf(v) < VIEW_ORDER.indexOf(lastViewName) ? 'back' : 'fwd');
+  }
+  lastViewName = v;
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   document.getElementById('view-'+v).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.view===v));
