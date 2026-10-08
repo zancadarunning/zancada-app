@@ -163,7 +163,7 @@
        pero cuesta lo mismo (casi nada) que no tener sombra. */
     --shadow-card:none; --shadow-lg:0 3px 6px rgba(0,0,0,.55);
     --hivis-glow:rgba(214,255,63,.32);
-    --glow-a:rgba(214,255,63,.5); --glow-b:rgba(214,255,63,.24); --glow-c:rgba(214,255,63,.09); --ambient:rgba(214,255,63,.13); --ambient-card:rgba(214,255,63,.2); --neon-rim:#F4FFA8; --neon:0 0 0 1.5px var(--neon-rim), 0 0 9px 1px rgba(214,255,63,.7), 0 0 22px 3px rgba(214,255,63,.3); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(214,255,63,.6), 0 0 12px 1px rgba(214,255,63,.25);
+    --glow-a:rgba(214,255,63,.5); --glow-b:rgba(214,255,63,.24); --glow-c:rgba(214,255,63,.09); --ambient:rgba(214,255,63,.13); --ambient-card:rgba(214,255,63,.2); --neon-rim:#F4FFA8; --neon:0 0 0 1.5px var(--neon-rim), 0 0 8px 1px rgba(214,255,63,.7), 0 0 15px 2px rgba(214,255,63,.3); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(214,255,63,.6), 0 0 12px 1px rgba(214,255,63,.25);
     /* Colores de zona (ritmo/FC) del tema oscuro: se probó una versión pastel
        más suave y se volvió atrás a pedido del usuario -- estos son los
        saturados/"neon" originales. El tema claro de acá abajo se deja como
@@ -209,7 +209,7 @@
       /* Mismo achique de blur que la versión oscura de arriba -- ver ese comentario. */
       --shadow-card:none; --shadow-lg:0 3px 6px rgba(20,22,18,.15);
       --hivis-glow:rgba(150,186,0,.32);
-    --glow-a:rgba(150,186,0,.42); --glow-b:rgba(150,186,0,.2); --glow-c:rgba(150,186,0,.08); --ambient:rgba(150,186,0,.12); --ambient-card:rgba(150,186,0,.2); --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 9px 1px rgba(150,186,0,.5), 0 0 20px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
+    --glow-a:rgba(150,186,0,.42); --glow-b:rgba(150,186,0,.2); --glow-c:rgba(150,186,0,.08); --ambient:rgba(150,186,0,.12); --ambient-card:rgba(150,186,0,.2); --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 8px 1px rgba(150,186,0,.5), 0 0 14px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
       /* Las 5 zonas del modo oscuro (azul pizarra → verde salvia → dorado apagado →
          terracota → ladrillo apagado, ver el comentario grande junto a --zone1 de :root)
          son un registro deliberadamente desaturado -- "para que las cinco lean como parte
@@ -273,7 +273,7 @@
     /* Mismo achique de blur que la versión oscura -- ver ese comentario. */
     --shadow-card:none; --shadow-lg:0 3px 6px rgba(20,22,18,.15);
     --hivis-glow:rgba(150,186,0,.32);
-    --glow-a:rgba(150,186,0,.42); --glow-b:rgba(150,186,0,.2); --glow-c:rgba(150,186,0,.08); --ambient:rgba(150,186,0,.12); --ambient-card:rgba(150,186,0,.2); --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 9px 1px rgba(150,186,0,.5), 0 0 20px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
+    --glow-a:rgba(150,186,0,.42); --glow-b:rgba(150,186,0,.2); --glow-c:rgba(150,186,0,.08); --ambient:rgba(150,186,0,.12); --ambient-card:rgba(150,186,0,.2); --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 8px 1px rgba(150,186,0,.5), 0 0 14px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
     /* Mismas 5 zonas que en el bloque de arriba (@media prefers-color-scheme:light) --
        ver ese comentario grande para el porqué de oscurecer estos tonos en vez de usar
        los saturados tipo Tailwind que tenía antes. */
@@ -1789,7 +1789,7 @@
   #app::after{content:''; position:fixed; left:0; right:0; bottom:0; height:300px; max-width:480px; margin:0 auto; pointer-events:none; z-index:2;
     background:radial-gradient(70% 100% at 50% 100%, var(--ambient), transparent 72%);}
   /* (2) Tarjeta de Hoy: borde lima fino, resplandor suave y números grandes en Bebas Neue. */
-  :root:root .card.card-highlight{border:1.5px solid var(--hivis); box-shadow:0 0 6px 0 var(--glow-a), 0 0 20px 2px var(--glow-b), 0 0 46px 6px var(--glow-c);}
+  :root:root .card.card-highlight{border:1.5px solid var(--hivis); box-shadow:0 0 6px 0 var(--glow-a), 0 0 18px 2px var(--glow-b), 0 0 30px 4px var(--glow-c);}
   :root:root .card-shell.card-shell-hivis{background:none; border-color:transparent; box-shadow:none;}
   .next-session .big{font-size:52px;}
   .next-session .day-dist{font-family:'Bebas Neue',sans-serif; font-weight:400; font-size:44px !important; line-height:.9; letter-spacing:.02em; color:var(--hivis-text);}
@@ -1970,6 +1970,16 @@
   /* (8) Perfil: avatar con aro neón y chip de racha */
   .avatar-big{box-shadow:var(--neon-press);}
   .streak-chip{display:inline-flex; align-items:center; margin:6px 0 0; padding:4px 11px; border-radius:999px; font-size:12px; font-weight:800; color:var(--hivis-text); background:var(--hivis-dim); box-shadow:0 0 14px -4px var(--glow-a);}
+
+  /* Rendimiento: el latido de los botones ya NO anima la sombra (se repintaba en cada cuadro: 81ms por cuadro en un celular de gama baja). Ahora es un anillo que crece y se desvanece (solo transform y opacity, se resuelve en la GPU). */
+  .go-circle{animation:none;}
+  nav.tabbar button.nav-btn-primary:not(.active) .nav-primary-circle{animation:none;}
+  .go-circle::after, nav.tabbar button.nav-btn-primary .nav-primary-circle::after{content:''; position:absolute; inset:-3px; border-radius:inherit; border:2px solid var(--hivis); opacity:0; pointer-events:none;}
+  .go-circle::after{animation:ringPulse 2.8s ease-out infinite;}
+  nav.tabbar button.nav-btn-primary:not(.active) .nav-primary-circle{position:relative;}
+  nav.tabbar button.nav-btn-primary:not(.active) .nav-primary-circle::after{animation:ringPulse 2.8s ease-out infinite;}
+  @keyframes ringPulse{0%{transform:scale(1); opacity:.6;} 70%,100%{transform:scale(1.14); opacity:0;}}
+  @media (prefers-reduced-motion:reduce){ .go-circle::after, nav.tabbar button.nav-btn-primary .nav-primary-circle::after{animation:none !important;} }
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
