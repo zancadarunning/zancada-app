@@ -2120,6 +2120,40 @@
   nav.tabbar button svg{width:24px; height:24px;}
   nav.tabbar button svg .fl{fill:none; transition:fill .15s var(--ease-out);}
   nav.tabbar button.active svg .fl{fill:currentColor; fill-opacity:.2;}
+
+  /* ===== Medallas, resumen semanal y estado vacío ===== */
+  .mdl{display:block; width:42px; height:50px; margin:0 auto 2px;} .mdl svg{width:100%; height:100%; display:block;}
+  .mdl-rib{fill:var(--mist-dim); fill-opacity:.3;} .mdl-rib.b{fill-opacity:.2;}
+  .mdl-disc{fill:none; stroke:var(--mist-dim); stroke-width:1.6; stroke-dasharray:3 3;} .mdl-ring{fill:none;} .mdl-star{fill:var(--mist-dim); fill-opacity:.45;}
+  .pr-medal.achieved .mdl-rib{fill:var(--hivis); fill-opacity:.55;} .pr-medal.achieved .mdl-rib.b{fill-opacity:.38;}
+  .pr-medal.achieved .mdl-disc{fill:var(--hivis); stroke:none; stroke-dasharray:none;}
+  .pr-medal.achieved .mdl-ring{stroke:var(--ink); stroke-opacity:.3; stroke-width:1.4;} .pr-medal.achieved .mdl-star{fill:var(--ink); fill-opacity:1;}
+  .recap-stats{display:flex; gap:8px; margin-top:10px;}
+  .recap-stat{flex:1; min-width:0; background:var(--asphalt-3); border-radius:12px; padding:12px 4px 10px; text-align:center;}
+  .recap-stat b{display:block; font-family:'Bebas Neue',sans-serif; font-weight:400; font-size:30px; line-height:1;}
+  .recap-stat span{display:block; margin-top:4px; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--mist);}
+  .recap-delta{margin:12px 0 0; font-size:13px; font-weight:700; color:var(--hivis-text);} .recap-delta.down{color:var(--mist);}
+  .recap-actions{display:flex; align-items:center; gap:14px; margin-top:14px;} .recap-actions .btn{flex:1;}
+  .empty-card{text-align:center; padding:30px 18px 24px;} .empty-card .empty-track{margin-bottom:10px;}
+  .empty-card h3.empty-title{margin:0 0 6px; font-family:'Bebas Neue',sans-serif; font-weight:400; font-size:28px; letter-spacing:.01em; text-transform:none; color:var(--chalk);}
+
+  /* ===== Tema claro: gráficos y medallas con el lima oscuro legible ===== */
+  :root[data-theme="light"] .pg-line{stroke:var(--hivis-text);}
+  :root[data-theme="light"] .pg-dot{stroke:var(--hivis-text);}
+  :root[data-theme="light"] .pg-dot.cur{fill:var(--hivis-text);}
+  :root[data-theme="light"] .pr-medal.achieved .mdl-rib{fill:var(--hivis-text); fill-opacity:.5;}
+  :root[data-theme="light"] .pr-medal.achieved .mdl-rib.b{fill-opacity:.32;}
+  @media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]) .pg-line{stroke:var(--hivis-text);}
+    :root:not([data-theme="dark"]) .pg-dot{stroke:var(--hivis-text);}
+    :root:not([data-theme="dark"]) .pg-dot.cur{fill:var(--hivis-text);}
+    :root:not([data-theme="dark"]) .pr-medal.achieved .mdl-rib{fill:var(--hivis-text); fill-opacity:.5;}
+    :root:not([data-theme="dark"]) .pr-medal.achieved .mdl-rib.b{fill-opacity:.32;}
+  }
+
+  /* Tema claro: el resaltado de hoy en el Plan, más suave */
+  :root[data-theme="light"] .day-row.day-row-today::after{background:linear-gradient(90deg, rgba(107,138,0,.09) 0%, rgba(107,138,0,.04) 55%, transparent 90%);}
+  @media (prefers-color-scheme: light){ :root:not([data-theme="dark"]) .day-row.day-row-today::after{background:linear-gradient(90deg, rgba(107,138,0,.09) 0%, rgba(107,138,0,.04) 55%, transparent 90%);} }
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -2535,6 +2569,14 @@
       <p class="muted" style="margin:0 0 12px; font-size:13px; line-height:1.5;" data-i18n="ltest_banner_desc"></p>
       <button class="btn btn-primary" style="width:100%;" onclick="openLevelTest()" data-i18n="ltest_banner_btn"></button>
     </div>
+
+    <div class="card" id="home-test-missed" style="display:none; border-color:var(--hivis);">
+      <h3 style="margin:0 0 6px;" data-i18n="ltest_missed_title"></h3>
+      <p class="muted" id="home-test-missed-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
+      <button class="btn btn-primary" style="width:100%;" onclick="openLevelTestSchedule()" data-i18n="ltest_missed_btn"></button>
+    </div>
+
+    <div class="card recap-card" id="home-recap-card" style="display:none;"></div>
 
     <div class="card" id="install-banner" style="display:none; align-items:center; gap:12px;">
       <span class="icon-sq" style="width:22px; height:22px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>

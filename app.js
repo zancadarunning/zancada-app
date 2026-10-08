@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T22:48:08Z';
+const APP_VERSION = '2026-10-08T23:03:01Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5291,6 +5291,15 @@ function generatePlan(p, weekNumber, weekStartDate){
       (d.dist queda solo como estimación para estadísticas, calendario y relojes). */
 const LEVEL_TEST_SECONDS = 720;
 const LEVEL_TEST_MIN_M = 800, LEVEL_TEST_MAX_M = 4500;
+// Fecha (ISO) del test agendado que pasó sin hacerse -- solo si no quedó otro test agendado más adelante.
+function missedLevelTestIso(){
+  const plan = state.plan || [];
+  const mi = plan.findIndex(d => d && d.typeKey === 'test' && d.status === 'skipped');
+  if(mi < 0 || !state.weekStart) return null;
+  if(plan.some(d => d && d.typeKey === 'test' && !d.status)) return null;
+  if(Object.keys(state.nextWeekOverrides || {}).some(k => state.nextWeekOverrides[k] && state.nextWeekOverrides[k].userTest)) return null;
+  return addDaysToIsoLocal(state.weekStart, mi);
+}
 function levelTestPending(p){
   p = p || (typeof state !== 'undefined' && state.profile);
   return !!(p && p.levelTest && p.levelTest.required && !p.levelTest.done);
@@ -5604,7 +5613,13 @@ function renderLevelTestUI(){
     sched.style.display = iso ? 'block' : 'none';
   }
   const banner = document.getElementById('home-test-banner');
-  if(banner) banner.style.display = levelTestPending(p) ? 'block' : 'none';
+  const missedIso = levelTestPending(p) ? missedLevelTestIso() : null;
+  const missedCard = document.getElementById('home-test-missed');
+  if(missedCard){
+    missedCard.style.display = missedIso ? 'block' : 'none';
+    if(missedIso) document.getElementById('home-test-missed-desc').textContent = t('ltest_missed_desc', {day: new Date(missedIso + 'T12:00:00').toLocaleDateString(LOCALE_MAP[lang], {weekday:'long'})});
+  }
+  if(banner) banner.style.display = (levelTestPending(p) && !missedIso) ? 'block' : 'none';
   const txt = document.getElementById('perfil-ltest-text');
   if(txt){
     const lt = p.levelTest;
@@ -6203,7 +6218,34 @@ function swapPlanDaySessions(dayA, dayB){
   fields.forEach(f=>{ if(dayB[f]===undefined) delete dayA[f]; else dayA[f] = dayB[f]; });
   fields.forEach(f=>{ if(aCopy[f]===undefined) delete dayB[f]; else dayB[f] = aCopy[f]; });
 }
+// Domingo y lunes: tarjeta con los números de la semana (la que termina el domingo, o la que acaba de terminar el lunes).
+function renderHomeRecap(){
+  const el = document.getElementById('home-recap-card');
+  if(!el) return;
+  const dow = new Date().getDay();
+  if(!state.onboarded || (dow !== 0 && dow !== 1)){ el.style.display = 'none'; return; }
+  const weeks = computeWeeklyProgress(3);
+  const w = dow === 0 ? weeks[2] : weeks[1], prev = dow === 0 ? weeks[1] : weeks[0];
+  if(!w || !(w.km > 0) || state.recapSeen === w.iso){ el.style.display = 'none'; return; }
+  const n = (state.runs || []).filter(r => getMondayISO(new Date(r.date)) === w.iso).length;
+  const diff = w.km - (prev ? prev.km : 0);
+  const delta = prev && prev.km > 0 && Math.abs(diff) >= 0.1
+    ? '<p class="recap-delta' + (diff < 0 ? ' down' : '') + '">' + t(diff > 0 ? 'recap_more' : 'recap_less', {d: fmtDist(Math.abs(diff), 1) + ' ' + distUnit()}) + '</p>' : '';
+  el.innerHTML = '<h3>' + t('recap_title') + '</h3>' +
+    '<div class="recap-stats"><div class="recap-stat"><b>' + fmtDist(w.km, 1) + '</b><span>' + distUnit() + '</span></div>' +
+    '<div class="recap-stat"><b>' + n + '</b><span>' + t('hist_total_runs') + '</span></div>' +
+    '<div class="recap-stat"><b>' + (w.pace ? fmtPace(w.pace) : '--') + '</b><span>' + t('recap_pace') + '</span></div></div>' + delta +
+    '<div class="recap-actions"><button class="btn btn-primary" onclick="shareWeeklyRecapImage()">' + t('hist_share') + '</button>' +
+    '<button class="small-link" onclick="dismissHomeRecap(this.dataset.iso)" data-iso="' + w.iso + '">' + t('recap_done') + '</button></div>';
+  el.style.display = 'block';
+}
+function dismissHomeRecap(iso){
+  state.recapSeen = iso;
+  persist();
+  renderHomeRecap();
+}
 function renderHome(){
+  renderHomeRecap();
   renderDailyTip();
   renderRaceTip();
   // La card de tips de carrera solo tiene sentido si hay una carrera cargada -- antes se
@@ -9871,7 +9913,14 @@ function showRunSummaryUI(){
   document.getElementById('sum-cal').textContent = Math.round((state.profile.weight||70)*tracker.distanceKm*1.036);
   updateRunUnitLabels();
   const sel = document.getElementById('sum-shoe');
-  sel.innerHTML = state.shoes.length ? state.shoes.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('') : `<option value="">${t('no_shoes')}</option>`;
+  sel.innerHTML = shoeOptionsHtml();
+}
+// Opciones de zapatilla para los selectores de carrera: la última que usaste viene preseleccionada.
+function shoeOptionsHtml(){
+  if(!state.shoes.length) return `<option value="">${t('no_shoes')}</option>`;
+  const last = [...(state.runs || [])].filter(r => r.shoeId && state.shoes.some(s => String(s.id) === String(r.shoeId))).sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+  const sel = last ? String(last.shoeId) : '';
+  return state.shoes.map(s => `<option value="${s.id}"${String(s.id) === sel ? ' selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
 }
 let ratingTargetIdx = null;
 function findUnratedDoneDay(){
@@ -10043,7 +10092,7 @@ function toggleManualForm(){
     document.getElementById('man-date').value = localDateISO();
     dateBoxUpdaters['man-date'] && dateBoxUpdaters['man-date']();
     const sel = document.getElementById('man-shoe');
-    sel.innerHTML = state.shoes.length ? state.shoes.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('') : `<option value="">${t('no_shoes')}</option>`;
+    sel.innerHTML = shoeOptionsHtml();
     // El label decía "Distancia (km)" fijo sin importar el modo del corredor -- alguien en
     // millas tipeaba un número pensando en millas (lo que ve en todo el resto de la app) y
     // ese valor se guardaba tal cual como si fueran km, corrompiendo la distancia real.
@@ -10320,10 +10369,12 @@ function unmarkLostAchievements(){
     return true; // id con un formato inesperado -- no tocar lo que no reconocemos
   });
 }
+const MEDAL_STAR = (function(){ const p = []; for(let k = 0; k < 10; k++){ const r = k % 2 ? 3.1 : 7.2, a = -Math.PI / 2 + k * Math.PI / 5; p.push((24 + r * Math.cos(a)).toFixed(1) + ',' + (35 + r * Math.sin(a)).toFixed(1)); } return p.join(' '); })();
+const MEDAL_SVG = '<svg viewBox="0 0 48 56" aria-hidden="true"><path class="mdl-rib" d="M11 2h11l6 20H17z"/><path class="mdl-rib b" d="M37 2H26l-6 20h11z"/><circle class="mdl-disc" cx="24" cy="35" r="16"/><circle class="mdl-ring" cx="24" cy="35" r="11.5"/><polygon class="mdl-star" points="' + MEDAL_STAR + '"/></svg>';
 function renderAchievementBadgeGrid(badges){
   return `<div class="pr-medal-grid">${badges.map(b=>{
-    if(b.achieved) return `<div class="pr-medal achieved"><span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${b.label}</span><span class="pr-medal-time">${t('ach_unlocked_tag')}</span></div>`;
-    return `<div class="pr-medal"><span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${b.label}</span><span class="pr-medal-locked">${b.progressText}</span></div>`;
+    if(b.achieved) return `<div class="pr-medal achieved"><span class="mdl">${MEDAL_SVG}</span><span class="pr-medal-label">${b.label}</span><span class="pr-medal-time">${t('ach_unlocked_tag')}</span></div>`;
+    return `<div class="pr-medal"><span class="mdl">${MEDAL_SVG}</span><span class="pr-medal-label">${b.label}</span><span class="pr-medal-locked">${b.progressText}</span></div>`;
   }).join('')}</div>`;
 }
 // ---- Marcas estimadas (fórmula de Riegel: T2 = T1 · (D2/D1)^1,06) ----
@@ -10425,8 +10476,8 @@ function renderPersonalRecordsCard(){
     const rec = prRecords[b.key];
     if(rec) return `<div class="pr-medal achieved">
       <button class="pr-medal-share-btn" onclick="event.stopPropagation(); sharePRImage('${b.key}')" aria-label="${t('aria_share_pr')}">${ICONS.share}</button>
-      <span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${t('pr_label_'+b.key)}</span><span class="pr-medal-time">${fmtTime(rec.durationSec)}</span></div>`;
-    return `<div class="pr-medal"><span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${t('pr_label_'+b.key)}</span><span class="pr-medal-locked">${t('pr_medal_locked')}</span></div>`;
+      <span class="mdl">${MEDAL_SVG}</span><span class="pr-medal-label">${t('pr_label_'+b.key)}</span><span class="pr-medal-time">${fmtTime(rec.durationSec)}</span></div>`;
+    return `<div class="pr-medal"><span class="mdl">${MEDAL_SVG}</span><span class="pr-medal-label">${t('pr_label_'+b.key)}</span><span class="pr-medal-locked">${t('pr_medal_locked')}</span></div>`;
   }).join('')}</div></div>`;
 }
 // Comparte (o descarga, si no hay share nativo) un blob de imagen ya generado -- mismo
@@ -10997,7 +11048,7 @@ function renderHistory(){
   // reemplaza por el mismo perfil de elevacion que ya es la firma visual de la app
   // (hoy usado como separador en Perfil), agrandado como pieza central acá: "todavia
   // no recorriste este camino" en vez de un ícono de reloj cualquiera.
-  if(!state.runs || state.runs.length===0){ el.innerHTML = stravaSyncCard + trendsCard + `<div class="card" style="text-align:center; padding:32px 18px;"><div class="empty-track" aria-hidden="true"></div><p class="muted" style="margin:0;">${t('hist_empty')}</p></div>`; animateHistTrendBars(); return; }
+  if(!state.runs || state.runs.length===0){ el.innerHTML = stravaSyncCard + trendsCard + `<div class="card empty-card"><div class="empty-track" aria-hidden="true"></div><h3 class="empty-title">${t('hist_empty_title')}</h3><p class="muted" style="margin:0 0 16px;">${t('hist_empty')}</p><button class="btn btn-primary" onclick="showView('correr')">${t('hist_empty_cta')}</button></div>`; animateHistTrendBars(); return; }
   // Buscador simple + encabezados de mes -- con varios meses de historial cargado, una
   // lista plana se vuelve incómoda de recorrer. El buscador filtra por lo que se ve en
   // cada tarjeta (fecha, zapatilla, "manual"/Strava); los encabezados de mes se insertan

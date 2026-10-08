@@ -269,6 +269,12 @@ A small hand-drawn line — five short climbs and descents ending flat, `viewBox
 - **Guided tour:** first-run, 4 spotlight steps (Plan, Run, Zonda, Perfil); only for accounts under 14 days old, once, and it waits if a sheet is open. Re-playable from Perfil → Acerca de.
 - **Tab icons** are custom line icons: Inicio = top-view track, Plan = calendar with an elevation squiggle, Historial = winding route between two dots, Perfil = head with a headband. The Correr shoe is unchanged.
 
+### Engagement pass (2026-10-08)
+- **Medals** (Logros) are drawn SVG medals: lime disc + ribbon + star when unlocked, dashed outline when locked. No filters.
+- **Weekly recap** card on Inicio on Sundays and Mondays (km, runs, pace, delta vs. previous week); dismissed per week.
+- **Missed level test:** Inicio shows a card offering to pick another day instead of the generic test banner.
+- **Empty Historial:** title + body + "Salir a correr" CTA. Light theme: pace chart and medals use the dark lime (--hivis-text).
+
 ## Do's and Don'ts
 
 ### Do:
