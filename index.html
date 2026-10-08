@@ -2179,6 +2179,11 @@
   .quote-card{display:flex; align-items:center; gap:14px; padding:16px 18px;}
   .quote-card .quote-mark{position:static; flex:none; width:36px; height:36px; border-radius:50%; background:var(--hivis-dim); color:var(--hivis-text); display:flex; align-items:center; justify-content:center; font-size:0; line-height:0;}
   .quote-card .quote-mark svg{width:26px; height:26px; fill:currentColor; display:block;}
+
+  /* Frase del día: etiqueta chica en lima, sin comillas */
+  .quote-card{display:block; padding:14px 18px 16px;}
+  .quote-card .quote-label{margin:0 0 6px; font-size:10.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--hivis-text);}
+  .quote-card p{font-size:15px;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -2670,7 +2675,7 @@
     </div>
 
     <div class="card quote-card" id="home-quote-card">
-      <span class="quote-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 17h3l2-4V7H5v6h3l-2 4zm8 0h3l2-4V7h-6v6h3l-2 4z"/></svg></span>
+      <div class="quote-label" data-i18n="home_quote_label"></div>
       <p id="daily-tip-text"></p>
     </div>
 
