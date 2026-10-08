@@ -163,7 +163,7 @@
        pero cuesta lo mismo (casi nada) que no tener sombra. */
     --shadow-card:none; --shadow-lg:0 3px 6px rgba(0,0,0,.55);
     --hivis-glow:rgba(214,255,63,.32);
-    --ambient:rgba(214,255,63,.13); --ambient-card:rgba(214,255,63,.2); --neon-rim:#F4FFA8; --neon:0 0 0 1.5px var(--neon-rim), 0 0 9px 1px rgba(214,255,63,.7), 0 0 22px 3px rgba(214,255,63,.3); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(214,255,63,.6), 0 0 12px 1px rgba(214,255,63,.25);
+    --glow-a:rgba(214,255,63,.5); --glow-b:rgba(214,255,63,.24); --glow-c:rgba(214,255,63,.09); --ambient:rgba(214,255,63,.13); --ambient-card:rgba(214,255,63,.2); --neon-rim:#F4FFA8; --neon:0 0 0 1.5px var(--neon-rim), 0 0 9px 1px rgba(214,255,63,.7), 0 0 22px 3px rgba(214,255,63,.3); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(214,255,63,.6), 0 0 12px 1px rgba(214,255,63,.25);
     /* Colores de zona (ritmo/FC) del tema oscuro: se probó una versión pastel
        más suave y se volvió atrás a pedido del usuario -- estos son los
        saturados/"neon" originales. El tema claro de acá abajo se deja como
@@ -209,7 +209,7 @@
       /* Mismo achique de blur que la versión oscura de arriba -- ver ese comentario. */
       --shadow-card:none; --shadow-lg:0 3px 6px rgba(20,22,18,.15);
       --hivis-glow:rgba(150,186,0,.32);
-    --ambient:rgba(150,186,0,.12); --ambient-card:rgba(150,186,0,.2); --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 9px 1px rgba(150,186,0,.5), 0 0 20px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
+    --glow-a:rgba(150,186,0,.42); --glow-b:rgba(150,186,0,.2); --glow-c:rgba(150,186,0,.08); --ambient:rgba(150,186,0,.12); --ambient-card:rgba(150,186,0,.2); --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 9px 1px rgba(150,186,0,.5), 0 0 20px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
       /* Las 5 zonas del modo oscuro (azul pizarra → verde salvia → dorado apagado →
          terracota → ladrillo apagado, ver el comentario grande junto a --zone1 de :root)
          son un registro deliberadamente desaturado -- "para que las cinco lean como parte
@@ -273,7 +273,7 @@
     /* Mismo achique de blur que la versión oscura -- ver ese comentario. */
     --shadow-card:none; --shadow-lg:0 3px 6px rgba(20,22,18,.15);
     --hivis-glow:rgba(150,186,0,.32);
-    --ambient:rgba(150,186,0,.12); --ambient-card:rgba(150,186,0,.2); --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 9px 1px rgba(150,186,0,.5), 0 0 20px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
+    --glow-a:rgba(150,186,0,.42); --glow-b:rgba(150,186,0,.2); --glow-c:rgba(150,186,0,.08); --ambient:rgba(150,186,0,.12); --ambient-card:rgba(150,186,0,.2); --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 9px 1px rgba(150,186,0,.5), 0 0 20px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
     /* Mismas 5 zonas que en el bloque de arriba (@media prefers-color-scheme:light) --
        ver ese comentario grande para el porqué de oscurecer estos tonos en vez de usar
        los saturados tipo Tailwind que tenía antes. */
@@ -1789,8 +1789,8 @@
   #app::after{content:''; position:fixed; left:0; right:0; bottom:0; height:300px; max-width:480px; margin:0 auto; pointer-events:none; z-index:2;
     background:radial-gradient(70% 100% at 50% 100%, var(--ambient), transparent 72%);}
   /* (2) Tarjeta de Hoy: borde lima fino, resplandor suave y números grandes en Bebas Neue. */
-  .card.card-highlight{border:1.5px solid var(--hivis); box-shadow:0 0 0 1px var(--ambient-card), 0 0 26px -4px var(--ambient-card);}
-  .card-shell-hivis{box-shadow:0 0 40px -10px var(--ambient-card);}
+  :root:root .card.card-highlight{border:1.5px solid var(--hivis); box-shadow:0 0 6px 0 var(--glow-a), 0 0 20px 2px var(--glow-b), 0 0 46px 6px var(--glow-c);}
+  :root:root .card-shell.card-shell-hivis{background:none; border-color:transparent; box-shadow:none;}
   .next-session .big{font-size:52px;}
   .next-session .day-dist{font-family:'Bebas Neue',sans-serif; font-weight:400; font-size:44px !important; line-height:.9; letter-spacing:.02em; color:var(--hivis-text);}
   /* (3) Anillo de progreso semanal */
@@ -1820,8 +1820,11 @@
   .day-row{position:relative;}
   .day-row:not([data-zone=""])::before{content:''; position:absolute; left:-12px; top:12px; bottom:12px; width:3px; border-radius:3px; background:var(--zc, var(--mist-dim)); opacity:.85;}
   .day-row[data-zone="1"]{--zc:var(--zone1-fill);} .day-row[data-zone="2"]{--zc:var(--zone2-fill);} .day-row[data-zone="3"]{--zc:var(--zone3-fill);} .day-row[data-zone="4"]{--zc:var(--zone4-fill);} .day-row[data-zone="5"]{--zc:var(--zone5-fill);}
-  .day-row.day-row-today{background:linear-gradient(90deg, var(--hivis-dim), transparent 65%);}
-  .day-row.day-row-today:not([data-zone=""])::before{top:6px; bottom:6px; width:4px; opacity:1; box-shadow:0 0 8px var(--zc);}
+  .day-row.day-row-today::after{content:''; position:absolute; inset:-14px -14px -14px -22px; pointer-events:none; z-index:0;
+    background:linear-gradient(90deg, transparent 0%, var(--hivis-dim) 14%, transparent 85%);
+    -webkit-mask-image:linear-gradient(180deg, transparent 0%, #000 32%, #000 68%, transparent 100%); mask-image:linear-gradient(180deg, transparent 0%, #000 32%, #000 68%, transparent 100%);}
+  .day-row.day-row-today > *{position:relative; z-index:1;}
+  .day-row.day-row-today:not([data-zone=""])::before{top:4px; bottom:4px; width:4px; opacity:1; z-index:1; background:linear-gradient(180deg, transparent 0%, var(--zc) 30%, var(--zc) 70%, transparent 100%); box-shadow:0 0 10px -1px var(--zc);}
   /* (3) Título de la pantalla en la barra de arriba al scrollear (reemplaza la fecha). */
   .header-view-title{display:none; font-family:'Bebas Neue',sans-serif; font-size:21px; letter-spacing:.03em; line-height:1; color:var(--chalk);}
   header.top.titled .header-view-title{display:block; animation:headerTitleIn .18s var(--ease-out);}
@@ -2910,7 +2913,7 @@
           <option value="obstaculos" data-i18n="ev_type_obstaculos"></option>
         </select>
       </div>
-      <button class="btn btn-outline btn-sm" style="margin-top:10px; width:100%;" data-i18n="perfil_ev_save" onclick="setEvent()"></button>
+      <button class="btn btn-outline btn-sm" id="save-event-btn" style="margin-top:10px; width:100%;" data-i18n="perfil_ev_save" onclick="setEvent()"></button>
     </div>
   </div>
 

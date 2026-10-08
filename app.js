@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T18:48:44Z';
+const APP_VERSION = '2026-10-08T18:57:30Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3039,10 +3039,15 @@ function saveTrainingDays(){
   renderAll(); renderZones(); persist();
   flashSaved('save-days-btn');
 }
-function flashSaved(btnId){
+// Al guardar: cartelito "Guardado" y, si el boton vive dentro de una pantalla de Perfil (.overlay-sheet), se cierra
+// a los 0,6s para volver a Perfil -- asi se ve que el cambio quedo guardado (opts.close:false para no cerrar).
+function flashSaved(btnId, opts){
   const btn = document.getElementById(btnId);
   if(!btn) return;
   if(btn.dataset.flashing) return; // evita solapar si tocan varias veces seguidas
+  showToast(t('save_confirmed'), 'success');
+  const sheet = btn.closest ? btn.closest('.overlay-sheet') : null;
+  if(sheet && !(opts && opts.close === false)) setTimeout(() => sheet.classList.remove('overlay-open'), 600);
   btn.dataset.flashing = '1';
   const original = btn.innerHTML;
   btn.innerHTML = `<span class="icon-sq" style="width:14px; height:14px; margin-right:5px; vertical-align:-2px;">${ICONS.check}</span>${t('save_confirmed')}`;
@@ -6916,6 +6921,7 @@ async function savePainLog(){
   setMascotExpression('concerned', {priority:1, duration:5000});
   closePainModal();
   renderPainLog();
+  showToast(t('save_confirmed'), 'success');
   await persist();
   // le avisamos al coach en el momento -- arma el mensaje como si el corredor lo hubiera
   // escrito, así la respuesta que llega ya trae consejo específico para esa molestia, en
@@ -8277,6 +8283,8 @@ function addShoe(){
   state.shoes.push({id:Date.now(), name, terrain:document.getElementById('shoe-terrain').value, km:0});
   document.getElementById('shoe-name').value='';
   renderPerfil(); persist();
+  showToast(t('save_confirmed'), 'success');
+  setTimeout(closeShoesOverlay, 600);
 }
 function startEditShoe(id){ editingShoeId = id; renderPerfil(); }
 function cancelEditShoe(){ editingShoeId = null; renderPerfil(); }
@@ -8291,6 +8299,8 @@ function saveEditShoe(id){
   // se queda con la barra en rojo pero sin haber disparado nunca el aviso de reemplazo.
   checkShoeWearAlerts();
   renderPerfil(); persist();
+  showToast(t('save_confirmed'), 'success');
+  setTimeout(closeShoesOverlay, 600);
 }
 async function deleteShoe(id){
   if(!(await showConfirm(t('confirm_delete'), {danger:true, confirmText:t('delete_word')}))) return;
@@ -8379,7 +8389,7 @@ function checkHrMaxFromRuns(){
 }
 function setEvent(){
   const name = document.getElementById('ev-name').value.trim(); const date = document.getElementById('ev-date').value;
-  if(!name || !date) return;
+  if(!name || !date){ showToast(t('ev_required_err'), 'error'); return; }
   const distanceKm = parseDistInput(document.getElementById('ev-distance').value);
   state.event = {name, date, type:document.getElementById('ev-type').value, distanceKm: distanceKm>0 ? distanceKm : null};
   // el evento (fecha, tipo de terreno) influye en el plan (taper, día de descanso el día
@@ -8387,6 +8397,7 @@ function setEvent(){
   // quedaban "guardados" pero invisibles hasta el próximo cambio de semana natural.
   state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
   renderAll(); persist();
+  flashSaved('save-event-btn');
 }
 async function deleteEvent(){
   if(!(await showConfirm(t('confirm_delete'), {danger:true, confirmText:t('delete_word')}))) return;
@@ -9930,7 +9941,7 @@ function saveManualRun(){
   // Antes la tarjeta se cerraba de golpe apenas guardado, sin ninguna señal de que el
   // entrenamiento efectivamente se había guardado -- ahora el botón muestra "Guardado" un
   // instante (mismo flashSaved() que ya usan Perfil/Metas/Zonas) y recién ahí se cierra.
-  flashSaved('man-save-btn');
+  flashSaved('man-save-btn', {close:false});
   setTimeout(toggleManualForm, 700);
 }
 
