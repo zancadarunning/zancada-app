@@ -1930,6 +1930,46 @@
   #coachChatWrap > .coach-head > *{position:relative; z-index:1;}
   #chatLog{padding-top:92px;}
   @media (max-height:660px){ #coachChatWrap > .coach-head{top:4px; border-radius:22px;} #chatLog{padding-top:54px;} }
+
+  /* ===== Tercera pasada de diseño 2026-10-08 ===== */
+  /* (1) Aspecto de vidrio líquido en la barra de arriba y la de abajo: cápsula, reflejo y sombra suave, sin contorno. Sin desenfoque en vivo (backdrop-filter): estas dos barras están siempre a la vista y ese efecto trabó el scroll en celulares de gama baja. */
+  :root{--liq-top:rgba(255,255,255,.10); --liq-bot:rgba(255,255,255,.05); --liq-sheen:rgba(255,255,255,.18); --liq-shadow:rgba(0,0,0,.6);}
+  :root[data-theme="light"]{--liq-top:rgba(255,255,255,0); --liq-bot:rgba(0,0,0,.04); --liq-sheen:rgba(255,255,255,.9); --liq-shadow:rgba(40,50,20,.3);}
+  @media (prefers-color-scheme:light){ :root:not([data-theme="dark"]){--liq-top:rgba(255,255,255,0); --liq-bot:rgba(0,0,0,.04); --liq-sheen:rgba(255,255,255,.9); --liq-shadow:rgba(40,50,20,.3);} }
+  nav.tabbar{background:linear-gradient(135deg, var(--liq-top) 0%, transparent 50%, var(--liq-bot) 100%), var(--asphalt-2); border:none; border-radius:30px; box-shadow:0 14px 32px -12px var(--liq-shadow);}
+  nav.tabbar::before{content:''; position:absolute; inset:0; z-index:-1; border-radius:inherit; pointer-events:none; background:radial-gradient(110% 80% at 10% -30%, var(--liq-sheen), transparent 55%);}
+  header.top{padding-left:26px; padding-right:26px;}
+  header.top::before{content:''; position:absolute; z-index:-1; left:10px; right:10px; top:calc(var(--safe-top) + 7px); bottom:5px; border-radius:26px; background:linear-gradient(135deg, var(--liq-top) 0%, transparent 50%, var(--liq-bot) 100%), var(--asphalt-2); box-shadow:0 10px 24px -12px var(--liq-shadow);}
+  header.top::after{content:''; position:absolute; z-index:-1; left:10px; right:10px; top:calc(var(--safe-top) + 7px); bottom:5px; border-radius:26px; pointer-events:none; background:radial-gradient(90% 140% at 8% -40%, var(--liq-sheen), transparent 55%);}
+  /* (2) Gráfico de Tendencias: globito al tocar una barra y hoy encendido */
+  .trend-bars{position:relative;}
+  .trend-col{cursor:pointer;}
+  .trend-col.sel .trend-stroke{box-shadow:0 0 10px var(--glow-a);}
+  .trend-stroke.trend-today{box-shadow:0 0 9px var(--glow-a), 0 0 2px var(--hivis);}
+  .trend-tip{position:absolute; top:-46px; transform:translateX(-50%) translateY(4px); opacity:0; pointer-events:none; z-index:2; display:flex; flex-direction:row; align-items:baseline; gap:7px; padding:5px 11px; border-radius:14px; white-space:nowrap; background:var(--asphalt-4); color:var(--chalk); box-shadow:0 8px 20px -8px var(--liq-shadow); transition:opacity .15s var(--ease-out), transform .15s var(--ease-out);}
+  .trend-tip strong{font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--hivis-text);} .trend-tip span{font-size:11px; color:var(--mist);}
+  .trend-tip.show{opacity:1; transform:translateX(-50%) translateY(0);}
+  /* (3) Separadores de día en el chat */
+  .msg-day{align-self:center; margin:6px 0 14px;}
+  .msg-day span{display:inline-block; padding:5px 13px; border-radius:999px; font-size:11.5px; font-weight:700; color:var(--mist); background:var(--asphalt-2);}
+  /* (4) Respuestas rápidas de Sí / No */
+  .chat-chip-yes{border-color:var(--hivis); color:var(--hivis-text); background:var(--hivis-dim);}
+  /* (5) La pista como marca: se dibuja de abajo hacia arriba en la bienvenida y es la imagen del Historial vacío */
+  #splash{isolation:isolate;}
+  #splash::before{content:''; position:fixed; inset:0; z-index:-1; pointer-events:none; background:var(--hivis); opacity:.16;
+    -webkit-mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20400%20900%22%20preserveAspectRatio%3D%22xMidYMid%20meet%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222.4%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M30%20260A170%20170%200%200%201%20370%20260L370%20640A170%20170%200%200%201%2030%20640Z%22%2F%3E%3Cpath%20d%3D%22M51%20260A149%20149%200%200%201%20349%20260L349%20640A149%20149%200%200%201%2051%20640Z%22%2F%3E%3Cpath%20d%3D%22M72%20260A128%20128%200%200%201%20328%20260L328%20640A128%20128%200%200%201%2072%20640Z%22%2F%3E%3Cpath%20d%3D%22M93%20260A107%20107%200%200%201%20307%20260L307%20640A107%20107%200%200%201%2093%20640Z%22%2F%3E%3Cpath%20d%3D%22M114%20260A86%2086%200%200%201%20286%20260L286%20640A86%2086%200%200%201%20114%20640Z%22%2F%3E%3Cpath%20d%3D%22M135%20260A65%2065%200%200%201%20265%20260L265%20640A65%2065%200%200%201%20135%20640Z%22%2F%3E%3Cpath%20d%3D%22M156%20260A44%2044%200%200%201%20244%20260L244%20640A44%2044%200%200%201%20156%20640Z%22%2F%3E%3Cpath%20d%3D%22M30%20320H156M244%20320H370%22%20stroke-width%3D%223%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") center/auto 96% no-repeat; mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20400%20900%22%20preserveAspectRatio%3D%22xMidYMid%20meet%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222.4%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M30%20260A170%20170%200%200%201%20370%20260L370%20640A170%20170%200%200%201%2030%20640Z%22%2F%3E%3Cpath%20d%3D%22M51%20260A149%20149%200%200%201%20349%20260L349%20640A149%20149%200%200%201%2051%20640Z%22%2F%3E%3Cpath%20d%3D%22M72%20260A128%20128%200%200%201%20328%20260L328%20640A128%20128%200%200%201%2072%20640Z%22%2F%3E%3Cpath%20d%3D%22M93%20260A107%20107%200%200%201%20307%20260L307%20640A107%20107%200%200%201%2093%20640Z%22%2F%3E%3Cpath%20d%3D%22M114%20260A86%2086%200%200%201%20286%20260L286%20640A86%2086%200%200%201%20114%20640Z%22%2F%3E%3Cpath%20d%3D%22M135%20260A65%2065%200%200%201%20265%20260L265%20640A65%2065%200%200%201%20135%20640Z%22%2F%3E%3Cpath%20d%3D%22M156%20260A44%2044%200%200%201%20244%20260L244%20640A44%2044%200%200%201%20156%20640Z%22%2F%3E%3Cpath%20d%3D%22M30%20320H156M244%20320H370%22%20stroke-width%3D%223%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") center/auto 96% no-repeat; animation:trackDraw 1.6s var(--ease-out) both;}
+  @keyframes trackDraw{from{clip-path:inset(100% 0 0 0);} to{clip-path:inset(0 0 0 0);}}
+  .empty-track{width:128px; height:128px; margin:0 auto 14px; background:var(--hivis-text); opacity:.85; filter:drop-shadow(0 0 4px var(--glow-b));
+    -webkit-mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20400%20900%22%20preserveAspectRatio%3D%22xMidYMid%20meet%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222.4%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M30%20260A170%20170%200%200%201%20370%20260L370%20640A170%20170%200%200%201%2030%20640Z%22%2F%3E%3Cpath%20d%3D%22M51%20260A149%20149%200%200%201%20349%20260L349%20640A149%20149%200%200%201%2051%20640Z%22%2F%3E%3Cpath%20d%3D%22M72%20260A128%20128%200%200%201%20328%20260L328%20640A128%20128%200%200%201%2072%20640Z%22%2F%3E%3Cpath%20d%3D%22M93%20260A107%20107%200%200%201%20307%20260L307%20640A107%20107%200%200%201%2093%20640Z%22%2F%3E%3Cpath%20d%3D%22M114%20260A86%2086%200%200%201%20286%20260L286%20640A86%2086%200%200%201%20114%20640Z%22%2F%3E%3Cpath%20d%3D%22M135%20260A65%2065%200%200%201%20265%20260L265%20640A65%2065%200%200%201%20135%20640Z%22%2F%3E%3Cpath%20d%3D%22M156%20260A44%2044%200%200%201%20244%20260L244%20640A44%2044%200%200%201%20156%20640Z%22%2F%3E%3Cpath%20d%3D%22M30%20320H156M244%20320H370%22%20stroke-width%3D%223%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") center/contain no-repeat; mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20400%20900%22%20preserveAspectRatio%3D%22xMidYMid%20meet%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222.4%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M30%20260A170%20170%200%200%201%20370%20260L370%20640A170%20170%200%200%201%2030%20640Z%22%2F%3E%3Cpath%20d%3D%22M51%20260A149%20149%200%200%201%20349%20260L349%20640A149%20149%200%200%201%2051%20640Z%22%2F%3E%3Cpath%20d%3D%22M72%20260A128%20128%200%200%201%20328%20260L328%20640A128%20128%200%200%201%2072%20640Z%22%2F%3E%3Cpath%20d%3D%22M93%20260A107%20107%200%200%201%20307%20260L307%20640A107%20107%200%200%201%2093%20640Z%22%2F%3E%3Cpath%20d%3D%22M114%20260A86%2086%200%200%201%20286%20260L286%20640A86%2086%200%200%201%20114%20640Z%22%2F%3E%3Cpath%20d%3D%22M135%20260A65%2065%200%200%201%20265%20260L265%20640A65%2065%200%200%201%20135%20640Z%22%2F%3E%3Cpath%20d%3D%22M156%20260A44%2044%200%200%201%20244%20260L244%20640A44%2044%200%200%201%20156%20640Z%22%2F%3E%3Cpath%20d%3D%22M30%20320H156M244%20320H370%22%20stroke-width%3D%223%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") center/contain no-repeat;}
+  @media (prefers-reduced-motion:reduce){ #splash::before{animation:none;} }
+  /* (7) Cuenta regresiva de Correr con neón */
+  .countdown-num{text-shadow:0 0 16px var(--glow-a), 0 0 44px var(--glow-b), 0 0 90px var(--glow-c);}
+  .countdown-num.go{animation:countdownGo .7s var(--ease-out);}
+  @keyframes countdownGo{0%{transform:scale(.7); opacity:0; text-shadow:0 0 0 transparent;} 35%{transform:scale(1.18); opacity:1; text-shadow:0 0 26px var(--hivis), 0 0 70px var(--glow-a), 0 0 130px var(--glow-b);} 100%{transform:scale(1); opacity:1;}}
+  @media (prefers-reduced-motion:reduce){ .countdown-num.go{animation:none;} }
+  /* (8) Perfil: avatar con aro neón y chip de racha */
+  .avatar-big{box-shadow:var(--neon-press);}
+  .streak-chip{display:inline-flex; align-items:center; margin:6px 0 0; padding:4px 11px; border-radius:999px; font-size:12px; font-weight:800; color:var(--hivis-text); background:var(--hivis-dim); box-shadow:0 0 14px -4px var(--glow-a);}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -3355,6 +3395,7 @@
       <div>
         <input type="text" id="perfil-name" class="display" data-i18n-aria="ob_name_label" style="background:none; border:none; color:var(--chalk); font-size:21px; padding:0; outline:none; width:100%;">
         <p class="muted" id="perfil-sub">—</p>
+        <p class="streak-chip" id="perfil-streak" style="display:none;"></p>
         <p class="muted" id="perfil-remove-photo" style="display:none; font-size:12px; margin-top:2px; text-decoration:underline; cursor:pointer;" onclick="removeAvatarPhoto(event)" data-i18n="perfil_remove_photo"></p>
       </div>
     </div>

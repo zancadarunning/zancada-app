@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T19:50:24Z';
+const APP_VERSION = '2026-10-08T20:02:21Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -298,6 +298,19 @@ const ICONS = {
 };
 
 /* ================= FEEDBACK: toast / confirm / haptics ================= */
+// Toque corto y suave para botones principales y pestañas. Solo en la app nativa (plugin Haptics); en el navegador no hace nada.
+function hapticTap(){
+  try{
+    const Haptics = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics;
+    if(Haptics) Haptics.impact({ style: 'LIGHT' });
+  }catch(e){}
+}
+if(typeof document !== 'undefined'){
+  document.addEventListener('click', e => {
+    const b = e.target && e.target.closest ? e.target.closest('.btn-primary,.btn-gray,.btn-outline,.nav-btn,.nav-btn-primary,.chat-chip,.choice,.day-pill,.week-nav-btn,.chat-send,.go-circle,.track-pause-circle') : null;
+    if(b && !b.disabled) hapticTap();
+  });
+}
 function haptic(pattern){
   // En la app nativa (Capacitor) usamos el plugin Haptics -- iOS nunca soportó la
   // Vibration API del navegador, así que sin esto no vibraba nunca ahí. El plugin
@@ -7111,6 +7124,7 @@ function renderPerfil(){
   // semanas cerradas todavía (cuenta recién creada) cae al viejo comportamiento (la meta),
   // que sigue siendo la mejor referencia disponible hasta que haya algo real para promediar.
   const avgKm = computeActualWeeklyKmAvg(3);
+  { const sk = document.getElementById('perfil-streak'); if(sk){ const n = state.streakWeeks||0; if(n >= 2){ sk.style.display = 'inline-flex'; sk.textContent = t('home_streak_badge', {n}); } else { sk.style.display = 'none'; } } }
   document.getElementById('perfil-sub').textContent = avgKm!=null
     ? `${t('perfil_avg_weekly_label')} ${fmtDist(avgKm,1)}${distUnit()}/sem · ${t('ob_goal_'+p.goal)}`
     : `${fmtDist(p.weeklyKm,1)}${distUnit()}/sem · ${t('ob_goal_'+p.goal)}`;
@@ -10670,10 +10684,10 @@ function renderHistory(){
       <div class="stat-cell"><div class="n">${fmtDist(tr.totalKm,0)}</div><div class="l">${t('hist_total_km')} (${distUnit()})</div></div>
       <div class="stat-cell"><div class="n">${tr.totalRuns}</div><div class="l">${t('hist_total_runs')}</div></div>
     </div>
-    <div class="trend-bars" id="hist-trend-bars" style="margin-top:16px;">${daily.map((x,i)=>{
+    <div class="trend-bars" id="hist-trend-bars" style="margin-top:46px;">${daily.map((x,i)=>{
       const h = x.km>0 ? Math.max(6, Math.round((x.km/maxKmDay)*70)) : (x.planned ? 4 : 2);
       const cls = (x.km>0 ? '' : (x.planned ? 'trend-planned' : 'trend-rest')) + (i===daily.length-1 ? ' trend-today' : '');
-      return `<div class="trend-col"><div class="trend-stroke ${cls}" data-h="${h}" style="height:0px; transition-delay:${i*30}ms;"></div><div class="trend-lbl">${x.day}</div></div>`;
+      return `<div class="trend-col" data-km="${x.km}" data-date="${x.date}" onclick="showTrendTip(this)"><div class="trend-stroke ${cls}" data-h="${h}" style="height:0px; transition-delay:${i*30}ms;"></div><div class="trend-lbl">${x.day}</div></div>`;
     }).join('')}</div>
   </div>`;
   // Los récords personales se muestran ahora en Logros (Perfil), junto con el resto de
@@ -10682,7 +10696,7 @@ function renderHistory(){
   // reemplaza por el mismo perfil de elevacion que ya es la firma visual de la app
   // (hoy usado como separador en Perfil), agrandado como pieza central acá: "todavia
   // no recorriste este camino" en vez de un ícono de reloj cualquiera.
-  if(!state.runs || state.runs.length===0){ el.innerHTML = stravaSyncCard + trendsCard + `<div class="card" style="text-align:center; padding:32px 18px;"><svg viewBox="0 0 60 14" style="width:90px; height:21px; margin:0 auto 14px; display:block; opacity:.7;"><polyline points="0,12 10,12 16,4 22,10 28,2 34,9 40,12 60,12" fill="none" stroke="#C06A2E" stroke-width="1.6"/></svg><p class="muted" style="margin:0;">${t('hist_empty')}</p></div>`; animateHistTrendBars(); return; }
+  if(!state.runs || state.runs.length===0){ el.innerHTML = stravaSyncCard + trendsCard + `<div class="card" style="text-align:center; padding:32px 18px;"><div class="empty-track" aria-hidden="true"></div><p class="muted" style="margin:0;">${t('hist_empty')}</p></div>`; animateHistTrendBars(); return; }
   // Buscador simple + encabezados de mes -- con varios meses de historial cargado, una
   // lista plana se vuelve incómoda de recorrer. El buscador filtra por lo que se ve en
   // cada tarjeta (fecha, zapatilla, "manual"/Strava); los encabezados de mes se insertan
@@ -10743,6 +10757,29 @@ function renderHistory(){
   // pasaban por ahí, así que ninguna carrera del historial era alcanzable por teclado.
   makeClickablesFocusable(el);
   animateHistTrendBars();
+}
+// Tocar una barra del grafico de Tendencias: globito con los km de ese dia (se va solo a los 2,6s).
+let trendTipTimer = null;
+function showTrendTip(col){
+  const bars = document.getElementById('hist-trend-bars');
+  if(!bars || !col) return;
+  let tip = document.getElementById('trend-tip');
+  if(!tip){ tip = document.createElement('div'); tip.id = 'trend-tip'; tip.className = 'trend-tip'; bars.appendChild(tip); }
+  const km = parseFloat(col.dataset.km) || 0;
+  const d = new Date(col.dataset.date + 'T12:00:00');
+  const dl = d.toLocaleDateString(LOCALE_MAP[lang], {weekday:'short', day:'numeric', month:'short'});
+  tip.innerHTML = '<strong>' + (km > 0 ? fmtDist(km) + ' ' + distUnit() : '—') + '</strong><span>' + escapeHtml(dl) + '</span>';
+  const br = bars.getBoundingClientRect(), cr = col.getBoundingClientRect();
+  tip.style.left = Math.min(Math.max(cr.left - br.left + cr.width / 2, 46), br.width - 46) + 'px';
+  const bar = col.querySelector('.trend-stroke');
+  const barTop = bar ? bar.getBoundingClientRect().top - br.top : 40;
+  tip.style.top = (barTop - tip.offsetHeight - 6) + 'px';
+  bars.querySelectorAll('.trend-col.sel').forEach(e => e.classList.remove('sel'));
+  col.classList.add('sel');
+  tip.classList.add('show');
+  hapticTap();
+  clearTimeout(trendTipTimer);
+  trendTipTimer = setTimeout(() => { tip.classList.remove('show'); col.classList.remove('sel'); }, 2600);
 }
 function animateHistTrendBars(){
   ['hist-trend-bars'].forEach(id=>{
@@ -12383,9 +12420,21 @@ function seedCoachGreeting(){
   state.chat = [{role:'coach', text: t('coach_greeting', {name:state.profile.name, km:fmtDist(state.profile.weeklyKm,1), unit:distUnit(), goal:t('ob_goal_'+state.profile.goal)}), ts:Date.now()}];
   renderChat();
 }
+// Etiqueta del separador de dia del chat: "Hoy", "Ayer" o "Lunes 5 de octubre".
+function chatDayLabel(ts){
+  const d = new Date(ts);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dd = new Date(d); dd.setHours(0,0,0,0);
+  const diff = Math.round((today - dd) / 864e5);
+  if(diff === 0) return t('chat_day_today');
+  if(diff === 1) return t('chat_day_yesterday');
+  const s = d.toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 function renderChat(){
   const msgs = state.chat;
   let html = '';
+  let lastDayKey = null;
   for(let i=0;i<msgs.length;i++){
     const m = msgs[i];
     const prev = msgs[i-1];
@@ -12396,6 +12445,10 @@ function renderChat(){
     let groupCls = '';
     if(m.role!=='system'){
       groupCls = sameAsPrev && sameAsNext ? 'mid' : sameAsPrev ? 'last' : sameAsNext ? 'first' : '';
+    }
+    if(m.ts && m.role!=='system'){
+      const dk = new Date(m.ts).toDateString();
+      if(dk !== lastDayKey){ html += `<div class="msg-day"><span>${escapeHtml(chatDayLabel(m.ts))}</span></div>`; lastDayKey = dk; }
     }
     const safeText = m.role==='system' ? m.text : m.role==='coach' ? formatCoachText(m.text) : escapeHtml(m.text);
     // Cada llamada a renderChat() reconstruye toda la lista, así que "el último mensaje"
@@ -12463,7 +12516,11 @@ function renderChatChips(){
   const sendBtn = document.getElementById('chat-send-btn');
   if(sendBtn && sendBtn.dataset.busy==='1') return;
   log.querySelectorAll('.chat-chips').forEach(el=>el.remove());
-  const chipsHtml = `<div class="chat-chips">${CHAT_CHIP_KEYS.map(k=>`<button class="chat-chip" onclick="sendChatChip('${k}')">${escapeHtml(t(k))}</button>`).join('')}</div>`;
+  // Si el ultimo mensaje es de Zonda y termina en pregunta, se ofrecen "Si, dale" / "No, gracias" primero.
+  const lastMsg = (state.chat || [])[(state.chat || []).length - 1];
+  const askedQuestion = !!(lastMsg && lastMsg.role === 'coach' && typeof lastMsg.text === 'string' && /\?[\s\u{1F300}-\u{1FAFF}\u2600-\u27BF]*$/u.test(lastMsg.text.trim()));
+  const replyChips = askedQuestion ? `<button class="chat-chip chat-chip-yes" onclick="sendChatChip('chat_reply_yes')">${escapeHtml(t('chat_reply_yes'))}</button><button class="chat-chip" onclick="sendChatChip('chat_reply_no')">${escapeHtml(t('chat_reply_no'))}</button>` : '';
+  const chipsHtml = `<div class="chat-chips">${replyChips}${CHAT_CHIP_KEYS.map(k=>`<button class="chat-chip" onclick="sendChatChip('${k}')">${escapeHtml(t(k))}</button>`).join('')}</div>`;
   log.insertAdjacentHTML('beforeend', chipsHtml);
 }
 function sendChatChip(key){

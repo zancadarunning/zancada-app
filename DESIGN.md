@@ -253,6 +253,14 @@ A small hand-drawn line — five short climbs and descents ending flat, `viewBox
 - **Welcome/onboarding.** Wordmark accent letter and the onboarding progress bar glow; step titles are 36px Bebas Neue.
 - **Viewport.** Pinch zoom stays disabled (`user-scalable=no`) on purpose; large system font sizes (tested at 130%) must not clip text.
 
+### Liquid-glass pass (2026-10-08)
+- **Chat background = athletics track.** A top-view running track (7 lanes + start line) is the fixed background of the Zonda chat (`#coachChatWrap::before`, lime at ~26% with a soft glow; olive in light). The same drawing is the brand mark on the welcome screen (it "draws" bottom-to-top, `trackDraw`) and the illustration of the empty Historial. **This replaces the Elevation Squiggle as the decorative empty-state glyph**; the squiggle remains the Perfil section divider.
+- **Zonda header = liquid glass.** The avatar/title block is a floating capsule: translucent gradient, `backdrop-filter` blur 26px + saturate, a specular sheen in the top-left corner, soft shadow, **no outline**. Messages scroll underneath it. It compacts when the keyboard is open (`max-height:660px`).
+- **Top bar and tab bar = liquid look without live blur.** Floating capsules with a gradient surface, sheen and soft shadow, no border. They deliberately do **not** use `backdrop-filter`: both are always visible and that effect measurably janked scrolling on low-end phones. Keep it that way.
+- **Tap feedback.** Primary buttons, tabs, chips, choices and the run controls fire a light haptic (`hapticTap`, native app only).
+- **Chat details.** Day separators (Hoy / Ayer / date), contextual `Sí, dale` / `No, gracias` chips when Zonda's last message ends in a question, and tappable trend bars with a one-line tooltip.
+- **Perfil.** Avatar has the neon ring; a streak chip appears from 2 consecutive weeks. **Run countdown** digits glow in neon, and "GO" flashes.
+
 ## Do's and Don'ts
 
 ### Do:
