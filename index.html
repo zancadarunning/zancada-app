@@ -674,6 +674,16 @@
   .btn-outline{background:transparent; border:1px solid var(--asphalt-4); color:var(--chalk); box-shadow:none; transition:transform .13s var(--ease-out), background .13s var(--ease-out);}
   .btn-outline:active{transform:scale(.97); background:var(--press);}
   /* Gris sólido (acciones neutras: Enviar mensaje, Cerrar sesión, Semanas anteriores) */
+  /* Bloque plegable (Perfil > Zonda) y lista de ajustes (Perfil > Acerca de) */
+  .fold > summary{display:flex; align-items:center; gap:10px; cursor:pointer; list-style:none; min-height:28px;}
+  .fold > summary::-webkit-details-marker{display:none;}
+  .fold .fold-chev{width:16px; height:16px; color:var(--mist); transition:transform .2s var(--ease-out);}
+  .fold[open] .fold-chev{transform:rotate(180deg);}
+  .fold .fold-body{margin-top:12px;}
+  .set-list{margin-top:12px; border-top:1px solid var(--asphalt-4);}
+  .set-row{display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; min-height:48px; padding:0; background:none; border:none; border-bottom:1px solid var(--asphalt-4); color:var(--chalk); font:inherit; font-size:15px; text-align:left; text-decoration:none; cursor:pointer;}
+  .set-row:active{background:var(--press);}
+  .set-row .set-chev{width:14px; height:14px; color:var(--mist-dim); flex-shrink:0;}
   .btn-gray{background:var(--asphalt-3); color:var(--chalk); border:none; box-shadow:none; transition:transform .13s var(--ease-out), background .13s var(--ease-out);}
   .btn-gray:active{transform:scale(.97); background:var(--asphalt-4);}
   .btn-gray:disabled{opacity:.6; cursor:not-allowed;}
@@ -1659,7 +1669,7 @@
      puntitos de más abajo (.coach-fab-thinking) -- reportado por el usuario que el
      puntito, al vivir pegado arriba del personaje, se veía como un elemento suelto
      de más; la burbuja sola ya cumple el mismo aviso. */
-  .coach-fab-wrap{position:fixed; left:0; right:0; bottom:calc(104px + var(--safe-bottom)); max-width:480px; margin:0 auto; pointer-events:none; z-index:21;}
+  .coach-fab-wrap{--fab-size:56px; position:fixed; left:0; right:0; bottom:calc(104px + var(--safe-bottom)); max-width:480px; margin:0 auto; pointer-events:none; z-index:21;}
   /* Personaje propio del coach (ver initMascotEyes/setMascotExpression en app.js) -- un
      círculo lima simple (mismo espíritu que un blob con ojitos, género genérico de mascota,
      no algo que nadie pueda "poseer" -- lo usan decenas de personajes de sobra conocidos),
@@ -1667,7 +1677,7 @@
      comentario sobre licencia AGPL en el historial de commits para por qué esto importa acá.
      drop-shadow (filter, no box-shadow) sigue la silueta real del círculo en vez de la caja
      rectangular del botón. */
-  .coach-fab{position:absolute; right:10px; bottom:0; width:74px; height:74px; background:none; border:none; pointer-events:auto;
+  .coach-fab{position:absolute; right:12px; bottom:0; width:var(--fab-size); height:var(--fab-size); background:none; border:none; pointer-events:auto;
     display:flex; align-items:center; justify-content:center; cursor:pointer; transition:transform .12s ease, opacity .15s ease;
     transform-origin:bottom right;}
   .coach-fab:active{transform:scale(.92);}
@@ -1686,7 +1696,7 @@
      <button> normal, no un elemento SVG, así que no tiene ese problema). */
   @keyframes mascotPop{0%{transform:scale(1);} 35%{transform:scale(1.16);} 65%{transform:scale(.95);} 100%{transform:scale(1);}}
   .coach-fab.pop{animation:mascotPop .5s ease-out;}
-  .coach-fab svg{width:74px; height:74px; filter:drop-shadow(0 2px 3px rgba(0,0,0,.3)) drop-shadow(0 8px 14px rgba(0,0,0,.45));}
+  .coach-fab svg{width:var(--fab-size); height:var(--fab-size); filter:drop-shadow(0 2px 3px rgba(0,0,0,.3)) drop-shadow(0 8px 14px rgba(0,0,0,.45));}
   /* Burbuja con 3 puntitos flotando arriba del personaje -- doble uso, nunca simultáneo
      (ver updateMascotBubble en app.js): mientras sendChat() espera la respuesta de
      /api/chat ("el coach está escribiendo"), O mientras haya un mensaje suyo sin leer
@@ -1707,7 +1717,7 @@
      mide 0px y la burbuja terminaba flotando pegada al borde inferior, superpuesta al botón, en
      vez de arriba. 74px es el alto real de .coach-fab (mismo valor que su width/height de acá
      arriba) + 10px de aire hasta la burbuja. */
-  .coach-fab-thinking{position:absolute; right:10px; bottom:calc(74px + 10px); width:74px;
+  .coach-fab-thinking{position:absolute; right:12px; bottom:calc(var(--fab-size) + 8px); width:var(--fab-size);
     display:flex; justify-content:center; opacity:0; transform:scale(.9); pointer-events:none;
     transition:opacity .15s ease, transform .15s ease;}
   .coach-fab-thinking.show{opacity:1; transform:scale(1);}
@@ -3272,20 +3282,23 @@
       </div>
     </div>
 
-    <div class="card">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+    <details class="card fold" id="perfil-zonda-fold">
+      <summary>
         <span class="icon-sq" style="width:22px; height:22px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v11H8l-4 4v-4H4z"/></svg></span>
-        <h3 style="margin:0;" data-i18n="perfil_coach_title"></h3>
+        <h3 style="margin:0; flex:1;" data-i18n="perfil_coach_title"></h3>
+        <span class="icon-sq fold-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+      </summary>
+      <div class="fold-body">
+        <p class="muted" style="margin:0 0 10px;" data-i18n="perfil_coach_intro"></p>
+        <ul style="margin:0; padding-left:18px; color:var(--mist); font-size:13px; line-height:1.7;">
+          <li data-i18n="perfil_coach_cap_1"></li>
+          <li data-i18n="perfil_coach_cap_2"></li>
+          <li data-i18n="perfil_coach_cap_3"></li>
+          <li data-i18n="perfil_coach_cap_4"></li>
+          <li data-i18n="perfil_coach_cap_5"></li>
+        </ul>
       </div>
-      <p class="muted" style="margin:0 0 10px;" data-i18n="perfil_coach_intro"></p>
-      <ul style="margin:0; padding-left:18px; color:var(--mist); font-size:13px; line-height:1.7;">
-        <li data-i18n="perfil_coach_cap_1"></li>
-        <li data-i18n="perfil_coach_cap_2"></li>
-        <li data-i18n="perfil_coach_cap_3"></li>
-        <li data-i18n="perfil_coach_cap_4"></li>
-        <li data-i18n="perfil_coach_cap_5"></li>
-      </ul>
-    </div>
+    </details>
 
     <!-- Formulario de feedback -- a diferencia del link mailto de "Contactar soporte" más
          abajo (que depende de que el corredor tenga una app de mail configurada en el
@@ -3302,13 +3315,11 @@
       <p class="muted" id="credits-text"></p>
       <p class="muted mono" id="app-version-text" style="margin-top:6px; font-size:10.5px; opacity:.55;"></p>
       <p class="muted" style="margin-top:8px;" data-i18n="perfil_data_note"></p>
-      <div style="display:flex; gap:16px; margin-top:12px; flex-wrap:wrap;">
-        <a class="small-link" href="/privacy.html" target="_blank" rel="noopener" data-i18n="legal_privacy_link"></a>
-        <a class="small-link" href="/terms.html" target="_blank" rel="noopener" data-i18n="legal_terms_link"></a>
-        <a class="small-link" href="mailto:info@zancada.org" data-i18n="perfil_support_link"></a>
-      </div>
-      <div style="display:flex; gap:16px; margin-top:12px;">
-        <button class="small-link" onclick="resetApp()" data-i18n="perfil_reset"></button>
+      <div class="set-list">
+        <a class="set-row" href="/privacy.html" target="_blank" rel="noopener"><span data-i18n="legal_privacy_link"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></a>
+        <a class="set-row" href="/terms.html" target="_blank" rel="noopener"><span data-i18n="legal_terms_link"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></a>
+        <a class="set-row" href="mailto:info@zancada.org"><span data-i18n="perfil_support_link"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></a>
+        <button type="button" class="set-row" onclick="resetApp()"><span data-i18n="perfil_reset"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>
       </div>
       <button class="btn btn-gray" style="margin-top:18px;" onclick="logout()" data-i18n="perfil_logout"></button>
       <button class="btn btn-danger" style="margin-top:12px;" onclick="deleteAccount()" data-i18n="perfil_delete_account"></button>
