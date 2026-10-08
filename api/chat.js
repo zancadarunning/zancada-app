@@ -120,7 +120,7 @@ module.exports = withSentry(async (req, res) => {
     const { system, tools, messages } = req.body || {};
     const busyMessage = BUSY_MSG[lang] || BUSY_MSG.es;
 
-    const inputChars = (typeof system === 'string' ? system.length : 0) + JSON.stringify(messages || []).length + JSON.stringify(tools || []).length;
+    const inputChars = (typeof system === 'string' ? system.length : JSON.stringify(system || '').length) + JSON.stringify(messages || []).length + JSON.stringify(tools || []).length;
     if (inputChars > MAX_INPUT_CHARS) {
       console.error('chat: pedido rechazado por tamaño —', inputChars, 'chars, usuario', auth.userId);
       res.status(200).json({ error: { message: GENERIC_ERROR_MSG[lang] || GENERIC_ERROR_MSG.es } });

@@ -1,6 +1,7 @@
 const webpush = require('web-push');
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { sendFcmPush } = require('./_lib/fcm');
+const { isTrustedPushEndpoint } = require('./_lib/push-endpoint');
 
 // ANTES este cron corría UNA vez por día a una hora fija en UTC (11:00 UTC, ver
 // vercel.json) -- pensada para que le llegue a las 8am a un corredor en Argentina
@@ -179,6 +180,8 @@ module.exports = withSentry(async (req, res) => {
             return;
           }
         } else {
+          // el endpoint lo escribe el cliente: solo se le manda a los servicios de push reales (evita SSRF a ciegas)
+          if (!subRow.subscription || !isTrustedPushEndpoint(subRow.subscription.endpoint)) { failed++; return; }
           await webpush.sendNotification(subRow.subscription, JSON.stringify({ title: 'Zancada', body }));
         }
         sent++;

@@ -13,7 +13,10 @@
 // cuota diaria del chat, ver api/chat.js).
 const { fetchWithTimeout } = require('./fetch-with-timeout');
 
-async function checkSyncCooldown(base, headers, userId, provider, cooldownMs) {
+// opts.failClosed: si el limitador mismo falla (RPC caída), NO se deja pasar. Se usa en los endpoints que cuestan plata o mandan
+// emails (feedback, remux); en los "Sincronizar ahora" se sigue dejando pasar para no romper el botón por un problema del limitador.
+async function checkSyncCooldown(base, headers, userId, provider, cooldownMs, opts) {
+  const onFailure = !(opts && opts.failClosed);
   try {
     const res = await fetchWithTimeout(`${base}/rest/v1/rpc/check_sync_cooldown`, {
       method: 'POST',
@@ -22,12 +25,12 @@ async function checkSyncCooldown(base, headers, userId, provider, cooldownMs) {
     }, 5000);
     if (!res.ok) {
       console.error('check_sync_cooldown rpc failed', provider, res.status, await res.text().catch(() => ''));
-      return true;
+      return onFailure;
     }
     return await res.json();
   } catch (e) {
     console.error('check_sync_cooldown request failed', provider, e);
-    return true;
+    return onFailure;
   }
 }
 

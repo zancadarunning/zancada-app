@@ -82,7 +82,7 @@ module.exports = withSentry(async (req, res) => {
   const base = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_KEY;
   const cooldownHeaders = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' };
-  const allowed = await checkSyncCooldown(base, cooldownHeaders, auth.userId, 'remux', REMUX_COOLDOWN_MS);
+  const allowed = await checkSyncCooldown(base, cooldownHeaders, auth.userId, 'remux', REMUX_COOLDOWN_MS, { failClosed: true });
   if(!allowed){ res.status(429).json({error:'Too many requests, try again shortly'}); return; }
 
   let inPath, outPath;

@@ -40,7 +40,7 @@ module.exports = withSentry(async (req, res) => {
   const sbBase = process.env.SUPABASE_URL;
   const sbKey = process.env.SUPABASE_SERVICE_KEY;
   const sbHeaders = { apikey: sbKey, Authorization: `Bearer ${sbKey}`, 'Content-Type': 'application/json' };
-  if (!(await checkSyncCooldown(sbBase, sbHeaders, auth.userId, 'feedback', FEEDBACK_COOLDOWN_MS))) {
+  if (!(await checkSyncCooldown(sbBase, sbHeaders, auth.userId, 'feedback', FEEDBACK_COOLDOWN_MS, { failClosed: true }))) {
     res.status(429).json({ error: 'Too many requests' });
     return;
   }
