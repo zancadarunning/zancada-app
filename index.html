@@ -1916,15 +1916,20 @@
   .day-end-slot{display:inline-flex; width:16px; height:16px; flex-shrink:0; align-items:center; justify-content:center;}
 
   /* Chat: pista más chica y cabecera de Zonda como vidrio esmerilado (flota sobre los mensajes, que pasan por debajo). */
-  #coachChatWrap::before{-webkit-mask-size:auto 74%; mask-size:auto 74%; -webkit-mask-position:center 58%; mask-position:center 58%;}
-  #coachChatWrap{--glass-bg:rgba(30,30,34,.5); --glass-edge:rgba(255,255,255,.1); --glass-hi:rgba(255,255,255,.14);}
-  :root[data-theme="light"] #coachChatWrap{--glass-bg:rgba(255,255,255,.55); --glass-edge:rgba(0,0,0,.07); --glass-hi:rgba(255,255,255,.9);}
-  @media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #coachChatWrap{--glass-bg:rgba(255,255,255,.55); --glass-edge:rgba(0,0,0,.07); --glass-hi:rgba(255,255,255,.9);} }
-  #coachChatWrap > .coach-head{position:absolute; top:0; left:8px; right:8px; z-index:3; border:1px solid var(--glass-edge); border-top-color:transparent; border-radius:0 0 22px 22px;
-    background:var(--glass-bg); -webkit-backdrop-filter:blur(20px) saturate(1.6); backdrop-filter:blur(20px) saturate(1.6);
-    box-shadow:inset 0 1px 0 var(--glass-hi), 0 8px 24px -12px rgba(0,0,0,.5);}
-  #chatLog{padding-top:88px;}
-  @media (max-height:660px){ #coachChatWrap > .coach-head{border-radius:0 0 18px 18px;} #chatLog{padding-top:50px;} }
+  #coachChatWrap::before{-webkit-mask-size:auto 104%; mask-size:auto 104%; -webkit-mask-position:center 50%; mask-position:center 50%;}
+  #coachChatWrap{--lg-a:rgba(255,255,255,.16); --lg-b:rgba(255,255,255,.06); --lg-c:rgba(255,255,255,.12); --lg-sheen:rgba(255,255,255,.22); --lg-shadow:rgba(0,0,0,.55); --glass-bg:rgba(30,30,34,.5); --glass-edge:rgba(255,255,255,.1); --glass-hi:rgba(255,255,255,.14);}
+  :root[data-theme="light"] #coachChatWrap{--lg-a:rgba(255,255,255,.7); --lg-b:rgba(255,255,255,.4); --lg-c:rgba(255,255,255,.6); --lg-sheen:rgba(255,255,255,.95); --lg-shadow:rgba(40,50,20,.28); --glass-bg:rgba(255,255,255,.55); --glass-edge:rgba(0,0,0,.07); --glass-hi:rgba(255,255,255,.9);}
+  @media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #coachChatWrap{--lg-a:rgba(255,255,255,.7); --lg-b:rgba(255,255,255,.4); --lg-c:rgba(255,255,255,.6); --lg-sheen:rgba(255,255,255,.95); --lg-shadow:rgba(40,50,20,.28); --glass-bg:rgba(255,255,255,.55); --glass-edge:rgba(0,0,0,.07); --glass-hi:rgba(255,255,255,.9);} }
+  #coachChatWrap > .coach-head{position:absolute; top:8px; left:10px; right:10px; z-index:3; border:none; border-radius:28px;
+    background:linear-gradient(135deg, var(--lg-a) 0%, var(--lg-b) 45%, var(--lg-c) 100%);
+    -webkit-backdrop-filter:blur(26px) saturate(1.9) brightness(1.08); backdrop-filter:blur(26px) saturate(1.9) brightness(1.08);
+    box-shadow:0 10px 30px -10px var(--lg-shadow);}
+  /* Brillo líquido: un reflejo suave en la esquina de arriba, sin ningún trazo de contorno. */
+  #coachChatWrap > .coach-head::after{content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+    background:radial-gradient(120% 90% at 8% -20%, var(--lg-sheen) 0%, transparent 55%);}
+  #coachChatWrap > .coach-head > *{position:relative; z-index:1;}
+  #chatLog{padding-top:92px;}
+  @media (max-height:660px){ #coachChatWrap > .coach-head{top:4px; border-radius:22px;} #chatLog{padding-top:54px;} }
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
