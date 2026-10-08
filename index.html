@@ -1972,6 +1972,15 @@
   nav.tabbar button.nav-btn-primary:not(.active) .nav-primary-circle::after{animation:ringPulse 2.8s ease-out infinite;}
   @keyframes ringPulse{0%{transform:scale(1); opacity:.6;} 70%,100%{transform:scale(1.14); opacity:0;}}
   @media (prefers-reduced-motion:reduce){ .go-circle::after, nav.tabbar button.nav-btn-primary .nav-primary-circle::after{animation:none !important;} }
+
+  /* ===== Rendimiento de scroll (medido en el celular de pruebas; sin cambios visibles) ===== */
+  /* La tarjeta destacada ya no usa backdrop-filter: detrás tiene un fondo casi liso, así que el desenfoque no se notaba y costaba caro. Mismo degradado lima sobre fondo opaco. */
+  :root:root .card.card-highlight{-webkit-backdrop-filter:none; backdrop-filter:none; background:linear-gradient(160deg, var(--hivis-dim), transparent 55%), var(--asphalt-2);}
+  /* Capas propias para lo que flota o es sticky, así el scroll no las vuelve a pintar. */
+  .coach-fab, .coach-fab-thinking, nav.tabbar, header.top, #app::after{will-change:transform;}
+  /* Historial: el brillo del trazo queda tapado por la imagen del mapa y el desenfoque de 3px de la etiqueta de duración no se aprecia sobre ese mapa; ambos se repetían en cada tarjeta. */
+  .hist-map-sketch path{filter:none;}
+  .hist-map-badge .hist-map-duration{-webkit-backdrop-filter:none; backdrop-filter:none; background:rgba(10,10,10,.7);}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
