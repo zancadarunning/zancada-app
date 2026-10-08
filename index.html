@@ -163,7 +163,7 @@
        pero cuesta lo mismo (casi nada) que no tener sombra. */
     --shadow-card:none; --shadow-lg:0 3px 6px rgba(0,0,0,.55);
     --hivis-glow:rgba(214,255,63,.32);
-    --glow-a:rgba(214,255,63,.5); --glow-b:rgba(214,255,63,.24); --glow-c:rgba(214,255,63,.09); --ambient:rgba(214,255,63,.13); --ambient-card:rgba(214,255,63,.2); --neon-rim:#F4FFA8; --neon:0 0 0 1.5px var(--neon-rim), 0 0 8px 1px rgba(214,255,63,.7), 0 0 15px 2px rgba(214,255,63,.3); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(214,255,63,.6), 0 0 12px 1px rgba(214,255,63,.25);
+    --glow-a:rgba(214,255,63,.5); --glow-b:rgba(214,255,63,.24); --glow-c:rgba(214,255,63,.09); --sk-hl:rgba(255,255,255,.07); --ambient:rgba(214,255,63,.13); --ambient-card:rgba(214,255,63,.2); --neon-rim:#F4FFA8; --neon:0 0 0 1.5px var(--neon-rim), 0 0 8px 1px rgba(214,255,63,.7), 0 0 15px 2px rgba(214,255,63,.3); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(214,255,63,.6), 0 0 12px 1px rgba(214,255,63,.25);
     /* Colores de zona (ritmo/FC) del tema oscuro: se probó una versión pastel
        más suave y se volvió atrás a pedido del usuario -- estos son los
        saturados/"neon" originales. El tema claro de acá abajo se deja como
@@ -209,7 +209,7 @@
       /* Mismo achique de blur que la versión oscura de arriba -- ver ese comentario. */
       --shadow-card:none; --shadow-lg:0 3px 6px rgba(20,22,18,.15);
       --hivis-glow:rgba(150,186,0,.32);
-    --glow-a:rgba(150,186,0,.42); --glow-b:rgba(150,186,0,.2); --glow-c:rgba(150,186,0,.08); --ambient:rgba(150,186,0,.12); --ambient-card:rgba(150,186,0,.2); --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 8px 1px rgba(150,186,0,.5), 0 0 14px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
+    --glow-a:rgba(150,186,0,.42); --glow-b:rgba(150,186,0,.2); --glow-c:rgba(150,186,0,.08); --sk-hl:rgba(255,255,255,.75); --ambient:rgba(150,186,0,.12); --ambient-card:rgba(150,186,0,.2); --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 8px 1px rgba(150,186,0,.5), 0 0 14px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
       /* Las 5 zonas del modo oscuro (azul pizarra → verde salvia → dorado apagado →
          terracota → ladrillo apagado, ver el comentario grande junto a --zone1 de :root)
          son un registro deliberadamente desaturado -- "para que las cinco lean como parte
@@ -273,7 +273,7 @@
     /* Mismo achique de blur que la versión oscura -- ver ese comentario. */
     --shadow-card:none; --shadow-lg:0 3px 6px rgba(20,22,18,.15);
     --hivis-glow:rgba(150,186,0,.32);
-    --glow-a:rgba(150,186,0,.42); --glow-b:rgba(150,186,0,.2); --glow-c:rgba(150,186,0,.08); --ambient:rgba(150,186,0,.12); --ambient-card:rgba(150,186,0,.2); --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 8px 1px rgba(150,186,0,.5), 0 0 14px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
+    --glow-a:rgba(150,186,0,.42); --glow-b:rgba(150,186,0,.2); --glow-c:rgba(150,186,0,.08); --sk-hl:rgba(255,255,255,.75); --ambient:rgba(150,186,0,.12); --ambient-card:rgba(150,186,0,.2); --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 8px 1px rgba(150,186,0,.5), 0 0 14px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
     /* Mismas 5 zonas que en el bloque de arriba (@media prefers-color-scheme:light) --
        ver ese comentario grande para el porqué de oscurecer estos tonos en vez de usar
        los saturados tipo Tailwind que tenía antes. */
@@ -1989,12 +1989,8 @@
   .msg.typing{display:flex; align-items:center; gap:10px; width:max-content; padding:10px 16px 10px 12px;}
   .msg.typing::before{content:''; width:24px; height:24px; flex-shrink:0; border-radius:50%; background:radial-gradient(circle at 36% 47%, var(--ink) 0 2px, transparent 2.6px), radial-gradient(circle at 64% 47%, var(--ink) 0 2px, transparent 2.6px), var(--hivis); box-shadow:var(--neon-press);}
   .msg.typing span{margin-right:0;}
-  .offline-dot{width:7px; height:7px; border-radius:50%; background:var(--clay); flex-shrink:0;}
   .ob-step-count{flex-shrink:0; min-width:30px; text-align:right; font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; color:var(--mist);}
 
-  .offline-chip{display:none; align-items:center; gap:6px; padding:3px 10px; border-radius:999px; background:var(--clay-dim); color:var(--clay); font-size:11.5px; font-weight:800; white-space:nowrap;}
-  .offline-chip.on{display:inline-flex;}
-  header.top.offline #headerDate{display:none;}
   .msg.typing{gap:0;} .msg.typing::before{margin-right:11px;} .msg.typing span{margin-right:5px;}
 
   /* Logros: el botón de compartir mantiene su zona táctil de 40px pero el círculo visible es de 26px, así no se encima con la medalla. */
@@ -2045,6 +2041,13 @@
   .conn-row.open .conn-chev{transform:rotate(90deg);}
   .conn-body{display:none; padding:0 16px 16px;}
   .conn-row.open .conn-body{display:block;}
+
+  /* ===== Esqueletos ===== */
+  #devices-overlay.conn-loading .conn-row-head .tag{position:relative; overflow:hidden; color:transparent; background:var(--asphalt-4);}
+  #devices-overlay.conn-loading .conn-row-head .tag::after{content:''; position:absolute; inset:0; background:linear-gradient(90deg,transparent,var(--sk-hl),transparent); transform:translateX(-100%); animation:skSweep 1.5s ease-in-out infinite;}
+  .skel-line{position:relative; overflow:hidden; background:var(--asphalt-3); animation:none;}
+  .skel-line::after{content:''; position:absolute; inset:0; background:linear-gradient(90deg,transparent,var(--sk-hl),transparent); transform:translateX(-100%); animation:skSweep 1.5s ease-in-out infinite;}
+  @media (prefers-reduced-motion:reduce){ #devices-overlay.conn-loading .conn-row-head .tag::after, .skel-line::after{animation:none;} }
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -2061,17 +2064,49 @@
   animation:boot-bar-run 1.15s cubic-bezier(.65,0,.35,1) infinite;}
 @keyframes boot-bar-in{to{opacity:1}}
 @keyframes boot-bar-run{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
-@media (prefers-reduced-motion:reduce){#boot .boot-bar::after{animation:none;width:100%;opacity:.55}#boot,#boot .boot-mark{transition-duration:.01s}}
+/* Esqueleto (pantalla de Inicio en gris que "respira"): reemplaza la marca si la carga tarda; usa los colores del tema activo. */
+#boot .boot-skel{display:none;}
+#boot.zc-boot-skel{background:var(--asphalt,#0A0A0A);align-items:flex-start;justify-content:flex-start;}
+#boot.zc-boot-skel .boot-mark,#boot.zc-boot-skel .boot-bar{display:none;}
+#boot.zc-boot-skel .boot-skel{display:block;width:100%;max-width:480px;margin:0 auto;padding:calc(20px + env(safe-area-inset-top,0px)) 20px 0;animation:skFade .3s ease-out both;}
+.sk{position:relative;overflow:hidden;display:block;background:var(--asphalt-3,#202023);border-radius:10px;}
+.sk::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,var(--sk-hl,rgba(255,255,255,.07)),transparent);transform:translateX(-100%);animation:skSweep 1.5s ease-in-out infinite;}
+#boot .bs-row{display:flex;justify-content:space-between;align-items:center;}
+#boot .bs-brand{width:112px;height:18px;} #boot .bs-date{width:72px;height:12px;}
+#boot .bs-hello{width:200px;height:32px;margin-top:28px;border-radius:12px;}
+#boot .bs-chip{width:150px;height:28px;margin-top:14px;border-radius:14px;}
+#boot .bs-label{width:56px;height:10px;margin-top:30px;}
+#boot .bs-card{margin-top:12px;border-radius:20px;background:var(--asphalt-2,#18181B);}
+#boot .bs-hero{height:176px;} #boot .bs-mid{height:112px;margin-top:16px;} #boot .bs-tall{height:190px;}
+#boot .bs-tabbar{position:fixed;left:14px;right:14px;bottom:calc(14px + env(safe-area-inset-bottom,0px));max-width:452px;margin:0 auto;height:66px;border-radius:30px;background:var(--asphalt-2,#18181B);display:flex;align-items:center;justify-content:space-around;padding:0 10px;}
+#boot .bs-tabbar .sk{width:30px;height:30px;border-radius:50%;} #boot .bs-tabbar .bs-run{width:52px;height:52px;margin-top:-22px;}
+@keyframes skSweep{to{transform:translateX(100%)}}
+@keyframes skFade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){#boot .boot-bar::after{animation:none;width:100%;opacity:.55}#boot,#boot .boot-mark{transition-duration:.01s}.sk::after{animation:none}#boot.zc-boot-skel .boot-skel{animation:none}}
 </style>
 </head>
 <body>
-<div id="boot" aria-hidden="true"><img class="boot-mark" src="/img/boot-mark.png" width="150" height="119" alt=""><div class="boot-bar"></div></div>
+<div id="boot" aria-hidden="true"><img class="boot-mark" src="/img/boot-mark.png" width="150" height="119" alt=""><div class="boot-bar"></div>
+  <div class="boot-skel">
+    <div class="bs-row"><i class="sk bs-brand"></i><i class="sk bs-date"></i></div>
+    <i class="sk bs-hello"></i>
+    <i class="sk bs-chip"></i>
+    <i class="sk bs-label"></i>
+    <i class="sk bs-card bs-hero"></i>
+    <i class="sk bs-card bs-mid"></i>
+    <i class="sk bs-label"></i>
+    <i class="sk bs-card bs-tall"></i>
+    <div class="bs-tabbar"><i class="sk"></i><i class="sk"></i><i class="sk bs-run"></i><i class="sk"></i><i class="sk"></i></div>
+  </div>
+</div>
 <script>
 /* zcBootDone(): retira la pantalla de arranque. Lo llama app.js cuando ya hay algo real para mostrar (la app, el
    login o el onboarding). Espera a las tipografias (maximo 500 ms) para que el texto no "salte" al destaparse, y a un
    minimo de 350 ms para que no parpadee si la carga fue instantanea. Red de seguridad: a los 12 s se retira igual. */
 (function(){
   var t0 = Date.now(), done = false;
+  // Si la carga tarda más de ~0,9 s, la marca da paso a un esqueleto de Inicio (más tranquilizador que una barrita).
+  setTimeout(function(){ if(done) return; var b = document.getElementById('boot'); if(b) b.classList.add('zc-boot-skel'); }, 900);
   function remove(){
     var b = document.getElementById('boot'); if(!b) return;
     b.classList.add('zc-boot-out');
@@ -2401,7 +2436,6 @@
     <div class="brand"><div class="dot"></div><span>ZANCADA</span></div>
     <div style="display:flex; align-items:center; gap:8px;">
       <span id="sync-pending-badge" class="tag tag-soon" role="button" tabindex="0" data-i18n-aria="sync_pending_title" style="display:none; align-items:center; gap:4px; cursor:pointer;" onclick="showToast(t('sync_pending_title'),'info')"><span class="icon-sq" style="width:11px; height:11px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span></span>
-      <div class="offline-chip" id="offline-pill" role="status" aria-live="polite"><span class="offline-dot"></span><span data-i18n="offline_pill"></span></div>
       <div class="header-view-title" id="header-view-title" aria-hidden="true"></div>
       <div class="muted mono" id="headerDate" style="font-size:12px;"></div>
     </div>

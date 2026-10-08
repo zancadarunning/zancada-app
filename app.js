@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T21:38:52Z';
+const APP_VERSION = '2026-10-08T21:44:51Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -298,19 +298,6 @@ const ICONS = {
 };
 
 /* ================= FEEDBACK: toast / confirm / haptics ================= */
-// Aviso discreto cuando el celular se queda sin internet (lo que se ve es lo guardado).
-function updateOfflinePill(){
-  const p = document.getElementById('offline-pill');
-  const off = (typeof navigator !== 'undefined' && navigator.onLine === false);
-  if(p) p.classList.toggle('on', off);
-  const hdr = document.getElementById('mainHeader');
-  if(hdr) hdr.classList.toggle('offline', off);
-}
-if(typeof window !== 'undefined' && window.addEventListener){
-  window.addEventListener('online', updateOfflinePill);
-  window.addEventListener('offline', updateOfflinePill);
-  updateOfflinePill();
-}
 // Chat: mantener apretado un mensaje lo copia entero (cartel "Mensaje copiado").
 async function copyChatMessage(m){
   const text = (m.innerText || '').trim();
@@ -8364,7 +8351,20 @@ async function showView(v){
     viewingWeekOffset = 0; renderPlan();
     refreshStateFromServer().then(()=>{ if(document.getElementById('view-plan').classList.contains('active')){ renderPlan(); } });
   }
-  if(v==='perfil'){ renderPerfilDays(); renderPerfilCrossTraining(); updatePushStatusDisplay(); updateStravaStatusDisplay(); updatePolarStatusDisplay(); updateWahooStatusDisplay(); updateCorosStatusDisplay(); updateSuuntoStatusDisplay(); updateHealthConnectStatusDisplay(); }
+  if(v==='perfil'){
+    renderPerfilDays(); renderPerfilCrossTraining(); updatePushStatusDisplay();
+    // Mientras se consulta el estado de cada marca, sus etiquetas de Relojes muestran un esqueleto (no "Nativo" y de golpe "Conectado").
+    const devOv = document.getElementById('devices-overlay');
+    if(devOv && devOv.classList && currentUserId){
+      devOv.classList.add('conn-loading');
+      const stopLoading = () => devOv.classList.remove('conn-loading');
+      Promise.allSettled([updateStravaStatusDisplay(), updatePolarStatusDisplay(), updateWahooStatusDisplay(), updateCorosStatusDisplay(), updateSuuntoStatusDisplay()]).then(stopLoading);
+      setTimeout(stopLoading, 8000);
+    } else {
+      updateStravaStatusDisplay(); updatePolarStatusDisplay(); updateWahooStatusDisplay(); updateCorosStatusDisplay(); updateSuuntoStatusDisplay();
+    }
+    updateHealthConnectStatusDisplay();
+  }
   if(v==='correr'){ renderRunTodayCard(); renderRunModeChoice(); initIdleMap(); }
 }
 function goCoachWithPrompt(prefill){
