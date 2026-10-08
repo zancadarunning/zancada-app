@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T23:32:50Z';
+const APP_VERSION = '2026-10-08T23:36:53Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10508,18 +10508,22 @@ function maybeOpenHistoryImport(){
   const anyConn = Object.values(deviceConnections || {}).some(Boolean) || !!state.healthConnectConnected;
   if(!anyConn) openHistoryImport();
 }
+const CUP_SVG = '<svg viewBox="0 0 48 52" aria-hidden="true"><path class="cup-handle" d="M13 9H7v4a7 7 0 0 0 7 7M35 9h6v4a7 7 0 0 1-7 7"/><path class="cup-body" d="M13 5h22v15a11 11 0 0 1-22 0z"/><path class="cup-shine" d="M17 9v10a7 7 0 0 0 3 5.6"/><polygon class="cup-star" points="24,11 25.6,15.2 30,15.4 26.5,18.1 27.7,22.4 24,19.9 20.3,22.4 21.5,18.1 18,15.4 22.4,15.2"/><rect class="cup-stem" x="21" y="31" width="6" height="7"/><rect class="cup-base" x="15" y="38" width="18" height="5" rx="2"/><rect class="cup-base" x="12" y="43" width="24" height="5" rx="2"/></svg>';
 function renderPersonalRecordsCard(){
-  // Vivía en Historial como una tarjeta aparte; ahora se muestra acá, en Logros, junto
-  // con el resto de los hitos del corredor (mismo estilo de medalla: iluminada con el
-  // tiempo si ya hay marca para esa distancia estándar, apagada con candado si no).
+  // Récords personales: una copa por distancia estándar -- encendida, con el tiempo, la fecha
+  // y el ritmo si ya hay marca; apagada y punteada si todavía no.
   const prRecords = getPersonalRecords();
-  return `<div class="card"><h3>${t('hist_pr_title')}</h3><div class="pr-medal-grid">${PR_DISTANCES.map(b=>{
+  return '<div class="card"><h3>' + t('hist_pr_title') + '</h3><div class="pr-list">' + PR_DISTANCES.map(b => {
     const rec = prRecords[b.key];
-    if(rec) return `<div class="pr-medal achieved">
-      <button class="pr-medal-share-btn" onclick="event.stopPropagation(); sharePRImage('${b.key}')" aria-label="${t('aria_share_pr')}">${ICONS.share}</button>
-      <span class="mdl">${MEDAL_SVG}</span><span class="pr-medal-label">${t('pr_label_'+b.key)}</span><span class="pr-medal-time">${fmtTime(rec.durationSec)}</span></div>`;
-    return `<div class="pr-medal"><span class="mdl">${MEDAL_SVG}</span><span class="pr-medal-label">${t('pr_label_'+b.key)}</span><span class="pr-medal-locked">${t('pr_medal_locked')}</span></div>`;
-  }).join('')}</div></div>`;
+    if(rec){
+      const rd = new Date(rec.date); const when = rd.toLocaleDateString(LOCALE_MAP[lang], rd.getFullYear() === new Date().getFullYear() ? {day:'numeric', month:'short'} : {day:'numeric', month:'short', year:'2-digit'});
+      const pace = fmtPace((rec.durationSec / 60) / rec.distanceKm) + '/' + distUnit();
+      return '<div class="pr-row achieved"><span class="pr-cup">' + CUP_SVG + '</span><div class="pr-info"><b>' + t('pr_label_' + b.key) + '</b><small>' + when + ' · ' + pace + '</small></div>' +
+        '<span class="pr-time">' + fmtTime(rec.durationSec) + '</span>' +
+        '<button class="pr-share" onclick="event.stopPropagation(); sharePRImage(\'' + b.key + '\')" aria-label="' + t('aria_share_pr') + '">' + ICONS.share + '</button></div>';
+    }
+    return '<div class="pr-row"><span class="pr-cup">' + CUP_SVG + '</span><div class="pr-info"><b>' + t('pr_label_' + b.key) + '</b><small>' + t('pr_medal_locked') + '</small></div></div>';
+  }).join('') + '</div></div>';
 }
 // Comparte (o descarga, si no hay share nativo) un blob de imagen ya generado -- mismo
 // patrón que repetían sharePRImage/shareRunImage/shareWeeklyRecapImage cada una por su

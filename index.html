@@ -2192,6 +2192,25 @@
   .pred-chev svg{width:16px; height:16px;}
   .pred-head[aria-expanded="true"] .pred-chev{transform:rotate(180deg);}
   .pred-body{margin-top:10px;} .pred-body[hidden]{display:none;}
+
+  /* ===== Récords personales: copas ===== */
+  .pr-list{display:flex; flex-direction:column; gap:8px; margin-top:10px;}
+  .pr-row{display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:var(--radius-sm); background:var(--asphalt-3);}
+  .pr-row.achieved{background:var(--hivis-dim); box-shadow:0 0 0 1px rgba(214,255,63,.18);}
+  .pr-cup{width:42px; height:46px; flex:none;} .pr-cup svg{width:100%; height:100%; display:block;}
+  .pr-info{flex:1; min-width:0;} .pr-info b{display:block; font-size:15px; font-weight:800;}
+  .pr-info small{display:block; margin-top:2px; font-size:11.5px; color:var(--mist); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .pr-time{font-family:'Bebas Neue',sans-serif; font-size:28px; line-height:1; color:var(--hivis-text); letter-spacing:.01em;}
+  .pr-share{width:36px; height:36px; padding:9px; border:none; border-radius:50%; background:rgba(0,0,0,.28); color:var(--hivis-text); cursor:pointer; flex:none; transition:transform .13s var(--ease-out);}
+  .pr-share:active{transform:scale(.88);} .pr-share svg{width:100%; height:100%; display:block;}
+  .cup-handle{fill:none; stroke:var(--mist-dim); stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:3 3;}
+  .cup-body{fill:none; stroke:var(--mist-dim); stroke-width:2; stroke-dasharray:3 3;}
+  .cup-shine,.cup-star{display:none;} .cup-stem,.cup-base{fill:var(--mist-dim); fill-opacity:.35;}
+  .pr-row.achieved .cup-handle{stroke:var(--hivis); stroke-dasharray:none;}
+  .pr-row.achieved .cup-body{fill:var(--hivis); stroke:none; stroke-dasharray:none;}
+  .pr-row.achieved .cup-shine{display:block; fill:none; stroke:#fff; stroke-opacity:.5; stroke-width:2; stroke-linecap:round;}
+  .pr-row.achieved .cup-star{display:block; fill:var(--ink);}
+  .pr-row.achieved .cup-stem,.pr-row.achieved .cup-base{fill:var(--hivis); fill-opacity:.8;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
