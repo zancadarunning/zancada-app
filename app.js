@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T23:40:37Z';
+const APP_VERSION = '2026-10-08T23:44:32Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10633,60 +10633,75 @@ function drawPRBadge(ctx, cx, cy, r){
   const ink = '#121415';
   ctx.fillStyle = ink;
   ctx.strokeStyle = ink;
+  const by = cy - r*0.01;
 
-  // cuenco: borde recto arriba, fondo redondo
-  const by = cy - r*0.08;
+  // sombra suave de apoyo bajo la base
+  ctx.save();
+  ctx.fillStyle = 'rgba(18,20,21,0.2)';
   ctx.beginPath();
-  ctx.moveTo(cx - r*0.38, by - r*0.46);
-  ctx.lineTo(cx + r*0.38, by - r*0.46);
-  ctx.lineTo(cx + r*0.38, by - r*0.16);
-  ctx.arc(cx, by - r*0.16, r*0.38, 0, Math.PI, false);
-  ctx.closePath();
+  ctx.ellipse(cx, by + r*0.6, r*0.4, r*0.05, 0, 0, Math.PI*2);
   ctx.fill();
+  ctx.restore();
 
-  // asas en lazo
-  ctx.lineWidth = r*0.075;
+  // asas en lazo, detrás del cuenco
+  ctx.lineWidth = r*0.085;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   [-1, 1].forEach(sg => {
     ctx.beginPath();
-    ctx.moveTo(cx + sg*r*0.36, by - r*0.38);
-    ctx.lineTo(cx + sg*r*0.52, by - r*0.38);
-    ctx.arc(cx + sg*r*0.52, by - r*0.25, r*0.13, -Math.PI/2, Math.PI/2, sg < 0);
-    ctx.lineTo(cx + sg*r*0.34, by - r*0.12);
+    ctx.moveTo(cx + sg*r*0.38, by - r*0.4);
+    ctx.lineTo(cx + sg*r*0.55, by - r*0.4);
+    ctx.arc(cx + sg*r*0.55, by - r*0.26, r*0.14, -Math.PI/2, Math.PI/2, sg < 0);
+    ctx.lineTo(cx + sg*r*0.33, by - r*0.12);
     ctx.stroke();
   });
 
-  // pie y base en dos escalones
-  ctx.fillRect(cx - r*0.055, by + r*0.2, r*0.11, r*0.16);
-  prRoundRect(ctx, cx - r*0.22, by + r*0.36, r*0.44, r*0.075, r*0.03); ctx.fill();
-  prRoundRect(ctx, cx - r*0.3, by + r*0.44, r*0.6, r*0.075, r*0.03); ctx.fill();
-
-  // estrella calada en el cuenco
-  const sx = cx, sy = by - r*0.2, so = r*0.14, si = r*0.058;
+  // cuenco: borde recto arriba, fondo redondo
+  const bw = r*0.42;
   ctx.beginPath();
-  for(let k = 0; k < 10; k++){
-    const rr = k % 2 ? si : so, an = -Math.PI/2 + k*Math.PI/5;
-    const px = sx + rr*Math.cos(an), py = sy + rr*Math.sin(an);
-    if(k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-  }
+  ctx.moveTo(cx - bw, by - r*0.5);
+  ctx.lineTo(cx + bw, by - r*0.5);
+  ctx.lineTo(cx + bw, by - r*0.16);
+  ctx.arc(cx, by - r*0.16, bw, 0, Math.PI, false);
   ctx.closePath();
-  ctx.fillStyle = '#D6FF3F';
   ctx.fill();
 
-  // etiqueta PR sobre el borde inferior del disco
-  const pw = r*0.74, ph = r*0.32, py0 = cy + r*0.86;
-  prRoundRect(ctx, cx - pw/2, py0 - ph/2, pw, ph, ph/2);
-  ctx.fillStyle = ink;
+  // borde superior (aro) y brillo del cuenco
+  prRoundRect(ctx, cx - bw - r*0.03, by - r*0.55, bw*2 + r*0.06, r*0.085, r*0.04);
   ctx.fill();
-  ctx.lineWidth = r*0.03;
-  ctx.strokeStyle = '#D6FF3F';
+  ctx.save();
+  ctx.strokeStyle = 'rgba(214,255,63,0.55)';
+  ctx.lineWidth = r*0.035;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - bw*0.82, by - r*0.38);
+  ctx.lineTo(cx - bw*0.82, by - r*0.18);
+  ctx.quadraticCurveTo(cx - bw*0.8, by - r*0.0, cx - bw*0.5, by + r*0.1);
   ctx.stroke();
+  ctx.restore();
+
+  // cuello con pie acampanado, nudo y dos escalones de base
+  ctx.beginPath();
+  ctx.moveTo(cx - r*0.07, by + r*0.2);
+  ctx.lineTo(cx + r*0.07, by + r*0.2);
+  ctx.lineTo(cx + r*0.05, by + r*0.33);
+  ctx.lineTo(cx - r*0.05, by + r*0.33);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(cx, by + r*0.265, r*0.1, r*0.04, 0, 0, Math.PI*2);
+  ctx.fill();
+  prRoundRect(ctx, cx - r*0.2, by + r*0.33, r*0.4, r*0.08, r*0.035); ctx.fill();
+  prRoundRect(ctx, cx - r*0.3, by + r*0.41, r*0.6, r*0.09, r*0.035); ctx.fill();
+  ctx.fillStyle = 'rgba(214,255,63,0.7)';
+  ctx.fillRect(cx - r*0.2, by + r*0.37, r*0.4, r*0.014);
+
+  // "PR" calado en el cuenco
   ctx.fillStyle = '#D6FF3F';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = '800 ' + Math.round(r*0.22) + 'px "Inter", Arial, sans-serif';
-  ctx.fillText('PR', cx, py0 + r*0.01);
+  ctx.font = '800 ' + Math.round(r*0.27) + 'px "Inter", Arial, sans-serif';
+  ctx.fillText('PR', cx + r*0.015, by - r*0.2);
 
   ctx.restore();
 }
