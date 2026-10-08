@@ -1876,6 +1876,11 @@
   .chat-input-bar{padding:10px 16px 12px; gap:10px; border-top:none; background:linear-gradient(180deg, transparent 0%, var(--asphalt) 28%);}
   .chat-input-bar input{border-width:1px; padding:13px 18px;}
   .chat-input-bar input:focus{border-color:var(--hivis); box-shadow:0 0 0 3px var(--hivis-dim);}
+
+  /* Chat con Zonda: fondo liso en toda la pantalla (sin la textura de curvas ni el halo ambiente), arriba del titulo y abajo de la barra de escribir. */
+  html[data-view="coach"] #app{background:var(--asphalt);}
+  html[data-view="coach"] #app::after{display:none;}
+  html[data-view="coach"] header.top{background:var(--asphalt);}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura

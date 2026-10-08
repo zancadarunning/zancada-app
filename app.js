@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T19:01:34Z';
+const APP_VERSION = '2026-10-08T19:18:46Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8223,6 +8223,7 @@ async function showView(v){
     document.documentElement.setAttribute('data-nav-dir', VIEW_ORDER.indexOf(v) < VIEW_ORDER.indexOf(lastViewName) ? 'back' : 'fwd');
   }
   lastViewName = v;
+  document.documentElement.setAttribute('data-view', v); // el chat usa fondo liso (ver html[data-view="coach"] en el CSS)
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   setTimeout(updateHeaderTitle, 0);
   document.getElementById('view-'+v).classList.add('active');
