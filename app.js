@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T20:39:10Z';
+const APP_VERSION = '2026-10-08T20:45:58Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -298,6 +298,44 @@ const ICONS = {
 };
 
 /* ================= FEEDBACK: toast / confirm / haptics ================= */
+// Aviso discreto cuando el celular se queda sin internet (lo que se ve es lo guardado).
+function updateOfflinePill(){
+  const p = document.getElementById('offline-pill');
+  const off = (typeof navigator !== 'undefined' && navigator.onLine === false);
+  if(p) p.classList.toggle('on', off);
+  const hdr = document.getElementById('mainHeader');
+  if(hdr) hdr.classList.toggle('offline', off);
+}
+if(typeof window !== 'undefined' && window.addEventListener){
+  window.addEventListener('online', updateOfflinePill);
+  window.addEventListener('offline', updateOfflinePill);
+  updateOfflinePill();
+}
+// Chat: mantener apretado un mensaje lo copia entero (cartel "Mensaje copiado").
+async function copyChatMessage(m){
+  const text = (m.innerText || '').trim();
+  if(!text) return;
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){ await navigator.clipboard.writeText(text); }
+    else { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+    m.classList.add('copied'); setTimeout(() => m.classList.remove('copied'), 650);
+    hapticTap();
+    showToast(t('chat_copied'), 'success');
+  }catch(e){}
+}
+if(typeof document !== 'undefined'){
+  let copyTimer = null;
+  const startCopy = e => {
+    const m = e.target && e.target.closest ? e.target.closest('#chatLog .msg:not(.typing):not(.system)') : null;
+    if(!m) return;
+    clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => copyChatMessage(m), 550);
+  };
+  const cancelCopy = () => clearTimeout(copyTimer);
+  document.addEventListener('touchstart', startCopy, {passive:true});
+  document.addEventListener('mousedown', startCopy);
+  ['touchend','touchmove','touchcancel','mouseup','mouseleave'].forEach(ev => document.addEventListener(ev, cancelCopy, {passive:true}));
+}
 // Toque corto y suave para botones principales y pestañas. Solo en la app nativa (plugin Haptics); en el navegador no hace nada.
 function hapticTap(){
   try{
@@ -3506,6 +3544,7 @@ function obGotoStep(n){
   obCurrentStep = n;
   document.querySelectorAll('.ob-step').forEach(el=>el.classList.toggle('active', parseInt(el.dataset.step,10)===n));
   document.getElementById('ob-progress-fill').style.transform = `scaleX(${n/OB_STEP_COUNT})`;
+  { const c = document.getElementById('ob-step-count'); if(c) c.textContent = n + '/' + OB_STEP_COUNT; }
   document.getElementById('ob-back-btn').style.display = n>1 ? 'flex' : 'none';
   document.getElementById('onboard').scrollTop = 0;
 }
@@ -11005,7 +11044,7 @@ function renderRDRuta(panel){
     </div>
     <div class="rd-ruta-below" id="rd-ruta-below">
       <div class="rd-big-dist">${fmtDist(r.distanceKm)} <span style="font-size:19px; font-weight:700; color:var(--mist);">${distUnit()}</span></div>
-      <p class="muted" style="margin-top:2px; text-transform:capitalize;">${dateStr}, ${timeStr}</p>
+      <p class="muted" style="margin-top:2px;">${dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}, ${timeStr}</p>
       <!-- Botón "Video del recorrido" sacado a pedido del usuario: en la web (PWA)
            nunca se pudo lograr que el video se guarde/comparta de forma confiable
            en iPhone (ver el historial de intentos alrededor de rdRemuxVideoIfNeeded

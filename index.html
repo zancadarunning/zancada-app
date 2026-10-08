@@ -1981,6 +1981,29 @@
   /* Historial: el brillo del trazo queda tapado por la imagen del mapa y el desenfoque de 3px de la etiqueta de duración no se aprecia sobre ese mapa; ambos se repetían en cada tarjeta. */
   .hist-map-sketch path{filter:none;}
   .hist-map-badge .hist-map-duration{-webkit-backdrop-filter:none; backdrop-filter:none; background:rgba(10,10,10,.7);}
+
+  /* ===== Cuarta pasada 2026-10-08: chat (copiar / escribiendo), sin conexión, contador de onboarding ===== */
+  .msg{-webkit-user-select:none; user-select:none; -webkit-touch-callout:none; transition:opacity .15s ease;}
+  .msg.copied{opacity:.55;}
+  .msg.typing{display:flex; align-items:center; gap:10px; width:max-content; padding:10px 16px 10px 12px;}
+  .msg.typing::before{content:''; width:24px; height:24px; flex-shrink:0; border-radius:50%; background:radial-gradient(circle at 36% 47%, var(--ink) 0 2px, transparent 2.6px), radial-gradient(circle at 64% 47%, var(--ink) 0 2px, transparent 2.6px), var(--hivis); box-shadow:var(--neon-press);}
+  .msg.typing span{margin-right:0;}
+  .offline-dot{width:7px; height:7px; border-radius:50%; background:var(--clay); flex-shrink:0;}
+  .ob-step-count{flex-shrink:0; min-width:30px; text-align:right; font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; color:var(--mist);}
+
+  .offline-chip{display:none; align-items:center; gap:6px; padding:3px 10px; border-radius:999px; background:var(--clay-dim); color:var(--clay); font-size:11.5px; font-weight:800; white-space:nowrap;}
+  .offline-chip.on{display:inline-flex;}
+  header.top.offline #headerDate{display:none;}
+  .msg.typing{gap:0;} .msg.typing::before{margin-right:11px;} .msg.typing span{margin-right:5px;}
+
+  /* Logros: el botón de compartir mantiene su zona táctil de 40px pero el círculo visible es de 26px, así no se encima con la medalla. */
+  .pr-medal-share-btn{background:none !important; top:0; right:0;}
+  .pr-medal-share-btn::before{content:''; position:absolute; width:26px; height:26px; border-radius:50%; background:rgba(0,0,0,.28);}
+  .pr-medal-share-btn:active::before{background:rgba(0,0,0,.4);}
+  .pr-medal-share-btn svg{position:relative; width:18px; height:18px;}
+
+  /* Botones de conectar relojes: mientras todavía no cargó su texto (se completa al consultar el estado), un relleno liso en vez de una píldora vacía. */
+  .btn:empty{background:var(--asphalt-3); border-color:transparent; box-shadow:none; min-height:48px; pointer-events:none;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -2166,6 +2189,7 @@
     <div class="ob-progress-wrap">
       <button class="week-nav-btn" id="ob-back-btn" data-i18n-aria="aria_back" onclick="obPrevStep()" style="display:none;"><span class="icon-sq" style="width:15px; height:15px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
       <div class="ob-progress"><div class="ob-progress-fill" id="ob-progress-fill"></div></div>
+      <span class="ob-step-count" id="ob-step-count" aria-hidden="true"></span>
       <button class="small-link" style="flex-shrink:0; white-space:nowrap;" onclick="logout()" data-i18n="perfil_logout"></button>
     </div>
 
@@ -2336,6 +2360,7 @@
     <div class="brand"><div class="dot"></div><span>ZANCADA</span></div>
     <div style="display:flex; align-items:center; gap:8px;">
       <span id="sync-pending-badge" class="tag tag-soon" role="button" tabindex="0" data-i18n-aria="sync_pending_title" style="display:none; align-items:center; gap:4px; cursor:pointer;" onclick="showToast(t('sync_pending_title'),'info')"><span class="icon-sq" style="width:11px; height:11px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span></span>
+      <div class="offline-chip" id="offline-pill" role="status" aria-live="polite"><span class="offline-dot"></span><span data-i18n="offline_pill"></span></div>
       <div class="header-view-title" id="header-view-title" aria-hidden="true"></div>
       <div class="muted mono" id="headerDate" style="font-size:12px;"></div>
     </div>
