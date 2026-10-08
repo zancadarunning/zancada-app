@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T15:31:53Z';
+const APP_VERSION = '2026-10-08T16:21:09Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6672,6 +6672,17 @@ function renderPlan(){
   document.getElementById('plan-list').innerHTML = buildDayListHtml(wd);
   makeClickablesFocusable(document.getElementById('plan-list'));
   renderPastWeeks();
+}
+// "Semanas anteriores": el botón gris despliega/pliega la lista completa de semanas.
+function togglePastWeeks(){
+  const wrap = document.getElementById('past-weeks-list-wrap');
+  const btn = document.getElementById('past-weeks-toggle');
+  const chev = document.getElementById('past-weeks-chevron');
+  if(!wrap || !btn) return;
+  const open = wrap.style.display === 'none';
+  wrap.style.display = open ? 'block' : 'none';
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if(chev) chev.style.transform = open ? 'rotate(180deg)' : '';
 }
 function renderPastWeeks(){
   const card = document.getElementById('past-weeks-card');

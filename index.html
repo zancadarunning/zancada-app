@@ -672,6 +672,10 @@
   .btn-primary:disabled:active{transform:none;}
   .btn-outline{background:transparent; border:1px solid var(--asphalt-4); color:var(--chalk); box-shadow:none; transition:transform .13s var(--ease-out), background .13s var(--ease-out);}
   .btn-outline:active{transform:scale(.97); background:var(--press);}
+  /* Gris sólido (acciones neutras: Enviar mensaje, Cerrar sesión, Semanas anteriores) */
+  .btn-gray{background:var(--asphalt-3); color:var(--chalk); border:none; box-shadow:none; transition:transform .13s var(--ease-out), background .13s var(--ease-out);}
+  .btn-gray:active{transform:scale(.97); background:var(--asphalt-4);}
+  .btn-gray:disabled{opacity:.6; cursor:not-allowed;}
   .btn-saved-flash{background:var(--hivis) !important; border-color:var(--hivis) !important; color:var(--ink) !important; transition:background .15s ease, color .15s ease;}
   /* Los botones "Guardar" de Perfil quedan ocultos hasta que el usuario modifica algo en
      esa sección -- antes estaban siempre visibles y generaban dudas sobre si un cambio ya
@@ -2278,12 +2282,22 @@
     <p class="muted" id="plan-recovery-note" style="display:none; color:var(--hivis-text); margin-bottom:14px;"></p>
     <div class="card" id="plan-list"></div>
     <div class="plan-secondary-actions">
-      <button class="plan-secondary-btn" onclick="openCalendarSubscribe()"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/></svg></span><span data-i18n="plan_export_ics"></span></button>
       <button class="plan-secondary-btn" onclick="goCoachWithPrompt('')"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v11H8l-4 4v-4H4z"/></svg></span><span data-i18n="plan_adjust"></span></button>
     </div>
-    <div class="card" id="past-weeks-card" style="display:none; margin-top:14px;">
-      <h3 data-i18n="plan_past_weeks"></h3>
-      <div id="past-weeks-list"></div>
+    <div class="card" id="perfil-ltest-card" style="margin-top:6px;">
+      <h3 data-i18n="ltest_perfil_title"></h3>
+      <p class="muted" id="perfil-ltest-text" style="margin-top:8px; font-size:13px; line-height:1.5;"></p>
+      <p id="perfil-ltest-sched" style="display:none; margin-top:8px; font-size:13px; font-weight:700; color:var(--hivis-text);"></p>
+      <button class="btn btn-primary" style="width:100%; margin-top:12px;" onclick="openLevelTestSchedule()" data-i18n="ltest_perfil_btn"></button>
+    </div>
+    <div id="past-weeks-card" style="display:none; margin-top:14px;">
+      <button type="button" class="btn btn-gray" id="past-weeks-toggle" aria-expanded="false" aria-controls="past-weeks-list-wrap" onclick="togglePastWeeks()" style="justify-content:space-between;">
+        <span data-i18n="plan_past_weeks"></span>
+        <span class="icon-sq" id="past-weeks-chevron" style="width:16px; height:16px; transition:transform .2s var(--ease-out);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+      </button>
+      <div class="card" id="past-weeks-list-wrap" style="display:none; margin-top:10px;">
+        <div id="past-weeks-list"></div>
+      </div>
     </div>
   </section>
 
@@ -2833,12 +2847,6 @@
       </div>
       <p class="muted" style="margin-top:10px; font-size:12.5px; line-height:1.5;" data-i18n="trainby_tip"></p>
     </div>
-    <div class="card" id="perfil-ltest-card">
-      <h3 data-i18n="ltest_perfil_title"></h3>
-      <p class="muted" id="perfil-ltest-text" style="margin-top:8px; font-size:13px; line-height:1.5;"></p>
-      <p id="perfil-ltest-sched" style="display:none; margin-top:8px; font-size:13px; font-weight:700; color:var(--hivis-text);"></p>
-      <button class="btn btn-primary" style="width:100%; margin-top:12px;" onclick="openLevelTestSchedule()" data-i18n="ltest_perfil_btn"></button>
-    </div>
     <div class="card">
       <h3 data-i18n="perfil_voice_label"></h3>
       <div class="choice-row segmented" id="voice-toggle">
@@ -3282,7 +3290,7 @@
       <h3 data-i18n="perfil_feedback_title"></h3>
       <p class="muted" style="font-size:12px; margin:2px 0 10px;" data-i18n="perfil_feedback_hint"></p>
       <textarea id="feedback-message" rows="3" maxlength="4000" data-i18n-ph="perfil_feedback_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
-      <button class="btn btn-outline btn-sm" id="feedback-send-btn" style="margin-top:12px; width:100%;" data-i18n="perfil_feedback_send" onclick="sendFeedback()"></button>
+      <button class="btn btn-gray btn-sm" id="feedback-send-btn" style="margin-top:12px; width:100%;" data-i18n="perfil_feedback_send" onclick="sendFeedback()"></button>
     </div>
 
     <div class="card">
@@ -3296,10 +3304,9 @@
         <a class="small-link" href="mailto:info@zancada.org" data-i18n="perfil_support_link"></a>
       </div>
       <div style="display:flex; gap:16px; margin-top:12px;">
-        <button class="small-link" onclick="logout()" data-i18n="perfil_logout"></button>
         <button class="small-link" onclick="resetApp()" data-i18n="perfil_reset"></button>
       </div>
-      <button class="btn btn-outline" style="margin-top:18px;" onclick="logout()" data-i18n="perfil_logout"></button>
+      <button class="btn btn-gray" style="margin-top:18px;" onclick="logout()" data-i18n="perfil_logout"></button>
       <button class="btn btn-danger" style="margin-top:12px;" onclick="deleteAccount()" data-i18n="perfil_delete_account"></button>
     </div>
   </section>
