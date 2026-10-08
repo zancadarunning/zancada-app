@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T23:49:43Z';
+const APP_VERSION = '2026-10-08T23:53:16Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10643,68 +10643,91 @@ function drawPRBadge(ctx, cx, cy, r){
   ctx.fill();
   ctx.restore();
 
-  // asas: curva rellena que sale de arriba del cuenco, se abre y vuelve a entrar más abajo,
-  // más gruesa afuera y fina en las uniones (se dibujan detrás del cuenco)
+  // volumen: degradados de tinta (más claro a la izquierda y arriba, más oscuro abajo/derecha)
+  const bw = r*0.44;
+  const gBowl = ctx.createLinearGradient(cx - bw, 0, cx + bw, 0);
+  gBowl.addColorStop(0, '#363c3f'); gBowl.addColorStop(0.35, '#1a1d1f'); gBowl.addColorStop(1, '#0c0e0f');
+  const gHandle = ctx.createLinearGradient(0, by - r*0.55, 0, by + r*0.1);
+  gHandle.addColorStop(0, '#31373a'); gHandle.addColorStop(1, '#0f1213');
+  const gBase = ctx.createLinearGradient(0, by + r*0.3, 0, by + r*0.52);
+  gBase.addColorStop(0, '#2a2f31'); gBase.addColorStop(1, '#0d0f10');
+
+  // asas: curva rellena que sale de arriba del cuenco, se abre y vuelve a entrar más abajo
+  // (más gruesa afuera, fina en las uniones; se dibujan detrás del cuenco)
   ctx.lineJoin = 'round';
-  ctx.lineWidth = r*0.018;
+  ctx.lineWidth = r*0.016;
+  ctx.fillStyle = gHandle;
+  ctx.strokeStyle = ink;
   [-1, 1].forEach(sg => {
     const X = v => cx + sg*r*v, Y = v => by + r*v;
     ctx.beginPath();
-    ctx.moveTo(X(0.34), Y(-0.47));
-    ctx.bezierCurveTo(X(0.86), Y(-0.58), X(0.92), Y(0.02), X(0.36), Y(0.06));
-    ctx.lineTo(X(0.36), Y(-0.03));
-    ctx.bezierCurveTo(X(0.68), Y(-0.01), X(0.7), Y(-0.37), X(0.34), Y(-0.36));
+    ctx.moveTo(X(0.38), Y(-0.48));
+    ctx.bezierCurveTo(X(0.92), Y(-0.6), X(0.97), Y(0.02), X(0.27), Y(0.06));
+    ctx.lineTo(X(0.28), Y(-0.03));
+    ctx.bezierCurveTo(X(0.7), Y(-0.01), X(0.72), Y(-0.38), X(0.38), Y(-0.37));
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
   });
 
-  // cuenco: borde recto arriba, fondo redondo
-  const bw = r*0.42;
+  // cuenco en tulipán: boca ancha que se afina hacia el pie
+  ctx.fillStyle = gBowl;
   ctx.beginPath();
   ctx.moveTo(cx - bw, by - r*0.5);
   ctx.lineTo(cx + bw, by - r*0.5);
-  ctx.lineTo(cx + bw, by - r*0.16);
-  ctx.arc(cx, by - r*0.16, bw, 0, Math.PI, false);
+  ctx.bezierCurveTo(cx + bw, by - r*0.1, cx + r*0.27, by + r*0.1, cx + r*0.06, by + r*0.17);
+  ctx.lineTo(cx - r*0.06, by + r*0.17);
+  ctx.bezierCurveTo(cx - r*0.27, by + r*0.1, cx - bw, by - r*0.1, cx - bw, by - r*0.5);
   ctx.closePath();
   ctx.fill();
 
-  // borde superior (aro) y brillo del cuenco
-  prRoundRect(ctx, cx - bw - r*0.03, by - r*0.55, bw*2 + r*0.06, r*0.085, r*0.04);
+  // aro de la boca con filo lima
+  prRoundRect(ctx, cx - bw - r*0.035, by - r*0.57, bw*2 + r*0.07, r*0.1, r*0.045);
+  ctx.fillStyle = gBase;
   ctx.fill();
   ctx.save();
-  ctx.strokeStyle = 'rgba(214,255,63,0.55)';
-  ctx.lineWidth = r*0.035;
+  ctx.strokeStyle = 'rgba(214,255,63,0.8)';
+  ctx.lineWidth = r*0.014;
+  ctx.beginPath();
+  ctx.moveTo(cx - bw + r*0.02, by - r*0.455);
+  ctx.lineTo(cx + bw - r*0.02, by - r*0.455);
+  ctx.stroke();
+  // brillo curvo sobre el costado izquierdo
+  ctx.strokeStyle = 'rgba(214,255,63,0.5)';
+  ctx.lineWidth = r*0.032;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(cx - bw*0.82, by - r*0.38);
-  ctx.lineTo(cx - bw*0.82, by - r*0.18);
-  ctx.quadraticCurveTo(cx - bw*0.8, by - r*0.0, cx - bw*0.5, by + r*0.1);
+  ctx.moveTo(cx - bw*0.86, by - r*0.38);
+  ctx.bezierCurveTo(cx - bw*0.9, by - r*0.2, cx - bw*0.74, by - r*0.02, cx - bw*0.42, by + r*0.08);
   ctx.stroke();
   ctx.restore();
 
-  // cuello con pie acampanado, nudo y dos escalones de base
+  // cuello acampanado, nudo y base en dos escalones con filo lima
+  ctx.fillStyle = gBowl;
   ctx.beginPath();
-  ctx.moveTo(cx - r*0.07, by + r*0.2);
-  ctx.lineTo(cx + r*0.07, by + r*0.2);
-  ctx.lineTo(cx + r*0.05, by + r*0.33);
-  ctx.lineTo(cx - r*0.05, by + r*0.33);
+  ctx.moveTo(cx - r*0.07, by + r*0.15);
+  ctx.lineTo(cx + r*0.07, by + r*0.15);
+  ctx.lineTo(cx + r*0.055, by + r*0.33);
+  ctx.lineTo(cx - r*0.055, by + r*0.33);
   ctx.closePath();
   ctx.fill();
   ctx.beginPath();
-  ctx.ellipse(cx, by + r*0.265, r*0.1, r*0.04, 0, 0, Math.PI*2);
+  ctx.ellipse(cx, by + r*0.25, r*0.105, r*0.042, 0, 0, Math.PI*2);
   ctx.fill();
+  ctx.fillStyle = gBase;
   prRoundRect(ctx, cx - r*0.2, by + r*0.33, r*0.4, r*0.08, r*0.035); ctx.fill();
-  prRoundRect(ctx, cx - r*0.3, by + r*0.41, r*0.6, r*0.09, r*0.035); ctx.fill();
-  ctx.fillStyle = 'rgba(214,255,63,0.7)';
-  ctx.fillRect(cx - r*0.2, by + r*0.37, r*0.4, r*0.014);
+  prRoundRect(ctx, cx - r*0.31, by + r*0.41, r*0.62, r*0.095, r*0.035); ctx.fill();
+  ctx.fillStyle = 'rgba(214,255,63,0.75)';
+  ctx.fillRect(cx - r*0.2, by + r*0.372, r*0.4, r*0.013);
 
-  // "PR" calado en el cuenco
+  // "PR" calado en el cuenco, con un subrayado lima
   ctx.fillStyle = '#D6FF3F';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = '800 ' + Math.round(r*0.27) + 'px "Inter", Arial, sans-serif';
-  ctx.fillText('PR', cx + r*0.015, by - r*0.2);
+  ctx.font = '800 ' + Math.round(r*0.3) + 'px "Inter", Arial, sans-serif';
+  ctx.fillText('PR', cx + r*0.012, by - r*0.24);
+  prRoundRect(ctx, cx - r*0.15, by - r*0.075, r*0.3, r*0.02, r*0.01);
+  ctx.fill();
 
   ctx.restore();
 }
