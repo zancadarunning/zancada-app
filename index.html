@@ -1881,6 +1881,25 @@
   html[data-view="coach"] #app{background:var(--asphalt);}
   html[data-view="coach"] #app::after{display:none;}
   html[data-view="coach"] header.top{background:var(--asphalt);}
+
+  /* Fondo del chat: una pista de atletismo vista desde arriba (carriles + línea de largada), como el dibujo de fondo de un chat de mensajería. */
+  #coachChatWrap{--track-line:rgba(214,255,63,.14);}
+  :root[data-theme="light"] #coachChatWrap{--track-line:rgba(94,112,0,.13);}
+  @media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #coachChatWrap{--track-line:rgba(94,112,0,.13);} }
+  #coachChatWrap::before{content:''; position:absolute; inset:0; z-index:0; pointer-events:none; background:var(--track-line);
+    -webkit-mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20400%20900%22%20preserveAspectRatio%3D%22xMidYMid%20slice%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M30%20260A170%20170%200%200%201%20370%20260L370%20640A170%20170%200%200%201%2030%20640Z%22%2F%3E%3Cpath%20d%3D%22M51%20260A149%20149%200%200%201%20349%20260L349%20640A149%20149%200%200%201%2051%20640Z%22%2F%3E%3Cpath%20d%3D%22M72%20260A128%20128%200%200%201%20328%20260L328%20640A128%20128%200%200%201%2072%20640Z%22%2F%3E%3Cpath%20d%3D%22M93%20260A107%20107%200%200%201%20307%20260L307%20640A107%20107%200%200%201%2093%20640Z%22%2F%3E%3Cpath%20d%3D%22M114%20260A86%2086%200%200%201%20286%20260L286%20640A86%2086%200%200%201%20114%20640Z%22%2F%3E%3Cpath%20d%3D%22M135%20260A65%2065%200%200%201%20265%20260L265%20640A65%2065%200%200%201%20135%20640Z%22%2F%3E%3Cpath%20d%3D%22M156%20260A44%2044%200%200%201%20244%20260L244%20640A44%2044%200%200%201%20156%20640Z%22%2F%3E%3Cpath%20d%3D%22M30%20320H156M244%20320H370%22%20stroke-width%3D%223%22%2F%3E%3Cpath%20d%3D%22M30%20580H156M244%20580H370%22%20stroke-width%3D%221.5%22%20stroke-dasharray%3D%223%205%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") center/cover no-repeat; mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20400%20900%22%20preserveAspectRatio%3D%22xMidYMid%20slice%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M30%20260A170%20170%200%200%201%20370%20260L370%20640A170%20170%200%200%201%2030%20640Z%22%2F%3E%3Cpath%20d%3D%22M51%20260A149%20149%200%200%201%20349%20260L349%20640A149%20149%200%200%201%2051%20640Z%22%2F%3E%3Cpath%20d%3D%22M72%20260A128%20128%200%200%201%20328%20260L328%20640A128%20128%200%200%201%2072%20640Z%22%2F%3E%3Cpath%20d%3D%22M93%20260A107%20107%200%200%201%20307%20260L307%20640A107%20107%200%200%201%2093%20640Z%22%2F%3E%3Cpath%20d%3D%22M114%20260A86%2086%200%200%201%20286%20260L286%20640A86%2086%200%200%201%20114%20640Z%22%2F%3E%3Cpath%20d%3D%22M135%20260A65%2065%200%200%201%20265%20260L265%20640A65%2065%200%200%201%20135%20640Z%22%2F%3E%3Cpath%20d%3D%22M156%20260A44%2044%200%200%201%20244%20260L244%20640A44%2044%200%200%201%20156%20640Z%22%2F%3E%3Cpath%20d%3D%22M30%20320H156M244%20320H370%22%20stroke-width%3D%223%22%2F%3E%3Cpath%20d%3D%22M30%20580H156M244%20580H370%22%20stroke-width%3D%221.5%22%20stroke-dasharray%3D%223%205%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") center/cover no-repeat;}
+  #coachChatWrap > .coach-head, #coachChatWrap > #chatLog, #coachChatWrap > .chat-input-bar{position:relative; z-index:1;}
+  .coach-head{border-bottom-color:transparent;}
+  /* Plan: todas las filas del mismo alto, título y chips alineados, y los km en una columna a la derecha. */
+  .day-row{min-height:76px; padding:10px 0; gap:12px; align-items:center;}
+  .day-badge{width:46px;}
+  .day-info{display:flex; flex-direction:column; justify-content:center; gap:6px; min-height:44px;}
+  .day-info .t{font-size:16px; line-height:1.2;}
+  .day-info-title-row{display:block;}
+  .day-row-chips{margin-top:0;}
+  .day-row-end{min-width:88px; justify-content:flex-end; gap:8px; padding-top:0;}
+  .day-km-inline{font-size:14px; text-align:right; white-space:nowrap; border-left:none; padding-left:0; margin-left:0;}
+  .day-end-slot{display:inline-flex; width:16px; height:16px; flex-shrink:0; align-items:center; justify-content:center;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
