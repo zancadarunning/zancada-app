@@ -2035,6 +2035,16 @@
   .hi-row{display:flex; align-items:center; justify-content:space-between; width:100%; min-height:62px; padding:0 18px; margin-bottom:10px; background:var(--asphalt-2); border:none; border-radius:var(--radius-sm); color:var(--chalk); cursor:pointer; font:inherit; transition:background .12s ease, transform .12s ease;}
   .hi-row:active{background:var(--press); transform:scale(.985);}
   .hi-row svg{color:var(--mist-dim); flex-shrink:0;}
+
+  /* ===== Relojes y conectividad: cada marca es una fila-botón (como "Traé tu historial") que se despliega ===== */
+  .conn-row, .conn-row-featured{padding:0; margin:0 0 10px; border-top:none; background:var(--asphalt-3); border-radius:var(--radius-sm); overflow:hidden;}
+  .conn-row:last-child{margin-bottom:0;}
+  .conn-row-head{margin:0; min-height:62px; padding:0 16px; cursor:pointer; -webkit-user-select:none; user-select:none; transition:background .12s ease;}
+  .conn-row-head:active{background:var(--press);}
+  .conn-chev{width:14px; height:14px; color:var(--mist-dim); flex-shrink:0; transition:transform .2s var(--ease-out);}
+  .conn-row.open .conn-chev{transform:rotate(90deg);}
+  .conn-body{display:none; padding:0 16px 16px;}
+  .conn-row.open .conn-body{display:block;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -2981,10 +2991,11 @@
       </div>
 
       <div class="conn-row conn-row-featured">
-        <div class="conn-row-head">
+        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" onclick="toggleConnRow(this)">
           <span class="brand-logo-chip"><img src="img/brand-logos/strava.svg" alt="Strava"></span>
           <span id="strava-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
-        </div>
+        <span class="icon-sq conn-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></div>
+        <div class="conn-body">
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_connectivity_desc"></p>
         <p id="strava-sync-note" class="muted" style="margin:8px 0 0; font-size:12px; display:none;"></p>
         <button class="btn btn-outline btn-sm" id="strava-connect-btn" style="margin-top:10px; width:100%;" onclick="connectStrava()"></button>
@@ -3002,13 +3013,16 @@
             <li data-i18n="perfil_remember_6"></li>
           </ul>
         </div>
+      
+        </div>
       </div>
 
       <div class="conn-row">
-        <div class="conn-row-head">
+        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" onclick="toggleConnRow(this)">
           <span class="brand-logo-chip"><img src="img/brand-logos/coros.png" alt="COROS"></span>
           <span id="coros-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
-        </div>
+        <span class="icon-sq conn-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></div>
+        <div class="conn-body">
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_coros_desc"></p>
         <button class="btn btn-outline btn-sm" id="coros-connect-btn" style="margin-top:10px; width:100%;" onclick="connectCoros()"></button>
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
@@ -3021,13 +3035,16 @@
             <li data-i18n="perfil_remember_generic_check_app"></li>
           </ul>
         </div>
+      
+        </div>
       </div>
 
       <div class="conn-row">
-        <div class="conn-row-head">
+        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" onclick="toggleConnRow(this)">
           <span class="brand-logo-chip"><img src="img/brand-logos/polar.svg" alt="Polar"></span>
           <span id="polar-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
-        </div>
+        <span class="icon-sq conn-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></div>
+        <div class="conn-body">
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_polar_desc"></p>
         <button class="btn btn-outline btn-sm" id="polar-connect-btn" style="margin-top:10px; width:100%;" onclick="connectPolar()"></button>
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
@@ -3040,15 +3057,18 @@
             <li data-i18n="perfil_remember_generic_check_app"></li>
           </ul>
         </div>
+      
+        </div>
       </div>
 
       <!-- Wahoo, a diferencia de Strava/Polar, también puede mandar la sesión de hoy AL
            reloj (ver syncPlanToWahoo()). -->
       <div class="conn-row">
-        <div class="conn-row-head">
+        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" onclick="toggleConnRow(this)">
           <span class="brand-logo-chip"><img src="img/brand-logos/wahoo.svg" alt="Wahoo"></span>
           <span id="wahoo-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
-        </div>
+        <span class="icon-sq conn-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></div>
+        <div class="conn-body">
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_wahoo_desc"></p>
         <button class="btn btn-outline btn-sm" id="wahoo-connect-btn" style="margin-top:10px; width:100%;" onclick="connectWahoo()"></button>
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
@@ -3061,16 +3081,19 @@
             <li data-i18n="perfil_remember_generic_check_app"></li>
           </ul>
         </div>
+      
+        </div>
       </div>
 
       <!-- Suunto: recibe las carreras al instante por webhook y puede mandar las sesiones de la semana
            AL reloj como guías SuuntoPlus (ver syncPlanToSuunto() y el botón "Enviar a mi Suunto" en Plan).
            Logo oficial de media.suunto.com (img/brand-logos/suunto.png), sin modificar colores. -->
       <div class="conn-row" id="suunto-card">
-        <div class="conn-row-head">
+        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" onclick="toggleConnRow(this)">
           <span class="brand-logo-chip brand-logo-plate" style="flex:none;"><img class="brand-logo-color" src="img/brand-logos/suunto.png" alt="Suunto" width="600" height="213"></span><span style="flex:1;"></span>
           <span id="suunto-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
-        </div>
+        <span class="icon-sq conn-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></div>
+        <div class="conn-body">
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_suunto_desc"></p>
         <button class="btn btn-outline btn-sm" id="suunto-connect-btn" style="margin-top:10px; width:100%;" onclick="connectSuunto()"></button>
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
@@ -3083,6 +3106,8 @@
             <li data-i18n="perfil_remember_generic_check_app"></li>
           </ul>
         </div>
+      
+        </div>
       </div>
 
       <!-- Health Connect solo tiene sentido en la app nativa de Android (no existe en
@@ -3091,12 +3116,15 @@
            cualquier reloj que escriba en Health Connect (Huawei, Samsung, etc.) sin
            necesitar una conexión propia por marca. -->
       <div class="conn-row" id="healthconnect-card" style="display:none;">
-        <div class="conn-row-head">
+        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" onclick="toggleConnRow(this)">
           <span class="brand-logo-chip" style="gap:8px; flex:1;"><img class="brand-logo-color" src="img/brand-logos/healthconnect.png" alt="" style="height:26px; max-width:26px; border-radius:7px;"><span class="n" style="font-size:14.5px; font-weight:700;" data-i18n="healthconnect_title"></span></span>
           <span id="healthconnect-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
-        </div>
+        <span class="icon-sq conn-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></div>
+        <div class="conn-body">
         <p class="muted" style="margin-bottom:8px;" data-i18n="healthconnect_desc"></p>
         <button class="btn btn-outline btn-sm" id="healthconnect-connect-btn" style="margin-top:10px; width:100%;" onclick="connectHealthConnect()"></button>
+      
+        </div>
       </div>
     </div>
     </div>

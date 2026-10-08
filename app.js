@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T21:32:35Z';
+const APP_VERSION = '2026-10-08T21:38:52Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7316,7 +7316,26 @@ function renderPerfil(){
    que abren un overlay de pantalla completa -- mismo patrón que openAchievements(). No
    hace falta reconstruir el HTML de adentro (a diferencia de logros): los inputs ya
    existen siempre en el DOM y renderPerfil() los mantiene al día estén o no visibles. */
-function openDevicesOverlay(){ openOverlaySheetEl(document.getElementById('devices-overlay')); }
+// Relojes y conectividad: cada marca es una fila-botón que se despliega (descripción, conectar/desconectar, avisos).
+function toggleConnRow(head){
+  const row = head && head.closest ? head.closest('.conn-row') : null;
+  if(!row) return;
+  const open = !row.classList.contains('open');
+  row.classList.toggle('open', open);
+  head.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+function openConnRow(row){
+  if(!row) return;
+  row.classList.add('open');
+  const h = row.querySelector('.conn-row-head');
+  if(h) h.setAttribute('aria-expanded', 'true');
+}
+function openDevicesOverlay(){
+  openOverlaySheetEl(document.getElementById('devices-overlay'));
+  // Los avisos de Strava (reconectar, sin sincronizar) viven dentro de su fila: si hay uno, esa fila se abre sola para que no pase desapercibido.
+  const note = document.getElementById('strava-sync-note');
+  if(note && note.style && note.style.display === 'block') openConnRow(note.closest ? note.closest('.conn-row') : null);
+}
 function closeDevicesOverlay(){ document.getElementById('devices-overlay').classList.remove('overlay-open'); }
 function openPersonalDataOverlay(){ openOverlaySheetEl(document.getElementById('personal-data-overlay')); }
 function closePersonalDataOverlay(){ document.getElementById('personal-data-overlay').classList.remove('overlay-open'); }
