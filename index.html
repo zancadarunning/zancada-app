@@ -1851,6 +1851,31 @@
   .ob-progress{overflow:visible;}
   .ob-progress-fill{box-shadow:0 0 10px var(--ambient-card), 0 0 2px var(--hivis);}
   .ob-step h2.display{font-size:36px; line-height:.95;}
+
+  /* ===== Rediseño del chat con Zonda ===== */
+  .coach-head{display:flex; align-items:center; gap:12px; padding:12px 20px; flex-shrink:0; border-bottom:1px solid var(--asphalt-4);}
+  .coach-head-avatar{width:42px; height:42px; flex-shrink:0; border-radius:50%; box-shadow:var(--neon-press); display:block;}
+  .coach-head-avatar svg{width:100%; height:100%; display:block;}
+  .coach-head-avatar circle{fill:var(--hivis);} .coach-head-avatar ellipse{fill:var(--ink);}
+  .coach-head-text{min-width:0; flex:1;}
+  #coachChatTitle{font-size:26px; line-height:1; padding:0; margin:0;}
+  .coach-head-sub{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',Inter,system-ui,sans-serif; font-size:12px; letter-spacing:0; color:var(--mist); margin-left:4px; vertical-align:middle;}
+  .coach-disclaimer{padding:4px 0 0; border:none; font-size:11.5px;}
+  #chatLog{padding:16px 16px 10px;}
+  .msg{max-width:84%; padding:12px 15px; border-radius:20px; font-size:15px; line-height:1.5; margin-bottom:8px;}
+  .msg.coach{background:var(--asphalt-2); border:1px solid var(--overlay-hairline); white-space:normal; border-bottom-left-radius:6px;}
+  .msg.user{border-bottom-right-radius:6px; box-shadow:0 0 18px -4px var(--glow-b);}
+  .msg.coach.mid,.msg.coach.last{border-top-left-radius:6px;} .msg.coach.first,.msg.coach.mid{border-bottom-left-radius:6px;}
+  .msg.user.mid,.msg.user.last{border-top-right-radius:6px;} .msg.user.first,.msg.user.mid{border-bottom-right-radius:6px;}
+  .msg .msg-p{margin:0 0 8px;} .msg .msg-p:last-child{margin-bottom:0;}
+  .msg .msg-list{margin:2px 0 8px; padding-left:18px;} .msg .msg-list:last-child{margin-bottom:0;} .msg .msg-list li{margin-bottom:4px;}
+  .msg-time{margin:-2px 0 12px;}
+  .msg-time.left{padding-left:6px;} .msg-time.right{padding-right:6px;}
+  .chat-chips{flex:0 0 auto; margin:6px -4px 2px;}
+  .chat-chip{padding:9px 15px; font-size:13px; font-weight:600; border:1px solid var(--asphalt-4);}
+  .chat-input-bar{padding:10px 16px 12px; gap:10px; border-top:none; background:linear-gradient(180deg, transparent 0%, var(--asphalt) 28%);}
+  .chat-input-bar input{border-width:1px; padding:13px 18px;}
+  .chat-input-bar input:focus{border-color:var(--hivis); box-shadow:0 0 0 3px var(--hivis-dim);}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -3236,8 +3261,13 @@
          "bottom:0" quedaba tapado por el teclado). Acá el contenedor mide el área
          realmente visible (visualViewport) y el chat interno se scrollea solo. -->
     <div id="coachChatWrap">
-      <h2 class="display" id="coachChatTitle">Zonda <span class="muted" style="font-family:'Inter',-apple-system,sans-serif; font-size:12px; letter-spacing:0; vertical-align:middle;" data-i18n="coach_title"></span></h2>
-      <p class="coach-disclaimer" data-i18n="coach_disclaimer"></p>
+      <div class="coach-head">
+        <span class="coach-head-avatar" aria-hidden="true"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="20"/><ellipse cx="14" cy="18" rx="2.6" ry="4.2"/><ellipse cx="26" cy="18" rx="2.6" ry="4.2"/></svg></span>
+        <div class="coach-head-text">
+          <h2 class="display" id="coachChatTitle">Zonda <span class="coach-head-sub" data-i18n="coach_title"></span></h2>
+          <p class="coach-disclaimer" data-i18n="coach_disclaimer"></p>
+        </div>
+      </div>
       <div id="chatLog"></div>
       <div class="chat-scroll-btn-wrap" id="chatScrollBtnWrap">
         <button class="chat-scroll-btn" id="chat-scroll-bottom-btn" style="display:none;" onclick="scrollChatToBottom()" data-i18n-aria="aria_scroll_bottom"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></button>

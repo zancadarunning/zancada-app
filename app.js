@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T18:57:30Z';
+const APP_VERSION = '2026-10-08T19:01:34Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -674,18 +674,22 @@ function sysMsgWithIcon(icon, text){
 // seguridad) y recién ahí convertimos ambas cosas, para no abrir la puerta a que
 // texto manipulado inyecte HTML.
 function formatCoachText(text){
+  // Parrafos (<p>) y listas (<ul>) reales: las lineas seguidas van en un mismo parrafo separadas por <br>,
+  // una linea en blanco corta el parrafo, y los guiones arman una lista. Asi no quedan huecos raros entre bloques.
   const withBold = escapeHtml(text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   const lines = withBold.split('\n');
-  const parts = [];
-  let listBuf = [];
-  const flushList = () => { if(listBuf.length){ parts.push('<ul class="msg-list">'+listBuf.map(li=>`<li>${li}</li>`).join('')+'</ul>'); listBuf = []; } };
+  const out = [];
+  let listBuf = [], para = [];
+  const flushList = () => { if(listBuf.length){ out.push('<ul class="msg-list">'+listBuf.map(li=>`<li>${li}</li>`).join('')+'</ul>'); listBuf = []; } };
+  const flushPara = () => { if(para.length){ out.push('<p class="msg-p">'+para.join('<br>')+'</p>'); para = []; } };
   lines.forEach(line=>{
     const m = line.match(/^-\s+(.+)$/);
-    if(m){ listBuf.push(m[1]); }
-    else { flushList(); parts.push(line); }
+    if(m){ flushPara(); listBuf.push(m[1]); }
+    else if(!line.trim()){ flushList(); flushPara(); }
+    else { flushList(); para.push(line); }
   });
-  flushList();
-  return parts.join('\n');
+  flushList(); flushPara();
+  return out.join('');
 }
 const countUpTimers = new WeakMap();
 function animateCountUp(el, target, decimals, duration){
@@ -12456,6 +12460,7 @@ function renderChatChips(){
   if(!log) return;
   const sendBtn = document.getElementById('chat-send-btn');
   if(sendBtn && sendBtn.dataset.busy==='1') return;
+  log.querySelectorAll('.chat-chips').forEach(el=>el.remove());
   const chipsHtml = `<div class="chat-chips">${CHAT_CHIP_KEYS.map(k=>`<button class="chat-chip" onclick="sendChatChip('${k}')">${escapeHtml(t(k))}</button>`).join('')}</div>`;
   log.insertAdjacentHTML('beforeend', chipsHtml);
 }
