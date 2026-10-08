@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T23:36:53Z';
+const APP_VERSION = '2026-10-08T23:40:37Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10596,57 +10596,97 @@ function drawSunburstRays(ctx, cx, cy, rInner, count){
   }
   ctx.restore();
 }
+function prRoundRect(ctx, x, y, w, h, rad){
+  ctx.beginPath();
+  ctx.moveTo(x + rad, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rad);
+  ctx.arcTo(x + w, y + h, x, y + h, rad);
+  ctx.arcTo(x, y + h, x, y, rad);
+  ctx.arcTo(x, y, x + w, y, rad);
+  ctx.closePath();
+}
 function drawPRBadge(ctx, cx, cy, r){
-  // Círculo lima sólido con rayos, y adentro una copa/trofeo en silueta oscura con "PR"
-  // encima -- misma composición que la insignia de Strava, en nuestra paleta (lima +
-  // tinta oscura) en vez de dorado + negro.
+  // Disco lima con rayos, copa en tinta oscura (cuenco en U, asas en lazo, pie en dos
+  // escalones, estrella en el cuenco) y una etiqueta "PR" que cruza el borde de abajo.
   ctx.save();
   ctx.shadowColor = 'transparent';
   ctx.shadowBlur = 0;
   ctx.shadowOffsetY = 0;
 
-  drawSunburstRays(ctx, cx, cy, r, 20);
+  drawSunburstRays(ctx, cx, cy, r, 24);
 
+  const g = ctx.createRadialGradient(cx - r*0.3, cy - r*0.4, r*0.1, cx, cy, r);
+  g.addColorStop(0, '#EAFF86');
+  g.addColorStop(0.55, '#D6FF3F');
+  g.addColorStop(1, '#C2E82F');
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI*2);
-  ctx.fillStyle = '#D6FF3F';
+  ctx.fillStyle = g;
   ctx.fill();
 
-  // Copa: contorno curvo (borde redondeado arriba, panza, se angosta al cuello) en vez
-  // de un trapecio de lados rectos -- se veía muy anguloso/tosco para ser un trofeo.
-  ctx.fillStyle = '#121415';
   ctx.beginPath();
-  ctx.moveTo(cx - r*0.46, cy - r*0.34);
-  ctx.quadraticCurveTo(cx, cy - r*0.52, cx + r*0.46, cy - r*0.34);
-  ctx.bezierCurveTo(cx + r*0.5, cy - r*0.05, cx + r*0.34, cy + r*0.14, cx + r*0.15, cy + r*0.16);
-  ctx.lineTo(cx - r*0.15, cy + r*0.16);
-  ctx.bezierCurveTo(cx - r*0.34, cy + r*0.14, cx - r*0.5, cy - r*0.05, cx - r*0.46, cy - r*0.34);
+  ctx.arc(cx, cy, r*0.9, 0, Math.PI*2);
+  ctx.strokeStyle = 'rgba(18,20,21,0.28)';
+  ctx.lineWidth = r*0.022;
+  ctx.stroke();
+
+  const ink = '#121415';
+  ctx.fillStyle = ink;
+  ctx.strokeStyle = ink;
+
+  // cuenco: borde recto arriba, fondo redondo
+  const by = cy - r*0.08;
+  ctx.beginPath();
+  ctx.moveTo(cx - r*0.38, by - r*0.46);
+  ctx.lineTo(cx + r*0.38, by - r*0.46);
+  ctx.lineTo(cx + r*0.38, by - r*0.16);
+  ctx.arc(cx, by - r*0.16, r*0.38, 0, Math.PI, false);
   ctx.closePath();
   ctx.fill();
 
-  // Asas: lazo cerrado y relleno (no un simple trazo curvo) que sale de la panza y
-  // vuelve a ella, como un asa real -- antes eran arcos sueltos que no se leían como
-  // parte del mismo objeto.
-  const handle = (sign)=>{
+  // asas en lazo
+  ctx.lineWidth = r*0.075;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  [-1, 1].forEach(sg => {
     ctx.beginPath();
-    ctx.moveTo(cx + sign*r*0.42, cy - r*0.3);
-    ctx.bezierCurveTo(cx + sign*r*0.82, cy - r*0.32, cx + sign*r*0.86, cy + r*0.08, cx + sign*r*0.5, cy + r*0.08);
-    ctx.bezierCurveTo(cx + sign*r*0.68, cy + r*0.05, cx + sign*r*0.64, cy - r*0.16, cx + sign*r*0.44, cy - r*0.14);
-    ctx.closePath();
-    ctx.fill();
-  };
-  handle(-1); handle(1);
+    ctx.moveTo(cx + sg*r*0.36, by - r*0.38);
+    ctx.lineTo(cx + sg*r*0.52, by - r*0.38);
+    ctx.arc(cx + sg*r*0.52, by - r*0.25, r*0.13, -Math.PI/2, Math.PI/2, sg < 0);
+    ctx.lineTo(cx + sg*r*0.34, by - r*0.12);
+    ctx.stroke();
+  });
 
-  // Cuello + base en dos escalones, como el pie real de un trofeo
-  ctx.fillRect(cx - r*0.09, cy + r*0.16, r*0.18, r*0.16);
-  ctx.fillRect(cx - r*0.26, cy + r*0.32, r*0.52, r*0.08);
-  ctx.fillRect(cx - r*0.34, cy + r*0.4, r*0.68, r*0.06);
+  // pie y base en dos escalones
+  ctx.fillRect(cx - r*0.055, by + r*0.2, r*0.11, r*0.16);
+  prRoundRect(ctx, cx - r*0.22, by + r*0.36, r*0.44, r*0.075, r*0.03); ctx.fill();
+  prRoundRect(ctx, cx - r*0.3, by + r*0.44, r*0.6, r*0.075, r*0.03); ctx.fill();
 
-  ctx.fillStyle = '#EDEFEF';
+  // estrella calada en el cuenco
+  const sx = cx, sy = by - r*0.2, so = r*0.14, si = r*0.058;
+  ctx.beginPath();
+  for(let k = 0; k < 10; k++){
+    const rr = k % 2 ? si : so, an = -Math.PI/2 + k*Math.PI/5;
+    const px = sx + rr*Math.cos(an), py = sy + rr*Math.sin(an);
+    if(k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = '#D6FF3F';
+  ctx.fill();
+
+  // etiqueta PR sobre el borde inferior del disco
+  const pw = r*0.74, ph = r*0.32, py0 = cy + r*0.86;
+  prRoundRect(ctx, cx - pw/2, py0 - ph/2, pw, ph, ph/2);
+  ctx.fillStyle = ink;
+  ctx.fill();
+  ctx.lineWidth = r*0.03;
+  ctx.strokeStyle = '#D6FF3F';
+  ctx.stroke();
+  ctx.fillStyle = '#D6FF3F';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = '800 ' + Math.round(r*0.26) + 'px "Inter", Arial, sans-serif';
-  ctx.fillText('PR', cx, cy - r*0.14);
+  ctx.font = '800 ' + Math.round(r*0.22) + 'px "Inter", Arial, sans-serif';
+  ctx.fillText('PR', cx, py0 + r*0.01);
 
   ctx.restore();
 }
@@ -10685,19 +10725,19 @@ function buildPRShareImageBlob(bucketKey, rec){
 
       ctx.fillStyle = '#EDEFEF';
       ctx.font = '400 90px "Bebas Neue", Arial, sans-serif';
-      ctx.fillText(t('pr_label_'+bucketKey), W/2, 895);
+      ctx.fillText(t('pr_label_'+bucketKey), W/2, 945);
 
       ctx.fillStyle = '#EDEFEF';
       ctx.font = '700 92px "JetBrains Mono", monospace';
-      ctx.fillText(fmtTime(rec.durationSec), W/2, 1080);
+      ctx.fillText(fmtTime(rec.durationSec), W/2, 1130);
 
       const paceMin = rec.distanceKm>0.02 ? (rec.durationSec/60)/rec.distanceKm : 0;
       ctx.fillStyle = '#8B9296';
       ctx.font = '700 40px "JetBrains Mono", monospace';
-      ctx.fillText(`${fmtPace(paceMin)}/${distUnit()}`, W/2, 1155);
+      ctx.fillText(`${fmtPace(paceMin)}/${distUnit()}`, W/2, 1205);
 
-      drawTrackEmblem(ctx, W/2, 1255, 200, 84);
-      drawBrandWord(ctx, W/2, 1395, 80);
+      drawTrackEmblem(ctx, W/2, 1305, 200, 84);
+      drawBrandWord(ctx, W/2, 1445, 80);
 
       canvas.toBlob((blob)=>resolve(blob||null), 'image/png');
     }catch(e){ resolve(null); }
