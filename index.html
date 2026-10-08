@@ -1891,10 +1891,15 @@
   #coachChatWrap > .coach-head, #coachChatWrap > #chatLog, #coachChatWrap > .chat-input-bar{position:relative; z-index:1;}
   .coach-head{border-bottom-color:transparent;}
   /* Plan: todas las filas del mismo alto, título y chips alineados, y los km en una columna a la derecha. */
-  .day-row{min-height:76px; padding:10px 0; gap:12px; align-items:center;}
+  .day-row{min-height:64px; padding:8px 0; gap:12px; align-items:center; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;}
+  /* El panel de detalle cerrado dejaba 14px de espacio muerto debajo de la línea separadora: el padding solo existe abierto. */
+  .day-detail > div{padding:0 0 0 54px; transition:padding .3s var(--ease-out);}
+  .day-detail.open > div{padding:0 0 14px 54px;}
+  .day-badge{padding:4px 0;}
+  .day-info .t{font-size:15.5px;}
   .day-badge{width:46px;}
   .day-info{display:flex; flex-direction:column; justify-content:center; gap:6px; min-height:44px;}
-  .day-info .t{font-size:16px; line-height:1.2;}
+  .day-info .t{line-height:1.2;}
   .day-info-title-row{display:block;}
   .day-row-chips{margin-top:0;}
   .day-row-end{min-width:88px; justify-content:flex-end; gap:8px; padding-top:0;}
