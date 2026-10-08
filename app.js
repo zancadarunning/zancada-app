@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T22:15:46Z';
+const APP_VERSION = '2026-10-08T22:19:42Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -322,6 +322,56 @@ if(typeof document !== 'undefined'){
   document.addEventListener('touchstart', startCopy, {passive:true});
   document.addEventListener('mousedown', startCopy);
   ['touchend','touchmove','touchcancel','mouseup','mouseleave'].forEach(ev => document.addEventListener(ev, cancelCopy, {passive:true}));
+}
+// ---- Recorrido guiado (primera vez): 4 globitos que señalan las pestañas ----
+const TOUR_STEPS = [
+  {sel: '.nav-btn[data-view="plan"]', key: 'tour_plan'},
+  {sel: '.nav-btn-primary .nav-primary-circle', key: 'tour_run', round: true},
+  {sel: '#coach-fab-wrap .coach-fab', key: 'tour_coach', round: true},
+  {sel: '.nav-btn[data-view="perfil"]', key: 'tour_perfil'}
+];
+let tourIdx = -1;
+function startTour(){
+  const el = document.getElementById('tour');
+  if(!el) return;
+  // si se lanza desde Perfil, se vuelve a Inicio para que las 4 pestañas y la mascota estén a la vista
+  if(typeof showView === 'function') showView('inicio');
+  tourIdx = -1;
+  el.style.display = 'block';
+  setTimeout(nextTour, 350);
+}
+function nextTour(){
+  tourIdx++;
+  if(tourIdx >= TOUR_STEPS.length){ endTour(); return; }
+  const st = TOUR_STEPS[tourIdx];
+  const target = document.querySelector(st.sel);
+  if(!target || !target.getBoundingClientRect().width){ nextTour(); return; }
+  const r = target.getBoundingClientRect();
+  const pad = 8;
+  const spot = document.getElementById('tour-spot');
+  spot.style.left = (r.left - pad) + 'px'; spot.style.top = (r.top - pad) + 'px';
+  spot.style.width = (r.width + pad * 2) + 'px'; spot.style.height = (r.height + pad * 2) + 'px';
+  spot.style.borderRadius = st.round ? '50%' : '22px';
+  document.getElementById('tour-text').textContent = t(st.key);
+  document.getElementById('tour-count').textContent = (tourIdx + 1) + '/' + TOUR_STEPS.length;
+  document.getElementById('tour-next').textContent = t(tourIdx === TOUR_STEPS.length - 1 ? 'tour_done' : 'tour_next');
+  const tip = document.getElementById('tour-tip');
+  const tw = Math.min(300, window.innerWidth - 28);
+  tip.style.width = tw + 'px';
+  tip.style.left = Math.max(14, Math.min(window.innerWidth - tw - 14, r.left + r.width / 2 - tw / 2)) + 'px';
+  tip.style.bottom = (window.innerHeight - (r.top - pad) + 14) + 'px';
+}
+function endTour(){
+  const el = document.getElementById('tour');
+  if(el) el.style.display = 'none';
+  if(state){ state.tourSeen = true; persist(); }
+}
+// Solo cuentas nuevas (menos de 14 días), una vez, y sin ninguna pantalla encima (si está "Traé tu historial", espera a que se cierre).
+function maybeStartTour(){
+  if(!state || !state.onboarded || state.tourSeen || !state.profile || !state.profile.createdAt) return;
+  if(Date.now() - new Date(state.profile.createdAt + 'T12:00:00').getTime() > 14 * 864e5) return;
+  if(document.querySelector('.overlay.overlay-open, .overlay-sheet.overlay-open')) return;
+  startTour();
 }
 // Toque corto y suave para botones principales y pestañas. Solo en la app nativa (plugin Haptics); en el navegador no hace nada.
 function hapticTap(){
@@ -3794,6 +3844,7 @@ function enterApp(){
   refreshDeviceConnections();
   finishPendingProviderLink(); // si se volvió de autorizar un reloj (ver oauth-link.js)
   setTimeout(()=>translateCustomPlanTexts(lang), 2500);
+  setTimeout(maybeStartTour, 3200);
   if(window.zcBootDone) window.zcBootDone();
 }
 // checkWeekRollover/autoSkipPastDays/autoClearPastEvent dependen de la fecha real, y antes
@@ -10356,7 +10407,7 @@ function openHistoryImport(){
   if(hc) hc.style.display = getHealthConnectBridge() ? 'flex' : 'none';
   openOverlaySheetEl(document.getElementById('history-import-overlay'));
 }
-function closeHistoryImport(){ document.getElementById('history-import-overlay').classList.remove('overlay-open'); }
+function closeHistoryImport(){ document.getElementById('history-import-overlay').classList.remove('overlay-open'); setTimeout(maybeStartTour, 600); }
 // Después de crear la cuenta: si todavía no hay ningún reloj/app conectado, se ofrece traer el historial (una sola vez).
 function maybeOpenHistoryImport(){
   if(!state || state.historyImportPrompted) return;
@@ -10837,6 +10888,86 @@ function routeSketchSvg(points){
   const d = pts.map((p, i) => (i ? 'L' : 'M') + X(i) + ' ' + Y(i)).join('');
   return '<svg class="hist-map-sketch" viewBox="0 0 400 108" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path d="' + d + '"/><circle cx="' + X(0) + '" cy="' + Y(0) + '" r="3.5"/></svg>';
 }
+// ---- Tu progreso (Historial): km por semana, ritmo promedio y tiempo por zona ----
+// Datos de las últimas 8 semanas (lunes a domingo). El ritmo semanal es tiempo total / km totales de esa semana.
+function computeWeeklyProgress(weeks){
+  weeks = weeks || 8;
+  const out = [];
+  for(let k = weeks - 1; k >= 0; k--){
+    out.push({iso: getMondayISO(new Date(Date.now() - k * 7 * 864e5)), km: 0, sec: 0});
+  }
+  const byIso = {}; out.forEach(w => { byIso[w.iso] = w; });
+  (state.runs || []).forEach(r => {
+    const w = byIso[getMondayISO(new Date(r.date))];
+    if(w && r.distanceKm > 0 && r.durationSec > 0){ w.km += r.distanceKm; w.sec += r.durationSec; }
+  });
+  out.forEach(w => { w.pace = w.km > 0.5 ? (w.sec / 60) / w.km : null; });
+  return out;
+}
+// Segundos por zona en las últimas 4 semanas: cada carrera con pulso (promedio o registro) cuenta entera en la zona de su pulso promedio.
+function computeZoneTime(){
+  const zones = state.profile && state.profile.hrZones;
+  if(!zones) return null;
+  const cutoff = Date.now() - 28 * 864e5;
+  const secs = [0, 0, 0, 0, 0, 0]; let n = 0;
+  (state.runs || []).forEach(r => {
+    if(new Date(r.date).getTime() < cutoff || !(r.durationSec > 0)) return;
+    const hr = r.avgHr || (r.hrLog && r.hrLog.length ? r.hrLog.reduce((a, h) => a + h.bpm, 0) / r.hrLog.length : 0);
+    if(!hr) return;
+    let z = 0;
+    for(let i = 1; i <= 5; i++){ if(zones[i] && hr >= zones[i].min) z = i; }
+    if(z === 0) z = 1;
+    secs[z] += r.durationSec; n++;
+  });
+  const total = secs.reduce((a, b) => a + b, 0);
+  return (n >= 2 && total > 0) ? {secs, total, n} : null;
+}
+function renderProgressCard(){
+  const weeks = computeWeeklyProgress(8);
+  if(!(state.runs || []).length) return '';
+  const W = 300, kmH = 92;
+  const maxKm = Math.max(...weeks.map(w => w.km), 1);
+  const slot = W / weeks.length, bw = Math.min(26, slot - 10);
+  const lbl = iso => { const d = new Date(iso + 'T12:00:00'); return d.getDate() + '/' + (d.getMonth() + 1); };
+  const bars = weeks.map((w, i) => {
+    const h = w.km > 0 ? Math.max(4, Math.round((w.km / maxKm) * (kmH - 22))) : 2;
+    const x = i * slot + (slot - bw) / 2, y = kmH - h;
+    const cur = i === weeks.length - 1;
+    const val = (cur || w.km === maxKm) && w.km > 0 ? '<text class="pg-val" x="' + (x + bw / 2) + '" y="' + (y - 4) + '" text-anchor="middle">' + fmtDist(w.km, 0) + '</text>' : '';
+    return '<rect class="pg-bar' + (cur ? ' cur' : '') + '" x="' + x.toFixed(1) + '" y="' + y + '" width="' + bw + '" height="' + h + '" rx="5"/>' + val +
+      '<text class="pg-lbl' + (cur ? ' cur' : '') + '" x="' + (x + bw / 2) + '" y="' + (kmH + 14) + '" text-anchor="middle">' + lbl(w.iso) + '</text>';
+  }).join('');
+  const kmSvg = '<svg class="pg-svg" viewBox="0 0 ' + W + ' ' + (kmH + 20) + '" role="img" aria-label="' + t('prog_km') + '">' + bars + '</svg>';
+
+  // ritmo: línea sobre las semanas que tienen carreras (más rápido = más arriba)
+  const withPace = weeks.map((w, i) => ({i, p: w.pace})).filter(x => x.p);
+  let paceBlock = '';
+  if(withPace.length >= 2){
+    const pH = 70;
+    const ps = withPace.map(x => x.p), minP = Math.min(...ps), maxP = Math.max(...ps), range = (maxP - minP) || 0.5;
+    const pt = x => ({x: x.i * slot + slot / 2, y: 10 + ((x.p - minP) / range) * (pH - 24)});
+    const pts = withPace.map(pt);
+    const path = pts.map((p, j) => (j ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join('');
+    const dots = pts.map((p, j) => '<circle class="pg-dot' + (j === pts.length - 1 ? ' cur' : '') + '" cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="' + (j === pts.length - 1 ? 4.5 : 3) + '"/>').join('');
+    const first = withPace[0].p, last = withPace[withPace.length - 1].p, diff = first - last;
+    const dMin = Math.floor(Math.abs(diff)), dSec = Math.round((Math.abs(diff) - dMin) * 60);
+    const dTxt = dMin + ':' + String(dSec).padStart(2, '0');
+    const delta = Math.abs(diff) < 0.03 ? '' : '<p class="pg-delta ' + (diff > 0 ? 'good' : 'bad') + '">' + t(diff > 0 ? 'prog_pace_better' : 'prog_pace_worse', {d: dTxt, unit: distUnit()}) + '</p>';
+    paceBlock = '<h4 class="pg-h">' + t('prog_pace') + '</h4><svg class="pg-svg" viewBox="0 0 ' + W + ' ' + pH + '" role="img" aria-label="' + t('prog_pace') + '"><path class="pg-line" d="' + path + '"/>' + dots +
+      '<text class="pg-val" x="' + pts[0].x + '" y="' + (pts[0].y - 9) + '" text-anchor="middle">' + fmtPace(first) + '</text>' +
+      '<text class="pg-val cur" x="' + pts[pts.length - 1].x + '" y="' + (pts[pts.length - 1].y - 10) + '" text-anchor="middle">' + fmtPace(last) + '</text></svg>' + delta;
+  }
+
+  // zonas: barra apilada de las últimas 4 semanas
+  let zoneBlock = '';
+  const zt = computeZoneTime();
+  if(zt){
+    const segs = [1, 2, 3, 4, 5].filter(z => zt.secs[z] > 0).map(z => '<span class="pg-seg z' + z + '" style="flex:' + zt.secs[z] + ';" title="' + t('zone_word') + ' ' + z + '"></span>').join('');
+    const legend = [1, 2, 3, 4, 5].filter(z => zt.secs[z] > 0).map(z => '<span class="pg-leg"><i class="pg-dotz z' + z + '"></i>' + t('zone_word') + ' ' + z + ' <b>' + Math.round(zt.secs[z] / zt.total * 100) + '%</b></span>').join('');
+    zoneBlock = '<h4 class="pg-h">' + t('prog_zones') + '</h4><div class="pg-zbar">' + segs + '</div><div class="pg-legend">' + legend + '</div>';
+  }
+  return '<div class="card pg-card"><h3>' + t('prog_title') + '</h3><h4 class="pg-h first">' + t('prog_km') + '</h4>' + kmSvg + paceBlock + zoneBlock + '</div>';
+}
 function renderHistory(){
   const el = document.getElementById('history-list');
   const stravaSyncCard = buildStravaSyncBanner();
@@ -10886,7 +11017,7 @@ function renderHistory(){
     return;
   }
   let lastMonthKey = null;
-  el.innerHTML = stravaSyncCard + trendsCard + filteredRuns.map(r=>{
+  el.innerHTML = stravaSyncCard + trendsCard + renderProgressCard() + filteredRuns.map(r=>{
     const shoe = state.shoes.find(s=>String(s.id)===String(r.shoeId));
     const paceMin = r.distanceKm>0.02 ? (r.durationSec/60)/r.distanceKm : 0;
     const avgHr = r.avgHr || (r.hrLog && r.hrLog.length ? Math.round(r.hrLog.reduce((a,h)=>a+h.bpm,0)/r.hrLog.length) : null);
@@ -11040,6 +11171,7 @@ function switchRDTab(tab){
     if(btn) btn.classList.toggle('active', tb===tab);
     if(panel) panel.classList.toggle('active', tb===tab);
   });
+  { const ab = document.getElementById('rd-tabbtn-' + tab); if(ab && ab.scrollIntoView){ try{ ab.scrollIntoView({inline:'center', block:'nearest', behavior:'smooth'}); }catch(e){} } }
   const panel = document.getElementById('rd-panel-'+tab);
   if(!panel) return;
   if(panel.dataset.rendered==='1'){

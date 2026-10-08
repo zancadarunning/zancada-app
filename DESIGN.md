@@ -261,6 +261,14 @@ A small hand-drawn line — five short climbs and descents ending flat, `viewBox
 - **Chat details.** Day separators (Hoy / Ayer / date), contextual `Sí, dale` / `No, gracias` chips when Zonda's last message ends in a question, and tappable trend bars with a one-line tooltip.
 - **Perfil.** Avatar has the neon ring; a streak chip appears from 2 consecutive weeks. **Run countdown** digits glow in neon, and "GO" flashes.
 
+### Completion pass (2026-10-08)
+- **Toasts** are glass-look capsules with the icon in a circle (lime for success, red for error). **Confirmations** are bottom sheets (grabber, primary action on top, gray Cancel) — no live blur.
+- **Share cards** stay transparent stickers (they are overlaid on the runner's own photo) but carry the mini 4-lane track emblem, a glowing ZANCADA wordmark, a glowing route line and lime separators.
+- **Level test:** steps are numbered with neon discs; the day picker is a list of date-badge rows (today = lime badge, scheduled = lime inset ring). The calendar's today uses a lime ring and the month title is capitalized only on the first letter.
+- **Tu progreso (Historial):** 8-week km bars (current week lime), average-pace line (faster is higher, with a delta line), and a stacked time-in-zone bar for the last 4 weeks. Static inline SVG, no filters.
+- **Guided tour:** first-run, 4 spotlight steps (Plan, Run, Zonda, Perfil); only for accounts under 14 days old, once, and it waits if a sheet is open. Re-playable from Perfil → Acerca de.
+- **Tab icons** are custom line icons: Inicio = top-view track, Plan = calendar with an elevation squiggle, Historial = winding route between two dots, Perfil = head with a headband. The Correr shoe is unchanged.
+
 ## Do's and Don'ts
 
 ### Do:
