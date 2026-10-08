@@ -2154,6 +2154,26 @@
   /* Tema claro: el resaltado de hoy en el Plan, más suave */
   :root[data-theme="light"] .day-row.day-row-today::after{background:linear-gradient(90deg, rgba(107,138,0,.09) 0%, rgba(107,138,0,.04) 55%, transparent 90%);}
   @media (prefers-color-scheme: light){ :root:not([data-theme="dark"]) .day-row.day-row-today::after{background:linear-gradient(90deg, rgba(107,138,0,.09) 0%, rgba(107,138,0,.04) 55%, transparent 90%);} }
+
+  /* ===== Resumen de carrera, frase del día y personaje más grande ===== */
+  .sum-hero{padding:14px 14px 16px;}
+  .sum-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+  .sum-kicker{font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; color:var(--mist);} .sum-date{font-size:11.5px; color:var(--mist); text-transform:capitalize;}
+  .sum-map{height:150px; margin-bottom:6px;}
+  .sum-pr-badge{position:absolute; left:10px; top:10px; z-index:2; background:rgba(11,11,12,.82); color:#D6FF3F; border-radius:10px; padding:4px 10px; font-size:11px; font-weight:700;}
+  .sum-big{text-align:center; margin:12px 0 14px;}
+  .sum-big .n{font-family:'Bebas Neue',sans-serif; font-weight:400; font-size:96px; line-height:.9; color:var(--hivis-text); letter-spacing:.01em;}
+  .sum-big .l{margin-top:4px; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--mist); font-weight:700;}
+  .sum-pr{display:flex; align-items:center; gap:12px; border:1px solid var(--hivis); background:var(--hivis-dim);}
+  .sum-pr b{display:block; font-size:14.5px;} .sum-pr span:not(.sum-pr-medal){display:block; margin-top:2px; font-size:12.5px; color:var(--mist);}
+  .sum-pr-medal{width:30px; height:36px; flex:none;} .sum-pr-medal svg{width:100%; height:100%; display:block;}
+  .sum-pr .mdl-rib{fill:var(--hivis-text); fill-opacity:.5;} .sum-pr .mdl-rib.b{fill-opacity:.32;} .sum-pr .mdl-disc{fill:var(--hivis); stroke:none; stroke-dasharray:none;}
+  .sum-pr .mdl-ring{stroke:var(--ink); stroke-opacity:.3; stroke-width:1.4;} .sum-pr .mdl-star{fill:var(--ink); fill-opacity:1;}
+  .quote-card{position:relative; padding:18px 20px 18px 56px; background:var(--asphalt-2);}
+  .quote-mark{position:absolute; left:16px; top:10px; font-family:'Bebas Neue',sans-serif; font-size:68px; line-height:1; color:var(--hivis-text);}
+  .quote-card p{margin:0; font-size:15.5px; line-height:1.5; font-weight:600; color:var(--chalk);}
+  .coach-fab-wrap{--fab-size:70px;}
+  .coach-head-avatar{width:52px; height:52px;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -2644,6 +2664,11 @@
       <p class="muted" id="home-race-phase-note" style="font-size:12.5px; margin:10px 0 0; display:none; line-height:1.4;"></p>
     </div>
 
+    <div class="card quote-card" id="home-quote-card">
+      <span class="quote-mark" aria-hidden="true">&ldquo;</span>
+      <p id="daily-tip-text"></p>
+    </div>
+
     <div class="home-section-label" data-i18n="home_week"></div>
 
     <div class="card">
@@ -2679,12 +2704,7 @@
       </div>
     </div>
 
-    <div class="home-section-label" data-i18n="home_section_more"></div>
-
-    <div class="card card-quiet" style="display:flex; gap:12px; align-items:flex-start;">
-      <span class="icon-sq" style="width:20px; height:20px; color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.45 1 1.2 1 2.1h5c0-.9.4-1.65 1-2.1A6 6 0 0 0 12 3z"/></svg></span>
-      <p id="daily-tip-text" style="margin:0; font-size:14.5px; line-height:1.5; color:var(--mist);"></p>
-    </div>
+    <div class="home-section-label" id="home-more-label" data-i18n="home_section_more"></div>
 
     <div class="card card-quiet" id="home-race-tips-card">
       <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" onclick="openRaceTipsInfo()">
@@ -2919,17 +2939,20 @@
     </div>
 
     <div id="runSummary">
-      <div class="card">
-        <h3 data-i18n="run_summary_title"></h3>
+      <div class="card sum-hero">
+        <div class="sum-top"><span class="sum-kicker" data-i18n="run_summary_title"></span><span class="sum-date" id="sum-date"></span></div>
+        <div class="hist-map sum-map" id="sum-map" style="display:none;"></div>
+        <div class="sum-big"><div class="n" id="sum-dist">0</div><div class="l" id="sum-dist-label" data-i18n="run_km"></div></div>
         <div class="stat-row">
-          <div class="stat-box"><div class="n mono" id="sum-dist">0</div><div class="l" id="sum-dist-label" data-i18n="run_km"></div></div>
           <div class="stat-box"><div class="n mono" id="sum-time">0</div><div class="l" data-i18n="run_time"></div></div>
           <div class="stat-box"><div class="n mono" id="sum-pace">0</div><div class="l" id="sum-pace-label" data-i18n="run_pace"></div></div>
           <div class="stat-box"><div class="n mono" id="sum-cal">0</div><div class="l" data-i18n="run_calories"></div></div>
         </div>
       </div>
+      <div class="card sum-pr" id="sum-pr" style="display:none;"><span class="sum-pr-medal" id="sum-pr-medal"></span><div><b id="sum-pr-title"></b><span id="sum-pr-sub"></span></div></div>
       <div class="card"><h3 id="sum-shoe-label" data-i18n="run_summary_shoe_q"></h3><div class="field" style="margin-top:12px;"><select id="sum-shoe" aria-labelledby="sum-shoe-label"></select></div></div>
-      <button class="btn btn-primary" data-i18n="run_summary_done" onclick="closeSummary()"></button>
+      <button class="btn btn-primary" data-i18n="hist_share" onclick="shareSummaryRun()"></button>
+      <button class="btn btn-gray" style="margin-top:10px;" data-i18n="run_summary_done" onclick="closeSummary()"></button>
     </div>
   </section>
 
