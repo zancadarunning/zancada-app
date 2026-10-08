@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T21:30:54Z';
+const APP_VERSION = '2026-10-08T21:32:35Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10294,8 +10294,9 @@ function getImportedHistoryStats(){
 function shouldOfferHistoryCalibration(){
   if(!state.profile || state.profile.historyCalibrated) return false;
   // Solo cuentas nuevas (menos de 60 días): quien ya viene entrenando con la app tiene su propio historial y plan ajustado.
+  // Una cuenta sin createdAt es de antes de que se guardara esa fecha: se considera antigua.
   const created = state.profile.createdAt ? new Date(state.profile.createdAt + 'T12:00:00').getTime() : 0;
-  if(created && Date.now() - created > 60 * 864e5) return false;
+  if(!created || Date.now() - created > 60 * 864e5) return false;
   const s = getImportedHistoryStats();
   return s.count >= 2 && s.weeklyKm >= 3;
 }

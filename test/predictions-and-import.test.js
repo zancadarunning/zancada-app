@@ -16,6 +16,7 @@ function baseProfile(app, overrides) {
     name: 'Corredor', weeklyKm: 12, currentWeeklyKm: 10, weeklyGoalKm: 0, goal: '10k', runnerType: 'new',
     trainingDays: ['tue', 'thu', 'sun'], terrain: 'asfalto', units: 'metric', trainBy: 'distance',
     birth: null, weight: null, height: null, hrKnown: false, hrMax: 190, hrZones: app.computeZones(190),
+    createdAt: new Date(Date.now() - 5 * 864e5).toISOString().slice(0, 10),
   }, overrides || {});
 }
 
@@ -112,4 +113,11 @@ test('historial importado: no se ofrece a cuentas de más de 60 días', () => {
   assert.equal(app.shouldOfferHistoryCalibration(), false);
   app.state.profile.createdAt = new Date(Date.now() - 10 * 864e5).toISOString().slice(0, 10);
   assert.equal(app.shouldOfferHistoryCalibration(), true);
+});
+
+test('historial importado: una cuenta sin createdAt (anterior a ese dato) se considera antigua y no se le ofrece', () => {
+  const app = loadApp();
+  app.state.profile = baseProfile(app, { createdAt: undefined });
+  app.state.runs = [run(3, 8, 45, { source: 'strava' }), run(8, 10, 55, { source: 'strava' })];
+  assert.equal(app.shouldOfferHistoryCalibration(), false);
 });
