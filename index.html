@@ -2022,6 +2022,19 @@
   #runSummary .stat-box{flex:1 1 0; min-width:0; padding-left:6px; padding-right:6px;}
   #runSummary .stat-box:nth-child(2){flex:1.7 1 0;}
   #runSummary .stat-box .n{font-size:18px;}
+
+  /* ===== Marcas estimadas e importar historial ===== */
+  .pred-row{display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:11px 0; border-bottom:1px solid var(--asphalt-4);}
+  .pred-row:last-of-type{border-bottom:none;}
+  .pred-label{font-weight:700; font-size:14.5px;}
+  .pred-time{font-family:'JetBrains Mono',monospace; font-weight:800; font-size:17px; color:var(--hivis-text);}
+  .pred-pace{font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--mist); margin-left:8px;}
+  .pred-need{font-size:12px; color:var(--mist-dim); text-align:right;}
+  .pred-note{margin:10px 0 0; font-size:12px; line-height:1.45;}
+  #history-calib-card{border-color:var(--hivis);}
+  .hi-row{display:flex; align-items:center; justify-content:space-between; width:100%; min-height:62px; padding:0 18px; margin-bottom:10px; background:var(--asphalt-2); border:none; border-radius:var(--radius-sm); color:var(--chalk); cursor:pointer; font:inherit; transition:background .12s ease, transform .12s ease;}
+  .hi-row:active{background:var(--press); transform:scale(.985);}
+  .hi-row svg{color:var(--mist-dim); flex-shrink:0;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -2392,6 +2405,13 @@
     <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:14px 0 4px;">
       <p class="greeting" style="margin:0;"><span data-i18n="home_hi"></span> <span id="home-name" style="font-weight:800;">—</span> 👋</p>
       <div class="streak-badge" id="home-streak-badge" style="display:none;"></div>
+    </div>
+
+    <div class="card" id="history-calib-card" style="display:none;">
+      <h3 data-i18n="calib_title"></h3>
+      <p class="muted" id="history-calib-text" style="margin:2px 0 14px;"></p>
+      <button class="btn btn-primary" onclick="applyHistoryCalibration()" data-i18n="calib_apply"></button>
+      <button class="small-link" style="display:block; margin:12px auto 0;" onclick="dismissHistoryCalibration()" data-i18n="hist_import_skip"></button>
     </div>
 
     <div class="card" id="home-test-banner" style="display:none; border-color:var(--hivis);">
@@ -2938,6 +2958,18 @@
        tres que no están en ningún set de íconos de marca abierto, un glifo propio en su
        color de marca real) separada por un divisor fino, para que se lea como un solo
        bloque de "conectá tu reloj". -->
+  <div class="overlay overlay-sheet" id="history-import-overlay">
+    <h2 class="display" style="font-size:32px; margin:10px 0 8px;" data-i18n="hist_import_title"></h2>
+    <p class="muted" style="margin:0 0 20px;" data-i18n="hist_import_lead"></p>
+    <button class="hi-row" onclick="closeHistoryImport(); connectStrava()"><span class="brand-logo-chip"><img src="img/brand-logos/strava.svg" alt="Strava"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
+    <button class="hi-row" onclick="closeHistoryImport(); connectPolar()"><span class="brand-logo-chip"><img src="img/brand-logos/polar.svg" alt="Polar"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
+    <button class="hi-row" onclick="closeHistoryImport(); connectWahoo()"><span class="brand-logo-chip"><img src="img/brand-logos/wahoo.svg" alt="Wahoo"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
+    <button class="hi-row" onclick="closeHistoryImport(); connectSuunto()"><span class="brand-logo-chip brand-logo-plate"><img class="brand-logo-color" src="img/brand-logos/suunto.png" alt="Suunto" width="600" height="213"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
+    <button class="hi-row" onclick="closeHistoryImport(); connectCoros()"><span class="brand-logo-chip"><img src="img/brand-logos/coros.png" alt="COROS"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
+    <button class="hi-row" id="hi-hc" style="display:none;" onclick="closeHistoryImport(); connectHealthConnect()"><span class="brand-logo-chip" style="gap:10px;"><img class="brand-logo-color" src="img/brand-logos/healthconnect.png" alt="" style="height:26px; max-width:26px; border-radius:7px;"><span style="font-size:14.5px; font-weight:700;">Health Connect</span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
+    <button class="small-link" style="display:block; margin:20px auto 0;" onclick="closeHistoryImport()" data-i18n="hist_import_skip"></button>
+  </div>
+
   <div class="overlay overlay-sheet" id="devices-overlay">
     <button class="week-nav-btn" onclick="closeDevicesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_devices_title"></h2>

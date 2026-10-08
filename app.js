@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T21:03:43Z';
+const APP_VERSION = '2026-10-08T21:30:54Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1868,6 +1868,8 @@ async function finishPendingProviderLink(){
     if(res.ok && data && data.ok){
       showToast(t('link_done_toast'), 'success');
       try{ await refreshDeviceConnections(); }catch(e){}
+      // Suunto no trae carreras al vincular (lo hace su sincronización): se la pide ahora. Después se refresca el estado para que aparezcan las carreras importadas.
+      try{ if(link.p === 'suunto') await callSyncEndpoint('/api/suunto-sync-now', session); await refreshStateFromServer(); renderAll(); renderHistory(); }catch(e){}
     } else if(res.status === 403){
       showToast(t('link_mismatch_toast'), 'error');
     } else {
@@ -3699,6 +3701,7 @@ async function finishOnboard(){
   seedCoachGreeting();
   await persist();
   enterApp();
+  setTimeout(maybeOpenHistoryImport, 1600);
   // Primera vez que el personaje se muestra de verdad para esta cuenta -- un festejo (mismos
   // ojos/color que ya usa celebrate() para una marca personal) en vez del parpadeo genérico
   // de "recién cargó la página", para que arrancar el plan también se sienta como un logro.
@@ -6316,6 +6319,7 @@ function renderHome(){
     animateCountUp(document.getElementById('home-week-km'), weekKmDisplay, 1);
   }
   animateCountUp(document.getElementById('home-week-sessions'), state.plan.filter(d=>d.dist>0).length, 0);
+  renderHistoryCalibCard();
   {
     // Anillo de progreso semanal (lo hecho vs. lo planeado de la semana): se llena con el neon.
     const ring = document.getElementById('home-week-ring');
@@ -10248,6 +10252,95 @@ function renderAchievementBadgeGrid(badges){
     return `<div class="pr-medal"><span class="icon-sq">${ICONS.medal}</span><span class="pr-medal-label">${b.label}</span><span class="pr-medal-locked">${b.progressText}</span></div>`;
   }).join('')}</div>`;
 }
+// ---- Marcas estimadas (fórmula de Riegel: T2 = T1 · (D2/D1)^1,06) ----
+// Usa tus carreras de los últimos 90 días (ritmo entre 2:30 y 12:00 /km, de 3 km o más) y se queda con la mejor proyección para cada distancia.
+// Solo proyecta hasta ~4 veces la distancia de la carrera de origen: más allá la fórmula deja de ser confiable.
+const PRED_TARGETS = [{key:'5k', km:5}, {key:'10k', km:10}, {key:'half', km:21.0975}, {key:'marathon', km:42.195}];
+function computeRacePredictions(){
+  const cutoff = Date.now() - 90 * 864e5;
+  const runs = (state.runs || []).filter(r => {
+    const pace = r.distanceKm > 0 ? (r.durationSec / 60) / r.distanceKm : 0;
+    return r.distanceKm >= 3 && r.distanceKm <= 60 && r.durationSec > 0 && pace >= 2.5 && pace <= 12 && new Date(r.date).getTime() >= cutoff;
+  });
+  return PRED_TARGETS.map(tg => {
+    let best = null;
+    runs.forEach(r => {
+      if(tg.km > r.distanceKm * 4.2) return;
+      const sec = r.durationSec * Math.pow(tg.km / r.distanceKm, 1.06);
+      if(!best || sec < best) best = sec;
+    });
+    return {key: tg.key, km: tg.km, sec: best, needKm: Math.ceil(tg.km / 4.2)};
+  });
+}
+function renderRacePredictionsCard(){
+  const rows = computeRacePredictions().map(p => {
+    if(p.sec){
+      const pace = (p.sec / 60) / p.km;
+      return '<div class="pred-row"><span class="pred-label">' + t('pr_label_' + p.key) + '</span><span><span class="pred-time">' + fmtTime(Math.round(p.sec)) + '</span><span class="pred-pace">' + fmtPace(pace) + '/' + distUnit() + '</span></span></div>';
+    }
+    return '<div class="pred-row"><span class="pred-label">' + t('pr_label_' + p.key) + '</span><span class="pred-need">' + t('pred_need', {km: fmtDist(p.needKm, 0) + ' ' + distUnit()}) + '</span></div>';
+  }).join('');
+  return '<div class="card"><h3>' + t('pred_title') + '</h3>' + rows + '<p class="muted pred-note">' + t('pred_note') + '</p></div>';
+}
+
+// ---- Importar historial de relojes y apps (Strava, Polar, Wahoo, Suunto, COROS, Health Connect) ----
+// Cada marca ya trae sus carreras recientes (~30 días) al conectarse. Acá se usan para ajustar el plan al nivel real.
+function getImportedHistoryStats(){
+  const cutoff = Date.now() - 28 * 864e5;
+  const imp = (state.runs || []).filter(r => r.source && SOURCE_LABELS[r.source] && r.distanceKm > 0.5 && new Date(r.date).getTime() >= cutoff);
+  const totalKm = imp.reduce((a, r) => a + r.distanceKm, 0);
+  return {count: imp.length, totalKm, weeklyKm: totalKm / 4};
+}
+function shouldOfferHistoryCalibration(){
+  if(!state.profile || state.profile.historyCalibrated) return false;
+  // Solo cuentas nuevas (menos de 60 días): quien ya viene entrenando con la app tiene su propio historial y plan ajustado.
+  const created = state.profile.createdAt ? new Date(state.profile.createdAt + 'T12:00:00').getTime() : 0;
+  if(created && Date.now() - created > 60 * 864e5) return false;
+  const s = getImportedHistoryStats();
+  return s.count >= 2 && s.weeklyKm >= 3;
+}
+function renderHistoryCalibCard(){
+  const el = document.getElementById('history-calib-card');
+  if(!el) return;
+  if(!shouldOfferHistoryCalibration()){ el.style.display = 'none'; return; }
+  const s = getImportedHistoryStats();
+  const txt = document.getElementById('history-calib-text');
+  if(txt) txt.textContent = t('calib_text', {n: s.count, km: fmtDist(s.weeklyKm, 1), unit: distUnit()});
+  el.style.display = 'block';
+}
+function applyHistoryCalibration(){
+  const s = getImportedHistoryStats();
+  const wk = Math.max(3, Math.min(150, Math.round(s.weeklyKm * 10) / 10));
+  const p = state.profile;
+  p.currentWeeklyKm = wk;
+  if(s.count >= 3 && wk >= 8) p.runnerType = 'active';
+  p.weeklyKm = calcWeeklyKm(p);
+  p.historyCalibrated = 'done';
+  state.plan = preserveLivedDays(state.plan, generatePlan(p, state.weekNumber || 1));
+  state.nextWeekOverrides = {};
+  state.chat.push({role:'coach', text: t('calib_coach_msg', {km: fmtDist(wk, 1), unit: distUnit()}), ts: Date.now()});
+  renderAll(); renderChat(); persist();
+  showToast(t('calib_done_toast'), 'success');
+}
+function dismissHistoryCalibration(){
+  if(state.profile) state.profile.historyCalibrated = 'dismissed';
+  persist();
+  renderHistoryCalibCard();
+}
+function openHistoryImport(){
+  const hc = document.getElementById('hi-hc');
+  if(hc) hc.style.display = getHealthConnectBridge() ? 'flex' : 'none';
+  openOverlaySheetEl(document.getElementById('history-import-overlay'));
+}
+function closeHistoryImport(){ document.getElementById('history-import-overlay').classList.remove('overlay-open'); }
+// Después de crear la cuenta: si todavía no hay ningún reloj/app conectado, se ofrece traer el historial (una sola vez).
+function maybeOpenHistoryImport(){
+  if(!state || state.historyImportPrompted) return;
+  state.historyImportPrompted = true;
+  persist();
+  const anyConn = Object.values(deviceConnections || {}).some(Boolean) || !!state.healthConnectConnected;
+  if(!anyConn) openHistoryImport();
+}
 function renderPersonalRecordsCard(){
   // Vivía en Historial como una tarjeta aparte; ahora se muestra acá, en Logros, junto
   // con el resto de los hitos del corredor (mismo estilo de medalla: iluminada con el
@@ -10451,6 +10544,7 @@ function openAchievements(){
     <p class="muted" style="margin:0 0 4px;">${t('ach_subtitle')}</p>
     <p style="margin:0 0 8px; font-weight:800; color:var(--hivis-text); font-size:13px;">${t('ach_unlocked_count', {unlocked:unlockedCount, total:totalCount})}</p>
     <div class="ob-progress" style="margin-bottom:16px;"><div class="ob-progress-fill" style="width:100%; transform:scaleX(${pct/100}); transform-origin:left;"></div></div>
+    ${renderRacePredictionsCard()}
     ${renderPersonalRecordsCard()}
     <div class="card"><h3>${t('ach_section_distance')}</h3>${renderAchievementBadgeGrid(distanceBadges)}</div>
     <div class="card"><h3>${t('ach_section_runs')}</h3>${renderAchievementBadgeGrid(runBadges)}</div>
