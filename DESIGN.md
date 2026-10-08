@@ -244,6 +244,14 @@ A small hand-drawn line — five short climbs and descents ending flat, `viewBox
 - **Today card numbers.** Session title 52px and distance 44px in Bebas Neue (hero numbers); everything else on that card stays Inter/mono per the Data-Is-Mono rule.
 - **Tab transitions.** Views slide 18px in the direction of travel (right when moving forward along the tab bar, left when going back), 200ms ease-out; disabled under reduced motion.
 - **Icon stroke.** Line icons render at 1.8px; small glyphs (chevrons, plus, check) at 2.2px. Enforced by a CSS rule on `svg[stroke="currentColor"]`, so new icons need no per-icon stroke-width.
+- **Route sketch in Historial.** Each run card draws its GPS route as a neon SVG line behind the Mapbox image (`routeSketchSvg`); the map fades in over it, and if the image fails the sketch stays.
+- **Plan zone bar.** Each training day has a 3px bar on its left in its effort-zone fill color (`data-zone`); today's bar is thicker and glows, and today's row has a faint lime wash.
+- **Collapsing titles.** When the big view title (TU SEMANA / CORRER / TU HISTORIAL) scrolls out, it replaces the date in the top bar (`header.titled`).
+- **Chat.** Bubbles have more padding, the quick-reply chips are one horizontally scrolling row with a fade on the right edge, and the typing dots glow lime.
+- **Week ring completion.** The first time the ring hits 100% in a week it flashes (scale + neon glow) with a short haptic; it keeps a stronger glow while complete.
+- **Skeletons.** `.skel-line` (shimmer) stands in for text still loading, currently the connected-devices summary in Perfil.
+- **Welcome/onboarding.** Wordmark accent letter and the onboarding progress bar glow; step titles are 36px Bebas Neue.
+- **Viewport.** Pinch zoom stays disabled (`user-scalable=no`) on purpose; large system font sizes (tested at 130%) must not clip text.
 
 ## Do's and Don'ts
 

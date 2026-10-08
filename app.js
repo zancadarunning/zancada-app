@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T18:41:21Z';
+const APP_VERSION = '2026-10-08T18:48:44Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1509,6 +1509,7 @@ async function connectStrava(){
 // false a propósito: mejor no mostrar el botón un instante y que aparezca cuando se
 // confirme una conexión real, que mostrarlo de entrada y tener que ocultarlo después
 // (ver refreshDeviceConnections(), llamada una vez al entrar a la app).
+let deviceConnectionsLoaded = false;
 let deviceConnections = { strava:false, polar:false, wahoo:false, coros:false, suunto:false };
 async function refreshDeviceConnections(){
   if(!currentUserId) return;
@@ -1525,6 +1526,7 @@ async function refreshDeviceConnections(){
     deviceConnections = { strava: pick('strava', s.data), polar: pick('polar', p.data), wahoo: pick('wahoo', w.data), coros: pick('coros', c.data), suunto: pick('suunto', su.data) };
     scheduleWatchSync();
   }catch(e){ console.error(e); }
+  deviceConnectionsLoaded = true;
   renderPlan();
   if(document.getElementById('perfil-devices-summary')) renderPerfil();
 }
@@ -6261,6 +6263,21 @@ function renderHome(){
     if(pctEl) pctEl.textContent = pct + '%';
     const fig = pctEl && pctEl.parentElement;
     if(fig && fig.setAttribute) fig.setAttribute('aria-label', pct + '%');
+    try{
+      // Destello + vibracion la primera vez que el anillo llega a 100% en la semana (no cada vez que se abre la pantalla).
+      const k = 'zc_ringpct_' + state.weekStart;
+      const prevRaw = localStorage.getItem(k);
+      const prev = prevRaw === null ? null : parseInt(prevRaw, 10);
+      localStorage.setItem(k, String(pct));
+      if(fig && fig.classList){
+        fig.classList.toggle('complete', pct >= 100);
+        if(prev !== null && prev < 100 && pct >= 100){
+          fig.classList.add('flash');
+          setTimeout(() => fig.classList.remove('flash'), 1500);
+          haptic([15, 40, 25]);
+        }
+      }
+    }catch(e){}
   }
   document.getElementById('home-runs-count').textContent = weekRuns.length;
 
@@ -6589,7 +6606,7 @@ function buildDayListHtml(wd){
     }
     if(d.typeKey==='test' && !d.testRead && d.status!=='skipped') statusBlock += `<div style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openLevelTest()">${t('ltest_load_btn')}</button></div>`;
     return `<div>
-      <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" onclick="toggleDay(${i})">
+      <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" data-zone="${(d.dist>0 && d.zone && !isEventDay)?d.zone:''}" onclick="toggleDay(${i})">
         <div class="day-badge"><div class="d">${t('day_'+d.day).slice(0,3)}</div>${dateLbl?`<div class="mono muted" style="font-size:10px; margin-top:2px;">${dateLbl}</div>`:''}</div>
         <div class="day-info">
           <div class="day-info-title-row"><span class="t">${lblType}</span>${isEventDay?(eventAmountText?`<span class="day-km-inline">${eventAmountText}</span>`:''):(d.dist>0?`<span class="day-km-inline">${planAmountText(d)}</span>`:(extraRunAmountText?`<span class="day-km-inline">${extraRunAmountText}</span>`:''))}</div>
@@ -7208,7 +7225,8 @@ function renderPerfil(){
     if(deviceConnections.suunto) connectedNames.push('Suunto');
     if(deviceConnections.coros) connectedNames.push('COROS');
     if(state.healthConnectConnected) connectedNames.push('Health Connect');
-    devicesSummaryEl.textContent = connectedNames.length ? connectedNames.join(', ') : t('perfil_devices_none');
+    if(!deviceConnectionsLoaded && currentUserId){ devicesSummaryEl.innerHTML = '<span class="skel-line"></span>'; }
+    else devicesSummaryEl.textContent = connectedNames.length ? connectedNames.join(', ') : t('perfil_devices_none');
   }
 
   const eventSummaryEl = document.getElementById('perfil-event-summary');
@@ -8169,6 +8187,24 @@ function updateCoachFabVisibility(){
     scrollEndTimer = setTimeout(()=>fabWrap.classList.remove('coach-fab-scrolling'), 300);
   }, {passive:true});
 })();
+// Titulo de la pantalla (TU SEMANA, TU HISTORIAL, CORRER) que sube a la barra de arriba cuando el grande sale de la vista.
+let headerTitleTicking = false;
+function updateHeaderTitle(){
+  headerTitleTicking = false;
+  const hdr = document.getElementById('mainHeader');
+  const slot = document.getElementById('header-view-title');
+  if(!hdr || !slot) return;
+  const view = document.querySelector('.view.active');
+  const h = view && view.querySelector('h2.display[data-i18n$="_title"]');
+  let on = false;
+  if(h){
+    const bottom = h.getBoundingClientRect().bottom;
+    on = bottom < hdr.offsetHeight + 2 && window.scrollY > 40;
+    if(on && slot.textContent !== h.textContent) slot.textContent = h.textContent;
+  }
+  hdr.classList.toggle('titled', on);
+}
+window.addEventListener('scroll', () => { if(!headerTitleTicking){ headerTitleTicking = true; requestAnimationFrame(updateHeaderTitle); } }, {passive:true});
 const VIEW_ORDER = ['inicio','plan','correr','history','perfil','coach'];
 let lastViewName = null;
 async function showView(v){
@@ -8178,6 +8214,7 @@ async function showView(v){
   }
   lastViewName = v;
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
+  setTimeout(updateHeaderTitle, 0);
   document.getElementById('view-'+v).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.view===v));
   updateCoachFabVisibility();
@@ -10577,6 +10614,28 @@ function runsByDateAsc(){
   const ts = r => { const x = new Date(r.date).getTime(); return isNaN(x) ? 0 : x; };
   return (state.runs||[]).slice().sort((a,b)=>ts(a)-ts(b));
 }
+// Boceto de la ruta (SVG) para las tarjetas del historial: se dibuja con los puntos del GPS, sin depender del mapa de Mapbox.
+// Queda detras de la imagen del mapa: si la imagen carga la tapa, si falla (sin red / sin token) se ve el trazo.
+function routeSketchSvg(points){
+  if(!Array.isArray(points) || points.length < 2) return '';
+  const ok = p => p && Number.isFinite(p.lat) && Number.isFinite(p.lon);
+  const step = Math.max(1, Math.floor(points.length / 70));
+  const pts = [];
+  for(let i = 0; i < points.length; i += step){ if(ok(points[i])) pts.push(points[i]); }
+  const last = points[points.length - 1];
+  if(ok(last) && pts[pts.length - 1] !== last) pts.push(last);
+  if(pts.length < 2) return '';
+  const lat0 = pts.reduce((a, p) => a + p.lat, 0) / pts.length;
+  const kx = Math.cos(lat0 * Math.PI / 180);
+  const xs = pts.map(p => p.lon * kx), ys = pts.map(p => -p.lat);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const W = 400, H = 108, pad = 16;
+  const sc = Math.min((W - 2 * pad) / ((maxX - minX) || 1e-9), (H - 2 * pad) / ((maxY - minY) || 1e-9));
+  const ox = (W - (maxX - minX) * sc) / 2, oy = (H - (maxY - minY) * sc) / 2;
+  const X = i => (ox + (xs[i] - minX) * sc).toFixed(1), Y = i => (oy + (ys[i] - minY) * sc).toFixed(1);
+  const d = pts.map((p, i) => (i ? 'L' : 'M') + X(i) + ' ' + Y(i)).join('');
+  return '<svg class="hist-map-sketch" viewBox="0 0 400 108" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path d="' + d + '"/><circle cx="' + X(0) + '" cy="' + Y(0) + '" r="3.5"/></svg>';
+}
 function renderHistory(){
   const el = document.getElementById('history-list');
   const stravaSyncCard = buildStravaSyncBanner();
@@ -10643,7 +10702,7 @@ function renderHistory(){
       <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" onclick="deleteRun('${r.id}')"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
       <div class="card hist-card swipe-content" onclick="openRunDetail('${r.id}')" style="cursor:pointer;">
         <div class="hist-top"><span style="font-weight:700;">${dateStr}</span>${hasMap ? '' : `<span class="hist-date">${r.manual? `<span class="tag tag-asfalto" style="margin-right:6px;">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, true)}${fmtTime(r.durationSec)}</span>`}</div>
-        ${hasMap ? `<div class="hist-map" data-run-id="${r.id}"><img class="hist-map-img" src="${buildHistMapStaticUrl(r, 400, 108)}" loading="lazy" alt="" decoding="async"><div class="hist-map-badge">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false)}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
+        ${hasMap ? `<div class="hist-map" data-run-id="${r.id}">${routeSketchSvg(r.points)}<img class="hist-map-img" src="${buildHistMapStaticUrl(r, 400, 108)}" loading="lazy" alt="" decoding="async" onload="this.classList.add('loaded')" onerror="this.style.display='none'"><div class="hist-map-badge">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false)}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
         <div class="stat-row-divided">
           <div class="stat-cell"><div class="n">${fmtDist(r.distanceKm)}</div><div class="l">${distUnit()}</div></div>
           <div class="stat-cell"><div class="n">${fmtPace(paceMin)}</div><div class="l">${t('run_pace_word')}</div></div>
