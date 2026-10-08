@@ -163,6 +163,7 @@
        pero cuesta lo mismo (casi nada) que no tener sombra. */
     --shadow-card:none; --shadow-lg:0 3px 6px rgba(0,0,0,.55);
     --hivis-glow:rgba(214,255,63,.32);
+    --neon-rim:#F4FFA8; --neon:0 0 0 1.5px var(--neon-rim), 0 0 9px 1px rgba(214,255,63,.7), 0 0 22px 3px rgba(214,255,63,.3); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(214,255,63,.6), 0 0 12px 1px rgba(214,255,63,.25);
     /* Colores de zona (ritmo/FC) del tema oscuro: se probó una versión pastel
        más suave y se volvió atrás a pedido del usuario -- estos son los
        saturados/"neon" originales. El tema claro de acá abajo se deja como
@@ -208,6 +209,7 @@
       /* Mismo achique de blur que la versión oscura de arriba -- ver ese comentario. */
       --shadow-card:none; --shadow-lg:0 3px 6px rgba(20,22,18,.15);
       --hivis-glow:rgba(150,186,0,.32);
+    --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 9px 1px rgba(150,186,0,.5), 0 0 20px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
       /* Las 5 zonas del modo oscuro (azul pizarra → verde salvia → dorado apagado →
          terracota → ladrillo apagado, ver el comentario grande junto a --zone1 de :root)
          son un registro deliberadamente desaturado -- "para que las cinco lean como parte
@@ -271,6 +273,7 @@
     /* Mismo achique de blur que la versión oscura -- ver ese comentario. */
     --shadow-card:none; --shadow-lg:0 3px 6px rgba(20,22,18,.15);
     --hivis-glow:rgba(150,186,0,.32);
+    --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 9px 1px rgba(150,186,0,.5), 0 0 20px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
     /* Mismas 5 zonas que en el bloque de arriba (@media prefers-color-scheme:light) --
        ver ese comentario grande para el porqué de oscurecer estos tonos en vez de usar
        los saturados tipo Tailwind que tenía antes. */
@@ -630,7 +633,7 @@
      muchas opciones (dolores, idioma) siguen usando .choice-row sin esta clase. */
   .choice-row.segmented{flex-wrap:nowrap; gap:2px; background:var(--asphalt-3); border-radius:var(--radius-sm); padding:3px;}
   .choice-row.segmented .choice{min-width:0; min-height:40px; border:none; background:none; box-shadow:none; padding:9px 4px; color:var(--chalk);}
-  .choice-row.segmented .choice.active{background:var(--hivis); color:var(--ink); box-shadow:0 1px 3px var(--hivis-glow);}
+  .choice-row.segmented .choice.active{background:var(--hivis); color:var(--ink); box-shadow:var(--neon-press);}
   /* Lista con buscador del picker de deportes (#sport-picker-overlay) -- filas apiladas en
      vez de chips en grilla, porque con ~24 deportes un grid de .choice no entra ni se lee. */
   .sport-row{display:flex; align-items:center; justify-content:space-between; padding:13px 16px;
@@ -667,8 +670,8 @@
 
   .btn{border:none; border-radius:999px; padding:15px 22px; font-weight:600; font-size:15px; cursor:pointer;
     width:100%; display:flex; align-items:center; justify-content:center; gap:8px;}
-  .btn-primary{background:var(--hivis); color:var(--ink); box-shadow:none; transition:transform .13s var(--ease-out), box-shadow .13s var(--ease-out), background .13s ease, color .13s ease;}
-  .btn-primary:active{transform:scale(.97);}
+  .btn-primary{background:var(--hivis); color:var(--ink); box-shadow:var(--neon); transition:transform .13s var(--ease-out), box-shadow .13s var(--ease-out), background .13s ease, color .13s ease;}
+  .btn-primary:active{transform:scale(.97); box-shadow:var(--neon-press);}
   .btn-primary:disabled{background:var(--asphalt-3); color:var(--mist-dim); box-shadow:none; cursor:not-allowed;}
   .btn-primary:disabled:active{transform:none;}
   .btn-outline{background:transparent; border:1px solid var(--asphalt-4); color:var(--chalk); box-shadow:none; transition:transform .13s var(--ease-out), background .13s var(--ease-out);}
@@ -1141,15 +1144,15 @@
   .run-bg-route .rbr-finish-dim{opacity:.3;}
   .go-circle{position:relative; z-index:1; width:100%; max-width:220px; height:88px; border-radius:999px; margin:0 auto; background:var(--hivis);
     display:flex; align-items:center; justify-content:center; flex-direction:column; color:var(--ink); border:none; cursor:pointer;
-    box-shadow:0 3px 8px var(--hivis-glow); transition:transform .12s ease, box-shadow .12s ease; animation:goCirclePulse 2.6s ease-in-out infinite;}
+    box-shadow:var(--neon); transition:transform .12s ease, box-shadow .12s ease; animation:goCirclePulse 2.6s ease-in-out infinite;}
   .go-circle .display{font-size:25px; letter-spacing:.03em;}
-  .go-circle:active{transform:scale(.96); box-shadow:0 2px 5px var(--hivis-glow); animation-play-state:paused;}
+  .go-circle:active{transform:scale(.96); box-shadow:var(--neon-press); animation-play-state:paused;}
   /* Blur chico (no solo offset/opacidad) también en la animación -- una sombra grande
      ANIMADA (cambiando de tamaño en loop infinito, no solo estática) es todavía más cara
      que una fija: se repinta en cada frame mientras el botón esté en pantalla, no nada más
      durante el scroll. Ver el comentario grande junto a --shadow-card sobre por qué el blur
      chico casi no cambia el look pero sí el costo. */
-  @keyframes goCirclePulse{0%,100%{box-shadow:0 3px 8px var(--hivis-glow);} 50%{box-shadow:0 3px 10px var(--hivis-glow), 0 0 0 8px var(--hivis-dim);}}
+  @keyframes goCirclePulse{0%,100%{box-shadow:var(--neon);} 50%{box-shadow:var(--neon), 0 0 0 8px var(--hivis-dim);}}
   @media (prefers-reduced-motion:reduce){ .go-circle{animation:none;} }
   #runActive,#runSummary,#runCountdown{display:none;}
   .rec-dot{width:9px; height:9px; border-radius:50%; background:var(--danger); animation:blink 1.4s ease-in-out infinite; display:inline-block; margin-right:7px;}
@@ -1221,7 +1224,7 @@
      pause-circle más abajo), para no agrandar también al de reanudar y desparejarlo del de
      terminar al lado. */
   .track-pause-circle{display:flex; align-items:center; justify-content:center; width:72px; height:72px; border-radius:50%; margin:30px auto 14px; background:var(--hivis); color:var(--ink);
-    border:none; cursor:pointer; box-shadow:0 3px 8px var(--hivis-glow); transition:transform .12s ease, box-shadow .12s ease;}
+    border:none; cursor:pointer; box-shadow:var(--neon); transition:transform .12s ease, box-shadow .12s ease;}
   .track-pause-circle svg{width:28px; height:28px;}
   .track-pause-circle:active{transform:scale(.94);}
   /* Más grande y pegado contra el borde de abajo, pedido del usuario ("como el de nike" / "casi
@@ -1408,7 +1411,7 @@
      sobra (ahí igual ocupa todo el flex:1 disponible). */
   .chat-input-bar input{flex:1; min-width:0; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:13px 16px; border-radius:999px; font-size:15px; outline:none;}
   .chat-input-bar input:focus{border-color:var(--hivis);}
-  .chat-send{background:var(--hivis); color:var(--ink); border:none; width:44px; height:44px; border-radius:50%; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .12s ease, background .15s ease;}
+  .chat-send{background:var(--hivis); color:var(--ink); border:none; box-shadow:var(--neon-press); width:44px; height:44px; border-radius:50%; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .12s ease, background .15s ease;}
   .chat-send:active{transform:scale(.92);}
   .chat-send[data-busy="1"]{background:var(--asphalt-4); color:var(--chalk);}
   /* margin-bottom chico (no 16px, como antes) -- el chat-chips es siempre lo ÚLTIMO dentro
@@ -1544,7 +1547,7 @@
      detalle de carrera, el calendario) no usan la clase .week-nav y no se ven
      afectadas por esto. */
   .week-nav{display:flex; align-items:center; justify-content:center; gap:10px; margin:0 auto 16px; max-width:280px;}
-  .week-nav .week-nav-btn{width:34px; height:34px; background:var(--hivis); color:#0a0a0a; flex-shrink:0; box-shadow:0 1px 3px var(--hivis-glow);}
+  .week-nav .week-nav-btn{width:34px; height:34px; background:var(--hivis); color:#0a0a0a; flex-shrink:0; box-shadow:var(--neon-press);}
   .week-nav .week-nav-btn:active{background:var(--hivis); transform:scale(.88);}
   /* Reportado en una auditoría: sin min-width:0 (el default de un item flex es "auto", que
      nunca lo deja angostarse más que su contenido), una cápsula angosta desbordaba y se
@@ -1645,9 +1648,9 @@
   nav.tabbar button.nav-btn-primary{flex:0 0 auto; width:64px; margin-top:-24px;}
   nav.tabbar button.nav-btn-primary .nav-primary-circle{width:56px; height:56px; border-radius:50%; background:var(--hivis);
     display:flex; align-items:center; justify-content:center; border:4px solid var(--asphalt);
-    box-shadow:0 2px 5px var(--hivis-glow); transition:transform .13s var(--ease-out), box-shadow .13s var(--ease-out);}
+    box-shadow:var(--neon); transition:transform .13s var(--ease-out), box-shadow .13s var(--ease-out);}
   nav.tabbar button.nav-btn-primary svg{width:37px; height:37px; padding:0; color:var(--ink); background:none !important;}
-  nav.tabbar button.nav-btn-primary.active .nav-primary-circle{box-shadow:0 2px 6px var(--hivis-glow), 0 0 0 3px var(--hivis-dim);}
+  nav.tabbar button.nav-btn-primary.active .nav-primary-circle{box-shadow:var(--neon), 0 0 0 5px var(--hivis-dim);}
   nav.tabbar button.nav-btn-primary:active .nav-primary-circle{transform:scale(.92);}
   /* Respiración lenta y sutil en el círculo de Correr cuando NO es la pestaña activa --
      "esta es la acción que existe para interrumpirte el día", igual que un botón de
@@ -1658,7 +1661,7 @@
      cualquier vista, todo el tiempo (parte de la tabbar) -- ver el comentario grande
      junto a --shadow-card sobre por qué el blur chico casi no cambia el look pero sí
      el costo. */
-  @keyframes primaryPulse{0%,100%{box-shadow:0 2px 5px var(--hivis-glow);} 50%{box-shadow:0 2px 7px var(--hivis-glow), 0 0 0 7px var(--hivis-dim);}}
+  @keyframes primaryPulse{0%,100%{box-shadow:var(--neon);} 50%{box-shadow:var(--neon), 0 0 0 7px var(--hivis-dim);}}
   nav.tabbar button.nav-btn-primary:not(.active) .nav-primary-circle{animation:primaryPulse 2.6s ease-in-out infinite;}
   @media (prefers-reduced-motion:reduce){ nav.tabbar button.nav-btn-primary .nav-primary-circle{animation:none;} }
   /* Botón flotante del coach: al sacar Coach de la tabbar (para bajar de 6 a 5
