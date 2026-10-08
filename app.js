@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T23:44:32Z';
+const APP_VERSION = '2026-10-08T23:49:43Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10643,16 +10643,19 @@ function drawPRBadge(ctx, cx, cy, r){
   ctx.fill();
   ctx.restore();
 
-  // asas en lazo, detrás del cuenco
-  ctx.lineWidth = r*0.085;
-  ctx.lineCap = 'round';
+  // asas: curva rellena que sale de arriba del cuenco, se abre y vuelve a entrar más abajo,
+  // más gruesa afuera y fina en las uniones (se dibujan detrás del cuenco)
   ctx.lineJoin = 'round';
+  ctx.lineWidth = r*0.018;
   [-1, 1].forEach(sg => {
+    const X = v => cx + sg*r*v, Y = v => by + r*v;
     ctx.beginPath();
-    ctx.moveTo(cx + sg*r*0.38, by - r*0.4);
-    ctx.lineTo(cx + sg*r*0.55, by - r*0.4);
-    ctx.arc(cx + sg*r*0.55, by - r*0.26, r*0.14, -Math.PI/2, Math.PI/2, sg < 0);
-    ctx.lineTo(cx + sg*r*0.33, by - r*0.12);
+    ctx.moveTo(X(0.34), Y(-0.47));
+    ctx.bezierCurveTo(X(0.86), Y(-0.58), X(0.92), Y(0.02), X(0.36), Y(0.06));
+    ctx.lineTo(X(0.36), Y(-0.03));
+    ctx.bezierCurveTo(X(0.68), Y(-0.01), X(0.7), Y(-0.37), X(0.34), Y(-0.36));
+    ctx.closePath();
+    ctx.fill();
     ctx.stroke();
   });
 
