@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-07T21:20:55Z';
+const APP_VERSION = '2026-10-08T00:46:07Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1410,7 +1410,7 @@ async function handleAppleSignIn(btnId){
   try{
     const AppleSignIn = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AppleSignIn;
     if(!AppleSignIn){ showToast(t('login_err'),'error'); return; }
-    const nonce = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const nonce = secureRandomHex(16);
     // Reportado en una auditoría: este código se escribió sin poder probarlo contra el
     // plugin real (@capawesome/capacitor-apple-sign-in nunca estuvo instalado -- ver
     // mobile/package.json). Los scopes adivinados ('email'/'fullName', minúscula) no
@@ -5733,9 +5733,15 @@ function planLabel(d){
    siempre. state.calendarToken identifica al usuario en esa URL pública sin necesitar
    login (ningún cliente de calendario sabe autenticarse) -- se genera una sola vez y viaja
    con el resto de state a app_state.data, igual que cualquier otro campo. */
+// Aleatorio criptográfico en hexadecimal (no Math.random: es predecible). Para tokens secretos y nonces.
+function secureRandomHex(bytes){
+  const buf = new Uint8Array(bytes || 16);
+  crypto.getRandomValues(buf);
+  return Array.from(buf, b => b.toString(16).padStart(2, '0')).join('');
+}
 function ensureCalendarToken(){
   if(!state.calendarToken){
-    state.calendarToken = (typeof crypto!=='undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+    state.calendarToken = (typeof crypto!=='undefined' && crypto.randomUUID) ? crypto.randomUUID() : secureRandomHex(16);
     persist();
   }
   return state.calendarToken;
