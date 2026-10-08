@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "org.zancada.app",
+      "sha256_cert_fingerprints": [
+        "36:B7:A9:06:9F:CF:E2:7F:AF:E6:51:47:C7:8D:24:58:D3:E5:F7:47:36:38:B3:88:78:C6:55:43:FC:2A:7A:38",
+        "AF:3C:B8:2C:0F:71:A0:A4:6A:A5:9C:5A:4B:BC:A7:4F:5E:EB:91:15:BF:30:C7:79:29:7D:33:11:F0:2E:5D:9E"
+      ]
+    }
+  }
+]

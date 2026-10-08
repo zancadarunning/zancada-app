@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T00:46:07Z';
+const APP_VERSION = '2026-10-08T15:31:53Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1772,6 +1772,77 @@ async function connectSuunto(){
     showToast(t('suunto_connect_error'),'error');
   }
 }
+/* ---- Vuelta de la autorización de un reloj (ver api/_lib/oauth-link.js) ----
+   Al volver de Strava/Polar/Wahoo/Suunto/COROS el servidor ya NO vincula la cuenta: manda a la persona a /conectar?p=<marca>&code&state
+   (en Android, abriendo la app con un intent). Acá se confirma con la SESIÓN de quien está en la app: el servidor verifica que el usuario
+   del state sea el de la sesión. Así nadie puede conectar la cuenta de otra persona a la suya con un link armado a mano. */
+const LINK_KEY = 'zancada_pending_link';
+function parseLinkReturn(urlStr){
+  try{
+    const u = new URL(urlStr, location.origin);
+    if(!/^\/conectar\/?$/.test(u.pathname)) return null;
+    const p = u.searchParams.get('p'), code = u.searchParams.get('code'), state = u.searchParams.get('state');
+    if(!/^(strava|polar|wahoo|suunto|coros)$/.test(p || '') || !code || !state) return null;
+    return { p, code, state };
+  }catch(e){ return null; }
+}
+function stashLinkReturn(link){
+  try{ localStorage.setItem(LINK_KEY, JSON.stringify({ p: link.p, code: link.code, state: link.state, ts: Date.now() })); }catch(e){}
+}
+function clearLinkReturn(){ try{ localStorage.removeItem(LINK_KEY); }catch(e){} }
+let linkFinishing = false;
+async function finishPendingProviderLink(){
+  if(linkFinishing) return;
+  let link = null;
+  try{ link = JSON.parse(localStorage.getItem(LINK_KEY) || 'null'); }catch(e){}
+  if(!link) return;
+  if(!parseLinkReturn('/conectar?p=' + encodeURIComponent(link.p) + '&code=' + encodeURIComponent(link.code) + '&state=' + encodeURIComponent(link.state)) || Date.now() - link.ts > 12 * 60 * 1000){ clearLinkReturn(); return; }
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if(!session) return; // sin sesión todavía: queda guardado y se reintenta al iniciar sesión
+  linkFinishing = true;
+  clearLinkReturn(); // el code es de un solo uso: no se reintenta
+  try{
+    const res = await fetch(apiUrl('/api/' + link.p + '-auth'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ code: link.code, state: link.state })
+    });
+    const data = await res.json().catch(() => ({}));
+    if(res.ok && data && data.ok){
+      showToast(t('link_done_toast'), 'success');
+      try{ await refreshDeviceConnections(); }catch(e){}
+    } else if(res.status === 403){
+      showToast(t('link_mismatch_toast'), 'error');
+    } else {
+      const key = link.p + '_connect_error';
+      const base = (typeof t === 'function' && t(key) !== key) ? t(key) : t('link_error_toast');
+      showToast(base + (data && data.why ? ' (' + data.why + (data.dx ? ' ' + data.dx : '') + ')' : ''), 'error');
+    }
+  }catch(e){
+    console.error('link finish', e);
+    showToast(t('link_error_toast'), 'error');
+  }finally{ linkFinishing = false; }
+}
+(function captureLinkReturn(){
+  // Web / iPhone: el navegador cargó /conectar?... -> se guarda y se limpia la URL enseguida (el code no debe quedar en el historial)
+  try{
+    const l = parseLinkReturn(location.href);
+    if(l){ stashLinkReturn(l); history.replaceState(null, '', '/'); }
+    if(/[?&]link_error=1(&|$)/.test(location.search)){
+      history.replaceState(null, '', location.pathname);
+      setTimeout(()=>{ try{ showToast(t('link_error_toast'),'error'); }catch(e){} }, 2000);
+    }
+  }catch(e){}
+  // App nativa: Android abre la app con el link (intent / App Link) -> plugin App
+  try{
+    const AppPlugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+    if(AppPlugin && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()){
+      const handle = (url) => { const l = parseLinkReturn(url || ''); if(l){ stashLinkReturn(l); if(typeof currentUserId !== 'undefined' && currentUserId) finishPendingProviderLink(); } };
+      AppPlugin.addListener('appUrlOpen', ev => handle(ev && ev.url));
+      AppPlugin.getLaunchUrl().then(r => handle(r && r.url)).catch(()=>{});
+    }
+  }catch(e){}
+})();
 // Si el callback de OAuth (api/suunto-auth.js) falló, vuelve acá con ?suunto_connect=error: se
 // limpia el parámetro y se avisa, en vez de dejar al usuario creyendo que se conectó.
 (function(){
@@ -3667,6 +3738,7 @@ function enterApp(){
   setTimeout(maybeShowInstallBanner, 1200);
   setTimeout(maybeShowWhatsNew, 1800);
   refreshDeviceConnections();
+  finishPendingProviderLink(); // si se volvió de autorizar un reloj (ver oauth-link.js)
   setTimeout(()=>translateCustomPlanTexts(lang), 2500);
   if(window.zcBootDone) window.zcBootDone();
 }

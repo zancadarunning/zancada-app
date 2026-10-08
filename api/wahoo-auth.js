@@ -27,17 +27,20 @@ function verifyState(state) {
 }
 
 const { withSentry, reportError } = require('./_lib/sentry');
+const { withOAuthLink } = require('./_lib/oauth-link');
 
 // Ver el comentario igual a este en strava-auth.js: antes cada rama de error de acá abajo
 // dejaba al usuario en una página muerta (texto plano o el JSON crudo del proveedor) sin
 // ningún link de vuelta a la app. El log server-side sigue teniendo el detalle real.
 function failGracefully(res, reason, detail) {
   console.error('wahoo-auth: ' + reason, detail || '');
-  res.writeHead(302, { Location: '/' });
+  res.writeHead(302, { Location: '/?link_error=1' });
   res.end();
 }
 
-module.exports = withSentry(async (req, res) => {
+// Vinculación real (intercambio del code + guardar tokens). Ver api/_lib/oauth-link.js: ya no corre al volver de la marca sino
+// cuando la app lo confirma con la sesión del usuario (POST).
+const linkAccount = async (req, res) => {
   const { code, state: rawState } = req.query;
   if (!code || !rawState) { failGracefully(res, 'falta code o state'); return; }
   const userId = verifyState(rawState);
@@ -117,4 +120,6 @@ module.exports = withSentry(async (req, res) => {
     await reportError(err, { endpoint: 'wahoo-auth' });
     failGracefully(res, 'excepción no controlada', err.message);
   }
-});
+};
+
+module.exports = withSentry(withOAuthLink(linkAccount, { provider: 'wahoo', verifyState }));

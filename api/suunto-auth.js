@@ -42,6 +42,7 @@ function verifyState(state) {
 }
 
 const { withSentry, reportError } = require('./_lib/sentry');
+const { withOAuthLink } = require('./_lib/oauth-link');
 
 // Ver el comentario igual a este en strava-auth.js: sin esto, cada rama de error dejaba al
 // usuario en una página muerta sin ningún link de vuelta a la app.
@@ -57,7 +58,9 @@ async function failGracefully(res, reason, detail, code, diag) {
   res.end();
 }
 
-module.exports = withSentry(async (req, res) => {
+// Vinculación real (intercambio del code + guardar tokens). Ver api/_lib/oauth-link.js: ya no corre al volver de la marca sino
+// cuando la app lo confirma con la sesión del usuario (POST).
+const linkAccount = async (req, res) => {
   const { code, state: rawState } = req.query;
   if (!code || !rawState) { await failGracefully(res, 'falta code o state', null, 'missing_code'); return; }
   const userId = verifyState(rawState);
@@ -100,4 +103,6 @@ module.exports = withSentry(async (req, res) => {
     await reportError(err, { endpoint: 'suunto-auth' });
     await failGracefully(res, 'excepción no controlada', err.message, 'exception');
   }
-});
+};
+
+module.exports = withSentry(withOAuthLink(linkAccount, { provider: 'suunto', verifyState }));
