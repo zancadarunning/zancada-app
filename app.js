@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T20:45:58Z';
+const APP_VERSION = '2026-10-08T21:03:43Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2723,7 +2723,8 @@ document.getElementById('ob-runnertype').addEventListener('click', e=>{
 function makeClickablesFocusable(root){
   (root||document).querySelectorAll('[onclick]:not(button):not(a):not(input):not(select):not(textarea)').forEach(el=>{
     if(!el.hasAttribute('tabindex')) el.setAttribute('tabindex','0');
-    if(!el.hasAttribute('role')) el.setAttribute('role','button');
+    // Si la tarjeta contiene otros botones/enlaces (ej. Compartir dentro de una carrera), role="link" y no "button": un botón con botones adentro es un anidado interactivo (lo marca axe como grave) y los lectores de pantalla no llegan al botón interno.
+    if(!el.hasAttribute('role')) el.setAttribute('role', el.querySelector('button, a, input, select, textarea, [onclick]') ? 'link' : 'button');
   });
 }
 makeClickablesFocusable();
@@ -6896,9 +6897,9 @@ function renderZones(){
     <div class="zone-row">
       <div><span class="zone-chip zone-${n}">${t('zone_word')} ${n}</span><div class="zd">${t('zdesc_'+n)} · ${ZONE_PCT[n]}</div></div>
       <div style="display:flex; align-items:center; gap:6px;">
-        <input type="number" id="zone-${n}-min" value="${z[n].min}" style="width:52px; background:var(--asphalt-3); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:6px 4px; border-radius:6px; text-align:center; font-size:13px;">
+        <input type="number" id="zone-${n}-min" aria-label="${t('zone_word')} ${n} min (bpm)" value="${z[n].min}" style="width:52px; background:var(--asphalt-3); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:6px 4px; border-radius:6px; text-align:center; font-size:13px;">
         <span class="muted">–</span>
-        <input type="number" id="zone-${n}-max" value="${z[n].max}" style="width:52px; background:var(--asphalt-3); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:6px 4px; border-radius:6px; text-align:center; font-size:13px;">
+        <input type="number" id="zone-${n}-max" aria-label="${t('zone_word')} ${n} max (bpm)" value="${z[n].max}" style="width:52px; background:var(--asphalt-3); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:6px 4px; border-radius:6px; text-align:center; font-size:13px;">
       </div>
     </div>`).join('');
 }
@@ -7574,12 +7575,25 @@ document.addEventListener('touchmove', e=>{
   const scroller = document.scrollingElement || document.documentElement;
   if(scroller.scrollTop > 0) return;
   const delta = e.touches[0].clientY - pullStartY;
+  updatePullRing(delta);
   if(delta > 90){
     pullTriggered = true;
+    updatePullRing(0);
     doPullRefresh();
   }
 }, {passive:true});
-document.addEventListener('touchend', ()=>{ pullActive = false; }, {passive:true});
+// Anillo de neon que se llena mientras se tira hacia abajo (90px = actualiza).
+function updatePullRing(delta){
+  const ring = document.getElementById('pull-ring');
+  const fill = document.getElementById('pull-ring-fill');
+  if(!ring || !fill) return;
+  if(!(delta > 8)){ ring.classList.remove('show'); return; }
+  const p = Math.min(1, delta / 90);
+  fill.style.strokeDashoffset = String(87.96 * (1 - p));
+  ring.style.transform = 'translateX(-50%) translateY(' + Math.round(p * 28) + 'px)';
+  ring.classList.add('show');
+}
+document.addEventListener('touchend', ()=>{ pullActive = false; updatePullRing(0); }, {passive:true});
 
 /* ---- swipe-to-delete (history + shoes list) ---- */
 let swipeStartX = 0, swipeStartY = 0, swipeContentEl = null, swipeDragging = false, swipeBaseX = 0, swipeLastX = 0, swipeSuppressClick = false;
@@ -12470,9 +12484,21 @@ function chatDayLabel(ts){
   const s = d.toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+// Cuantos mensajes se dibujan (los mas recientes); "Ver mensajes anteriores" suma otros 50. Con cientos de mensajes, dibujar todos en cada render pesaba.
+const CHAT_PAGE = 50;
+let chatShown = CHAT_PAGE;
+let chatKeepScroll = null;
+function showMoreChat(){
+  const log = document.getElementById('chatLog');
+  if(log) chatKeepScroll = { h: log.scrollHeight, top: log.scrollTop };
+  chatShown += CHAT_PAGE;
+  renderChat();
+}
 function renderChat(){
-  const msgs = state.chat;
+  const allMsgs = state.chat;
+  const msgs = allMsgs.length > chatShown ? allMsgs.slice(-chatShown) : allMsgs;
   let html = '';
+  if(allMsgs.length > msgs.length) html += `<div class="chat-more"><button type="button" onclick="showMoreChat()">${escapeHtml(t('chat_show_older'))}</button></div>`;
   let lastDayKey = null;
   for(let i=0;i<msgs.length;i++){
     const m = msgs[i];
@@ -12505,7 +12531,14 @@ function renderChat(){
   }
   document.getElementById('chatLog').innerHTML = html;
   renderChatChips();
-  scrollChatToBottom();
+  if(chatKeepScroll){
+    // "Ver mensajes anteriores": se mantiene el lugar donde estaba el lector en vez de saltar al final.
+    const log = document.getElementById('chatLog');
+    if(log) log.scrollTop = log.scrollHeight - chatKeepScroll.h + chatKeepScroll.top;
+    chatKeepScroll = null;
+  } else {
+    scrollChatToBottom();
+  }
   updateChatBadge();
 }
 // Aviso de que hay un mensaje del coach (proactivo o de ajuste automático) que todavía no
@@ -12559,7 +12592,8 @@ function renderChatChips(){
   const lastMsg = (state.chat || [])[(state.chat || []).length - 1];
   const askedQuestion = !!(lastMsg && lastMsg.role === 'coach' && typeof lastMsg.text === 'string' && /\?[\s\u{1F300}-\u{1FAFF}\u2600-\u27BF]*$/u.test(lastMsg.text.trim()));
   const replyChips = askedQuestion ? `<button class="chat-chip chat-chip-yes" onclick="sendChatChip('chat_reply_yes')">${escapeHtml(t('chat_reply_yes'))}</button><button class="chat-chip" onclick="sendChatChip('chat_reply_no')">${escapeHtml(t('chat_reply_no'))}</button>` : '';
-  const chipsHtml = `<div class="chat-chips">${replyChips}${CHAT_CHIP_KEYS.map(k=>`<button class="chat-chip" onclick="sendChatChip('${k}')">${escapeHtml(t(k))}</button>`).join('')}</div>`;
+  const firstChat = (state.chat || []).length <= 1;
+  const chipsHtml = `<div class="chat-chips${firstChat ? ' big' : ''}">${replyChips}${CHAT_CHIP_KEYS.map(k=>`<button class="chat-chip" onclick="sendChatChip('${k}')">${escapeHtml(t(k))}</button>`).join('')}</div>`;
   log.insertAdjacentHTML('beforeend', chipsHtml);
 }
 function sendChatChip(key){
