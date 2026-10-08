@@ -44,12 +44,12 @@ typography:
     lineHeight: 0.9
     letterSpacing: "0.02em"
   body:
-    fontFamily: "'Inter', -apple-system, sans-serif"
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif"
     fontSize: "14px–16px"
     fontWeight: 400
     lineHeight: 1.5
   label:
-    fontFamily: "'Inter', -apple-system, sans-serif"
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif"
     fontSize: "10.5px–12.5px"
     fontWeight: 600
     letterSpacing: "0.04em–0.09em"
@@ -101,7 +101,7 @@ components:
 
 Zancada is built for running before the sun's up or after it's down — the hours when a runner's own visibility is the thing keeping them safe. Near-black carbon (`#0A0A0A`) is the committed default and the only theme every design decision in this document is written against: nothing here is "dark mode" bolted onto a light design. A light theme exists too (see [Themes](#themes) below) — it was built once, removed entirely at the user's request, and later re-requested by that same user, so it now ships as a real, maintained second surface rather than an experiment. It is not a second design language: every rule, token role, and named rule in this document applies identically in both themes, just through each theme's own token values. Out of the dark theme's carbon, one color does real work the way hi-vis gear does in real life: a lime-green accent (`#D6FF3F`) that exists to be seen, not to decorate. It marks the thing that's active, the button that matters, the number that's live right now — everywhere else, the screen stays quiet.
 
-Surfaces separate from each other by luminosity, not by borders. Cards sit a few steps lighter than the page behind them; hairline strokes exist only as a faint finishing touch, never as the primary way two surfaces tell each other apart. Numbers — pace, distance, time, splits, percentages — always render in a monospaced face, so a runner glancing down mid-stride reads a tabular, precise, GPS-watch kind of number, visually distinct from the conversational prose around it. Everything else about the shape language is built for a hand that might be tired, sweaty, or moving: big pill buttons, generous 26px card corners, and a tab bar that floats like a HUD, its center pinned by a raised circular "Correr" button that has to be visibly gravity-defying to earn the interruption of stopping your day to start a run.
+Surfaces separate from each other by luminosity, not by borders. Cards sit a few steps lighter than the page behind them; hairline strokes exist only as a faint finishing touch, never as the primary way two surfaces tell each other apart. Numbers — pace, distance, time, splits, percentages — always render in a monospaced face, so a runner glancing down mid-stride reads a tabular, precise, GPS-watch kind of number, visually distinct from the conversational prose around it. Everything else about the shape language is built for a hand that might be tired, sweaty, or moving: big pill buttons, generous 20px card corners, and a tab bar that floats like a HUD, its center pinned by a raised circular "Correr" button that has to be visibly gravity-defying to earn the interruption of stopping your day to start a run.
 
 **Key Characteristics:**
 - Dark is the committed default — carbon-black ground, every surface and rule in this document specified against it first. A real, maintained light theme exists as an opt-in (system-preference or manual toggle), using the same tokens re-valued for contrast on white, never a second design language.
@@ -164,7 +164,7 @@ The live-run and history route maps (Leaflet + Mapbox tiles) use their own small
 ## Typography
 
 **Display Font:** Bebas Neue (with sans-serif fallback)
-**Body Font:** Inter (with -apple-system, sans-serif fallback)
+**Body Font:** the system font stack — `-apple-system, BlinkMacSystemFont, 'SF Pro Text'` (SF Pro on iPhone, Roboto/system elsewhere), with Inter as the web fallback; `SF Pro Display` is used for large text where the system exposes it
 **Label/Mono Font:** JetBrains Mono
 
 **Character:** A tall, condensed, all-caps poster face for anything that announces itself (headings, big stats, the wordmark) against a workmanlike, highly legible grotesque for everything you actually read, with a tabular mono face reserved strictly for numbers — the pairing reads like a race bib next to a watch face.
@@ -190,18 +190,18 @@ Single-column, mobile-first, capped at `max-width: 480px` and centered — the a
 Depth comes from two complementary systems working together, not shadows alone: a **luminosity ladder** (Asphalt → Asphalt Raised → Asphalt Recessed) does most of the work of telling surfaces apart, while soft, ambient (never hard-edged) shadows add a second, subtler layer of lift for things that float above the page — cards, the tab bar, modals, and confirm sheets.
 
 ### Shadow Vocabulary
-- **Card** (`box-shadow: 0 8px 22px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.03)`): the default lift for cards and chips — a soft ambient shadow plus a 1px inner top highlight that reads as a faint sheen, not a border.
+- **Card** (`box-shadow: none`): since the 2026-10-07 Apple pass, cards and chips are flat — they separate from the page by luminosity alone (the ladder above), with no shadow. Shadows below are reserved for things that float.
 - **Large / Modal** (`box-shadow: 0 16px 48px rgba(0,0,0,.55)`): deeper, more diffuse — reserved for things that visually float above the whole page: confirm dialogs, sheet overlays.
 - **Hi-Vis Glow** (`box-shadow: 0 10px 24px rgba(214,255,63,.32)`, tighter `0 4px 14px` on smaller elements): a colored glow instead of a neutral shadow, used only under lime-filled elements (primary button, active segmented choice) — depth and "this is lit up" read as the same gesture.
 
 ### Named Rules
-**The Ambient-Only Rule.** Shadows in this system are soft and diffuse (`rgba(0,0,0,.4–.55)` blurred), never sharp or directional. A shadow signals "this surface is above the page," not "light is coming from a specific angle."
+**The Ambient-Only Rule.** Where a shadow exists at all (floating sheets, the tab bar, modals), it is soft and diffuse (`rgba(0,0,0,.4–.55)` blurred), never sharp or directional. A shadow signals "this surface is above the page," not "light is coming from a specific angle."
 
 ## Shapes
 
-Two radius steps, both generous, plus a hard pill for anything you tap to act: `18px` (`--radius-sm`) for inputs, chips, tags, and secondary surfaces; `26px` (`--radius`) for cards, confirm dialogs, and the splash panel; `999px` for every button, the tab bar itself, switches, and the language pills. Corners get rounder as an element gets more "actionable" — a card corner is generous, a button corner is total. No sharp (0px) corners appear anywhere in the system.
+Two radius steps, both generous, plus a hard pill for anything you tap to act: `14px` (`--radius-sm`) for inputs, chips, tags, and secondary surfaces; `20px` (`--radius`) for cards, confirm dialogs, and the splash panel; `999px` for every button, the tab bar itself, switches, and the language pills. Corners get rounder as an element gets more "actionable" — a card corner is generous, a button corner is total. No sharp (0px) corners appear anywhere in the system.
 
-A third, smaller step — `8px` (`rounded.xs`) — is documented for compact inline controls that are visibly too small to carry the full 18px scale (a tiny icon thumbnail, a dense number input, a small secondary action button inside a list row). Found in an audit: roughly 14 such spots across the codebase currently use ad-hoc values between 2px and 16px instead of this token, because no compact tier existed to reach for. This token exists so *new* compact controls have a documented value to use — normalizing the existing scattered spots to it is follow-up work, since several of them need a visual check (not just a find-and-replace) to confirm 8px is right for that specific element before changing it.
+A third, smaller step — `8px` (`rounded.xs`) — is documented for compact inline controls that are visibly too small to carry the full 14px scale (a tiny icon thumbnail, a dense number input, a small secondary action button inside a list row). Found in an audit: roughly 14 such spots across the codebase currently use ad-hoc values between 2px and 16px instead of this token, because no compact tier existed to reach for. This token exists so *new* compact controls have a documented value to use — normalizing the existing scattered spots to it is follow-up work, since several of them need a visual check (not just a find-and-replace) to confirm 8px is right for that specific element before changing it.
 
 ## Components
 
@@ -217,14 +217,14 @@ A third, smaller step — `8px` (`rounded.xs`) — is documented for compact inl
 - **Semantic tags** (terrain, load risk): small pill, uppercase label type — Asphalt Stroke/Chalk for neutral (asfalto), Clay-Dim/Clay for trail and load-caution, Danger-Dim/Danger for load-risk, a dashed hairline "soon" variant for unavailable features.
 
 ### Cards / Containers
-- **Corner Style:** 26px (`--radius`).
+- **Corner Style:** 20px (`--radius`).
 - **Background:** Asphalt Raised, no alpha/translucency (cards sit above swipe-to-delete action backgrounds, so a flat opaque fill is required, not just visual preference).
 - **Shadow Strategy:** Card shadow (see Elevation & Depth) plus the 1px inner top highlight.
 - **Border:** Overlay Hairline only.
 - **Internal Padding:** 22px; card eyebrow headers (`h3`) are 11.5px uppercase Label type with 12px bottom margin before content.
 
 ### Inputs / Fields
-- **Style:** Asphalt Raised background, 1.5px Asphalt Stroke border, 18px radius, 13px/15px padding, 16px font size (kept at 16px specifically to avoid iOS Safari's auto-zoom-on-focus).
+- **Style:** Asphalt Raised background, 1.5px Asphalt Stroke border, 14px radius, 13px/15px padding, 16px font size (kept at 16px specifically to avoid iOS Safari's auto-zoom-on-focus).
 - **Focus:** border shifts to Hi-Vis, plus a `0 0 0 3px` Hi-Vis-Dim ring — the same accent-as-signal language as everywhere else in the system.
 - **Error:** Danger-colored helper text beneath the field; the field chrome itself does not change state.
 
@@ -252,5 +252,5 @@ A small hand-drawn line — five short climbs and descents ending flat, `viewBox
 - **Don't** use hard borders as the primary way two surfaces read as separate; the hairline (`rgba(255,255,255,.045)`) is a finishing touch, not a boundary.
 - **Don't** spend the Hi-Vis accent on more than one "this is the active/primary thing" per screen — it loses its meaning (and its resemblance to real hi-vis gear) the moment it's decorative.
 - **Don't** repurpose the five effort-zone colors (Zone 1–5) for anything other than heart-rate/pace zone data — they're a fixed semantic scale, not a brand palette to draw from.
-- **Don't** use a sharp 0px corner anywhere; the system's smallest radius is 8px (`rounded.xs`, reserved for compact inline controls — see Shapes), and 18px for anything larger than that.
+- **Don't** use a sharp 0px corner anywhere; the system's smallest radius is 8px (`rounded.xs`, reserved for compact inline controls — see Shapes), and 14px for anything larger than that.
 - **Don't** put prose or labels in JetBrains Mono, and don't put a measurement in Inter — the mono/sans split is how the interface tells data from language.
