@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T22:19:42Z';
+const APP_VERSION = '2026-10-08T22:30:38Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10943,9 +10943,9 @@ function renderProgressCard(){
   const withPace = weeks.map((w, i) => ({i, p: w.pace})).filter(x => x.p);
   let paceBlock = '';
   if(withPace.length >= 2){
-    const pH = 70;
+    const pH = 88;
     const ps = withPace.map(x => x.p), minP = Math.min(...ps), maxP = Math.max(...ps), range = (maxP - minP) || 0.5;
-    const pt = x => ({x: x.i * slot + slot / 2, y: 10 + ((x.p - minP) / range) * (pH - 24)});
+    const pt = x => ({x: x.i * slot + slot / 2, y: 16 + ((x.p - minP) / range) * (pH - 44)});
     const pts = withPace.map(pt);
     const path = pts.map((p, j) => (j ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join('');
     const dots = pts.map((p, j) => '<circle class="pg-dot' + (j === pts.length - 1 ? ' cur' : '') + '" cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="' + (j === pts.length - 1 ? 4.5 : 3) + '"/>').join('');
@@ -10954,8 +10954,8 @@ function renderProgressCard(){
     const dTxt = dMin + ':' + String(dSec).padStart(2, '0');
     const delta = Math.abs(diff) < 0.03 ? '' : '<p class="pg-delta ' + (diff > 0 ? 'good' : 'bad') + '">' + t(diff > 0 ? 'prog_pace_better' : 'prog_pace_worse', {d: dTxt, unit: distUnit()}) + '</p>';
     paceBlock = '<h4 class="pg-h">' + t('prog_pace') + '</h4><svg class="pg-svg" viewBox="0 0 ' + W + ' ' + pH + '" role="img" aria-label="' + t('prog_pace') + '"><path class="pg-line" d="' + path + '"/>' + dots +
-      '<text class="pg-val" x="' + pts[0].x + '" y="' + (pts[0].y - 9) + '" text-anchor="middle">' + fmtPace(first) + '</text>' +
-      '<text class="pg-val cur" x="' + pts[pts.length - 1].x + '" y="' + (pts[pts.length - 1].y - 10) + '" text-anchor="middle">' + fmtPace(last) + '</text></svg>' + delta;
+      '<text class="pg-val" x="' + pts[0].x + '" y="' + (pts[0].y + (pts[1].y < pts[0].y ? 17 : -9)) + '" text-anchor="middle">' + fmtPace(first) + '</text>' +
+      '<text class="pg-val cur" x="' + pts[pts.length - 1].x + '" y="' + (pts[pts.length - 1].y + (pts[pts.length - 2].y < pts[pts.length - 1].y ? 17 : -10)) + '" text-anchor="middle">' + fmtPace(last) + '</text></svg>' + delta;
   }
 
   // zonas: barra apilada de las últimas 4 semanas
