@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-09T16:43:10Z';
+const APP_VERSION = '2026-10-09T17:04:23Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4682,7 +4682,7 @@ function checkWeekRollover(){
     const diffWeeks = Math.max(1, Math.round((new Date(currentMonday) - prevMonday)/(7*86400000)));
     let adjustNote = null, recapMsg = null, goalUpsellMsg = null, breakMsg = null;
     let promotedPlan = null, promotedWeekNumber = (state.weekNumber||1) + diffWeeks, promotedWeekStart = currentMonday;
-    const breakAdj = computeReturnFromBreakAdjustment(detectTrainingGapWeeks(state.weekStart));
+    const breakAdj = (state.breakAdjLastRunMs && state.breakAdjLastRunMs === lastRunTimeMs()) ? null : computeReturnFromBreakAdjustment(detectTrainingGapWeeks(state.weekStart));
     if(state.weekStart && state.plan && state.plan.length){
       state.planHistory.push({weekNumber: state.weekNumber||1, weekStart: state.weekStart, plan: state.plan});
       recapMsg = buildWeeklyRecapMessage(state.plan, state.weekStart, diffWeeks);
@@ -6273,7 +6273,7 @@ function renderHomeAdjust(){
   const n = skippedSessionCount();
   const todayIdx = (new Date().getDay() + 6) % 7;
   const hasLeft = (state.plan || []).some((d, i) => d && d.dist > 0 && !d.status && i >= todayIdx);
-  if(!state.onboarded || n < 2 || !hasLeft || state.adjustDismissed === state.weekStart){ el.style.display = 'none'; return; }
+  if(!state.onboarded || n < 2 || !hasLeft || state.adjustDismissed === state.weekStart || returnCardInfo()){ el.style.display = 'none'; return; } // si se ofrece el plan de regreso, las sesiones salteadas ya son parte de esa pausa
   document.getElementById('home-adjust-desc').textContent = t('adjust_desc', {n});
   el.style.display = 'block';
 }
@@ -6471,8 +6471,66 @@ async function shareRacePlan(){
   if(!blob) return;
   await shareImageBlobFile(blob, 'zancada-plan-de-carrera.png');
 }
+// ---- Plan de regreso después de una pausa ----
+// Fecha (ms) de la última carrera registrada con una fecha real y pasada, o 0.
+function lastRunTimeMs(){
+  const now = Date.now(); let last = 0;
+  (state.runs || []).forEach(r => { const d = new Date(r.date).getTime(); if(!isNaN(d) && d > last && d <= now) last = d; });
+  return last;
+}
+// Promedio semanal (km) de las 6 semanas anteriores a la pausa.
+function previousWeeklyKm(lastMs){
+  const from = lastMs - 42 * 864e5;
+  const km = (state.runs || []).reduce((a, r) => { const d = new Date(r.date).getTime(); return (d >= from && d <= lastMs) ? a + (r.distanceKm || 0) : a; }, 0);
+  return Math.round((km / 6) * 10) / 10;
+}
+function returnCardInfo(){
+  if(!state.onboarded || !state.profile || (state.runs || []).length < 3) return null;
+  if(state.profile.returningFromBreak) return null;
+  const last = lastRunTimeMs();
+  if(!last || state.returnDismissedFor === last || state.breakAdjLastRunMs === last) return null;
+  const weeks = Math.floor((Date.now() - last) / (7 * 864e5));
+  if(weeks < 2) return null;
+  const prev = previousWeeklyKm(last);
+  if(prev < 5) return null;
+  return {weeks, prev, last};
+}
+function renderHomeReturn(){
+  const el = document.getElementById('home-return-card');
+  if(!el) return;
+  const info = returnCardInfo();
+  if(!info){ el.style.display = 'none'; return; }
+  document.getElementById('home-return-title').textContent = t('return_title', {n: info.weeks});
+  document.getElementById('home-return-desc').textContent = t('return_desc', {pct: 60, prev: fmtDist(info.prev, 0) + ' ' + distUnit()});
+  el.style.display = 'block';
+}
+function dismissReturnCard(){
+  state.returnDismissedFor = lastRunTimeMs();
+  persist();
+  renderHomeReturn();
+}
+// Arma el plan de regreso: marca el perfil como "volviendo de una pausa" (arranca al 60% del volumen de antes, progresa más lento y se
+// gradúa solo cuando volvés a correr cerca de lo de antes) y regenera la semana.
+function applyReturnPlan(){
+  const info = returnCardInfo();
+  if(!info) return;
+  const p = state.profile;
+  const adj = computeReturnFromBreakAdjustment(info.weeks);
+  p.returningFromBreak = true;
+  p.currentWeeklyKm = Math.max(5, Math.round(info.prev));
+  p.weeklyKm = calcWeeklyKm(p);
+  if(adj && adj.weekNumberReset) state.weekNumber = adj.weekNumberReset;
+  state.plan = preserveLivedDays(state.plan, generatePlan(p, state.weekNumber || 1));
+  state.breakAdjLastRunMs = info.last;
+  state.chat.push({role: 'coach', text: t('return_done_msg'), ts: Date.now()});
+  renderChat();
+  renderAll();
+  persist();
+  showToast(t('return_toast'), 'success');
+}
 function renderHome(){
   renderHomeRecap();
+  renderHomeReturn();
   renderRacePlanEntry();
   renderHomeLoad();
   renderHomeAdjust();
@@ -9086,6 +9144,7 @@ async function startCadence(saved){
         if(el) el.textContent = spm ? String(spm) : '—';
         // solo cuenta para el promedio mientras se está corriendo de verdad y con valores de carrera (desde 140 pasos/min: por debajo es caminata y el sensor se vuelve menos preciso)
         if(spm && spm >= 140 && spm <= 230 && isTrackingActive()){ tracker.cadSum = (tracker.cadSum || 0) + spm; tracker.cadN = (tracker.cadN || 0) + 1; }
+        checkCadenceDrop(spm);
       });
     }
     await p.start();
@@ -9098,6 +9157,23 @@ function stopCadence(){
   if(p) p.stop().catch(() => {});
   const stat = document.getElementById('track-cad-stat');
   if(stat){ stat.style.display = 'none'; stat.parentElement.classList.remove('three'); }
+}
+// Aviso de voz si tu cadencia de los últimos ~9 s cae más de 10% por debajo del promedio de esta carrera (señal de cansancio o de
+// paso largo). Solo en carrera libre o sesiones continuas (en series, cuestas y fartlek la cadencia cambia a propósito), con al menos
+// ~90 s de referencia y como mucho un aviso cada 5 minutos.
+function checkCadenceDrop(spm){
+  if(!tracker || !(spm >= 120) || !isTrackingActive()) return;
+  const w = tracker.workout;
+  if(w && w.phase !== 'continuous') return;
+  tracker.cadRecent = (tracker.cadRecent || []).concat(spm).slice(-3);
+  if(tracker.cadRecent.length < 3 || (tracker.cadN || 0) < 30) return;
+  const avg = tracker.cadSum / tracker.cadN;
+  const recent = tracker.cadRecent.reduce((a, b) => a + b, 0) / 3;
+  if(recent >= avg * 0.9) return;
+  if(tracker.elapsedSec - (tracker.lastCadAlertSec || -999) < 300) return;
+  tracker.lastCadAlertSec = tracker.elapsedSec;
+  speak(t('voice_cadence_low'));
+  haptic([40, 60, 40]);
 }
 function runAvgCadence(){
   return tracker && tracker.cadN >= 10 ? Math.round(tracker.cadSum / tracker.cadN) : null;

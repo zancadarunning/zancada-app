@@ -267,3 +267,75 @@ test('cadencia: el promedio de la carrera solo existe con suficientes muestras (
   tr.cadSum = 170 * 10 + 10; tr.cadN = 11;
   assert.equal(app.runAvgCadence(), Math.round((170 * 10 + 10) / 11));
 });
+
+test('cadencia baja: avisa una vez cuando cae más de 10% bajo el promedio y respeta la espera de 5 minutos', () => {
+  const app = loadApp();
+  const said = [];
+  app.speak = (txt) => said.push(txt);
+  app.haptic = () => {};
+  const tr = app.getTracker();
+  tr.running = true; tr.autoPaused = false; tr.workout = null; tr.elapsedSec = 900;
+  tr.cadSum = 170 * 40; tr.cadN = 40; tr.cadRecent = [];
+  app.checkCadenceDrop(170); app.checkCadenceDrop(170); app.checkCadenceDrop(170);
+  assert.equal(said.length, 0, 'cadencia normal: sin aviso');
+  tr.cadRecent = [];
+  app.checkCadenceDrop(148); app.checkCadenceDrop(148); app.checkCadenceDrop(148);
+  assert.equal(said.length, 1, 'cayó ~13%: avisa');
+  tr.cadRecent = [];
+  app.checkCadenceDrop(148); app.checkCadenceDrop(148); app.checkCadenceDrop(148);
+  assert.equal(said.length, 1, 'no repite antes de 5 minutos');
+  tr.elapsedSec += 301; tr.cadRecent = [];
+  app.checkCadenceDrop(148); app.checkCadenceDrop(148); app.checkCadenceDrop(148);
+  assert.equal(said.length, 2);
+});
+
+test('cadencia baja: en series (fase de esfuerzo) y con poca referencia no avisa', () => {
+  const app = loadApp();
+  const said = [];
+  app.speak = (txt) => said.push(txt);
+  app.haptic = () => {};
+  const tr = app.getTracker();
+  tr.running = true; tr.autoPaused = false; tr.elapsedSec = 900;
+  tr.cadSum = 170 * 40; tr.cadN = 40; tr.cadRecent = [];
+  tr.workout = { phase: 'effort', structure: { typeKey: 'intervals' } };
+  for (let i = 0; i < 3; i++) app.checkCadenceDrop(140);
+  assert.equal(said.length, 0, 'en series la cadencia cambia a propósito');
+  tr.workout = null; tr.cadN = 10; tr.cadSum = 1700; tr.cadRecent = [];
+  for (let i = 0; i < 3; i++) app.checkCadenceDrop(140);
+  assert.equal(said.length, 0, 'con menos de ~90 s de referencia no avisa');
+});
+
+test('plan de regreso: se ofrece tras 2+ semanas sin correr y arma un plan más suave una sola vez', () => {
+  const app = loadApp();
+  const weeklyKm = 30;
+  app.state.onboarded = true;
+  app.state.weekStart = app.getMondayISO(new Date());
+  app.state.profile = {
+    name: 'Corredor', weeklyKm, currentWeeklyKm: weeklyKm, goal: '10k', runnerType: 'active', trainingDays: ['tue', 'thu', 'sun'],
+    terrain: 'asfalto', units: 'metric', trainBy: 'distance', hrKnown: false, hrMax: 190, hrZones: app.computeZones(190),
+    createdAt: '2025-01-01',
+  };
+  // 6 semanas corriendo ~30 km por semana, y la última carrera hace 4 semanas
+  app.state.runs = [];
+  for (let w = 0; w < 6; w++) for (let k = 0; k < 3; k++) app.state.runs.push({ id: 'r' + w + k, date: isoDaysAgo(28 + w * 7 + k * 2 + 1), distanceKm: 10, durationSec: 3600 });
+  const info = app.returnCardInfo();
+  assert.ok(info && info.weeks >= 4, 'ofrece el plan de regreso');
+  assert.ok(Math.abs(info.prev - 30) < 1);
+  app.state.plan = mkPlan({});
+  app.state.chat = [];
+  app.applyReturnPlan();
+  assert.equal(app.state.profile.returningFromBreak, true);
+  assert.ok(app.state.profile.weeklyKm < weeklyKm, 'el volumen baja');
+  assert.equal(app.returnCardInfo(), null, 'ya no se vuelve a ofrecer');
+  assert.ok(app.state.chat.length >= 1);
+});
+
+test('plan de regreso: no se ofrece con una pausa corta o con poco historial', () => {
+  const app = loadApp();
+  app.state.onboarded = true;
+  app.state.profile = { name: 'x', weeklyKm: 20, createdAt: '2025-01-01' };
+  app.state.runs = [{ id: 'a', date: isoDaysAgo(3), distanceKm: 10, durationSec: 3600 }, { id: 'b', date: isoDaysAgo(6), distanceKm: 10, durationSec: 3600 }, { id: 'c', date: isoDaysAgo(9), distanceKm: 10, durationSec: 3600 }];
+  assert.equal(app.returnCardInfo(), null, 'corrió hace 3 días');
+  app.state.runs = [{ id: 'a', date: isoDaysAgo(40), distanceKm: 10, durationSec: 3600 }];
+  assert.equal(app.returnCardInfo(), null, 'menos de 3 carreras');
+});
