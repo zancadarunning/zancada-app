@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-09T16:13:42Z';
+const APP_VERSION = '2026-10-09T16:20:38Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -11632,7 +11632,7 @@ function renderFitnessCard(){
   const weeks = computeFitnessTrend(12);
   const withV = weeks.map((w, i) => ({i, v: w.v})).filter(x => x.v !== null);
   if(withV.length < 3){
-    return (state.runs || []).length ? '<div class="card"><h3>' + t('fit_title') + '</h3><p class="muted" style="margin:6px 0 0; font-size:13px; line-height:1.5;">' + t('fit_empty') + '</p></div>' : '';
+    return (state.runs || []).length ? '<div class="card fold-card' + (foldState.fit ? ' open' : '') + '">' + foldHead('fit', t('fit_title'), 'openFitInfo', t('fit_info_title')) + foldBodyOpen('fit') + '<p class="muted" style="margin:0; font-size:13px; line-height:1.5;">' + t('fit_empty') + '</p></div></div>' : '';
   }
   const W = 300, H = 84, slot = W / weeks.length;
   const vs = withV.map(x => x.v), minV = Math.min(...vs), maxV = Math.max(...vs), range = (maxV - minV) || 1;
@@ -11646,7 +11646,7 @@ function renderFitnessCard(){
     '<text class="pg-val cur" x="' + pts[pts.length - 1].x + '" y="' + (pts[pts.length - 1].y - 10) + '" text-anchor="middle">' + last.v.toFixed(1) + '</text>';
   const diff = last.v - first.v, nWeeks = last.i - first.i;
   const delta = Math.abs(diff) < 0.2 || nWeeks < 2 ? '' : '<p class="pg-delta ' + (diff > 0 ? 'good' : 'bad') + '">' + t(diff > 0 ? 'fit_up' : 'fit_down', {d: Math.abs(diff).toFixed(1), n: nWeeks}) + '</p>';
-  return '<div class="card pg-card"><h3>' + t('fit_title') + '</h3><svg class="pg-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + t('fit_title') + '"><path class="pg-line" d="' + path + '"/>' + dots + labels + '</svg>' + delta + '<p class="muted" style="margin:10px 0 0; font-size:12px; line-height:1.45;">' + t('fit_note') + '</p></div>';
+  return '<div class="card pg-card fold-card' + (foldState.fit ? ' open' : '') + '">' + foldHead('fit', t('fit_title'), 'openFitInfo', t('fit_info_title')) + foldBodyOpen('fit') + '<svg class="pg-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + t('fit_title') + '"><path class="pg-line" d="' + path + '"/>' + dots + labels + '</svg>' + delta + '<p class="muted" style="margin:10px 0 0; font-size:12px; line-height:1.45;">' + t('fit_note') + '</p></div></div>';
 }
 function renderProgressCard(){
   const weeks = computeWeeklyProgress(8);
@@ -11692,7 +11692,7 @@ function renderProgressCard(){
     const legend = [1, 2, 3, 4, 5].filter(z => zt.secs[z] > 0).map(z => '<span class="pg-leg"><i class="pg-dotz z' + z + '"></i>' + t('zone_word') + ' ' + z + ' <b>' + Math.round(zt.secs[z] / zt.total * 100) + '%</b></span>').join('');
     zoneBlock = '<h4 class="pg-h">' + t('prog_zones') + '</h4><div class="pg-zbar">' + segs + '</div><div class="pg-legend">' + legend + '</div>';
   }
-  return '<div class="card pg-card"><h3>' + t('prog_title') + '</h3><h4 class="pg-h first">' + t('prog_km') + '</h4>' + kmSvg + paceBlock + zoneBlock + '</div>';
+  return '<div class="card pg-card fold-card' + (foldState.prog ? ' open' : '') + '">' + foldHead('prog', t('prog_title')) + foldBodyOpen('prog') + '<h4 class="pg-h first">' + t('prog_km') + '</h4>' + kmSvg + paceBlock + zoneBlock + '</div></div>';
 }
 function renderHistory(){
   const el = document.getElementById('history-list');
@@ -12417,6 +12417,28 @@ async function deleteRun(runId){
   closeRunDetail();
   renderHistory(); renderHome(); renderPlan(); renderPerfil();
   persist();
+}
+function openFitInfo(){ document.getElementById('fit-info-modal').style.display = 'block'; }
+function closeFitInfo(){ document.getElementById('fit-info-modal').style.display = 'none'; }
+// Tarjetas desplegables de Historial ("Tu progreso", "Forma física"): vienen cerradas; lo que abrís se recuerda
+// mientras la app está abierta (el buscador vuelve a dibujar la lista en cada letra).
+const foldState = {};
+const FOLD_CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
+function foldHead(key, title, infoFn, infoLabel){
+  const o = !!foldState[key];
+  const info = infoFn ? '<button class="info-btn" onclick="' + infoFn + '()" aria-label="' + infoLabel + '"><span class="icon-sq" style="width:19px; height:19px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span></button>' : '';
+  return '<div class="fold-head"><button class="pred-head" aria-expanded="' + o + '" onclick="toggleFold(this,\'' + key + '\')"><h3>' + title + '</h3></button>' + info +
+    '<button class="pred-chev" aria-label="' + title + '" aria-expanded="' + o + '" onclick="toggleFold(this,\'' + key + '\')">' + FOLD_CHEV + '</button></div>';
+}
+function foldBodyOpen(key){ return '<div class="pred-body"' + (foldState[key] ? '' : ' hidden') + '>'; }
+function toggleFold(el, key){
+  const card = el.closest('.fold-card');
+  if(!card) return;
+  const open = !card.classList.contains('open');
+  foldState[key] = open;
+  card.classList.toggle('open', open);
+  card.querySelector('.pred-body').hidden = !open;
+  card.querySelectorAll('[aria-expanded]').forEach(x => x.setAttribute('aria-expanded', String(open)));
 }
 function openHistInfo(){ document.getElementById('hist-info-modal').style.display = 'block'; }
 function closeHistInfo(){ document.getElementById('hist-info-modal').style.display = 'none'; }

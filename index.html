@@ -2259,6 +2259,15 @@
 
   /* Saludo + clima en Inicio */
   .wx-chip{display:inline-flex; align-items:center; gap:6px; background:var(--asphalt-2); border-radius:999px; padding:6px 12px; font-size:13px; font-weight:700; color:var(--chalk);}
+
+  /* Título de tarjeta con botón de información */
+  .pg-title-row{display:flex; align-items:center; justify-content:space-between; gap:10px;} .pg-title-row h3{margin:0;}
+
+  /* Tarjetas desplegables del Historial */
+  .fold-head{display:flex; align-items:center; gap:10px;} .fold-head .pred-head{flex:1; min-width:0; width:auto;}
+  button.pred-chev{border:none; padding:0; cursor:pointer;}
+  .fold-card.open .pred-chev{transform:rotate(180deg);}
+  .fold-card .pred-body{margin-top:12px;} .fold-card .pred-body > .pg-h.first{margin-top:0;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -3631,6 +3640,18 @@
     <h2 class="subtitle" style="font-size:22px;" data-i18n="hist_info_title"></h2>
     <p class="lead" data-i18n="hist_info_text"></p>
     <button class="btn btn-primary" style="width:100%; margin-top:28px;" onclick="closeHistInfo()" data-i18n="hist_info_ok"></button>
+  </div>
+
+  <div class="overlay" id="fit-info-modal" style="display:none; z-index:59;">
+    <div class="icon-sq" style="width:38px; height:38px; margin:0 auto 8px; color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg></div>
+    <h2 class="subtitle" style="font-size:22px; text-align:center;" data-i18n="fit_info_title"></h2>
+    <div style="margin-top:18px; display:flex; flex-direction:column; gap:14px;">
+      <p class="lead" style="margin:0;" data-i18n="fit_info_what"></p>
+      <p class="muted" style="margin:0; font-size:14px; line-height:1.55;" data-i18n="fit_info_how"></p>
+      <p class="muted" style="margin:0; font-size:14px; line-height:1.55;" data-i18n="fit_info_read"></p>
+      <p class="muted" style="margin:0; font-size:13px; line-height:1.5;" data-i18n="fit_info_note"></p>
+    </div>
+    <button class="btn btn-primary" style="width:100%; margin-top:24px;" onclick="closeFitInfo()" data-i18n="hist_info_ok"></button>
   </div>
 
   <div class="overlay" id="zones-info-modal" style="display:none; z-index:59;">
