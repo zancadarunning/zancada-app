@@ -201,7 +201,7 @@ test('plan de carrera: los parciales suman exactamente el tiempo objetivo y sale
     const sp = app.buildRaceSplits(km, 3000);
     assert.equal(Math.round(sp[sp.length - 1].cumSec), 3000, 'total = objetivo para ' + km + ' km');
     assert.ok(sp[0].paceMin > sp[Math.floor(sp.length / 2)].paceMin, 'el primer km es más lento que el del medio');
-    assert.ok(sp[sp.length - 2].paceMin < sp[Math.floor(sp.length / 2)].paceMin, 'el final es más rápido que el medio');
+    assert.ok(sp[sp.length - 1].paceMin < sp[Math.floor(sp.length / 2)].paceMin, 'el final es más rápido que el medio');
   }
   assert.equal(app.buildRaceSplits(10, 3000).length, 10);
   assert.equal(app.buildRaceSplits(21.0975, 6000).length, 22, 'la media termina con un tramo parcial');
