@@ -2227,6 +2227,10 @@
   .tap-pad,.info-btn,.hist-add-btn,#plan-prev-btn,#plan-next-btn,.small-link,#home-next-hint{position:relative;}
   .tap-pad::before,.info-btn::before,.hist-add-btn::before,#plan-prev-btn::before,#plan-next-btn::before,.small-link::before,#home-next-hint::before{content:''; position:absolute; inset:-9px -7px;}
   .info-btn::before{inset:-12px;}
+
+  /* Tamaño del texto: 4 opciones en grilla de 2x2 para que entren incluso con letra grande */
+  #textsize-toggle{display:grid; grid-template-columns:1fr 1fr; gap:6px;}
+  #textsize-toggle .choice{white-space:normal; text-align:center;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
