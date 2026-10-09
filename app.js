@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-09T17:04:23Z';
+const APP_VERSION = '2026-10-09T17:14:13Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -9406,6 +9406,38 @@ function maybePaceAlert(){
   speak(t(key));
   haptic([40, 60, 40]);
 }
+// Avisos de voz en los hitos de la sesión de hoy (rodaje, tempo, tirada larga o progresivo, o sea las sesiones continuas):
+// mitad del camino, último kilómetro/minuto y sesión completa. Si la carrera se retoma ya pasado un hito, no lo repite.
+function sessionProgress(){
+  const w = tracker.workout;
+  if(!w || w.phase !== 'continuous' || !w.structure) return null;
+  const s = w.structure;
+  if(isTimeMode()){
+    const total = planDurationMin({dist: s.targetDist, durMin: s.targetDurMin}) * 60;
+    if(!(total > 0)) return null;
+    return {mode: 'time', frac: tracker.elapsedSec / total, remaining: total - tracker.elapsedSec, total};
+  }
+  if(!(s.targetDist > 0)) return null;
+  return {mode: 'dist', frac: tracker.distanceKm / s.targetDist, remaining: s.targetDist - tracker.distanceKm, total: s.targetDist};
+}
+function maybeAnnounceMilestones(){
+  const p = sessionProgress();
+  if(!p) return;
+  const ms = tracker.ms || (tracker.ms = {});
+  const remUnits = p.mode === 'dist' ? (isImperial() ? p.remaining * MI_PER_KM : p.remaining) : p.remaining;
+  const bigEnough = p.mode === 'dist' ? p.total >= 2 : p.total >= 600;
+  const lastEnough = p.mode === 'dist' ? p.total >= 3 : p.total >= 600;
+  if(!ms.init){
+    // primera vez (o carrera retomada): lo que ya pasó no se anuncia
+    ms.init = true;
+    if(p.frac >= 0.5) ms.half = true;
+    if(p.mode === 'dist' ? remUnits <= 1 : remUnits <= 60) ms.last = true;
+    if(p.frac >= 1) ms.done = true;
+  }
+  if(!ms.half && bigEnough && p.frac >= 0.5 && p.frac < 0.95){ ms.half = true; speak(t('voice_half')); }
+  if(!ms.last && lastEnough && p.frac < 1 && (p.mode === 'dist' ? remUnits <= 1 : remUnits <= 60)){ ms.last = true; speak(t(p.mode === 'dist' ? (isImperial() ? 'voice_last_mi' : 'voice_last_km') : 'voice_last_min')); }
+  if(!ms.done && p.frac >= 1){ ms.done = true; speak(t('voice_target_done')); haptic([15, 40, 15]); }
+}
 function maybeAnnounceKm(){
   // Antes esto anunciaba siempre en km ("Kilómetro 1... Kilómetro 2...") y el ritmo en
   // min/km, sin importar si el corredor eligió sistema imperial -- mientras que el resto de
@@ -10228,7 +10260,7 @@ function tickRunTimer(){
   tracker.lastTickAt = now;
   if(isTrackingActive() && deltaSec > 0){
     tracker.elapsedSec += deltaSec;
-    updateLiveStats(); tickWorkoutGuide();
+    updateLiveStats(); tickWorkoutGuide(); if(isTimeMode()) maybeAnnounceMilestones();
     if(tracker.elapsedSec - (tracker.lastSavedSec||0) >= 15){ tracker.lastSavedSec = tracker.elapsedSec; saveRunProgress(); }
   }
 }
@@ -10452,7 +10484,7 @@ function onPosition(pos){
     // y esos puntos quedaban para siempre en la ruta guardada.
     tracker.points.push({lat, lon, t:tracker.elapsedSec, alt:(typeof altitude==='number' && !isNaN(altitude)) ? altitude : null});
     updateLiveMap(lat,lon);
-    maybeAnnounceKm(); maybePaceAlert(); tickWorkoutGuide();
+    maybeAnnounceKm(); maybeAnnounceMilestones(); maybePaceAlert(); tickWorkoutGuide();
   }
   updateLiveStats();
   // Se sacó el saveRunProgress() de acá -- se llamaba en cada fix de GPS (varias veces
@@ -12311,7 +12343,8 @@ function renderRDRitmo(panel){
       <div><span class="mono" style="font-size:22px; font-weight:800; display:block;">${fmtPace(paceMin)}</span><span class="muted" style="font-size:12px;">${t('rd_avg_pace')}</span></div>
       <div><span class="mono" style="font-size:22px; font-weight:800; display:block;">${fmtPace(fastest)}</span><span class="muted" style="font-size:12px;">${t('rd_fastest_pace')}</span></div>
     </div>
-    ${pacingAnalysis ? `<p style="font-weight:700; margin-bottom:14px; font-size:13.5px;">${t('hist_split_'+pacingAnalysis.kind)}</p>` : ''}
+    ${pacingAnalysis ? `<p style="font-weight:700; margin-bottom:${pacingDetailText(splits) ? 4 : 14}px; font-size:13.5px;">${t('hist_split_'+pacingAnalysis.kind)}</p>` : ''}
+    ${pacingAnalysis && pacingDetailText(splits) ? `<p class="muted" style="margin:0 0 14px; font-size:12.5px;">${pacingDetailText(splits)}</p>` : ''}
     <div class="muted" style="font-size:11px; margin-bottom:8px; display:flex; justify-content:space-between;"><span>${unitLabel}</span><span>${t('run_pace_word')} (/${distUnit()})</span></div>
     ${splits.map(s=>{
       const zone = classifyPaceRelative(s.paceMin, paceMin);
@@ -12521,6 +12554,25 @@ function renderRDDetalles(panel){
     </div>
     ${r.hrLog && r.hrLog.length>1 ? `<div class="hist-hrlist" style="margin-top:12px;">${r.hrLog.map(h=>`<span class="zone-chip zone-${classifyHR(h.bpm)}">${h.bpm} bpm</span>`).join('')}</div>` : ''}
   `;
+}
+// Cuánto varía el ritmo entre parciales y cuánto cambió la segunda mitad respecto de la primera (el veredicto "negativo / parejo /
+// aflojaste" lo da analyzeSplitPacing, en la pestaña Ritmo). Los parciales sueltos (un último tramo de 0,4 km) no cuentan.
+function pacingStats(splits){
+  const sp = (splits || []).filter(s => s && s.paceMin > 0 && s.paceMin < 20 && (isNaN(parseFloat(s.km)) || Number.isInteger(parseFloat(s.km))));
+  if(sp.length < 3) return null;
+  const p = sp.map(s => s.paceMin);
+  const half = Math.floor(p.length / 2);
+  const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+  const first = avg(p.slice(0, half)), second = avg(p.slice(p.length - half));
+  const mean = avg(p), sd = Math.sqrt(avg(p.map(x => (x - mean) * (x - mean))));
+  return {diffPct: (second - first) / first * 100, cv: sd / mean * 100, n: p.length};
+}
+function pacingDetailText(splits){
+  const st = pacingStats(splits);
+  if(!st) return '';
+  const abs = Math.abs(st.diffPct);
+  const half = abs < 0.5 ? t('pacing_half_same') : t(st.diffPct < 0 ? 'pacing_half_faster' : 'pacing_half_slower', {p: abs.toFixed(1)});
+  return t('pacing_detail', {cv: st.cv.toFixed(1), half});
 }
 async function deleteRun(runId){
   if(!(await showConfirm(t('hist_delete_confirm'), {danger:true, confirmText:t('delete_word')}))) return;

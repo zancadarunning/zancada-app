@@ -339,3 +339,62 @@ test('plan de regreso: no se ofrece con una pausa corta o con poco historial', (
   app.state.runs = [{ id: 'a', date: isoDaysAgo(40), distanceKm: 10, durationSec: 3600 }];
   assert.equal(app.returnCardInfo(), null, 'menos de 3 carreras');
 });
+
+function sessionTracker(app, dist, totalKm, mode) {
+  const tr = app.getTracker();
+  tr.running = true; tr.autoPaused = false; tr.elapsedSec = 600; tr.distanceKm = dist; tr.ms = undefined;
+  tr.workout = { phase: 'continuous', structure: { typeKey: 'continuous', planTypeKey: 'easy', targetDist: totalKm, targetDurMin: undefined } };
+  app.state.profile = { trainBy: mode || 'distance', units: 'metric' };
+  return tr;
+}
+
+test('hitos de la sesión: avisa mitad, último kilómetro y sesión completa, cada uno una vez', () => {
+  const app = loadApp();
+  const said = [];
+  app.speak = (txt) => said.push(txt);
+  app.haptic = () => {};
+  const tr = sessionTracker(app, 0.5, 8);
+  app.maybeAnnounceMilestones();
+  assert.equal(said.length, 0, 'al inicio no dice nada');
+  tr.distanceKm = 4.1; app.maybeAnnounceMilestones();
+  assert.equal(said.length, 1); assert.match(said[0], /Mitad/);
+  tr.distanceKm = 4.4; app.maybeAnnounceMilestones();
+  assert.equal(said.length, 1, 'la mitad no se repite');
+  tr.distanceKm = 7.1; app.maybeAnnounceMilestones();
+  assert.equal(said.length, 2); assert.match(said[1], /Último kilómetro/);
+  tr.distanceKm = 8.05; app.maybeAnnounceMilestones();
+  assert.equal(said.length, 3); assert.match(said[2], /Completaste/);
+  tr.distanceKm = 8.5; app.maybeAnnounceMilestones();
+  assert.equal(said.length, 3);
+});
+
+test('hitos de la sesión: una carrera retomada pasada la mitad no repite lo que ya pasó, y sesiones cortas no anuncian la mitad', () => {
+  const app = loadApp();
+  const said = [];
+  app.speak = (txt) => said.push(txt);
+  app.haptic = () => {};
+  sessionTracker(app, 5, 8);
+  app.maybeAnnounceMilestones();
+  assert.equal(said.length, 0, 'ya pasó la mitad al retomar: no la anuncia');
+  const app2 = loadApp();
+  const said2 = [];
+  app2.speak = (txt) => said2.push(txt); app2.haptic = () => {};
+  const tr2 = sessionTracker(app2, 0.2, 1.5);
+  app2.maybeAnnounceMilestones(); tr2.distanceKm = 0.9; app2.maybeAnnounceMilestones();
+  assert.equal(said2.length, 0, 'una sesión de 1,5 km es muy corta para anunciar hitos');
+});
+
+test('constancia de ritmo: variación entre parciales y cambio de la segunda mitad', () => {
+  const app = loadApp();
+  const mk = (paces) => paces.map((p, i) => ({ km: String(i + 1), paceMin: p }));
+  const neg = app.pacingStats(mk([6.2, 6.1, 6.0, 5.8, 5.7, 5.6]));
+  assert.ok(neg.diffPct < -3, 'segunda mitad más rápida');
+  const even = app.pacingStats(mk([6.0, 6.02, 5.98, 6.01, 6.0, 5.99]));
+  assert.ok(Math.abs(even.diffPct) < 0.5 && even.cv < 0.5);
+  const fade = app.pacingStats(mk([5.5, 5.6, 5.8, 6.0, 6.2, 6.4]));
+  assert.ok(fade.diffPct > 3 && fade.cv > 4);
+  assert.equal(app.pacingStats(mk([6, 6])), null, 'con menos de 3 parciales no hay datos');
+  const partial = app.pacingStats([...mk([6, 6, 6, 6, 6]), { km: '5.4', paceMin: 9 }]);
+  assert.ok(partial.cv < 0.1, 'el último tramo suelto (5,4) no cuenta');
+  assert.match(app.pacingDetailText(mk([6.2, 6.1, 6.0, 5.8, 5.7, 5.6])), /Variación entre parciales: \d/);
+});
