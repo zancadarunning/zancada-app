@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-09T15:45:43Z';
+const APP_VERSION = '2026-10-09T15:59:06Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10380,7 +10380,7 @@ function showRunSummaryUI(){
   updateCoachFabVisibility();
   const paceMin = tracker.distanceKm>0.02 ? (tracker.elapsedSec/60)/tracker.distanceKm : 0;
   document.getElementById('sum-dist').textContent = fmtDist(tracker.distanceKm);
-  document.getElementById('sum-time').textContent = fmtTime(tracker.elapsedSec);
+  document.getElementById('sum-time').textContent = fmtRaceTime(tracker.elapsedSec);
   document.getElementById('sum-pace').textContent = fmtPace(paceMin);
   document.getElementById('sum-cal').textContent = Math.round((state.profile.weight||70)*tracker.distanceKm*1.036);
   updateRunUnitLabels();
