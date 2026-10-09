@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-09T15:59:06Z';
+const APP_VERSION = '2026-10-09T16:13:42Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -9908,10 +9908,38 @@ function paintHomeWeather(w){
   const deg = isImperial() ? Math.round(w.temp * 9 / 5 + 32) + '°F' : Math.round(w.temp) + '°C';
   chip.textContent = k.e + ' ' + deg + ' · ' + t('wx_' + k.k);
   chip.style.display = '';
+  chip.removeAttribute('role'); chip.removeAttribute('tabindex'); chip.onclick = null;
+}
+// Pide la ubicación una vez (con el aviso del sistema si hace falta) y la guarda para el clima.
+function requestWeatherLocation(){
+  if(!navigator.geolocation){ paintHomeWeather(null); return; }
+  navigator.geolocation.getCurrentPosition(p => {
+    saveLastKnownPosition(p.coords.latitude, p.coords.longitude);
+    refreshHomeWeather();
+  }, () => {
+    showToast(t('wx_denied'), 'error');
+    paintHomeWeather(null);
+  }, {enableHighAccuracy: false, timeout: 10000, maximumAge: 600000});
+}
+function paintWeatherInvite(){
+  const chip = document.getElementById('home-wx');
+  if(!chip) return;
+  chip.textContent = '📍 ' + t('wx_enable');
+  chip.style.display = '';
+  chip.setAttribute('role', 'button'); chip.tabIndex = 0;
+  chip.onclick = requestWeatherLocation;
 }
 async function refreshHomeWeather(){
   const pos = readLastKnownPosition();
-  if(!pos){ paintHomeWeather(null); return; }
+  if(!pos){
+    // Sin ubicación guardada: si el permiso ya está concedido la tomamos sin molestar; si no, el chip invita a activarla.
+    let state0 = 'prompt';
+    try{ if(navigator.permissions && navigator.permissions.query) state0 = (await navigator.permissions.query({name: 'geolocation'})).state; }catch(e){}
+    if(state0 === 'granted' && navigator.geolocation){ requestWeatherLocation(); return; }
+    if(state0 === 'denied' || !navigator.geolocation){ paintHomeWeather(null); return; }
+    paintWeatherInvite();
+    return;
+  }
   const lat = Math.round(pos.lat * 100) / 100, lng = Math.round(pos.lng * 100) / 100;
   let cached = null;
   try{ cached = JSON.parse(localStorage.getItem(WX_KEY) || 'null'); }catch(e){}
@@ -11603,7 +11631,9 @@ function computeFitnessTrend(weeks){
 function renderFitnessCard(){
   const weeks = computeFitnessTrend(12);
   const withV = weeks.map((w, i) => ({i, v: w.v})).filter(x => x.v !== null);
-  if(withV.length < 3) return '';
+  if(withV.length < 3){
+    return (state.runs || []).length ? '<div class="card"><h3>' + t('fit_title') + '</h3><p class="muted" style="margin:6px 0 0; font-size:13px; line-height:1.5;">' + t('fit_empty') + '</p></div>' : '';
+  }
   const W = 300, H = 84, slot = W / weeks.length;
   const vs = withV.map(x => x.v), minV = Math.min(...vs), maxV = Math.max(...vs), range = (maxV - minV) || 1;
   const pt = x => ({x: x.i * slot + slot / 2, y: 18 + (1 - (x.v - minV) / range) * (H - 44)});

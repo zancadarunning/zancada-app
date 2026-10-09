@@ -245,3 +245,14 @@ test('clima: traduce los códigos de Open-Meteo', () => {
   assert.equal(app.wxKind(73).k, 'snow');
   assert.equal(app.wxKind(95).k, 'storm');
 });
+
+test('forma física: con pocas semanas de datos muestra una tarjeta explicativa (no desaparece)', () => {
+  const app = loadApp();
+  app.state.profile = {};
+  app.state.runs = [];
+  assert.equal(app.renderFitnessCard(), '', 'sin ninguna carrera no hay tarjeta (ya está el estado vacío del historial)');
+  app.state.runs = [{ id: 'a', date: isoDaysAgo(3), distanceKm: 5, durationSec: 1700 }];
+  const html = app.renderFitnessCard();
+  assert.match(html, /Forma física/);
+  assert.match(html, /3 semanas/);
+});
