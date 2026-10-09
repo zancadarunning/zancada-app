@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-08T23:53:16Z';
+const APP_VERSION = '2026-10-09T00:13:49Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10635,6 +10635,12 @@ function drawPRBadge(ctx, cx, cy, r){
   ctx.strokeStyle = ink;
   const by = cy - r*0.01;
 
+  // la copa entera se dibuja a escala reducida, centrada en el disco
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(0.8, 0.8);
+  ctx.translate(-cx, -cy);
+
   // sombra suave de apoyo bajo la base
   ctx.save();
   ctx.fillStyle = 'rgba(18,20,21,0.2)';
@@ -10662,9 +10668,9 @@ function drawPRBadge(ctx, cx, cy, r){
     const X = v => cx + sg*r*v, Y = v => by + r*v;
     ctx.beginPath();
     ctx.moveTo(X(0.38), Y(-0.48));
-    ctx.bezierCurveTo(X(0.92), Y(-0.6), X(0.97), Y(0.02), X(0.27), Y(0.06));
+    ctx.bezierCurveTo(X(0.74), Y(-0.54), X(0.78), Y(0.0), X(0.27), Y(0.06));
     ctx.lineTo(X(0.28), Y(-0.03));
-    ctx.bezierCurveTo(X(0.7), Y(-0.01), X(0.72), Y(-0.38), X(0.38), Y(-0.37));
+    ctx.bezierCurveTo(X(0.58), Y(-0.01), X(0.6), Y(-0.34), X(0.38), Y(-0.35));
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
@@ -10728,6 +10734,7 @@ function drawPRBadge(ctx, cx, cy, r){
   ctx.fillText('PR', cx + r*0.012, by - r*0.24);
   prRoundRect(ctx, cx - r*0.15, by - r*0.075, r*0.3, r*0.02, r*0.01);
   ctx.fill();
+  ctx.restore();
 
   ctx.restore();
 }
