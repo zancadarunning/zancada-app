@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-09T00:49:50Z';
+const APP_VERSION = '2026-10-09T00:52:57Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7535,7 +7535,30 @@ function openEventOverlay(){ openOverlaySheetEl(document.getElementById('event-o
 function closeEventOverlay(){ document.getElementById('event-overlay').classList.remove('overlay-open'); }
 // Tema/Unidades/Entrenar por/Avisos de voz consolidados en un solo botón "Preferencias" --
 // ver el comentario junto a preferences-overlay en index.html.
-function openPreferencesOverlay(){ openOverlaySheetEl(document.getElementById('preferences-overlay')); }
+// "Tamaño del texto" (solo en la app de Android, ver ZancadaDisplayPlugin.kt): automático (sigue al
+// sistema), normal, grande o muy grande.
+function displayPlugin(){
+  if(typeof Capacitor === 'undefined' || !Capacitor.isNativePlatform || !Capacitor.isNativePlatform()) return null;
+  return (Capacitor.Plugins && Capacitor.Plugins.ZancadaDisplay) || null;
+}
+async function renderTextSizeSetting(){
+  const card = document.getElementById('text-size-card');
+  const p = displayPlugin();
+  if(!card) return;
+  if(!p){ card.style.display = 'none'; return; }
+  card.style.display = '';
+  try{
+    const r = await p.getTextSize();
+    [...document.getElementById('textsize-toggle').children].forEach(c => c.classList.toggle('active', c.dataset.v === r.mode));
+  }catch(e){}
+}
+document.getElementById('textsize-toggle').addEventListener('click', async e => {
+  const c = e.target.closest('.choice'); if(!c) return;
+  const p = displayPlugin(); if(!p) return;
+  [...document.getElementById('textsize-toggle').children].forEach(x => x.classList.toggle('active', x === c));
+  try{ await p.setTextSize({mode: c.dataset.v}); }catch(err){}
+});
+function openPreferencesOverlay(){ renderTextSizeSetting(); openOverlaySheetEl(document.getElementById('preferences-overlay')); }
 function closePreferencesOverlay(){ document.getElementById('preferences-overlay').classList.remove('overlay-open'); }
 function openLangOverlay(){ openOverlaySheetEl(document.getElementById('lang-overlay')); }
 function closeLangOverlay(){ document.getElementById('lang-overlay').classList.remove('overlay-open'); }
