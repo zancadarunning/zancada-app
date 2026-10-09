@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-09T01:13:27Z';
+const APP_VERSION = '2026-10-09T15:30:20Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6323,8 +6323,157 @@ function askZondaLowerLoad(){
   const input = document.getElementById('chatInput');
   if(input){ input.value = t('load_prompt', {pct: sp ? sp.pct : 30}); sendChat(); }
 }
+// ---- Plan de carrera: tiempo objetivo, ritmo, estrategia y parciales de la próxima carrera ----
+// Distancia de la carrera cargada en Próximos eventos (o, si no la cargó y es la carrera objetivo de
+// Perfil, la distancia de esa meta).
+// Tiempo compacto: mm:ss hasta la hora, h:mm:ss desde ahí.
+function fmtRaceTime(sec){
+  sec = Math.round(sec);
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = sec % 60;
+  return h > 0 ? h + ':' + String(m).padStart(2, '0') + ':' + String(x).padStart(2, '0') : String(m).padStart(2, '0') + ':' + String(x).padStart(2, '0');
+}
+function racePlanKm(){
+  const ev = state.event;
+  if(!ev) return null;
+  if(ev.distanceKm > 0) return ev.distanceKm;
+  if(state.profile && state.profile.raceDate && ev.date === state.profile.raceDate) return getGoalRaceKm();
+  return null;
+}
+// Tiempo estimado para km kilómetros con Riegel: primero tu mejor esfuerzo de los últimos 90 días,
+// si no hay, tu mejor marca (o la de referencia del onboarding).
+function estimateRaceTime(km){
+  const cutoff = Date.now() - 90 * 864e5;
+  let best = null;
+  (state.runs || []).forEach(r => {
+    const pace = r.distanceKm > 0 ? (r.durationSec / 60) / r.distanceKm : 0;
+    if(!(r.distanceKm >= 3 && r.distanceKm <= 60 && r.durationSec > 0 && pace >= 2.5 && pace <= 12 && new Date(r.date).getTime() >= cutoff)) return;
+    if(km > r.distanceKm * 4.2) return;
+    const sec = r.durationSec * Math.pow(km / r.distanceKm, 1.06);
+    if(!best || sec < best) best = sec;
+  });
+  if(best) return {sec: best, source: 'runs'};
+  const p = predictRaceTime(km);
+  return p ? {sec: p.predictedSec, source: 'pr'} : null;
+}
+// Parciales con salida controlada: el primer 20% un 1,5% más lento, el último 20% un 1,5% más
+// rápido y el medio parejo; el total siempre da el tiempo objetivo. Las cuentas van en la unidad
+// que ve el corredor (km o millas).
+function buildRaceSplits(km, targetSec){
+  const D = isImperial() ? km * MI_PER_KM : km;
+  const n = Math.max(1, Math.ceil(D - 1e-9));
+  const parts = [];
+  for(let i = 0; i < n; i++) parts.push(Math.min(1, D - i));
+  const adj = parts.map((f, i) => D < 3 ? 0 : (i < Math.floor(D * 0.2) ? 0.015 : (i >= D * 0.8 ? -0.015 : 0)));
+  const raw = parts.reduce((a, f, i) => a + f * (1 + adj[i]), 0);
+  const base = targetSec / 60 / raw;
+  let cum = 0;
+  return parts.map((f, i) => { const pace = base * (1 + adj[i]); cum += pace * f * 60; return {n: i + 1, partial: f < 1, paceMin: pace, cumSec: cum}; });
+}
+function fmtMinSec(minDec){
+  const m = Math.floor(minDec), s = Math.round((minDec - m) * 60);
+  return s === 60 ? (m + 1) + ':00' : m + ':' + String(s).padStart(2, '0');
+}
+function renderRacePlanEntry(){
+  const el = document.getElementById('home-raceplan-entry');
+  if(!el) return;
+  const km = racePlanKm();
+  const ev = state.event;
+  if(!ev || !km){ el.style.display = 'none'; return; }
+  const days = Math.round((new Date(ev.date + 'T00:00:00') - new Date().setHours(0,0,0,0)) / 86400000);
+  if(days < 0){ el.style.display = 'none'; return; }
+  const est = estimateRaceTime(km);
+  document.getElementById('home-raceplan-sub').textContent = est
+    ? t('rp_entry_sub', {time: fmtRaceTime(Math.round(est.sec)), pace: fmtPace(est.sec / 60 / km) + '/' + distUnit()})
+    : t('rp_entry_open');
+  el.style.display = '';
+}
+function openRacePlan(){
+  const ev = state.event, km = racePlanKm();
+  const box = document.getElementById('race-plan-content');
+  if(!ev || !box) return;
+  const when = new Date(ev.date + 'T12:00:00').toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
+  const days = Math.round((new Date(ev.date + 'T00:00:00') - new Date().setHours(0,0,0,0)) / 86400000);
+  let html = '<h2 class="rp-head">' + escapeHtml(ev.name) + (km ? ' · ' + fmtDist(km, km % 1 ? 1 : 0) + ' ' + distUnit() : '') + '</h2>' +
+    '<p class="rp-when">' + (days <= 0 ? t('rp_when_today', {date: when}) : t('rp_when', {date: when, n: days})) + '</p>';
+  const est = km ? estimateRaceTime(km) : null;
+  if(!km){
+    html += '<div class="card"><p class="muted" style="margin:0; font-size:13.5px; line-height:1.5;">' + t('rp_nodist') + '</p></div>';
+  } else if(!est){
+    html += '<div class="card"><p class="muted" style="margin:0; font-size:13.5px; line-height:1.5;">' + t('rp_none') + '</p></div>';
+  } else {
+    const sec = Math.round(est.sec);
+    const splits = buildRaceSplits(km, est.sec);
+    const long = splits.length > 12;
+    const shown = splits.filter((s, i) => !long || (s.n % 5 === 0) || i === splits.length - 1);
+    const unit = distUnit();
+    html += '<div class="card rp-target"><div class="rp-target-row"><div><div class="rp-lbl">' + t('rp_target') + '</div><div class="rp-big">' + fmtRaceTime(sec) + '</div></div>' +
+      '<div><div class="rp-lbl" style="text-align:right;">' + t('rp_pace_lbl') + '</div><div class="rp-pace">' + fmtPace(est.sec / 60 / km) + ' <small>/' + unit + '</small></div></div></div>' +
+      '<p class="rp-note">' + t(est.source === 'runs' ? 'rp_hint_runs' : 'rp_hint_pr') + '</p></div>' +
+      '<div class="card"><div class="rp-lbl" style="margin-bottom:6px;">' + t('rp_strategy') + '</div><div class="rp-strat-name">' + t('rp_strategy_name') + '</div><p class="rp-strat-body">' + t('rp_strategy_body') + '</p></div>' +
+      '<div class="card"><div class="rp-lbl" style="margin-bottom:4px;">' + t('rp_splits') + '</div>' +
+      shown.map((s, i) => {
+        const fin = s === splits[splits.length - 1];
+        const label = fin ? fmtDist(km, km % 1 ? 1 : 0) + ' ' + unit : (unit + ' ' + s.n);
+        return '<div class="rp-row' + (fin ? ' fin' : '') + '"><b>' + label + '</b><span class="m">' + fmtMinSec(s.paceMin) + '</span><span class="c">' + fmtRaceTime(Math.round(s.cumSec)) + '</span></div>';
+      }).join('') + '</div>' +
+      '<button class="btn btn-primary" onclick="shareRacePlan()">' + t('rp_share') + '</button>';
+  }
+  box.innerHTML = html;
+  openOverlaySheetEl(document.getElementById('race-plan-overlay'));
+}
+function closeRacePlan(){ document.getElementById('race-plan-overlay').classList.remove('overlay-open'); }
+function buildRacePlanImageBlob(){
+  return new Promise(async (resolve) => {
+    try{
+      try{
+        await Promise.all([document.fonts.load('400 64px "Bebas Neue"'), document.fonts.load('700 92px "JetBrains Mono"'), document.fonts.load('800 40px "Inter"')]);
+        await document.fonts.ready;
+      }catch(e){}
+      const km = racePlanKm(), est = km ? estimateRaceTime(km) : null;
+      if(!km || !est){ resolve(null); return; }
+      const splits = buildRaceSplits(km, est.sec);
+      const long = splits.length > 12;
+      const rows = splits.filter((s, i) => !long || (s.n % 5 === 0) || i === splits.length - 1).slice(0, 12);
+      const gap = rows.length > 9 ? 60 : 74;
+      const W = 1080, H = 1920, canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 3;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#D6FF3F'; ctx.font = '800 40px "Inter", Arial, sans-serif';
+      ctx.fillText(t('rp_entry_title').toUpperCase(), W/2, 360);
+      ctx.fillStyle = '#EDEFEF'; ctx.font = '400 120px "Bebas Neue", Arial, sans-serif';
+      ctx.fillText(state.event.name + ' · ' + fmtDist(km, km % 1 ? 1 : 0) + ' ' + distUnit(), W/2, 490);
+      ctx.font = '700 150px "JetBrains Mono", monospace';
+      ctx.fillText(fmtRaceTime(Math.round(est.sec)), W/2, 680);
+      ctx.fillStyle = '#8B9296'; ctx.font = '700 48px "JetBrains Mono", monospace';
+      ctx.fillText(fmtPace(est.sec / 60 / km) + '/' + distUnit(), W/2, 760);
+      ctx.font = '700 46px "JetBrains Mono", monospace';
+      rows.forEach((s, i) => {
+        const y = 900 + i * gap, fin = s === splits[splits.length - 1];
+        ctx.fillStyle = '#EDEFEF'; ctx.textAlign = 'left';
+        ctx.fillText(fin ? fmtDist(km, km % 1 ? 1 : 0) + ' ' + distUnit() : distUnit() + ' ' + s.n, 250, y);
+        ctx.textAlign = 'right'; ctx.fillStyle = '#8B9296';
+        ctx.fillText(fmtMinSec(s.paceMin), 640, y);
+        ctx.fillStyle = '#D6FF3F';
+        ctx.fillText(fmtRaceTime(Math.round(s.cumSec)), 830, y);
+      });
+      ctx.textAlign = 'center';
+      const lastY = 900 + (rows.length - 1) * gap;
+      drawTrackEmblem(ctx, W/2, lastY + 110, 200, 84);
+      drawBrandWord(ctx, W/2, lastY + 250, 80);
+      canvas.toBlob(b => resolve(b || null), 'image/png');
+    }catch(e){ resolve(null); }
+  });
+}
+async function shareRacePlan(){
+  const blob = await buildRacePlanImageBlob();
+  if(!blob) return;
+  await shareImageBlobFile(blob, 'zancada-plan-de-carrera.png');
+}
 function renderHome(){
   renderHomeRecap();
+  renderRacePlanEntry();
   renderHomeLoad();
   renderHomeAdjust();
   renderDailyTip();

@@ -194,3 +194,29 @@ test('mover sesión: intercambia los días y rechaza un día que ya pasó o ya s
   const bad = app.applyMoveSession({ dia_origen: DAYS[t0 + 2], dia_destino: DAYS[t0 + 1] });
   assert.doesNotMatch(bad, /^OK/);
 });
+
+test('plan de carrera: los parciales suman exactamente el tiempo objetivo y salen más lentos al inicio', () => {
+  const app = loadApp();
+  for (const km of [5, 10, 21.0975, 42.195]) {
+    const sp = app.buildRaceSplits(km, 3000);
+    assert.equal(Math.round(sp[sp.length - 1].cumSec), 3000, 'total = objetivo para ' + km + ' km');
+    assert.ok(sp[0].paceMin > sp[Math.floor(sp.length / 2)].paceMin, 'el primer km es más lento que el del medio');
+    assert.ok(sp[sp.length - 2].paceMin < sp[Math.floor(sp.length / 2)].paceMin, 'el final es más rápido que el medio');
+  }
+  assert.equal(app.buildRaceSplits(10, 3000).length, 10);
+  assert.equal(app.buildRaceSplits(21.0975, 6000).length, 22, 'la media termina con un tramo parcial');
+});
+
+test('plan de carrera: estima con tu mejor esfuerzo reciente o, si no hay, con tu mejor marca', () => {
+  const app = loadApp();
+  app.state.runs = [{ id: 'a', date: isoDaysAgo(10), distanceKm: 5, durationSec: 1500 }];
+  const e = app.estimateRaceTime(10);
+  assert.equal(e.source, 'runs');
+  assert.ok(Math.abs(e.sec / 60 - 25 * Math.pow(2, 1.06)) < 0.1);
+  app.state.runs = [{ id: 'b', date: isoDaysAgo(200), distanceKm: 10, durationSec: 3000 }];
+  const e2 = app.estimateRaceTime(10);
+  assert.equal(e2 && e2.source, 'pr');
+  app.state.runs = [];
+  app.state.profile = {};
+  assert.equal(app.estimateRaceTime(10), null);
+});

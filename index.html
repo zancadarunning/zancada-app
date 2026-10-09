@@ -2237,6 +2237,25 @@
   .live-pace.ok{background:var(--hivis-dim); color:var(--hivis-text);}
   .live-pace.fast{background:rgba(255,176,32,.16); color:#FFB020;}
   .live-pace.slow{background:rgba(94,164,255,.16); color:#5EA4FF;}
+
+  /* ===== Plan de carrera ===== */
+  .rp-entry{display:flex; align-items:center; gap:12px; cursor:pointer; background:var(--hivis-dim); border:1px solid rgba(214,255,63,.35);}
+  .rp-entry:active{transform:scale(.99);}
+  .rp-entry-ic{width:32px; height:32px; border-radius:50%; background:var(--hivis); color:var(--ink); display:flex; align-items:center; justify-content:center; flex:none;} .rp-entry-ic svg{width:17px; height:17px;}
+  .rp-entry-txt{flex:1; min-width:0;} .rp-entry-txt b{display:block; font-size:14px;} .rp-entry-txt span{display:block; margin-top:2px; font-size:12.5px; color:var(--mist);}
+  .rp-entry-chev{width:16px; height:16px; color:var(--mist); flex:none;} .rp-entry-chev svg{width:100%; height:100%; display:block;}
+  .rp-head{font-family:'Bebas Neue',sans-serif; font-weight:400; font-size:36px; line-height:.95; margin:0 0 4px;}
+  .rp-when{font-size:12.5px; color:var(--mist); margin:0 0 14px;}
+  .rp-target{border:1.5px solid var(--hivis);}
+  .rp-target-row{display:flex; justify-content:space-between; align-items:flex-end; gap:12px;}
+  .rp-lbl{font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; color:var(--mist);}
+  .rp-big{font-family:'Bebas Neue',sans-serif; font-size:60px; line-height:.9; color:var(--hivis-text); margin-top:6px;}
+  .rp-pace{font-family:'Bebas Neue',sans-serif; font-size:36px; line-height:.9; margin-top:6px; text-align:right;} .rp-pace small{font-size:13px; color:var(--mist); font-family:inherit;}
+  .rp-note{margin:10px 0 0; font-size:12px; line-height:1.45; color:var(--mist);}
+  .rp-strat-name{font-size:14px; font-weight:700;} .rp-strat-body{margin:6px 0 0; font-size:13px; line-height:1.5; color:var(--mist);}
+  .rp-row{display:flex; align-items:center; padding:9px 0; border-bottom:1px solid var(--asphalt-4); font-size:14px;} .rp-row:last-child{border-bottom:none;}
+  .rp-row b{flex:1; font-weight:700;} .rp-row .m{font-family:'JetBrains Mono',monospace; width:64px; text-align:right; color:var(--mist);} .rp-row .c{font-family:'JetBrains Mono',monospace; width:84px; text-align:right; font-weight:700; color:var(--hivis-text);}
+  .rp-row.fin b,.rp-row.fin .m{color:var(--chalk);}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -2739,6 +2758,12 @@
       <p class="muted" id="home-race-phase-note" style="font-size:12.5px; margin:10px 0 0; display:none; line-height:1.4;"></p>
     </div>
 
+    <div class="card rp-entry" id="home-raceplan-entry" role="button" tabindex="0" onclick="openRacePlan()" style="display:none;">
+      <span class="rp-entry-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg></span>
+      <div class="rp-entry-txt"><b data-i18n="rp_entry_title"></b><span id="home-raceplan-sub"></span></div>
+      <span class="rp-entry-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span>
+    </div>
+
     <div class="card quote-card" id="home-quote-card">
       <div class="quote-label" data-i18n="home_quote_label"></div>
       <p id="daily-tip-text"></p>
@@ -3110,6 +3135,11 @@
   <div class="overlay" id="run-detail-modal" style="display:none;">
     <button class="week-nav-btn" onclick="closeRunDetail()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <div id="run-detail-content"></div>
+  </div>
+
+  <div class="overlay overlay-sheet" id="race-plan-overlay">
+    <button class="week-nav-btn" onclick="closeRacePlan()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <div id="race-plan-content"></div>
   </div>
 
   <div class="overlay overlay-sheet" id="achievements-modal">
