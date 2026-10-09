@@ -2717,6 +2717,12 @@
       <div class="recap-actions" style="margin-top:0;"><button class="btn btn-primary" onclick="applyReturnPlan()" data-i18n="return_btn"></button><button class="small-link" onclick="dismissReturnCard()" data-i18n="return_later"></button></div>
     </div>
 
+    <div class="card" id="home-recal-card" style="display:none; border-color:var(--hivis);">
+      <h3 style="margin:0 0 6px;" id="home-recal-title"></h3>
+      <p class="muted" id="home-recal-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
+      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-primary" onclick="startRecalibration()" data-i18n="recal_btn"></button><button class="small-link" onclick="dismissRecal()" data-i18n="recal_later"></button></div>
+    </div>
+
     <div class="card recap-card" id="home-recap-card" style="display:none;"></div>
 
     <div class="card" id="install-banner" style="display:none; align-items:center; gap:12px;">

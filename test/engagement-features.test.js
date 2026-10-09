@@ -452,3 +452,57 @@ test('hitos con vibración: todos los tipos tienen un patrón y se distinguen en
   });
   assert.equal(seen.size, names.length, 'no hay dos tipos con el mismo patrón');
 });
+
+function recalSetup(app, vdotTest, weeksAgo, runVdotMinutes) {
+  const d = new Date(Date.now() - weeksAgo * 7 * 864e5);
+  const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  app.state.onboarded = true;
+  app.state.plan = mkPlan({});
+  app.state.nextWeekOverrides = {};
+  app.state.profile = { levelTest: { required: true, done: true, vdot: vdotTest, date: iso, paces: { easy: [6.5, 7.5], tempo: [5.5, 6], interval: [4.8, 5.2] } } };
+  app.state.runs = runVdotMinutes ? [1, 2, 3].map(i => ({ id: 'r' + i, date: isoDaysAgo(i * 3), distanceKm: 5, durationSec: runVdotMinutes * 60 })) : [];
+}
+
+test('recalibrar ritmos: se ofrece si tus carreras recientes superan el nivel del test en 2 puntos o más', () => {
+  const app = loadApp();
+  recalSetup(app, 40, 5, 22);   // 5K en 22:00 ≈ VDOT 45: bastante más que el 40 del test
+  const info = app.recalInfo();
+  assert.ok(info && info.reason === 'better');
+  assert.ok(info.now >= 42);
+});
+
+test('recalibrar ritmos: no se ofrece con un test reciente, con un test agendado o si lo descartaste hace poco', () => {
+  const app = loadApp();
+  recalSetup(app, 40, 1, 22);
+  assert.equal(app.recalInfo(), null, 'test de hace 1 semana: demasiado reciente');
+  recalSetup(app, 40, 5, 22);
+  app.state.plan = mkPlan({ 4: { typeKey: 'test', dist: 2 } });
+  assert.equal(app.recalInfo(), null, 'ya hay un test agendado');
+  recalSetup(app, 40, 5, 22);
+  app.state.recalDismissedAt = Date.now() - 2 * 864e5;
+  assert.equal(app.recalInfo(), null, 'lo descartó hace 2 días');
+  app.state.recalDismissedAt = Date.now() - 20 * 864e5;
+  assert.ok(app.recalInfo(), 'pasaron 14+ días: vuelve a ofrecerse');
+});
+
+test('recalibrar ritmos: sin mejora se ofrece recién a las 12 semanas del test', () => {
+  const app = loadApp();
+  recalSetup(app, 45, 6, 25);   // 5K en 25:00 ≈ VDOT 38: por debajo del test, no hay motivo
+  assert.equal(app.recalInfo(), null);
+  recalSetup(app, 45, 13, 25);
+  const info = app.recalInfo();
+  assert.ok(info && info.reason === 'old' && info.weeks >= 12);
+});
+
+test('avisos de Inicio: se muestran como mucho dos a la vez, por prioridad', () => {
+  const app = loadApp();
+  const els = {};
+  app.HOME_ALERT_IDS.forEach(id => { els[id] = { style: { display: 'block' } }; });
+  els['home-load-card'].style.display = 'none';   // ese no está activo
+  app.document.getElementById = (id) => els[id] || { style: { display: 'none' } };
+  app.limitHomeAlerts(2);
+  const visible = app.HOME_ALERT_IDS.filter(id => els[id].style.display === 'block');
+  assert.equal(JSON.stringify(visible), JSON.stringify(['home-test-missed', 'home-return-card']), 'quedan los dos más importantes');
+  assert.equal(els['home-adjust-card'].style.display, 'none');
+  assert.equal(els['home-recal-card'].style.display, 'none');
+});

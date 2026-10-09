@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-09T17:24:53Z';
+const APP_VERSION = '2026-10-09T17:38:13Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5640,6 +5640,7 @@ function renderLevelTestUI(){
     if(missedIso) document.getElementById('home-test-missed-desc').textContent = t('ltest_missed_desc', {day: new Date(missedIso + 'T12:00:00').toLocaleDateString(LOCALE_MAP[lang], {weekday:'long'})});
   }
   if(banner) banner.style.display = (levelTestPending(p) && !missedIso) ? 'block' : 'none';
+  limitHomeAlerts(2);
   const txt = document.getElementById('perfil-ltest-text');
   if(txt){
     const lt = p.levelTest;
@@ -6262,7 +6263,7 @@ function renderHomeRecap(){
 function dismissHomeRecap(iso){
   state.recapSeen = iso;
   persist();
-  renderHomeRecap();
+  refreshHomeAlerts();
 }
 // Dos o más sesiones salteadas esta semana, y todavía quedan días por delante: ofrece reacomodar con Zonda.
 function skippedSessionCount(){
@@ -6281,7 +6282,7 @@ function renderHomeAdjust(){
 function dismissAdjustWeek(){
   state.adjustDismissed = state.weekStart;
   persist();
-  renderHomeAdjust();
+  refreshHomeAlerts();
 }
 function askZondaAdjustWeek(){
   const n = skippedSessionCount();
@@ -6314,7 +6315,7 @@ function renderHomeLoad(){
 function dismissLoadCard(){
   state.loadDismissed = state.weekStart;
   persist();
-  renderHomeLoad();
+  refreshHomeAlerts();
 }
 function askZondaLowerLoad(){
   const sp = weeklyLoadSpike();
@@ -6508,7 +6509,7 @@ function renderHomeReturn(){
 function dismissReturnCard(){
   state.returnDismissedFor = lastRunTimeMs();
   persist();
-  renderHomeReturn();
+  refreshHomeAlerts();
 }
 // Arma el plan de regreso: marca el perfil como "volviendo de una pausa" (arranca al 60% del volumen de antes, progresa más lento y se
 // gradúa solo cuando volvés a correr cerca de lo de antes) y regenera la semana.
@@ -6529,12 +6530,72 @@ function applyReturnPlan(){
   persist();
   showToast(t('return_toast'), 'success');
 }
+// ---- Recalibrar ritmos: ofrece repetir el test de nivel si tus carreras recientes ya muestran otro nivel, o si pasaron 12 semanas ----
+function recalInfo(){
+  const p = state.profile, lt = p && p.levelTest;
+  if(!state.onboarded || !lt || !lt.done || !lt.vdot || !lt.date) return null;
+  if(state.recalDismissedAt && Date.now() - state.recalDismissedAt < 14 * 864e5) return null;
+  if((state.plan || []).some(d => d && d.typeKey === 'test' && !d.status)) return null;          // ya hay un test agendado
+  if(Object.keys(state.nextWeekOverrides || {}).some(k => state.nextWeekOverrides[k] && state.nextWeekOverrides[k].userTest)) return null;
+  const weeks = Math.floor((Date.now() - new Date(lt.date + 'T12:00:00').getTime()) / (7 * 864e5));
+  if(weeks < 3) return null;
+  const recent = computeFitnessTrend(4).map(w => w.v).filter(v => v !== null);
+  const best = recent.length ? Math.max(...recent) : null;
+  // un esfuerzo de entrenamiento rara vez es máximo: si igual supera el nivel del test por 2 puntos o más, el test quedó viejo
+  if(best !== null && best >= lt.vdot + 2) return {reason: 'better', weeks, now: best, then: lt.vdot};
+  if(weeks >= 12) return {reason: 'old', weeks};
+  return null;
+}
+function renderHomeRecal(){
+  const el = document.getElementById('home-recal-card');
+  if(!el) return;
+  const info = recalInfo();
+  if(!info || returnCardInfo()){ el.style.display = 'none'; return; }
+  document.getElementById('home-recal-title').textContent = t('recal_title_' + info.reason, {w: info.weeks});
+  document.getElementById('home-recal-desc').textContent = t('recal_desc_' + info.reason, {w: info.weeks, now: info.now ? info.now.toFixed(1) : '', then: info.then ? Number(info.then).toFixed(1) : ''});
+  el.style.display = 'block';
+}
+function dismissRecal(){
+  state.recalDismissedAt = Date.now();
+  persist();
+  refreshHomeAlerts();
+}
+function startRecalibration(){
+  state.recalDismissedAt = Date.now();   // mientras elegís el día no vuelve a aparecer
+  persist();
+  openLevelTestSchedule();
+  refreshHomeAlerts();
+}
+// Tarjetas de aviso de Inicio, de más a menos importante. Para que no se apilen arriba, se muestran como mucho dos a la vez: las
+// otras esperan su turno (reaparecen apenas se resuelve o se descarta una).
+var HOME_ALERT_IDS = ['home-test-missed', 'home-return-card', 'home-adjust-card', 'home-load-card', 'home-recal-card', 'home-recap-card'];
+function limitHomeAlerts(max){
+  let shown = 0;
+  HOME_ALERT_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if(!el || el.style.display !== 'block') return;
+    if(shown >= (max || 2)) el.style.display = 'none'; else shown++;
+  });
+}
+// Vuelve a dibujar todas las tarjetas de aviso (y aplica el tope de dos): lo usan los botones de descartar, para que el aviso que
+// estaba esperando aparezca apenas se libera un lugar.
+function refreshHomeAlerts(){
+  renderHomeRecap();
+  renderHomeRecal();
+  renderHomeReturn();
+  renderHomeLoad();
+  renderHomeAdjust();
+  try{ renderLevelTestUI(); }catch(e){}   // dibuja el aviso de test salteado y aplica el tope
+  limitHomeAlerts(2);
+}
 function renderHome(){
   renderHomeRecap();
+  renderHomeRecal();
   renderHomeReturn();
   renderRacePlanEntry();
   renderHomeLoad();
   renderHomeAdjust();
+  limitHomeAlerts(2);
   renderDailyTip();
   renderRaceTip();
   // La card de tips de carrera solo tiene sentido si hay una carrera cargada -- antes se
