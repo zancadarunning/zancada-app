@@ -112,7 +112,7 @@ module.exports = withSentry(async (req, res) => {
     const states = [];
     for (let i = 0; i < subUserIds.length; i += STATE_BATCH) {
       const ids = subUserIds.slice(i, i + STATE_BATCH).map(encodeURIComponent).join(',');
-      const statesRes = await fetch(`${base}/rest/v1/app_state?user_id=in.(${ids})&select=user_id,plan:data->plan,weekStart:data->>weekStart,tz:data->profile->>tz,lang:data->>lang`, { headers });
+      const statesRes = await fetch(`${base}/rest/v1/app_state?user_id=in.(${ids})&select=user_id,plan:data->plan,weekStart:data->>weekStart,tz:data->profile->>tz,rh:data->profile->>reminderHour,lang:data->>lang`, { headers });
       if (!statesRes.ok) {
         const body = await statesRes.text().catch(() => '');
         throw new Error(`app_state fetch failed: ${statesRes.status} ${body}`);
@@ -150,7 +150,10 @@ module.exports = withSentry(async (req, res) => {
 
       const tz = row.tz || DEFAULT_TZ;
       const { hour, dayIdx } = localClock(tz);
-      if (hour !== REMINDER_HOUR) { skipped++; continue; } // todavía no son las 8am en el huso de ESTE usuario
+      // Cada corredor puede elegir la hora del aviso en Perfil (profile.reminderHour, 0-23); sin elegir, las 8.
+      const chosen = parseInt(row.rh, 10);
+      const wantHour = Number.isInteger(chosen) && chosen >= 0 && chosen <= 23 ? chosen : REMINDER_HOUR;
+      if (hour !== wantHour) { skipped++; continue; } // todavía no es la hora elegida en el huso de ESTE usuario
 
       const today = plan[dayIdx];
       // today.dist sigue siendo el km planeado aunque la sesión ya se haya marcado 'done'

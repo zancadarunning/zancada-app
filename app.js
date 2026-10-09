@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-09T00:13:49Z';
+const APP_VERSION = '2026-10-09T00:49:50Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -804,6 +804,7 @@ function showToast(message, type){
   if(!wrap){
     wrap = document.createElement('div');
     wrap.id = 'toast-wrap'; wrap.className = 'toast-wrap';
+    wrap.setAttribute('role', 'status'); wrap.setAttribute('aria-live', 'polite'); // los lectores de pantalla leen los avisos
     document.body.appendChild(wrap);
   }
   const icon = type==='error' ? ICONS.warn : type==='success' ? ICONS.check : '';
@@ -1037,7 +1038,25 @@ function urlBase64ToUint8Array(base64String){
   for(let i=0; i<rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
   return outputArray;
 }
+// Hora del recordatorio diario (la usa api/send-reminders.js, en el huso horario del celular).
+function renderReminderHour(){
+  const sel = document.getElementById('reminder-hour');
+  if(!sel) return;
+  if(!sel.options.length){
+    for(let h = 5; h <= 22; h++){ const o = document.createElement('option'); o.value = String(h); o.textContent = String(h).padStart(2, '0') + ':00'; sel.appendChild(o); }
+  }
+  const cur = state.profile && Number.isInteger(state.profile.reminderHour) ? state.profile.reminderHour : 8;
+  sel.value = String(cur);
+}
+function setReminderHour(v){
+  const h = parseInt(v, 10);
+  if(!(h >= 0 && h <= 23)) return;
+  state.profile.reminderHour = h;
+  persist();
+  haptic(10);
+}
 async function updatePushStatusDisplay(){
+  renderReminderHour();
   const el = document.getElementById('push-status');
   const toggle = document.getElementById('push-toggle');
   if(!el) return;
@@ -6244,8 +6263,36 @@ function dismissHomeRecap(iso){
   persist();
   renderHomeRecap();
 }
+// Dos o más sesiones salteadas esta semana, y todavía quedan días por delante: ofrece reacomodar con Zonda.
+function skippedSessionCount(){
+  return (state.plan || []).filter(d => d && d.dist > 0 && d.status === 'skipped' && d.typeKey !== 'test').length;
+}
+function renderHomeAdjust(){
+  const el = document.getElementById('home-adjust-card');
+  if(!el) return;
+  const n = skippedSessionCount();
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  const hasLeft = (state.plan || []).some((d, i) => d && d.dist > 0 && !d.status && i >= todayIdx);
+  if(!state.onboarded || n < 2 || !hasLeft || state.adjustDismissed === state.weekStart){ el.style.display = 'none'; return; }
+  document.getElementById('home-adjust-desc').textContent = t('adjust_desc', {n});
+  el.style.display = 'block';
+}
+function dismissAdjustWeek(){
+  state.adjustDismissed = state.weekStart;
+  persist();
+  renderHomeAdjust();
+}
+function askZondaAdjustWeek(){
+  const n = skippedSessionCount();
+  state.adjustDismissed = state.weekStart;
+  persist();
+  showView('coach');
+  const input = document.getElementById('chatInput');
+  if(input){ input.value = t('adjust_prompt', {n}); sendChat(); }
+}
 function renderHome(){
   renderHomeRecap();
+  renderHomeAdjust();
   renderDailyTip();
   renderRaceTip();
   // La card de tips de carrera solo tiene sentido si hay una carrera cargada -- antes se
@@ -6758,7 +6805,7 @@ function buildDayListHtml(wd){
     if(d.typeKey==='test' && !d.testRead && d.status!=='skipped') statusBlock += `<div style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openLevelTest()">${t('ltest_load_btn')}</button></div>`;
     const kmHtml = isEventDay ? (eventAmountText ? `<span class="day-km-inline">${eventAmountText}</span>` : '') : (d.dist>0 ? `<span class="day-km-inline">${planAmountText(d)}</span>` : (extraRunAmountText ? `<span class="day-km-inline">${extraRunAmountText}</span>` : ''));
     return `<div>
-      <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" data-zone="${(d.dist>0 && d.zone && !isEventDay)?d.zone:''}" onclick="toggleDay(${i})">
+      <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" data-idx="${i}"${(wd.mode==='current' && canEdit && !isEventDay && !d.status) ? (d.dist>0 ? ' data-src="1" data-drop="1"' : ' data-drop="1"') : ''} data-zone="${(d.dist>0 && d.zone && !isEventDay)?d.zone:''}" onclick="toggleDay(${i})">
         <div class="day-badge"><div class="d">${t('day_'+d.day).slice(0,3)}</div>${dateLbl?`<div class="mono muted" style="font-size:10px; margin-top:2px;">${dateLbl}</div>`:''}</div>
         <div class="day-info">
           <div class="day-info-title-row"><span class="t">${lblType}</span></div>
@@ -6770,6 +6817,62 @@ function buildDayListHtml(wd){
     </div>`;
   }).join('');
 }
+// ---- Mover una sesión arrastrándola ----
+// Mantené apretada una sesión de esta semana (que todavía no pasó ni se hizo) y soltala sobre otro
+// día libre o con otra sesión: se intercambian (applyMoveSession, la misma lógica que usa el
+// coach, con su deshacer). Solo touch; en la web con mouse se sigue usando el chat.
+function initPlanDrag(){
+  const list = document.getElementById('plan-list');
+  if(!list || list.dataset.dragInit) return;
+  list.dataset.dragInit = '1';
+  let timer = null, drag = null, sx = 0, sy = 0, sRow = null;
+  const overRow = (x, y) => { const el = document.elementFromPoint(x, y); return el && el.closest ? el.closest('#plan-list .day-row[data-drop]') : null; };
+  const clearOver = () => list.querySelectorAll('.drag-over').forEach(e => e.classList.remove('drag-over'));
+  const reset = () => {
+    clearTimeout(timer); timer = null;
+    if(drag){ drag.row.classList.remove('drag-src'); drag.row.style.transform = ''; drag.row.style.pointerEvents = ''; }
+    list.classList.remove('plan-dragging'); clearOver(); drag = null; sRow = null;
+  };
+  list.addEventListener('touchstart', e => {
+    if(e.touches.length !== 1) return;
+    const row = e.target.closest ? e.target.closest('.day-row[data-src]') : null;
+    if(!row) return;
+    sRow = row; sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+    timer = setTimeout(() => {
+      drag = {row, idx: parseInt(row.dataset.idx, 10), target: null};
+      row.classList.add('drag-src'); list.classList.add('plan-dragging');
+      try{ haptic(25); }catch(err){}
+    }, 380);
+  }, {passive:true});
+  list.addEventListener('touchmove', e => {
+    const t0 = e.touches[0];
+    if(!drag){
+      if(timer && Math.hypot(t0.clientX - sx, t0.clientY - sy) > 10){ clearTimeout(timer); timer = null; }
+      return;
+    }
+    e.preventDefault();
+    drag.row.style.transform = 'translateY(' + (t0.clientY - sy) + 'px) scale(1.02)';
+    drag.row.style.pointerEvents = 'none';
+    const over = overRow(t0.clientX, t0.clientY);
+    clearOver();
+    drag.target = (over && over !== drag.row) ? over : null;
+    if(drag.target) drag.target.classList.add('drag-over');
+  }, {passive:false});
+  const finish = e => {
+    if(!drag){ reset(); return; }
+    e.preventDefault();
+    const from = drag.idx, to = drag.target ? parseInt(drag.target.dataset.idx, 10) : -1;
+    reset();
+    if(to >= 0 && to !== from){
+      const res = applyMoveSession({dia_origen: DAY_KEYS[from], dia_destino: DAY_KEYS[to]});
+      if(/^OK/.test(res)){ try{ haptic(15); }catch(err){} showToast(t('plan_moved', {day: t('day_' + DAY_KEYS[to])}), 'success'); }
+      else showToast(res, 'error');
+    }
+  };
+  list.addEventListener('touchend', finish);
+  list.addEventListener('touchcancel', () => reset());
+}
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPlanDrag); else initPlanDrag();
 function renderPlan(){
   const wd = getWeekData(viewingWeekOffset);
   const wn = wd.weekNumber;
@@ -8403,7 +8506,7 @@ async function showView(v){
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   setTimeout(updateHeaderTitle, 0);
   document.getElementById('view-'+v).classList.add('active');
-  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.view===v));
+  document.querySelectorAll('.nav-btn').forEach(b=>{ const on = b.dataset.view===v; b.classList.toggle('active', on); if(on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   updateCoachFabVisibility();
   document.getElementById('chatBar').classList.toggle('active', v==='coach');
   (document.scrollingElement || document.documentElement).scrollTop = 0;
@@ -8712,7 +8815,47 @@ function updateRunMuteBtn(){
   btn.setAttribute('aria-label', t(muted ? 'run_unmute' : 'run_mute'));
   btn.classList.toggle('muted', muted);
 }
+// ---- Notificación de carrera en vivo (Android) ----
+// Mientras se graba, la notificación persistente del servicio de GPS muestra distancia, tiempo y
+// ritmo promedio (también en la pantalla bloqueada, estilo Nike Run Club) y un botón
+// Pausar/Reanudar. Ver mobile/android/.../ZancadaRunNotificationPlugin.kt. En la web y en iOS no hace nada.
+function runNotifPlugin(){
+  if(typeof Capacitor === 'undefined' || !Capacitor.isNativePlatform || !Capacitor.isNativePlatform()) return null;
+  return (Capacitor.Plugins && Capacitor.Plugins.ZancadaRunNotification) || null;
+}
+let runNotifLastAt = 0, runNotifBound = false;
+function pushRunNotification(force){
+  const p = runNotifPlugin();
+  if(!p || !tracker || tracker.watchId === null || tracker.watchId === undefined) return;
+  const now = Date.now();
+  if(!force && now - runNotifLastAt < 1000) return;
+  runNotifLastAt = now;
+  if(!runNotifBound){
+    runNotifBound = true;
+    try{ p.addListener('toggle', () => { if(tracker && tracker.watchId !== null && tracker.watchId !== undefined) togglePause(); }); }catch(e){}
+  }
+  const active = isTrackingActive();
+  const paceMin = tracker.distanceKm > 0.02 ? (tracker.elapsedSec / 60) / tracker.distanceKm : 0;
+  p.update({
+    title: t('run_bg_notif_title'),
+    dist: fmtDist(tracker.distanceKm),
+    distLabel: t('run_km'),
+    distShort: distUnit(),
+    paceShort: '/' + distUnit(),
+    timeLabel: t('run_time'),
+    pace: paceMin ? fmtPace(paceMin) : "-'--\"",
+    paceLabel: t('run_pace_word') + ' /' + distUnit(),
+    elapsedSec: Math.max(0, Math.round(tracker.elapsedSec)),
+    running: active,
+    toggleText: t(tracker.running ? 'run_pause' : 'run_resume')
+  }).catch(() => {});
+}
+function clearRunNotification(){
+  const p = runNotifPlugin();
+  if(p) p.clear().catch(() => {});
+}
 function updateRecordingLabel(){
+  pushRunNotification(true);
   const dot = document.getElementById('run-rec-dot');
   const label = document.getElementById('run-recording-label');
   // is-paused maneja el cambio de fondo lima<->carbón de toda la pantalla de carrera en
@@ -8866,6 +9009,31 @@ function speak(text){
   }
   if(!('speechSynthesis' in window)) return;
   try{ const u = new SpeechSynthesisUtterance(text); u.lang = LOCALE_MAP[lang]; window.speechSynthesis.speak(u); }catch(e){}
+}
+// Aviso de voz si vas bastante más rápido que tu ritmo suave en una sesión de rodaje suave o tirada larga
+// (necesita el test de nivel hecho, que es lo que fija tu ritmo suave). Mide el ritmo de los últimos ~60 s.
+function maybePaceAlert(){
+  const w = tracker.workout;
+  if(!w || !w.structure || w.structure.typeKey !== 'continuous') return;
+  if(w.structure.planTypeKey !== 'easy' && w.structure.planTypeKey !== 'long') return;
+  const lt = state.profile && state.profile.levelTest;
+  const easy = lt && lt.done && lt.paces && lt.paces.easy;
+  if(!easy || !(easy[0] > 0) || tracker.elapsedSec < 180 || tracker.elapsedSec - (tracker.lastPaceAlertSec || -999) < 150) return;
+  const pts = tracker.points;
+  if(!pts || pts.length < 10) return;
+  const last = pts[pts.length - 1];
+  let i = pts.length - 1;
+  while(i > 0 && last.t - pts[i].t < 60) i--;
+  if(last.t - pts[i].t < 45) return;
+  let km = 0;
+  for(let k = i + 1; k < pts.length; k++) km += haversine(pts[k-1].lat, pts[k-1].lon, pts[k].lat, pts[k].lon);
+  if(km < 0.05) return;
+  const paceMin = ((last.t - pts[i].t) / 60) / km;
+  if(paceMin < easy[0] * 0.92){
+    tracker.lastPaceAlertSec = tracker.elapsedSec;
+    speak(t('voice_too_fast'));
+    haptic([40, 60, 40]);
+  }
 }
 function maybeAnnounceKm(){
   // Antes esto anunciaba siempre en km ("Kilómetro 1... Kilómetro 2...") y el ritmo en
@@ -9837,7 +10005,7 @@ function onPosition(pos){
     // y esos puntos quedaban para siempre en la ruta guardada.
     tracker.points.push({lat, lon, t:tracker.elapsedSec, alt:(typeof altitude==='number' && !isNaN(altitude)) ? altitude : null});
     updateLiveMap(lat,lon);
-    maybeAnnounceKm(); tickWorkoutGuide();
+    maybeAnnounceKm(); maybePaceAlert(); tickWorkoutGuide();
   }
   updateLiveStats();
   // Se sacó el saveRunProgress() de acá -- se llamaba en cada fix de GPS (varias veces
@@ -9867,6 +10035,7 @@ function updateLiveStats(){
   document.getElementById('track-ppace').textContent = fmtPace(paceMin);
   document.getElementById('track-pcal').textContent = Math.round((state.profile.weight||70)*tracker.distanceKm*1.036);
   updateRunUnitLabels();
+  pushRunNotification();
 }
 function togglePause(){
   tracker.running = !tracker.running;
@@ -9892,6 +10061,7 @@ function stopRun(){
   // return;) lo hubiera confundido con una carrera todavía activa, bloqueando arrancar la
   // PRÓXIMA carrera para siempre.
   tracker.watchId = null;
+  clearRunNotification();
   releaseWakeLock();
   tracker.workout = null;
   // Guardamos el progreso final ANTES de mostrar el resumen -- si la app se cierra
@@ -11163,7 +11333,7 @@ function renderHistory(){
   const trendsCard = `<div class="card">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
       <h3 style="margin:0;" data-i18n="hist_trends">${t('hist_trends')}</h3>
-      <button onclick="shareWeeklyRecapImage()" style="background:none; border:1.5px solid var(--asphalt-4); color:var(--hivis-text); font-size:12px; cursor:pointer; padding:5px 9px; border-radius:6px; display:flex; align-items:center; gap:5px; font-weight:700; flex-shrink:0;">${t('hist_share')}</button>
+      <button class="tap-pad" onclick="shareWeeklyRecapImage()" style="background:none; border:1.5px solid var(--asphalt-4); color:var(--hivis-text); font-size:12px; cursor:pointer; padding:5px 9px; border-radius:6px; display:flex; align-items:center; gap:5px; font-weight:700; flex-shrink:0;">${t('hist_share')}</button>
     </div>
     <div class="stat-row-divided">
       <div class="stat-cell"><div class="n">${fmtDist(tr.totalKm,0)}</div><div class="l">${t('hist_total_km')} (${distUnit()})</div></div>

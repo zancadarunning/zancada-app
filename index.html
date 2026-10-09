@@ -965,7 +965,7 @@
      (Strava) con el mapa que ya lo representa visualmente. */
   .hist-map-badge{position:absolute; top:8px; right:8px; z-index:1000; display:flex; align-items:center; gap:6px;}
   .hist-map-badge .tag{margin:0;}
-  .hist-map-badge .hist-map-duration{background:rgba(10,10,10,.62); backdrop-filter:blur(3px); color:var(--chalk); font-size:11.5px; font-weight:700; font-family:'JetBrains Mono',monospace; padding:4px 8px; border-radius:99px;}
+  .hist-map-badge .hist-map-duration{background:rgba(10,10,10,.62); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px); color:var(--chalk); font-size:11.5px; font-weight:700; font-family:'JetBrains Mono',monospace; padding:4px 8px; border-radius:99px;}
   /* Peso/Altura (Perfil): en vez de dos inputs numéricos encajonados, un valor grande
      centrado con la etiqueta arriba y un divisor fino abajo -- se ve y se edita como un
      dato destacado, no como un formulario. */
@@ -2211,6 +2211,22 @@
   .pr-row.achieved .cup-shine{display:block; fill:none; stroke:#fff; stroke-opacity:.5; stroke-width:2; stroke-linecap:round;}
   .pr-row.achieved .cup-star{display:block; fill:var(--ink);}
   .pr-row.achieved .cup-stem,.pr-row.achieved .cup-base{fill:var(--hivis); fill-opacity:.8;}
+
+  /* Hora del recordatorio diario */
+  .reminder-row{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--asphalt-4);}
+  .reminder-row label{font-size:13.5px; font-weight:700;}
+  .reminder-row select{background:var(--asphalt-3); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:8px 12px; border-radius:10px; font-size:15px; font-family:'JetBrains Mono',monospace; font-weight:700;}
+
+  /* Plan: mover una sesión arrastrándola (mantener apretado) */
+  .day-row[data-src]{-webkit-touch-callout:none; -webkit-user-select:none; user-select:none;}
+  .day-row.drag-src{position:relative; z-index:6; background:var(--asphalt-3); border-radius:12px; outline:1.5px solid var(--hivis); transition:none;}
+  .plan-dragging .day-row[data-drop]:not(.drag-src){outline:1.5px dashed var(--hivis-dim); outline-offset:-2px; border-radius:12px;}
+  .plan-dragging .day-row.drag-over{outline:2px solid var(--hivis); background:var(--hivis-dim);}
+
+  /* Accesibilidad: más área tocable (mínimo ~44px) en controles chicos, sin cambiar cómo se ven */
+  .tap-pad,.info-btn,.hist-add-btn,#plan-prev-btn,#plan-next-btn,.small-link,#home-next-hint{position:relative;}
+  .tap-pad::before,.info-btn::before,.hist-add-btn::before,#plan-prev-btn::before,#plan-next-btn::before,.small-link::before,#home-next-hint::before{content:''; position:absolute; inset:-9px -7px;}
+  .info-btn::before{inset:-12px;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -2631,6 +2647,12 @@
       <h3 style="margin:0 0 6px;" data-i18n="ltest_missed_title"></h3>
       <p class="muted" id="home-test-missed-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
       <button class="btn btn-primary" style="width:100%;" onclick="openLevelTestSchedule()" data-i18n="ltest_missed_btn"></button>
+    </div>
+
+    <div class="card" id="home-adjust-card" style="display:none;">
+      <h3 style="margin:0 0 6px;" data-i18n="adjust_title"></h3>
+      <p class="muted" id="home-adjust-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
+      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-primary" onclick="askZondaAdjustWeek()" data-i18n="adjust_btn"></button><button class="small-link" onclick="dismissAdjustWeek()" data-i18n="adjust_later"></button></div>
     </div>
 
     <div class="card recap-card" id="home-recap-card" style="display:none;"></div>
@@ -3814,6 +3836,10 @@
           <span class="switch-slider"></span>
         </label>
       </div>
+      <div class="reminder-row">
+        <label for="reminder-hour" data-i18n="push_hour_label"></label>
+        <select id="reminder-hour" onchange="setReminderHour(this.value)"></select>
+      </div>
     </div>
 
     <details class="card fold" id="perfil-zonda-fold">
@@ -3872,7 +3898,7 @@
       </div>
     </div>
   </div>
-  <nav class="tabbar" id="tabbar" style="display:none;">
+  <nav class="tabbar" id="tabbar" aria-label="Zancada" style="display:none;">
     <button class="nav-btn active" data-view="inicio" onclick="showView('inicio')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path class="fl" d="M4.2 10.6 12 4l7.8 6.6V19a1.5 1.5 0 0 1-1.5 1.5h-3V15a1.2 1.2 0 0 0-1.2-1.2h-4.2A1.2 1.2 0 0 0 8.7 15v5.5h-3A1.5 1.5 0 0 1 4.2 19z"/></svg><span data-i18n="nav_home"></span></button>
     <button class="nav-btn" data-view="plan" onclick="showView('plan')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect class="fl" x="3.5" y="4.8" width="17" height="15.7" rx="3.5"/><path d="M3.5 9.6h17M8 3v3.4M16 3v3.4"/></svg><span data-i18n="nav_plan"></span></button>
     <button class="nav-btn nav-btn-primary" data-view="correr" onclick="showView('correr')" data-i18n-aria="nav_run"><span class="nav-primary-circle"><svg viewBox="77 6 233 535" fill="currentColor" fill-rule="evenodd"><path d="M118,484 L121,495 L144,515 L175,526 L216,524 L247,499 L211,476 L179,484 L156,471 Z M216,456 L217,468 L253,487 L261,469 L258,465 L223,455 Z M203,454 L193,462 L193,467 L192,468 L192,473 L193,474 L197,473 L200,470 L202,461 L204,458 Z M169,452 L167,455 L168,461 L172,468 L175,471 L177,471 L178,469 L177,457 L171,452 Z M113,469 L158,458 L157,447 L115,446 Z M208,430 L203,430 L197,433 L195,436 L195,442 L196,443 L199,443 L206,440 L208,438 Z M221,424 L220,442 L254,451 L263,450 L266,433 Z M171,424 L168,430 L170,436 L176,440 L181,441 L182,439 L181,431 L175,424 Z M113,431 L114,433 L157,433 L160,429 L160,418 L136,413 L118,413 Z M212,395 L207,399 L203,399 L199,401 L198,413 L200,416 L204,416 L213,411 Z M176,390 L172,395 L172,405 L174,409 L179,413 L185,414 L186,399 Z M225,386 L224,412 L267,418 L269,390 Z M128,370 L119,395 L120,400 L162,402 L165,383 L163,375 Z M242,270 L237,295 L279,316 L286,282 Z M159,266 L116,286 L129,314 L170,290 Z M192,252 L189,252 L172,263 L172,267 L180,282 L194,270 Z M205,249 L204,269 L227,286 L231,267 Z M295,232 L290,229 L249,230 L247,251 L251,255 L290,259 Z M146,230 L101,236 L108,267 L153,253 Z M189,209 L161,232 L166,251 L190,231 L191,212 Z M203,207 L202,228 L224,243 L236,246 L237,225 Z M93,188 L95,220 L141,215 L138,189 Z M293,189 L285,186 L250,194 L249,214 L292,214 Z M186,169 L152,197 L155,215 L187,192 Z M198,166 L200,185 L235,208 L236,183 L202,165 Z M286,144 L277,143 L245,155 L247,178 L287,171 L290,163 Z M98,140 L92,166 L95,170 L122,174 L138,172 L140,149 Z M183,126 L153,150 L153,176 L184,149 Z M196,124 L197,147 L232,164 L231,150 L224,136 Z M267,96 L231,115 L240,139 L277,123 Z M109,93 L101,122 L143,131 L149,108 Z M179,92 L171,96 L164,106 L159,121 L160,125 L173,111 L182,105 L182,98 Z M194,90 L193,103 L218,118 L213,106 L207,98 L199,91 Z M114,74 L154,95 L172,79 L196,77 L224,101 L261,79 L239,47 L190,21 L172,21 L139,40 Z"/></svg></span></button>
