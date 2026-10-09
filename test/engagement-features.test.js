@@ -220,3 +220,28 @@ test('plan de carrera: estima con tu mejor esfuerzo reciente o, si no hay, con t
   app.state.profile = {};
   assert.equal(app.estimateRaceTime(10), null);
 });
+
+test('forma física: el VDOT de un 5K en 20:00 es ~49.8 y el índice sube cuando corrés más rápido', () => {
+  const app = loadApp();
+  assert.ok(Math.abs(app.vdotFromEffort(5000, 20) - 49.8) < 0.2);
+  assert.ok(app.vdotFromEffort(5000, 25) < app.vdotFromEffort(5000, 22));
+  // una carrera por semana, cada vez más rápida
+  app.state.profile = {};
+  app.state.runs = [0, 1, 2, 3].map(i => ({ id: 'r' + i, date: isoDaysAgo(7 * (3 - i) + 1), distanceKm: 5, durationSec: (30 - i) * 60 }));
+  const weeks = app.computeFitnessTrend(12).filter(w => w.v !== null);
+  assert.equal(weeks.length, 4);
+  assert.ok(weeks[3].v > weeks[0].v);
+  app.state.runs = [{ id: 'x', date: isoDaysAgo(2), distanceKm: 1.5, durationSec: 480 }];
+  assert.equal(app.computeFitnessTrend(12).filter(w => w.v !== null).length, 0, 'una carrera de menos de 3 km no cuenta');
+});
+
+test('clima: traduce los códigos de Open-Meteo', () => {
+  const app = loadApp();
+  assert.equal(app.wxKind(0).k, 'clear');
+  assert.equal(app.wxKind(2).k, 'partly');
+  assert.equal(app.wxKind(3).k, 'cloudy');
+  assert.equal(app.wxKind(63).k, 'rain');
+  assert.equal(app.wxKind(81).k, 'rain');
+  assert.equal(app.wxKind(73).k, 'snow');
+  assert.equal(app.wxKind(95).k, 'storm');
+});

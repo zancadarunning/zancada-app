@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-09T15:30:20Z';
+const APP_VERSION = '2026-10-09T15:45:43Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6495,6 +6495,8 @@ function renderHome(){
   const installHelpCard = document.getElementById('install-help-card');
   if(installHelpCard) installHelpCard.style.display = (isRunningStandalone() || !!deferredInstallPrompt) ? 'none' : '';
   document.getElementById('home-name').textContent = state.profile.name;
+  { const hh = new Date().getHours(); const hi = document.getElementById('home-hi'); if(hi) hi.textContent = t(hh < 5 || hh >= 21 ? 'greet_evening' : hh < 12 ? 'greet_morning' : 'greet_afternoon') + ','; }
+  refreshHomeWeather();
   document.getElementById('headerDate').textContent = new Date().toLocaleDateString(LOCALE_MAP[lang],{weekday:'short',day:'numeric',month:'short'});
 
   // Carrera cargada en "Próximos eventos" (Perfil) -- se muestra también acá en Inicio
@@ -9882,13 +9884,60 @@ function isIosStandalonePwa(){
   return ios && standalone && !(typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
 }
 const LAST_POS_KEY = 'zancada_last_pos';
+// ---- Clima en Inicio (Open-Meteo, sin clave) ----
+// Usa la última ubicación conocida (la que ya guarda la pantalla de Correr), redondeada a ~1 km; si todavía no
+// hay ninguna, el chip simplemente no aparece. El resultado se guarda 30 minutos.
+const WX_KEY = 'zancada_wx';
+let wxInFlight = false;
+function wxKind(code){
+  if(code === 0) return {k: 'clear', e: '☀️'};
+  if(code === 1 || code === 2) return {k: 'partly', e: '⛅'};
+  if(code === 3) return {k: 'cloudy', e: '☁️'};
+  if(code === 45 || code === 48) return {k: 'fog', e: '🌫️'};
+  if(code >= 51 && code <= 57) return {k: 'drizzle', e: '🌦️'};
+  if((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return {k: 'rain', e: '🌧️'};
+  if((code >= 71 && code <= 77) || code === 85 || code === 86) return {k: 'snow', e: '❄️'};
+  if(code >= 95) return {k: 'storm', e: '⛈️'};
+  return {k: 'cloudy', e: '☁️'};
+}
+function paintHomeWeather(w){
+  const chip = document.getElementById('home-wx');
+  if(!chip) return;
+  if(!w || !Number.isFinite(w.temp)){ chip.style.display = 'none'; return; }
+  const k = wxKind(w.code);
+  const deg = isImperial() ? Math.round(w.temp * 9 / 5 + 32) + '°F' : Math.round(w.temp) + '°C';
+  chip.textContent = k.e + ' ' + deg + ' · ' + t('wx_' + k.k);
+  chip.style.display = '';
+}
+async function refreshHomeWeather(){
+  const pos = readLastKnownPosition();
+  if(!pos){ paintHomeWeather(null); return; }
+  const lat = Math.round(pos.lat * 100) / 100, lng = Math.round(pos.lng * 100) / 100;
+  let cached = null;
+  try{ cached = JSON.parse(localStorage.getItem(WX_KEY) || 'null'); }catch(e){}
+  if(cached && Math.abs(cached.lat - lat) < 0.1 && Math.abs(cached.lng - lng) < 0.1) paintHomeWeather(cached);
+  if(cached && Date.now() - cached.ts < 30 * 60000 && Math.abs(cached.lat - lat) < 0.1 && Math.abs(cached.lng - lng) < 0.1) return;
+  if(wxInFlight || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+  wxInFlight = true;
+  try{
+    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const to = setTimeout(() => { if(ctl) ctl.abort(); }, 6000);
+    const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lng + '&current=temperature_2m,weather_code&timezone=auto', ctl ? {signal: ctl.signal} : undefined);
+    clearTimeout(to);
+    const j = await r.json();
+    const w = {ts: Date.now(), lat, lng, temp: j.current.temperature_2m, code: j.current.weather_code};
+    try{ localStorage.setItem(WX_KEY, JSON.stringify(w)); }catch(e){}
+    paintHomeWeather(w);
+  }catch(e){ /* sin conexión o sin respuesta: queda lo que ya había */ }
+  finally{ wxInFlight = false; }
+}
 function saveLastKnownPosition(lat, lng){
   try{ localStorage.setItem(LAST_POS_KEY, JSON.stringify({lat, lng, ts: Date.now()})); }catch(e){}
 }
 // La posición exacta es un dato personal: se borra al cerrar sesión, borrar los datos o borrar la cuenta (si no, la próxima
 // cuenta que entre en este mismo iPhone vería el mapa de dónde corría la anterior).
 function clearLastKnownPosition(){
-  try{ localStorage.removeItem(LAST_POS_KEY); }catch(e){}
+  try{ localStorage.removeItem(LAST_POS_KEY); localStorage.removeItem(WX_KEY); }catch(e){}
 }
 function readLastKnownPosition(){
   try{
@@ -11528,6 +11577,47 @@ function computeZoneTime(){
   const total = secs.reduce((a, b) => a + b, 0);
   return (n >= 2 && total > 0) ? {secs, total, n} : null;
 }
+// ---- Forma física: índice estimado por semana (Daniels/Gilbert, el mismo cálculo del test de nivel) ----
+// VDOT a partir de una distancia y un tiempo cualquiera.
+function vdotFromEffort(distanceM, minutes){
+  const v = distanceM / minutes;
+  const vo2 = -4.60 + 0.182258 * v + 0.000104 * v * v;
+  const pct = 0.8 + 0.1894393 * Math.exp(-0.012778 * minutes) + 0.2989558 * Math.exp(-0.1932605 * minutes);
+  return vo2 / pct;
+}
+// Mejor esfuerzo de cada una de las últimas 'weeks' semanas (carreras de 3 km o más, ritmo creíble).
+function computeFitnessTrend(weeks){
+  weeks = weeks || 12;
+  const out = [];
+  for(let k = weeks - 1; k >= 0; k--) out.push({iso: getMondayISO(new Date(Date.now() - k * 7 * 864e5)), v: null});
+  const byIso = {}; out.forEach(w => { byIso[w.iso] = w; });
+  const bump = (iso, v) => { const w = byIso[iso]; if(w && v > 15 && v < 90 && (w.v === null || v > w.v)) w.v = v; };
+  (state.runs || []).forEach(r => {
+    const pace = r.distanceKm > 0 ? (r.durationSec / 60) / r.distanceKm : 0;
+    if(r.distanceKm >= 3 && r.distanceKm <= 60 && r.durationSec > 0 && pace >= 2.5 && pace <= 12) bump(getMondayISO(new Date(r.date)), vdotFromEffort(r.distanceKm * 1000, r.durationSec / 60));
+  });
+  const lt = state.profile && state.profile.levelTest;
+  if(lt && lt.done && lt.vdot && lt.date) bump(getMondayISO(new Date(lt.date + 'T12:00:00')), lt.vdot);
+  return out;
+}
+function renderFitnessCard(){
+  const weeks = computeFitnessTrend(12);
+  const withV = weeks.map((w, i) => ({i, v: w.v})).filter(x => x.v !== null);
+  if(withV.length < 3) return '';
+  const W = 300, H = 84, slot = W / weeks.length;
+  const vs = withV.map(x => x.v), minV = Math.min(...vs), maxV = Math.max(...vs), range = (maxV - minV) || 1;
+  const pt = x => ({x: x.i * slot + slot / 2, y: 18 + (1 - (x.v - minV) / range) * (H - 44)});
+  const pts = withV.map(pt);
+  const path = pts.map((p, j) => (j ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join('');
+  const dots = pts.map((p, j) => '<circle class="pg-dot' + (j === pts.length - 1 ? ' cur' : '') + '" cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="' + (j === pts.length - 1 ? 4.5 : 3) + '"/>').join('');
+  const first = withV[0], last = withV[withV.length - 1];
+  const below = pts.length > 1 && pts[1].y < pts[0].y;
+  const labels = '<text class="pg-val" x="' + pts[0].x + '" y="' + (pts[0].y + (below ? 17 : -9)) + '" text-anchor="middle">' + first.v.toFixed(1) + '</text>' +
+    '<text class="pg-val cur" x="' + pts[pts.length - 1].x + '" y="' + (pts[pts.length - 1].y - 10) + '" text-anchor="middle">' + last.v.toFixed(1) + '</text>';
+  const diff = last.v - first.v, nWeeks = last.i - first.i;
+  const delta = Math.abs(diff) < 0.2 || nWeeks < 2 ? '' : '<p class="pg-delta ' + (diff > 0 ? 'good' : 'bad') + '">' + t(diff > 0 ? 'fit_up' : 'fit_down', {d: Math.abs(diff).toFixed(1), n: nWeeks}) + '</p>';
+  return '<div class="card pg-card"><h3>' + t('fit_title') + '</h3><svg class="pg-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + t('fit_title') + '"><path class="pg-line" d="' + path + '"/>' + dots + labels + '</svg>' + delta + '<p class="muted" style="margin:10px 0 0; font-size:12px; line-height:1.45;">' + t('fit_note') + '</p></div>';
+}
 function renderProgressCard(){
   const weeks = computeWeeklyProgress(8);
   if(!(state.runs || []).length) return '';
@@ -11623,7 +11713,7 @@ function renderHistory(){
     return;
   }
   let lastMonthKey = null;
-  el.innerHTML = stravaSyncCard + trendsCard + renderProgressCard() + filteredRuns.map(r=>{
+  el.innerHTML = stravaSyncCard + trendsCard + renderProgressCard() + renderFitnessCard() + filteredRuns.map(r=>{
     const shoe = state.shoes.find(s=>String(s.id)===String(r.shoeId));
     const paceMin = r.distanceKm>0.02 ? (r.durationSec/60)/r.distanceKm : 0;
     const avgHr = r.avgHr || (r.hrLog && r.hrLog.length ? Math.round(r.hrLog.reduce((a,h)=>a+h.bpm,0)/r.hrLog.length) : null);

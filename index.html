@@ -2256,6 +2256,9 @@
   .rp-row{display:flex; align-items:center; padding:9px 0; border-bottom:1px solid var(--asphalt-4); font-size:14px;} .rp-row:last-child{border-bottom:none;}
   .rp-row b{flex:1; font-weight:700;} .rp-row .m{font-family:'JetBrains Mono',monospace; width:64px; text-align:right; color:var(--mist);} .rp-row .c{font-family:'JetBrains Mono',monospace; width:84px; text-align:right; font-weight:700; color:var(--hivis-text);}
   .rp-row.fin b,.rp-row.fin .m{color:var(--chalk);}
+
+  /* Saludo + clima en Inicio */
+  .wx-chip{display:inline-flex; align-items:center; gap:6px; background:var(--asphalt-2); border-radius:999px; padding:6px 12px; font-size:13px; font-weight:700; color:var(--chalk);}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -2655,8 +2658,9 @@
 
   <section class="view" id="view-inicio">
     <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:14px 0 4px;">
-      <p class="greeting" style="margin:0;"><span data-i18n="home_hi"></span> <span id="home-name" style="font-weight:800;">—</span> 👋</p>
+      <p class="greeting" style="margin:0;"><span id="home-hi"></span> <span id="home-name" style="font-weight:800;">—</span> 👋</p>
       <div class="streak-badge" id="home-streak-badge" style="display:none;"></div>
+      <div class="wx-chip" id="home-wx" style="display:none;"></div>
     </div>
 
     <div class="card" id="history-calib-card" style="display:none;">
