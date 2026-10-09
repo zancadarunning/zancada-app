@@ -398,3 +398,18 @@ test('constancia de ritmo: variación entre parciales y cambio de la segunda mit
   assert.ok(partial.cv < 0.1, 'el último tramo suelto (5,4) no cuenta');
   assert.match(app.pacingDetailText(mk([6.2, 6.1, 6.0, 5.8, 5.7, 5.6])), /Variación entre parciales: \d/);
 });
+
+test('modo de voz: "solo lo importante" calla el aviso de cada km pero deja los hitos y alertas', () => {
+  const app = loadApp();
+  app.state.voiceEnabled = true; app.state.voiceMode = 'all';
+  assert.equal(app.voiceAllowed(false), true);
+  assert.equal(app.voiceAllowed(true), true);
+  assert.equal(app.voiceChoice(), 'on');
+  app.state.voiceMode = 'key';
+  assert.equal(app.voiceAllowed(false), false, 'el aviso de cada km se calla');
+  assert.equal(app.voiceAllowed(true), true, 'los avisos importantes siguen');
+  assert.equal(app.voiceChoice(), 'key');
+  app.state.voiceEnabled = false;
+  assert.equal(app.voiceAllowed(true), false, 'apagada del todo, no habla nada');
+  assert.equal(app.voiceChoice(), 'off');
+});

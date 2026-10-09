@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-09T17:14:13Z';
+const APP_VERSION = '2026-10-09T17:18:33Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2835,7 +2835,8 @@ document.addEventListener('keydown', e=>{
 document.getElementById('voice-toggle').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('voice-toggle').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
-  state.voiceEnabled = c.dataset.v === 'on';
+  state.voiceEnabled = c.dataset.v !== 'off';
+  if(c.dataset.v !== 'off') state.voiceMode = c.dataset.v === 'key' ? 'key' : 'all';
   persist();
 });
 document.getElementById('units-toggle').addEventListener('click', e=>{
@@ -3849,7 +3850,7 @@ function enterApp(){
   checkHrMaxFromRuns();
   updateChatBadge(); // por si algún mensaje del coach se agregó recién arriba (ajuste automático, aviso proactivo) sin pasar por renderChat
   if(relinkTodayRun()) persist();
-  [...document.getElementById('voice-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.voiceEnabled===false?'off':'on')));
+  [...document.getElementById('voice-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === voiceChoice()));
   [...document.getElementById('units-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.profile.units==='imperial'?'imperial':'metric')));
   [...document.getElementById('perfil-trainby-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.profile.trainBy==='time'?'time':'distance')));
   [...document.getElementById('theme-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v===currentThemePref()));
@@ -9071,7 +9072,7 @@ function toggleRunVoice(){
   persist();
   updateRunMuteBtn();
   const voiceToggle = document.getElementById('voice-toggle');
-  if(voiceToggle) [...voiceToggle.children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.voiceEnabled===false ? 'off' : 'on')));
+  if(voiceToggle) [...voiceToggle.children].forEach(c=>c.classList.toggle('active', c.dataset.v === voiceChoice()));
 }
 function updateRunMuteBtn(){
   const btn = document.getElementById('run-mute-btn');
@@ -9172,7 +9173,7 @@ function checkCadenceDrop(spm){
   if(recent >= avg * 0.9) return;
   if(tracker.elapsedSec - (tracker.lastCadAlertSec || -999) < 300) return;
   tracker.lastCadAlertSec = tracker.elapsedSec;
-  speak(t('voice_cadence_low'));
+  speakKey(t('voice_cadence_low'));
   haptic([40, 60, 40]);
 }
 function runAvgCadence(){
@@ -9319,8 +9320,16 @@ async function getBestVoiceIndex(targetLang){
 // mismo cambio) usa el motor de TTS real de Android/iOS -- se prueba primero (plataforma
 // nativa + el plugin registrado), y si no está (web/PWA/escritorio) cae al
 // speechSynthesis de siempre, que ahí sí funciona.
-function speak(text){
-  if(state.voiceEnabled===false) return;
+// Modo de voz: 'all' (todo) o 'key' (solo lo importante: hitos, alertas de ritmo y cadencia y la guía de series; sin el aviso de cada km).
+function voiceChoice(){ return state.voiceEnabled===false ? 'off' : (state.voiceMode==='key' ? 'key' : 'on'); }
+function voiceAllowed(isKey){
+  if(state.voiceEnabled===false) return false;
+  if(state.voiceMode==='key' && !isKey) return false;
+  return true;
+}
+function speakKey(text){ speak(text, true); }
+function speak(text, isKey){
+  if(!voiceAllowed(isKey)) return;
   const isNative = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
   const nativeTTS = isNative && window.Capacitor.Plugins && window.Capacitor.Plugins.TextToSpeech;
   if(nativeTTS){
@@ -9403,7 +9412,7 @@ function maybePaceAlert(){
   if(tracker.elapsedSec - (tracker.lastPaceAlertSec || -999) < cooldown) return;
   tracker.lastPaceAlertSec = tracker.elapsedSec;
   const key = st.kind === 'easy' ? 'voice_too_fast' : (st.status === 'fast' ? 'voice_pace_fast' : 'voice_pace_slow');
-  speak(t(key));
+  speakKey(t(key));
   haptic([40, 60, 40]);
 }
 // Avisos de voz en los hitos de la sesión de hoy (rodaje, tempo, tirada larga o progresivo, o sea las sesiones continuas):
@@ -9434,9 +9443,9 @@ function maybeAnnounceMilestones(){
     if(p.mode === 'dist' ? remUnits <= 1 : remUnits <= 60) ms.last = true;
     if(p.frac >= 1) ms.done = true;
   }
-  if(!ms.half && bigEnough && p.frac >= 0.5 && p.frac < 0.95){ ms.half = true; speak(t('voice_half')); }
-  if(!ms.last && lastEnough && p.frac < 1 && (p.mode === 'dist' ? remUnits <= 1 : remUnits <= 60)){ ms.last = true; speak(t(p.mode === 'dist' ? (isImperial() ? 'voice_last_mi' : 'voice_last_km') : 'voice_last_min')); }
-  if(!ms.done && p.frac >= 1){ ms.done = true; speak(t('voice_target_done')); haptic([15, 40, 15]); }
+  if(!ms.half && bigEnough && p.frac >= 0.5 && p.frac < 0.95){ ms.half = true; speakKey(t('voice_half')); }
+  if(!ms.last && lastEnough && p.frac < 1 && (p.mode === 'dist' ? remUnits <= 1 : remUnits <= 60)){ ms.last = true; speakKey(t(p.mode === 'dist' ? (isImperial() ? 'voice_last_mi' : 'voice_last_km') : 'voice_last_min')); }
+  if(!ms.done && p.frac >= 1){ ms.done = true; speakKey(t('voice_target_done')); haptic([15, 40, 15]); }
 }
 function maybeAnnounceKm(){
   // Antes esto anunciaba siempre en km ("Kilómetro 1... Kilómetro 2...") y el ritmo en
@@ -9537,7 +9546,7 @@ function announceContinuousWorkoutStart(s){
   const target = isTimeMode()
     ? fmtDurationShort(planDurationMin({dist:s.targetDist, durMin:s.targetDurMin})*60)
     : `${fmtDist(s.targetDist)} ${distUnit()}`;
-  speak(s.zone ? t('voice_continuous_start_zone', {type, target, zone:s.zone}) : t('voice_continuous_start', {type, target}));
+  speakKey(s.zone ? t('voice_continuous_start_zone', {type, target, zone:s.zone}) : t('voice_continuous_start', {type, target}));
 }
 function beginWorkoutReps(){
   if(!tracker.workout) return;
@@ -9573,11 +9582,11 @@ function announceWorkoutPhase(){
   if(w.phase==='effort'){
     // "Repetición" (genérico) sirve igual de bien para series y fartlek -- solo cuestas
     // tiene su propia palabra ("Subida").
-    speak(s.typeKey==='hills' ? t('voice_hill_start',{cur:w.currentRep, total:s.reps, target:targetSpoken}) : t('voice_rep_start',{cur:w.currentRep, total:s.reps, target:targetSpoken}));
+    speakKey(s.typeKey==='hills' ? t('voice_hill_start',{cur:w.currentRep, total:s.reps, target:targetSpoken}) : t('voice_rep_start',{cur:w.currentRep, total:s.reps, target:targetSpoken}));
   } else if(w.phase==='recovery'){
-    speak(s.typeKey==='hills' ? t('voice_hill_recovery',{cur:w.currentRep, target:targetSpoken}) : t('voice_rep_recovery',{cur:w.currentRep, target:targetSpoken}));
+    speakKey(s.typeKey==='hills' ? t('voice_hill_recovery',{cur:w.currentRep, target:targetSpoken}) : t('voice_rep_recovery',{cur:w.currentRep, target:targetSpoken}));
   } else if(w.phase==='done'){
-    speak(t('voice_workout_done'));
+    speakKey(t('voice_workout_done'));
   }
 }
 function advanceWorkoutPhase(){

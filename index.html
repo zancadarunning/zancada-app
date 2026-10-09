@@ -2273,6 +2273,9 @@
   .track-topstats{flex-wrap:wrap; row-gap:10px;}
   .track-topstats.three{gap:16px;} .track-topstats.three .track-topstat{width:auto; min-width:92px;}
 
+
+  /* Voz: tres opciones (Todo / Solo lo importante / No) caben en renglones si hace falta */
+  #voice-toggle{flex-wrap:wrap;} #voice-toggle .choice{white-space:normal; text-align:center;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -3497,9 +3500,11 @@
     <div class="card">
       <h3 data-i18n="perfil_voice_label"></h3>
       <div class="choice-row segmented" id="voice-toggle">
-        <div class="choice active" data-v="on" data-i18n="word_yes"></div>
+        <div class="choice active" data-v="on" data-i18n="voice_opt_all"></div>
+        <div class="choice" data-v="key" data-i18n="voice_opt_key"></div>
         <div class="choice" data-v="off" data-i18n="word_no"></div>
       </div>
+      <p class="muted" style="margin-top:10px; font-size:12.5px; line-height:1.5;" data-i18n="voice_key_hint"></p>
     </div>
   </div>
 
