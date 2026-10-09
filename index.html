@@ -2231,6 +2231,12 @@
   /* Tamaño del texto: 4 opciones en grilla de 2x2 para que entren incluso con letra grande */
   #textsize-toggle{display:grid; grid-template-columns:1fr 1fr; gap:6px;}
   #textsize-toggle .choice{white-space:normal; text-align:center;}
+
+  /* Guía de ritmo en vivo (rodaje, tempo, series): objetivo + si vas bien, rápido o lento */
+  .live-pace{margin:12px 0 0; padding:8px 12px; border-radius:10px; background:var(--asphalt-3); font-size:13px; font-weight:700; color:var(--mist);}
+  .live-pace.ok{background:var(--hivis-dim); color:var(--hivis-text);}
+  .live-pace.fast{background:rgba(255,176,32,.16); color:#FFB020;}
+  .live-pace.slow{background:rgba(94,164,255,.16); color:#5EA4FF;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -2659,6 +2665,12 @@
       <div class="recap-actions" style="margin-top:0;"><button class="btn btn-primary" onclick="askZondaAdjustWeek()" data-i18n="adjust_btn"></button><button class="small-link" onclick="dismissAdjustWeek()" data-i18n="adjust_later"></button></div>
     </div>
 
+    <div class="card" id="home-load-card" style="display:none; border-color:var(--hivis);">
+      <h3 style="margin:0 0 6px;" data-i18n="load_title"></h3>
+      <p class="muted" id="home-load-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
+      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-primary" onclick="askZondaLowerLoad()" data-i18n="load_btn"></button><button class="small-link" onclick="dismissLoadCard()" data-i18n="load_ok"></button></div>
+    </div>
+
     <div class="card recap-card" id="home-recap-card" style="display:none;"></div>
 
     <div class="card" id="install-banner" style="display:none; align-items:center; gap:12px;">
@@ -2973,6 +2985,7 @@
             <span class="icon-sq" style="width:20px; height:20px; color:var(--hivis-text); margin-bottom:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6.5 9 17.5l-5-5"/></svg></span>
             <p class="muted" id="workout-guide-done-text" style="margin:0; font-size:13px; line-height:1.5;"></p>
           </div>
+          <p class="live-pace" id="workout-guide-pace" style="display:none;"></p>
         </div>
 
         <button class="track-pause-circle" onclick="togglePause()" data-i18n-aria="run_pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4.5" height="14" rx="1.5"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.5"/></svg></button>

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-09T00:55:53Z';
+const APP_VERSION = '2026-10-09T01:13:27Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6290,8 +6290,42 @@ function askZondaAdjustWeek(){
   const input = document.getElementById('chatInput');
   if(input){ input.value = t('adjust_prompt', {n}); sendChat(); }
 }
+// Subida brusca de carga: si esta semana (lo corrido + lo que queda planeado) supera en 30% o más a la
+// anterior, Inicio avisa y ofrece bajarla con Zonda. Solo con una semana anterior de 8 km o más.
+function weeklyLoadSpike(){
+  const weeks = computeWeeklyProgress(2);
+  const prev = weeks[0], cur = weeks[1];
+  if(!prev || !cur || prev.km < 8) return null;
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  const left = (state.plan || []).reduce((a, d, i) => a + ((d && d.dist > 0 && !d.status && i >= todayIdx) ? d.dist : 0), 0);
+  const proj = cur.km + left;
+  const pct = Math.round((proj / prev.km - 1) * 100);
+  return pct >= 30 ? {pct, prev: prev.km, proj} : null;
+}
+function renderHomeLoad(){
+  const el = document.getElementById('home-load-card');
+  if(!el) return;
+  const sp = state.onboarded ? weeklyLoadSpike() : null;
+  if(!sp || state.loadDismissed === state.weekStart){ el.style.display = 'none'; return; }
+  document.getElementById('home-load-desc').textContent = t('load_desc', {pct: sp.pct, prev: fmtDist(sp.prev, 0) + ' ' + distUnit(), now: fmtDist(sp.proj, 0) + ' ' + distUnit()});
+  el.style.display = 'block';
+}
+function dismissLoadCard(){
+  state.loadDismissed = state.weekStart;
+  persist();
+  renderHomeLoad();
+}
+function askZondaLowerLoad(){
+  const sp = weeklyLoadSpike();
+  state.loadDismissed = state.weekStart;
+  persist();
+  showView('coach');
+  const input = document.getElementById('chatInput');
+  if(input){ input.value = t('load_prompt', {pct: sp ? sp.pct : 30}); sendChat(); }
+}
 function renderHome(){
   renderHomeRecap();
+  renderHomeLoad();
   renderHomeAdjust();
   renderDailyTip();
   renderRaceTip();
@@ -9033,30 +9067,76 @@ function speak(text){
   if(!('speechSynthesis' in window)) return;
   try{ const u = new SpeechSynthesisUtterance(text); u.lang = LOCALE_MAP[lang]; window.speechSynthesis.speak(u); }catch(e){}
 }
-// Aviso de voz si vas bastante más rápido que tu ritmo suave en una sesión de rodaje suave o tirada larga
-// (necesita el test de nivel hecho, que es lo que fija tu ritmo suave). Mide el ritmo de los últimos ~60 s.
-function maybePaceAlert(){
-  const w = tracker.workout;
-  if(!w || !w.structure || w.structure.typeKey !== 'continuous') return;
-  if(w.structure.planTypeKey !== 'easy' && w.structure.planTypeKey !== 'long') return;
+// ---- Guía de ritmo en vivo ----
+// No usa pulsaciones: compara el ritmo de los últimos ~60 s (medido por el GPS del celular) con el
+// ritmo objetivo de la sesión de hoy. Ese objetivo sale del test de nivel (suave / tempo / series);
+// sin test, de tu promedio en las últimas carreras (solo para rodaje suave, tirada larga y tempo).
+function livePaceRanges(){
   const lt = state.profile && state.profile.levelTest;
-  const easy = lt && lt.done && lt.paces && lt.paces.easy;
-  if(!easy || !(easy[0] > 0) || tracker.elapsedSec < 180 || tracker.elapsedSec - (tracker.lastPaceAlertSec || -999) < 150) return;
+  if(lt && lt.done && lt.paces && lt.paces.easy) return {easy: lt.paces.easy, tempo: lt.paces.tempo, interval: lt.paces.interval};
+  const recent = runsByDateAsc().filter(r => r.distanceKm > 0.5 && r.durationSec > 0);
+  if(recent.length < 3) return null;
+  const base = estimateBasePaceMinPerKm(state.profile);
+  const r2 = x => Math.round(x * 100) / 100;
+  return {easy: [r2(base * 0.97), r2(base * 1.15)], tempo: [r2(base * 0.84), r2(base * 0.92)], interval: null};
+}
+function livePaceTarget(){
+  const w = tracker.workout;
+  if(!w || !w.structure) return null;
+  const ranges = livePaceRanges();
+  if(!ranges) return null;
+  if(w.phase === 'continuous'){
+    const k = w.structure.planTypeKey;
+    if(k === 'easy' || k === 'long') return ranges.easy ? {kind:'easy', range: ranges.easy} : null;
+    if(k === 'tempo') return ranges.tempo ? {kind:'tempo', range: ranges.tempo} : null;
+    return null;
+  }
+  if(w.phase === 'effort' && w.structure.typeKey === 'intervals' && ranges.interval) return {kind:'interval', range: ranges.interval};
+  return null;
+}
+// Ritmo (min/km) de los últimos windowSec segundos, o null si todavía no hay datos suficientes.
+function rollingPaceMin(windowSec){
   const pts = tracker.points;
-  if(!pts || pts.length < 10) return;
+  if(!pts || pts.length < 6) return null;
   const last = pts[pts.length - 1];
   let i = pts.length - 1;
-  while(i > 0 && last.t - pts[i].t < 60) i--;
-  if(last.t - pts[i].t < 45) return;
+  while(i > 0 && last.t - pts[i].t < windowSec) i--;
+  if(last.t - pts[i].t < windowSec * 0.75) return null;
   let km = 0;
   for(let k = i + 1; k < pts.length; k++) km += haversine(pts[k-1].lat, pts[k-1].lon, pts[k].lat, pts[k].lon);
-  if(km < 0.05) return;
-  const paceMin = ((last.t - pts[i].t) / 60) / km;
-  if(paceMin < easy[0] * 0.92){
-    tracker.lastPaceAlertSec = tracker.elapsedSec;
-    speak(t('voice_too_fast'));
-    haptic([40, 60, 40]);
-  }
+  if(km < 0.03) return null;
+  return ((last.t - pts[i].t) / 60) / km;
+}
+function livePaceStatus(){
+  const tg = livePaceTarget();
+  if(!tg) return null;
+  const p = rollingPaceMin(tg.kind === 'interval' ? 30 : 60);
+  let status = 'wait';
+  if(p != null) status = p < tg.range[0] * 0.95 ? 'fast' : (p > tg.range[1] * 1.05 ? 'slow' : 'ok');
+  return {kind: tg.kind, range: tg.range, pace: p, status};
+}
+function updateLivePaceChip(st){
+  const el = document.getElementById('workout-guide-pace');
+  if(!el) return;
+  if(!st){ el.style.display = 'none'; return; }
+  const label = t('pace_target', {range: fmtPaceRange(st.range) + '/' + distUnit()});
+  el.textContent = st.status === 'wait' ? label : label + ' · ' + t('pace_' + st.status);
+  el.className = 'live-pace' + (st.status === 'wait' ? '' : ' ' + st.status);
+  el.style.display = 'block';
+}
+function maybePaceAlert(){
+  const st = livePaceStatus();
+  updateLivePaceChip(st);
+  if(!st || st.status === 'ok' || st.status === 'wait') return;
+  if(st.kind === 'easy' && st.status === 'slow') return;         // ir lento en un rodaje suave no se avisa
+  if(st.kind === 'interval' && st.status === 'fast') return;     // en series, ir más rápido no es un problema
+  const cooldown = st.kind === 'interval' ? 45 : 150;
+  if(tracker.elapsedSec < 120 && st.kind !== 'interval') return;
+  if(tracker.elapsedSec - (tracker.lastPaceAlertSec || -999) < cooldown) return;
+  tracker.lastPaceAlertSec = tracker.elapsedSec;
+  const key = st.kind === 'easy' ? 'voice_too_fast' : (st.status === 'fast' ? 'voice_pace_fast' : 'voice_pace_slow');
+  speak(t(key));
+  haptic([40, 60, 40]);
 }
 function maybeAnnounceKm(){
   // Antes esto anunciaba siempre en km ("Kilómetro 1... Kilómetro 2...") y el ritmo en
