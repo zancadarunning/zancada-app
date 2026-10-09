@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-09T16:20:38Z';
+const APP_VERSION = '2026-10-09T16:43:10Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -9062,6 +9062,46 @@ function clearRunNotification(){
   const p = runNotifPlugin();
   if(p) p.clear().catch(() => {});
 }
+// ---- Cadencia con el acelerómetro del teléfono (Android) ----
+// Mientras se corre, el plugin nativo ZancadaCadence cuenta los pasos con el sensor de movimiento y avisa cada 3 s la
+// cadencia (pasos por minuto). Se muestra en vivo y, al guardar, queda el promedio en la carrera (avgCadence).
+// En la web y en iOS el plugin no existe y simplemente no se muestra nada.
+function cadencePlugin(){
+  if(typeof Capacitor === 'undefined' || !Capacitor.isNativePlatform || !Capacitor.isNativePlatform()) return null;
+  return (Capacitor.Plugins && Capacitor.Plugins.ZancadaCadence) || null;
+}
+let cadenceBound = false;
+async function startCadence(saved){
+  const p = cadencePlugin();
+  if(!p || !tracker) return;
+  tracker.cadSum = saved && saved.cadSum ? saved.cadSum : 0;
+  tracker.cadN = saved && saved.cadN ? saved.cadN : 0;
+  try{
+    if(!cadenceBound){
+      cadenceBound = true;
+      p.addListener('cadence', ev => {
+        if(!tracker || tracker.watchId === null || tracker.watchId === undefined) return;
+        const spm = ev && ev.spm;
+        const el = document.getElementById('track-cad');
+        if(el) el.textContent = spm ? String(spm) : '—';
+        // solo cuenta para el promedio mientras se está corriendo de verdad y con valores de carrera (desde 140 pasos/min: por debajo es caminata y el sensor se vuelve menos preciso)
+        if(spm && spm >= 140 && spm <= 230 && isTrackingActive()){ tracker.cadSum = (tracker.cadSum || 0) + spm; tracker.cadN = (tracker.cadN || 0) + 1; }
+      });
+    }
+    await p.start();
+    const stat = document.getElementById('track-cad-stat');
+    if(stat){ stat.style.display = ''; stat.parentElement.classList.add('three'); }
+  }catch(e){ /* sin acelerómetro: no hay cadencia, y listo */ }
+}
+function stopCadence(){
+  const p = cadencePlugin();
+  if(p) p.stop().catch(() => {});
+  const stat = document.getElementById('track-cad-stat');
+  if(stat){ stat.style.display = 'none'; stat.parentElement.classList.remove('three'); }
+}
+function runAvgCadence(){
+  return tracker && tracker.cadN >= 10 ? Math.round(tracker.cadSum / tracker.cadN) : null;
+}
 function updateRecordingLabel(){
   pushRunNotification(true);
   const dot = document.getElementById('run-rec-dot');
@@ -9140,6 +9180,7 @@ function saveRunProgress(finished){
       hrLog: tracker.hrLog,
       lastAnnouncedKm: tracker.lastAnnouncedKm,
       elapsedSec: tracker.elapsedSec,
+      cadSum: tracker.cadSum || 0, cadN: tracker.cadN || 0,
       // running: togglePause() llama a saveRunProgress() justo al pausar (ver su comentario)
       // para poder recuperar el progreso lo más cerca posible del momento real de la pausa --
       // pero sin guardar ESTE campo, actuallyStartRun() no tenía forma de saber que la carrera
@@ -10237,6 +10278,7 @@ function actuallyStartRun(saved){
     ? {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:saved.elapsedSec||0, running:restoredRunning, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt, autoPaused:restoredAutoPaused, lastMoveMs:Date.now(), lastFixMs:null}
     : {watchId:null, timerId:null, points:[], distanceKm:0, elapsedSec:0, running:true, hrLog:[], lastAnnouncedKm:0, startedAt:Date.now(), autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null};
   requestWakeLock();
+  startCadence(saved);
   document.getElementById('runIdle').style.display='none';
   document.getElementById('runSummary').style.display='none';
   document.getElementById('runActive').style.display='block';
@@ -10391,6 +10433,7 @@ function stopRun(){
   // PRÓXIMA carrera para siempre.
   tracker.watchId = null;
   clearRunNotification();
+  stopCadence();
   releaseWakeLock();
   tracker.workout = null;
   // Guardamos el progreso final ANTES de mostrar el resumen -- si la app se cierra
@@ -10411,6 +10454,7 @@ function showRunSummaryUI(){
   document.getElementById('sum-time').textContent = fmtRaceTime(tracker.elapsedSec);
   document.getElementById('sum-pace').textContent = fmtPace(paceMin);
   document.getElementById('sum-cal').textContent = Math.round((state.profile.weight||70)*tracker.distanceKm*1.036);
+  { const cad = runAvgCadence(), box = document.getElementById('sum-cad-box'); if(box){ box.style.display = cad ? '' : 'none'; if(cad) document.getElementById('sum-cad').textContent = cad; } }
   updateRunUnitLabels();
   const sel = document.getElementById('sum-shoe');
   sel.innerHTML = shoeOptionsHtml();
@@ -10582,7 +10626,7 @@ async function closeSummary(){
   const elev = computeElevationFromPoints(tracker.points);
   const paceSeries = computePaceSeriesFromPoints(tracker.points);
   state.runs.push({
-    id:runId, date:runDate, distanceKm:tracker.distanceKm, durationSec:tracker.elapsedSec,
+    id:runId, date:runDate, distanceKm:tracker.distanceKm, durationSec:tracker.elapsedSec, avgCadence: runAvgCadence(),
     hrLog:tracker.hrLog, points:tracker.points, shoeId:shoeId||null,
     splits: computeSplitsFromPoints(tracker.points), splitsV:3,
     elevationGain: elev.gain, elevationLoss: elev.loss,

@@ -2268,6 +2268,10 @@
   button.pred-chev{border:none; padding:0; cursor:pointer;}
   .fold-card.open .pred-chev{transform:rotate(180deg);}
   .fold-card .pred-body{margin-top:12px;} .fold-card .pred-body > .pg-h.first{margin-top:0;}
+
+  /* Cadencia en vivo: si hay tres datos arriba, se acomodan en renglones sin salirse de la pantalla */
+  .track-topstats{flex-wrap:wrap; row-gap:10px;}
+  .track-topstats.three{gap:16px;} .track-topstats.three .track-topstat{width:auto; min-width:92px;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -2972,6 +2976,7 @@
         <div class="track-topstats">
           <div class="track-topstat"><div class="n mono" id="track-timer">00:00:00</div><div class="l" data-i18n="run_time"></div></div>
           <div class="track-topstat"><div class="n mono" id="track-pace">—</div><div class="l" id="track-pace-label" data-i18n="run_pace"></div></div>
+          <div class="track-topstat" id="track-cad-stat" style="display:none;"><div class="n mono" id="track-cad">—</div><div class="l" data-i18n="hist_cadence"></div></div>
         </div>
 
         <div class="track-hero">
@@ -3061,6 +3066,7 @@
           <div class="stat-box"><div class="n mono" id="sum-time">0</div><div class="l" data-i18n="run_time"></div></div>
           <div class="stat-box"><div class="n mono" id="sum-pace">0</div><div class="l" id="sum-pace-label" data-i18n="run_pace"></div></div>
           <div class="stat-box"><div class="n mono" id="sum-cal">0</div><div class="l" data-i18n="run_calories"></div></div>
+          <div class="stat-box" id="sum-cad-box" style="display:none;"><div class="n mono" id="sum-cad">0</div><div class="l">spm</div></div>
         </div>
       </div>
       <div class="card sum-pr" id="sum-pr" style="display:none;"><span class="sum-pr-medal" id="sum-pr-medal"></span><div><b id="sum-pr-title"></b><span id="sum-pr-sub"></span></div></div>

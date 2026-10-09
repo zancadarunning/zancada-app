@@ -256,3 +256,14 @@ test('forma física: con pocas semanas de datos muestra una tarjeta explicativa 
   assert.match(html, /Forma física/);
   assert.match(html, /3 semanas/);
 });
+
+test('cadencia: el promedio de la carrera solo existe con suficientes muestras (≥ 10)', () => {
+  const app = loadApp();
+  const tr = app.getTracker();
+  tr.cadSum = 0; tr.cadN = 0;
+  assert.equal(app.runAvgCadence(), null);
+  tr.cadSum = 170 * 9; tr.cadN = 9;
+  assert.equal(app.runAvgCadence(), null, '9 muestras (27 s) no alcanzan');
+  tr.cadSum = 170 * 10 + 10; tr.cadN = 11;
+  assert.equal(app.runAvgCadence(), Math.round((170 * 10 + 10) / 11));
+});
