@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-09T17:18:33Z';
+const APP_VERSION = '2026-10-09T17:24:53Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2836,7 +2836,7 @@ document.getElementById('voice-toggle').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('voice-toggle').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
   state.voiceEnabled = c.dataset.v !== 'off';
-  if(c.dataset.v !== 'off') state.voiceMode = c.dataset.v === 'key' ? 'key' : 'all';
+  if(c.dataset.v !== 'off') state.voiceMode = c.dataset.v === 'key' ? 'key' : (c.dataset.v === 'vibe' ? 'vibe' : 'all');
   persist();
 });
 document.getElementById('units-toggle').addEventListener('click', e=>{
@@ -9173,8 +9173,7 @@ function checkCadenceDrop(spm){
   if(recent >= avg * 0.9) return;
   if(tracker.elapsedSec - (tracker.lastCadAlertSec || -999) < 300) return;
   tracker.lastCadAlertSec = tracker.elapsedSec;
-  speakKey(t('voice_cadence_low'));
-  haptic([40, 60, 40]);
+  announceKey('cadence', t('voice_cadence_low'));
 }
 function runAvgCadence(){
   return tracker && tracker.cadN >= 10 ? Math.round(tracker.cadSum / tracker.cadN) : null;
@@ -9321,13 +9320,49 @@ async function getBestVoiceIndex(targetLang){
 // nativa + el plugin registrado), y si no está (web/PWA/escritorio) cae al
 // speechSynthesis de siempre, que ahí sí funciona.
 // Modo de voz: 'all' (todo) o 'key' (solo lo importante: hitos, alertas de ritmo y cadencia y la guía de series; sin el aviso de cada km).
-function voiceChoice(){ return state.voiceEnabled===false ? 'off' : (state.voiceMode==='key' ? 'key' : 'on'); }
+function voiceChoice(){ return state.voiceEnabled===false ? 'off' : (state.voiceMode==='key' ? 'key' : (state.voiceMode==='vibe' ? 'vibe' : 'on')); }
 function voiceAllowed(isKey){
   if(state.voiceEnabled===false) return false;
+  if(state.voiceMode==='vibe') return false;        // "solo vibración": no habla nada
   if(state.voiceMode==='key' && !isKey) return false;
   return true;
 }
 function speakKey(text){ speak(text, true); }
+// Patrones de vibración de cada tipo de hito: [vibra, pausa, vibra, ...] en milisegundos. Cada tipo se siente distinto.
+var HITO_PATTERNS = {
+  start: [250],
+  half: [150, 120, 150],                       // 2 pulsos
+  last: [150, 100, 150, 100, 150],             // 3 pulsos
+  done: [150, 100, 150, 100, 600],             // dos cortos y uno largo
+  pace_fast: [100, 70, 100, 70, 100, 70, 100], // 4 pulsos rápidos
+  pace_slow: [500],                            // un pulso largo
+  cadence: [120, 90, 350],
+  rep: [350],
+  recovery: [120, 90, 120]
+};
+// Reproduce un patrón: en Android con la API de vibración (el sistema lo reproduce entero, aun con la pantalla apagada); donde no hay
+// (iPhone) con toques del plugin Haptics en secuencia.
+function vibratePattern(pattern){
+  try{
+    if(typeof navigator !== 'undefined' && navigator.vibrate && navigator.vibrate(pattern.map((ms, i) => i % 2 === 0 ? Math.max(ms, 80) : ms))) return;
+  }catch(e){}
+  try{
+    const Hp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics;
+    if(!Hp) return;
+    let at = 0;
+    pattern.forEach((ms, i) => { if(i % 2 === 0) setTimeout(() => { try{ Hp.impact({style: 'HEAVY'}); }catch(e){} }, at); at += ms; });
+  }catch(e){}
+}
+// Aviso importante de la carrera: vibra con el patrón de su tipo y, según el modo de voz, además lo dice en voz alta.
+// Con la voz apagada del todo no suena ni vibra, salvo los cambios de repetición/fase, que siempre dieron un toque.
+function announceKey(kind, text){
+  if(state.voiceEnabled===false){
+    if(kind === 'rep' || kind === 'recovery' || kind === 'done') haptic([15, 40, 15]);
+    return;
+  }
+  vibratePattern(HITO_PATTERNS[kind] || [250]);
+  speakKey(text);
+}
 function speak(text, isKey){
   if(!voiceAllowed(isKey)) return;
   const isNative = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
@@ -9412,8 +9447,7 @@ function maybePaceAlert(){
   if(tracker.elapsedSec - (tracker.lastPaceAlertSec || -999) < cooldown) return;
   tracker.lastPaceAlertSec = tracker.elapsedSec;
   const key = st.kind === 'easy' ? 'voice_too_fast' : (st.status === 'fast' ? 'voice_pace_fast' : 'voice_pace_slow');
-  speakKey(t(key));
-  haptic([40, 60, 40]);
+  announceKey(st.status === 'fast' ? 'pace_fast' : 'pace_slow', t(key));
 }
 // Avisos de voz en los hitos de la sesión de hoy (rodaje, tempo, tirada larga o progresivo, o sea las sesiones continuas):
 // mitad del camino, último kilómetro/minuto y sesión completa. Si la carrera se retoma ya pasado un hito, no lo repite.
@@ -9443,9 +9477,9 @@ function maybeAnnounceMilestones(){
     if(p.mode === 'dist' ? remUnits <= 1 : remUnits <= 60) ms.last = true;
     if(p.frac >= 1) ms.done = true;
   }
-  if(!ms.half && bigEnough && p.frac >= 0.5 && p.frac < 0.95){ ms.half = true; speakKey(t('voice_half')); }
-  if(!ms.last && lastEnough && p.frac < 1 && (p.mode === 'dist' ? remUnits <= 1 : remUnits <= 60)){ ms.last = true; speakKey(t(p.mode === 'dist' ? (isImperial() ? 'voice_last_mi' : 'voice_last_km') : 'voice_last_min')); }
-  if(!ms.done && p.frac >= 1){ ms.done = true; speakKey(t('voice_target_done')); haptic([15, 40, 15]); }
+  if(!ms.half && bigEnough && p.frac >= 0.5 && p.frac < 0.95){ ms.half = true; announceKey('half', t('voice_half')); }
+  if(!ms.last && lastEnough && p.frac < 1 && (p.mode === 'dist' ? remUnits <= 1 : remUnits <= 60)){ ms.last = true; announceKey('last', t(p.mode === 'dist' ? (isImperial() ? 'voice_last_mi' : 'voice_last_km') : 'voice_last_min')); }
+  if(!ms.done && p.frac >= 1){ ms.done = true; announceKey('done', t('voice_target_done')); }
 }
 function maybeAnnounceKm(){
   // Antes esto anunciaba siempre en km ("Kilómetro 1... Kilómetro 2...") y el ritmo en
@@ -9546,7 +9580,7 @@ function announceContinuousWorkoutStart(s){
   const target = isTimeMode()
     ? fmtDurationShort(planDurationMin({dist:s.targetDist, durMin:s.targetDurMin})*60)
     : `${fmtDist(s.targetDist)} ${distUnit()}`;
-  speakKey(s.zone ? t('voice_continuous_start_zone', {type, target, zone:s.zone}) : t('voice_continuous_start', {type, target}));
+  announceKey('start', s.zone ? t('voice_continuous_start_zone', {type, target, zone:s.zone}) : t('voice_continuous_start', {type, target}));
 }
 function beginWorkoutReps(){
   if(!tracker.workout) return;
@@ -9555,7 +9589,6 @@ function beginWorkoutReps(){
   w.currentRep = 1;
   w.phaseStartDistanceKm = tracker.distanceKm;
   w.phaseStartElapsedSec = tracker.elapsedSec;
-  haptic([15,40,15]);
   announceWorkoutPhase();
   renderWorkoutGuide();
 }
@@ -9582,11 +9615,11 @@ function announceWorkoutPhase(){
   if(w.phase==='effort'){
     // "Repetición" (genérico) sirve igual de bien para series y fartlek -- solo cuestas
     // tiene su propia palabra ("Subida").
-    speakKey(s.typeKey==='hills' ? t('voice_hill_start',{cur:w.currentRep, total:s.reps, target:targetSpoken}) : t('voice_rep_start',{cur:w.currentRep, total:s.reps, target:targetSpoken}));
+    announceKey('rep', s.typeKey==='hills' ? t('voice_hill_start',{cur:w.currentRep, total:s.reps, target:targetSpoken}) : t('voice_rep_start',{cur:w.currentRep, total:s.reps, target:targetSpoken}));
   } else if(w.phase==='recovery'){
-    speakKey(s.typeKey==='hills' ? t('voice_hill_recovery',{cur:w.currentRep, target:targetSpoken}) : t('voice_rep_recovery',{cur:w.currentRep, target:targetSpoken}));
+    announceKey('recovery', s.typeKey==='hills' ? t('voice_hill_recovery',{cur:w.currentRep, target:targetSpoken}) : t('voice_rep_recovery',{cur:w.currentRep, target:targetSpoken}));
   } else if(w.phase==='done'){
-    speakKey(t('voice_workout_done'));
+    announceKey('done', t('voice_workout_done'));
   }
 }
 function advanceWorkoutPhase(){
@@ -9610,7 +9643,6 @@ function advanceWorkoutPhase(){
     w.phaseStartDistanceKm = tracker.distanceKm;
     w.phaseStartElapsedSec = tracker.elapsedSec;
   }
-  haptic([15,40,15]);
   announceWorkoutPhase();
 }
 // Único lugar que sabe "cuánto dura esta fase" para series/cuestas/fartlek -- antes

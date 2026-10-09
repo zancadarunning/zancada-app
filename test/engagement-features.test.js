@@ -413,3 +413,42 @@ test('modo de voz: "solo lo importante" calla el aviso de cada km pero deja los 
   assert.equal(app.voiceAllowed(true), false, 'apagada del todo, no habla nada');
   assert.equal(app.voiceChoice(), 'off');
 });
+
+test('hitos con vibración: cada aviso importante vibra con su patrón y, según el modo, también habla', () => {
+  const app = loadApp();
+  const spoken = [], vibes = [];
+  // voz simulada: el filtro real de speak() queda en juego
+  app.SpeechSynthesisUtterance = function (txt) { this.text = txt; };
+  app.speechSynthesis = { speak: (u) => spoken.push(u.text) };
+  app.haptic = () => {};
+  app.navigator.vibrate = (p) => { vibes.push(p); return true; };
+  app.state.voiceEnabled = true; app.state.voiceMode = 'all';
+  app.announceKey('half', 'mitad');
+  assert.equal(spoken.length, 1);
+  assert.equal(vibes.length, 1);
+  assert.deepEqual(vibes[0].filter((_, i) => i % 2 === 0).length, 2, 'la mitad vibra con 2 pulsos');
+  app.announceKey('last', 'último');
+  assert.equal(vibes[1].filter((_, i) => i % 2 === 0).length, 3, 'el último tramo vibra con 3 pulsos');
+  // solo vibración: vibra pero no habla
+  app.state.voiceMode = 'vibe';
+  app.announceKey('done', 'meta');
+  assert.equal(spoken.length, 2, 'no suma voz');
+  assert.equal(vibes.length, 3, 'pero sí vibra');
+  assert.equal(app.voiceChoice(), 'vibe');
+  // voz apagada: ni voz ni vibración de hito
+  app.state.voiceEnabled = false;
+  app.announceKey('half', 'x');
+  assert.equal(spoken.length, 2);
+  assert.equal(vibes.length, 3);
+});
+
+test('hitos con vibración: todos los tipos tienen un patrón y se distinguen entre sí', () => {
+  const app = loadApp();
+  const names = ['half', 'last', 'done', 'pace_fast', 'pace_slow', 'cadence', 'rep', 'recovery', 'start'];
+  const seen = new Set();
+  names.forEach(n => {
+    assert.ok(Array.isArray(app.HITO_PATTERNS[n]) && app.HITO_PATTERNS[n].length >= 1, 'patrón de ' + n);
+    seen.add(JSON.stringify(app.HITO_PATTERNS[n]));
+  });
+  assert.equal(seen.size, names.length, 'no hay dos tipos con el mismo patrón');
+});
