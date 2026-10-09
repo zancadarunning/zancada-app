@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-09T17:38:13Z';
+const APP_VERSION = '2026-10-09T17:56:41Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -12271,6 +12271,9 @@ function buildColoredRouteSegments(r){
   });
   return segs.length ? segs : [{latlngs:catmullRomCurve(smoothed).map(p=>[p.lat,p.lon]), color: zoneColorVar(3)}];
 }
+function isNativeApp(){
+  return !!(typeof window !== 'undefined' && window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+}
 function renderRDRuta(panel){
   const {r, paceMin, cal} = rdCurrent;
   const dateStr = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
@@ -12295,7 +12298,9 @@ function renderRDRuta(panel){
            (Capacitor), donde compartir un archivo es mucho más directo que por el
            navegador. El resto del sistema de video (startDynamicVideo y compañía)
            queda intacto, sin usarse, listo para volver a engancharse acá con solo
-           reponer este botón. -->
+           reponer este botón. Se repone ACÁ, en la app de Android y también en la web (en la web el video se comparte con el
+           panel del navegador o se descarga; en iPhone pasa antes por api/remux-video para que Fotos/WhatsApp lo acepten). -->
+      ${(r.points && r.points.length > 1) ? `<button class="btn btn-outline btn-sm rd-video-btn" onclick="startDynamicVideo('${r.id}')">${t('rd_video_btn')}</button>` : ''}
       ${paces.length>1 ? `
         <div class="rd-legend-bar"></div>
         <div class="rd-legend-labels"><span>${t('rd_slowest')} ${fmtPace(slowest)}/${distUnit()}</span><span>${t('rd_fastest')} ${fmtPace(fastest)}/${distUnit()}</span></div>
@@ -13034,12 +13039,12 @@ const MAP_TILE_SIZE = 256;
 // chico da un acercamiento tipo Strava (se ven las calles cercanas mientras
 // la cámara sigue al corredor); uno grande se parecería más al mapa
 // "panorama fijo" que teníamos antes.
-const FOLLOW_TARGET_METERS = 550;
-const FOLLOW_MIN_ZOOM = 12, FOLLOW_MAX_ZOOM = 17;
+const FOLLOW_TARGET_METERS = 450;
+const FOLLOW_MIN_ZOOM = 12, FOLLOW_MAX_ZOOM = 18;
 // Tope de tiles distintas a pedir para armar el mosaico de la cámara
 // dinámica. Si una carrera muy larga necesitaría más que esto al zoom
 // ideal, vamos bajando el zoom (mapa más "alejado") hasta que entre.
-const FOLLOW_MAX_TILES = 220;
+const FOLLOW_MAX_TILES = 260;
 
 // Plantilla de URL de las tiles, en una variable (no una constante) a
 // propósito: así un test puede redirigirla a un servidor local para poder
@@ -13054,8 +13059,10 @@ const FOLLOW_MAX_TILES = 220;
 // en startDynamicVideo), pero las tiles en sí también pedían la versión de menor
 // resolución -- @2x le da al drawImage() de abajo el doble de detalle fuente para
 // reducir a MAP_TILE_SIZE, en vez de una tile ya de baja resolución estirada.
+// El video usa el estilo oscuro de Mapbox (como los videos de Strava): el trazado verde fluor resalta y el texto blanco se lee bien.
+const VIDEO_MAP_STYLE = 'dark-v11';
 let routeTileUrl = function(subdomain, zoom, x, y){
-  return `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/tiles/256/${zoom}/${x}/${y}@2x?access_token=${MAPBOX_TOKEN}`;
+  return `https://api.mapbox.com/styles/v1/mapbox/${VIDEO_MAP_STYLE}/tiles/256/${zoom}/${x}/${y}@2x?access_token=${MAPBOX_TOKEN}`;
 };
 
 // Proyección Web Mercator estándar (la misma matemática que usan los mapas
@@ -13169,13 +13176,8 @@ function computeVideoRouteData(r, rectX, rectY, rectW, rectH, pad){
 async function loadFollowMapForVideo(routeData){
   if(!routeData || !routeData.followPlan) return null;
   try{
-    const { zoom, tiles, txMin, txMax, tyMin, tyMax } = routeData.followPlan;
-    const tileCountX = txMax-txMin+1, tileCountY = tyMax-tyMin+1;
-    // Chequeo extra además del tope de tiles ÚNICAS: para una ruta con forma
-    // rara (ida y vuelta muy separadas, etc.) el rectángulo que ENVUELVE a
-    // todas las tiles necesarias podría ser mucho más grande que la cantidad
-    // de tiles real -- no queremos reservar un canvas gigantesco vacío.
-    if(tileCountX<=0 || tileCountY<=0 || tileCountX*tileCountY > FOLLOW_MAX_TILES*2) return null;
+    const { zoom, tiles } = routeData.followPlan;
+    if(!tiles.length || tiles.length > FOLLOW_MAX_TILES*2) return null;
 
     const maxTile = Math.pow(2, zoom);
     const subdomains = ['a','b','c','d'];
@@ -13196,31 +13198,26 @@ async function loadFollowMapForVideo(routeData){
     const results = await Promise.all(tiles.map(tl => loadTile(tl.tx, tl.ty)));
     if(results.every(img=>!img)) return null;
 
-    const off = document.createElement('canvas');
-    off.width = tileCountX*MAP_TILE_SIZE;
-    off.height = tileCountY*MAP_TILE_SIZE;
-    const octx = off.getContext('2d');
-    // Fondo parejo antes de pegar las tiles: si alguna tile puntual falló
-    // (timeout, 404, etc.) el hueco se ve como el resto de la tarjeta en vez
-    // de quedar transparente/negro.
-    octx.fillStyle = '#23282c';
-    octx.fillRect(0, 0, off.width, off.height);
+    // Un canvas chico por tile (en vez de un mosaico gigante): una ruta en diagonal no desperdicia memoria en huecos vacíos y
+    // el video puede cubrir cualquier recorrido. Con pocas tiles las guardamos a más resolución (la tile @2x llega a 512px)
+    // para que el mapa se vea nítido en pantalla de alta densidad; con muchas, a menos para no pasarnos de memoria.
+    const res = tiles.length <= 80 ? 2*MAP_TILE_SIZE : (tiles.length <= 160 ? 1.5*MAP_TILE_SIZE : MAP_TILE_SIZE);
+    const store = new Map();
     tiles.forEach((tl,i)=>{
       const img = results[i];
       if(!img) return;
-      // Tamaño de destino explícito (MAP_TILE_SIZE): la imagen @2x llega al doble de esa
-      // resolución (512px reales para una tile "de 256"), así el navegador la reduce con
-      // buena calidad en vez de estirarla 1:1 como hacía el drawImage de 2 argumentos.
-      try{ octx.drawImage(img, (tl.tx-txMin)*MAP_TILE_SIZE, (tl.ty-tyMin)*MAP_TILE_SIZE, MAP_TILE_SIZE, MAP_TILE_SIZE); }catch(e){}
+      const c = document.createElement('canvas');
+      c.width = c.height = res;
+      try{ c.getContext('2d').drawImage(img, 0, 0, res, res); }catch(e){ return; }
+      store.set(tl.tx+'_'+tl.ty, c);
     });
+    if(!store.size) return null;
 
-    // Chequeo de "taint": si alguna tile contaminó el canvas (cross-origin
-    // sin CORS bien habilitado), getImageData tira excepción. En ese caso NO
-    // copiamos nada de esto al canvas de grabación -- un canvas contaminado
-    // rompe captureStream() en silencio (graba cuadros vacíos).
-    try{ octx.getImageData(0,0,1,1); }catch(e){ return null; }
+    // Chequeo de "taint": si una tile contaminó el canvas (cross-origin sin CORS), getImageData tira excepción. En ese caso NO
+    // usamos nada de esto -- un canvas contaminado rompe captureStream() en silencio (graba cuadros vacíos).
+    try{ store.values().next().value.getContext('2d').getImageData(0,0,1,1); }catch(e){ return null; }
 
-    return { canvas: off, originWX: txMin*MAP_TILE_SIZE, originWY: tyMin*MAP_TILE_SIZE };
+    return { zoom, tiles: store };
   }catch(e){
     return null;
   }
@@ -13280,8 +13277,8 @@ async function startDynamicVideo(runId){
     ctx.scale(videoDpr, videoDpr);
   }
 
-  const mapX=34, mapY=176, mapW=W-68, mapH=640, mapPad=26;
-  const routeData = computeVideoRouteData(r, mapX, mapY, mapW, mapH, mapPad);
+  // El mapa ocupa TODO el cuadro (pantalla completa, como el video de Strava): el recuadro de la cámara es el canvas entero.
+  const routeData = computeVideoRouteData(r, 0, 0, W, H, 0);
   if(!routeData || routeData.totalDist<=0){ showToast(t('rd_video_error'), 'error'); return; }
 
   // Mapa real: intentamos cargar el mosaico de tiles que necesita la cámara
@@ -13312,131 +13309,120 @@ async function startDynamicVideo(runId){
 
   const dateStr = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {day:'numeric', month:'long', year:'numeric'});
   const totalDist = routeData.totalDist;
-  const ANIM_MS = Math.round(Math.min(12000, Math.max(6000, 1500 + totalDist*900)));
-  const bg1 = (getComputedStyle(document.documentElement).getPropertyValue('--asphalt-2')||'#1c2126').trim() || '#1c2126';
-  const bg2 = (getComputedStyle(document.documentElement).getPropertyValue('--asphalt')||'#14181b').trim() || '#14181b';
+  const ANIM_MS = Math.round(Math.min(16000, Math.max(7000, 2500 + totalDist*1000)));
+  const HOLD_MS = 1200;   // el último cuadro (con el total) queda un momento a la vista antes de cortar
+  const FADE_IN_MS = 500;
+  const runName = (r.name || '').trim().slice(0, 30);
 
-  // Capa auxiliar SOLO para el trazado y el marcador, del tamaño exacto del
-  // interior del recuadro del mapa. En el modo "cámara dinámica" el trazado
-  // ya recorrido puede quedar, en píxeles de mundo, muy lejos del centro de
-  // pantalla (la escala ahora es real, no se encoge para que la ruta entera
-  // entre en el recuadro como antes) -- así que hace falta recortarlo a los
-  // límites de la tarjeta. En vez de ctx.clip() en el canvas principal
-  // (sospechoso de romper canvas.captureStream() en el WebView de iOS, ver
-  // comentario más abajo) dibujamos en este canvas aparte, que recorta solo
-  // por tener ese tamaño fijo, y lo pegamos entero con un drawImage() plano.
-  const routeLayer = document.createElement('canvas');
-  routeLayer.width = Math.max(1, Math.round(routeData.availW));
-  routeLayer.height = Math.max(1, Math.round(routeData.availH));
-  const routeCtx = routeLayer.getContext('2d');
+  // Cámara: sigue al corredor con un suavizado corto (si no, los saltos del GPS hacen temblar el mapa).
+  const cam = { x: null, y: null, t: 0 };
 
-  // Tarjeta del mapa: fondo bien visible (antes casi transparente, por eso no se
-  // veía) + borde sutil, dibujados con fill/stroke normales, SIN ctx.clip(). En
-  // algunos WebView de iOS (donde corre la app empaquetada) combinar ctx.clip()
-  // con canvas.captureStream() puede hacer que esa región no quede grabada.
-  function drawFrame(p, virtualDist, cursor){
-    // Reseteamos sombra explícitamente: en el WebView de la app empaquetada
-    // (iOS) usar ctx.shadowBlur en un canvas que se está grabando con
-    // captureStream() puede dejar el resto del cuadro -- todo lo que se
-    // dibuja con fill()/stroke() después, no el texto -- sin grabarse, aunque
-    // en el canvas en vivo se vea bien. Por eso ya no usamos sombra en nada
-    // de este video (antes la tarjeta del mapa tenía una, y todo lo que se
-    // dibujaba después -- la propia tarjeta, la ruta, el marcador -- no
-    // aparecía en el video final, aunque el texto sí).
+  // Todo se dibuja con fill/stroke normales: SIN sombras (shadowBlur) ni ctx.clip(), que en algunos WebView (iOS) dejan partes del
+  // cuadro sin grabar con captureStream(). El "brillo" del trazado es un trazo ancho y transparente por debajo.
+  function drawFrame(p, virtualDist, cursor, el){
     ctx.shadowBlur = 0;
     ctx.shadowColor = 'transparent';
+    const fp = routeData.followProj;
 
-    const grad = ctx.createLinearGradient(0,0,0,H);
-    grad.addColorStop(0, bg1); grad.addColorStop(1, bg2);
-    ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
-
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#D6FF3F';
-    ctx.font = '400 54px "Bebas Neue", Arial, sans-serif';
-    ctx.fillText('ZANCADA', 40, 78);
-    ctx.fillStyle = 'rgba(237,239,239,0.6)';
-    ctx.font = '500 22px "Inter", Arial, sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText(dateStr, W-40, 68);
-    ctx.textAlign = 'left';
-
-    // Posición actual de la cámara en píxeles de "mundo" al zoom de
-    // seguimiento (mismo sistema que routeData.followProj) -- interpolada
-    // entre el punto actual y el siguiente para que el paneo sea suave
-    // cuadro a cuadro, igual que antes se interpolaba la posición del
-    // marcador.
-    let camX = routeData.followProj[cursor].x, camY = routeData.followProj[cursor].y;
-    if(cursor < routeData.followProj.length-1){
+    // posición actual interpolada entre el punto actual y el siguiente (paneo suave cuadro a cuadro)
+    let posX = fp[cursor].x, posY = fp[cursor].y;
+    if(cursor < fp.length-1){
       const dA = routeData.cum[cursor], dB = routeData.cum[cursor+1];
       const frac = dB>dA ? Math.max(0, Math.min(1, (virtualDist-dA)/(dB-dA))) : 0;
-      camX = routeData.followProj[cursor].x + (routeData.followProj[cursor+1].x-routeData.followProj[cursor].x)*frac;
-      camY = routeData.followProj[cursor].y + (routeData.followProj[cursor+1].y-routeData.followProj[cursor].y)*frac;
+      posX = fp[cursor].x + (fp[cursor+1].x-fp[cursor].x)*frac;
+      posY = fp[cursor].y + (fp[cursor+1].y-fp[cursor].y)*frac;
     }
+    if(cam.x === null){ cam.x = posX; cam.y = posY; }
+    else{
+      const dt = Math.max(0, Math.min(100, el - cam.t));
+      const k = 1 - Math.exp(-dt/100);
+      cam.x += (posX-cam.x)*k; cam.y += (posY-cam.y)*k;
+    }
+    cam.t = el;
+    // cámara en píxeles enteros: las tiles encajan sin costuras y el trazado queda pegado al mapa
+    const left = Math.round(cam.x - W/2), top = Math.round(cam.y - H/2);
 
+    // mapa a pantalla completa
+    ctx.fillStyle = '#16191c';
+    ctx.fillRect(0, 0, W, H);
     if(followMap){
-      // Mapa real: recortamos del mosaico precargado la ventana que
-      // corresponde a la posición actual de la cámara (sin ctx.clip() a
-      // propósito -- el recorte lo hace el propio ancho/alto del destino)
-      // más un velo bien sutil, solo para que el trazado y el marcador no
-      // se pierdan sobre calles muy claras -- antes era más oscuro y tapaba
-      // demasiado el mapa real.
-      try{
-        const sx = camX - followMap.originWX - routeData.availW/2;
-        const sy = camY - followMap.originWY - routeData.availH/2;
-        ctx.drawImage(followMap.canvas, sx, sy, routeData.availW, routeData.availH, mapX+mapPad, mapY+mapPad, routeData.availW, routeData.availH);
-        ctx.fillStyle = 'rgba(0,0,0,0.07)';
-        ctx.fillRect(mapX+mapPad, mapY+mapPad, routeData.availW, routeData.availH);
-      }catch(e){
-        ctx.fillStyle = 'rgba(255,255,255,0.10)';
-        rdRoundRectPath(ctx, mapX, mapY, mapW, mapH, 28);
-        ctx.fill();
+      const T = MAP_TILE_SIZE;
+      for(let tx=Math.floor(left/T); tx<=Math.floor((left+W)/T); tx++){
+        for(let ty=Math.floor(top/T); ty<=Math.floor((top+H)/T); ty++){
+          const tile = followMap.tiles.get(tx+'_'+ty);
+          if(tile) ctx.drawImage(tile, tx*T-left, ty*T-top, T, T);
+        }
       }
-    } else {
-      ctx.fillStyle = 'rgba(255,255,255,0.10)';
-      rdRoundRectPath(ctx, mapX, mapY, mapW, mapH, 28);
-      ctx.fill();
     }
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-    rdRoundRectPath(ctx, mapX, mapY, mapW, mapH, 28);
-    ctx.stroke();
+    ctx.fillStyle = 'rgba(12,15,17,0.04)';
+    ctx.fillRect(0, 0, W, H);
 
-    // Trazo parejo de un solo color (el verde de la marca), dibujado en
-    // coordenadas relativas a la cámara -- el corredor queda siempre fijo en
-    // el centro de la tarjeta (como en los videos de Strava) y el trazado ya
-    // recorrido se desliza por debajo a medida que avanza la carrera. Se
-    // dibuja en routeLayer (ver más arriba) para que quede recortado a los
-    // límites de la tarjeta sin usar ctx.clip() en el canvas que se graba.
-    // Envuelto en try/catch a propósito: si algo de esto tira una excepción
-    // en el teléfono, preferimos ver el mensaje de error dibujado en rojo
-    // (aparece en el video) a que la carátula quede muda sobre qué pasó.
-    const centerLocalX = routeData.availW/2, centerLocalY = routeData.availH/2;
+    // trazado: la ruta que falta, finita y tenue; la ya recorrida, verde fluor con brillo
     try{
-      routeCtx.clearRect(0, 0, routeLayer.width, routeLayer.height);
-      routeCtx.beginPath();
-      routeCtx.moveTo(centerLocalX + (routeData.followProj[0].x-camX), centerLocalY + (routeData.followProj[0].y-camY));
-      for(let i=1;i<=cursor;i++){
-        routeCtx.lineTo(centerLocalX + (routeData.followProj[i].x-camX), centerLocalY + (routeData.followProj[i].y-camY));
-      }
-      routeCtx.lineTo(centerLocalX, centerLocalY);
-      routeCtx.lineCap='round'; routeCtx.lineJoin='round';
-      routeCtx.lineWidth = 12; routeCtx.strokeStyle = 'rgba(0,0,0,0.35)';
-      routeCtx.stroke();
-      routeCtx.lineWidth = 7; routeCtx.strokeStyle = '#D6FF3F';
-      routeCtx.stroke();
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(fp[0].x-left, fp[0].y-top);
+      for(let i=1;i<fp.length;i++) ctx.lineTo(fp[i].x-left, fp[i].y-top);
+      ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(255,255,255,0.26)';
+      ctx.stroke();
 
-      routeCtx.beginPath(); routeCtx.arc(centerLocalX,centerLocalY,17,0,Math.PI*2); routeCtx.fillStyle='rgba(255,255,255,0.22)'; routeCtx.fill();
-      routeCtx.beginPath(); routeCtx.arc(centerLocalX,centerLocalY,8,0,Math.PI*2); routeCtx.fillStyle='#fff'; routeCtx.fill();
-      routeCtx.lineWidth=3; routeCtx.strokeStyle = '#D6FF3F'; routeCtx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(fp[0].x-left, fp[0].y-top);
+      for(let i=1;i<=cursor;i++) ctx.lineTo(fp[i].x-left, fp[i].y-top);
+      ctx.lineTo(posX-left, posY-top);
+      ctx.lineWidth = 26; ctx.strokeStyle = 'rgba(214,255,63,0.16)'; ctx.stroke();
+      ctx.lineWidth = 14; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.stroke();
+      ctx.lineWidth = 9; ctx.strokeStyle = '#D6FF3F'; ctx.stroke();
 
-      ctx.drawImage(routeLayer, mapX+mapPad, mapY+mapPad);
+      // salida y llegada
+      const sx = fp[0].x-left, sy = fp[0].y-top;
+      ctx.beginPath(); ctx.arc(sx, sy, 11, 0, Math.PI*2); ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.lineWidth = 4; ctx.strokeStyle = '#16191c'; ctx.stroke();
+      const ex = fp[fp.length-1].x-left, ey = fp[fp.length-1].y-top;
+      ctx.beginPath(); ctx.arc(ex, ey, 11, 0, Math.PI*2); ctx.fillStyle = p>=1 ? '#D6FF3F' : 'rgba(255,255,255,0.55)'; ctx.fill();
+      ctx.lineWidth = 4; ctx.strokeStyle = '#16191c'; ctx.stroke();
+
+      // corredor: punto blanco con un anillo que late
+      const hx = posX-left, hy = posY-top;
+      const pulse = (el % 900) / 900;
+      ctx.beginPath(); ctx.arc(hx, hy, 18 + 26*pulse, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(214,255,63,' + (0.35*(1-pulse)).toFixed(3) + ')'; ctx.fill();
+      ctx.beginPath(); ctx.arc(hx, hy, 17, 0, Math.PI*2); ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(hx, hy, 10, 0, Math.PI*2); ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.lineWidth = 4; ctx.strokeStyle = '#D6FF3F'; ctx.stroke();
     }catch(drawErr){
-      ctx.textAlign='left';
+      // si algo falla en el teléfono preferimos ver el error en el video a que no sepamos qué pasó
+      ctx.textAlign = 'left';
       ctx.font = '700 15px monospace';
       ctx.fillStyle = '#FF5A5A';
-      ctx.fillText('ERROR: '+drawErr.message, mapX+10, mapY+mapH/2);
+      ctx.fillText('ERROR: '+drawErr.message, 20, H/2);
     }
 
+    // degradados arriba y abajo para que el texto se lea sobre cualquier mapa
+    const gTop = ctx.createLinearGradient(0, 0, 0, 380);
+    gTop.addColorStop(0, 'rgba(12,15,17,0.9)'); gTop.addColorStop(1, 'rgba(12,15,17,0)');
+    ctx.fillStyle = gTop; ctx.fillRect(0, 0, W, 380);
+    const gBot = ctx.createLinearGradient(0, H-620, 0, H);
+    gBot.addColorStop(0, 'rgba(12,15,17,0)'); gBot.addColorStop(0.55, 'rgba(12,15,17,0.82)'); gBot.addColorStop(1, 'rgba(12,15,17,0.96)');
+    ctx.fillStyle = gBot; ctx.fillRect(0, H-620, W, 620);
+
+    // encabezado
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#D6FF3F';
+    ctx.font = '400 56px "Bebas Neue", Arial, sans-serif';
+    ctx.fillText('ZANCADA', 40, 98);
+    ctx.fillStyle = 'rgba(237,239,239,0.7)';
+    ctx.font = '500 22px "Inter", Arial, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(dateStr, W-40, 90);
+    ctx.textAlign = 'left';
+    if(runName){
+      ctx.fillStyle = '#EDEFEF';
+      ctx.font = '700 30px "Inter", Arial, sans-serif';
+      ctx.fillText(runName, 40, 150);
+    }
+
+    // estadísticas en vivo
     let currentTimeSec;
     if(routeData.hasRealTime){
       const nextIdx = Math.min(cursor+1, routeData.times.length-1);
@@ -13448,40 +13434,52 @@ async function startDynamicVideo(runId){
     }
     const currentPace = virtualDist>0.05 ? (currentTimeSec/60)/virtualDist : null;
 
-    // Estadísticas más abajo (antes quedaban pegadas al borde del mapa).
-    const statsY = mapY+mapH+130;
-    ctx.textAlign='center';
+    const distY = H-290;
     ctx.fillStyle = '#EDEFEF';
-    ctx.font = '700 88px "JetBrains Mono", monospace';
-    ctx.fillText(fmtDist(virtualDist), W/2, statsY);
-    ctx.fillStyle = 'rgba(237,239,239,0.55)';
-    ctx.font = '700 24px "Inter", Arial, sans-serif';
-    ctx.fillText(distUnit().toUpperCase(), W/2, statsY+38);
+    ctx.font = '700 128px "JetBrains Mono", monospace';
+    const distStr = fmtDist(virtualDist);
+    ctx.fillText(distStr, 40, distY);
+    const distW = ctx.measureText(distStr).width;
+    ctx.fillStyle = '#D6FF3F';
+    ctx.font = '700 36px "Inter", Arial, sans-serif';
+    ctx.fillText(distUnit().toUpperCase(), 40+distW+16, distY);
 
-    const rowY = statsY+118;
-    const colW = (W-80)/2;
-    ctx.font = '700 46px "JetBrains Mono", monospace';
+    const rowY = H-166, col2 = Math.round(W/2)+20;
     ctx.fillStyle = '#EDEFEF';
-    ctx.fillText(fmtTime(Math.round(currentTimeSec)), 40+colW/2, rowY);
-    ctx.fillText(currentPace!=null ? (fmtPace(currentPace)+'/'+distUnit()) : '--:--', 40+colW+colW/2, rowY);
+    ctx.font = '700 58px "JetBrains Mono", monospace';
+    ctx.fillText(fmtTime(Math.round(currentTimeSec)), 40, rowY);
+    ctx.fillText(currentPace!=null ? (fmtPace(currentPace)+'/'+distUnit()) : '--:--', col2, rowY);
     ctx.font = '700 20px "Inter", Arial, sans-serif';
     ctx.fillStyle = 'rgba(237,239,239,0.55)';
-    ctx.fillText(t('run_time').toUpperCase(), 40+colW/2, rowY+34);
-    ctx.fillText(t('run_pace_word').toUpperCase(), 40+colW+colW/2, rowY+34);
+    ctx.fillText(t('run_time').toUpperCase(), 40, rowY+34);
+    ctx.fillText(t('run_pace_word').toUpperCase(), col2, rowY+34);
 
-    const barY = H-56, barW = W-80, barH=6;
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    // barra de progreso + atribución del mapa (los términos de Mapbox/OpenStreetMap la piden)
+    const barY = H-84, barW = W-80, barH = 6;
+    ctx.fillStyle = 'rgba(255,255,255,0.14)';
     rdRoundRectPath(ctx, 40, barY, barW, barH, 3); ctx.fill();
     ctx.fillStyle = '#D6FF3F';
     rdRoundRectPath(ctx, 40, barY, Math.max(barH, barW*p), barH, 3); ctx.fill();
-    ctx.textAlign='left';
+    if(followMap){
+      ctx.textAlign = 'right';
+      ctx.fillStyle = 'rgba(237,239,239,0.45)';
+      ctx.font = '500 15px "Inter", Arial, sans-serif';
+      ctx.fillText('© Mapbox © OpenStreetMap', W-40, H-40);
+    }
+    ctx.textAlign = 'left';
+
+    // entrada: sale del negro
+    if(el < FADE_IN_MS){
+      ctx.fillStyle = 'rgba(0,0,0,' + (1 - el/FADE_IN_MS).toFixed(3) + ')';
+      ctx.fillRect(0, 0, W, H);
+    }
   }
 
   // Pintamos el primer cuadro ANTES de pedir captureStream(): en algunos
   // WebView (iOS) si el canvas todavía está en blanco cuando se llama a
   // captureStream(), el video queda grabado en negro/vacío de principio a
   // fin, aunque el canvas se siga dibujando bien después.
-  drawFrame(0, 0, 0);
+  drawFrame(0, 0, 0, 0);
 
   let mimeType = '';
   ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4'].forEach(c=>{
@@ -13541,12 +13539,13 @@ async function startDynamicVideo(runId){
   const t0 = performance.now();
   function frame(now){
     if(!rdVideoState || rdVideoState.cancelled) return;
-    const p = Math.min(1, (now-t0)/ANIM_MS);
+    const el = Math.max(0, now-t0);
+    const p = Math.min(1, el/ANIM_MS);
     const virtualDist = p*totalDist;
     while(cursor < routeData.followProj.length-2 && routeData.cum[cursor+1]<=virtualDist) cursor++;
-    drawFrame(p, virtualDist, cursor);
+    drawFrame(p, virtualDist, cursor, el);
     if(progressEl) progressEl.textContent = Math.round(p*100)+'%';
-    if(p<1){
+    if(el < ANIM_MS + HOLD_MS){
       rdVideoState.raf = requestAnimationFrame(frame);
     } else {
       if(progressEl) progressEl.textContent = t('rd_video_finishing');
@@ -13622,6 +13621,23 @@ async function downloadDynamicVideo(){
   const mime = blob.type || 'video/webm';
   const ext = mime.includes('mp4') ? 'mp4' : (mime.includes('webm') ? 'webm' : 'mp4');
   const fileName = `zancada-${dateSlug}.${ext}`;
+  if(isNativeApp()){
+    const Share = window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
+    const Filesystem = window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
+    if(Share && Filesystem){
+      try{
+        const base64 = await new Promise((resolve, reject)=>{
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(String(reader.result).split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        const written = await Filesystem.writeFile({ path: fileName, data: base64, directory: 'CACHE' });
+        await Share.share({ files: [written.uri], title: 'Zancada' });
+      }catch(e){ /* canceló el panel de compartir, o falló: no rompemos la pantalla */ }
+      return;
+    }
+  }
   try{
     const file = new File([blob], fileName, {type: mime});
     if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
