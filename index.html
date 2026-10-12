@@ -2588,6 +2588,23 @@
     :root:not([data-theme="dark"]) .heat-legend i{background:linear-gradient(to right, rgba(94,143,0,.2), #5E8F00);}
   
   }
+
+  /* Panel de administración */
+  .adm-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-top:12px;}
+  .adm-stat{background:var(--asphalt-3); border-radius:var(--radius-sm); padding:12px 8px; text-align:center;}
+  .adm-stat .n{font-size:22px; font-weight:800; font-variant-numeric:tabular-nums;}
+  .adm-stat .l{margin-top:2px; font-size:11px; color:var(--mist); line-height:1.25;}
+  .adm-bars{display:flex; align-items:flex-end; gap:5px; height:84px; margin-top:14px;}
+  .adm-bars .b{flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:4px;}
+  .adm-bars .b i{display:block; width:100%; max-width:18px; border-radius:5px 5px 2px 2px; background:var(--hivis-text); min-height:2px;}
+  .adm-bars .b span{font-size:9.5px; color:var(--mist);}
+  .adm-bars .b em{font-style:normal; font-size:10px; font-weight:700; color:var(--chalk);}
+  .adm-row{display:grid; grid-template-columns:78px 1fr auto; gap:10px; align-items:center; margin-top:10px; font-size:13.5px;}
+  .adm-row .track{height:8px; border-radius:99px; background:var(--asphalt-3); overflow:hidden;}
+  .adm-row .track i{display:block; height:100%; border-radius:99px; background:var(--hivis-text);}
+  .adm-row .v{font-weight:800; font-variant-numeric:tabular-nums; min-width:34px; text-align:right;}
+  .adm-note{margin:10px 0 0; font-size:11.5px; line-height:1.45; color:var(--mist);}
+  .adm-err{padding:14px; border-radius:var(--radius-sm); background:var(--danger-dim); color:var(--danger-text); font-size:13.5px; line-height:1.45;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -3955,6 +3972,18 @@
     <button class="btn btn-primary" style="margin-top:16px;" onclick="closeSportPicker()" data-i18n="sport_picker_done"></button>
   </div>
 
+
+  <!-- Panel de administración: solo se muestra el acceso si api/admin-stats.js confirma que sos admin (ADMIN_EMAILS). Texto fijo en español a propósito: lo usa solo el dueño. -->
+  <div class="overlay overlay-sheet" id="admin-overlay">
+    <button class="week-nav-btn" onclick="closeAdminOverlay()" style="margin-bottom:14px;" aria-label="Volver"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></span></button>
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+      <h2 class="subtitle" style="font-size:22px;">Panel de administración</h2>
+      <button class="btn btn-outline btn-sm" id="admin-refresh" onclick="loadAdminStats()">Actualizar</button>
+    </div>
+    <p class="muted" id="admin-updated" style="margin:6px 0 0; font-size:12.5px;"></p>
+    <div id="admin-body" style="margin-top:14px;"></div>
+  </div>
+
   <div class="overlay overlay-sheet" id="zones-overlay">
     <button class="week-nav-btn" onclick="closeZonesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
@@ -4377,6 +4406,7 @@
         <button type="button" class="set-row" onclick="startTour()"><span data-i18n="tour_replay"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>
         <button type="button" class="set-row" onclick="resetApp()"><span data-i18n="perfil_reset"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>
       </div>
+      <button type="button" class="set-row" id="admin-row" style="display:none;" onclick="openAdminOverlay()"><span>Panel de administración</span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>
       <button class="btn btn-gray" style="margin-top:18px;" onclick="confirmLogout()" data-i18n="perfil_logout"></button>
       <button class="btn btn-danger" style="margin-top:12px;" onclick="deleteAccount()" data-i18n="perfil_delete_account"></button>
     </div>

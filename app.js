@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T22:40:31Z';
+const APP_VERSION = '2026-10-12T23:23:45Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8052,6 +8052,7 @@ async function logReadiness(quality, detail){
 
 let editingShoeId = null;
 function renderPerfil(){
+  try{ checkAdminOnce(); }catch(e){}
   const p = state.profile;
   document.getElementById('perfil-initial').textContent = (p.name[0]||'?').toUpperCase();
   // Muestra el promedio REAL de las últimas semanas corridas (computeActualWeeklyKmAvg) en vez
@@ -8264,6 +8265,74 @@ function openLangOverlay(){ openOverlaySheetEl(document.getElementById('lang-ove
 function closeLangOverlay(){ document.getElementById('lang-overlay').classList.remove('overlay-open'); }
 function openDaysOverlay(){ openOverlaySheetEl(document.getElementById('days-overlay')); }
 function closeDaysOverlay(){ document.getElementById('days-overlay').classList.remove('overlay-open'); }
+/* ================= PANEL DE ADMINISTRACIÓN ================= */
+// El acceso aparece solo si el servidor confirma que sos admin (api/admin-stats.js, lista ADMIN_EMAILS en Vercel).
+// Para cualquier otro usuario la respuesta es 403 y no se muestra nada.
+let adminChecked = false;
+async function adminFetch(probe){
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if(!session) return null;
+  return fetch(apiUrl('/api/admin-stats' + (probe ? '?probe=1' : '')), { headers: { 'Authorization': 'Bearer ' + session.access_token } });
+}
+async function checkAdminOnce(){
+  if(adminChecked) return;
+  adminChecked = true;
+  try{
+    const r = await adminFetch(true);
+    const row = document.getElementById('admin-row');
+    if(row) row.style.display = (r && r.ok) ? '' : 'none';
+  }catch(e){ adminChecked = false; }
+}
+function openAdminOverlay(){ openOverlaySheetEl(document.getElementById('admin-overlay')); loadAdminStats(); }
+function closeAdminOverlay(){ document.getElementById('admin-overlay').classList.remove('overlay-open'); }
+function admPct(n, total){ return total > 0 ? Math.round((n / total) * 100) : 0; }
+function admStat(n, label){ return '<div class="adm-stat"><div class="n">' + escapeHtml(String(n == null ? '—' : n)) + '</div><div class="l">' + escapeHtml(label) + '</div></div>'; }
+function admBarRows(entries, total){
+  const max = Math.max(1, ...entries.map(e => e[1]));
+  return entries.map(([k, n]) => '<div class="adm-row"><span>' + escapeHtml(String(k)) + '</span><div class="track"><i style="width:' + Math.round((n / max) * 100) + '%;"></i></div><span class="v">' + n + (total ? ' <span style="font-weight:600; color:var(--mist); font-size:11.5px;">' + admPct(n, total) + '%</span>' : '') + '</span></div>').join('');
+}
+function renderAdminStats(s){
+  const u = s.users || {}, a = s.app || {}, w = s.watches || {}, p = s.push || {};
+  const weeks = s.signups_by_week || [];
+  const maxW = Math.max(1, ...weeks.map(x => x.n));
+  const bars = weeks.map((x, i) => '<div class="b"><em>' + (x.n || '') + '</em><i style="height:' + Math.max(2, Math.round((x.n / maxW) * 56)) + 'px;"></i><span>' + (i % 3 === 0 ? escapeHtml(x.week.slice(8, 10) + '/' + x.week.slice(5, 7)) : '&nbsp;') + '</span></div>').join('');
+  const watchEntries = [['Strava', w.strava], ['Suunto', w.suunto], ['Wahoo', w.wahoo], ['Polar', w.polar], ['COROS', w.coros]].map(([k, n]) => [k, n || 0]).sort((x, y) => y[1] - x[1]);
+  const langs = Object.entries(s.languages || {}).sort((x, y) => y[1] - x[1]);
+  const goals = Object.entries(s.goals || {}).sort((x, y) => y[1] - x[1]);
+  const plats = Object.entries(p.by_platform || {}).sort((x, y) => y[1] - x[1]);
+  document.getElementById('admin-body').innerHTML =
+    '<div class="card"><h3>Cuentas</h3><div class="adm-grid">'
+      + admStat(u.total, 'registradas') + admStat(u.confirmed, 'con mail confirmado') + admStat(u.new_7d, 'nuevas, 7 días')
+      + admStat(u.new_30d, 'nuevas, 30 días') + admStat(u.signed_in_7d, 'entraron, 7 días') + admStat(u.signed_in_30d, 'entraron, 30 días')
+    + '</div><p class="adm-note">“Entraron” cuenta el último inicio de sesión: quien mantiene la sesión abierta puede no figurar. Para actividad real mirá “Guardaron datos”.</p></div>'
+    + '<div class="card"><h3>Altas por semana</h3><div class="adm-bars">' + bars + '</div></div>'
+    + '<div class="card"><h3>Uso</h3><div class="adm-grid">'
+      + admStat(a.onboarded, 'onboarding completo (' + admPct(a.onboarded, u.total) + '%)') + admStat(a.data_saved_7d, 'guardaron datos, 7 días') + admStat(a.data_saved_30d, 'guardaron datos, 30 días')
+      + admStat(a.users_with_runs, 'con al menos 1 carrera') + admStat(a.total_runs, 'carreras en total') + admStat(w.users_with_any, 'con algún reloj')
+    + '</div></div>'
+    + '<div class="card"><h3>Relojes conectados</h3>' + admBarRows(watchEntries, u.total)
+      + '<p class="adm-note">Health Connect no figura: esa conexión vive solo en el teléfono de cada persona.</p></div>'
+    + '<div class="card"><h3>Notificaciones</h3><div class="adm-grid">' + admStat(p.users, 'personas con push') + admStat(p.devices, 'dispositivos') + admStat(admPct(p.users || 0, u.total) + '%', 'de las cuentas') + '</div>'
+      + (plats.length ? '<div style="margin-top:6px;">' + admBarRows(plats, 0) + '</div>' : '') + '</div>'
+    + '<div class="card"><h3>Idiomas</h3>' + (langs.length ? admBarRows(langs, a.with_data) : '<p class="muted">Sin datos.</p>') + '</div>'
+    + '<div class="card"><h3>Objetivos</h3>' + (goals.length ? admBarRows(goals, a.with_data) : '<p class="muted">Sin datos.</p>') + '</div>';
+  const when = s.generated_at ? new Date(s.generated_at) : new Date();
+  document.getElementById('admin-updated').textContent = 'Actualizado ' + when.toLocaleString();
+}
+async function loadAdminStats(){
+  const body = document.getElementById('admin-body'), btn = document.getElementById('admin-refresh');
+  if(btn) btn.disabled = true;
+  if(!body.innerHTML) body.innerHTML = '<div class="skeleton" style="height:120px; border-radius:var(--radius);"></div>';
+  try{
+    const r = await adminFetch(false);
+    if(!r) throw new Error('Sin sesión');
+    const data = await r.json().catch(() => ({}));
+    if(!r.ok) throw new Error(data.error || ('Error ' + r.status));
+    renderAdminStats(data);
+  }catch(e){
+    body.innerHTML = '<div class="adm-err">No se pudo cargar el panel: ' + escapeHtml(String(e.message || e)) + '</div>';
+  }finally{ if(btn) btn.disabled = false; }
+}
 function openZonesOverlay(){ openOverlaySheetEl(document.getElementById('zones-overlay')); }
 function closeZonesOverlay(){ document.getElementById('zones-overlay').classList.remove('overlay-open'); }
 /* ---- Resorte estilo Apple (WWDC 2018, "Designing Fluid Interfaces") ----

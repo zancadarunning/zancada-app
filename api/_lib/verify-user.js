@@ -41,7 +41,8 @@ module.exports = async function verifyUser(req) {
     // email: agregado para send-feedback.js (necesita saber a quién responderle sin
     // confiar en un email que mande el cliente suelto) -- los demás endpoints que ya
     // usaban este helper solo leían userId, así que esto es puramente aditivo.
-    return { ok: true, userId: user.id, email: user.email, token };
+    // emailConfirmed: lo usa admin-stats.js (un mail sin confirmar no alcanza para ser admin)
+    return { ok: true, userId: user.id, email: user.email, emailConfirmed: !!user.email_confirmed_at, token };
   } catch (e) {
     console.error('verify-user: token verification failed', e);
     return { ok: false, status: 401, error: 'Invalid session' };
