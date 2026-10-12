@@ -2458,6 +2458,76 @@
   /* Cuenta regresiva: tocar la pantalla la cancela (antes había que esperar y parar una carrera fantasma) */
   #runCountdown{cursor:pointer; -webkit-tap-highlight-color:transparent;}
   .countdown-hint{position:absolute; left:16px; right:16px; bottom:calc(36px + env(safe-area-inset-bottom, 0px)); margin:0; text-align:center; font-size:14px; font-weight:600; color:var(--mist);}
+
+
+  /* =====================================================================================================================
+     TEMA CLARO -- revisión de colores (2026-10-12). Papel cálido + lima pálido + verde-lima profundo para texto.
+     Un solo bloque al final: pisa los dos bloques de tokens claros de más arriba.
+     ===================================================================================================================== */
+  :root[data-theme="light"]{
+    /* Papel cálido en vez de gris frío: el lima de la marca es amarillo-verdoso, y sobre un gris azulado se ensucia */
+    --asphalt:#F5F5F0; --asphalt-2:#FFFFFF; --asphalt-3:#ECECE5; --asphalt-4:#D8D8CF;
+    --chalk:#1A1B16; --mist:#5A5D52; --mist-dim:#666A5E;
+    /* El lima como TEXTO pasa a un verde-lima profundo (7,7:1 sobre blanco) y como FONDO a un lima pálido de verdad, no a un verde oliva traslúcido */
+    --hivis-text:#3F5B00; --hivis-dim:rgba(190,232,0,.26);
+    --press:rgba(30,30,10,.05); --overlay-hairline:rgba(30,30,10,.09);
+    --contour-line:rgba(30,30,10,.035);
+    --tabbar-bg:rgba(255,255,255,.94);
+    --header-bg:linear-gradient(180deg, var(--asphalt) 0, var(--asphalt) 74%, transparent 100%);
+    --ambient:rgba(190,232,0,.10); --ambient-card:rgba(150,190,0,.16);
+  }
+  /* sin el halo lima que sube desde la barra inferior: sobre claro se lee como una mancha */
+  :root[data-theme="light"] #app::after{display:none;}
+  /* tarjetas destacadas: lima pálido opaco, no verde grisáceo traslúcido */
+  :root[data-theme="light"] .card.card-highlight{background:linear-gradient(160deg, #F0FAC4, #FFFFFF 62%); border-color:#B9D94A; box-shadow:none;}
+  :root[data-theme="light"] .card-shell.card-shell-hivis{background:none; box-shadow:none;}
+  :root[data-theme="light"] .rp-entry{background:#F0FAC4; border-color:#CFE56A;}
+  :root[data-theme="light"] .sum-big .n{color:var(--chalk);}
+  :root[data-theme="light"] .day-row.day-row-today::after{inset:0; border-radius:var(--radius-sm); background:linear-gradient(90deg, rgba(190,232,0,.16), transparent 90%); -webkit-mask-image:none; mask-image:none;}
+  /* logos de marca: son wordmarks blancos pensados para el oscuro; en claro se pasan a negro (los que traen color propio quedan igual) */
+  :root[data-theme="light"] .brand-logo-chip img{filter:brightness(0);}
+  :root[data-theme="light"] .brand-logo-chip img.brand-logo-color{filter:none;}
+  /* fichas de stats planas (la sombra se sentía pesada sobre papel) y trazos de tendencia en verde de marca en vez de negro */
+  :root[data-theme="light"] .stat-box{background:var(--asphalt); box-shadow:none;}
+  :root[data-theme="light"] .trend-stroke{background:var(--hivis-text);}
+  :root[data-theme="light"] .trend-stroke.trend-planned{background:var(--mist-dim);}
+  :root[data-theme="light"] .trend-stroke.trend-rest{background:var(--asphalt-4);}
+  :root[data-theme="light"] .trend-stroke.trend-today{background:var(--hivis); box-shadow:none;}
+  :root[data-theme="light"] .streak-chip{box-shadow:none;}
+
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      /* Papel cálido en vez de gris frío: el lima de la marca es amarillo-verdoso, y sobre un gris azulado se ensucia */
+      --asphalt:#F5F5F0; --asphalt-2:#FFFFFF; --asphalt-3:#ECECE5; --asphalt-4:#D8D8CF;
+      --chalk:#1A1B16; --mist:#5A5D52; --mist-dim:#666A5E;
+      /* El lima como TEXTO pasa a un verde-lima profundo (7,7:1 sobre blanco) y como FONDO a un lima pálido de verdad, no a un verde oliva traslúcido */
+      --hivis-text:#3F5B00; --hivis-dim:rgba(190,232,0,.26);
+      --press:rgba(30,30,10,.05); --overlay-hairline:rgba(30,30,10,.09);
+      --contour-line:rgba(30,30,10,.035);
+      --tabbar-bg:rgba(255,255,255,.94);
+      --header-bg:linear-gradient(180deg, var(--asphalt) 0, var(--asphalt) 74%, transparent 100%);
+      --ambient:rgba(190,232,0,.10); --ambient-card:rgba(150,190,0,.16);
+    }
+    /* sin el halo lima que sube desde la barra inferior: sobre claro se lee como una mancha */
+    :root:not([data-theme="dark"]) #app::after{display:none;}
+    /* tarjetas destacadas: lima pálido opaco, no verde grisáceo traslúcido */
+    :root:not([data-theme="dark"]) .card.card-highlight{background:linear-gradient(160deg, #F0FAC4, #FFFFFF 62%); border-color:#B9D94A; box-shadow:none;}
+    :root:not([data-theme="dark"]) .card-shell.card-shell-hivis{background:none; box-shadow:none;}
+    :root:not([data-theme="dark"]) .rp-entry{background:#F0FAC4; border-color:#CFE56A;}
+    :root:not([data-theme="dark"]) .sum-big .n{color:var(--chalk);}
+    :root:not([data-theme="dark"]) .day-row.day-row-today::after{inset:0; border-radius:var(--radius-sm); background:linear-gradient(90deg, rgba(190,232,0,.16), transparent 90%); -webkit-mask-image:none; mask-image:none;}
+    /* logos de marca: son wordmarks blancos pensados para el oscuro; en claro se pasan a negro (los que traen color propio quedan igual) */
+    :root:not([data-theme="dark"]) .brand-logo-chip img{filter:brightness(0);}
+    :root:not([data-theme="dark"]) .brand-logo-chip img.brand-logo-color{filter:none;}
+    /* fichas de stats planas (la sombra se sentía pesada sobre papel) y trazos de tendencia en verde de marca en vez de negro */
+    :root:not([data-theme="dark"]) .stat-box{background:var(--asphalt); box-shadow:none;}
+    :root:not([data-theme="dark"]) .trend-stroke{background:var(--hivis-text);}
+    :root:not([data-theme="dark"]) .trend-stroke.trend-planned{background:var(--mist-dim);}
+    :root:not([data-theme="dark"]) .trend-stroke.trend-rest{background:var(--asphalt-4);}
+    :root:not([data-theme="dark"]) .trend-stroke.trend-today{background:var(--hivis); box-shadow:none;}
+    :root:not([data-theme="dark"]) .streak-chip{box-shadow:none;}
+  
+  }
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
