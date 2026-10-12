@@ -950,6 +950,24 @@
     transition:transform .12s ease, background .12s ease;}
   .hist-add-btn:active{transform:scale(.88); background:var(--asphalt-4);}
   .hist-add-btn svg{width:16px; height:16px;}
+  /* Mapa de calor (todas las carreras con GPS superpuestas) */
+  .heat-overlay{position:fixed; inset:0; z-index:60; background:#0e1114; display:none; flex-direction:column;}
+  .heat-overlay #heatmap-map{position:absolute; inset:0;}
+  .heat-overlay .leaflet-container{background:#0e1114;}
+  .heat-top{position:absolute; top:0; left:0; right:0; z-index:500; padding:calc(14px + var(--safe-top)) 16px 36px; background:linear-gradient(to bottom, rgba(14,17,20,.94), rgba(14,17,20,0)); pointer-events:none;}
+  .heat-top > *{pointer-events:auto;}
+  .heat-top h2{margin:0; font-size:24px; color:#EDEFEF;}
+  .heat-top p{margin:4px 0 0; font-size:12.5px; line-height:1.45; color:rgba(237,239,239,.68); max-width:30em;}
+  .heat-close{position:absolute; z-index:600; top:calc(12px + var(--safe-top)); right:14px; width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,.14); border:none; color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer;}
+  .heat-bottom{position:absolute; left:0; right:0; bottom:0; z-index:500; padding:44px 16px calc(34px + var(--safe-bottom)); background:linear-gradient(to top, rgba(14,17,20,.96), rgba(14,17,20,0)); pointer-events:none;}
+  .heat-bottom > *{pointer-events:auto;}
+  .heat-chips{display:flex; gap:8px; margin-bottom:12px;}
+  .heat-chip{border:1.5px solid rgba(255,255,255,.2); background:rgba(255,255,255,.06); color:#EDEFEF; border-radius:999px; padding:7px 14px; font-size:13px; font-weight:700; cursor:pointer;}
+  .heat-chip.on{background:var(--hivis); border-color:var(--hivis); color:#14181b;}
+  .heat-stats{font-size:13px; color:#EDEFEF; font-weight:700; margin-bottom:8px;}
+  .heat-legend{display:flex; align-items:center; gap:8px; font-size:11px; color:rgba(237,239,239,.65);}
+  .heat-legend i{flex:0 0 90px; height:6px; border-radius:3px; background:linear-gradient(to right, rgba(214,255,63,.18), #D6FF3F);}
+  .heat-empty{position:absolute; left:0; right:0; top:46%; text-align:center; color:rgba(237,239,239,.75); font-size:14px; z-index:500; padding:0 30px;}
   /* Gráficos de tendencia (Historial): reemplaza las barras dentro de cajas grises por
      trazos verticales finos y redondeados -- los días/semanas sin actividad quedan como
      una línea fina en vez de una barra, así el ojo va directo a los días con volumen. */
@@ -3103,6 +3121,7 @@
       </div>
       <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
         <div style="text-align:right;"><div class="n mono" id="home-runs-count" style="font-size:20px; font-weight:800;">0</div><div class="l" style="font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--mist);" data-i18n="home_logged"></div></div>
+        <button class="hist-add-btn" id="hist-heat-btn" style="display:none;" onclick="openHeatmap()" data-i18n-aria="heat_title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5l6-2.5 6 2.5 6-2.5v13.5l-6 2.5-6-2.5-6 2.5z"/><path d="M9 4v13.5M15 6.5V20"/></svg></button>
         <button class="hist-add-btn" onclick="toggleManualForm()" data-i18n-aria="hist_manual_add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
       </div>
     </div>
@@ -3627,6 +3646,25 @@
     <div class="card" style="margin-top:16px;">
       <div id="pain-log-list"></div>
       <button class="btn btn-outline btn-sm" style="margin-top:12px; width:100%;" data-i18n="pain_add_btn" onclick="openPainModal()"></button>
+    </div>
+  </div>
+
+  <div class="heat-overlay" id="heatmap-overlay">
+    <div id="heatmap-map"></div>
+    <div class="heat-top">
+      <h2 class="display" data-i18n="heat_title"></h2>
+      <p data-i18n="heat_sub"></p>
+    </div>
+    <button class="heat-close" onclick="closeHeatmap()" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span></button>
+    <div class="heat-empty" id="heatmap-empty" style="display:none;" data-i18n="heat_empty"></div>
+    <div class="heat-bottom">
+      <div class="heat-chips" id="heatmap-chips">
+        <button class="heat-chip on" data-r="all" onclick="setHeatRange('all')" data-i18n="heat_range_all"></button>
+        <button class="heat-chip" data-r="year" onclick="setHeatRange('year')" data-i18n="heat_range_year"></button>
+        <button class="heat-chip" data-r="90" onclick="setHeatRange('90')" data-i18n="heat_range_90"></button>
+      </div>
+      <div class="heat-stats" id="heatmap-stats"></div>
+      <div class="heat-legend"><span data-i18n="heat_less"></span><i></i><span data-i18n="heat_more"></span></div>
     </div>
   </div>
 

@@ -40,6 +40,8 @@ test('send-reminders con 20.000 usuarios y 3.000 suscripciones: consultas dirigi
     if (url.includes('/rest/v1/push_subscriptions')) { calls.subscriptions++; return { ok: true, status: 200, json: async () => subs, text: async () => '' }; }
     if (url.includes('/rest/v1/app_state')) {
       const m = url.match(/user_id=in\.\(([^)]*)\)/);
+      // consulta puntual de un usuario (el resumen semanal pide solo SUS carreras): no es "pedir la tabla entera"
+      if (!m && /user_id=eq\./.test(url)) return { ok: true, status: 200, json: async () => [{ runs: [] }], text: async () => '' };
       if (!m) { calls.appStateFull++; calls.rowsServed += USERS; return { ok: true, status: 200, json: async () => [...states.values()], text: async () => '' }; }
       calls.appStateBatches++;
       const rows = m[1].split(',').map(decodeURIComponent).map(id => states.get(id)).filter(Boolean);

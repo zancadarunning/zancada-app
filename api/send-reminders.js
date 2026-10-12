@@ -2,6 +2,7 @@ const webpush = require('web-push');
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { sendFcmPush } = require('./_lib/fcm');
 const { isTrustedPushEndpoint } = require('./_lib/push-endpoint');
+const { buildWeeklySummary, WEEKLY_HOUR } = require('./_lib/weekly-summary');
 
 // ANTES este cron corría UNA vez por día a una hora fija en UTC (11:00 UTC, ver
 // vercel.json) -- pensada para que le llegue a las 8am a un corredor en Argentina
@@ -112,7 +113,7 @@ module.exports = withSentry(async (req, res) => {
     const states = [];
     for (let i = 0; i < subUserIds.length; i += STATE_BATCH) {
       const ids = subUserIds.slice(i, i + STATE_BATCH).map(encodeURIComponent).join(',');
-      const statesRes = await fetch(`${base}/rest/v1/app_state?user_id=in.(${ids})&select=user_id,plan:data->plan,weekStart:data->>weekStart,tz:data->profile->>tz,rh:data->profile->>reminderHour,lang:data->>lang`, { headers });
+      const statesRes = await fetch(`${base}/rest/v1/app_state?user_id=in.(${ids})&select=user_id,plan:data->plan,weekStart:data->>weekStart,tz:data->profile->>tz,rh:data->profile->>reminderHour,lang:data->>lang,streak:data->>streakWeeks,units:data->profile->>units`, { headers });
       if (!statesRes.ok) {
         const body = await statesRes.text().catch(() => '');
         throw new Error(`app_state fetch failed: ${statesRes.status} ${body}`);
@@ -130,9 +131,12 @@ module.exports = withSentry(async (req, res) => {
 
     let sent = 0, skipped = 0, failed = 0;
     const due = [];
+    const weekly = [];   // a quién le toca el resumen semanal (domingo, 20:00 hora local)
     for (const row of (states || [])) {
       const subRow = subsByUser[row.user_id];
       if (!subRow) { skipped++; continue; }
+      const wClock = localClock(row.tz || DEFAULT_TZ);
+      if (wClock.dayIdx === 6 && wClock.hour === WEEKLY_HOUR) weekly.push({ row, subRow });
       const plan = row.plan;
       if (!plan || !plan.length) { skipped++; continue; }
 
@@ -171,12 +175,13 @@ module.exports = withSentry(async (req, res) => {
 
     // El envío (una llamada de red por usuario) va en paralelo, de a SEND_CONCURRENCY: a las 8 am de un huso populoso pueden
     // juntarse cientos de avisos en la misma corrida y, de a uno, la función se quedaba sin tiempo antes de terminar.
-    async function sendOne({ row, subRow, body }) {
+    async function sendOne({ row, subRow, body, title }) {
+      title = title || 'Zancada';
       try {
         if (subRow.platform === 'android' || subRow.platform === 'ios') {
           // App nativa (Capacitor) -- acá subscription es {token: '<token de FCM>'}, no una
           // suscripción Web Push (ver sql/push_subscriptions_add_platform.sql y api/_lib/fcm.js).
-          const dead = await sendFcmPush(subRow.subscription && subRow.subscription.token, 'Zancada', body);
+          const dead = await sendFcmPush(subRow.subscription && subRow.subscription.token, title, body);
           if (dead) {
             await fetch(`${base}/rest/v1/push_subscriptions?user_id=eq.${row.user_id}`, { method: 'DELETE', headers });
             failed++;
@@ -185,7 +190,7 @@ module.exports = withSentry(async (req, res) => {
         } else {
           // el endpoint lo escribe el cliente: solo se le manda a los servicios de push reales (evita SSRF a ciegas)
           if (!subRow.subscription || !isTrustedPushEndpoint(subRow.subscription.endpoint)) { failed++; return; }
-          await webpush.sendNotification(subRow.subscription, JSON.stringify({ title: 'Zancada', body }));
+          await webpush.sendNotification(subRow.subscription, JSON.stringify({ title, body }));
         }
         sent++;
       } catch (err) {
@@ -201,7 +206,34 @@ module.exports = withSentry(async (req, res) => {
     });
     await Promise.all(workers);
 
-    res.status(200).json({ sent, skipped, failed });
+    // Resumen semanal: el historial de carreras es pesado (puntos GPS), así que solo se pide para quienes les toca ahora (una vez
+    // por semana cada uno), de a pocos en paralelo.
+    let weeklySent = 0;
+    async function sendWeekly({ row, subRow }) {
+      try {
+        const rRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${row.user_id}&select=runs:data->runs`, { headers });
+        if (!rRes.ok) return;
+        const rows = await rRes.json();
+        const runs = Array.isArray(rows) && rows[0] && Array.isArray(rows[0].runs) ? rows[0].runs : [];
+        const msg = buildWeeklySummary({
+          runs, plan: row.plan, weekStart: row.weekStart, streak: row.streak, tz: row.tz || DEFAULT_TZ,
+          lang: MSGS[row.lang] ? row.lang : 'es', imperial: row.units === 'imperial', now: Date.now()
+        });
+        if (!msg) return;
+        const before = sent;
+        await sendOne({ row, subRow, body: msg.body, title: msg.title });
+        if (sent > before) weeklySent++;
+      } catch (e) { failed++; }
+    }
+    // Tope de tiempo (la función serverless no puede pasarse): si a esa hora hay muchísimos usuarios, los que no alcanzan se quedan sin
+    // resumen esta semana (mejor eso que cortar la corrida a la mitad).
+    const weeklyStart = Date.now();
+    let nextWeekly = 0;
+    await Promise.all(Array.from({ length: Math.min(6, weekly.length) }, async () => {
+      while (nextWeekly < weekly.length && Date.now() - weeklyStart < 6000) { await sendWeekly(weekly[nextWeekly++]); }
+    }));
+
+    res.status(200).json({ sent, skipped, failed, weeklySent });
   } catch (err) {
     console.error('send-reminders error', err);
     await reportError(err, { endpoint: 'send-reminders' });

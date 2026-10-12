@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T01:41:09Z';
+const APP_VERSION = '2026-10-12T02:09:13Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -11948,7 +11948,80 @@ function renderProgressCard(){
   }
   return '<div class="card pg-card fold-card' + (foldState.prog ? ' open' : '') + '">' + foldHead('prog', t('prog_title')) + foldBodyOpen('prog') + '<h4 class="pg-h first">' + t('prog_km') + '</h4>' + kmSvg + paceBlock + zoneBlock + '</div></div>';
 }
+/* ---- Mapa de calor: todas las carreras con GPS superpuestas en un mapa oscuro ----
+   Cada carrera es un trazo verde fluor semitransparente: donde se repite el recorrido los trazos se suman y el tramo "brilla". */
+let heatMap = null, heatLayer = null, heatRange = 'all';
+// Carreras con ruta GPS dentro del período (range: 'all' | 'year' (últimos 365 días) | '90')
+function heatmapRuns(range, now){
+  const cutoff = range === '90' ? (now||Date.now()) - 90*864e5 : (range === 'year' ? (now||Date.now()) - 365*864e5 : 0);
+  return (state.runs||[]).filter(r => r.points && r.points.length > 1 && new Date(r.date).getTime() >= cutoff);
+}
+// Zona a encuadrar: el grupo de carreras alrededor de donde corrés normalmente (mediana de los puntos de salida, hasta 60 km):
+// una salida aislada en otra ciudad no tiene que alejar el zoom hasta que no se vea nada.
+function heatmapFocusBounds(runs){
+  const starts = runs.map(r => r.points.find(p => Number.isFinite(p.lat) && Number.isFinite(p.lon))).filter(Boolean);
+  if(!starts.length) return null;
+  const med = a => { const s = a.slice().sort((x,y)=>x-y); return s[Math.floor(s.length/2)]; };
+  const mLat = med(starts.map(p=>p.lat)), mLon = med(starts.map(p=>p.lon));
+  let latMin=Infinity, latMax=-Infinity, lonMin=Infinity, lonMax=-Infinity, any=false;
+  runs.forEach(r => {
+    const s = r.points.find(p => Number.isFinite(p.lat) && Number.isFinite(p.lon));
+    if(!s || haversine(mLat, mLon, s.lat, s.lon) > 60) return;
+    r.points.forEach(p => {
+      if(!Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;
+      any = true;
+      if(p.lat<latMin) latMin=p.lat; if(p.lat>latMax) latMax=p.lat;
+      if(p.lon<lonMin) lonMin=p.lon; if(p.lon>lonMax) lonMax=p.lon;
+    });
+  });
+  return any ? [[latMin, lonMin], [latMax, lonMax]] : null;
+}
+function updateHeatmapButton(){
+  const b = document.getElementById('hist-heat-btn');
+  if(b) b.style.display = heatmapRuns('all').length >= 2 ? 'flex' : 'none';
+}
+function openHeatmap(){
+  const ov = document.getElementById('heatmap-overlay');
+  if(!ov) return;
+  ov.style.display = 'flex';
+  renderHeatmap();
+}
+function closeHeatmap(){
+  const ov = document.getElementById('heatmap-overlay');
+  if(ov) ov.style.display = 'none';
+}
+function setHeatRange(k){
+  heatRange = k;
+  document.querySelectorAll('#heatmap-chips .heat-chip').forEach(c => c.classList.toggle('on', c.dataset.r === k));
+  renderHeatmap();
+}
+function renderHeatmap(){
+  if(typeof L === 'undefined') return;
+  const runs = heatmapRuns(heatRange);
+  if(!heatMap){
+    heatMap = L.map('heatmap-map', {zoomControl:false, attributionControl:true, preferCanvas:true}).setView([0,0], 2);
+    L.tileLayer(MAPBOX_TILE_URL.replace(MAPBOX_STYLE, 'dark-v11'), {maxZoom:20, detectRetina:true, attribution:MAPBOX_ATTRIBUTION}).addTo(heatMap);
+  }
+  if(heatLayer){ heatLayer.remove(); heatLayer = null; }
+  heatLayer = L.layerGroup().addTo(heatMap);
+  let km = 0;
+  runs.forEach(r => {
+    km += r.distanceKm || 0;
+    const step = Math.max(1, Math.floor(r.points.length / 500));   // 500 puntos por carrera alcanzan de sobra para dibujar el trazo
+    const ll = [];
+    for(let i=0;i<r.points.length;i+=step){ const p = r.points[i]; if(Number.isFinite(p.lat) && Number.isFinite(p.lon)) ll.push([p.lat, p.lon]); }
+    if(ll.length > 1) L.polyline(ll, {color:'#D6FF3F', weight:3, opacity:0.3, lineCap:'round', lineJoin:'round', interactive:false}).addTo(heatLayer);
+  });
+  document.getElementById('heatmap-empty').style.display = runs.length ? 'none' : 'block';
+  document.getElementById('heatmap-stats').textContent = runs.length ? t('heat_stats', {n: runs.length, km: fmtDist(km, 0) + ' ' + distUnit()}) : '';
+  setTimeout(() => {
+    heatMap.invalidateSize();
+    const b = heatmapFocusBounds(runs);
+    if(b) heatMap.fitBounds(b, {padding:[40,40], maxZoom:16});
+  }, 60);
+}
 function renderHistory(){
+  updateHeatmapButton();
   const el = document.getElementById('history-list');
   const stravaSyncCard = buildStravaSyncBanner();
   const weekRuns = (state.runs||[]).filter(r => getMondayISO(new Date(r.date)) === state.weekStart);
