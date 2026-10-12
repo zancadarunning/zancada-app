@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-09T17:56:41Z';
+const APP_VERSION = '2026-10-12T01:27:45Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -13039,12 +13039,14 @@ const MAP_TILE_SIZE = 256;
 // chico da un acercamiento tipo Strava (se ven las calles cercanas mientras
 // la cámara sigue al corredor); uno grande se parecería más al mapa
 // "panorama fijo" que teníamos antes.
+// Escala de resolución del video (1 = 720x1280). Más alto se ve más nítido pero un celular modesto no llega a dibujar 30 cuadros por segundo.
+const RD_VIDEO_SCALE = 1;
 const FOLLOW_TARGET_METERS = 450;
 const FOLLOW_MIN_ZOOM = 12, FOLLOW_MAX_ZOOM = 18;
 // Tope de tiles distintas a pedir para armar el mosaico de la cámara
 // dinámica. Si una carrera muy larga necesitaría más que esto al zoom
 // ideal, vamos bajando el zoom (mapa más "alejado") hasta que entre.
-const FOLLOW_MAX_TILES = 260;
+const FOLLOW_MAX_TILES = 180;
 
 // Plantilla de URL de las tiles, en una variable (no una constante) a
 // propósito: así un test puede redirigirla a un servidor local para poder
@@ -13198,10 +13200,10 @@ async function loadFollowMapForVideo(routeData){
     const results = await Promise.all(tiles.map(tl => loadTile(tl.tx, tl.ty)));
     if(results.every(img=>!img)) return null;
 
-    // Un canvas chico por tile (en vez de un mosaico gigante): una ruta en diagonal no desperdicia memoria en huecos vacíos y
-    // el video puede cubrir cualquier recorrido. Con pocas tiles las guardamos a más resolución (la tile @2x llega a 512px)
-    // para que el mapa se vea nítido en pantalla de alta densidad; con muchas, a menos para no pasarnos de memoria.
-    const res = tiles.length <= 80 ? 2*MAP_TILE_SIZE : (tiles.length <= 160 ? 1.5*MAP_TILE_SIZE : MAP_TILE_SIZE);
+    // Un canvas chico por tile (en vez de un mosaico gigante): una ruta en diagonal no desperdicia memoria en huecos vacíos y el
+    // video puede cubrir cualquier recorrido. A 256 px (1:1 con el video a 720x1280): guardarlas más grandes llegó a ocupar
+    // ~330 MB de memoria gráfica en un celular modesto, y eso lo dejaba lento y hasta cerraba la app.
+    const res = MAP_TILE_SIZE;
     const store = new Map();
     tiles.forEach((tl,i)=>{
       const img = results[i];
@@ -13240,7 +13242,7 @@ function closeDynamicVideo(){
   const progressEl = document.getElementById('rd-video-progress');
   if(overlay) overlay.style.display='none';
   if(video){ try{ video.pause(); }catch(e){} video.removeAttribute('src'); try{ video.load(); }catch(e){} video.style.display='none'; }
-  if(canvas) canvas.style.display='none';
+  if(canvas){ canvas.style.display='none'; canvas.style.width = ''; canvas.style.height = ''; canvas.style.maxHeight = ''; }
   if(actions) actions.style.display='none';
   if(progressEl) progressEl.textContent='';
 }
@@ -13268,14 +13270,14 @@ async function startDynamicVideo(runId){
   // dibujos que ya asumen coordenadas de 720x1280 caigan bien en el buffer más grande, sin
   // tocar ninguna otra cuenta de esta función. Tope en 2x (no el dpr real, que puede ser 3
   // en algunos celulares) para no disparar el costo de grabar+codificar un video enorme.
-  const W = canvas.width, H = canvas.height;
-  const ctx = canvas.getContext('2d');
-  const videoDpr = Math.min(window.devicePixelRatio || 1, 2);
-  if(videoDpr > 1){
-    canvas.width = W * videoDpr;
-    canvas.height = H * videoDpr;
-    ctx.scale(videoDpr, videoDpr);
-  }
+  // OJO: W/H son constantes, no canvas.width/height -- el buffer queda con la escala de la corrida anterior y, al generar un
+  // segundo video sin recargar, el tamaño lógico salía mal.
+  const W = 720, H = 1280;
+  const ctx = canvas.getContext('2d', {alpha:false});
+  const videoDpr = RD_VIDEO_SCALE;
+  canvas.width = Math.round(W * videoDpr);    // asignar el tamaño también reinicia el estado del contexto
+  canvas.height = Math.round(H * videoDpr);
+  if(videoDpr !== 1) ctx.scale(videoDpr, videoDpr);
 
   // El mapa ocupa TODO el cuadro (pantalla completa, como el video de Strava): el recuadro de la cámara es el canvas entero.
   const routeData = computeVideoRouteData(r, 0, 0, W, H, 0);
@@ -13295,6 +13297,9 @@ async function startDynamicVideo(runId){
   video.style.display='none'; video.removeAttribute('src');
   actions.style.display='none';
   canvas.style.display='block';
+  // Mientras se graba, el cuadro se muestra como miniatura: componer en pantalla un canvas grande en cada cuadro le quitaba casi la
+  // mitad de velocidad a un celular modesto (video "trabado"). La vista previa a tamaño completo es el <video> ya terminado.
+  canvas.style.width = '170px'; canvas.style.height = 'auto'; canvas.style.maxHeight = 'none';
   overlay.style.display='flex';
   progressEl.textContent = t('rd_video_generating');
 
@@ -13313,6 +13318,18 @@ async function startDynamicVideo(runId){
   const HOLD_MS = 1200;   // el último cuadro (con el total) queda un momento a la vista antes de cortar
   const FADE_IN_MS = 500;
   const runName = (r.name || '').trim().slice(0, 30);
+
+  // Puntos del trazado para DIBUJAR: se descartan los que quedan a menos de 3 px del anterior (el GPS da uno cada ~3 m y a esta
+  // escala sería más de uno por píxel) -- mismo dibujo, bastante menos trabajo por cuadro. Siempre se conservan el primero y el último.
+  const drawIdx = [0];
+  {
+    let lx = routeData.followProj[0].x, ly = routeData.followProj[0].y;
+    for(let i=1;i<routeData.followProj.length-1;i++){
+      const dx = routeData.followProj[i].x-lx, dy = routeData.followProj[i].y-ly;
+      if(dx*dx+dy*dy >= 9){ drawIdx.push(i); lx = routeData.followProj[i].x; ly = routeData.followProj[i].y; }
+    }
+    drawIdx.push(routeData.followProj.length-1);
+  }
 
   // Cámara: sigue al corredor con un suavizado corto (si no, los saltos del GPS hacen temblar el mapa).
   const cam = { x: null, y: null, t: 0 };
@@ -13360,18 +13377,27 @@ async function startDynamicVideo(runId){
     // trazado: la ruta que falta, finita y tenue; la ya recorrida, verde fluor con brillo
     try{
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      ctx.beginPath();
-      ctx.moveTo(fp[0].x-left, fp[0].y-top);
-      for(let i=1;i<fp.length;i++) ctx.lineTo(fp[i].x-left, fp[i].y-top);
+      // Solo se traza lo que cae dentro (o cerca) del cuadro: el recorrido completo son miles de vértices y la GPU de un celular
+      // modesto se ahogaba rasterizando trazos anchos que quedaban fuera de pantalla.
+      const tracePath = (lastIdx, headX, headY) => {
+        ctx.beginPath();
+        let pen = false, px = fp[0].x-left, py = fp[0].y-top;
+        let prevOn = px > -80 && px < W+80 && py > -80 && py < H+80;
+        for(let k=1;k<drawIdx.length && drawIdx[k]<=lastIdx;k++){
+          const q = fp[drawIdx[k]], x = q.x-left, y = q.y-top;
+          const on = x > -80 && x < W+80 && y > -80 && y < H+80;
+          if(on || prevOn){ if(!pen){ ctx.moveTo(px, py); pen = true; } ctx.lineTo(x, y); }
+          else pen = false;
+          px = x; py = y; prevOn = on;
+        }
+        if(headX !== undefined){ if(!pen) ctx.moveTo(px, py); ctx.lineTo(headX, headY); }
+      };
+      tracePath(fp.length, undefined, undefined);
       ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(255,255,255,0.26)';
       ctx.stroke();
 
-      ctx.beginPath();
-      ctx.moveTo(fp[0].x-left, fp[0].y-top);
-      for(let i=1;i<=cursor;i++) ctx.lineTo(fp[i].x-left, fp[i].y-top);
-      ctx.lineTo(posX-left, posY-top);
-      ctx.lineWidth = 26; ctx.strokeStyle = 'rgba(214,255,63,0.16)'; ctx.stroke();
-      ctx.lineWidth = 14; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.stroke();
+      tracePath(cursor, posX-left, posY-top);
+      ctx.lineWidth = 15; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.stroke();
       ctx.lineWidth = 9; ctx.strokeStyle = '#D6FF3F'; ctx.stroke();
 
       // salida y llegada
@@ -13481,8 +13507,107 @@ async function startDynamicVideo(runId){
   // fin, aunque el canvas se siga dibujando bien después.
   drawFrame(0, 0, 0, 0);
 
+  // Video terminado: lo muestra en la vista previa y habilita los botones.
+  function finishVideo(blob){
+    rdVideoState.blob = blob;
+    const url = URL.createObjectURL(blob);
+    rdVideoState.url = url;
+    canvas.style.display='none';
+    canvas.style.width = ''; canvas.style.height = ''; canvas.style.maxHeight = '';
+    video.src = url;
+    video.style.display='block';
+    video.play().catch(()=>{});
+    progressEl.textContent='';
+    actions.style.display='flex';
+    // Arrancamos en paralelo (sin esperar acá) el arreglo del contenedor del
+    // video del lado del servidor -- ver rdRemuxVideoIfNeeded. La vista previa
+    // ya se puede mostrar con el video tal cual sale de MediaRecorder porque
+    // <video> lo reproduce bien; el problema es sólo al exportarlo. Si para
+    // cuando el usuario aprieta compartir/descargar ya terminó, usamos el
+    // arreglado; si no, downloadDynamicVideo() lo espera un toque.
+    rdRemuxVideoIfNeeded();
+  }
+
+  // Camino principal: codificar cuadro a cuadro con WebCodecs ("sin conexión", no en tiempo real). Con MediaRecorder el video se
+  // graba en vivo, y un celular modesto que no llega a codificar 30 cuadros por segundo produce un video entrecortado y con la
+  // duración mal. Acá cada cuadro lleva su marca de tiempo exacta, así que el resultado sale parejo a 30 fps en cualquier equipo
+  // (solo tarda más en generarse). Además arma un MP4 completo (H.264) cuando el equipo lo permite, que aceptan Fotos, WhatsApp
+  // y cualquier galería sin pasar por el servidor. Devuelve false si el equipo no tiene WebCodecs: ahí se usa MediaRecorder.
+  async function encodeOffline(){
+    if(typeof VideoEncoder === 'undefined' || typeof VideoFrame === 'undefined') return false;
+    const FPS = 30, bw = canvas.width, bh = canvas.height;
+    const cands = [
+      {codec:'avc1.640028', mux:'mp4'}, {codec:'avc1.4d0028', mux:'mp4'}, {codec:'avc1.42001f', mux:'mp4'},
+      {codec:'vp09.00.10.08', mux:'webm'}, {codec:'vp8', mux:'webm'}   // VP9 primero: sus decodificadores por hardware son más comunes (en el celular de prueba VP8 se reproducía con 80% de cuadros perdidos, VP9 con 19%)
+    ];
+    let cfg = null;
+    for(const c of cands){
+      try{
+        const conf = {codec:c.codec, width:bw, height:bh, bitrate:3500000, framerate:FPS};
+        if(c.mux === 'mp4') conf.avc = {format:'avc'};
+        const r = await VideoEncoder.isConfigSupported(conf);
+        if(r && r.supported){ cfg = {codec:c.codec, mux:c.mux, conf}; break; }
+      }catch(e){}
+    }
+    if(!cfg) return false;
+    try{ await rdLoadScript(cfg.mux === 'mp4' ? 'vendor/mp4-muxer.js' : 'vendor/webm-muxer.js'); }catch(e){ return false; }
+    const M = cfg.mux === 'mp4' ? window.Mp4Muxer : window.WebMMuxer;
+    if(!M || !M.Muxer || !M.ArrayBufferTarget) return false;
+
+    let encErr = null, encoder = null;
+    try{
+      const target = new M.ArrayBufferTarget();
+      const muxer = new M.Muxer(cfg.mux === 'mp4'
+        ? {target, video:{codec:'avc', width:bw, height:bh}, fastStart:'in-memory'}
+        : {target, video:{codec: cfg.codec === 'vp8' ? 'V_VP8' : 'V_VP9', width:bw, height:bh, frameRate:FPS}});
+      encoder = new VideoEncoder({
+        output: (chunk, meta)=>{ try{ muxer.addVideoChunk(chunk, meta); }catch(e){ encErr = e; } },
+        error: (e)=>{ encErr = e; }
+      });
+      encoder.configure(cfg.conf);
+      rdVideoState = { recorder:null, cancelled:false, raf:null, url:null, blob:null, offline:true };
+
+      const nFrames = Math.ceil((ANIM_MS + HOLD_MS) / 1000 * FPS);
+      let cur = 0;
+      for(let i=0;i<nFrames;i++){
+        if(!rdVideoState || rdVideoState.cancelled){ try{ encoder.close(); }catch(e){} return true; }
+        if(encErr) throw encErr;
+        const el = i*1000/FPS;
+        const p = Math.min(1, el/ANIM_MS);
+        const virtualDist = p*totalDist;
+        while(cur < routeData.followProj.length-2 && routeData.cum[cur+1]<=virtualDist) cur++;
+        drawFrame(p, virtualDist, cur, el);
+        const vf = new VideoFrame(canvas, {timestamp: Math.round(i*1e6/FPS), duration: Math.round(1e6/FPS)});
+        encoder.encode(vf, {keyFrame: i % 60 === 0});
+        vf.close();
+        // no dejamos que se acumulen cuadros sin codificar (memoria) y cada tanto le damos aire a la pantalla
+        while(encoder.encodeQueueSize > 6) await new Promise(r=>setTimeout(r, 4));
+        if(i % 2 === 0){
+          progressEl.textContent = Math.round(i/nFrames*100)+'%';
+          await new Promise(r=>setTimeout(r, 0));
+        }
+      }
+      progressEl.textContent = t('rd_video_finishing');
+      await encoder.flush();
+      if(encErr) throw encErr;
+      muxer.finalize();
+      try{ encoder.close(); }catch(e){}
+      if(!rdVideoState || rdVideoState.cancelled) return true;
+      finishVideo(new Blob([target.buffer], {type: cfg.mux === 'mp4' ? 'video/mp4' : 'video/webm'}));
+      return true;
+    }catch(e){
+      console.warn('encodeOffline: falló, se usa MediaRecorder', e);
+      try{ if(encoder) encoder.close(); }catch(_){}
+      rdVideoState = null;
+      return false;
+    }
+  }
+  if(await encodeOffline()) return;
+
   let mimeType = '';
-  ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4'].forEach(c=>{
+  // VP8 primero: se codifica bastante más rápido que VP9 en un celular modesto (VP9 dejaba el video
+  // a ~17 cuadros por segundo). MP4/H.264 quedó de último recurso: en el celular de prueba grababa un archivo vacío.
+  ['video/webm;codecs=vp8','video/webm;codecs=vp9','video/webm','video/mp4'].forEach(c=>{
     if(!mimeType && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) mimeType=c;
   });
 
@@ -13515,23 +13640,7 @@ async function startDynamicVideo(runId){
 
   recorder.onstop = ()=>{
     if(!rdVideoState || rdVideoState.cancelled) return;
-    const blob = new Blob(chunks, {type: recordedMimeType});
-    rdVideoState.blob = blob;
-    const url = URL.createObjectURL(blob);
-    rdVideoState.url = url;
-    canvas.style.display='none';
-    video.src = url;
-    video.style.display='block';
-    video.play().catch(()=>{});
-    progressEl.textContent='';
-    actions.style.display='flex';
-    // Arrancamos en paralelo (sin esperar acá) el arreglo del contenedor del
-    // video del lado del servidor -- ver rdRemuxVideoIfNeeded. La vista previa
-    // ya se puede mostrar con el video tal cual sale de MediaRecorder porque
-    // <video> lo reproduce bien; el problema es sólo al exportarlo. Si para
-    // cuando el usuario aprieta compartir/descargar ya terminó, usamos el
-    // arreglado; si no, downloadDynamicVideo() lo espera un toque.
-    rdRemuxVideoIfNeeded();
+    finishVideo(new Blob(chunks, {type: recordedMimeType}));
   };
 
   recorder.start();
@@ -13565,10 +13674,24 @@ async function startDynamicVideo(runId){
 // celular sin una librería pesada. Si algo falla acá (sin sesión, sin datos
 // móviles en ese momento, el servidor tarda, etc.) nos quedamos con el video
 // original tal cual salió -- nunca dejamos al usuario sin nada.
+// Carga un script propio (carpeta vendor/) una sola vez.
+const rdScriptLoads = {};
+function rdLoadScript(src){
+  if(!rdScriptLoads[src]) rdScriptLoads[src] = new Promise((resolve, reject)=>{
+    const el = document.createElement('script');
+    el.src = src; el.onload = resolve; el.onerror = ()=>{ delete rdScriptLoads[src]; reject(new Error('no se pudo cargar '+src)); };
+    document.head.appendChild(el);
+  });
+  return rdScriptLoads[src];
+}
 async function rdRemuxVideoIfNeeded(){
   if(!rdVideoState || !rdVideoState.blob) return;
+  if(rdVideoState.offline) return;   // el MP4 armado con WebCodecs ya sale completo (moov al principio): no hace falta el servidor
   const blob = rdVideoState.blob;
   if(!(blob.type||'').includes('mp4')) return; // el problema es específico de MP4 (Safari); webm no lo necesita
+  // ...y solo de iPhone/Safari: el MP4 que graba Chrome (Android, escritorio) lo aceptan todas las galerías y apps tal cual.
+  const ua = navigator.userAgent || '';
+  if(!(/iPhone|iPad|iPod/.test(ua) || (/Safari/.test(ua) && !/Chrome|Chromium|Android/.test(ua)))) return;
   rdVideoState.remuxState = 'pending';
   try{
     const { data: { session } } = await supabaseClient.auth.getSession();
@@ -13589,15 +13712,17 @@ async function rdRemuxVideoIfNeeded(){
     if(rdVideoState) rdVideoState.remuxState = 'done';
   }
 }
-async function downloadDynamicVideo(){
-  if(!rdVideoState || !rdVideoState.blob) return;
+// Deja listo el archivo del video para compartirlo o guardarlo: espera (un rato acotado) a que termine el arreglo del servidor si
+// está en curso y arma el nombre con la extensión que corresponde al tipo real del video.
+async function rdPrepareVideoFile(buttonId){
+  if(!rdVideoState || !rdVideoState.blob) return null;
   if(rdVideoState.remuxState === 'pending'){
     // Le damos un margen a que termine de optimizarse en el servidor -- pero
     // no de más: si tarda mucho (sin datos móviles, servidor lento), preferimos
-    // compartir el original a dejar al usuario esperando sin poder hacer nada.
-    const downloadBtn = document.querySelector('#rd-video-actions .btn-primary');
-    const originalLabel = downloadBtn ? downloadBtn.textContent : '';
-    if(downloadBtn) downloadBtn.textContent = t('rd_video_optimizing');
+    // usar el original a dejar al usuario esperando sin poder hacer nada.
+    const btn = document.getElementById(buttonId);
+    const originalLabel = btn ? btn.textContent : '';
+    if(btn) btn.textContent = t('rd_video_optimizing');
     await Promise.race([
       new Promise(resolve=>{
         const iv = setInterval(()=>{
@@ -13606,50 +13731,84 @@ async function downloadDynamicVideo(){
       }),
       new Promise(resolve=>setTimeout(resolve, 6000))
     ]);
-    if(downloadBtn) downloadBtn.textContent = originalLabel;
+    if(btn) btn.textContent = originalLabel;
   }
-  if(!rdVideoState || !rdVideoState.blob) return;
+  if(!rdVideoState || !rdVideoState.blob) return null;
   const blob = rdVideoState.blob;
   const dateSlug = (rdCurrent && rdCurrent.r && rdCurrent.r.date ? rdCurrent.r.date : new Date().toISOString()).slice(0,10);
-  // La extensión del archivo tiene que coincidir con el tipo real del video
-  // grabado. Antes el nombre quedaba hardcodeado en ".webm" sin importar qué
-  // formato haya elegido MediaRecorder -- pero Safari/WKWebView (la app
-  // empaquetada de iOS) normalmente NO soporta grabar en webm y termina
-  // grabando en video/mp4. Un archivo "algo.webm" cuyo contenido real es MP4
-  // confunde al share sheet: por eso WhatsApp lo trataba como si "no
-  // existiera" (lo recibía pero no lo reconocía como un video válido).
+  // La extensión del archivo tiene que coincidir con el tipo real del video grabado: Safari/WKWebView (iPhone) graba
+  // en video/mp4; un "algo.webm" con contenido MP4 confunde al panel de compartir (WhatsApp lo trataba como inexistente).
   const mime = blob.type || 'video/webm';
   const ext = mime.includes('mp4') ? 'mp4' : (mime.includes('webm') ? 'webm' : 'mp4');
-  const fileName = `zancada-${dateSlug}.${ext}`;
-  if(isNativeApp()){
-    const Share = window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
-    const Filesystem = window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
-    if(Share && Filesystem){
-      try{
-        const base64 = await new Promise((resolve, reject)=>{
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(String(reader.result).split(',')[1]);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-        const written = await Filesystem.writeFile({ path: fileName, data: base64, directory: 'CACHE' });
-        await Share.share({ files: [written.uri], title: 'Zancada' });
-      }catch(e){ /* canceló el panel de compartir, o falló: no rompemos la pantalla */ }
-      return;
-    }
-  }
-  try{
-    const file = new File([blob], fileName, {type: mime});
-    if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
-      await navigator.share({files:[file], title:'Zancada'});
-      return;
-    }
-  }catch(e){ /* si el share falla o lo cancela, seguimos con la descarga directa */ }
+  return { blob, mime, fileName: `zancada-${dateSlug}.${ext}` };
+}
+function rdBlobToBase64(blob){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result).split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+// Descarga común del navegador (también la usa la app cuando no hay otra forma).
+function rdBrowserDownload(blob, fileName){
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = fileName;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(()=>URL.revokeObjectURL(url), 5000);
+}
+// Panel "Compartir" del sistema con el archivo (app: archivo en caché + Share; web: Web Share API). Devuelve false si no se pudo
+// ofrecer el panel (el llamador decide qué hacer).
+async function rdShareFile(f){
+  if(isNativeApp()){
+    const Share = window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
+    const Filesystem = window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
+    if(Share && Filesystem){
+      try{
+        const written = await Filesystem.writeFile({ path: f.fileName, data: await rdBlobToBase64(f.blob), directory: 'CACHE' });
+        await Share.share({ files: [written.uri], title: 'Zancada' });
+      }catch(e){ /* canceló el panel de compartir, o falló: no rompemos la pantalla */ }
+      return true;
+    }
+  }
+  try{
+    const file = new File([f.blob], f.fileName, {type: f.mime});
+    if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file], title:'Zancada'}); }catch(e){ /* canceló */ }
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+// Botón "Compartir"
+async function downloadDynamicVideo(){
+  const f = await rdPrepareVideoFile('rd-video-share');
+  if(!f) return;
+  if(await rdShareFile(f)) return;
+  // este navegador no sabe compartir archivos (Chrome de escritorio, Firefox...): se descarga y se avisa
+  showToast(t('rd_video_share_unavailable'));
+  rdBrowserDownload(f.blob, f.fileName);
+}
+// Botón "Descargar": en Android lo guarda en la galería (Movies/Zancada); en la web, descarga común; en iPhone, el panel del
+// sistema (que ofrece "Guardar video").
+async function saveDynamicVideo(){
+  const f = await rdPrepareVideoFile('rd-video-save');
+  if(!f) return;
+  if(isNativeApp()){
+    const Media = window.Capacitor.Plugins && window.Capacitor.Plugins.ZancadaMedia;
+    if(Media){
+      try{
+        await Media.saveVideo({ data: await rdBlobToBase64(f.blob), name: f.fileName, mime: f.mime });
+        showToast(t('rd_video_saved_gallery'), 'success');
+      }catch(e){ showToast(t('rd_video_save_error'), 'error'); }
+      return;
+    }
+    await rdShareFile(f);   // iPhone: el panel de compartir trae "Guardar video"
+    return;
+  }
+  rdBrowserDownload(f.blob, f.fileName);
+  showToast(t('rd_video_saved_file'));
 }
 function changeRunShoe(runId, newShoeId){
   const r = state.runs.find(x => String(x.id) === String(runId));
