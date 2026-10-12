@@ -1,11 +1,21 @@
 // api/_lib/weekly-summary.js
 //
-// Resumen de la semana que send-reminders.js (cron cada hora) manda el domingo a la noche, hora local de cada corredor:
+// Resumen de la semana que send-reminders.js (cron cada hora) manda el domingo entre las 19 y las 22, hora local de cada corredor:
 // kilómetros y salidas de la semana, comparación con la anterior, sesiones del plan cumplidas y racha. buildWeeklySummary es una
 // función pura (se prueba aparte); el cron solo decide a quién le toca y cómo se envía.
 
 const MI_PER_KM = 0.621371;
-const WEEKLY_HOUR = 20;   // domingo, 20:00 en el huso del corredor
+// El resumen se reparte en varias horas del domingo a la noche (hora local de cada corredor) en vez de mandarlo todo a las 20:00:
+// cada usuario tiene una hora fija (la saca de su id), así cada corrida del cron atiende a una cuarta parte y entra sin problema en
+// el tiempo máximo de la función. No hace falta recordar a quién ya se le mandó: su hora es siempre la misma.
+const WEEKLY_HOURS = [19, 20, 21, 22];
+function weeklySlotHour(userId) {
+  let h = 0;
+  for (const ch of String(userId)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return WEEKLY_HOURS[h % WEEKLY_HOURS.length];
+}
+// ¿A este usuario le toca el resumen ahora? (localHour: la hora actual en SU huso horario, en un domingo)
+function isWeeklySlot(userId, localHour) { return weeklySlotHour(userId) === localHour; }
 
 const L = {
   es: { title: 'Tu semana en Zancada', runs: n => n === 1 ? '1 salida' : `${n} salidas`, head: (d, r, delta) => `${d} en ${r}${delta ? ` (${delta} vs la semana anterior)` : ''}.`, sessions: (a, b) => `Sesiones del plan: ${a} de ${b}.`, streak: n => `Racha: ${n} semanas seguidas.` },
@@ -65,4 +75,4 @@ function buildWeeklySummary({ runs, plan, weekStart, streak, tz, lang, imperial,
   return { title: T.title, body: parts.join(' ') };
 }
 
-module.exports = { buildWeeklySummary, WEEKLY_HOUR, localDateKey };
+module.exports = { buildWeeklySummary, WEEKLY_HOURS, weeklySlotHour, isWeeklySlot, localDateKey };

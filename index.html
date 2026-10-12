@@ -2697,7 +2697,7 @@
   <section class="view" id="view-inicio">
     <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:14px 0 4px;">
       <p class="greeting" style="margin:0;"><span id="home-hi"></span> <span id="home-name" style="font-weight:800;">—</span> 👋</p>
-      <div class="streak-badge" id="home-streak-badge" style="display:none;"></div>
+      <div class="streak-badge" id="home-streak-badge" style="display:none; cursor:pointer;" onclick="openPreferencesOverlay()"></div>
       <div class="wx-chip" id="home-wx" style="display:none;"></div>
     </div>
 
@@ -3514,6 +3514,12 @@
         <div class="choice" data-v="time" data-i18n="ob_trainby_time"></div>
       </div>
       <p class="muted" style="margin-top:10px; font-size:12.5px; line-height:1.5;" data-i18n="trainby_tip"></p>
+    </div>
+    <div class="card" id="streak-pause-card" style="display:none;">
+      <h3 data-i18n="streak_pause_title"></h3>
+      <p class="muted" style="margin:0 0 12px; font-size:12.5px; line-height:1.5;" data-i18n="streak_pause_hint"></p>
+      <button class="btn btn-outline btn-sm" id="streak-pause-btn" style="width:100%;" onclick="toggleStreakPause()"></button>
+      <p class="muted" id="streak-pause-status" style="margin:10px 0 0; font-size:12.5px; line-height:1.5; display:none;"></p>
     </div>
     <div class="card" id="text-size-card" style="display:none;">
       <h3 data-i18n="perfil_textsize_title"></h3>

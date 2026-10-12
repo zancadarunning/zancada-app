@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T02:09:13Z';
+const APP_VERSION = '2026-10-12T02:15:12Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4554,6 +4554,46 @@ function getNextWeekPlan(){
   });
   return { plan, weekNumber: wn, weekStart: nextStartIso };
 }
+/* ---- Pausa de racha (lesión, enfermedad, viaje) ----
+   state.streakPause = {since: lunes (ISO) de la semana en que se pausó}. Mientras está activa (hasta STREAK_PAUSE_MAX_WEEKS semanas
+   desde ese lunes) una semana que no llega al 70% o un salto de semanas NO reinician la racha; si igual se cumple, sigue sumando. */
+const STREAK_PAUSE_MAX_WEEKS = 4;
+function streakPauseWeeks(refMondayIso){
+  const sp = state.streakPause;
+  if(!sp || !sp.since) return null;
+  return Math.round((new Date(refMondayIso) - new Date(sp.since)) / (7*864e5));
+}
+function streakPauseActive(refMondayIso){
+  const w = streakPauseWeeks(refMondayIso || getMondayISO(new Date()));
+  return w !== null && w >= 0 && w <= STREAK_PAUSE_MAX_WEEKS;
+}
+function toggleStreakPause(){
+  if(state.streakPause && streakPauseActive()){
+    state.streakPause = null;
+    showToast(t('streak_resumed_toast'), 'success');
+  } else {
+    state.streakPause = {since: getMondayISO(new Date())};
+    showToast(t('streak_paused_toast'), 'success');
+  }
+  persist();
+  renderStreakPauseCard();
+  try{ renderHome(); }catch(e){}
+}
+function renderStreakPauseCard(){
+  const card = document.getElementById('streak-pause-card');
+  if(!card) return;
+  if(state.streakPause && !streakPauseActive()) state.streakPause = null;   // la pausa ya venció
+  const paused = !!state.streakPause;
+  // sin una racha en curso no hay nada que proteger (salvo que ya esté en pausa, para poder retomarla)
+  card.style.display = (paused || (state.streakWeeks||0) >= 1) ? '' : 'none';
+  const btn = document.getElementById('streak-pause-btn');
+  if(btn) btn.textContent = t(paused ? 'streak_resume_btn' : 'streak_pause_btn');
+  const st = document.getElementById('streak-pause-status');
+  if(st){
+    st.style.display = paused ? 'block' : 'none';
+    if(paused) st.textContent = t('streak_pause_status', {date: new Date(state.streakPause.since + 'T12:00:00').toLocaleDateString(LOCALE_MAP[lang], {day:'numeric', month:'long'})});
+  }
+}
 function buildWeeklyRecapMessage(weekPlan, weekStartIso, diffWeeks){
   // Resumen factual de la semana que se cierra, sin juicio de valor (eso ya lo cubren
   // el ajuste automático y el aviso proactivo) -- así el corredor tiene noticias del
@@ -4587,12 +4627,23 @@ function buildWeeklyRecapMessage(weekPlan, weekStartIso, diffWeeks){
   // "¡vas racha de semanas!" en el mismo momento -- dos mensajes contradictorios -- y esa
   // racha inflada quedaba grabada para siempre en bestStreakWeeks (la pantalla de Logros).
   const brokeStreak = (diffWeeks||1) > 1;
-  state.streakWeeks = (metGoal && !brokeStreak) ? (state.streakWeeks||0)+1 : 0;
+  const pausedNow = streakPauseActive();
+  if(metGoal && !brokeStreak) state.streakWeeks = (state.streakWeeks||0)+1;
+  else if(pausedNow) { /* pausa de racha: se conserva tal cual */ }
+  else state.streakWeeks = 0;
   // Guardamos también la racha más larga alcanzada alguna vez (no solo la actual) --
   // la usa la pantalla de Logros para no perder un hito ya conseguido cuando la racha
   // en curso se corta.
   state.bestStreakWeeks = Math.max(state.bestStreakWeeks||0, state.streakWeeks);
-  if(state.streakWeeks >= 2){
+  if(pausedNow && !(metGoal && !brokeStreak)){
+    msg += ' ' + t('coach_streak_paused', {n: state.streakWeeks||0});
+  }
+  // la pausa se agota a las STREAK_PAUSE_MAX_WEEKS semanas: se limpia y se avisa
+  if(state.streakPause && (streakPauseWeeks(getMondayISO(new Date())) || 0) >= STREAK_PAUSE_MAX_WEEKS){
+    state.streakPause = null;
+    msg += ' ' + t('coach_streak_pause_ended');
+  }
+  if(state.streakWeeks >= 2 && !(pausedNow && !(metGoal && !brokeStreak))){
     msg += ' ' + t('coach_streak_line', {n: state.streakWeeks});
     setMascotExpression('excited', {priority:2, duration:2600});
     setMascotColor('good', {duration:3200});
@@ -6670,7 +6721,11 @@ function renderHome(){
   // coach, para no mostrar un badge "1" que se sienta como un contador vacío recién
   // arrancado.
   const streakBadge = document.getElementById('home-streak-badge');
-  if((state.streakWeeks||0) >= 2){
+  if(state.streakPause && !streakPauseActive()) state.streakPause = null;
+  if(state.streakPause && (state.streakWeeks||0) >= 1){
+    streakBadge.style.display = 'inline-flex';
+    streakBadge.textContent = t('home_streak_paused', {n: state.streakWeeks});
+  } else if((state.streakWeeks||0) >= 2){
     streakBadge.style.display = 'inline-flex';
     streakBadge.textContent = t('home_streak_badge', {n: state.streakWeeks});
   } else {
@@ -7863,7 +7918,7 @@ document.getElementById('textsize-toggle').addEventListener('click', async e => 
   [...document.getElementById('textsize-toggle').children].forEach(x => x.classList.toggle('active', x === c));
   try{ await p.setTextSize({mode: c.dataset.v}); }catch(err){}
 });
-function openPreferencesOverlay(){ renderTextSizeSetting(); openOverlaySheetEl(document.getElementById('preferences-overlay')); }
+function openPreferencesOverlay(){ renderTextSizeSetting(); renderStreakPauseCard(); openOverlaySheetEl(document.getElementById('preferences-overlay')); }
 function closePreferencesOverlay(){ document.getElementById('preferences-overlay').classList.remove('overlay-open'); }
 function openLangOverlay(){ openOverlaySheetEl(document.getElementById('lang-overlay')); }
 function closeLangOverlay(){ document.getElementById('lang-overlay').classList.remove('overlay-open'); }

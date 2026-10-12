@@ -2,7 +2,7 @@ const webpush = require('web-push');
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { sendFcmPush } = require('./_lib/fcm');
 const { isTrustedPushEndpoint } = require('./_lib/push-endpoint');
-const { buildWeeklySummary, WEEKLY_HOUR } = require('./_lib/weekly-summary');
+const { buildWeeklySummary, isWeeklySlot } = require('./_lib/weekly-summary');
 
 // ANTES este cron corría UNA vez por día a una hora fija en UTC (11:00 UTC, ver
 // vercel.json) -- pensada para que le llegue a las 8am a un corredor en Argentina
@@ -131,12 +131,12 @@ module.exports = withSentry(async (req, res) => {
 
     let sent = 0, skipped = 0, failed = 0;
     const due = [];
-    const weekly = [];   // a quién le toca el resumen semanal (domingo, 20:00 hora local)
+    const weekly = [];   // a quién le toca el resumen semanal (domingo, en la hora fija de cada uno entre las 19 y las 22, hora local)
     for (const row of (states || [])) {
       const subRow = subsByUser[row.user_id];
       if (!subRow) { skipped++; continue; }
       const wClock = localClock(row.tz || DEFAULT_TZ);
-      if (wClock.dayIdx === 6 && wClock.hour === WEEKLY_HOUR) weekly.push({ row, subRow });
+      if (wClock.dayIdx === 6 && isWeeklySlot(row.user_id, wClock.hour)) weekly.push({ row, subRow });
       const plan = row.plan;
       if (!plan || !plan.length) { skipped++; continue; }
 
@@ -225,15 +225,17 @@ module.exports = withSentry(async (req, res) => {
         if (sent > before) weeklySent++;
       } catch (e) { failed++; }
     }
-    // Tope de tiempo (la función serverless no puede pasarse): si a esa hora hay muchísimos usuarios, los que no alcanzan se quedan sin
-    // resumen esta semana (mejor eso que cortar la corrida a la mitad).
+    // Tope de tiempo (la función serverless no puede pasarse). Como el resumen ya se reparte en 4 horas, cada corrida atiende solo una
+    // cuarta parte; si aun así alguien no alcanza, queda contado en weeklyPending para verlo en los logs.
     const weeklyStart = Date.now();
     let nextWeekly = 0;
-    await Promise.all(Array.from({ length: Math.min(6, weekly.length) }, async () => {
+    await Promise.all(Array.from({ length: Math.min(8, weekly.length) }, async () => {
       while (nextWeekly < weekly.length && Date.now() - weeklyStart < 6000) { await sendWeekly(weekly[nextWeekly++]); }
     }));
+    const weeklyPending = Math.max(0, weekly.length - nextWeekly);
+    if (weeklyPending) console.warn('send-reminders: resumen semanal sin enviar por falta de tiempo:', weeklyPending);
 
-    res.status(200).json({ sent, skipped, failed, weeklySent });
+    res.status(200).json({ sent, skipped, failed, weeklySent, weeklyPending });
   } catch (err) {
     console.error('send-reminders error', err);
     await reportError(err, { endpoint: 'send-reminders' });

@@ -65,3 +65,63 @@ test('mapa de calor: el encuadre ignora una salida aislada en otra ciudad', () =
   assert.ok(b[0][0] < -34 && b[1][0] < -34, 'el encuadre se queda en Buenos Aires');
   assert.equal(JSON.stringify(app.heatmapFocusBounds([])), 'null');
 });
+
+// ---- reparto del resumen semanal en varias horas ----
+const { weeklySlotHour, isWeeklySlot, WEEKLY_HOURS } = require('../api/_lib/weekly-summary.js');
+
+test('resumen semanal: cada usuario tiene una hora fija entre las 19 y las 22, y el reparto es parejo', () => {
+  const counts = { 19: 0, 20: 0, 21: 0, 22: 0 };
+  for (let i = 0; i < 4000; i++) {
+    const id = `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`;
+    const h = weeklySlotHour(id);
+    assert.ok(WEEKLY_HOURS.includes(h));
+    assert.equal(weeklySlotHour(id), h, 'siempre la misma hora para el mismo usuario');
+    counts[h]++;
+  }
+  Object.values(counts).forEach(c => assert.ok(c > 800 && c < 1200, 'ninguna hora concentra más de ~30% de los usuarios: ' + JSON.stringify(counts)));
+  assert.equal(isWeeklySlot('abc', weeklySlotHour('abc')), true);
+  assert.equal(isWeeklySlot('abc', 8), false);
+});
+
+// ---- pausa de racha ----
+test('pausa de racha: una semana sin cumplir NO corta la racha mientras está en pausa, y sin pausa sí', () => {
+  const app = loadApp();
+  const monday = app.getMondayISO(new Date());
+  const plan = [{ dist: 8, status: 'skipped' }, { dist: 5 }, { dist: 0 }];
+  app.state.runs = [];
+
+  app.state.streakWeeks = 5; app.state.streakPause = null;
+  app.buildWeeklyRecapMessage(plan, monday, 1);
+  assert.equal(app.state.streakWeeks, 0, 'sin pausa se corta');
+
+  app.state.streakWeeks = 5; app.state.streakPause = { since: monday };
+  const msg = app.buildWeeklyRecapMessage(plan, monday, 1);
+  assert.equal(app.state.streakWeeks, 5, 'con pausa se conserva');
+  assert.match(msg, /⏸/);
+
+  // aunque el corredor haya desaparecido varias semanas (diffWeeks > 1), la pausa la sostiene
+  app.state.streakWeeks = 5; app.state.streakPause = { since: monday };
+  app.buildWeeklyRecapMessage(plan, monday, 3);
+  assert.equal(app.state.streakWeeks, 5);
+});
+
+test('pausa de racha: si igual cumple el plan sigue sumando; vence a las 4 semanas y se limpia', () => {
+  const app = loadApp();
+  const monday = app.getMondayISO(new Date());
+  const done = [{ dist: 8, status: 'done' }, { dist: 5, status: 'done' }];
+  app.state.runs = [];
+  app.state.streakWeeks = 3; app.state.streakPause = { since: monday };
+  app.buildWeeklyRecapMessage(done, monday, 1);
+  assert.equal(app.state.streakWeeks, 4, 'cumplió: suma aunque esté en pausa');
+
+  const old = new Date(Date.now() - 6 * 7 * 864e5);
+  app.state.streakPause = { since: app.getMondayISO(old) };
+  assert.equal(app.streakPauseActive(), false, 'una pausa de hace 6 semanas ya venció');
+
+  const fourWeeksAgo = app.getMondayISO(new Date(Date.now() - 4 * 7 * 864e5));
+  app.state.streakWeeks = 6; app.state.streakPause = { since: fourWeeksAgo };
+  assert.equal(app.streakPauseActive(), true, 'a las 4 semanas todavía cubre esa última semana');
+  app.buildWeeklyRecapMessage([{ dist: 8, status: 'skipped' }], monday, 1);
+  assert.equal(app.state.streakWeeks, 6);
+  assert.equal(app.state.streakPause, null, 'agotada: se limpia sola');
+});
