@@ -2467,6 +2467,8 @@
 
 
 
+
+
   /* =====================================================================================================================
      ZONAS DE FRECUENCIA CARDÍACA -- color fuerte en los dos temas (azul, verde, amarillo, naranja, rojo).
      Relleno vivo para barras, anillos, mapas y chips; el texto sobre fondo usa una variante legible por tema.
@@ -2495,6 +2497,7 @@
     --chalk:#1A1B16; --mist:#5A5D52; --mist-dim:#666A5E;
     /* Verde lima de marca: relleno #CDF51A con borde olive #6F8F00 para que se separe del papel, y texto #3A5300 (9:1 sobre blanco) */
     --hivis:#CDF51A; --hivis-edge:#6F8F00; --hivis-text:#3A5300; --hivis-dim:rgba(190,235,0,.30); --hivis-glow:rgba(160,200,0,.35);
+    --hivis-line:#86B000; --zone3-stroke:#D49A00;
     --volt:#D6FF3F; --pale-green:#F1FAC8; --pale-green-edge:#C4E24A;
     /* Zonas con color fuerte; el texto de zona usa variantes más oscuras */
     --zone1-fill:#2E86F0; --zone2-fill:#22B35A; --zone3-fill:#F2C200; --zone4-fill:#FF8A1F; --zone5-fill:#E5392F;
@@ -2555,8 +2558,31 @@
   :root[data-theme="light"] .pr-row.achieved .cup-handle{stroke:var(--hivis-edge);} :root[data-theme="light"] .pr-row.achieved .cup-body{stroke:var(--hivis-edge);}
   /* banner de marca nueva en el resumen */
   :root[data-theme="light"] .sum-pr{background:var(--pale-green); border-color:var(--pale-green-edge);}
-  /* el mapa de calor siempre es un mapa oscuro: sus filtros activos llevan el lima de marca */
-  :root[data-theme="light"] .heat-chip.on{background:var(--volt); border-color:var(--volt);}
+  /* ---- Mejoras del modo claro ---- */
+  /* trazos y barras finas en un lima más profundo: el lima vivo sobre blanco casi no se ve */
+  :root[data-theme="light"] .week-ring-fig .wr-fill{stroke:var(--hivis-line);}
+  :root[data-theme="light"] .ob-progress-fill, :root[data-theme="light"] .wearbar > div, :root[data-theme="light"] #goal-progress-bar, :root[data-theme="light"] #workout-guide-progress-bar{background:var(--hivis-line) !important;}
+  :root[data-theme="light"] .week-days .wd-col.today .wd-bar, :root[data-theme="light"] .trend-stroke.trend-today{background:var(--hivis-line); box-shadow:none;}
+  :root[data-theme="light"] header.top .brand .dot{background:var(--hivis-line); box-shadow:0 0 0 3px rgba(134,176,0,.22);}
+  :root[data-theme="light"] .switch input:checked + .switch-slider{background:var(--hivis-line);}
+  /* tarjetas con una sombra suave para separarlas del papel */
+  :root[data-theme="light"] .card{box-shadow:0 1px 2px rgba(30,30,10,.05), 0 10px 22px -14px rgba(30,30,10,.18);}
+  :root[data-theme="light"] .card.card-highlight, :root[data-theme="light"] .card-quiet, :root[data-theme="light"] .rp-entry{box-shadow:none;}
+  /* chips que se perdían sobre gris o crema */
+  :root[data-theme="light"] .tag-asfalto{background:rgba(134,176,0,.14); color:var(--hivis-text); box-shadow:inset 0 0 0 1px rgba(111,143,0,.28);}
+  :root[data-theme="light"] .wx-chip{box-shadow:inset 0 0 0 1px rgba(30,30,10,.10);}
+  :root[data-theme="light"] .streak-badge{background:var(--pale-green); box-shadow:inset 0 0 0 1px var(--pale-green-edge);}
+  /* mapa de calor en claro: mapa claro, textos oscuros, trazos naranja */
+  :root[data-theme="light"] .heat-overlay, :root[data-theme="light"] .heat-overlay .leaflet-container{background:#F5F5F0;}
+  :root[data-theme="light"] .heat-top{background:linear-gradient(to bottom, rgba(245,245,240,.96), rgba(245,245,240,0));}
+  :root[data-theme="light"] .heat-bottom{background:linear-gradient(to top, rgba(245,245,240,.97), rgba(245,245,240,0));}
+  :root[data-theme="light"] .heat-top h2, :root[data-theme="light"] .heat-stats{color:var(--chalk);}
+  :root[data-theme="light"] .heat-top p, :root[data-theme="light"] .heat-legend, :root[data-theme="light"] .heat-empty{color:var(--mist);}
+  :root[data-theme="light"] .heat-close{background:rgba(255,255,255,.94); color:var(--chalk); box-shadow:0 1px 4px rgba(0,0,0,.2);}
+  :root[data-theme="light"] .heat-chip{border-color:rgba(30,30,10,.18); background:rgba(255,255,255,.94); color:var(--chalk);}
+  :root[data-theme="light"] .heat-chip.on{background:var(--hivis); border-color:var(--hivis-edge); color:#0F1A00;}
+  :root[data-theme="light"] .heat-legend i{background:linear-gradient(to right, rgba(232,83,14,.2), #E8530E);}
+  :root[data-theme="light"] #heatmap-map::after{display:none;}
   /* la mascota conserva el lima de marca */
   :root[data-theme="light"] .mascot-body{fill:var(--volt);}
 
@@ -2567,6 +2593,7 @@
       --chalk:#1A1B16; --mist:#5A5D52; --mist-dim:#666A5E;
       /* Verde lima de marca: relleno #CDF51A con borde olive #6F8F00 para que se separe del papel, y texto #3A5300 (9:1 sobre blanco) */
       --hivis:#CDF51A; --hivis-edge:#6F8F00; --hivis-text:#3A5300; --hivis-dim:rgba(190,235,0,.30); --hivis-glow:rgba(160,200,0,.35);
+      --hivis-line:#86B000; --zone3-stroke:#D49A00;
       --volt:#D6FF3F; --pale-green:#F1FAC8; --pale-green-edge:#C4E24A;
       /* Zonas con color fuerte; el texto de zona usa variantes más oscuras */
       --zone1-fill:#2E86F0; --zone2-fill:#22B35A; --zone3-fill:#F2C200; --zone4-fill:#FF8A1F; --zone5-fill:#E5392F;
@@ -2627,8 +2654,31 @@
     :root:not([data-theme="dark"]) .pr-row.achieved .cup-handle{stroke:var(--hivis-edge);} :root:not([data-theme="dark"]) .pr-row.achieved .cup-body{stroke:var(--hivis-edge);}
     /* banner de marca nueva en el resumen */
     :root:not([data-theme="dark"]) .sum-pr{background:var(--pale-green); border-color:var(--pale-green-edge);}
-    /* el mapa de calor siempre es un mapa oscuro: sus filtros activos llevan el lima de marca */
-    :root:not([data-theme="dark"]) .heat-chip.on{background:var(--volt); border-color:var(--volt);}
+    /* ---- Mejoras del modo claro ---- */
+    /* trazos y barras finas en un lima más profundo: el lima vivo sobre blanco casi no se ve */
+    :root:not([data-theme="dark"]) .week-ring-fig .wr-fill{stroke:var(--hivis-line);}
+    :root:not([data-theme="dark"]) .ob-progress-fill, :root:not([data-theme="dark"]) .wearbar > div, :root:not([data-theme="dark"]) #goal-progress-bar, :root:not([data-theme="dark"]) #workout-guide-progress-bar{background:var(--hivis-line) !important;}
+    :root:not([data-theme="dark"]) .week-days .wd-col.today .wd-bar, :root:not([data-theme="dark"]) .trend-stroke.trend-today{background:var(--hivis-line); box-shadow:none;}
+    :root:not([data-theme="dark"]) header.top .brand .dot{background:var(--hivis-line); box-shadow:0 0 0 3px rgba(134,176,0,.22);}
+    :root:not([data-theme="dark"]) .switch input:checked + .switch-slider{background:var(--hivis-line);}
+    /* tarjetas con una sombra suave para separarlas del papel */
+    :root:not([data-theme="dark"]) .card{box-shadow:0 1px 2px rgba(30,30,10,.05), 0 10px 22px -14px rgba(30,30,10,.18);}
+    :root:not([data-theme="dark"]) .card.card-highlight, :root:not([data-theme="dark"]) .card-quiet, :root:not([data-theme="dark"]) .rp-entry{box-shadow:none;}
+    /* chips que se perdían sobre gris o crema */
+    :root:not([data-theme="dark"]) .tag-asfalto{background:rgba(134,176,0,.14); color:var(--hivis-text); box-shadow:inset 0 0 0 1px rgba(111,143,0,.28);}
+    :root:not([data-theme="dark"]) .wx-chip{box-shadow:inset 0 0 0 1px rgba(30,30,10,.10);}
+    :root:not([data-theme="dark"]) .streak-badge{background:var(--pale-green); box-shadow:inset 0 0 0 1px var(--pale-green-edge);}
+    /* mapa de calor en claro: mapa claro, textos oscuros, trazos naranja */
+    :root:not([data-theme="dark"]) .heat-overlay, :root:not([data-theme="dark"]) .heat-overlay .leaflet-container{background:#F5F5F0;}
+    :root:not([data-theme="dark"]) .heat-top{background:linear-gradient(to bottom, rgba(245,245,240,.96), rgba(245,245,240,0));}
+    :root:not([data-theme="dark"]) .heat-bottom{background:linear-gradient(to top, rgba(245,245,240,.97), rgba(245,245,240,0));}
+    :root:not([data-theme="dark"]) .heat-top h2, :root:not([data-theme="dark"]) .heat-stats{color:var(--chalk);}
+    :root:not([data-theme="dark"]) .heat-top p, :root:not([data-theme="dark"]) .heat-legend, :root:not([data-theme="dark"]) .heat-empty{color:var(--mist);}
+    :root:not([data-theme="dark"]) .heat-close{background:rgba(255,255,255,.94); color:var(--chalk); box-shadow:0 1px 4px rgba(0,0,0,.2);}
+    :root:not([data-theme="dark"]) .heat-chip{border-color:rgba(30,30,10,.18); background:rgba(255,255,255,.94); color:var(--chalk);}
+    :root:not([data-theme="dark"]) .heat-chip.on{background:var(--hivis); border-color:var(--hivis-edge); color:#0F1A00;}
+    :root:not([data-theme="dark"]) .heat-legend i{background:linear-gradient(to right, rgba(232,83,14,.2), #E8530E);}
+    :root:not([data-theme="dark"]) #heatmap-map::after{display:none;}
     /* la mascota conserva el lima de marca */
     :root:not([data-theme="dark"]) .mascot-body{fill:var(--volt);}
   

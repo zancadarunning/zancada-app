@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T19:04:54Z';
+const APP_VERSION = '2026-10-12T19:35:45Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2868,6 +2868,12 @@ function currentThemePref(){
   if(v==='light' || v==='dark') return v;
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 }
+// Barras del sistema de Android (estado y navegación): crema con íconos oscuros en claro, oscuras en oscuro.
+function syncSystemBars(){
+  const p = (typeof displayPlugin === 'function') ? displayPlugin() : null;
+  if(!p || !p.setSystemBars) return;
+  try{ p.setSystemBars({light: isLightThemeNow()}); }catch(e){}
+}
 function applyTheme(pref){
   try{ localStorage.setItem(THEME_KEY, pref); }catch(e){}
   if(pref==='light' || pref==='dark') document.documentElement.setAttribute('data-theme', pref);
@@ -2876,6 +2882,7 @@ function applyTheme(pref){
   const meta = document.getElementById('theme-color-meta');
   if(meta) meta.setAttribute('content', isLight ? '#F0F1EE' : '#0A0A0A');
   [...document.getElementById('theme-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v===pref));
+  syncSystemBars();
 }
 document.getElementById('theme-toggle').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
@@ -2894,8 +2901,10 @@ window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', ()
     const meta = document.getElementById('theme-color-meta');
     if(meta) meta.setAttribute('content', window.matchMedia('(prefers-color-scheme: light)').matches ? '#F0F1EE' : '#0A0A0A');
     [...document.getElementById('theme-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v===currentThemePref()));
+    syncSystemBars();
   }
 });
+setTimeout(syncSystemBars, 400);
 document.getElementById('ob-days').addEventListener('click', e=>{
   const c=e.target.closest('.day-pill'); if(!c) return;
   c.classList.toggle('active');
@@ -12554,9 +12563,19 @@ function updateHeatmapButton(){
   const b = document.getElementById('hist-heat-btn');
   if(b) b.style.display = heatmapRuns('all').length >= 2 ? 'flex' : 'none';
 }
+// El mapa de calor sigue el tema: mapa claro con trazos naranja, u oscuro con trazos lima. Si el tema cambió desde la última vez, se recrea.
+function heatPalette(){ return isLightThemeNow() ? {style:'light-v11', line:'#E8530E', glow:0.10, opacity:0.62} : {style:'navigation-night-v1', line:'#D6FF3F', glow:0.18, opacity:0.55}; }
 function openHeatmap(){
   const ov = document.getElementById('heatmap-overlay');
   if(!ov) return;
+  const light = isLightThemeNow();
+  if(heatLight !== null && heatLight !== light){
+    try{ if(heatGl){ heatGl.remove(); } }catch(e){}
+    try{ if(heatMap){ heatMap.remove(); } }catch(e){}
+    heatGl = null; heatMap = null; heatLayer = null;
+    document.getElementById('heatmap-map').innerHTML = '';
+  }
+  heatLight = light;
   ov.style.display = 'flex';
   renderHeatmap();
 }
@@ -12569,7 +12588,7 @@ function setHeatRange(k){
   document.querySelectorAll('#heatmap-chips .heat-chip').forEach(c => c.classList.toggle('on', c.dataset.r === k));
   renderHeatmap();
 }
-let heatGl = null;
+let heatGl = null, heatLight = null;
 // Mapa de calor vectorial: todas las carreras como una sola capa de líneas finas semitransparentes (al superponerse se suman y brillan).
 async function renderHeatmapGl(runs){
   if(!(await loadMapboxGl())) return false;
@@ -12582,12 +12601,13 @@ async function renderHeatmapGl(runs){
   const data = {type:'FeatureCollection', features};
   if(!heatGl){
     const el = document.getElementById('heatmap-map');
-    const map = newGlMap(el, 'navigation-night-v1');
+    const hp = heatPalette();
+    const map = newGlMap(el, hp.style);
     heatGl = glAdapter(map);
     heatGl.ready = new Promise(resolve => map.on('load', () => {
       map.addSource('heat', {type:'geojson', data});
-      map.addLayer({id:'heat', type:'line', source:'heat', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':'#D6FF3F','line-width':['interpolate',['linear'],['zoom'],10,1.5,15,3.5],'line-opacity':0.55}});
-      map.addLayer({id:'heat-glow', type:'line', source:'heat', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':'#D6FF3F','line-width':8,'line-blur':6,'line-opacity':0.18}}, 'heat');
+      map.addLayer({id:'heat', type:'line', source:'heat', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':hp.line,'line-width':['interpolate',['linear'],['zoom'],10,1.5,15,3.5],'line-opacity':hp.opacity}});
+      map.addLayer({id:'heat-glow', type:'line', source:'heat', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':hp.line,'line-width':8,'line-blur':6,'line-opacity':hp.glow}}, 'heat');
       resolve();
     }));
   } else {
@@ -12614,7 +12634,7 @@ function renderHeatmapRaster(runs){
   if(typeof L === 'undefined') return;
   if(!heatMap){
     heatMap = L.map('heatmap-map', {zoomControl:false, attributionControl:true, preferCanvas:true}).setView([0,0], 2);
-    mapboxTileLayer('navigation-night-v1').addTo(heatMap);
+    mapboxTileLayer(heatPalette().style).addTo(heatMap);
   }
   if(heatLayer){ heatLayer.remove(); heatLayer = null; }
   heatLayer = L.layerGroup().addTo(heatMap);
@@ -12624,7 +12644,7 @@ function renderHeatmapRaster(runs){
     const step = Math.max(1, Math.floor(r.points.length / 500));   // 500 puntos por carrera alcanzan de sobra para dibujar el trazo
     const ll = [];
     for(let i=0;i<r.points.length;i+=step){ const p = r.points[i]; if(Number.isFinite(p.lat) && Number.isFinite(p.lon)) ll.push([p.lat, p.lon]); }
-    if(ll.length > 1) L.polyline(ll, {color:'#D6FF3F', weight:2, opacity:0.32, lineCap:'round', lineJoin:'round', interactive:false}).addTo(heatLayer);
+    if(ll.length > 1) L.polyline(ll, {color:heatPalette().line, weight:2, opacity:isLightThemeNow() ? 0.5 : 0.32, lineCap:'round', lineJoin:'round', interactive:false}).addTo(heatLayer);
   });
   setTimeout(() => {
     heatMap.invalidateSize();
@@ -12790,6 +12810,11 @@ let rdCurrent = null;
 // en el tema claro es demasiado oscura para servir de fondo con --ink (igual de oscuro)
 // encima. --zoneN-fill son las mismas 5 tonalidades vívidas del tema oscuro en los dos
 // temas -- ver el comentario grande junto a --zone1-fill en el <style> de index.html.
+// Para LÍNEAS finas (ruta en el mapa): en claro la zona 3 usa un mostaza más oscuro; el resto igual que el relleno.
+function zoneStrokeVar(n){
+  const s = (getComputedStyle(document.documentElement).getPropertyValue('--zone'+n+'-stroke') || '').trim();
+  return s || zoneColorVar(n);
+}
 function zoneColorVar(n){
   return (getComputedStyle(document.documentElement).getPropertyValue('--zone'+n+'-fill') || '').trim() || '#8B9296';
 }
@@ -12933,7 +12958,7 @@ function buildColoredRouteSegments(r){
   // cortar smoothed en los mismos tramos.
   const smoothed = smoothRouteForDisplay(points);
   if(!r.splits || !r.splits.length || points.length<3){
-    return [{latlngs:catmullRomCurve(smoothed).map(p=>[p.lat,p.lon]), color: zoneColorVar(3)}];
+    return [{latlngs:catmullRomCurve(smoothed).map(p=>[p.lat,p.lon]), color: zoneStrokeVar(3)}];
   }
   const cum=[0];
   for(let i=1;i<points.length;i++) cum.push(cum[i-1]+haversine(points[i-1].lat,points[i-1].lon,points[i].lat,points[i].lon));
@@ -12949,11 +12974,11 @@ function buildColoredRouteSegments(r){
     if(chunk.length>=2){
       const zone = classifyPaceRelative(split.paceMin, avgPace);
       const curved = chunk.length>=3 ? catmullRomCurve(chunk) : chunk;
-      segs.push({latlngs:curved.map(p=>[p.lat,p.lon]), color: zoneColorVar(zone)});
+      segs.push({latlngs:curved.map(p=>[p.lat,p.lon]), color: zoneStrokeVar(zone)});
     }
     startIdx = idx;
   });
-  return segs.length ? segs : [{latlngs:catmullRomCurve(smoothed).map(p=>[p.lat,p.lon]), color: zoneColorVar(3)}];
+  return segs.length ? segs : [{latlngs:catmullRomCurve(smoothed).map(p=>[p.lat,p.lon]), color: zoneStrokeVar(3)}];
 }
 function isNativeApp(){
   return !!(typeof window !== 'undefined' && window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
