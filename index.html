@@ -950,6 +950,15 @@
     transition:transform .12s ease, background .12s ease;}
   .hist-add-btn:active{transform:scale(.88); background:var(--asphalt-4);}
   .hist-add-btn svg{width:16px; height:16px;}
+  /* Check-in de 3 toques (sueño / piernas / ánimo) */
+  .rd3-row{display:flex; align-items:center; gap:10px; margin-bottom:8px;}
+  .rd3-row:last-child{margin-bottom:0;}
+  .rd3-lbl{flex:0 0 62px; font-size:12.5px; font-weight:700; color:var(--mist);}
+  .rd3-row .choice-row{flex:1; min-width:0;}
+  .rd3-row .choice{padding-left:4px; padding-right:4px; font-size:13px;}
+  /* seguimiento de molestias */
+  .pain-evo{font-size:11.5px; color:var(--mist); margin-top:3px; line-height:1.45;}
+  .pain-evo b.better{color:var(--hivis-text);} .pain-evo b.worse{color:#E5736A;}
   /* Mapa de calor (todas las carreras con GPS superpuestas) */
   .heat-overlay{position:fixed; inset:0; z-index:60; background:#0e1114; display:none; flex-direction:column;}
   .heat-overlay #heatmap-map{position:absolute; inset:0;}
@@ -2744,6 +2753,16 @@
       <div class="recap-actions" style="margin-top:0;"><button class="btn btn-primary" onclick="applyReturnPlan()" data-i18n="return_btn"></button><button class="small-link" onclick="dismissReturnCard()" data-i18n="return_later"></button></div>
     </div>
 
+    <div class="card" id="home-pain-card" style="display:none; border-color:var(--hivis);">
+      <h3 style="margin:0 0 12px;" id="home-pain-title"></h3>
+      <div class="choice-row segmented" id="home-pain-choice">
+        <div class="choice" data-v="better" data-i18n="pain_trend_better"></div>
+        <div class="choice" data-v="same" data-i18n="pain_trend_same"></div>
+        <div class="choice" data-v="worse" data-i18n="pain_trend_worse"></div>
+      </div>
+      <div class="recap-actions" style="margin-top:10px;"><button class="small-link" onclick="dismissHomePain()" data-i18n="pain_home_later"></button></div>
+    </div>
+
     <div class="card" id="home-recal-card" style="display:none; border-color:var(--hivis);">
       <h3 style="margin:0 0 6px;" id="home-recal-title"></h3>
       <p class="muted" id="home-recal-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
@@ -2792,12 +2811,25 @@
     </div>
 
     <div class="card" id="readiness-card" style="display:none;">
-      <h3 style="margin:0 0 12px;" data-i18n="readiness_title"></h3>
-      <div class="choice-row segmented" id="readiness-choice">
-        <div class="choice" data-v="mal" data-i18n="readiness_bad"></div>
-        <div class="choice" data-v="regular" data-i18n="readiness_ok"></div>
-        <div class="choice" data-v="bien" data-i18n="readiness_good"></div>
-      </div>
+      <h3 style="margin:0 0 12px;" data-i18n="readiness_title3"></h3>
+      <div class="rd3-row"><span class="rd3-lbl" data-i18n="readiness_q_sleep"></span>
+        <div class="choice-row segmented" data-k="sleep">
+          <div class="choice" data-v="0" data-i18n="readiness_bad"></div>
+          <div class="choice" data-v="1" data-i18n="readiness_ok"></div>
+          <div class="choice" data-v="2" data-i18n="readiness_good"></div>
+        </div></div>
+      <div class="rd3-row"><span class="rd3-lbl" data-i18n="readiness_q_legs"></span>
+        <div class="choice-row segmented" data-k="legs">
+          <div class="choice" data-v="0" data-i18n="readiness_legs_0"></div>
+          <div class="choice" data-v="1" data-i18n="readiness_legs_1"></div>
+          <div class="choice" data-v="2" data-i18n="readiness_legs_2"></div>
+        </div></div>
+      <div class="rd3-row"><span class="rd3-lbl" data-i18n="readiness_q_mood"></span>
+        <div class="choice-row segmented" data-k="mood">
+          <div class="choice" data-v="0" data-i18n="readiness_mood_0"></div>
+          <div class="choice" data-v="1" data-i18n="readiness_mood_1"></div>
+          <div class="choice" data-v="2" data-i18n="readiness_mood_2"></div>
+        </div></div>
     </div>
 
     <div class="card" id="home-race-card" style="display:none;">
@@ -3659,6 +3691,7 @@
     <div class="card" style="margin-top:16px;">
       <div id="pain-log-list"></div>
       <button class="btn btn-outline btn-sm" style="margin-top:12px; width:100%;" data-i18n="pain_add_btn" onclick="openPainModal()"></button>
+      <button class="small-link" id="pain-share-btn" style="display:block; margin:14px auto 0;" data-i18n="pain_share_btn" onclick="sharePainSummary()"></button>
     </div>
   </div>
 
@@ -3779,6 +3812,21 @@
       <button class="btn btn-outline" style="flex:1;" onclick="closePainModal()" data-i18n="cancel_word"></button>
       <button class="btn btn-primary" style="flex:1;" onclick="savePainLog()" data-i18n="pain_save"></button>
     </div>
+  </div>
+
+  <div class="overlay" id="pain-update-modal" style="display:none; z-index:58;">
+    <h2 class="subtitle" style="font-size:22px;" id="pain-update-title"></h2>
+    <div class="choice-row segmented" id="pain-update-choice" style="margin-top:18px;">
+      <div class="choice" data-v="better" data-i18n="pain_trend_better"></div>
+      <div class="choice" data-v="same" data-i18n="pain_trend_same"></div>
+      <div class="choice" data-v="worse" data-i18n="pain_trend_worse"></div>
+    </div>
+    <textarea id="pain-update-note" rows="2" data-i18n-ph="pain_update_note_ph" data-i18n-aria="pain_update_note_ph" style="width:100%; margin-top:14px; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+    <div style="display:flex; gap:10px; margin-top:20px;">
+      <button class="btn btn-outline" style="flex:1;" onclick="closePainUpdate()" data-i18n="cancel_word"></button>
+      <button class="btn btn-primary" id="pain-update-save" style="flex:1;" onclick="savePainUpdate()" data-i18n="save_word"></button>
+    </div>
+    <button class="small-link" style="display:block; margin:16px auto 0;" onclick="resolveFromUpdate()" data-i18n="pain_update_resolved_btn"></button>
   </div>
 
   <div class="overlay" id="pain-info-modal" style="display:none; z-index:59;">

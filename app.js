@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T02:46:02Z';
+const APP_VERSION = '2026-10-12T02:54:58Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6619,7 +6619,7 @@ function startRecalibration(){
 }
 // Tarjetas de aviso de Inicio, de más a menos importante. Para que no se apilen arriba, se muestran como mucho dos a la vez: las
 // otras esperan su turno (reaparecen apenas se resuelve o se descarta una).
-var HOME_ALERT_IDS = ['home-test-missed', 'home-return-card', 'home-adjust-card', 'home-load-card', 'home-recal-card', 'home-recap-card'];
+var HOME_ALERT_IDS = ['home-test-missed', 'home-pain-card', 'home-return-card', 'home-adjust-card', 'home-load-card', 'home-recal-card', 'home-recap-card'];
 function limitHomeAlerts(max){
   let shown = 0;
   HOME_ALERT_IDS.forEach(id => {
@@ -6631,6 +6631,7 @@ function limitHomeAlerts(max){
 // Vuelve a dibujar todas las tarjetas de aviso (y aplica el tope de dos): lo usan los botones de descartar, para que el aviso que
 // estaba esperando aparezca apenas se libera un lugar.
 function refreshHomeAlerts(){
+  renderHomePain();
   renderHomeRecap();
   renderHomeRecal();
   renderHomeReturn();
@@ -6640,6 +6641,7 @@ function refreshHomeAlerts(){
   limitHomeAlerts(2);
 }
 function renderHome(){
+  renderHomePain();
   renderHomeRecap();
   renderHomeRecal();
   renderHomeReturn();
@@ -7501,11 +7503,31 @@ function saveCustomZones(){
    activa (ver activePainEntries) sube la "cautela" del plan -- ver trainingCaution() --
    y se le avisa al coach en cada mensaje (ver buildContext). */
 const PAIN_BODY_PARTS = ['rodilla','tobillo','pantorrilla','isquios','cadera','espalda','pie','cuadriceps','otro'];
-document.getElementById('readiness-choice').addEventListener('click', e=>{
+// Check-in de 3 toques (sueño / piernas / ánimo, cada uno 0 = mal a 2 = bien): al contestar los tres se guarda solo.
+document.getElementById('readiness-card').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
+  const row = c.parentElement; if(!row || !row.dataset.k) return;
   haptic(15);
-  logReadiness(c.dataset.v);
+  [...row.children].forEach(x => x.classList.toggle('active', x === c));
+  const sel = {};
+  document.querySelectorAll('#readiness-card [data-k]').forEach(r => { const a = r.querySelector('.choice.active'); if(a) sel[r.dataset.k] = Number(a.dataset.v); });
+  if(sel.sleep !== undefined && sel.legs !== undefined && sel.mood !== undefined) logReadiness(readinessQuality(sel), sel);
 });
+// De los tres toques sale la misma nota de siempre (mal / regular / bien): suma 0 a 6 -> hasta 2 mal, hasta 4 regular, 5 o más bien.
+function readinessQuality(sel){
+  const score = (sel.sleep||0) + (sel.legs||0) + (sel.mood||0);
+  return score <= 2 ? 'mal' : (score <= 4 ? 'regular' : 'bien');
+}
+// ¿Tres días seguidos (hoy incluido) con el check-in en "mal"?
+function readinessBadStreak(){
+  const log = state.readinessLog || [];
+  for(let i = 0; i < 3; i++){
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const e = log.find(r => r.date === localDateISO(d));
+    if(!e || e.quality !== 'mal') return false;
+  }
+  return true;
+}
 document.getElementById('pain-body-choice').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('pain-body-choice').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
@@ -7560,12 +7582,49 @@ function resolvePainLog(id){
   // que el corredor escribió el mensaje para pedir consejo específico).
   state.chat.push({role:'coach', text: t('coach_pain_resolved_msg', {part: t('pain_body_'+entry.bodyPart)}), ts:Date.now()});
   renderChat();
+  try{ refreshHomeAlerts(); }catch(e){}
+  // una molestia de una semana o más: se ofrece volver de a poco (después de guardar, para no bloquear)
+  const daysOut = Math.round((new Date(entry.resolvedDate + 'T00:00:00') - new Date(entry.date + 'T00:00:00')) / 864e5);
+  if(daysOut >= 7) setTimeout(() => { offerPainReturn(entry, daysOut); }, 400);
   // persist() al final, después del push al chat -- antes se llamaba justo después de
   // renderPainLog(), una línea antes de agregar este mensaje; movido para que el mensaje
   // nuevo quede guardado en la misma llamada, no en una futura (persist() no espera a que
   // termine el guardado remoto, así que un persist() anterior al push corría el riesgo real
   // de mandar el estado sin este mensaje todavía adentro).
   persist();
+}
+// Km semanales promedio de las 4 semanas ANTES de que empezara la molestia (la referencia de "lo que corrías")
+function painReturnBaseKm(entry){
+  const end = new Date(entry.date + 'T00:00:00').getTime(), start = end - 28 * 864e5;
+  const km = (state.runs || []).reduce((s, r) => { const d = new Date(r.date).getTime(); return (d >= start && d < end) ? s + (r.distanceKm || 0) : s; }, 0);
+  return km / 4;
+}
+// ¿Corresponde ofrecer el regreso gradual? Solo con plan por distancia, sin otro regreso en curso y con una base real de antes (>= 5 km/semana).
+function painReturnEligible(entry){
+  const p = state.profile;
+  if(!state.onboarded || !p || p.returningFromBreak || p.trainBy === 'time') return null;
+  const base = painReturnBaseKm(entry);
+  return base >= 5 ? base : null;
+}
+async function offerPainReturn(entry, daysOut){
+  const base = painReturnEligible(entry);
+  if(base === null) return;
+  if(!(await showConfirm(t('painreturn_confirm', {days: daysOut, part: t('pain_body_' + entry.bodyPart).toLowerCase()})))) return;
+  applyPainReturn(entry, base);
+}
+// Mismo mecanismo que el regreso de una pausa (applyReturnPlan): arranca al 60% del volumen de antes, progresa más lento y se gradúa solo.
+function applyPainReturn(entry, base){
+  const p = state.profile;
+  p.returningFromBreak = true;
+  p.currentWeeklyKm = Math.max(5, Math.round(base));
+  p.weeklyKm = calcWeeklyKm(p);
+  state.plan = preserveLivedDays(state.plan, generatePlan(p, state.weekNumber || 1));
+  state.breakAdjLastRunMs = lastRunTimeMs();     // que no aparezca además el aviso de "volver de una pausa"
+  state.chat.push({role: 'coach', text: t('painreturn_done_msg'), ts: Date.now()});
+  renderChat();
+  renderAll();
+  persist();
+  showToast(t('painreturn_toast'), 'success');
 }
 async function deletePainLog(id){
   if(!(await showConfirm(t('confirm_delete'), {danger:true, confirmText:t('delete_word')}))) return;
@@ -7597,6 +7656,121 @@ function checkPainCheckins(){
   });
   if(sentAny){ renderChat(); persist(); }
 }
+/* ---- Seguimiento de una molestia: cada entrada de painLog puede tener updates = [{date, trend: 'better'|'same'|'worse', note}] ---- */
+function painShortDate(iso){ return new Date(iso + 'T00:00:00').toLocaleDateString(LOCALE_MAP[lang], {day:'numeric', month:'short'}); }
+// Último día en que se tocó la molestia: la carga o su última actualización
+function painLastTouchISO(p){ const u = p.updates || []; return u.length ? u[u.length-1].date : p.date; }
+function painDaysSince(iso){ return Math.floor((new Date(todayISO() + 'T00:00:00') - new Date(iso + 'T00:00:00')) / 864e5); }
+// Línea de evolución: las últimas actualizaciones, de la más vieja a la más nueva
+function painEvolutionHtml(p){
+  const u = (p.updates || []).slice(-5);
+  if(!u.length) return '';
+  return '<div class="pain-evo">' + t('pain_evolution') + ': ' + u.map(x => painShortDate(x.date) + ' <b class="' + (x.trend === 'better' ? 'better' : (x.trend === 'worse' ? 'worse' : '')) + '">' + t('pain_trend_' + x.trend) + '</b>').join(' → ') + '</div>';
+}
+let painUpdateId = null, painUpdateTrend = null;
+function openPainUpdate(id){
+  const p = (state.painLog || []).find(x => String(x.id) === String(id));
+  if(!p) return;
+  painUpdateId = p.id; painUpdateTrend = null;
+  document.getElementById('pain-update-title').textContent = t('pain_update_title', {part: t('pain_body_' + p.bodyPart).toLowerCase()});
+  document.getElementById('pain-update-note').value = '';
+  [...document.getElementById('pain-update-choice').children].forEach(c => c.classList.remove('active'));
+  document.getElementById('pain-update-save').disabled = true;
+  document.getElementById('pain-update-modal').style.display = 'block';
+}
+function closePainUpdate(){ document.getElementById('pain-update-modal').style.display = 'none'; painUpdateId = null; }
+document.getElementById('pain-update-choice').addEventListener('click', e => {
+  const c = e.target.closest('.choice'); if(!c) return;
+  painUpdateTrend = c.dataset.v;
+  [...document.getElementById('pain-update-choice').children].forEach(x => x.classList.toggle('active', x === c));
+  document.getElementById('pain-update-save').disabled = false;
+});
+function savePainUpdate(){
+  if(painUpdateId === null || !painUpdateTrend) return;
+  const note = document.getElementById('pain-update-note').value.trim().slice(0, 200);
+  const id = painUpdateId;
+  closePainUpdate();
+  applyPainUpdate(id, painUpdateTrend, note);
+}
+function resolveFromUpdate(){
+  const id = painUpdateId;
+  closePainUpdate();
+  if(id !== null) resolvePainLog(id);
+}
+// Guarda una actualización (desde el modal o desde la tarjeta de Inicio). Dos "peor" seguidas -> aviso del coach de frenar y consultar.
+function applyPainUpdate(id, trend, note){
+  const p = (state.painLog || []).find(x => String(x.id) === String(id));
+  if(!p) return;
+  if(!p.updates) p.updates = [];
+  const prev = p.updates[p.updates.length - 1];
+  p.updates.push({date: todayISO(), trend, note: note || ''});
+  if(p.updates.length > 30) p.updates = p.updates.slice(-30);
+  delete p.snoozeUntil;
+  if(trend === 'worse' && prev && prev.trend === 'worse'){
+    state.chat.push({role:'coach', text: t('pain_worse_twice_msg', {part: t('pain_body_' + p.bodyPart).toLowerCase()}), ts: Date.now()});
+    renderChat();
+  }
+  renderPainLog();
+  try{ refreshHomeAlerts(); }catch(e){}
+  persist();
+  showToast(t('pain_update_saved'), 'success');
+}
+// Tarjeta de Inicio: ¿cómo sigue? -- para la molestia activa que hace 4 días o más que nadie toca (y tiene menos de 2 meses)
+function painFollowupCandidate(){
+  const today = todayISO();
+  return (state.painLog || [])
+    .filter(p => p.active && painDaysSince(p.date) <= 60 && painDaysSince(painLastTouchISO(p)) >= 4 && !(p.snoozeUntil && p.snoozeUntil > today))
+    .sort((a, b) => painLastTouchISO(a).localeCompare(painLastTouchISO(b)))[0] || null;
+}
+function renderHomePain(){
+  const el = document.getElementById('home-pain-card');
+  if(!el) return;
+  const p = state.onboarded ? painFollowupCandidate() : null;
+  if(!p){ el.style.display = 'none'; return; }
+  document.getElementById('home-pain-title').textContent = t('pain_home_title', {part: t('pain_body_' + p.bodyPart).toLowerCase()});
+  [...document.getElementById('home-pain-choice').children].forEach(c => c.classList.remove('active'));
+  el.style.display = 'block';
+}
+document.getElementById('home-pain-choice').addEventListener('click', e => {
+  const c = e.target.closest('.choice'); if(!c) return;
+  const p = painFollowupCandidate();
+  if(p) applyPainUpdate(p.id, c.dataset.v, '');
+});
+function dismissHomePain(){
+  const p = painFollowupCandidate();
+  if(!p) return;
+  const d = new Date(); d.setDate(d.getDate() + 2);
+  p.snoozeUntil = localDateISO(d);
+  persist();
+  refreshHomeAlerts();
+}
+// Resumen en texto de las molestias (últimos 90 días + las activas) para llevarle al kinesiólogo o médico
+function buildPainSummaryText(){
+  const today = todayISO();
+  const entries = (state.painLog || []).filter(p => p.active || painDaysSince(p.date) <= 90).sort((a, b) => a.date.localeCompare(b.date));
+  const name = (state.profile && state.profile.name) || '';
+  const lines = [t('ps_title', {name})];
+  if(!entries.length){ lines.push('', t('ps_none')); return lines.join('\n'); }
+  entries.forEach(p => {
+    const end = p.active ? today : (p.resolvedDate || today);
+    const runs = (state.runs || []).filter(r => { const d = localDateISO(r.date); return d >= p.date && d <= end; });
+    const km = runs.reduce((s, r) => s + (r.distanceKm || 0), 0);
+    lines.push('', t('ps_entry', {part: t('pain_body_' + p.bodyPart), date: painShortDate(p.date), status: p.active ? t('pain_active_tag') : t('pain_resolved_tag') + (p.resolvedDate ? ' (' + painShortDate(p.resolvedDate) + ')' : '')}));
+    if(p.note) lines.push(t('ps_note') + ': ' + p.note);
+    (p.updates || []).forEach(u => lines.push('  ' + painShortDate(u.date) + ' — ' + t('pain_trend_' + u.trend) + (u.note ? ': ' + u.note : '')));
+    lines.push(runs.length ? t('ps_runs', {n: runs.length, km: fmtDist(km, 1) + ' ' + distUnit()}) : t('ps_no_runs'));
+  });
+  return lines.join('\n');
+}
+async function sharePainSummary(){
+  const text = buildPainSummaryText();
+  try{
+    const Share = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
+    if(Share){ await Share.share({text, title: 'Zancada'}); return; }
+    if(navigator.share){ await navigator.share({text, title: 'Zancada'}); return; }
+  }catch(e){ return; /* canceló */ }
+  try{ await navigator.clipboard.writeText(text); showToast(t('pain_share_copied'), 'success'); }catch(e){}
+}
 function renderPainLog(){
   const el = document.getElementById('pain-log-list');
   const entries = (state.painLog||[]).slice().reverse();
@@ -7610,17 +7784,18 @@ function renderPainLog(){
   if(!entries.length){ el.innerHTML = `<p class="muted" style="text-align:center; padding:8px 0;">${t('pain_list_empty')}</p>`; return; }
   el.innerHTML = entries.map(p=>{
     const dateStr = new Date(p.date+'T00:00:00').toLocaleDateString(LOCALE_MAP[lang], {day:'numeric', month:'short'});
-    return `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:10px 0; border-bottom:1px solid var(--asphalt-3);">
-      <div style="min-width:0;">
+    return `<div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; padding:10px 0; border-bottom:1px solid var(--asphalt-3);">
+      <div style="min-width:0; flex:1 1 100%;">
         <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
           <span style="font-weight:700; font-size:13.5px;">${t('pain_body_'+p.bodyPart)}</span>
           <span class="tag tag-${p.active?'load-caution':'asfalto'}">${p.active ? t('pain_active_tag') : t('pain_resolved_tag')}</span>
         </div>
         <div class="muted" style="font-size:12px; margin-top:2px;">${dateStr}${p.note?' · '+escapeHtml(p.note):''}</div>
+        ${painEvolutionHtml(p)}
       </div>
-      <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
-        ${p.active ? `<button class="small-link" onclick="resolvePainLog(${p.id})" style="font-size:11.5px; padding:4px 2px;">${t('pain_resolve_btn')}</button>` : ''}
-        <button onclick="deletePainLog(${p.id})" aria-label="${t('aria_delete')}" style="background:none; border:none; color:var(--mist-dim); cursor:pointer; padding:4px; display:flex;"><span class="icon-sq" style="width:16px; height:16px;">${ICONS.trash}</span></button>
+      <div style="display:flex; align-items:center; gap:14px; flex:1 1 100%;">
+        ${p.active ? `<button class="small-link" onclick="openPainUpdate(${p.id})" style="font-size:11.5px; padding:4px 2px;">${t('pain_update_btn')}</button><button class="small-link" onclick="resolvePainLog(${p.id})" style="font-size:11.5px; padding:4px 2px;">${t('pain_resolve_btn')}</button>` : ''}
+        <button onclick="deletePainLog(${p.id})" aria-label="${t('aria_delete')}" style="margin-left:auto; background:none; border:none; color:var(--mist-dim); cursor:pointer; padding:4px; display:flex;"><span class="icon-sq" style="width:16px; height:16px;">${ICONS.trash}</span></button>
       </div>
     </div>`;
   }).join('');
@@ -7671,7 +7846,9 @@ function todayReadinessEntry(){
 function renderReadinessCard(){
   const card = document.getElementById('readiness-card');
   if(!card) return;
-  card.style.display = (state.onboarded && !todayReadinessEntry()) ? 'block' : 'none';
+  const show = state.onboarded && !todayReadinessEntry();
+  if(show) card.querySelectorAll('.choice.active').forEach(c => c.classList.remove('active'));   // arranca limpio cada día
+  card.style.display = show ? 'block' : 'none';
 }
 function lowerTodaySession(pct){
   const idx = (new Date().getDay()+6)%7;
@@ -7682,10 +7859,10 @@ function lowerTodaySession(pct){
   renderPlan(); renderHome();
   return true;
 }
-async function logReadiness(quality){
+async function logReadiness(quality, detail){
   if(!state.readinessLog) state.readinessLog = [];
   state.readinessLog = state.readinessLog.filter(r=>r.date !== todayISO());
-  state.readinessLog.push({date: todayISO(), quality});
+  state.readinessLog.push(detail ? {date: todayISO(), quality, sleep: detail.sleep, legs: detail.legs, mood: detail.mood} : {date: todayISO(), quality});
   // no hace falta guardar esto para siempre -- alcanza con una ventana razonable
   if(state.readinessLog.length > 60) state.readinessLog = state.readinessLog.slice(-60);
   renderReadinessCard();
@@ -7700,10 +7877,18 @@ async function logReadiness(quality){
       lowerTodaySession(-15);
       await persist();
     }
+    // tres días seguidos mal: en vez de la charla de siempre, un aviso enlatado que sugiere descansar o aflojar la semana (una vez por día)
+    if(readinessBadStreak() && state.readinessStreakMsgDate !== todayISO()){
+      state.readinessStreakMsgDate = todayISO();
+      state.chat.push({role:'coach', text: t('readiness_streak_msg'), ts:Date.now()});
+      renderChat(); persist();
+      return;
+    }
     // le avisamos al coach en el momento, tenga o no sesión hoy -- así puede
     // tenerlo en cuenta si le preguntan algo en la charla.
     const chatInput = document.getElementById('chatInput');
-    if(chatInput){ chatInput.value = t('readiness_chat_bad'); sendChat(); }
+    const sleepWord = detail ? t(['readiness_bad','readiness_ok','readiness_good'][detail.sleep]).toLowerCase() : '';
+    if(chatInput){ chatInput.value = detail ? t('readiness_chat_bad3', {sleep: sleepWord, legs: t('readiness_legs_'+detail.legs).toLowerCase(), mood: t('readiness_mood_'+detail.mood).toLowerCase()}) : t('readiness_chat_bad'); sendChat(); }
   }
 }
 
@@ -14410,7 +14595,7 @@ function buildContext(){
   const activePains = activePainEntries();
   if(activePains.length) ctx += ` Molestias activas registradas por el corredor: ${activePains.map(pa=>`${t('pain_body_'+pa.bodyPart)} (desde ${pa.date}${pa.note?', nota: "'+pa.note+'"':''})`).join('; ')}. Tenelas en cuenta al sugerir ejercicios y preguntá cómo siguen si corresponde.`;
   const todayReadiness = todayReadinessEntry();
-  if(todayReadiness) ctx += ` Check-in de hoy sobre cómo durmió/energía: ${todayReadiness.quality}.`;
+  if(todayReadiness) ctx += ` Check-in de hoy sobre cómo durmió/energía: ${todayReadiness.quality}.` + (todayReadiness.sleep !== undefined ? ` (detalle de 0 = mal a 2 = bien: sueño ${todayReadiness.sleep}, piernas ${todayReadiness.legs}, ánimo ${todayReadiness.mood}.)` : '');
   if(state.event) ctx += ` Carrera cargada en "Próximos eventos" (informativa, no es necesariamente la carrera objetivo del perfil): ${state.event.name} (${state.event.type}) el ${state.event.date}.`;
   if(state.runs.length){
     // En vez de solo la última carrera, le damos al coach una tendencia real: las

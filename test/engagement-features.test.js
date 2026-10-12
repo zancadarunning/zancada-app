@@ -499,6 +499,7 @@ test('avisos de Inicio: se muestran como mucho dos a la vez, por prioridad', () 
   const els = {};
   app.HOME_ALERT_IDS.forEach(id => { els[id] = { style: { display: 'block' } }; });
   els['home-load-card'].style.display = 'none';   // ese no está activo
+  els['home-pain-card'].style.display = 'none';
   app.document.getElementById = (id) => els[id] || { style: { display: 'none' } };
   app.limitHomeAlerts(2);
   const visible = app.HOME_ALERT_IDS.filter(id => els[id].style.display === 'block');
@@ -565,4 +566,82 @@ test('frase de la carrera: ningún texto queda con un {marcador} sin reemplazar'
     app.computeRunHighlight(hlRun(app, 'n', 0, 10, 6, sp([6, 6, 6, 6])), [hlRun(app, 'a', 30, 5, 6), hlRun(app, 'b', 20, 6, 6), hlRun(app, 'c', 10, 8, 6)])
   ];
   for (const h of cases) { assert.ok(h, 'hay frase'); assert.doesNotMatch(app.t(h.key, h.vars), /[{}]/, h.key); }
+});
+
+// ---- check-in de 3 toques, seguimiento de molestias y regreso gradual ----
+test('check-in de 3 toques: la nota sale de la suma (hasta 2 mal, hasta 4 regular, 5+ bien)', () => {
+  const app = loadApp();
+  const q = (s, l, m) => app.readinessQuality({ sleep: s, legs: l, mood: m });
+  assert.equal(q(0, 0, 0), 'mal');
+  assert.equal(q(1, 1, 0), 'mal');
+  assert.equal(q(1, 1, 1), 'regular');
+  assert.equal(q(2, 1, 1), 'regular');
+  assert.equal(q(2, 2, 1), 'bien');
+  assert.equal(q(2, 2, 2), 'bien');
+});
+
+test('check-in: tres días seguidos en "mal" se detecta, con uno en medio que no, no', () => {
+  const app = loadApp();
+  const day = n => { const d = new Date(); d.setDate(d.getDate() - n); return app.localDateISO(d); };
+  app.state.readinessLog = [{ date: day(0), quality: 'mal' }, { date: day(1), quality: 'mal' }, { date: day(2), quality: 'mal' }];
+  assert.equal(app.readinessBadStreak(), true);
+  app.state.readinessLog[1].quality = 'regular';
+  assert.equal(app.readinessBadStreak(), false);
+  app.state.readinessLog = [{ date: day(0), quality: 'mal' }, { date: day(1), quality: 'mal' }];
+  assert.equal(app.readinessBadStreak(), false, 'faltan datos de un día');
+});
+
+test('seguimiento de molestias: candidata para la tarjeta de Inicio (activa, 4+ días sin tocar, no pospuesta)', () => {
+  const app = loadApp();
+  app.state.onboarded = true;
+  const iso = n => { const d = new Date(); d.setDate(d.getDate() - n); return app.localDateISO(d); };
+  app.state.painLog = [
+    { id: 1, date: iso(10), bodyPart: 'rodilla', active: true },
+    { id: 2, date: iso(2), bodyPart: 'tobillo', active: true },
+    { id: 3, date: iso(20), bodyPart: 'pie', active: false },
+    { id: 4, date: iso(90), bodyPart: 'cadera', active: true }
+  ];
+  assert.equal(app.painFollowupCandidate().id, 1, 'la rodilla: activa y hace 10 días que nadie la toca');
+  app.state.painLog[0].updates = [{ date: iso(1), trend: 'same' }];
+  assert.equal(app.painFollowupCandidate(), null, 'actualizada ayer: ya no toca preguntar (el tobillo es de hace 2 días, la cadera de hace más de 60)');
+  app.state.painLog[0].updates = [{ date: iso(6), trend: 'same' }];
+  app.state.painLog[0].snoozeUntil = iso(-1);
+  assert.equal(app.painFollowupCandidate(), null, 'pospuesta hasta mañana');
+});
+
+test('seguimiento: dos "peor" seguidas mandan el aviso del coach; el resumen para el kinesiólogo cuenta las salidas del período', () => {
+  const app = loadApp();
+  const iso = n => { const d = new Date(); d.setDate(d.getDate() - n); return app.localDateISO(d); };
+  app.state.profile = { name: 'Lu' };
+  app.state.chat = []; app.state.painLog = [{ id: 7, date: iso(10), bodyPart: 'rodilla', note: 'al bajar escaleras', active: true }];
+  app.state.runs = [{ id: 'r1', date: new Date(Date.now() - 5 * 864e5).toISOString(), distanceKm: 5, durationSec: 1800 }, { id: 'r0', date: new Date(Date.now() - 30 * 864e5).toISOString(), distanceKm: 9, durationSec: 3000 }];
+  app.applyPainUpdate(7, 'worse', 'dolió más');
+  assert.equal(app.state.chat.length, 0, 'una sola vez: sin aviso');
+  app.applyPainUpdate(7, 'worse', '');
+  assert.equal(app.state.chat.length, 1, 'dos seguidas: aviso');
+  assert.equal(app.state.painLog[0].updates.length, 2);
+  const txt = app.buildPainSummaryText();
+  assert.match(txt, /Lu/);
+  assert.match(txt, /al bajar escaleras/);
+  assert.match(txt, /dolió más/);
+  assert.match(txt, /1 salidas \(5\.0 km\)/, 'solo la carrera de dentro del período');
+});
+
+test('regreso gradual: base = promedio de 4 semanas ANTES de la molestia; solo si hay base real, plan por distancia y sin otro regreso', () => {
+  const app = loadApp();
+  const iso = n => { const d = new Date(); d.setDate(d.getDate() - n); return app.localDateISO(d); };
+  const run = (daysAgo, km) => ({ id: 'r' + daysAgo, date: new Date(Date.now() - daysAgo * 864e5).toISOString(), distanceKm: km, durationSec: km * 360 });
+  const entry = { id: 1, date: iso(20), bodyPart: 'rodilla', active: false, resolvedDate: iso(2) };
+  // 4 semanas antes de hace 20 días: entre hace 48 y hace 20 días
+  app.state.runs = [run(25, 10), run(30, 10), run(40, 10), run(45, 10), run(10, 99)];
+  assert.equal(app.painReturnBaseKm(entry), 10, '40 km en 4 semanas = 10 por semana (la de hace 10 días no cuenta)');
+  app.state.onboarded = true; app.state.profile = { trainBy: 'distance', returningFromBreak: false };
+  assert.equal(app.painReturnEligible(entry), 10);
+  app.state.profile.returningFromBreak = true;
+  assert.equal(app.painReturnEligible(entry), null, 'ya hay un regreso en curso');
+  app.state.profile = { trainBy: 'time' };
+  assert.equal(app.painReturnEligible(entry), null, 'plan por tiempo: no aplica');
+  app.state.profile = { trainBy: 'distance' };
+  app.state.runs = [run(25, 3)];
+  assert.equal(app.painReturnEligible(entry), null, 'menos de 5 km por semana de base');
 });
