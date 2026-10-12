@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T16:58:56Z';
+const APP_VERSION = '2026-10-12T18:04:04Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8039,17 +8039,14 @@ function renderPerfil(){
     : `${fmtDist(p.weeklyKm,1)}${distUnit()}/sem · ${t('ob_goal_'+p.goal)}`;
   const avatarImg = document.getElementById('perfil-avatar-img');
   const avatarInitial = document.getElementById('perfil-initial');
-  const removeBtn = document.getElementById('perfil-remove-photo');
   if(p.avatarPhoto){
     avatarImg.src = p.avatarPhoto;
     avatarImg.style.display = 'block';
     avatarInitial.style.display = 'none';
-    removeBtn.style.display = 'block';
   }else{
     avatarImg.style.display = 'none';
     avatarImg.removeAttribute('src');
     avatarInitial.style.display = '';
-    removeBtn.style.display = 'none';
   }
   renderPainLog();
 
@@ -8396,6 +8393,29 @@ function handleAvatarPhotoChange(e){
     img.src = ev.target.result;
   };
   reader.readAsDataURL(file);
+}
+// Tocar la foto: sin foto abre directo el selector; con foto ofrece cambiarla o quitarla (reemplaza al link "Quitar foto").
+function onAvatarTap(){
+  const input = document.getElementById('perfil-photo-input');
+  if(!(state.profile && state.profile.avatarPhoto)){ input.click(); return; }
+  let backdrop = document.getElementById('confirm-backdrop');
+  if(!backdrop){
+    backdrop = document.createElement('div');
+    backdrop.id = 'confirm-backdrop'; backdrop.className = 'confirm-backdrop';
+    document.body.appendChild(backdrop);
+  }
+  backdrop.innerHTML = `<div class="confirm-card"><div class="confirm-actions">
+      <button class="btn btn-primary" id="avatar-change-btn">${t('perfil_change_photo')}</button>
+      <button class="btn btn-danger" id="avatar-remove-btn">${t('perfil_remove_photo')}</button>
+      <button class="btn btn-outline" id="avatar-cancel-btn">${t('cancel_word')}</button>
+    </div></div>`;
+  backdrop.classList.add('show');
+  haptic(15);
+  const close = ()=>{ backdrop.classList.remove('show'); setTimeout(()=>{ if(backdrop) backdrop.innerHTML = ''; }, 180); };
+  document.getElementById('avatar-change-btn').onclick = ()=>{ close(); input.click(); };
+  document.getElementById('avatar-remove-btn').onclick = ()=>{ close(); removeAvatarPhoto(); };
+  document.getElementById('avatar-cancel-btn').onclick = close;
+  backdrop.onclick = (e)=>{ if(e.target===backdrop) close(); };
 }
 function removeAvatarPhoto(e){
   if(e) e.stopPropagation();

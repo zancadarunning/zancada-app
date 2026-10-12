@@ -2423,7 +2423,6 @@
   .rd-chart-svg path[stroke-width]{vector-effect:non-scaling-stroke;}
   .profile-head{align-items:flex-start;}
   #perfil-days-card, #perfil-sport-days-card{padding:18px 10px;}
-  #perfil-remove-photo{display:inline-flex; align-items:center; min-height:var(--tap);}
   /* Mapa de calor: más oscuro para que las rutas brillen */
   #heatmap-map::after{content:''; position:absolute; inset:0; background:rgba(10,10,10,.35); pointer-events:none; z-index:400;}
 
@@ -4154,7 +4153,7 @@
 
   <section class="view" id="view-perfil">
     <div class="profile-head">
-      <div class="avatar-big-wrap" id="perfil-avatar" role="button" tabindex="0" data-i18n-aria="perfil_change_photo" onclick="document.getElementById('perfil-photo-input').click()">
+      <div class="avatar-big-wrap" id="perfil-avatar" role="button" tabindex="0" data-i18n-aria="perfil_change_photo" onclick="onAvatarTap()">
         <div class="avatar-big">
           <span id="perfil-initial">?</span>
           <img id="perfil-avatar-img" alt="" style="display:none;">
@@ -4166,7 +4165,6 @@
         <input type="text" id="perfil-name" class="display" data-i18n-aria="ob_name_label" style="background:none; border:none; color:var(--chalk); font-size:21px; padding:0; outline:none; width:100%;">
         <p class="muted" id="perfil-sub">—</p>
         <p class="streak-chip" id="perfil-streak" style="display:none;"></p>
-        <p class="muted" id="perfil-remove-photo" style="display:none; font-size:12px; margin-top:2px; text-decoration:underline; cursor:pointer;" onclick="removeAvatarPhoto(event)" data-i18n="perfil_remove_photo"></p>
       </div>
     </div>
 
