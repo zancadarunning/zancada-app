@@ -31,6 +31,11 @@ function mondayKeyFor(now, tz) {
 function hasSundaySession(plan, weekStart, tz, now) {
   return Array.isArray(plan) && weekStart === mondayKeyFor(now, tz) && !!(plan[6] && plan[6].dist > 0);
 }
+// Sesión del domingo todavía por hacer: planeada y no marcada como cumplida. Si el plan ya la tiene 'done' (la app lo marcó al cargar la
+// carrera), el resumen no tiene por qué esperar a la última instancia.
+function sundayPending(plan, weekStart, tz, now) {
+  return hasSundaySession(plan, weekStart, tz, now) && plan[6].status !== 'done';
+}
 function weeklySlotOf(userId, sundaySession) {
   const h = hashOf(userId);
   return sundaySession ? LATE_FIRST_SLOT + (h % LATE_SLOTS) : h % NORMAL_SLOTS;
@@ -40,7 +45,12 @@ function currentWeeklySlot(localHour, localMinute) {
   if (localHour < WEEKLY_FIRST_HOUR || localHour > WEEKLY_LAST_HOUR) return -1;
   return (localHour - WEEKLY_FIRST_HOUR) * 2 + (localMinute >= 30 ? 1 : 0);
 }
-// ¿A este usuario le toca el resumen ahora? (hora y minuto actuales en SU huso horario, en un domingo)
+// Con el registro de enviados (sql/sent_notifications.sql): ¿ya le corresponde el resumen? Es true desde su turno en adelante, así que si una
+// corrida falló, las siguientes de la noche lo reintentan (el registro evita mandarlo dos veces).
+function isWeeklyDue(userId, currentSlot, sundaySession) {
+  return currentSlot >= 0 && currentSlot >= weeklySlotOf(userId, !!sundaySession);
+}
+// Sin registro (tabla todavía no creada): solo en su turno exacto, como antes. ¿A este usuario le toca el resumen ahora? (hora y minuto actuales en SU huso horario, en un domingo)
 function isWeeklySlot(userId, localHour, localMinute, sundaySession) {
   return currentWeeklySlot(localHour, localMinute || 0) === weeklySlotOf(userId, !!sundaySession);
 }
@@ -103,4 +113,4 @@ function buildWeeklySummary({ runs, plan, weekStart, streak, tz, lang, imperial,
   return { title: T.title, body: parts.join(' ') };
 }
 
-module.exports = { buildWeeklySummary, WEEKLY_SLOTS, NORMAL_SLOTS, LATE_FIRST_SLOT, LATE_SLOTS, weeklySlotOf, currentWeeklySlot, isWeeklySlot, hasSundaySession, localDateKey };
+module.exports = { buildWeeklySummary, WEEKLY_SLOTS, NORMAL_SLOTS, LATE_FIRST_SLOT, LATE_SLOTS, weeklySlotOf, currentWeeklySlot, isWeeklySlot, isWeeklyDue, hasSundaySession, sundayPending, mondayKeyFor, localDateKey };

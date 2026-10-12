@@ -2,7 +2,8 @@ const webpush = require('web-push');
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { sendFcmPush } = require('./_lib/fcm');
 const { isTrustedPushEndpoint } = require('./_lib/push-endpoint');
-const { buildWeeklySummary, isWeeklySlot, hasSundaySession } = require('./_lib/weekly-summary');
+const { buildWeeklySummary, isWeeklySlot, isWeeklyDue, sundayPending, currentWeeklySlot, mondayKeyFor } = require('./_lib/weekly-summary');
+const sentRegistry = require('./_lib/sent-registry');
 
 // ANTES este cron corría UNA vez por día a una hora fija en UTC (11:00 UTC, ver
 // vercel.json) -- pensada para que le llegue a las 8am a un corredor en Argentina
@@ -137,7 +138,14 @@ module.exports = withSentry(async (req, res) => {
       const subRow = subsByUser[row.user_id];
       if (!subRow) { skipped++; continue; }
       const wClock = localClock(row.tz || DEFAULT_TZ);
-      if (wClock.dayIdx === 6 && isWeeklySlot(row.user_id, wClock.hour, wClock.minute, hasSundaySession(row.plan, row.weekStart, row.tz || DEFAULT_TZ, Date.now()))) weekly.push({ row, subRow });
+      if (wClock.dayIdx === 6) {
+        const wtz = row.tz || DEFAULT_TZ, wNow = Date.now();
+        const slot = currentWeeklySlot(wClock.hour, wClock.minute);
+        const pending = sundayPending(row.plan, row.weekStart, wtz, wNow);
+        // candidato = ya le corresponde (su turno o uno posterior: reintento); más abajo se descartan los que ya recibieron y, si no hay
+        // registro de enviados, se vuelve a "solo en su turno exacto"
+        if (isWeeklyDue(row.user_id, slot, pending)) weekly.push({ row, subRow, period: mondayKeyFor(wNow, wtz), exact: isWeeklySlot(row.user_id, wClock.hour, wClock.minute, pending) });
+      }
       const plan = row.plan;
       if (!plan || !plan.length) { skipped++; continue; }
 
@@ -188,19 +196,22 @@ module.exports = withSentry(async (req, res) => {
           if (dead) {
             await fetch(`${base}/rest/v1/push_subscriptions?user_id=eq.${row.user_id}`, { method: 'DELETE', headers });
             failed++;
-            return;
+            return 'dead';
           }
         } else {
           // el endpoint lo escribe el cliente: solo se le manda a los servicios de push reales (evita SSRF a ciegas)
-          if (!subRow.subscription || !isTrustedPushEndpoint(subRow.subscription.endpoint)) { failed++; return; }
+          if (!subRow.subscription || !isTrustedPushEndpoint(subRow.subscription.endpoint)) { failed++; return 'dead'; }
           await webpush.sendNotification(subRow.subscription, JSON.stringify({ title, body }));
         }
         sent++;
+        return 'sent';
       } catch (err) {
         failed++;
         if (err.statusCode === 404 || err.statusCode === 410) {
           await fetch(`${base}/rest/v1/push_subscriptions?user_id=eq.${row.user_id}`, { method: 'DELETE', headers });
+          return 'dead';
         }
+        return 'failed';   // falla pasajera (red, servicio de push): se puede reintentar
       }
     }
     let nextDue = 0;
@@ -209,36 +220,62 @@ module.exports = withSentry(async (req, res) => {
     });
     await Promise.all(workers);
 
-    // Resumen semanal: el historial de carreras es pesado (puntos GPS), así que solo se pide para quienes les toca ahora (una vez
-    // por semana cada uno), de a pocos en paralelo.
-    let weeklySent = 0;
-    async function sendWeekly({ row, subRow }) {
+    // Resumen semanal. El historial de carreras es pesado (puntos GPS), así que solo se pide para quienes les toca.
+    // Con el registro de enviados (sql/sent_notifications.sql): a cada candidato se le "reclama" el aviso antes de mandarlo, así que una
+    // corrida caída o sin tiempo se recupera en la siguiente (a los 30 minutos) y nunca se manda dos veces. Sin la tabla, vuelve a
+    // funcionar solo en el turno exacto de cada usuario.
+    let weeklySent = 0, weeklyRetried = 0, registryOk = true;
+    const KIND = 'weekly_summary';
+    let toSend = weekly;
+    if (weekly.length) {
+      const byPeriod = new Map();
+      weekly.forEach(w => { if (!byPeriod.has(w.period)) byPeriod.set(w.period, []); byPeriod.get(w.period).push(w); });
+      const pending = [];
+      for (const [period, list] of byPeriod) {
+        const already = await sentRegistry.fetchSent(base, headers, KIND, period, list.map(w => w.row.user_id));
+        if (already === null) { registryOk = false; break; }
+        list.forEach(w => { if (!already.has(w.row.user_id)) pending.push(w); });
+      }
+      toSend = registryOk ? pending : weekly.filter(w => w.exact);
+      if (!registryOk) console.warn('send-reminders: tabla sent_notifications no disponible; resumen semanal solo en el turno exacto (sin reintentos)');
+      // limpieza: cada domingo, en la primera corrida de la franja, se borran los registros de más de 60 días
+      if (registryOk && currentWeeklySlot(localClock(DEFAULT_TZ).hour, localClock(DEFAULT_TZ).minute) === 0) await sentRegistry.pruneOld(base, headers, 60);
+    }
+    async function sendWeekly({ row, subRow, period, exact }) {
+      let claimed = false;
       try {
+        if (registryOk) {
+          const c = await sentRegistry.claim(base, headers, row.user_id, KIND, period);
+          if (c === false) return;                 // otra corrida ya lo reclamó
+          claimed = c === true;
+        }
         const rRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${row.user_id}&select=runs:data->runs`, { headers });
-        if (!rRes.ok) return;
+        if (!rRes.ok) { if (claimed) await sentRegistry.release(base, headers, row.user_id, KIND, period); failed++; return; }
         const rows = await rRes.json();
         const runs = Array.isArray(rows) && rows[0] && Array.isArray(rows[0].runs) ? rows[0].runs : [];
         const msg = buildWeeklySummary({
           runs, plan: row.plan, weekStart: row.weekStart, streak: row.streak, tz: row.tz || DEFAULT_TZ,
           lang: MSGS[row.lang] ? row.lang : 'es', imperial: row.units === 'imperial', now: Date.now()
         });
-        if (!msg) return;
-        const before = sent;
-        await sendOne({ row, subRow, body: msg.body, title: msg.title });
-        if (sent > before) weeklySent++;
-      } catch (e) { failed++; }
+        if (!msg) return;                          // sin salidas esta semana: queda registrado como atendido, no se vuelve a evaluar
+        const r = await sendOne({ row, subRow, body: msg.body, title: msg.title });
+        if (r === 'sent') { weeklySent++; if (!exact) weeklyRetried++; }
+        else if (r === 'failed' && claimed) await sentRegistry.release(base, headers, row.user_id, KIND, period);   // pasajera: se reintenta
+      } catch (e) {
+        failed++;
+        if (claimed) await sentRegistry.release(base, headers, row.user_id, KIND, period);
+      }
     }
-    // Tope de tiempo (la función serverless no puede pasarse). Como el resumen ya se reparte en turnos de media hora, cada corrida atiende solo una
-    // fracción; si aun así alguien no alcanza, queda contado en weeklyPending para verlo en los logs.
+    // Tope de tiempo (la función serverless no puede pasarse): los que no alcanzan quedan sin reclamar y los toma la próxima corrida.
     const weeklyStart = Date.now();
     let nextWeekly = 0;
-    await Promise.all(Array.from({ length: Math.min(8, weekly.length) }, async () => {
-      while (nextWeekly < weekly.length && Date.now() - weeklyStart < 6000) { await sendWeekly(weekly[nextWeekly++]); }
+    await Promise.all(Array.from({ length: Math.min(8, toSend.length) }, async () => {
+      while (nextWeekly < toSend.length && Date.now() - weeklyStart < 6000) { await sendWeekly(toSend[nextWeekly++]); }
     }));
-    const weeklyPending = Math.max(0, weekly.length - nextWeekly);
-    if (weeklyPending) console.warn('send-reminders: resumen semanal sin enviar por falta de tiempo:', weeklyPending);
+    const weeklyPending = Math.max(0, toSend.length - nextWeekly);
+    if (weeklyPending) console.warn('send-reminders: resumen semanal sin enviar por falta de tiempo (se reintenta en la próxima corrida):', weeklyPending);
 
-    res.status(200).json({ sent, skipped, failed, weeklySent, weeklyPending });
+    res.status(200).json({ sent, skipped, failed, weeklySent, weeklyRetried, weeklyPending, weeklyRegistry: registryOk });
   } catch (err) {
     console.error('send-reminders error', err);
     await reportError(err, { endpoint: 'send-reminders' });
