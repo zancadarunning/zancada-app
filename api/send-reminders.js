@@ -33,18 +33,19 @@ const WEEKDAY_IDX = { Mon:0, Tue:1, Wed:2, Thu:3, Fri:4, Sat:5, Sun:6 };
 // evalúa contra su propio reloj, no contra el del servidor.
 function localHourAndDayIdx(tz){
   try{
-    const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour:'numeric', hour12:false, weekday:'short' }).formatToParts(new Date());
-    let hour = null, weekday = null;
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour:'numeric', minute:'numeric', hour12:false, weekday:'short' }).formatToParts(new Date());
+    let hour = null, minute = 0, weekday = null;
     for(const p of parts){
       if(p.type === 'hour') hour = parseInt(p.value, 10) % 24; // Intl puede devolver "24" para la medianoche en vez de "0"
+      if(p.type === 'minute') minute = parseInt(p.value, 10) || 0;
       if(p.type === 'weekday') weekday = p.value;
     }
     if(hour === null || !(weekday in WEEKDAY_IDX)) throw new Error('huso horario inválido: ' + tz);
-    return { hour, dayIdx: WEEKDAY_IDX[weekday] };
+    return { hour, minute, dayIdx: WEEKDAY_IDX[weekday] };
   }catch(e){
     // tz guardado mal o directamente desconocido para Intl -- mejor caer al default
     // que reventar el envío de TODOS los demás usuarios en esta corrida.
-    if(tz === DEFAULT_TZ) return { hour: -1, dayIdx: 0 }; // corta la recursión si hasta el default fallara
+    if(tz === DEFAULT_TZ) return { hour: -1, minute: 0, dayIdx: 0 }; // corta la recursión si hasta el default fallara
     return localHourAndDayIdx(DEFAULT_TZ);
   }
 }
@@ -131,12 +132,12 @@ module.exports = withSentry(async (req, res) => {
 
     let sent = 0, skipped = 0, failed = 0;
     const due = [];
-    const weekly = [];   // a quién le toca el resumen semanal (domingo, en la hora fija de cada uno entre las 19 y las 22, hora local)
+    const weekly = [];   // a quién le toca el resumen semanal (domingo, en la hora fija de cada uno entre las 19:00 y las 23:00, hora local)
     for (const row of (states || [])) {
       const subRow = subsByUser[row.user_id];
       if (!subRow) { skipped++; continue; }
       const wClock = localClock(row.tz || DEFAULT_TZ);
-      if (wClock.dayIdx === 6 && isWeeklySlot(row.user_id, wClock.hour)) weekly.push({ row, subRow });
+      if (wClock.dayIdx === 6 && isWeeklySlot(row.user_id, wClock.hour, wClock.minute)) weekly.push({ row, subRow });
       const plan = row.plan;
       if (!plan || !plan.length) { skipped++; continue; }
 
@@ -153,11 +154,13 @@ module.exports = withSentry(async (req, res) => {
       }
 
       const tz = row.tz || DEFAULT_TZ;
-      const { hour, dayIdx } = localClock(tz);
+      const { hour, minute, dayIdx } = localClock(tz);
       // Cada corredor puede elegir la hora del aviso en Perfil (profile.reminderHour, 0-23); sin elegir, las 8.
       const chosen = parseInt(row.rh, 10);
       const wantHour = Number.isInteger(chosen) && chosen >= 0 && chosen <= 23 ? chosen : REMINDER_HOUR;
-      if (hour !== wantHour) { skipped++; continue; } // todavía no es la hora elegida en el huso de ESTE usuario
+      // El cron corre cada 30 minutos: de las dos corridas de cada hora, el recordatorio diario sale solo en la que cae en la primera
+      // mitad de la hora LOCAL del corredor (siempre hay exactamente una, también en husos con :30 o :45), si no llegaría duplicado.
+      if (hour !== wantHour || minute >= 30) { skipped++; continue; } // todavía no es la hora elegida en el huso de ESTE usuario
 
       const today = plan[dayIdx];
       // today.dist sigue siendo el km planeado aunque la sesión ya se haya marcado 'done'
@@ -225,8 +228,8 @@ module.exports = withSentry(async (req, res) => {
         if (sent > before) weeklySent++;
       } catch (e) { failed++; }
     }
-    // Tope de tiempo (la función serverless no puede pasarse). Como el resumen ya se reparte en 4 horas, cada corrida atiende solo una
-    // cuarta parte; si aun así alguien no alcanza, queda contado en weeklyPending para verlo en los logs.
+    // Tope de tiempo (la función serverless no puede pasarse). Como el resumen ya se reparte en 8 turnos de media hora, cada corrida atiende solo una
+    // octava parte; si aun así alguien no alcanza, queda contado en weeklyPending para verlo en los logs.
     const weeklyStart = Date.now();
     let nextWeekly = 0;
     await Promise.all(Array.from({ length: Math.min(8, weekly.length) }, async () => {

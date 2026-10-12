@@ -66,21 +66,36 @@ test('mapa de calor: el encuadre ignora una salida aislada en otra ciudad', () =
   assert.equal(JSON.stringify(app.heatmapFocusBounds([])), 'null');
 });
 
-// ---- reparto del resumen semanal en varias horas ----
-const { weeklySlotHour, isWeeklySlot, WEEKLY_HOURS } = require('../api/_lib/weekly-summary.js');
+// ---- reparto del resumen semanal en turnos de media hora ----
+const { weeklySlotOf, currentWeeklySlot, isWeeklySlot, WEEKLY_SLOTS } = require('../api/_lib/weekly-summary.js');
 
-test('resumen semanal: cada usuario tiene una hora fija entre las 19 y las 22, y el reparto es parejo', () => {
-  const counts = { 19: 0, 20: 0, 21: 0, 22: 0 };
-  for (let i = 0; i < 4000; i++) {
+test('resumen semanal: 8 turnos de media hora entre las 19:00 y las 23:00, y el reparto es parejo', () => {
+  assert.equal(WEEKLY_SLOTS, 8);
+  const counts = new Array(8).fill(0);
+  for (let i = 0; i < 8000; i++) {
     const id = `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`;
-    const h = weeklySlotHour(id);
-    assert.ok(WEEKLY_HOURS.includes(h));
-    assert.equal(weeklySlotHour(id), h, 'siempre la misma hora para el mismo usuario');
-    counts[h]++;
+    const s = weeklySlotOf(id);
+    assert.ok(s >= 0 && s < 8);
+    assert.equal(weeklySlotOf(id), s, 'siempre el mismo turno para el mismo usuario');
+    counts[s]++;
   }
-  Object.values(counts).forEach(c => assert.ok(c > 800 && c < 1200, 'ninguna hora concentra más de ~30% de los usuarios: ' + JSON.stringify(counts)));
-  assert.equal(isWeeklySlot('abc', weeklySlotHour('abc')), true);
-  assert.equal(isWeeklySlot('abc', 8), false);
+  counts.forEach(c => assert.ok(c > 800 && c < 1200, 'ningún turno concentra más de ~15% de los usuarios: ' + JSON.stringify(counts)));
+});
+
+test('resumen semanal: el turno actual sale de la hora y el minuto locales, y fuera de 19:00-23:00 no hay turno', () => {
+  assert.equal(currentWeeklySlot(19, 0), 0);
+  assert.equal(currentWeeklySlot(19, 29), 0);
+  assert.equal(currentWeeklySlot(19, 30), 1);
+  assert.equal(currentWeeklySlot(22, 0), 6);
+  assert.equal(currentWeeklySlot(22, 45), 7);
+  assert.equal(currentWeeklySlot(18, 59), -1);
+  assert.equal(currentWeeklySlot(23, 0), -1);
+  assert.equal(currentWeeklySlot(8, 0), -1);
+  // cada usuario recibe el resumen en exactamente UNA de las 8 corridas de la noche
+  const id = 'usuario-de-prueba';
+  let hits = 0;
+  for (let h = 0; h < 24; h++) for (const m of [0, 30]) if (isWeeklySlot(id, h, m)) hits++;
+  assert.equal(hits, 1);
 });
 
 // ---- pausa de racha ----

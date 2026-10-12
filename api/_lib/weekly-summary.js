@@ -1,21 +1,27 @@
 // api/_lib/weekly-summary.js
 //
-// Resumen de la semana que send-reminders.js (cron cada hora) manda el domingo entre las 19 y las 22, hora local de cada corredor:
+// Resumen de la semana que send-reminders.js (cron cada hora) manda el domingo entre las 19:00 y las 23:00, hora local de cada corredor:
 // kilómetros y salidas de la semana, comparación con la anterior, sesiones del plan cumplidas y racha. buildWeeklySummary es una
 // función pura (se prueba aparte); el cron solo decide a quién le toca y cómo se envía.
 
 const MI_PER_KM = 0.621371;
-// El resumen se reparte en varias horas del domingo a la noche (hora local de cada corredor) en vez de mandarlo todo a las 20:00:
-// cada usuario tiene una hora fija (la saca de su id), así cada corrida del cron atiende a una cuarta parte y entra sin problema en
-// el tiempo máximo de la función. No hace falta recordar a quién ya se le mandó: su hora es siempre la misma.
-const WEEKLY_HOURS = [19, 20, 21, 22];
-function weeklySlotHour(userId) {
+// El resumen se reparte en 8 turnos de media hora del domingo a la noche (19:00 a 22:30, hora local de cada corredor) en vez de mandarlo
+// todo junto: cada usuario tiene un turno fijo (lo saca de su id), así cada corrida del cron (cada 30 minutos) atiende a la octava
+// parte y entra sin problema en el tiempo máximo de la función. No hace falta recordar a quién ya se le mandó: su turno es siempre el mismo.
+const WEEKLY_FIRST_HOUR = 19, WEEKLY_LAST_HOUR = 22;   // el último turno es 22:30 (se manda antes de las 23:00)
+const WEEKLY_SLOTS = (WEEKLY_LAST_HOUR - WEEKLY_FIRST_HOUR + 1) * 2;
+function weeklySlotOf(userId) {
   let h = 0;
   for (const ch of String(userId)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return WEEKLY_HOURS[h % WEEKLY_HOURS.length];
+  return h % WEEKLY_SLOTS;
 }
-// ¿A este usuario le toca el resumen ahora? (localHour: la hora actual en SU huso horario, en un domingo)
-function isWeeklySlot(userId, localHour) { return weeklySlotHour(userId) === localHour; }
+// Turno que corresponde a la hora y minuto locales actuales (0 a 7), o -1 si está fuera de la franja
+function currentWeeklySlot(localHour, localMinute) {
+  if (localHour < WEEKLY_FIRST_HOUR || localHour > WEEKLY_LAST_HOUR) return -1;
+  return (localHour - WEEKLY_FIRST_HOUR) * 2 + (localMinute >= 30 ? 1 : 0);
+}
+// ¿A este usuario le toca el resumen ahora? (hora y minuto actuales en SU huso horario, en un domingo)
+function isWeeklySlot(userId, localHour, localMinute) { return currentWeeklySlot(localHour, localMinute || 0) === weeklySlotOf(userId); }
 
 const L = {
   es: { title: 'Tu semana en Zancada', runs: n => n === 1 ? '1 salida' : `${n} salidas`, head: (d, r, delta) => `${d} en ${r}${delta ? ` (${delta} vs la semana anterior)` : ''}.`, sessions: (a, b) => `Sesiones del plan: ${a} de ${b}.`, streak: n => `Racha: ${n} semanas seguidas.` },
@@ -75,4 +81,4 @@ function buildWeeklySummary({ runs, plan, weekStart, streak, tz, lang, imperial,
   return { title: T.title, body: parts.join(' ') };
 }
 
-module.exports = { buildWeeklySummary, WEEKLY_HOURS, weeklySlotHour, isWeeklySlot, localDateKey };
+module.exports = { buildWeeklySummary, WEEKLY_SLOTS, weeklySlotOf, currentWeeklySlot, isWeeklySlot, localDateKey };
