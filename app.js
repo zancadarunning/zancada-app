@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T02:15:12Z';
+const APP_VERSION = '2026-10-12T02:46:02Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10734,6 +10734,12 @@ function showRunSummaryUI(){
       ? routeSketchSvg(tracker.points) + '<img class="hist-map-img" src="' + buildHistMapStaticUrl({points: tracker.points}, 400, 150) + '" alt="" decoding="async" onload="this.classList.add(\'loaded\')" onerror="this.style.display=\'none\'">' + (pr ? '<span class="sum-pr-badge">' + t('sum_pr_badge', {label: pr.label}) + '</span>' : '')
       : '';
   }
+  const hlCard = document.getElementById('sum-highlight');
+  if(hlCard){
+    const hlText = pr ? '' : runHighlightText({distanceKm: tracker.distanceKm, durationSec: tracker.elapsedSec, splits: computeSplitsFromPoints(tracker.points), date: new Date(tracker.startedAt || Date.now()).toISOString()}, state.runs);
+    hlCard.style.display = hlText ? 'block' : 'none';
+    document.getElementById('sum-highlight-text').textContent = hlText;
+  }
   const prCard = document.getElementById('sum-pr');
   if(prCard){
     prCard.style.display = pr ? 'flex' : 'none';
@@ -10743,6 +10749,63 @@ function showRunSummaryUI(){
       document.getElementById('sum-pr-sub').textContent = pr.prev ? t('sum_pr_delta', {d: (function(x){ return Math.floor(x / 60) + ':' + String(x % 60).padStart(2, '0'); })(Math.max(1, Math.round(pr.prev.durationSec - tracker.elapsedSec)))}) : t('sum_pr_first');
     }
   }
+}
+/* ---- Frase de Zonda: lo más destacado de una carrera ----
+   run = {distanceKm, durationSec, splits (tramos de 1 km), date}; history = las carreras ANTERIORES a esta. Devuelve {key, vars} del primer
+   motivo que aplique (en orden de importancia) o null si no hay nada que valga la pena decir -- mejor sin frase que una genérica. */
+function computeRunHighlight(run, history){
+  const d = run.distanceKm, dur = run.durationSec;
+  if(!(d >= 1) || !(dur > 0)) return null;
+  const hist = (history || []).filter(r => r && r.distanceKm > 0 && r.durationSec > 0);
+  const u = distUnit();
+  const toUnit = isImperial() ? KM_PER_MI : 1;                  // factor minutos/km -> minutos/unidad de distancia
+  const pace = dur / 60 / d;
+  const similar = hist.filter(r => Math.abs(r.distanceKm - d) / d <= 0.15);
+  const secsFaster = (a, b) => Math.round((b - a) * 60 * toUnit);   // segundos por unidad de distancia que a es más rápido que b
+
+  // 1) la salida más larga hasta ahora
+  if(hist.length >= 3 && d >= 3 && d > Math.max(...hist.map(r => r.distanceKm))){
+    return {key:'hl_longest', vars:{d: fmtDist(d, 1), u}};
+  }
+  // 2) el ritmo más rápido en salidas de distancia parecida
+  if(similar.length >= 2){
+    const bestPrev = Math.min(...similar.map(r => r.durationSec / 60 / r.distanceKm));
+    if(pace < bestPrev * 0.99) return {key:'hl_best_pace', vars:{d: fmtDist(d, 0), u, u2: u, p: fmtPace(pace)}};
+  }
+  const splits = (run.splits || []).filter(s => s && s.paceMin > 0 && s.paceMin < 20 && Number.isInteger(parseFloat(s.km)));
+  // 3) segunda mitad más rápida que la primera (negative split)
+  if(splits.length >= 4){
+    const mid = Math.floor(splits.length / 2);
+    const avg = arr => arr.reduce((s, x) => s + x.paceMin, 0) / arr.length;
+    const p1 = avg(splits.slice(0, mid)), p2 = avg(splits.slice(mid));
+    const gain = secsFaster(p2, p1);
+    if((p1 - p2) / p1 >= 0.02 && gain >= 3) return {key:'hl_negative', vars:{s: gain, u}};
+    // 4) ritmo muy parejo
+    const st = pacingStats(splits);
+    if(st && st.cv <= 3) return {key:'hl_even', vars:{cv: st.cv.toFixed(1)}};
+  }
+  // 5) el tramo más rápido, si se destaca claramente del resto
+  if(splits.length >= 3){
+    let bi = 0; splits.forEach((s, i) => { if(s.paceMin < splits[bi].paceMin) bi = i; });
+    const others = splits.filter((_, i) => i !== bi);
+    const avgOthers = others.reduce((s, x) => s + x.paceMin, 0) / others.length;
+    if(splits[bi].paceMin < avgOthers * 0.97) return {key:'hl_fast_km', vars:{n: splits[bi].km, p: fmtPace(splits[bi].paceMin), u}};
+  }
+  // 6) más rápido que la última salida de distancia parecida
+  if(similar.length){
+    const last = similar.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+    const s = secsFaster(pace, last.durationSec / 60 / last.distanceKm);
+    if(s >= 3) return {key:'hl_faster_than_last', vars:{s, u}};
+  }
+  // 7) constancia del mes
+  const ref = run.date ? new Date(run.date) : new Date();
+  const inMonth = hist.filter(r => { const x = new Date(r.date); return x.getFullYear() === ref.getFullYear() && x.getMonth() === ref.getMonth(); }).length + 1;
+  if(inMonth >= 3) return {key:'hl_month', vars:{n: inMonth}};
+  return null;
+}
+function runHighlightText(run, history){
+  const h = computeRunHighlight(run, history);
+  return h ? t(h.key, h.vars) : '';
 }
 // ¿Esta carrera, todavía sin guardar, sería récord personal en su distancia?
 function runSummaryPR(){
@@ -12263,6 +12326,7 @@ function openRunDetail(runId){
   document.getElementById('run-detail-content').innerHTML = `
     <h2 class="display" style="font-size:20px; margin-bottom:2px;">${escapeHtml(r.name) || dateStr}</h2>
     ${r.name ? `<p class="muted" style="margin-bottom:10px;">${dateStr}</p>` : '<div style="margin-bottom:10px;"></div>'}
+    ${(function(){ const hl = runHighlightText(r, (state.runs||[]).filter(x => x !== r && new Date(x.date) < new Date(r.date))); return hl ? `<div class="rd-hl"><span class="hl-kicker">${t('nav_coach')}</span><p>${escapeHtml(hl)}</p></div>` : ''; })()}
     <div class="rd-tabs">${tabs.map(tb=>`<button class="rd-tab-btn" id="rd-tabbtn-${tb}" onclick="switchRDTab('${tb}')">${tabLabels[tb]}</button>`).join('')}</div>
     ${tabs.map(tb=>`<div class="rd-panel" id="rd-panel-${tb}"></div>`).join('')}
     <button class="btn btn-outline" style="width:100%; margin-top:24px;" onclick="openEditRun('${r.id}')">${t('edit_run_btn')}</button>

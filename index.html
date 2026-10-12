@@ -2182,6 +2182,12 @@
   .sum-big{text-align:center; margin:12px 0 14px;}
   .sum-big .n{font-family:'Bebas Neue',sans-serif; font-weight:400; font-size:96px; line-height:.9; color:var(--hivis-text); letter-spacing:.01em;}
   .sum-big .l{margin-top:4px; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--mist); font-weight:700;}
+  /* Frase de Zonda con lo más destacado de una carrera (resumen al terminar y detalle de la carrera) */
+  .hl-card{border-left:3px solid var(--hivis); padding:14px 16px;}
+  .hl-card .hl-kicker, .rd-hl .hl-kicker{display:block; font-size:10.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--hivis-text); margin-bottom:4px;}
+  .hl-card p{margin:0; font-size:14.5px; line-height:1.45; font-weight:600;}
+  .rd-hl{border-left:3px solid var(--hivis); padding:2px 0 2px 12px; margin:0 0 14px;}
+  .rd-hl p{margin:0; font-size:13.5px; line-height:1.45; font-weight:600;}
   .sum-pr{display:flex; align-items:center; gap:12px; border:1px solid var(--hivis); background:var(--hivis-dim);}
   .sum-pr b{display:block; font-size:14.5px;} .sum-pr span:not(.sum-pr-medal){display:block; margin-top:2px; font-size:12.5px; color:var(--mist);}
   .sum-pr-medal{width:30px; height:36px; flex:none;} .sum-pr-medal svg{width:100%; height:100%; display:block;}
@@ -3106,6 +3112,7 @@
           <div class="stat-box" id="sum-cad-box" style="display:none;"><div class="n mono" id="sum-cad">0</div><div class="l">spm</div></div>
         </div>
       </div>
+      <div class="card hl-card" id="sum-highlight" style="display:none;"><span class="hl-kicker" data-i18n="nav_coach"></span><p id="sum-highlight-text"></p></div>
       <div class="card sum-pr" id="sum-pr" style="display:none;"><span class="sum-pr-medal" id="sum-pr-medal"></span><div><b id="sum-pr-title"></b><span id="sum-pr-sub"></span></div></div>
       <div class="card"><h3 id="sum-shoe-label" data-i18n="run_summary_shoe_q"></h3><div class="field" style="margin-top:12px;"><select id="sum-shoe" aria-labelledby="sum-shoe-label"></select></div></div>
       <button class="btn btn-primary" data-i18n="hist_share" onclick="shareSummaryRun()"></button>

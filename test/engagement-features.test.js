@@ -506,3 +506,63 @@ test('avisos de Inicio: se muestran como mucho dos a la vez, por prioridad', () 
   assert.equal(els['home-adjust-card'].style.display, 'none');
   assert.equal(els['home-recal-card'].style.display, 'none');
 });
+
+// ---- Frase de Zonda con lo más destacado de una carrera (computeRunHighlight) ----
+function hlRun(app, id, daysAgo, km, paceMin, splits) {
+  const dur = Math.round(km * paceMin * 60);
+  return { id, date: new Date(Date.now() - daysAgo * 864e5).toISOString(), distanceKm: km, durationSec: dur, splits: splits || [] };
+}
+const sp = (paces) => paces.map((p, i) => ({ km: i + 1, paceMin: p }));
+
+test('frase de la carrera: la más larga hasta ahora gana a todo lo demás', () => {
+  const app = loadApp();
+  const hist = [hlRun(app, 'a', 30, 5, 6), hlRun(app, 'b', 20, 6, 6), hlRun(app, 'c', 10, 8, 6)];
+  const cur = hlRun(app, 'n', 0, 10, 6, sp([6, 6, 6, 6, 6, 6, 6, 6, 6, 6]));
+  const h = JSON.parse(JSON.stringify(app.computeRunHighlight(cur, hist)));
+  assert.equal(h.key, 'hl_longest');
+  assert.equal(h.vars.d, '10.0');
+});
+
+test('frase de la carrera: ritmo más rápido en distancia parecida, negative split, parejo y tramo más rápido', () => {
+  const app = loadApp();
+  const similar = [hlRun(app, 'a', 30, 10, 6), hlRun(app, 'b', 20, 10, 6.2), hlRun(app, 'c', 10, 10, 6.1)];
+  // más rápido que cualquiera de las parecidas
+  assert.equal(app.computeRunHighlight(hlRun(app, 'n', 0, 10, 5.5), similar).key, 'hl_best_pace');
+  // sin historial comparable: negative split (segunda mitad más rápida)
+  const neg = app.computeRunHighlight(hlRun(app, 'n', 0, 4, 6, sp([6.4, 6.2, 5.8, 5.6])), []);
+  assert.equal(neg.key, 'hl_negative');
+  assert.ok(neg.vars.s >= 20, 'unos 30 s/km más rápido en la segunda mitad');
+  // ritmo parejo
+  assert.equal(app.computeRunHighlight(hlRun(app, 'n', 0, 5, 6, sp([6.0, 6.02, 5.98, 6.01, 6.0])), []).key, 'hl_even');
+  // un tramo que se destaca
+  const fast = app.computeRunHighlight(hlRun(app, 'n', 0, 5, 6.4, sp([6.6, 5.6, 6.5, 6.6, 6.6])), []);
+  assert.equal(fast.key, 'hl_fast_km');
+  assert.equal(fast.vars.n, 2);
+});
+
+test('frase de la carrera: más rápido que la última parecida, constancia del mes, y sin nada que decir devuelve null', () => {
+  const app = loadApp();
+  const last = hlRun(app, 'a', 6, 5, 6.5);
+  const faster = app.computeRunHighlight(hlRun(app, 'n', 0, 5, 6.3), [last]);
+  assert.equal(faster.key, 'hl_faster_than_last');
+  assert.equal(faster.vars.s, 12);
+  // sin parecidas ni parciales: solo la constancia del mes, y únicamente si ya van 3 o más
+  const monthRuns = [hlRun(app, 'x', 1, 12, 6), hlRun(app, 'y', 2, 2, 7)];
+  assert.equal(app.computeRunHighlight(hlRun(app, 'n', 0, 7, 6.5), monthRuns).key, 'hl_month');
+  assert.equal(app.computeRunHighlight(hlRun(app, 'n', 0, 7, 6.5), [hlRun(app, 'x', 40, 12, 6)]), null);
+  assert.equal(app.computeRunHighlight({ distanceKm: 0.4, durationSec: 200 }, []), null, 'una carrera de menos de 1 km no tiene frase');
+});
+
+test('frase de la carrera: ningún texto queda con un {marcador} sin reemplazar', () => {
+  const app = loadApp();
+  const similar = [hlRun(app, 'a', 30, 10, 6), hlRun(app, 'b', 20, 10, 6.2)];
+  const cases = [
+    app.computeRunHighlight(hlRun(app, 'n', 0, 10, 5.5), similar),
+    app.computeRunHighlight(hlRun(app, 'n', 0, 4, 6, sp([6.4, 6.2, 5.8, 5.6])), []),
+    app.computeRunHighlight(hlRun(app, 'n', 0, 5, 6, sp([6.0, 6.02, 5.98, 6.01, 6.0])), []),
+    app.computeRunHighlight(hlRun(app, 'n', 0, 5, 6.4, sp([6.6, 5.6, 6.5, 6.6, 6.6])), []),
+    app.computeRunHighlight(hlRun(app, 'n', 0, 5, 6.3), [hlRun(app, 'a', 6, 5, 6.5)]),
+    app.computeRunHighlight(hlRun(app, 'n', 0, 10, 6, sp([6, 6, 6, 6])), [hlRun(app, 'a', 30, 5, 6), hlRun(app, 'b', 20, 6, 6), hlRun(app, 'c', 10, 8, 6)])
+  ];
+  for (const h of cases) { assert.ok(h, 'hay frase'); assert.doesNotMatch(app.t(h.key, h.vars), /[{}]/, h.key); }
+});
