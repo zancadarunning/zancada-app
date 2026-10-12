@@ -2459,6 +2459,11 @@
   .countdown-hint{position:absolute; left:16px; right:16px; bottom:calc(36px + env(safe-area-inset-bottom, 0px)); margin:0; text-align:center; font-size:14px; font-weight:600; color:var(--mist);}
 
 
+
+
+
+
+
   /* =====================================================================================================================
      TEMA CLARO -- revisión de colores (2026-10-12). Papel cálido + lima pálido + verde-lima profundo para texto.
      Un solo bloque al final: pisa los dos bloques de tokens claros de más arriba.
@@ -2468,7 +2473,15 @@
     --asphalt:#F5F5F0; --asphalt-2:#FFFFFF; --asphalt-3:#ECECE5; --asphalt-4:#D8D8CF;
     --chalk:#1A1B16; --mist:#5A5D52; --mist-dim:#666A5E;
     /* El lima como TEXTO pasa a un verde-lima profundo (7,7:1 sobre blanco) y como FONDO a un lima pálido de verdad, no a un verde oliva traslúcido */
-    --hivis-text:#3F5B00; --hivis-dim:rgba(190,232,0,.26);
+    --hivis-text:#3F5B00; --hivis-dim:rgba(150,200,0,.24);
+    /* --hivis (rellenos: barras, anillos, puntos, interruptores) baja a un verde-lima con 3:1 sobre blanco; el lima de marca puro queda como --volt, solo sobre fondos oscuros */
+    --hivis:#68A600; --volt:#D6FF3F; --ink-surface:#16170F;
+    /* Zonas con color fuerte (estilo Huawei): azul, verde, amarillo, naranja, rojo -- vivos como relleno y más oscuros como texto */
+    --zone1-fill:#2E86F0; --zone2-fill:#22B35A; --zone3-fill:#F2C200; --zone4-fill:#FF8A1F; --zone5-fill:#E5392F;
+    --zone1:#1B5FBF; --zone2:#17803D; --zone3:#8A6800; --zone4:#B25500; --zone5:#C0281E;
+    --zone1-bg:rgba(46,134,240,.14); --zone2-bg:rgba(34,179,90,.14); --zone3-bg:rgba(242,194,0,.20); --zone4-bg:rgba(255,138,31,.16); --zone5-bg:rgba(229,57,47,.13);
+    --zone1-bg-live:rgba(46,134,240,.12); --zone2-bg-live:rgba(34,179,90,.12); --zone3-bg-live:rgba(242,194,0,.16); --zone4-bg-live:rgba(255,138,31,.13); --zone5-bg-live:rgba(229,57,47,.11);
+    --zone5-text:#C0281E; --hivis-glow:rgba(104,166,0,.30);
     --press:rgba(30,30,10,.05); --overlay-hairline:rgba(30,30,10,.09);
     --contour-line:rgba(30,30,10,.035);
     --tabbar-bg:rgba(255,255,255,.94);
@@ -2493,6 +2506,53 @@
   :root[data-theme="light"] .trend-stroke.trend-rest{background:var(--asphalt-4);}
   :root[data-theme="light"] .trend-stroke.trend-today{background:var(--hivis); box-shadow:none;}
   :root[data-theme="light"] .streak-chip{box-shadow:none;}
+  /* ---- Tinta + lima: las acciones principales van en negro con letra lima (el lima puro no contrasta con el fondo claro) ---- */
+  :root[data-theme="light"] .btn-primary{background:var(--ink-surface); color:var(--volt); box-shadow:none;}
+  :root[data-theme="light"] .btn-primary:disabled{background:var(--asphalt-3); color:var(--mist-dim);}
+  :root[data-theme="light"] .go-circle{background:var(--ink-surface); color:var(--volt); box-shadow:0 6px 16px -6px rgba(22,23,15,.55); border-color:transparent;}
+  :root[data-theme="light"] nav.tabbar button.nav-btn-primary .nav-primary-circle{background:var(--ink-surface); color:var(--volt); box-shadow:0 0 0 3px #fff, 0 4px 12px -2px rgba(22,23,15,.5); border-color:transparent;}
+  :root[data-theme="light"] nav.tabbar button.nav-btn-primary.active .nav-primary-circle{box-shadow:0 0 0 3px #fff, 0 0 0 5px var(--hivis), 0 4px 12px -2px rgba(22,23,15,.5);}
+  :root[data-theme="light"] nav.tabbar button.active{color:var(--chalk);}
+  :root[data-theme="light"] nav.tabbar button.active svg{background:var(--ink-surface); color:var(--volt);}
+  :root[data-theme="light"] .choice.active, :root[data-theme="light"] .choice-row.segmented .choice.active{background:var(--ink-surface); border-color:var(--ink-surface); color:var(--volt); box-shadow:none;}
+  :root[data-theme="light"] .msg.user{background:var(--ink-surface); color:#F4F4EE;}
+  :root[data-theme="light"] .chat-send{background:var(--ink-surface); color:var(--volt); box-shadow:none;}
+  /* tiempo sobre el mapa del historial: texto claro sobre el fondo oscuro */
+  :root[data-theme="light"] .hist-map-badge .hist-map-duration{color:#fff; background:rgba(16,17,10,.72);}
+  /* copas y medallas: ganadas = ficha negra con lima (antes lima sobre lima pálido y se perdían); bloqueadas = gris con trazo visible */
+  :root[data-theme="light"] .pr-row.achieved, :root[data-theme="light"] .pr-medal.achieved{background:var(--ink-surface); box-shadow:none;}
+  :root[data-theme="light"] .pr-row.achieved .pr-info b, :root[data-theme="light"] .pr-medal.achieved .pr-medal-label{color:#F4F4EE;}
+  :root[data-theme="light"] .pr-row.achieved .pr-info small{color:#B9BCAE;}
+  :root[data-theme="light"] .pr-row.achieved .pr-time, :root[data-theme="light"] .pr-medal.achieved .pr-medal-time, :root[data-theme="light"] .pr-medal.achieved .icon-sq{color:var(--volt);}
+  :root[data-theme="light"] .pr-share{background:rgba(214,255,63,.16); color:var(--volt);}
+  :root[data-theme="light"] .pr-row.achieved .cup-handle{stroke:var(--volt);} :root[data-theme="light"] .pr-row.achieved .cup-body, :root[data-theme="light"] .pr-row.achieved .cup-stem, :root[data-theme="light"] .pr-row.achieved .cup-base{fill:var(--volt);}
+  :root[data-theme="light"] .pr-medal.achieved .mdl-rib, :root[data-theme="light"] .pr-medal.achieved .mdl-disc{fill:var(--volt);} :root[data-theme="light"] .pr-medal.achieved .mdl-rib{fill-opacity:.95;} :root[data-theme="light"] .pr-medal.achieved .mdl-rib.b{fill-opacity:.7;}
+  :root[data-theme="light"] .cup-handle, :root[data-theme="light"] .cup-body{stroke:#6F7267;} :root[data-theme="light"] .cup-stem, :root[data-theme="light"] .cup-base{fill:#8E9186; fill-opacity:.5;}
+  :root[data-theme="light"] .mdl-rib{fill:#8E9186; fill-opacity:.45;} :root[data-theme="light"] .mdl-disc{stroke:#6F7267;} :root[data-theme="light"] .mdl-star{fill:#6F7267; fill-opacity:.7;}
+  :root[data-theme="light"] .card.card-highlight, :root[data-theme="light"] .rp-entry{border-color:var(--hivis);}
+  :root[data-theme="light"] .card.card-highlight{border-width:1.5px;}
+  :root[data-theme="light"] nav.tabbar button.nav-btn-primary svg{color:var(--volt);}
+  /* la mascota conserva el lima de marca (el relleno --hivis ahora es un verde más profundo) */
+  :root[data-theme="light"] .mascot-body{fill:var(--volt);}
+  /* zonas: chips de color sólido y fuerte, texto negro */
+  :root[data-theme="light"] .zone-1, :root[data-theme="light"] .zone-badge-live.zone-1{background:var(--zone1-fill); color:var(--ink);}
+  :root[data-theme="light"] .zone-2, :root[data-theme="light"] .zone-badge-live.zone-2{background:var(--zone2-fill); color:var(--ink);}
+  :root[data-theme="light"] .zone-3, :root[data-theme="light"] .zone-badge-live.zone-3{background:var(--zone3-fill); color:var(--ink);}
+  :root[data-theme="light"] .zone-4, :root[data-theme="light"] .zone-badge-live.zone-4{background:var(--zone4-fill); color:var(--ink);}
+  :root[data-theme="light"] .zone-5, :root[data-theme="light"] .zone-badge-live.zone-5{background:var(--zone5-fill); color:var(--ink);}
+  :root[data-theme="light"] .pr-row.achieved .cup-body, :root[data-theme="light"] .pr-row.achieved .cup-handle{stroke:none;} :root[data-theme="light"] .pr-row.achieved .cup-handle{stroke:var(--volt);}
+  :root[data-theme="light"] .pr-row.achieved .cup-stem, :root[data-theme="light"] .pr-row.achieved .cup-base{fill-opacity:.85;}
+  :root[data-theme="light"] .pr-medal.achieved .mdl-disc{stroke:none;}
+  /* banner de marca nueva en el resumen: ficha negra con medalla lima, igual que en Logros */
+  :root[data-theme="light"] .sum-pr{background:var(--ink-surface); border-color:var(--ink-surface);}
+  :root[data-theme="light"] .sum-pr b{color:#F4F4EE;} :root[data-theme="light"] .sum-pr span:not(.sum-pr-medal){color:#B9BCAE;}
+  :root[data-theme="light"] .sum-pr .mdl-rib, :root[data-theme="light"] .sum-pr .mdl-disc{fill:var(--volt);} :root[data-theme="light"] .sum-pr .mdl-rib{fill-opacity:.95;} :root[data-theme="light"] .sum-pr .mdl-rib.b{fill-opacity:.7;}
+  /* el mapa de calor siempre es oscuro: sus filtros activos llevan el lima de marca */
+  :root[data-theme="light"] .heat-chip.on{background:var(--volt); border-color:var(--volt);}
+  /* barras de ritmo: los colores de zona ya son fuertes, sin el realce de saturación */
+  :root[data-theme="light"] .pace-bar-fill{filter:none;}
+  :root[data-theme="light"] .track-pause-circle{background:var(--ink-surface); color:var(--volt); box-shadow:0 6px 16px -6px rgba(22,23,15,.55); border-color:transparent;}
+  :root[data-theme="light"] .day-pill.active{background:var(--ink-surface); border-color:var(--ink-surface); color:var(--volt); box-shadow:none;}
 
   @media (prefers-color-scheme: light){
     :root:not([data-theme="dark"]){
@@ -2500,7 +2560,15 @@
       --asphalt:#F5F5F0; --asphalt-2:#FFFFFF; --asphalt-3:#ECECE5; --asphalt-4:#D8D8CF;
       --chalk:#1A1B16; --mist:#5A5D52; --mist-dim:#666A5E;
       /* El lima como TEXTO pasa a un verde-lima profundo (7,7:1 sobre blanco) y como FONDO a un lima pálido de verdad, no a un verde oliva traslúcido */
-      --hivis-text:#3F5B00; --hivis-dim:rgba(190,232,0,.26);
+      --hivis-text:#3F5B00; --hivis-dim:rgba(150,200,0,.24);
+      /* --hivis (rellenos: barras, anillos, puntos, interruptores) baja a un verde-lima con 3:1 sobre blanco; el lima de marca puro queda como --volt, solo sobre fondos oscuros */
+      --hivis:#68A600; --volt:#D6FF3F; --ink-surface:#16170F;
+      /* Zonas con color fuerte (estilo Huawei): azul, verde, amarillo, naranja, rojo -- vivos como relleno y más oscuros como texto */
+      --zone1-fill:#2E86F0; --zone2-fill:#22B35A; --zone3-fill:#F2C200; --zone4-fill:#FF8A1F; --zone5-fill:#E5392F;
+      --zone1:#1B5FBF; --zone2:#17803D; --zone3:#8A6800; --zone4:#B25500; --zone5:#C0281E;
+      --zone1-bg:rgba(46,134,240,.14); --zone2-bg:rgba(34,179,90,.14); --zone3-bg:rgba(242,194,0,.20); --zone4-bg:rgba(255,138,31,.16); --zone5-bg:rgba(229,57,47,.13);
+      --zone1-bg-live:rgba(46,134,240,.12); --zone2-bg-live:rgba(34,179,90,.12); --zone3-bg-live:rgba(242,194,0,.16); --zone4-bg-live:rgba(255,138,31,.13); --zone5-bg-live:rgba(229,57,47,.11);
+      --zone5-text:#C0281E; --hivis-glow:rgba(104,166,0,.30);
       --press:rgba(30,30,10,.05); --overlay-hairline:rgba(30,30,10,.09);
       --contour-line:rgba(30,30,10,.035);
       --tabbar-bg:rgba(255,255,255,.94);
@@ -2525,6 +2593,53 @@
     :root:not([data-theme="dark"]) .trend-stroke.trend-rest{background:var(--asphalt-4);}
     :root:not([data-theme="dark"]) .trend-stroke.trend-today{background:var(--hivis); box-shadow:none;}
     :root:not([data-theme="dark"]) .streak-chip{box-shadow:none;}
+    /* ---- Tinta + lima: las acciones principales van en negro con letra lima (el lima puro no contrasta con el fondo claro) ---- */
+    :root:not([data-theme="dark"]) .btn-primary{background:var(--ink-surface); color:var(--volt); box-shadow:none;}
+    :root:not([data-theme="dark"]) .btn-primary:disabled{background:var(--asphalt-3); color:var(--mist-dim);}
+    :root:not([data-theme="dark"]) .go-circle{background:var(--ink-surface); color:var(--volt); box-shadow:0 6px 16px -6px rgba(22,23,15,.55); border-color:transparent;}
+    :root:not([data-theme="dark"]) nav.tabbar button.nav-btn-primary .nav-primary-circle{background:var(--ink-surface); color:var(--volt); box-shadow:0 0 0 3px #fff, 0 4px 12px -2px rgba(22,23,15,.5); border-color:transparent;}
+    :root:not([data-theme="dark"]) nav.tabbar button.nav-btn-primary.active .nav-primary-circle{box-shadow:0 0 0 3px #fff, 0 0 0 5px var(--hivis), 0 4px 12px -2px rgba(22,23,15,.5);}
+    :root:not([data-theme="dark"]) nav.tabbar button.active{color:var(--chalk);}
+    :root:not([data-theme="dark"]) nav.tabbar button.active svg{background:var(--ink-surface); color:var(--volt);}
+    :root:not([data-theme="dark"]) .choice.active, :root:not([data-theme="dark"]) .choice-row.segmented .choice.active{background:var(--ink-surface); border-color:var(--ink-surface); color:var(--volt); box-shadow:none;}
+    :root:not([data-theme="dark"]) .msg.user{background:var(--ink-surface); color:#F4F4EE;}
+    :root:not([data-theme="dark"]) .chat-send{background:var(--ink-surface); color:var(--volt); box-shadow:none;}
+    /* tiempo sobre el mapa del historial: texto claro sobre el fondo oscuro */
+    :root:not([data-theme="dark"]) .hist-map-badge .hist-map-duration{color:#fff; background:rgba(16,17,10,.72);}
+    /* copas y medallas: ganadas = ficha negra con lima (antes lima sobre lima pálido y se perdían); bloqueadas = gris con trazo visible */
+    :root:not([data-theme="dark"]) .pr-row.achieved, :root:not([data-theme="dark"]) .pr-medal.achieved{background:var(--ink-surface); box-shadow:none;}
+    :root:not([data-theme="dark"]) .pr-row.achieved .pr-info b, :root:not([data-theme="dark"]) .pr-medal.achieved .pr-medal-label{color:#F4F4EE;}
+    :root:not([data-theme="dark"]) .pr-row.achieved .pr-info small{color:#B9BCAE;}
+    :root:not([data-theme="dark"]) .pr-row.achieved .pr-time, :root:not([data-theme="dark"]) .pr-medal.achieved .pr-medal-time, :root:not([data-theme="dark"]) .pr-medal.achieved .icon-sq{color:var(--volt);}
+    :root:not([data-theme="dark"]) .pr-share{background:rgba(214,255,63,.16); color:var(--volt);}
+    :root:not([data-theme="dark"]) .pr-row.achieved .cup-handle{stroke:var(--volt);} :root:not([data-theme="dark"]) .pr-row.achieved .cup-body, :root:not([data-theme="dark"]) .pr-row.achieved .cup-stem, :root:not([data-theme="dark"]) .pr-row.achieved .cup-base{fill:var(--volt);}
+    :root:not([data-theme="dark"]) .pr-medal.achieved .mdl-rib, :root:not([data-theme="dark"]) .pr-medal.achieved .mdl-disc{fill:var(--volt);} :root:not([data-theme="dark"]) .pr-medal.achieved .mdl-rib{fill-opacity:.95;} :root:not([data-theme="dark"]) .pr-medal.achieved .mdl-rib.b{fill-opacity:.7;}
+    :root:not([data-theme="dark"]) .cup-handle, :root:not([data-theme="dark"]) .cup-body{stroke:#6F7267;} :root:not([data-theme="dark"]) .cup-stem, :root:not([data-theme="dark"]) .cup-base{fill:#8E9186; fill-opacity:.5;}
+    :root:not([data-theme="dark"]) .mdl-rib{fill:#8E9186; fill-opacity:.45;} :root:not([data-theme="dark"]) .mdl-disc{stroke:#6F7267;} :root:not([data-theme="dark"]) .mdl-star{fill:#6F7267; fill-opacity:.7;}
+    :root:not([data-theme="dark"]) .card.card-highlight, :root:not([data-theme="dark"]) .rp-entry{border-color:var(--hivis);}
+    :root:not([data-theme="dark"]) .card.card-highlight{border-width:1.5px;}
+    :root:not([data-theme="dark"]) nav.tabbar button.nav-btn-primary svg{color:var(--volt);}
+    /* la mascota conserva el lima de marca (el relleno --hivis ahora es un verde más profundo) */
+    :root:not([data-theme="dark"]) .mascot-body{fill:var(--volt);}
+    /* zonas: chips de color sólido y fuerte, texto negro */
+    :root:not([data-theme="dark"]) .zone-1, :root:not([data-theme="dark"]) .zone-badge-live.zone-1{background:var(--zone1-fill); color:var(--ink);}
+    :root:not([data-theme="dark"]) .zone-2, :root:not([data-theme="dark"]) .zone-badge-live.zone-2{background:var(--zone2-fill); color:var(--ink);}
+    :root:not([data-theme="dark"]) .zone-3, :root:not([data-theme="dark"]) .zone-badge-live.zone-3{background:var(--zone3-fill); color:var(--ink);}
+    :root:not([data-theme="dark"]) .zone-4, :root:not([data-theme="dark"]) .zone-badge-live.zone-4{background:var(--zone4-fill); color:var(--ink);}
+    :root:not([data-theme="dark"]) .zone-5, :root:not([data-theme="dark"]) .zone-badge-live.zone-5{background:var(--zone5-fill); color:var(--ink);}
+    :root:not([data-theme="dark"]) .pr-row.achieved .cup-body, :root:not([data-theme="dark"]) .pr-row.achieved .cup-handle{stroke:none;} :root:not([data-theme="dark"]) .pr-row.achieved .cup-handle{stroke:var(--volt);}
+    :root:not([data-theme="dark"]) .pr-row.achieved .cup-stem, :root:not([data-theme="dark"]) .pr-row.achieved .cup-base{fill-opacity:.85;}
+    :root:not([data-theme="dark"]) .pr-medal.achieved .mdl-disc{stroke:none;}
+    /* banner de marca nueva en el resumen: ficha negra con medalla lima, igual que en Logros */
+    :root:not([data-theme="dark"]) .sum-pr{background:var(--ink-surface); border-color:var(--ink-surface);}
+    :root:not([data-theme="dark"]) .sum-pr b{color:#F4F4EE;} :root:not([data-theme="dark"]) .sum-pr span:not(.sum-pr-medal){color:#B9BCAE;}
+    :root:not([data-theme="dark"]) .sum-pr .mdl-rib, :root:not([data-theme="dark"]) .sum-pr .mdl-disc{fill:var(--volt);} :root:not([data-theme="dark"]) .sum-pr .mdl-rib{fill-opacity:.95;} :root:not([data-theme="dark"]) .sum-pr .mdl-rib.b{fill-opacity:.7;}
+    /* el mapa de calor siempre es oscuro: sus filtros activos llevan el lima de marca */
+    :root:not([data-theme="dark"]) .heat-chip.on{background:var(--volt); border-color:var(--volt);}
+    /* barras de ritmo: los colores de zona ya son fuertes, sin el realce de saturación */
+    :root:not([data-theme="dark"]) .pace-bar-fill{filter:none;}
+    :root:not([data-theme="dark"]) .track-pause-circle{background:var(--ink-surface); color:var(--volt); box-shadow:0 6px 16px -6px rgba(22,23,15,.55); border-color:transparent;}
+    :root:not([data-theme="dark"]) .day-pill.active{background:var(--ink-surface); border-color:var(--ink-surface); color:var(--volt); box-shadow:none;}
   
   }
 </style>
