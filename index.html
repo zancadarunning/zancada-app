@@ -2344,6 +2344,7 @@
 
 
 
+
   /* =====================================================================================================================
      ZONAS DE FRECUENCIA CARDÍACA -- color fuerte en los dos temas (azul, verde, amarillo, naranja, rojo).
      Relleno vivo para barras, anillos, mapas y chips; el texto sobre fondo usa una variante legible por tema.
@@ -2392,7 +2393,7 @@
     --shadow-card:none; --shadow-lg:0 4px 10px rgba(23,26,16,.16);
     --toast-error-bg:#FDEAE7; --toast-error-fg:#B0241A;
     --header-bg:linear-gradient(180deg, var(--asphalt) 0, var(--asphalt) 74%, transparent 100%);
-    --zone1-fill:#2E86F0; --zone2-fill:#22B35A; --zone3-fill:#F2C200; --zone4-fill:#FF8A1F; --zone5-fill:#E5392F;
+    --zone1-fill:#2E86F0; --zone2-fill:#22B35A; --zone3-fill:#EBBB00; --zone4-fill:#FF8A1F; --zone5-fill:#E5392F;
     --zone1:#1B5FBF; --zone2:#17803D; --zone3:#8A6800; --zone4:#B25500; --zone5:#C0281E; --zone5-text:#C0281E;
     --zone1-bg:rgba(46,134,240,.14); --zone2-bg:rgba(34,179,90,.14); --zone3-bg:rgba(242,194,0,.20); --zone4-bg:rgba(255,138,31,.16); --zone5-bg:rgba(229,57,47,.13);
     --zone1-bg-live:rgba(46,134,240,.12); --zone2-bg-live:rgba(34,179,90,.12); --zone3-bg-live:rgba(242,194,0,.16); --zone4-bg-live:rgba(255,138,31,.13); --zone5-bg-live:rgba(229,57,47,.11);
@@ -2431,6 +2432,37 @@
   :root[data-theme="light"] .pr-row.achieved .cup-stem, :root[data-theme="light"] .pr-row.achieved .cup-base{fill:var(--hivis-edge); fill-opacity:1;}
   :root[data-theme="light"] .pr-row.achieved .cup-shine{stroke:#fff;}
   :root[data-theme="light"] .pr-share{background:rgba(23,26,16,.07); color:var(--hivis-text);}
+  /* ---- Mejoras de visibilidad ---- */
+  /* 1: el lima se separa del blanco con un contorno oliva más firme */
+  :root[data-theme="light"] .btn-primary, :root[data-theme="light"] .go-circle, :root[data-theme="light"] .track-pause-circle, :root[data-theme="light"] .chat-send{box-shadow:inset 0 0 0 2px var(--hivis-edge);}
+  :root[data-theme="light"] .go-circle, :root[data-theme="light"] .track-pause-circle{box-shadow:inset 0 0 0 2px var(--hivis-edge), 0 8px 18px -8px rgba(110,150,0,.55);}
+  :root[data-theme="light"] nav.tabbar button.nav-btn-primary .nav-primary-circle{box-shadow:inset 0 0 0 2px var(--hivis-edge), 0 0 0 3px #fff, 0 4px 12px -2px rgba(110,150,0,.5);}
+  :root[data-theme="light"] nav.tabbar button.nav-btn-primary.active .nav-primary-circle{box-shadow:inset 0 0 0 2px var(--hivis-edge), 0 0 0 3px #fff, 0 0 0 5px rgba(141,182,0,.45);}
+  :root[data-theme="light"] nav.tabbar button.active svg{background:var(--hivis); box-shadow:inset 0 0 0 1.5px var(--hivis-edge); color:var(--ink);}
+  :root[data-theme="light"] .choice.active, :root[data-theme="light"] .choice-row.segmented .choice.active, :root[data-theme="light"] .day-pill.active{box-shadow:inset 0 0 0 1.5px var(--hivis-edge);}
+  :root[data-theme="light"] .msg.user{box-shadow:inset 0 0 0 1.5px var(--hivis-edge);}
+  :root[data-theme="light"] .mascot-body{stroke:var(--hivis-edge); stroke-width:2.2;}
+  :root[data-theme="light"] .coach-head-avatar circle{stroke:var(--hivis-edge); stroke-width:1.6;}
+  /* 2: barras laterales de la frase de Zonda y las notas, en oliva (el lima casi no se ve sobre blanco) */
+  :root[data-theme="light"] .hl-card, :root[data-theme="light"] .rd-hl, :root[data-theme="light"] #plan-taper-note, :root[data-theme="light"] #plan-event-week-note, :root[data-theme="light"] #plan-cutback-note, :root[data-theme="light"] #plan-recovery-note, :root[data-theme="light"] .ob-callout{border-left-color:var(--hivis-edge);}
+  /* 3: chips que se perdían (clima, racha) */
+  :root[data-theme="light"] .wx-chip, :root[data-theme="light"] .streak-badge, :root[data-theme="light"] .streak-chip{background:var(--asphalt-3); box-shadow:inset 0 0 0 1px var(--overlay-hairline);}
+  /* 4: barras de tendencia en verde de marca */
+  :root[data-theme="light"] .trend-stroke{background:var(--hivis-line);}
+  :root[data-theme="light"] .trend-stroke.trend-planned{background:var(--asphalt-4);}
+  :root[data-theme="light"] .trend-stroke.trend-rest{background:var(--asphalt-4);}
+  :root[data-theme="light"] .trend-stroke.trend-today{background:var(--hivis-edge);}
+  /* 5: pista del chat más suave */
+  :root[data-theme="light"] #coachChatWrap{--track-line:rgba(120,165,0,.17); --track-glow:rgba(140,190,0,.12);}
+  /* 6: mensajes de Zonda en blanco con filete */
+  :root[data-theme="light"] .msg.coach{background:#fff; border:1px solid var(--overlay-hairline);}
+  /* 7: Plan de carrera: lima pálido limpio */
+  :root[data-theme="light"] .rp-entry{background:#EAF7B4; border-color:rgba(141,182,0,.6);}
+  :root[data-theme="light"] .rp-entry-ic{background:var(--hivis); box-shadow:inset 0 0 0 1.5px var(--hivis-edge);}
+  /* 8: hoy en el Plan: pastilla plana */
+  :root[data-theme="light"] .day-row.day-row-today::after{inset:0; border-radius:var(--radius-sm); background:#EEF9C4; -webkit-mask-image:none; mask-image:none;}
+  :root[data-theme="light"] .day-row.day-row-today .day-badge{background:var(--hivis); box-shadow:inset 0 0 0 1.5px var(--hivis-edge);}
+  :root[data-theme="light"] .day-row.day-row-today .day-badge .d, :root[data-theme="light"] .day-row.day-row-today .day-badge .mono{color:var(--ink);}
   /* Logos de marca: en oscuro se pasan a blanco; acá a negro */
   :root[data-theme="light"] .brand-logo-chip img{filter:brightness(0);}
   :root[data-theme="light"] .brand-logo-chip img.brand-logo-color{filter:none;}
@@ -2479,7 +2511,7 @@
       --shadow-card:none; --shadow-lg:0 4px 10px rgba(23,26,16,.16);
       --toast-error-bg:#FDEAE7; --toast-error-fg:#B0241A;
       --header-bg:linear-gradient(180deg, var(--asphalt) 0, var(--asphalt) 74%, transparent 100%);
-      --zone1-fill:#2E86F0; --zone2-fill:#22B35A; --zone3-fill:#F2C200; --zone4-fill:#FF8A1F; --zone5-fill:#E5392F;
+      --zone1-fill:#2E86F0; --zone2-fill:#22B35A; --zone3-fill:#EBBB00; --zone4-fill:#FF8A1F; --zone5-fill:#E5392F;
       --zone1:#1B5FBF; --zone2:#17803D; --zone3:#8A6800; --zone4:#B25500; --zone5:#C0281E; --zone5-text:#C0281E;
       --zone1-bg:rgba(46,134,240,.14); --zone2-bg:rgba(34,179,90,.14); --zone3-bg:rgba(242,194,0,.20); --zone4-bg:rgba(255,138,31,.16); --zone5-bg:rgba(229,57,47,.13);
       --zone1-bg-live:rgba(46,134,240,.12); --zone2-bg-live:rgba(34,179,90,.12); --zone3-bg-live:rgba(242,194,0,.16); --zone4-bg-live:rgba(255,138,31,.13); --zone5-bg-live:rgba(229,57,47,.11);
@@ -2518,6 +2550,37 @@
     :root:not([data-theme="dark"]) .pr-row.achieved .cup-stem, :root:not([data-theme="dark"]) .pr-row.achieved .cup-base{fill:var(--hivis-edge); fill-opacity:1;}
     :root:not([data-theme="dark"]) .pr-row.achieved .cup-shine{stroke:#fff;}
     :root:not([data-theme="dark"]) .pr-share{background:rgba(23,26,16,.07); color:var(--hivis-text);}
+    /* ---- Mejoras de visibilidad ---- */
+    /* 1: el lima se separa del blanco con un contorno oliva más firme */
+    :root:not([data-theme="dark"]) .btn-primary, :root:not([data-theme="dark"]) .go-circle, :root:not([data-theme="dark"]) .track-pause-circle, :root:not([data-theme="dark"]) .chat-send{box-shadow:inset 0 0 0 2px var(--hivis-edge);}
+    :root:not([data-theme="dark"]) .go-circle, :root:not([data-theme="dark"]) .track-pause-circle{box-shadow:inset 0 0 0 2px var(--hivis-edge), 0 8px 18px -8px rgba(110,150,0,.55);}
+    :root:not([data-theme="dark"]) nav.tabbar button.nav-btn-primary .nav-primary-circle{box-shadow:inset 0 0 0 2px var(--hivis-edge), 0 0 0 3px #fff, 0 4px 12px -2px rgba(110,150,0,.5);}
+    :root:not([data-theme="dark"]) nav.tabbar button.nav-btn-primary.active .nav-primary-circle{box-shadow:inset 0 0 0 2px var(--hivis-edge), 0 0 0 3px #fff, 0 0 0 5px rgba(141,182,0,.45);}
+    :root:not([data-theme="dark"]) nav.tabbar button.active svg{background:var(--hivis); box-shadow:inset 0 0 0 1.5px var(--hivis-edge); color:var(--ink);}
+    :root:not([data-theme="dark"]) .choice.active, :root:not([data-theme="dark"]) .choice-row.segmented .choice.active, :root:not([data-theme="dark"]) .day-pill.active{box-shadow:inset 0 0 0 1.5px var(--hivis-edge);}
+    :root:not([data-theme="dark"]) .msg.user{box-shadow:inset 0 0 0 1.5px var(--hivis-edge);}
+    :root:not([data-theme="dark"]) .mascot-body{stroke:var(--hivis-edge); stroke-width:2.2;}
+    :root:not([data-theme="dark"]) .coach-head-avatar circle{stroke:var(--hivis-edge); stroke-width:1.6;}
+    /* 2: barras laterales de la frase de Zonda y las notas, en oliva (el lima casi no se ve sobre blanco) */
+    :root:not([data-theme="dark"]) .hl-card, :root:not([data-theme="dark"]) .rd-hl, :root:not([data-theme="dark"]) #plan-taper-note, :root:not([data-theme="dark"]) #plan-event-week-note, :root:not([data-theme="dark"]) #plan-cutback-note, :root:not([data-theme="dark"]) #plan-recovery-note, :root:not([data-theme="dark"]) .ob-callout{border-left-color:var(--hivis-edge);}
+    /* 3: chips que se perdían (clima, racha) */
+    :root:not([data-theme="dark"]) .wx-chip, :root:not([data-theme="dark"]) .streak-badge, :root:not([data-theme="dark"]) .streak-chip{background:var(--asphalt-3); box-shadow:inset 0 0 0 1px var(--overlay-hairline);}
+    /* 4: barras de tendencia en verde de marca */
+    :root:not([data-theme="dark"]) .trend-stroke{background:var(--hivis-line);}
+    :root:not([data-theme="dark"]) .trend-stroke.trend-planned{background:var(--asphalt-4);}
+    :root:not([data-theme="dark"]) .trend-stroke.trend-rest{background:var(--asphalt-4);}
+    :root:not([data-theme="dark"]) .trend-stroke.trend-today{background:var(--hivis-edge);}
+    /* 5: pista del chat más suave */
+    :root:not([data-theme="dark"]) #coachChatWrap{--track-line:rgba(120,165,0,.17); --track-glow:rgba(140,190,0,.12);}
+    /* 6: mensajes de Zonda en blanco con filete */
+    :root:not([data-theme="dark"]) .msg.coach{background:#fff; border:1px solid var(--overlay-hairline);}
+    /* 7: Plan de carrera: lima pálido limpio */
+    :root:not([data-theme="dark"]) .rp-entry{background:#EAF7B4; border-color:rgba(141,182,0,.6);}
+    :root:not([data-theme="dark"]) .rp-entry-ic{background:var(--hivis); box-shadow:inset 0 0 0 1.5px var(--hivis-edge);}
+    /* 8: hoy en el Plan: pastilla plana */
+    :root:not([data-theme="dark"]) .day-row.day-row-today::after{inset:0; border-radius:var(--radius-sm); background:#EEF9C4; -webkit-mask-image:none; mask-image:none;}
+    :root:not([data-theme="dark"]) .day-row.day-row-today .day-badge{background:var(--hivis); box-shadow:inset 0 0 0 1.5px var(--hivis-edge);}
+    :root:not([data-theme="dark"]) .day-row.day-row-today .day-badge .d, :root:not([data-theme="dark"]) .day-row.day-row-today .day-badge .mono{color:var(--ink);}
     /* Logos de marca: en oscuro se pasan a blanco; acá a negro */
     :root:not([data-theme="dark"]) .brand-logo-chip img{filter:brightness(0);}
     :root:not([data-theme="dark"]) .brand-logo-chip img.brand-logo-color{filter:none;}
