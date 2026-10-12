@@ -59,7 +59,9 @@ function buildMessage(runs, source, lang, imperial) {
 }
 
 async function runExists(base, headers, userId, runId) {
-  const res = await fetch(`${base}/rest/v1/app_state?user_id=eq.${encodeURIComponent(userId)}&data=cs.${encodeURIComponent(JSON.stringify({ runs: [{ id: runId }] }))}&select=user_id`, { headers });
+  // (URL armada por concatenación: el filtro ya va escapado con encodeURIComponent)
+  const filter = encodeURIComponent(JSON.stringify({ runs: [{ id: runId }] }));
+  const res = await fetch(base + '/rest/v1/app_state?user_id=eq.' + encodeURIComponent(userId) + '&data=cs.' + filter + '&select=user_id', { headers });
   if (!res.ok) throw new Error('exists check failed ' + res.status);
   const rows = await res.json();
   return Array.isArray(rows) && rows.length > 0;
