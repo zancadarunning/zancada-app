@@ -665,3 +665,36 @@ test('vendor/mapbox-gl-csp.js va envuelto en su propia función (si no, declara 
   assert.match(src.slice(0, 400), /^\/\*[^]*?\*\/\s*\(function\(\)\{\s*var e,t;/, 'envuelto al principio');
   assert.match(src.slice(-200), /\}\)\.call\(/, 'cierre del envoltorio al final');
 });
+
+test('plan de carrera: el tiempo estimado no puede ser más rápido de lo que permite el test de nivel (caso: 4 semanas corriendo, zona 4 a 6:30)', () => {
+  const app = loadApp();
+  // test de nivel de hace 4 semanas con ~1,9 km en 12 min (VDOT ~30): zona 4 ~ 6:30/km
+  const vdot = app.vdotFromCooper(1900);
+  app.state.profile = { levelTest: { required: true, done: true, vdot, distanceM: 1900, date: isoDaysAgo(28).slice(0, 10) } };
+  // una salida corta y rápida (4 km a 5:00/km) que con Riegel proyectaría un 10K a ~5:20/km
+  app.state.runs = [{ id: 'a', date: isoDaysAgo(5), distanceKm: 4, durationSec: 1200 }];
+  const raw = 1200 * Math.pow(10 / 4, 1.06);
+  assert.ok(raw / 600 < 5.6, 'sin el piso saldría ~5:30/km');
+  const e = app.estimateRaceTime(10);
+  assert.equal(e.source, 'level');
+  const paceMin = e.sec / 60 / 10;
+  assert.ok(paceMin > 6.1 && paceMin < 6.7, 'con el piso: ~6:15-6:30/km, no ' + paceMin.toFixed(2));
+});
+
+test('plan de carrera: sin test de nivel no hay piso, y una salida de 3 km ya no proyecta un 10K; con una de 5 km sí, y guarda la base', () => {
+  const app = loadApp();
+  app.state.profile = {};
+  app.state.runs = [{ id: 'a', date: isoDaysAgo(5), distanceKm: 3, durationSec: 900 }];
+  assert.equal(app.estimateRaceTime(10), null, '3 km -> 10 km es mucho salto (más de 2,5 veces)');
+  app.state.runs = [{ id: 'a', date: isoDaysAgo(5), distanceKm: 5, durationSec: 1800 }];
+  const e = app.estimateRaceTime(10);
+  assert.equal(e.source, 'runs');
+  assert.equal(e.basis.distKm, 5);
+  assert.ok(Math.abs(e.basis.paceMin - 6) < 1e-9);
+});
+
+test('raceSecFromVdot: coincide con las tablas de Daniels (VDOT 50: 5K ≈ 19:57, 10K ≈ 41:21)', () => {
+  const app = loadApp();
+  assert.ok(Math.abs(app.raceSecFromVdot(50, 5000) / 60 - 19.95) < 0.3);
+  assert.ok(Math.abs(app.raceSecFromVdot(50, 10000) / 60 - 41.35) < 0.5);
+});

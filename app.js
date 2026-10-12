@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T03:45:29Z';
+const APP_VERSION = '2026-10-12T03:53:32Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6396,17 +6396,23 @@ function racePlanKm(){
 // si no hay, tu mejor marca (o la de referencia del onboarding).
 function estimateRaceTime(km){
   const cutoff = Date.now() - 90 * 864e5;
-  let best = null;
+  let best = null, basis = null;
   (state.runs || []).forEach(r => {
     const pace = r.distanceKm > 0 ? (r.durationSec / 60) / r.distanceKm : 0;
     if(!(r.distanceKm >= 3 && r.distanceKm <= 60 && r.durationSec > 0 && pace >= 2.5 && pace <= 12 && new Date(r.date).getTime() >= cutoff)) return;
-    if(km > r.distanceKm * 4.2) return;
+    // Riegel solo es confiable con una distancia de referencia parecida: de una salida de 3 km no se proyecta un 10K (antes se aceptaba hasta 4,2 veces)
+    if(km > r.distanceKm * 2.5) return;
     const sec = r.durationSec * Math.pow(km / r.distanceKm, 1.06);
-    if(!best || sec < best) best = sec;
+    if(!best || sec < best){ best = sec; basis = {distKm: r.distanceKm, paceMin: pace, date: r.date}; }
   });
-  if(best) return {sec: best, source: 'runs'};
+  const floor = levelRaceFloor(km);
+  if(best){
+    // un entrenamiento rara vez es un esfuerzo máximo: si la proyección sale más rápida de lo que permite el test de nivel, manda el test
+    if(floor && best < floor.sec) return {sec: floor.sec, source: 'level'};
+    return {sec: best, source: 'runs', basis};
+  }
   const p = predictRaceTime(km);
-  return p ? {sec: p.predictedSec, source: 'pr'} : null;
+  return p ? {sec: p.predictedSec, source: p.floored ? 'level' : 'pr'} : null;
 }
 // Parciales con salida controlada: el primer 20% un 1,5% más lento, el último 20% un 1,5% más
 // rápido y el medio parejo; el total siempre da el tiempo objetivo. Las cuentas van en la unidad
@@ -6461,7 +6467,7 @@ function openRacePlan(){
     const unit = distUnit();
     html += '<div class="card rp-target"><div class="rp-target-row"><div><div class="rp-lbl">' + t('rp_target') + '</div><div class="rp-big">' + fmtRaceTime(sec) + '</div></div>' +
       '<div><div class="rp-lbl" style="text-align:right;">' + t('rp_pace_lbl') + '</div><div class="rp-pace">' + fmtPace(est.sec / 60 / km) + ' <small>/' + unit + '</small></div></div></div>' +
-      '<p class="rp-note">' + t(est.source === 'runs' ? 'rp_hint_runs' : 'rp_hint_pr') + '</p></div>' +
+      '<p class="rp-note">' + t(est.source === 'runs' ? 'rp_hint_runs' : (est.source === 'level' ? 'rp_hint_level' : 'rp_hint_pr')) + (est.basis ? ' ' + t('rp_basis', {dist: fmtDist(est.basis.distKm, 1) + ' ' + distUnit(), pace: fmtPace(est.basis.paceMin), unit: distUnit(), date: new Date(est.basis.date).toLocaleDateString(LOCALE_MAP[lang], {day:'numeric', month:'short'})}) : '') + '</p></div>' +
       '<div class="card"><div class="rp-lbl" style="margin-bottom:6px;">' + t('rp_strategy') + '</div><div class="rp-strat-name">' + t('rp_strategy_name') + '</div><p class="rp-strat-body">' + t('rp_strategy_body') + '</p></div>' +
       '<div class="card"><div class="rp-lbl" style="margin-bottom:4px;">' + t('rp_splits') + '</div>' +
       shown.map((s, i) => {
@@ -11942,6 +11948,28 @@ function closeAchievements(){
   document.getElementById('achievements-modal').classList.remove('overlay-open');
 }
 
+// Tiempo de carrera (segundos) que corresponde a un VDOT para una distancia (Daniels): se busca el tiempo en que el consumo de oxígeno que exige
+// ese ritmo es justo la fracción del VDOT que se puede sostener durante ese rato.
+function raceSecFromVdot(vdot, distM){
+  let lo = 60, hi = 10 * 3600;
+  for(let i = 0; i < 60; i++){
+    const mid = (lo + hi) / 2, min = mid / 60, v = distM / min;
+    const vo2 = -4.60 + 0.182258 * v + 0.000104 * v * v;
+    const pct = 0.8 + 0.1894393 * Math.exp(-0.012778 * min) + 0.2989558 * Math.exp(-0.1932605 * min);
+    if(vo2 / pct > vdot) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+// Piso del tiempo estimado: nadie corre una carrera mucho más rápido de lo que dice su test de nivel. Se deja un margen de mejora que crece con
+// las semanas desde el test (2% + 0,5% por semana, hasta 12%): un principiante a 4 semanas de arrancar mejora poco, uno de hace 6 meses bastante.
+// Sin test de nivel hecho no hay piso (null).
+function levelRaceFloor(km){
+  const lt = state.profile && state.profile.levelTest;
+  if(!lt || !lt.done || !(lt.vdot > 0) || !(km > 0)) return null;
+  const weeks = lt.date ? Math.max(0, (Date.now() - new Date(lt.date + 'T12:00:00').getTime()) / (7 * 864e5)) : 0;
+  const allowance = Math.min(0.12, 0.02 + 0.005 * weeks);
+  return {sec: raceSecFromVdot(lt.vdot, km * 1000) * (1 - allowance), refDistanceKm: (lt.distanceM || 0) / 1000, refDurationSec: 720};
+}
 function predictRaceTime(targetKm){
   // Estima el tiempo objetivo para `targetKm` con la fórmula de Riegel (T2 = T1 *
   // (D2/D1)^1.06), usando como referencia la marca personal más cercana en distancia
@@ -11960,6 +11988,9 @@ function predictRaceTime(targetKm){
   });
   if(!best) return null;
   const predictedSec = best.durationSec * Math.pow(targetKm/best.distanceKm, 1.06);
+  // con el test de nivel hecho, la proyección no puede ser más rápida que lo que ese nivel permite (con su margen de mejora)
+  const floor = levelRaceFloor(targetKm);
+  if(floor && predictedSec < floor.sec && floor.refDistanceKm > 0) return { predictedSec: floor.sec, refDistanceKm: floor.refDistanceKm, refDurationSec: floor.refDurationSec, floored: true };
   return { predictedSec, refDistanceKm: best.distanceKm, refDurationSec: best.durationSec };
 }
 function getGoalRaceKm(){
