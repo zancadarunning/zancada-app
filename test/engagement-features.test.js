@@ -645,3 +645,16 @@ test('regreso gradual: base = promedio de 4 semanas ANTES de la molestia; solo s
   app.state.runs = [run(25, 3)];
   assert.equal(app.painReturnEligible(entry), null, 'menos de 5 km por semana de base');
 });
+
+test('mapas vectoriales: el envoltorio traduce fitBounds/on/resize a Mapbox GL (lon,lat y padding numérico)', () => {
+  const app = loadApp();
+  const calls = [];
+  const fake = { fitBounds: (b, o) => calls.push(['fit', JSON.stringify(b), JSON.stringify(o)]), resize: () => calls.push(['resize']), on: (e, fn) => calls.push(['on', e]), remove: () => calls.push(['remove']) };
+  const ad = app.glAdapter(fake);
+  ad.fitBounds([[-34.6, -58.5], [-34.5, -58.3]], { padding: [40, 40], maxZoom: 16 });
+  assert.deepEqual(calls[0], ['fit', '[[-58.5,-34.6],[-58.3,-34.5]]', '{"padding":40,"duration":0,"maxZoom":16}']);
+  ad.on('dragstart zoomstart', () => {});
+  assert.deepEqual(calls.filter(c => c[0] === 'on').map(c => c[1]), ['dragstart', 'zoomstart']);
+  ad.invalidateSize(); ad.remove();
+  assert.deepEqual(calls.slice(-2).map(c => c[0]), ['resize', 'remove']);
+});

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T03:15:58Z';
+const APP_VERSION = '2026-10-12T03:24:33Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10160,6 +10160,46 @@ function computePaceSeriesFromPoints(points){
 const MAPBOX_TOKEN = 'pk.eyJ1IjoiemFuY2FkYSIsImEiOiJjbXU0cm9sbGEwM2tzMndwczE4emExdzVnIn0.kzrV4ltOY_PjTd_YIuh1vQ';
 const MAPBOX_STYLE = 'streets-v12';
 const MAPBOX_TILE_URL = `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/tiles/256/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`;
+/* ---- Mapas vectoriales (Mapbox GL): el texto y las líneas se dibujan a la resolución real de la pantalla (en un iPhone con 3x de densidad las
+   tiles de imagen, aun en @2x, quedan blandas). Se usa en el detalle de carrera y en el mapa de calor; si no carga o el equipo no soporta WebGL, los
+   dos caen al mapa de imágenes de siempre. La librería es la versión "CSP" (su worker se sirve desde vendor/, sin blobs) y se carga recién al abrir un mapa. ---- */
+let mapboxGlPromise = null;
+function loadMapboxGl(){
+  if(typeof mapboxgl !== 'undefined') return Promise.resolve(true);
+  if(!mapboxGlPromise) mapboxGlPromise = new Promise(resolve => {
+    const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = 'vendor/mapbox-gl.css'; document.head.appendChild(link);
+    const s = document.createElement('script'); s.src = 'vendor/mapbox-gl-csp.js';
+    s.onload = () => {
+      try{
+        mapboxgl.accessToken = MAPBOX_TOKEN;
+        mapboxgl.workerUrl = new URL('vendor/mapbox-gl-csp-worker.js', document.baseURI).href;
+        resolve(!!(mapboxgl.supported ? mapboxgl.supported() : true));
+      }catch(e){ resolve(false); }
+    };
+    s.onerror = () => { mapboxGlPromise = null; resolve(false); };
+    document.head.appendChild(s);
+  });
+  return mapboxGlPromise;
+}
+// Envoltorio con los mismos métodos de Leaflet que usa el resto del código (invalidateSize, remove, fitBounds, on)
+function glAdapter(map){
+  return {
+    isGl: true, map,
+    invalidateSize: () => map.resize(),
+    remove: () => map.remove(),
+    fitBounds: (b, o) => {
+      // b: L.latLngBounds o [[lat, lon], [lat, lon]]
+      const sw = Array.isArray(b) ? {lat: b[0][0], lng: b[0][1]} : b.getSouthWest(), ne = Array.isArray(b) ? {lat: b[1][0], lng: b[1][1]} : b.getNorthEast();
+      map.fitBounds([[sw.lng, sw.lat], [ne.lng, ne.lat]], {padding: (o && o.padding && o.padding[0]) || 0, duration: 0, maxZoom: (o && o.maxZoom) || 18});
+    },
+    on: (events, fn) => { String(events).split(' ').forEach(e => { if(e) map.on(e, fn); }); }
+  };
+}
+function newGlMap(container, style){
+  const map = new mapboxgl.Map({container, style: 'mapbox://styles/mapbox/' + style, center: [0, 0], zoom: 2, attributionControl: true, dragRotate: false, pitchWithRotate: false, touchPitch: false, fadeDuration: 0});
+  try{ map.touchZoomRotate.disableRotation(); }catch(e){}
+  return map;
+}
 // Capa de mapa de Leaflet con la mejor nitidez: tiles de 512 px pedidas siempre en versión @2x (1024 px reales) -- en una pantalla común (no retina)
 // el navegador las reduce y se ven mucho más definidas; en una retina son 1:1. tileSize 512 + zoomOffset -1 mantiene la misma escala y el mismo
 // tamaño de texto que antes. (detectRetina no se usa: pediría el doble de zoom con tiles de 512.)
@@ -10297,14 +10337,14 @@ function buildHistMapStaticUrl(r, width, height){
   const dpr = (typeof devicePixelRatio!=='undefined' && devicePixelRatio) || 1;
   const w = Math.min(1280, Math.round(width)), h = Math.min(1280, Math.round(height));
   const retina = dpr > 1.25 ? '@2x' : '';
-  return `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/static/path-3+0B5D2E-1(${encoded})/auto/${w}x${h}${retina}?access_token=${MAPBOX_TOKEN}`;
+  return `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/static/path-2+0B5D2E-1(${encoded})/auto/${w}x${h}${retina}?access_token=${MAPBOX_TOKEN}`;
 }
 function initLiveMap(){
   if(liveMap){ liveMap.remove(); liveMap=null; }
   liveMap = L.map('liveMap', {zoomControl:false, attributionControl:true}).setView([0,0], 15);
   mapboxTileLayer().addTo(liveMap);
   slimMapAttribution(liveMap);
-  livePolyline = L.polyline([], {color:'#0B5D2E', weight:5, lineCap:'round', lineJoin:'round'}).addTo(liveMap);
+  livePolyline = L.polyline([], {color:'#0B5D2E', weight:3.5, lineCap:'round', lineJoin:'round'}).addTo(liveMap);
   liveMarker = null; startMarker = null;
   liveMapFollowing = true;
   document.querySelector('.map-recenter-btn')?.classList.remove('visible');
@@ -12304,9 +12344,48 @@ function setHeatRange(k){
   document.querySelectorAll('#heatmap-chips .heat-chip').forEach(c => c.classList.toggle('on', c.dataset.r === k));
   renderHeatmap();
 }
-function renderHeatmap(){
-  if(typeof L === 'undefined') return;
+let heatGl = null;
+// Mapa de calor vectorial: todas las carreras como una sola capa de líneas finas semitransparentes (al superponerse se suman y brillan).
+async function renderHeatmapGl(runs){
+  if(!(await loadMapboxGl())) return false;
+  const features = runs.map(r => {
+    const step = Math.max(1, Math.floor(r.points.length / 500));
+    const coords = [];
+    for(let i=0;i<r.points.length;i+=step){ const p = r.points[i]; if(Number.isFinite(p.lat) && Number.isFinite(p.lon)) coords.push([p.lon, p.lat]); }
+    return coords.length > 1 ? {type:'Feature', properties:{}, geometry:{type:'LineString', coordinates: coords}} : null;
+  }).filter(Boolean);
+  const data = {type:'FeatureCollection', features};
+  if(!heatGl){
+    const el = document.getElementById('heatmap-map');
+    const map = newGlMap(el, 'navigation-night-v1');
+    heatGl = glAdapter(map);
+    heatGl.ready = new Promise(resolve => map.on('load', () => {
+      map.addSource('heat', {type:'geojson', data});
+      map.addLayer({id:'heat', type:'line', source:'heat', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':'#D6FF3F','line-width':2,'line-opacity':0.32}});
+      resolve();
+    }));
+  } else {
+    heatGl.ready.then(() => { const src = heatGl.map.getSource('heat'); if(src) src.setData(data); });
+  }
+  heatGl.invalidateSize();
+  const b = heatmapFocusBounds(runs);
+  if(b) heatGl.fitBounds(b, {padding:[40,40], maxZoom:16});
+  return true;
+}
+async function renderHeatmap(){
   const runs = heatmapRuns(heatRange);
+  let km = 0;
+  runs.forEach(r => { km += r.distanceKm || 0; });
+  document.getElementById('heatmap-empty').style.display = runs.length ? 'none' : 'block';
+  document.getElementById('heatmap-stats').textContent = runs.length ? t('heat_stats', {n: runs.length, km: fmtDist(km, 0) + ' ' + distUnit()}) : '';
+  let ok = false;
+  if(!heatMap){ try{ ok = await renderHeatmapGl(runs); }catch(e){ ok = false; } }
+  else ok = false;
+  if(ok || heatGl) return;
+  renderHeatmapRaster(runs);
+}
+function renderHeatmapRaster(runs){
+  if(typeof L === 'undefined') return;
   if(!heatMap){
     heatMap = L.map('heatmap-map', {zoomControl:false, attributionControl:true, preferCanvas:true}).setView([0,0], 2);
     mapboxTileLayer('navigation-night-v1').addTo(heatMap);
@@ -12319,10 +12398,8 @@ function renderHeatmap(){
     const step = Math.max(1, Math.floor(r.points.length / 500));   // 500 puntos por carrera alcanzan de sobra para dibujar el trazo
     const ll = [];
     for(let i=0;i<r.points.length;i+=step){ const p = r.points[i]; if(Number.isFinite(p.lat) && Number.isFinite(p.lon)) ll.push([p.lat, p.lon]); }
-    if(ll.length > 1) L.polyline(ll, {color:'#D6FF3F', weight:3, opacity:0.3, lineCap:'round', lineJoin:'round', interactive:false}).addTo(heatLayer);
+    if(ll.length > 1) L.polyline(ll, {color:'#D6FF3F', weight:2, opacity:0.32, lineCap:'round', lineJoin:'round', interactive:false}).addTo(heatLayer);
   });
-  document.getElementById('heatmap-empty').style.display = runs.length ? 'none' : 'block';
-  document.getElementById('heatmap-stats').textContent = runs.length ? t('heat_stats', {n: runs.length, km: fmtDist(km, 0) + ' ' + distUnit()}) : '';
   setTimeout(() => {
     heatMap.invalidateSize();
     const b = heatmapFocusBounds(runs);
@@ -12696,16 +12773,25 @@ function renderRDRuta(panel){
   `;
   rdMapExpanded = false;
   document.querySelector('.rd-map-controls button')?.classList.remove('visible');
-  setTimeout(()=>{
+  setTimeout(async ()=>{
     if(detailMap){ detailMap.remove(); detailMap=null; }
-    detailMap = L.map('rd-route-map', {zoomControl:false, attributionControl:true});
-    mapboxTileLayer().addTo(detailMap);
-    slimMapAttribution(detailMap);
     const segs = buildColoredRouteSegments(r);
     const allLatLngs = [];
-    segs.forEach(seg=>{ L.polyline(seg.latlngs, {color:seg.color, weight:5, lineCap:'round', lineJoin:'round'}).addTo(detailMap); allLatLngs.push(...seg.latlngs); });
-    rdMapProgrammaticMoveAt = Date.now();
-    if(allLatLngs.length) detailMap.fitBounds(L.latLngBounds(allLatLngs), {padding:[20,20]});
+    segs.forEach(seg => allLatLngs.push(...seg.latlngs));
+    // 1) mapa vectorial (nítido a cualquier densidad de pantalla); 2) si no se pudo, el de imágenes de siempre
+    let gl = null;
+    try{ gl = await initDetailMapGl(segs, allLatLngs); }catch(e){ gl = null; }
+    if(!rdCurrent || rdCurrent.r !== r || !document.getElementById('rd-route-map')){ if(gl) gl.remove(); return; }   // se cerró el detalle mientras cargaba
+    if(gl){
+      detailMap = gl;
+    } else {
+      detailMap = L.map('rd-route-map', {zoomControl:false, attributionControl:true});
+      mapboxTileLayer().addTo(detailMap);
+      slimMapAttribution(detailMap);
+      segs.forEach(seg=>{ L.polyline(seg.latlngs, {color:seg.color, weight:3.5, lineCap:'round', lineJoin:'round'}).addTo(detailMap); });
+      rdMapProgrammaticMoveAt = Date.now();
+      if(allLatLngs.length) detailMap.fitBounds(L.latLngBounds(allLatLngs), {padding:[20,20]});
+    }
     // dragstart/zoomstart también disparan con nuestros propios fitBounds() (acá arriba,
     // en rdRecenterMap() y al expandir/achicar el mapa) -- rdMapProgrammaticMoveAt filtra
     // esos casos, igual que el mismo mecanismo en el mapa en vivo (ver recenterMap()).
@@ -12715,6 +12801,24 @@ function renderRDRuta(panel){
     });
     applyStaticTranslations();
   }, 60);
+}
+// Mapa vectorial del detalle: el recorrido va como trazo fino de color (el de cada tramo según su ritmo) con un borde blanco que lo despega del mapa.
+async function initDetailMapGl(segs, allLatLngs){
+  if(!(await loadMapboxGl())) return null;
+  const el = document.getElementById('rd-route-map');
+  if(!el || !allLatLngs.length) return null;
+  const map = newGlMap(el, MAPBOX_STYLE);
+  const features = segs.map(seg => ({type:'Feature', properties:{color: seg.color}, geometry:{type:'LineString', coordinates: seg.latlngs.map(p => [p[1], p[0]])}}));
+  map.on('load', () => {
+    map.addSource('route', {type:'geojson', data:{type:'FeatureCollection', features}});
+    map.addLayer({id:'route-casing', type:'line', source:'route', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':'#ffffff','line-width':5.5,'line-opacity':0.9}});
+    map.addLayer({id:'route', type:'line', source:'route', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':['get','color'],'line-width':3.2}});
+  });
+  map.on('error', e => { if(e && e.error && /style|token|401|403/i.test(String(e.error.message || ''))) console.warn('mapbox gl:', e.error.message); });
+  const adapter = glAdapter(map);
+  rdMapProgrammaticMoveAt = Date.now();
+  adapter.fitBounds(L.latLngBounds(allLatLngs), {padding:[20,20]});
+  return adapter;
 }
 /* ---- arrastrar el mapa de la pestaña Ruta hacia arriba para agrandarlo ----
    Igual que el resto de los gestos de la app (swipe-to-delete, swipe del plan
@@ -13779,12 +13883,12 @@ async function startDynamicVideo(runId){
         if(headX !== undefined){ if(!pen) ctx.moveTo(px, py); ctx.lineTo(headX, headY); }
       };
       tracePath(fp.length, undefined, undefined);
-      ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(255,255,255,0.26)';
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,0.26)';
       ctx.stroke();
 
       tracePath(cursor, posX-left, posY-top);
-      ctx.lineWidth = 15; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.stroke();
-      ctx.lineWidth = 9; ctx.strokeStyle = '#D6FF3F'; ctx.stroke();
+      ctx.lineWidth = 10; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.stroke();
+      ctx.lineWidth = 6; ctx.strokeStyle = '#D6FF3F'; ctx.stroke();
 
       // salida y llegada
       const sx = fp[0].x-left, sy = fp[0].y-top;
