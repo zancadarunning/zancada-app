@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T16:16:14Z';
+const APP_VERSION = '2026-10-12T16:37:28Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -277,6 +277,15 @@ const ICONS = {
   flag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4.5s2-1.3 4.5-1.3 3.5 1.5 6 1.5 3.5-1 3.5-1v9s-1.5 1-3.5 1-3.5-1.5-6-1.5-4.5 1.3-4.5 1.3z"/></svg>',
   // Mismo ícono que usa el tab "Plan" de la tabbar (index.html) -- lo reusamos acá para
   // que "agregar al calendario" se lea visualmente como la misma acción en toda la app.
+  flame: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c.6 3.2 4.5 5 4.5 9.6A4.5 4.5 0 0 1 12 17a4.5 4.5 0 0 1-4.5-4.4c0-1.6.7-2.7 1.5-3.6.3 1 .9 1.6 1.7 1.8C10.4 8.2 10.8 5.2 12 3z"/><path d="M12 21a3 3 0 0 0 3-3"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5v14M15 5v14"/></svg>',
+  wxClear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></svg>',
+  wxPartly: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.5" cy="8.5" r="2.8"/><path d="M8.5 3v1.2M3 8.5h1.2M4.6 4.6l.9.9M12.4 4.6l-.9.9"/><path d="M8.5 19h8.8a3.6 3.6 0 0 0 .4-7.2A5 5 0 0 0 8 13a3 3 0 0 0 .5 6z"/></svg>',
+  wxCloud: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h10.5a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.4 10.6 3.8 3.8 0 0 0 7 18z"/></svg>',
+  wxFog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 13h10.5a3.8 3.8 0 0 0 .4-7.6A5.6 5.6 0 0 0 7 6.5 3.6 3.6 0 0 0 7 13z"/><path d="M5 17h14M8 20.5h8"/></svg>',
+  wxRain: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 14h10.5a3.8 3.8 0 0 0 .4-7.6A5.6 5.6 0 0 0 7 7.5 3.6 3.6 0 0 0 7 14z"/><path d="M8 17.5 7 20M12 17.5 11 20M16 17.5 15 20"/></svg>',
+  wxSnow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/><path d="M9.8 4.6 12 6.5l2.2-1.9M9.8 19.4 12 17.5l2.2 1.9"/></svg>',
+  wxStorm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 14h10.5a3.8 3.8 0 0 0 .4-7.6A5.6 5.6 0 0 0 7 7.5 3.6 3.6 0 0 0 7 14z"/><path d="m12.5 14-2 3.5H14l-2 3.5"/></svg>',
   calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/></svg>',
   cross: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
   send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>',
@@ -4042,6 +4051,9 @@ function openOverlaySheetEl(el){
   void el.offsetHeight;
   el.classList.add('overlay-open');
 }
+function confirmLogout(){
+  showConfirm(t('logout_confirm'), {danger: true, confirmText: t('perfil_logout')}).then(ok=>{ if(ok) logout(); });
+}
 async function logout(){
   await waitForPendingPersist();
   await clearNativeCalendarQuietly();
@@ -6845,10 +6857,10 @@ function renderHome(){
   if(state.streakPause && !streakPauseActive()) state.streakPause = null;
   if(state.streakPause && (state.streakWeeks||0) >= 1){
     streakBadge.style.display = 'inline-flex';
-    streakBadge.textContent = t('home_streak_paused', {n: state.streakWeeks});
+    streakBadge.innerHTML = '<span class="ico" aria-hidden="true">' + ICONS.pause + '</span><span>' + escapeHtml(t('home_streak_paused', {n: state.streakWeeks})) + '</span>';
   } else if((state.streakWeeks||0) >= 2){
     streakBadge.style.display = 'inline-flex';
-    streakBadge.textContent = t('home_streak_badge', {n: state.streakWeeks});
+    streakBadge.innerHTML = '<span class="ico" aria-hidden="true">' + ICONS.flame + '</span><span>' + escapeHtml(t('home_streak_badge', {n: state.streakWeeks})) + '</span>';
   } else {
     streakBadge.style.display = 'none';
   }
@@ -8021,7 +8033,7 @@ function renderPerfil(){
   // semanas cerradas todavía (cuenta recién creada) cae al viejo comportamiento (la meta),
   // que sigue siendo la mejor referencia disponible hasta que haya algo real para promediar.
   const avgKm = computeActualWeeklyKmAvg(3);
-  { const sk = document.getElementById('perfil-streak'); if(sk){ const n = state.streakWeeks||0; if(n >= 2){ sk.style.display = 'inline-flex'; sk.textContent = t('home_streak_badge', {n}); } else { sk.style.display = 'none'; } } }
+  { const sk = document.getElementById('perfil-streak'); if(sk){ const n = state.streakWeeks||0; if(n >= 2){ sk.style.display = 'inline-flex'; sk.innerHTML = '<span class="ico" aria-hidden="true">' + ICONS.flame + '</span><span>' + escapeHtml(t('home_streak_badge', {n})) + '</span>'; } else { sk.style.display = 'none'; } } }
   document.getElementById('perfil-sub').textContent = avgKm!=null
     ? `${t('perfil_avg_weekly_label')} ${fmtDist(avgKm,1)}${distUnit()}/sem · ${t('ob_goal_'+p.goal)}`
     : `${fmtDist(p.weeklyKm,1)}${distUnit()}/sem · ${t('ob_goal_'+p.goal)}`;
@@ -8125,9 +8137,9 @@ function renderPerfil(){
       <p class="display" style="font-size:34px; color:var(--hivis-text); margin-top:4px;">${Math.max(0,days)} <span style="font-size:13px; font-family:Inter; color:var(--mist);">${t('perfil_event_days')}</span></p>
       <div style="display:flex; align-items:center; gap:14px; margin-top:6px; flex-wrap:wrap;">
         <button class="small-link" style="display:flex; align-items:center; gap:5px;" onclick="downloadEventIcs()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.calendar}</span>${t('add_to_calendar')}</button>
-        <button class="small-link" style="color:var(--danger);" onclick="deleteEvent()">${t('delete_event')}</button>
       </div>
-      ${paceBlock}`;
+      ${paceBlock}
+      <button class="btn btn-danger event-delete-btn" onclick="deleteEvent()">${t('delete_event')}</button>`;
     document.getElementById('ev-name').value = state.event.name;
     document.getElementById('ev-distance').value = state.event.distanceKm>0 ? fmtDist(state.event.distanceKm,2) : '';
     document.getElementById('ev-date').value = state.event.date;
@@ -10575,15 +10587,15 @@ const LAST_POS_KEY = 'zancada_last_pos';
 const WX_KEY = 'zancada_wx';
 let wxInFlight = false;
 function wxKind(code){
-  if(code === 0) return {k: 'clear', e: '☀️'};
-  if(code === 1 || code === 2) return {k: 'partly', e: '⛅'};
-  if(code === 3) return {k: 'cloudy', e: '☁️'};
-  if(code === 45 || code === 48) return {k: 'fog', e: '🌫️'};
-  if(code >= 51 && code <= 57) return {k: 'drizzle', e: '🌦️'};
-  if((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return {k: 'rain', e: '🌧️'};
-  if((code >= 71 && code <= 77) || code === 85 || code === 86) return {k: 'snow', e: '❄️'};
-  if(code >= 95) return {k: 'storm', e: '⛈️'};
-  return {k: 'cloudy', e: '☁️'};
+  if(code === 0) return {k: 'clear', e: 'wxClear'};
+  if(code === 1 || code === 2) return {k: 'partly', e: 'wxPartly'};
+  if(code === 3) return {k: 'cloudy', e: 'wxCloud'};
+  if(code === 45 || code === 48) return {k: 'fog', e: 'wxFog'};
+  if(code >= 51 && code <= 57) return {k: 'drizzle', e: 'wxRain'};
+  if((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return {k: 'rain', e: 'wxRain'};
+  if((code >= 71 && code <= 77) || code === 85 || code === 86) return {k: 'snow', e: 'wxSnow'};
+  if(code >= 95) return {k: 'storm', e: 'wxStorm'};
+  return {k: 'cloudy', e: 'wxCloud'};
 }
 function paintHomeWeather(w){
   const chip = document.getElementById('home-wx');
@@ -10591,7 +10603,7 @@ function paintHomeWeather(w){
   if(!w || !Number.isFinite(w.temp)){ chip.style.display = 'none'; return; }
   const k = wxKind(w.code);
   const deg = isImperial() ? Math.round(w.temp * 9 / 5 + 32) + '°F' : Math.round(w.temp) + '°C';
-  chip.textContent = k.e + ' ' + deg + ' · ' + t('wx_' + k.k);
+  chip.innerHTML = '<span class="ico" aria-hidden="true">' + ICONS[k.e] + '</span><span>' + escapeHtml(deg + ' · ' + t('wx_' + k.k)) + '</span>';
   chip.style.display = '';
   chip.removeAttribute('role'); chip.removeAttribute('tabindex'); chip.onclick = null;
 }
