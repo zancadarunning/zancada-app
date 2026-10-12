@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T21:56:37Z';
+const APP_VERSION = '2026-10-12T22:04:59Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -12811,6 +12811,10 @@ let rdCurrent = null;
 // encima. --zoneN-fill son las mismas 5 tonalidades vívidas del tema oscuro en los dos
 // temas -- ver el comentario grande junto a --zone1-fill en el <style> de index.html.
 // Para LÍNEAS finas (ruta en el mapa): en claro la zona 3 usa un mostaza más oscuro; el resto igual que el relleno.
+// Tinta oscura del mismo tono que el relleno de la zona (texto sobre las barras de ritmo y los chips).
+function zoneInkVar(n){
+  return (getComputedStyle(document.documentElement).getPropertyValue('--zone'+n+'-ink') || '').trim() || '#14170C';
+}
 function zoneStrokeVar(n){
   const s = (getComputedStyle(document.documentElement).getPropertyValue('--zone'+n+'-stroke') || '').trim();
   return s || zoneColorVar(n);
@@ -13210,7 +13214,7 @@ function renderRDRitmo(panel){
       const widthPct = s.paceMin>0 ? Math.max(30, Math.min(100, (Math.min(...splitPaces, paceMin) / s.paceMin) * 100)) : 30;   // más largo = más rápido
       return `<div class="pace-bar-row">
         <div class="pace-bar-label">${s.km}</div>
-        <div class="pace-bar-track"><div class="pace-bar-fill" style="width:${widthPct}%; background:${zoneColorVar(zone)};">${fmtPace(s.paceMin)}</div></div>
+        <div class="pace-bar-track"><div class="pace-bar-fill" style="width:${widthPct}%; background:${zoneColorVar(zone)}; color:${zoneInkVar(zone)};">${fmtPace(s.paceMin)}</div></div>
       </div>`;
     }).join('')}
   `;
