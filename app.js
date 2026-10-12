@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T03:37:52Z';
+const APP_VERSION = '2026-10-12T03:43:40Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10340,12 +10340,20 @@ function encodePolylinePoints(points){
 // agrandar cualquier imagen de trama más chica que su tamaño de despliegue. Tope en 3x
 // (no devicePixelRatio directo) para no pedir un archivo innecesariamente pesado en
 // pantallas de densidad rarísima.
+// ¿La app se está viendo en tema claro? (elección manual, o la del sistema si está en "automático")
+function isLightThemeNow(){
+  const a = document.documentElement.getAttribute('data-theme');
+  return a === 'light' || (a !== 'dark' && !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches));
+}
+// Ancho en px CSS de la miniatura de una carrera (la tarjeta ocupa el ancho de la pantalla menos los márgenes)
+function histMapCssWidth(){ return Math.max(280, Math.min(640, Math.round((window.innerWidth || 400) - 34))); }
+// Miniatura del recorrido (API de imágenes estáticas de Mapbox). Mejoras: se pide al tamaño real de la tarjeta y en retina (@2x, así no se estira),
+// con un estilo limpio que sigue el tema (claro: mapa claro y trazo verde oscuro; oscuro: mapa oscuro y trazo verde fluor), 200 puntos del
+// recorrido (antes 120) y un margen para que la ruta no toque los bordes.
 function buildHistMapStaticUrl(r, width, height){
-  // Suavizado ANTES de muestrear -- muestrear primero y suavizar después perdería la forma
-  // real del ruido (ya estaría diezmado) y el promedio móvil terminaría promediando puntos
-  // que en el trazado real no eran vecinos directos.
+  // Suavizado ANTES de muestrear -- muestrear primero y suavizar después perdería la forma real del ruido.
   const pts = smoothRouteForDisplay(r.points);
-  const maxPoints = 120;
+  const maxPoints = 200;
   const step = pts.length > maxPoints ? pts.length / maxPoints : 1;
   const sampled = [];
   for(let i=0; i<pts.length; i += step) sampled.push(pts[Math.floor(i)]);
@@ -10354,7 +10362,10 @@ function buildHistMapStaticUrl(r, width, height){
   const dpr = (typeof devicePixelRatio!=='undefined' && devicePixelRatio) || 1;
   const w = Math.min(1280, Math.round(width)), h = Math.min(1280, Math.round(height));
   const retina = dpr > 1.25 ? '@2x' : '';
-  return `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/static/path-2+0B5D2E-1(${encoded})/auto/${w}x${h}${retina}?access_token=${MAPBOX_TOKEN}`;
+  const light = isLightThemeNow();
+  const style = light ? 'light-v11' : 'dark-v11';
+  const stroke = light ? '0B5D2E' : 'D6FF3F';
+  return `https://api.mapbox.com/styles/v1/mapbox/${style}/static/path-3+${stroke}-1(${encoded})/auto/${w}x${h}${retina}?padding=22,28,22,28&access_token=${MAPBOX_TOKEN}`;
 }
 function initLiveMap(){
   if(liveMap){ liveMap.remove(); liveMap=null; }
@@ -10979,7 +10990,7 @@ function showRunSummaryUI(){
     const hasMap = !!(tracker.points && tracker.points.length > 1);
     mapEl.style.display = hasMap ? 'block' : 'none';
     mapEl.innerHTML = hasMap
-      ? routeSketchSvg(tracker.points) + '<img class="hist-map-img" src="' + buildHistMapStaticUrl({points: tracker.points}, 400, 150) + '" alt="" decoding="async" onload="this.classList.add(\'loaded\')" onerror="this.style.display=\'none\'">' + (pr ? '<span class="sum-pr-badge">' + t('sum_pr_badge', {label: pr.label}) + '</span>' : '')
+      ? routeSketchSvg(tracker.points) + '<img class="hist-map-img" src="' + buildHistMapStaticUrl({points: tracker.points}, histMapCssWidth(), 150) + '" alt="" decoding="async" onload="this.classList.add(\'loaded\')" onerror="this.style.display=\'none\'">' + (pr ? '<span class="sum-pr-badge">' + t('sum_pr_badge', {label: pr.label}) + '</span>' : '')
       : '';
   }
   const hlCard = document.getElementById('sum-highlight');
@@ -12490,7 +12501,7 @@ function renderHistory(){
       <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" onclick="deleteRun('${r.id}')"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
       <div class="card hist-card swipe-content" onclick="openRunDetail('${r.id}')" style="cursor:pointer;">
         <div class="hist-top"><span style="font-weight:700;">${dateStr}</span>${hasMap ? '' : `<span class="hist-date">${r.manual? `<span class="tag tag-asfalto" style="margin-right:6px;">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, true)}${fmtTime(r.durationSec)}</span>`}</div>
-        ${hasMap ? `<div class="hist-map" data-run-id="${r.id}">${routeSketchSvg(r.points)}<img class="hist-map-img" src="${buildHistMapStaticUrl(r, 400, 108)}" loading="lazy" alt="" decoding="async" onload="this.classList.add('loaded')" onerror="this.style.display='none'"><div class="hist-map-badge">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false)}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
+        ${hasMap ? `<div class="hist-map" data-run-id="${r.id}">${routeSketchSvg(r.points)}<img class="hist-map-img" src="${buildHistMapStaticUrl(r, histMapCssWidth(), 132)}" loading="lazy" alt="" decoding="async" onload="this.classList.add('loaded')" onerror="this.style.display='none'"><div class="hist-map-badge">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false)}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
         <div class="stat-row-divided">
           <div class="stat-cell"><div class="n">${fmtDist(r.distanceKm)}</div><div class="l">${distUnit()}</div></div>
           <div class="stat-cell"><div class="n">${fmtPace(paceMin)}</div><div class="l">${t('run_pace_word')}</div></div>
