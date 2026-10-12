@@ -2469,6 +2469,7 @@
 
 
 
+
   /* =====================================================================================================================
      ZONAS DE FRECUENCIA CARDÍACA -- color fuerte en los dos temas (azul, verde, amarillo, naranja, rojo).
      Relleno vivo para barras, anillos, mapas y chips; el texto sobre fondo usa una variante legible por tema.
@@ -2486,6 +2487,8 @@
   .zone-4, .zone-badge-live.zone-4{background:var(--zone4-fill); color:#0F1114;}
   .zone-5, .zone-badge-live.zone-5{background:var(--zone5-fill); color:#0F1114;}
   .pace-bar-fill{filter:none;}
+  /* acción de borrar por deslizamiento: oculta en reposo en TODAS las listas (en Zapatillas asomaban rayas rojas al borde) */
+  .swipe-item:not(:has(.swipe-content[style*="translate3d(-"])) .swipe-action-delete{visibility:hidden;}
 
   /* =====================================================================================================================
      TEMA CLARO -- verde lima de marca (relleno #CDF51A, borde olive #6F8F00, texto #3A5300). Sin superficies negras.
