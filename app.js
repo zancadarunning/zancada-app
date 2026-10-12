@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T22:13:43Z';
+const APP_VERSION = '2026-10-12T22:26:00Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2882,6 +2882,8 @@ function syncSystemBars(){
 }
 function applyTheme(pref){
   try{ localStorage.setItem(THEME_KEY, pref); }catch(e){}
+  // fundido corto entre temas (la clase se saca sola a los 350 ms)
+  try{ const root = document.documentElement; root.classList.add('theme-fade'); clearTimeout(applyTheme._t); applyTheme._t = setTimeout(()=>root.classList.remove('theme-fade'), 350); }catch(e){}
   if(pref==='light' || pref==='dark') document.documentElement.setAttribute('data-theme', pref);
   else document.documentElement.removeAttribute('data-theme');
   const isLight = pref==='light' || (pref!=='dark' && window.matchMedia('(prefers-color-scheme: light)').matches);

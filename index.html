@@ -2346,6 +2346,7 @@
 
 
 
+
   /* =====================================================================================================================
      ZONAS DE FRECUENCIA CARDÍACA -- color fuerte pero no estridente, en los dos temas (azul, verde, amarillo, naranja, rojo).
      Relleno suave para chips, barras, anillos y mapas; el texto encima es una tinta oscura del MISMO tono (--zoneN-ink).
@@ -2364,6 +2365,15 @@
   .zone-4, .zone-badge-live.zone-4{background:var(--zone4-fill); color:var(--zone4-ink);}
   .zone-5, .zone-badge-live.zone-5{background:var(--zone5-fill); color:var(--zone5-ink);}
   .pace-bar-fill{filter:none;}
+  /* ---- Pulido de temas ---- */
+  /* Controles nativos (calendarios, listas desplegables, barras de scroll, selección) con los colores del tema */
+  html{color-scheme:var(--cs, dark); accent-color:var(--hivis); caret-color:var(--hivis-text);}
+  /* Gráficos: etiquetas de altura más legibles y separadas de la línea */
+  .rd-ax{font-size:11px; left:4px; padding:1px 5px; border-radius:6px; background:var(--asphalt-2); opacity:.92;}
+  .rd-ax-top{top:2px;} .rd-ax-bot{bottom:2px;}
+  /* Cambio de tema con un fundido corto (solo durante el cambio) */
+  html.theme-fade, html.theme-fade *, html.theme-fade *::before, html.theme-fade *::after{transition:background-color .26s ease, color .26s ease, border-color .26s ease, fill .26s ease, stroke .26s ease, box-shadow .26s ease !important;}
+  @media (prefers-reduced-motion:reduce){ html.theme-fade, html.theme-fade *, html.theme-fade *::before, html.theme-fade *::after{transition:none !important;} }
 
   /* =====================================================================================================================
      TEMA CLARO -- hecho de cero: el mismo diseño que el oscuro, en blanco con el lima de marca como relleno.
@@ -2577,10 +2587,6 @@
     :root:not([data-theme="dark"]) .heat-legend i{background:linear-gradient(to right, rgba(94,143,0,.2), #5E8F00);}
   
   }
-
-  /* Motivo de un botón deshabilitado: una línea debajo, que dice qué falta */
-  .btn-reason{margin:8px 2px 0; font-size:12.5px; line-height:1.4; color:var(--mist); text-align:center;}
-  .btn-reason:empty{display:none;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -2589,6 +2595,15 @@
 #boot{position:fixed;inset:0;z-index:2147483000;background:#0A0A0A;display:flex;align-items:center;justify-content:center;
   opacity:1;transition:opacity .34s cubic-bezier(.23,1,.32,1);}
 #boot.zc-boot-out{opacity:0;pointer-events:none;}
+/* Arranque en claro: fondo crema y barra en oliva (el atributo de tema ya se puso en el <head>, antes de pintar) */
+:root[data-theme="light"] #boot{background:#F2F4EC;}
+:root[data-theme="light"] #boot .boot-bar{background:rgba(111,143,0,.18);}
+:root[data-theme="light"] #boot .boot-bar::after{background:#8DB600;}
+@media (prefers-color-scheme:light){
+  :root:not([data-theme="dark"]) #boot{background:#F2F4EC;}
+  :root:not([data-theme="dark"]) #boot .boot-bar{background:rgba(111,143,0,.18);}
+  :root:not([data-theme="dark"]) #boot .boot-bar::after{background:#8DB600;}
+}
 #boot .boot-mark{width:150px;height:auto;display:block;transition:transform .34s cubic-bezier(.23,1,.32,1);}
 #boot.zc-boot-out .boot-mark{transform:scale(1.035);}
 #boot .boot-bar{position:absolute;left:50%;top:calc(50% + 74px);width:56px;height:2px;margin-left:-28px;border-radius:2px;
