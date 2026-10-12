@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T03:00:05Z';
+const APP_VERSION = '2026-10-12T03:12:02Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10288,9 +10288,10 @@ function buildHistMapStaticUrl(r, width, height){
   for(let i=0; i<pts.length; i += step) sampled.push(pts[Math.floor(i)]);
   if(sampled[sampled.length-1] !== pts[pts.length-1]) sampled.push(pts[pts.length-1]);
   const encoded = encodeURIComponent(encodePolylinePoints(sampled.map(p=>[p.lat, p.lon])));
-  const dpr = Math.min((typeof devicePixelRatio!=='undefined' && devicePixelRatio) || 1, 3);
-  const w = Math.min(1280, Math.round(width * dpr)), h = Math.min(1280, Math.round(height * dpr));
-  return `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/static/path-3+0B5D2E-1(${encoded})/auto/${w}x${h}?access_token=${MAPBOX_TOKEN}`;
+  const dpr = (typeof devicePixelRatio!=='undefined' && devicePixelRatio) || 1;
+  const w = Math.min(1280, Math.round(width)), h = Math.min(1280, Math.round(height));
+  const retina = dpr > 1.25 ? '@2x' : '';
+  return `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/static/path-3+0B5D2E-1(${encoded})/auto/${w}x${h}${retina}?access_token=${MAPBOX_TOKEN}`;
 }
 function initLiveMap(){
   if(liveMap){ liveMap.remove(); liveMap=null; }
@@ -13408,14 +13409,17 @@ function rdRoundRectPath(ctx, x, y, w, h, r){
   ctx.closePath();
 }
 
-const MAP_TILE_SIZE = 256;
+// Tamaño con el que se dibuja cada tile del mapa del video (px lógicos del cuadro de 720x1280). Las tiles de Mapbox traen el texto con un tamaño fijo en
+// píxeles de tile: dibujarlas a 384 en vez de 256 (se muestra menos zona, a un zoom menor) hace que los nombres de calles y barrios salgan
+// 1,5 veces más grandes y se puedan leer en el video.
+const MAP_TILE_SIZE = 384;
 // Cuánto mundo real (en metros) queremos que se vea a lo ancho/alto del
 // recuadro del mapa en el modo "cámara dinámica" (ver más abajo) -- un valor
 // chico da un acercamiento tipo Strava (se ven las calles cercanas mientras
 // la cámara sigue al corredor); uno grande se parecería más al mapa
 // "panorama fijo" que teníamos antes.
 // Escala de resolución del video (1 = 720x1280). Más alto se ve más nítido pero un celular modesto no llega a dibujar 30 cuadros por segundo.
-const RD_VIDEO_SCALE = 1;
+const RD_VIDEO_SCALE = 1.5;   // 1080x1920
 const FOLLOW_TARGET_METERS = 450;
 const FOLLOW_MIN_ZOOM = 12, FOLLOW_MAX_ZOOM = 18;
 // Tope de tiles distintas a pedir para armar el mosaico de la cámara
@@ -13436,8 +13440,8 @@ const FOLLOW_MAX_TILES = 180;
 // en startDynamicVideo), pero las tiles en sí también pedían la versión de menor
 // resolución -- @2x le da al drawImage() de abajo el doble de detalle fuente para
 // reducir a MAP_TILE_SIZE, en vez de una tile ya de baja resolución estirada.
-// El video usa el estilo oscuro de Mapbox (como los videos de Strava): el trazado verde fluor resalta y el texto blanco se lee bien.
-const VIDEO_MAP_STYLE = 'dark-v11';
+// El video usa un estilo oscuro de Mapbox (como los videos de Strava): el trazado verde fluor resalta y el texto blanco se lee bien.
+const VIDEO_MAP_STYLE = 'navigation-night-v1';   // oscuro pero con nombres de calles bien contrastados (dark-v11 los dejaba casi ilegibles)
 let routeTileUrl = function(subdomain, zoom, x, y){
   return `https://api.mapbox.com/styles/v1/mapbox/${VIDEO_MAP_STYLE}/tiles/256/${zoom}/${x}/${y}@2x?access_token=${MAPBOX_TOKEN}`;
 };
@@ -13464,7 +13468,8 @@ function computeFollowCameraPlan(pts, latMid, availW, availH){
   const halfW = availW/2, halfH = availH/2;
   const idealMpp = FOLLOW_TARGET_METERS / Math.max(availW, availH);
   const cosLat = Math.max(0.15, Math.cos(latMid * Math.PI/180));
-  let zoom = Math.round(Math.log2((156543.03392 * cosLat) / idealMpp));
+  // metros por píxel de mundo a cada zoom, para tiles dibujadas a MAP_TILE_SIZE px (la fórmula clásica es para tiles de 256)
+  let zoom = Math.round(Math.log2((156543.03392 * cosLat * (256 / MAP_TILE_SIZE)) / idealMpp));
   zoom = Math.max(FOLLOW_MIN_ZOOM, Math.min(FOLLOW_MAX_ZOOM, zoom));
 
   // Para rutas con muchísimos puntos GPS no hace falta mirar cada uno para
@@ -13576,9 +13581,10 @@ async function loadFollowMapForVideo(routeData){
     if(results.every(img=>!img)) return null;
 
     // Un canvas chico por tile (en vez de un mosaico gigante): una ruta en diagonal no desperdicia memoria en huecos vacíos y el
-    // video puede cubrir cualquier recorrido. A 256 px (1:1 con el video a 720x1280): guardarlas más grandes llegó a ocupar
-    // ~330 MB de memoria gráfica en un celular modesto, y eso lo dejaba lento y hasta cerraba la app.
-    const res = MAP_TILE_SIZE;
+    // video puede cubrir cualquier recorrido.
+    // Con pocas tiles se guardan a la resolución real de Mapbox (512 px, el doble de lo que se muestra: nítido en el video de 1080x1920);
+    // con muchas se baja para no pasarse de memoria (en un celular modesto 330 MB de memoria gráfica llegaron a cerrar la app).
+    const res = tiles.length <= 70 ? 512 : (tiles.length <= 130 ? 448 : MAP_TILE_SIZE);
     const store = new Map();
     tiles.forEach((tl,i)=>{
       const img = results[i];
@@ -13916,7 +13922,7 @@ async function startDynamicVideo(runId){
     let cfg = null;
     for(const c of cands){
       try{
-        const conf = {codec:c.codec, width:bw, height:bh, bitrate:3500000, framerate:FPS};
+        const conf = {codec:c.codec, width:bw, height:bh, bitrate:7000000, framerate:FPS};
         if(c.mux === 'mp4') conf.avc = {format:'avc'};
         const r = await VideoEncoder.isConfigSupported(conf);
         if(r && r.supported){ cfg = {codec:c.codec, mux:c.mux, conf}; break; }
@@ -13987,7 +13993,7 @@ async function startDynamicVideo(runId){
   let stream, recorder;
   try{
     stream = canvas.captureStream(30);
-    recorder = mimeType ? new MediaRecorder(stream, {mimeType, videoBitsPerSecond:4000000}) : new MediaRecorder(stream);
+    recorder = mimeType ? new MediaRecorder(stream, {mimeType, videoBitsPerSecond:6000000}) : new MediaRecorder(stream);
   }catch(e){
     closeDynamicVideo();
     showToast(t('rd_video_unsupported'), 'error');
