@@ -11,6 +11,7 @@ const requireCronSecret = require('./_lib/require-cron-secret');
 const { rotateForFairness } = require('./_lib/cron-rotation');
 const { activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool, corosDateRangeArgs, getCorosRunRecords, getCorosRecordId } = require('./_lib/coros-activity-helpers');
 const { withSentry, reportError } = require('./_lib/sentry');
+const { mergeAndNotify } = require('./_lib/notify-new-run');
 const { enrichCorosRecord, applyCorosEnrichmentToRun } = require('./_lib/coros-activity-helpers');
 
 module.exports = withSentry(async (req, res) => {
@@ -58,7 +59,7 @@ module.exports = withSentry(async (req, res) => {
             const newRecs = runRecords.filter(r => !knownIds.has(getCorosRecordId(r)));
             for (const rec of newRecs.slice(0, 3)) await enrichCorosRecord(accessToken, rec);
             const newRuns = newRecs.map(record => activityToRun(record));
-            if (newRuns.length) await mergeCorosRuns(base, headers, conn.user_id, newRuns, 'skip');
+            if (newRuns.length) await mergeAndNotify(mergeCorosRuns, base, headers, conn.user_id, newRuns, 'skip', 'coros');
 
             // Carreras que ya estaban guardadas sin mapa/parciales/cadencia (se sincronizaron antes de que se leyera el
             // FIT y el detalle de COROS): se completa UNA por corrida de cron, y como máximo 3 intentos por carrera.

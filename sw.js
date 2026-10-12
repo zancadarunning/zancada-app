@@ -17,6 +17,7 @@ self.addEventListener('push', (event) => {
     icon: '/icon-192.png',
     badge: '/icon-192.png'
   };
+  if(data.tag) options.tag = data.tag;   // misma etiqueta = la notificación nueva reemplaza a la anterior
   event.waitUntil(self.registration.showNotification(data.title || 'Zancada', options));
 });
 

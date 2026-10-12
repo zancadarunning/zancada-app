@@ -21,6 +21,7 @@
 const crypto = require('crypto');
 const { isRunningActivity, workoutToRun, mergeSuuntoRuns } = require('./_lib/suunto-activity-helpers');
 const { withSentry, reportError, reportSecurityEvent, reportDiagnostic } = require('./_lib/sentry');
+const { mergeAndNotify } = require('./_lib/notify-new-run');
 
 function readRawBody(req) {
   return new Promise((resolve, reject) => {
@@ -86,7 +87,7 @@ const handler = withSentry(async (req, res) => {
 
     const run = workoutToRun(workout, null);
     for (const c of conns) {
-      await mergeSuuntoRuns(base, headers, c.user_id, [run], 'skip');
+      await mergeAndNotify(mergeSuuntoRuns, base, headers, c.user_id, [run], 'skip', 'suunto', 900);
     }
     await diag('saved');
     res.status(200).json({ ok: true });

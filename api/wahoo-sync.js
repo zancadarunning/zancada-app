@@ -9,6 +9,7 @@ const { rotateForFairness } = require('./_lib/cron-rotation');
 const { workoutToRun, mergeWahooRuns, isRunningWorkoutType, refreshWahooToken, fetchFitSplits } = require('./_lib/wahoo-activity-helpers');
 const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { withSentry, reportError } = require('./_lib/sentry');
+const { mergeAndNotify } = require('./_lib/notify-new-run');
 
 // Cuántas carreras sin splits reales se completan por cuenta en cada corrida del cron --
 // ver el comentario grande de backfillWahooSplits.
@@ -167,7 +168,7 @@ module.exports = withSentry(async (req, res) => {
             for (const w of runWorkouts.filter(w => !knownIds.has(w.id))) {
               newRuns.push(await workoutToRun(w, accessToken));
             }
-            if (newRuns.length) await mergeWahooRuns(base, headers, conn.user_id, newRuns, 'skip');
+            if (newRuns.length) await mergeAndNotify(mergeWahooRuns, base, headers, conn.user_id, newRuns, 'skip', 'wahoo');
           }
         }
 

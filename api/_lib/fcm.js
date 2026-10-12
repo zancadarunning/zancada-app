@@ -42,12 +42,18 @@ const DEAD_TOKEN_CODES = new Set([
 
 // Devuelve true si el token quedó muerto (para que el que llama borre la fila), false si
 // mandó bien, y relanza cualquier otro error (falla transitoria, no hay que borrar nada).
-async function sendFcmPush(token, title, body) {
+async function sendFcmPush(token, title, body, opts) {
   const app = getFirebaseApp();
   if (!app) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON no está configurada');
   const admin = require('firebase-admin');
   try {
-    await admin.messaging(app).send({ token, notification: { title, body } });
+    const message = { token, notification: { title, body } };
+    // tag / collapse-id: una notificación nueva con la misma etiqueta reemplaza a la anterior en vez de apilarse
+    if (opts && opts.tag) {
+      message.android = { notification: { tag: opts.tag } };
+      message.apns = { headers: { 'apns-collapse-id': opts.tag } };
+    }
+    await admin.messaging(app).send(message);
     return false;
   } catch (err) {
     if (DEAD_TOKEN_CODES.has(err && err.code)) return true;

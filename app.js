@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T01:27:45Z';
+const APP_VERSION = '2026-10-12T01:41:09Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -13241,7 +13241,7 @@ function closeDynamicVideo(){
   const actions = document.getElementById('rd-video-actions');
   const progressEl = document.getElementById('rd-video-progress');
   if(overlay) overlay.style.display='none';
-  if(video){ try{ video.pause(); }catch(e){} video.removeAttribute('src'); try{ video.load(); }catch(e){} video.style.display='none'; }
+  if(video){ try{ video.pause(); }catch(e){} video.removeAttribute('poster'); video.removeAttribute('src'); try{ video.load(); }catch(e){} video.style.display='none'; }
   if(canvas){ canvas.style.display='none'; canvas.style.width = ''; canvas.style.height = ''; canvas.style.maxHeight = ''; }
   if(actions) actions.style.display='none';
   if(progressEl) progressEl.textContent='';
@@ -13316,7 +13316,6 @@ async function startDynamicVideo(runId){
   const totalDist = routeData.totalDist;
   const ANIM_MS = Math.round(Math.min(16000, Math.max(7000, 2500 + totalDist*1000)));
   const HOLD_MS = 1200;   // el último cuadro (con el total) queda un momento a la vista antes de cortar
-  const FADE_IN_MS = 500;
   const runName = (r.name || '').trim().slice(0, 30);
 
   // Puntos del trazado para DIBUJAR: se descartan los que quedan a menos de 3 px del anterior (el GPS da uno cada ~3 m y a esta
@@ -13494,11 +13493,6 @@ async function startDynamicVideo(runId){
     }
     ctx.textAlign = 'left';
 
-    // entrada: sale del negro
-    if(el < FADE_IN_MS){
-      ctx.fillStyle = 'rgba(0,0,0,' + (1 - el/FADE_IN_MS).toFixed(3) + ')';
-      ctx.fillRect(0, 0, W, H);
-    }
   }
 
   // Pintamos el primer cuadro ANTES de pedir captureStream(): en algunos
@@ -13514,8 +13508,12 @@ async function startDynamicVideo(runId){
     rdVideoState.url = url;
     canvas.style.display='none';
     canvas.style.width = ''; canvas.style.height = ''; canvas.style.maxHeight = '';
+    try{ video.poster = canvas.toDataURL('image/jpeg', 0.85); }catch(e){ video.removeAttribute('poster'); }   // último cuadro dibujado = el final
+    video.muted = true; video.loop = true;
     video.src = url;
     video.style.display='block';
+    // si el navegador no deja arrancar solo, queda en pausa en un cuadro con la ruta ya dibujada (no en el primero, casi vacío)
+    video.onloadeddata = ()=>{ if(video.paused && isFinite(video.duration) && video.duration > 0) video.currentTime = video.duration * 0.7; };
     video.play().catch(()=>{});
     progressEl.textContent='';
     actions.style.display='flex';
