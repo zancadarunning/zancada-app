@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T03:53:32Z';
+const APP_VERSION = '2026-10-12T04:05:01Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4404,6 +4404,7 @@ function autoClearPastEvent(){
     // Guardamos la fecha antes de borrar el evento -- isRecoveryWeek() la sigue
     // necesitando toda la semana de recuperación, después de que esta limpieza ya corrió.
     state.lastEventDate = state.event.date;
+    try{ recordRaceCalibration(state.event); }catch(e){}
     state.event = null;
     persist();
   }
@@ -6392,27 +6393,129 @@ function racePlanKm(){
   if(state.profile && state.profile.raceDate && ev.date === state.profile.raceDate) return getGoalRaceKm();
   return null;
 }
-// Tiempo estimado para km kilómetros con Riegel: primero tu mejor esfuerzo de los últimos 90 días,
-// si no hay, tu mejor marca (o la de referencia del onboarding).
+/* ---- Estimación del tiempo de carrera ----
+   Se parte de la fórmula de Riegel (T2 = T1 · (D2/D1)^exponente), pero con tres ajustes para que el número sea más honesto:
+   - el exponente es PERSONAL (riegelExponent): quien tiene poca base se desacelera más al alargar la distancia que quien lleva años corriendo;
+   - un margen por distancia (enduranceSurcharge): si la salida más larga de las últimas 8 semanas es mucho menor que la carrera, se suma tiempo;
+   - una corrección aprendida de tus carreras reales (raceCalibration): se compara lo que se estimó con lo que hiciste. */
+const RIEGEL_BASE = 1.06;
+// Exponente de Riegel de este corredor. Parte de uno según la experiencia (semanas corriendo y km semanales) y, si hay datos de salidas de
+// distintos largos, se mezcla 50/50 con el que sale de sus propias marcas. Sin ninguna carrera ni dato de perfil: el 1,06 clásico.
+function riegelExponent(){
+  const runs = (state.runs || []).filter(r => r && r.distanceKm > 0 && r.durationSec > 0 && r.date);
+  const p = state.profile || {};
+  if(!runs.length && !p.runnerType) return RIEGEL_BASE;
+  const now = Date.now();
+  const first = runs.reduce((m, r) => Math.min(m, new Date(r.date).getTime()), now);
+  let weeksActive = (now - first) / (7 * 864e5);
+  if(p.runnerType === 'active' && !p.returningFromBreak) weeksActive = Math.max(weeksActive, 26);   // dijo que ya corría: la historia previa no está en la app
+  const km8 = runs.reduce((s, r) => s + (new Date(r.date).getTime() >= now - 56 * 864e5 ? r.distanceKm : 0), 0) / 8;
+  let prior = RIEGEL_BASE + (weeksActive < 12 ? 0.04 : (weeksActive < 26 ? 0.02 : 0)) + (km8 < 15 ? 0.02 : (km8 >= 40 ? -0.01 : 0));
+  prior = Math.max(1.04, Math.min(1.12, prior));
+  // el exponente que sale de sus propias marcas: la mejor salida (por ritmo) de cada largo, del más corto al más largo
+  const cut = now - 120 * 864e5, buckets = [[3, 5], [5, 8], [8, 12], [12, 25], [25, 100]], best = [];
+  buckets.forEach(([a, b]) => {
+    let bestRun = null;
+    runs.forEach(r => {
+      const pace = r.durationSec / 60 / r.distanceKm;
+      if(r.distanceKm < a || r.distanceKm >= b || pace < 2.5 || pace > 12 || new Date(r.date).getTime() < cut) return;
+      if(!bestRun || pace < bestRun.durationSec / 60 / bestRun.distanceKm) bestRun = r;
+    });
+    if(bestRun) best.push(bestRun);
+  });
+  if(best.length >= 2){
+    const lo = best[0], hi = best[best.length - 1];
+    if(hi.distanceKm / lo.distanceKm >= 1.6){
+      const fit = Math.log(hi.durationSec / lo.durationSec) / Math.log(hi.distanceKm / lo.distanceKm);
+      if(isFinite(fit)) return Math.round((0.5 * prior + 0.5 * Math.max(1.03, Math.min(1.15, fit))) * 1000) / 1000;
+    }
+  }
+  return Math.round(prior * 1000) / 1000;
+}
+// Margen por falta de distancia: según la salida más larga de las últimas 8 semanas respecto de la carrera. null si no hay carreras recientes
+// (sin datos no se castiga) o si ya llegó a una distancia parecida.
+function enduranceSurcharge(km){
+  const cut = Date.now() - 56 * 864e5;
+  let longest = 0, any = false;
+  (state.runs || []).forEach(r => { if(r && r.date && new Date(r.date).getTime() >= cut && r.distanceKm > 0){ any = true; if(r.distanceKm > longest) longest = r.distanceKm; } });
+  if(!any || !(km > 0)) return null;
+  const ratio = longest / km;
+  const pct = ratio >= 0.8 ? 0 : (ratio >= 0.65 ? 0.02 : (ratio >= 0.5 ? 0.04 : (ratio >= 0.35 ? 0.07 : 0.10)));
+  return pct > 0 ? {pct, longestKm: longest} : null;
+}
+// Corrección aprendida: mediana de (lo que hizo / lo que se estimó) de sus últimas 3 carreras, con peso creciente (60% con una, 80% con dos, 100% con tres)
+// y acotada entre -12% y +15%.
+function raceCalibration(){
+  const list = (state.raceCalibration || []).filter(c => c && c.ratio > 0 && Date.now() - new Date(c.date + 'T12:00:00').getTime() < 548 * 864e5).slice(-3);
+  if(!list.length) return null;
+  const s = list.map(c => c.ratio).sort((a, b) => a - b);
+  const med = s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
+  const weight = list.length === 1 ? 0.6 : (list.length === 2 ? 0.8 : 1);
+  const factor = Math.max(0.88, Math.min(1.15, 1 + (med - 1) * weight));
+  return {factor, n: list.length};
+}
+// Aplica el margen por distancia y la calibración a un tiempo base. rawSec = antes de la calibración (es lo que se guarda para comparar con la carrera real).
+function adjustRaceSec(km, baseSec){
+  const endurance = enduranceSurcharge(km);
+  const rawSec = baseSec * (1 + (endurance ? endurance.pct : 0));
+  const calib = raceCalibration();
+  return {sec: rawSec * (calib ? calib.factor : 1), rawSec, endurance, calib};
+}
+// Tiempo estimado para km kilómetros: primero tu mejor esfuerzo de los últimos 90 días, si no hay, tu mejor marca (o la de referencia del onboarding).
 function estimateRaceTime(km){
   const cutoff = Date.now() - 90 * 864e5;
+  const exp = riegelExponent();
   let best = null, basis = null;
   (state.runs || []).forEach(r => {
     const pace = r.distanceKm > 0 ? (r.durationSec / 60) / r.distanceKm : 0;
     if(!(r.distanceKm >= 3 && r.distanceKm <= 60 && r.durationSec > 0 && pace >= 2.5 && pace <= 12 && new Date(r.date).getTime() >= cutoff)) return;
     // Riegel solo es confiable con una distancia de referencia parecida: de una salida de 3 km no se proyecta un 10K (antes se aceptaba hasta 4,2 veces)
     if(km > r.distanceKm * 2.5) return;
-    const sec = r.durationSec * Math.pow(km / r.distanceKm, 1.06);
+    const sec = r.durationSec * Math.pow(km / r.distanceKm, exp);
     if(!best || sec < best){ best = sec; basis = {distKm: r.distanceKm, paceMin: pace, date: r.date}; }
   });
   const floor = levelRaceFloor(km);
+  let base = null, source = null;
   if(best){
     // un entrenamiento rara vez es un esfuerzo máximo: si la proyección sale más rápida de lo que permite el test de nivel, manda el test
-    if(floor && best < floor.sec) return {sec: floor.sec, source: 'level'};
-    return {sec: best, source: 'runs', basis};
+    if(floor && best < floor.sec){ base = floor.sec; source = 'level'; basis = null; }
+    else { base = best; source = 'runs'; }
+  } else {
+    const p = predictRaceBase(km);
+    if(!p) return null;
+    base = p.predictedSec; source = p.floored ? 'level' : 'pr';
   }
-  const p = predictRaceTime(km);
-  return p ? {sec: p.predictedSec, source: p.floored ? 'level' : 'pr'} : null;
+  const adj = adjustRaceSec(km, base);
+  return {sec: adj.sec, rawSec: adj.rawSec, source, basis, endurance: adj.endurance, calib: adj.calib, exp};
+}
+// Guarda la estimación (sin calibrar) en el evento mientras falta para la carrera: es lo que se compara con el resultado real. Solo si cambió más de 1%.
+function snapshotRacePrediction(est){
+  const ev = state.event;
+  if(!ev || !est || !(est.rawSec > 0)) return;
+  if(ev.predictedSec && Math.abs(est.rawSec / ev.predictedSec - 1) < 0.01) return;
+  ev.predictedSec = Math.round(est.rawSec);
+  ev.predictedAt = Date.now();
+  persist();
+}
+// Cuando pasa el día de la carrera (se llama justo antes de sacar el evento): si hay una salida ese día (o un día antes o después) de una distancia
+// parecida, se compara con lo que se había estimado y se guarda la proporción para corregir las próximas estimaciones.
+function recordRaceCalibration(ev){
+  if(!ev || !(ev.predictedSec > 0) || !ev.date) return false;
+  const evKm = ev.distanceKm > 0 ? ev.distanceKm : ((state.profile && state.profile.raceDate === ev.date) ? getGoalRaceKm() : null);
+  if(!(evKm > 0)) return false;
+  const day = n => { const d = new Date(ev.date + 'T12:00:00'); d.setDate(d.getDate() + n); return localDateISO(d); };
+  const days = [day(0), day(-1), day(1)];
+  const run = (state.runs || []).filter(r => r && r.distanceKm > 0 && r.durationSec > 0 && days.includes(localDateISO(r.date)) && Math.abs(r.distanceKm / evKm - 1) <= 0.15)
+    .sort((a, b) => Math.abs(b.distanceKm - evKm) - Math.abs(a.distanceKm - evKm)).pop();
+  if(!run) return false;
+  const actualSec = run.durationSec * Math.pow(evKm / run.distanceKm, riegelExponent());   // normalizada a la distancia oficial si el GPS midió un poco distinto
+  const ratio = actualSec / ev.predictedSec;
+  if(!(ratio > 0.7 && ratio < 1.4)) return false;      // un resultado fuera de lo razonable (se caminó, se paró, GPS roto) no enseña nada
+  if(!state.raceCalibration) state.raceCalibration = [];
+  state.raceCalibration.push({date: ev.date, km: evKm, predictedSec: ev.predictedSec, actualSec: Math.round(actualSec), ratio: Math.round(ratio * 1000) / 1000});
+  state.raceCalibration = state.raceCalibration.slice(-6);
+  state.chat.push({role: 'coach', text: t('rp_calib_msg', {name: ev.name || '', pred: fmtRaceTime(ev.predictedSec), actual: fmtRaceTime(Math.round(actualSec))}), ts: Date.now()});
+  return true;
 }
 // Parciales con salida controlada: el primer 20% un 1,5% más lento, el último 20% un 1,5% más
 // rápido y el medio parejo; el total siempre da el tiempo objetivo. Las cuentas van en la unidad
@@ -6441,6 +6544,7 @@ function renderRacePlanEntry(){
   const days = Math.round((new Date(ev.date + 'T00:00:00') - new Date().setHours(0,0,0,0)) / 86400000);
   if(days < 0){ el.style.display = 'none'; return; }
   const est = estimateRaceTime(km);
+  snapshotRacePrediction(est);
   document.getElementById('home-raceplan-sub').textContent = est
     ? t('rp_entry_sub', {time: fmtRaceTime(Math.round(est.sec)), pace: fmtPace(est.sec / 60 / km) + '/' + distUnit()})
     : t('rp_entry_open');
@@ -6467,7 +6571,7 @@ function openRacePlan(){
     const unit = distUnit();
     html += '<div class="card rp-target"><div class="rp-target-row"><div><div class="rp-lbl">' + t('rp_target') + '</div><div class="rp-big">' + fmtRaceTime(sec) + '</div></div>' +
       '<div><div class="rp-lbl" style="text-align:right;">' + t('rp_pace_lbl') + '</div><div class="rp-pace">' + fmtPace(est.sec / 60 / km) + ' <small>/' + unit + '</small></div></div></div>' +
-      '<p class="rp-note">' + t(est.source === 'runs' ? 'rp_hint_runs' : (est.source === 'level' ? 'rp_hint_level' : 'rp_hint_pr')) + (est.basis ? ' ' + t('rp_basis', {dist: fmtDist(est.basis.distKm, 1) + ' ' + distUnit(), pace: fmtPace(est.basis.paceMin), unit: distUnit(), date: new Date(est.basis.date).toLocaleDateString(LOCALE_MAP[lang], {day:'numeric', month:'short'})}) : '') + '</p></div>' +
+      '<p class="rp-note">' + t(est.source === 'runs' ? 'rp_hint_runs' : (est.source === 'level' ? 'rp_hint_level' : 'rp_hint_pr')) + (est.endurance ? ' ' + t('rp_endurance', {dist: fmtDist(est.endurance.longestKm, 1) + ' ' + distUnit(), pct: Math.round(est.endurance.pct * 100)}) : '') + (est.calib ? ' ' + t('rp_calib', {n: est.calib.n, pct: (est.calib.factor >= 1 ? '+' : '') + ((est.calib.factor - 1) * 100).toFixed(1) + '%'}) : '') + (est.basis ? ' ' + t('rp_basis', {dist: fmtDist(est.basis.distKm, 1) + ' ' + distUnit(), pace: fmtPace(est.basis.paceMin), unit: distUnit(), date: new Date(est.basis.date).toLocaleDateString(LOCALE_MAP[lang], {day:'numeric', month:'short'})}) : '') + '</p></div>' +
       '<div class="card"><div class="rp-lbl" style="margin-bottom:6px;">' + t('rp_strategy') + '</div><div class="rp-strat-name">' + t('rp_strategy_name') + '</div><p class="rp-strat-body">' + t('rp_strategy_body') + '</p></div>' +
       '<div class="card"><div class="rp-lbl" style="margin-bottom:4px;">' + t('rp_splits') + '</div>' +
       shown.map((s, i) => {
@@ -11970,7 +12074,8 @@ function levelRaceFloor(km){
   const allowance = Math.min(0.12, 0.02 + 0.005 * weeks);
   return {sec: raceSecFromVdot(lt.vdot, km * 1000) * (1 - allowance), refDistanceKm: (lt.distanceM || 0) / 1000, refDurationSec: 720};
 }
-function predictRaceTime(targetKm){
+// Misma proyección de siempre (marca más cercana en distancia) pero con el exponente personal y el piso del test de nivel; sin el margen ni la calibración.
+function predictRaceBase(targetKm){
   // Estima el tiempo objetivo para `targetKm` con la fórmula de Riegel (T2 = T1 *
   // (D2/D1)^1.06), usando como referencia la marca personal más cercana en distancia
   // (cuanto más parecidas son las distancias, más confiable es la proyección).
@@ -11987,11 +12092,18 @@ function predictRaceTime(targetKm){
     if(diff < bestDiff){ bestDiff = diff; best = rec; }
   });
   if(!best) return null;
-  const predictedSec = best.durationSec * Math.pow(targetKm/best.distanceKm, 1.06);
+  const predictedSec = best.durationSec * Math.pow(targetKm/best.distanceKm, riegelExponent());
   // con el test de nivel hecho, la proyección no puede ser más rápida que lo que ese nivel permite (con su margen de mejora)
   const floor = levelRaceFloor(targetKm);
   if(floor && predictedSec < floor.sec && floor.refDistanceKm > 0) return { predictedSec: floor.sec, refDistanceKm: floor.refDistanceKm, refDurationSec: floor.refDurationSec, floored: true };
   return { predictedSec, refDistanceKm: best.distanceKm, refDurationSec: best.durationSec };
+}
+// Lo mismo que predictRaceBase pero con el margen por distancia y la corrección aprendida: es lo que ven Perfil, la calculadora y el plan de carrera.
+function predictRaceTime(targetKm){
+  const p = predictRaceBase(targetKm);
+  if(!p) return null;
+  const adj = adjustRaceSec(targetKm, p.predictedSec);
+  return Object.assign({}, p, {predictedSec: adj.sec});
 }
 function getGoalRaceKm(){
   return {'5k':5, '10k':10, '15k':15, '21k':21.0975, '42k':42.195}[state.profile.goal] || null;

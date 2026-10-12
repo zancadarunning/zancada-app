@@ -283,7 +283,7 @@ test('predictRaceTime: proyecta con la fórmula de Riegel a partir de la marca m
   assert.ok(pred);
   assert.equal(pred.refDistanceKm, 10);
   assert.equal(pred.refDurationSec, 3000);
-  const expected = 3000 * Math.pow(5 / 10, 1.06);
+  const expected = 3000 * Math.pow(5 / 10, app.riegelExponent());   // el exponente es personal (con poca historia: más alto que el 1,06 clásico)
   assert.ok(Math.abs(pred.predictedSec - expected) < 0.01);
   assert.ok(pred.predictedSec < 1500, 'proyectar a la mitad de distancia debería dar bastante menos de la mitad del tiempo');
 });

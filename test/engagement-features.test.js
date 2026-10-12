@@ -212,7 +212,10 @@ test('plan de carrera: estima con tu mejor esfuerzo reciente o, si no hay, con t
   app.state.runs = [{ id: 'a', date: isoDaysAgo(10), distanceKm: 5, durationSec: 1500 }];
   const e = app.estimateRaceTime(10);
   assert.equal(e.source, 'runs');
-  assert.ok(Math.abs(e.sec / 60 - 25 * Math.pow(2, 1.06)) < 0.1);
+  // Riegel con el exponente personal (corredor nuevo: más alto que 1,06) y el margen por distancia (su salida más larga es la mitad de la carrera: +4%)
+  assert.equal(e.endurance.pct, 0.04);
+  assert.ok(Math.abs(e.sec / 60 - 25 * Math.pow(2, app.riegelExponent()) * 1.04) < 0.1);
+  assert.ok(e.sec / 60 > 25 * Math.pow(2, 1.06), 'más conservador que el Riegel clásico');
   app.state.runs = [{ id: 'b', date: isoDaysAgo(200), distanceKm: 10, durationSec: 3000 }];
   const e2 = app.estimateRaceTime(10);
   assert.equal(e2 && e2.source, 'pr');
@@ -678,7 +681,9 @@ test('plan de carrera: el tiempo estimado no puede ser más rápido de lo que pe
   const e = app.estimateRaceTime(10);
   assert.equal(e.source, 'level');
   const paceMin = e.sec / 60 / 10;
-  assert.ok(paceMin > 6.1 && paceMin < 6.7, 'con el piso: ~6:15-6:30/km, no ' + paceMin.toFixed(2));
+  // con el piso del test (~6:30) y el margen por distancia (su salida más larga fue de 4 km para un 10K): un 10K realista de principiante, ~7:00/km
+  assert.ok(e.endurance && e.endurance.pct > 0);
+  assert.ok(paceMin > 6.4 && paceMin < 7.5, 'con el piso y el margen: ~6:40-7:10/km, no ' + paceMin.toFixed(2));
 });
 
 test('plan de carrera: sin test de nivel no hay piso, y una salida de 3 km ya no proyecta un 10K; con una de 5 km sí, y guarda la base', () => {
@@ -697,4 +702,64 @@ test('raceSecFromVdot: coincide con las tablas de Daniels (VDOT 50: 5K ≈ 19:57
   const app = loadApp();
   assert.ok(Math.abs(app.raceSecFromVdot(50, 5000) / 60 - 19.95) < 0.3);
   assert.ok(Math.abs(app.raceSecFromVdot(50, 10000) / 60 - 41.35) < 0.5);
+});
+
+test('exponente de Riegel personal: corredor nuevo > clásico, experimentado y con volumen < nuevo; sin datos, el 1,06 clásico', () => {
+  const app = loadApp();
+  app.state.runs = []; app.state.profile = {};
+  assert.equal(app.riegelExponent(), 1.06);
+  // recién empieza: pocas semanas y pocos km
+  app.state.profile = { runnerType: 'new' };
+  app.state.runs = [{ id: 'a', date: isoDaysAgo(10), distanceKm: 4, durationSec: 1500 }];
+  const nuevo = app.riegelExponent();
+  assert.ok(nuevo >= 1.10 && nuevo <= 1.12, 'principiante ~1,12: ' + nuevo);
+  // lleva más de un año y 45 km por semana
+  app.state.profile = { runnerType: 'active' };
+  app.state.runs = [];
+  for (let w = 0; w < 60; w++) app.state.runs.push({ id: 'r' + w, date: isoDaysAgo(w * 7 + 1), distanceKm: 45, durationSec: 45 * 330 });
+  const exp = app.riegelExponent();
+  assert.ok(exp <= 1.06, 'experimentado ~1,05: ' + exp);
+});
+
+test('exponente personal: si hay salidas de distintos largos, se mezcla con el que sale de sus propias marcas', () => {
+  const app = loadApp();
+  app.state.profile = { runnerType: 'active' };
+  // 4 km a 5:00 y 12 km a 6:00: pierde mucho más ritmo al alargar -> exponente propio alto (acotado en 1,15)
+  app.state.runs = [{ id: 'a', date: isoDaysAgo(20), distanceKm: 4, durationSec: 1200 }, { id: 'b', date: isoDaysAgo(10), distanceKm: 12, durationSec: 4320 }];
+  const exp = app.riegelExponent();
+  assert.ok(exp > 1.08 && exp <= 1.15, 'mezcla con el propio: ' + exp);
+});
+
+test('margen por distancia: por tramos según la salida más larga de las últimas 8 semanas, y nada si no hay carreras recientes', () => {
+  const app = loadApp();
+  const longest = km => { app.state.runs = [{ id: 'a', date: isoDaysAgo(10), distanceKm: km, durationSec: km * 360 }]; return app.enduranceSurcharge(10); };
+  assert.equal(longest(9), null, '90%: sin margen');
+  assert.equal(longest(7).pct, 0.02);
+  assert.equal(longest(5.5).pct, 0.04);
+  assert.equal(longest(4).pct, 0.07);
+  assert.equal(longest(2).pct, 0.10);
+  app.state.runs = [{ id: 'a', date: isoDaysAgo(100), distanceKm: 3, durationSec: 1000 }];
+  assert.equal(app.enduranceSurcharge(10), null, 'sin carreras en 8 semanas no se castiga (no hay datos)');
+});
+
+test('calibración: tras la carrera se guarda lo estimado vs lo hecho, y corrige las próximas estimaciones con peso creciente', () => {
+  const app = loadApp();
+  app.state.profile = {}; app.state.chat = [];
+  const evDate = isoDaysAgo(1).slice(0, 10);
+  // 10K estimado en 60:00; hizo 66:00 (10% más lento)
+  const ev = { name: 'Mi 10K', date: evDate, distanceKm: 10, predictedSec: 3600 };
+  app.state.runs = [{ id: 'r', date: evDate + 'T12:00:00', distanceKm: 10, durationSec: 3960 }];
+  assert.equal(app.recordRaceCalibration(ev), true);
+  assert.equal(app.state.raceCalibration.length, 1);
+  assert.ok(Math.abs(app.state.raceCalibration[0].ratio - 1.1) < 1e-9);
+  assert.equal(app.state.chat.length, 1);
+  const c1 = app.raceCalibration();
+  assert.ok(Math.abs(c1.factor - 1.06) < 1e-9, 'una carrera: 60% de la diferencia (+6%)');
+  app.state.raceCalibration.push({ date: evDate, km: 10, predictedSec: 3600, actualSec: 3960, ratio: 1.1 }, { date: evDate, km: 10, predictedSec: 3600, actualSec: 3960, ratio: 1.1 });
+  assert.ok(Math.abs(app.raceCalibration().factor - 1.1) < 1e-9, 'tres carreras: 100%');
+  // un resultado fuera de lo razonable no cuenta, ni una carrera de otra distancia
+  app.state.runs = [{ id: 'r', date: evDate + 'T12:00:00', distanceKm: 10, durationSec: 9000 }];
+  assert.equal(app.recordRaceCalibration(ev), false);
+  app.state.runs = [{ id: 'r', date: evDate + 'T12:00:00', distanceKm: 5, durationSec: 1700 }];
+  assert.equal(app.recordRaceCalibration(ev), false, 'una salida de 5 km no es la carrera de 10');
 });
