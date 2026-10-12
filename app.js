@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T23:23:45Z';
+const APP_VERSION = '2026-10-12T23:52:32Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8291,8 +8291,98 @@ function admBarRows(entries, total){
   const max = Math.max(1, ...entries.map(e => e[1]));
   return entries.map(([k, n]) => '<div class="adm-row"><span>' + escapeHtml(String(k)) + '</span><div class="track"><i style="width:' + Math.round((n / max) * 100) + '%;"></i></div><span class="v">' + n + (total ? ' <span style="font-weight:600; color:var(--mist); font-size:11.5px;">' + admPct(n, total) + '%</span>' : '') + '</span></div>').join('');
 }
+function admFmtBytes(b){
+  b = Number(b) || 0;
+  if(b >= 1048576) return (b / 1048576).toFixed(1) + ' MB';
+  if(b >= 1024) return Math.round(b / 1024) + ' KB';
+  return b + ' B';
+}
+// Explicación de cada tarjeta (botón ⓘ): qué mide cada número y cómo se calcula.
+const ADMIN_HELP = {
+  limits: [
+    ['Qué es', 'Qué tan cerca estás de los topes de los servicios que usa la app. Verde: hasta 70 %. Naranja: 70 a 90 %. Rojo: más de 90 %.'],
+    ['Strava', 'Cuántas personas conectaron Strava contra el cupo de atletas que tiene tu app en Strava. Si se llena, nadie más puede conectarse. Se ajusta con STRAVA_ATHLETE_LIMIT.'],
+    ['Base de datos', 'Tamaño real de la base de Supabase contra el máximo del plan (500 MB en el gratis). Se ajusta con SUPABASE_DB_LIMIT_MB.'],
+    ['Usuarios activos', 'Personas que iniciaron sesión en los últimos 30 días contra los usuarios activos por mes que incluye tu plan de Supabase (50.000 en el gratis). Se ajusta con SUPABASE_MAU_LIMIT.'],
+    ['Zonda (IA)', 'La persona que más usó el chat hoy contra el límite diario por persona (CHAT_DAILY_LIMIT). Si alguien llega al tope, deja de poder escribirle a Zonda hasta mañana.']
+  ],
+  funnel: [
+    ['Registradas', 'Cuentas creadas.'],
+    ['Confirmaron el mail', 'Abrieron el link de confirmación. Si hay muchas sin confirmar, puede haber un problema con el mail o con el registro.'],
+    ['Completaron el onboarding', 'Terminaron las preguntas iniciales y llegaron a la app. Es donde más gente suele abandonar.'],
+    ['Tienen una carrera', 'Tienen al menos una carrera guardada, propia o traída de un reloj.'],
+    ['Conectaron un reloj', 'Tienen al menos un reloj o app de Strava, Suunto, Wahoo, Polar o COROS.']
+  ],
+  accounts: [
+    ['Registradas', 'Total de cuentas creadas.'],
+    ['Con mail confirmado', 'Cuentas que confirmaron su mail.'],
+    ['Nuevas, 7 y 30 días', 'Cuentas creadas en esos períodos.'],
+    ['Entraron, 7 y 30 días', 'Cuentas que iniciaron sesión en esos períodos. Ojo: quien deja la sesión abierta no vuelve a iniciar sesión, así que puede no figurar aunque use la app.']
+  ],
+  signups: [['Altas por semana', 'Cuentas nuevas en cada una de las últimas 12 semanas. La fecha es el lunes de cada semana.']],
+  activity: [
+    ['Corrieron, 7 y 30 días', 'Personas con al menos una carrera con fecha en ese período. Es la medida más real de uso, porque cuenta carreras y no inicios de sesión.'],
+    ['Carreras, 7 y 30 días', 'Cantidad de carreras registradas en el período, sumando todas las personas.'],
+    ['Guardaron datos', 'Cuentas cuyos datos se modificaron en el período. Puede estar inflado: las sincronizaciones automáticas de los relojes también los modifican.'],
+    ['Carreras en total', 'Todas las carreras guardadas desde el comienzo.']
+  ],
+  watches: [
+    ['Barras por reloj', 'Cuentas con ese reloj conectado y el porcentaje sobre todas las cuentas registradas.'],
+    ['Con algún reloj', 'Cuentas con al menos un reloj, sin contar dos veces a quien tiene varios.'],
+    ['Con errores de sincronización', 'Cuentas de Strava cuya última sincronización falló. Si crece, hay un problema con la conexión.'],
+    ['Health Connect', 'No se puede contar: esa conexión vive solo en el teléfono de cada persona.']
+  ],
+  push: [
+    ['Personas con push', 'Cuentas con al menos un dispositivo que aceptó notificaciones. Es el número que más se parece a “suscriptos”.'],
+    ['Dispositivos', 'Teléfonos o navegadores registrados. Una persona puede tener varios.'],
+    ['Android / web', 'De qué tipo son esos dispositivos.'],
+    ['Enviadas, 7 y 30 días', 'Resúmenes semanales enviados. Hoy solo se registra ese tipo de aviso.']
+  ],
+  chat: [
+    ['Mensajes hoy', 'Mensajes que se le mandaron a Zonda hoy, entre todas las personas.'],
+    ['Personas hoy', 'Cuántas personas hablaron con Zonda hoy.'],
+    ['Máximo por persona', 'El que más mensajes mandó hoy. Si se acerca al límite diario, esa persona se va a quedar sin respuestas.'],
+    ['Últimos 7 días', 'Mensajes totales de la última semana. Cada uno tiene un costo en la API de IA.']
+  ],
+  storage: [
+    ['Base de datos', 'Tamaño total de la base de Supabase. Es lo que cuenta contra el límite del plan.'],
+    ['Datos por persona', 'Cuánto pesan los datos de cada cuenta (carreras, plan, chat). El promedio sirve para proyectar: más cuentas por ese promedio da el crecimiento esperado.'],
+    ['El más grande', 'La cuenta con más datos. Si es mucho mayor que el promedio, conviene revisarla.']
+  ],
+  languages: [['Idiomas', 'Idioma que eligió cada cuenta, con el porcentaje sobre las cuentas con datos.']],
+  goals: [['Objetivos', 'Lo que eligieron en el onboarding como meta de entrenamiento.']],
+  external: [
+    ['Qué es', 'Límites de servicios que la app no puede medir desde acá. Hay que mirarlos en el panel de cada uno cada tanto.'],
+    ['Mapbox', 'Cargas de mapa y de imágenes por mes (los mapas del historial, del detalle y del video). El plan gratis incluye un cupo mensual; se mira en account.mapbox.com.'],
+    ['Vercel', 'Invocaciones de funciones, ancho de banda y tareas programadas. Se mira en Vercel → Usage.'],
+    ['Anthropic', 'Gasto de la API de IA que usa Zonda. Se mira en console.anthropic.com → Usage.'],
+    ['Strava (llamadas)', 'Strava limita las llamadas a su API por 15 minutos y por día. Se mira en strava.com/settings/api.'],
+    ['Supabase (tráfico)', 'Ancho de banda mensual. Se mira en Supabase → Reports.']
+  ]
+};
+function admCard(id, title, bodyHtml){
+  const help = (ADMIN_HELP[id] || []).map(([k, v]) => '<dt>' + escapeHtml(k) + '</dt><dd>' + escapeHtml(v) + '</dd>').join('');
+  return '<div class="card"><div class="adm-head"><h3>' + escapeHtml(title) + '</h3>'
+    + '<button type="button" class="adm-info" onclick="toggleAdminHelp(this)" aria-expanded="false" aria-label="Qué significa ' + escapeHtml(title) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.6" r=".6" fill="currentColor"/></svg></button></div>'
+    + '<dl class="adm-help" hidden>' + help + '</dl>' + bodyHtml + '</div>';
+}
+function toggleAdminHelp(btn){
+  const dl = btn.closest('.card').querySelector('.adm-help');
+  const open = dl.hasAttribute('hidden');
+  if(open) dl.removeAttribute('hidden'); else dl.setAttribute('hidden', '');
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  btn.classList.toggle('on', open);
+}
+function admLimitRow(l){
+  const name = { strava: 'Strava (atletas)', db: 'Base de datos', mau: 'Usuarios activos (30 d)', chat: 'Zonda: máximo por persona hoy' }[l.key] || l.key;
+  const pct = Math.max(0, l.pct || 0);
+  const tone = pct >= 90 ? 'hi' : (pct >= 70 ? 'mid' : 'ok');
+  const unit = l.unit === 'MB' ? ' MB' : '';
+  return '<div class="adm-limit ' + tone + '"><div class="top"><span>' + escapeHtml(name) + '</span><b>' + Number(l.used).toLocaleString() + unit + ' / ' + Number(l.limit).toLocaleString() + unit + '</b></div>'
+    + '<div class="track"><i style="width:' + Math.min(100, pct) + '%;"></i></div><div class="pct">' + pct + ' %' + (pct >= 90 ? ' · cerca del límite' : (pct >= 70 ? ' · atención' : '')) + '</div></div>';
+}
 function renderAdminStats(s){
-  const u = s.users || {}, a = s.app || {}, w = s.watches || {}, p = s.push || {};
+  const u = s.users || {}, a = s.app || {}, w = s.watches || {}, p = s.push || {}, f = s.funnel || {}, act = s.activity || {}, db = s.db || {}, chat = s.chat || {}, ns = s.notifications_sent || {}, se = s.sync_errors || {};
   const weeks = s.signups_by_week || [];
   const maxW = Math.max(1, ...weeks.map(x => x.n));
   const bars = weeks.map((x, i) => '<div class="b"><em>' + (x.n || '') + '</em><i style="height:' + Math.max(2, Math.round((x.n / maxW) * 56)) + 'px;"></i><span>' + (i % 3 === 0 ? escapeHtml(x.week.slice(8, 10) + '/' + x.week.slice(5, 7)) : '&nbsp;') + '</span></div>').join('');
@@ -8300,22 +8390,31 @@ function renderAdminStats(s){
   const langs = Object.entries(s.languages || {}).sort((x, y) => y[1] - x[1]);
   const goals = Object.entries(s.goals || {}).sort((x, y) => y[1] - x[1]);
   const plats = Object.entries(p.by_platform || {}).sort((x, y) => y[1] - x[1]);
+  const funnelSteps = [['Registradas', f.registered], ['Confirmaron el mail', f.confirmed], ['Completaron el onboarding', f.onboarded], ['Tienen una carrera', f.with_runs], ['Conectaron un reloj', w.users_with_any]];
+  const funnel = funnelSteps.map(([k, n]) => '<div class="adm-row"><span style="grid-column:auto;">' + escapeHtml(k) + '</span><div class="track"><i style="width:' + admPct(n || 0, f.registered || 0) + '%;"></i></div><span class="v">' + (n || 0) + ' <span style="font-weight:600; color:var(--mist); font-size:11.5px;">' + admPct(n || 0, f.registered || 0) + '%</span></span></div>').join('');
+  const limits = (s.limits || []).map(admLimitRow).join('') || '<p class="muted">Sin datos.</p>';
+  const avg = db.app_state_avg_bytes || 0;
   document.getElementById('admin-body').innerHTML =
-    '<div class="card"><h3>Cuentas</h3><div class="adm-grid">'
+    admCard('limits', 'Límites', limits + '<p class="adm-note">Los topes son los del plan gratis; si cambiaste de plan, se ajustan desde las variables de Vercel.</p>')
+    + admCard('funnel', 'Del registro a la carrera', funnel)
+    + admCard('accounts', 'Cuentas', '<div class="adm-grid">'
       + admStat(u.total, 'registradas') + admStat(u.confirmed, 'con mail confirmado') + admStat(u.new_7d, 'nuevas, 7 días')
-      + admStat(u.new_30d, 'nuevas, 30 días') + admStat(u.signed_in_7d, 'entraron, 7 días') + admStat(u.signed_in_30d, 'entraron, 30 días')
-    + '</div><p class="adm-note">“Entraron” cuenta el último inicio de sesión: quien mantiene la sesión abierta puede no figurar. Para actividad real mirá “Guardaron datos”.</p></div>'
-    + '<div class="card"><h3>Altas por semana</h3><div class="adm-bars">' + bars + '</div></div>'
-    + '<div class="card"><h3>Uso</h3><div class="adm-grid">'
-      + admStat(a.onboarded, 'onboarding completo (' + admPct(a.onboarded, u.total) + '%)') + admStat(a.data_saved_7d, 'guardaron datos, 7 días') + admStat(a.data_saved_30d, 'guardaron datos, 30 días')
-      + admStat(a.users_with_runs, 'con al menos 1 carrera') + admStat(a.total_runs, 'carreras en total') + admStat(w.users_with_any, 'con algún reloj')
-    + '</div></div>'
-    + '<div class="card"><h3>Relojes conectados</h3>' + admBarRows(watchEntries, u.total)
-      + '<p class="adm-note">Health Connect no figura: esa conexión vive solo en el teléfono de cada persona.</p></div>'
-    + '<div class="card"><h3>Notificaciones</h3><div class="adm-grid">' + admStat(p.users, 'personas con push') + admStat(p.devices, 'dispositivos') + admStat(admPct(p.users || 0, u.total) + '%', 'de las cuentas') + '</div>'
-      + (plats.length ? '<div style="margin-top:6px;">' + admBarRows(plats, 0) + '</div>' : '') + '</div>'
-    + '<div class="card"><h3>Idiomas</h3>' + (langs.length ? admBarRows(langs, a.with_data) : '<p class="muted">Sin datos.</p>') + '</div>'
-    + '<div class="card"><h3>Objetivos</h3>' + (goals.length ? admBarRows(goals, a.with_data) : '<p class="muted">Sin datos.</p>') + '</div>';
+      + admStat(u.new_30d, 'nuevas, 30 días') + admStat(u.signed_in_7d, 'entraron, 7 días') + admStat(u.signed_in_30d, 'entraron, 30 días') + '</div>')
+    + admCard('signups', 'Altas por semana', '<div class="adm-bars">' + bars + '</div>')
+    + admCard('activity', 'Actividad', '<div class="adm-grid">'
+      + admStat(act.ran_7d, 'corrieron, 7 días') + admStat(act.ran_30d, 'corrieron, 30 días') + admStat(act.runs_7d, 'carreras, 7 días')
+      + admStat(act.runs_30d, 'carreras, 30 días') + admStat(a.data_saved_7d, 'guardaron datos, 7 días') + admStat(a.total_runs, 'carreras en total') + '</div>')
+    + admCard('watches', 'Relojes conectados', admBarRows(watchEntries, u.total)
+      + '<p class="adm-note">' + (w.users_with_any || 0) + ' cuentas con algún reloj · ' + (se.strava || 0) + ' con error de sincronización en Strava.</p>')
+    + admCard('push', 'Notificaciones', '<div class="adm-grid">' + admStat(p.users, 'personas con push') + admStat(p.devices, 'dispositivos') + admStat(admPct(p.users || 0, u.total) + '%', 'de las cuentas') + '</div>'
+      + (plats.length ? '<div style="margin-top:6px;">' + admBarRows(plats, 0) + '</div>' : '')
+      + '<p class="adm-note">Resúmenes enviados: ' + (ns.last_7d || 0) + ' en 7 días · ' + (ns.last_30d || 0) + ' en 30 días.</p>')
+    + admCard('chat', 'Zonda (IA)', '<div class="adm-grid">' + admStat(chat.today_messages, 'mensajes hoy') + admStat(chat.today_users, 'personas hoy') + admStat(chat.week_messages, 'mensajes, 7 días') + '</div>')
+    + admCard('storage', 'Almacenamiento', '<div class="adm-grid">' + admStat(admFmtBytes(db.size_bytes), 'base de datos') + admStat(admFmtBytes(avg), 'datos por persona (prom.)') + admStat(admFmtBytes(db.app_state_max_bytes), 'la cuenta más grande') + '</div>'
+      + (avg > 0 && db.size_bytes ? '<p class="adm-note">Con ' + (a.with_data || 0) + ' cuentas, cada 1.000 cuentas nuevas suman unos ' + admFmtBytes(avg * 1000) + ' de datos de usuario.</p>' : ''))
+    + admCard('languages', 'Idiomas', langs.length ? admBarRows(langs, a.with_data) : '<p class="muted">Sin datos.</p>')
+    + admCard('goals', 'Objetivos', goals.length ? admBarRows(goals, a.with_data) : '<p class="muted">Sin datos.</p>')
+    + admCard('external', 'Límites que hay que mirar a mano', '<p class="adm-note" style="margin-top:0;">Mapbox, Vercel, Anthropic, tráfico de Supabase y las llamadas a la API de Strava no se pueden medir desde acá. Tocá la ⓘ para ver dónde mirar cada uno.</p>');
   const when = s.generated_at ? new Date(s.generated_at) : new Date();
   document.getElementById('admin-updated').textContent = 'Actualizado ' + when.toLocaleString();
 }

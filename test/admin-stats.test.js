@@ -69,3 +69,26 @@ test('si falta correr el SQL, avisa con un 502 claro', async () => {
   const r = await call({});
   assert.equal(r.code, 502); assert.match(r.body.error, /admin_stats/);
 });
+
+test('devuelve los límites con el porcentaje usado (Strava, base, usuarios activos y Zonda)', async () => {
+  process.env.ADMIN_EMAILS = 'yo@x.com';
+  process.env.CHAT_DAILY_LIMIT = '60';
+  delete process.env.STRAVA_ATHLETE_LIMIT;
+  global.fetch = fakeFetch({ id: 'u1', email: 'yo@x.com', email_confirmed_at: '2026-01-01' },
+    { users: { signed_in_30d: 500 }, watches: { strava: 9 }, db: { size_bytes: 400 * 1024 * 1024 }, chat: { max_user_today: 30 } });
+  const r = await call({});
+  const by = Object.fromEntries(r.body.limits.map(l => [l.key, l]));
+  assert.equal(by.strava.limit, 10); assert.equal(by.strava.pct, 90);
+  assert.equal(by.db.used, 400); assert.equal(by.db.pct, 80);
+  assert.equal(by.mau.pct, 1);
+  assert.equal(by.chat.limit, 60); assert.equal(by.chat.pct, 50);
+});
+
+test('los límites se pueden ajustar con variables de entorno', async () => {
+  process.env.ADMIN_EMAILS = 'yo@x.com';
+  process.env.STRAVA_ATHLETE_LIMIT = '100';
+  global.fetch = fakeFetch({ id: 'u1', email: 'yo@x.com', email_confirmed_at: '2026-01-01' }, { watches: { strava: 9 } });
+  const r = await call({});
+  assert.equal(r.body.limits.find(l => l.key === 'strava').limit, 100);
+  delete process.env.STRAVA_ATHLETE_LIMIT;
+});

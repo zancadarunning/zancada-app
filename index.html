@@ -2348,6 +2348,45 @@
 
 
 
+  /* Panel de administración */
+  .adm-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-top:12px;}
+  .adm-stat{background:var(--asphalt-3); border-radius:var(--radius-sm); padding:12px 8px; text-align:center;}
+  .adm-stat .n{font-size:22px; font-weight:800; font-variant-numeric:tabular-nums;}
+  .adm-stat .l{margin-top:2px; font-size:11px; color:var(--mist); line-height:1.25;}
+  .adm-bars{display:flex; align-items:flex-end; gap:5px; height:84px; margin-top:14px;}
+  .adm-bars .b{flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:4px;}
+  .adm-bars .b i{display:block; width:100%; max-width:18px; border-radius:5px 5px 2px 2px; background:var(--hivis-text); min-height:2px;}
+  .adm-bars .b span{font-size:9.5px; color:var(--mist);}
+  .adm-bars .b em{font-style:normal; font-size:10px; font-weight:700; color:var(--chalk);}
+  .adm-row{display:grid; grid-template-columns:78px 1fr auto; gap:10px; align-items:center; margin-top:10px; font-size:13.5px;}
+  .adm-row .track{height:8px; border-radius:99px; background:var(--asphalt-3); overflow:hidden;}
+  .adm-row .track i{display:block; height:100%; border-radius:99px; background:var(--hivis-text);}
+  .adm-row .v{font-weight:800; font-variant-numeric:tabular-nums; min-width:34px; text-align:right;}
+  .adm-note{margin:10px 0 0; font-size:11.5px; line-height:1.45; color:var(--mist);}
+  .adm-err{padding:14px; border-radius:var(--radius-sm); background:var(--danger-dim); color:var(--danger-text); font-size:13.5px; line-height:1.45;}
+
+  /* Panel de administración: ⓘ, límites y definiciones */
+  .adm-head{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  .adm-head h3{margin:0;}
+  .adm-info{width:var(--tap, 44px); height:var(--tap, 44px); margin:-10px -10px -10px 0; display:flex; align-items:center; justify-content:center; background:none; border:none; color:var(--mist); cursor:pointer; border-radius:50%;}
+  .adm-info svg{width:20px; height:20px;}
+  .adm-info.on{color:var(--hivis-text);}
+  .adm-help{margin:6px 0 4px; padding:12px 14px; border-radius:var(--radius-sm); background:var(--asphalt-3); font-size:12.5px; line-height:1.45; color:var(--mist);}
+  .adm-help[hidden]{display:none;}
+  .adm-help dt{margin-top:8px; font-weight:800; color:var(--chalk);}
+  .adm-help dt:first-child{margin-top:0;}
+  .adm-help dd{margin:2px 0 0;}
+  .adm-limit{margin-top:12px;}
+  .adm-limit .top{display:flex; justify-content:space-between; gap:10px; font-size:13.5px;}
+  .adm-limit .top b{font-variant-numeric:tabular-nums; white-space:nowrap;}
+  .adm-limit .track{height:9px; border-radius:99px; background:var(--asphalt-3); overflow:hidden; margin-top:6px;}
+  .adm-limit .track i{display:block; height:100%; border-radius:99px; background:var(--zone2-fill);}
+  .adm-limit.mid .track i{background:var(--zone4-fill);}
+  .adm-limit.hi .track i{background:var(--zone5-fill);}
+  .adm-limit .pct{margin-top:4px; font-size:11.5px; color:var(--mist);}
+  .adm-limit.mid .pct{color:var(--zone4); font-weight:700;}
+  .adm-limit.hi .pct{color:var(--zone5-text); font-weight:800;}
+
   /* =====================================================================================================================
      ZONAS DE FRECUENCIA CARDÍACA -- color fuerte pero no estridente, en los dos temas (azul, verde, amarillo, naranja, rojo).
      Relleno suave para chips, barras, anillos y mapas; el texto encima es una tinta oscura del MISMO tono (--zoneN-ink).
@@ -2589,22 +2628,6 @@
   
   }
 
-  /* Panel de administración */
-  .adm-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-top:12px;}
-  .adm-stat{background:var(--asphalt-3); border-radius:var(--radius-sm); padding:12px 8px; text-align:center;}
-  .adm-stat .n{font-size:22px; font-weight:800; font-variant-numeric:tabular-nums;}
-  .adm-stat .l{margin-top:2px; font-size:11px; color:var(--mist); line-height:1.25;}
-  .adm-bars{display:flex; align-items:flex-end; gap:5px; height:84px; margin-top:14px;}
-  .adm-bars .b{flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:4px;}
-  .adm-bars .b i{display:block; width:100%; max-width:18px; border-radius:5px 5px 2px 2px; background:var(--hivis-text); min-height:2px;}
-  .adm-bars .b span{font-size:9.5px; color:var(--mist);}
-  .adm-bars .b em{font-style:normal; font-size:10px; font-weight:700; color:var(--chalk);}
-  .adm-row{display:grid; grid-template-columns:78px 1fr auto; gap:10px; align-items:center; margin-top:10px; font-size:13.5px;}
-  .adm-row .track{height:8px; border-radius:99px; background:var(--asphalt-3); overflow:hidden;}
-  .adm-row .track i{display:block; height:100%; border-radius:99px; background:var(--hivis-text);}
-  .adm-row .v{font-weight:800; font-variant-numeric:tabular-nums; min-width:34px; text-align:right;}
-  .adm-note{margin:10px 0 0; font-size:11.5px; line-height:1.45; color:var(--mist);}
-  .adm-err{padding:14px; border-radius:var(--radius-sm); background:var(--danger-dim); color:var(--danger-text); font-size:13.5px; line-height:1.45;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura

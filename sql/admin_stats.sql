@@ -62,6 +62,46 @@ BEGIN
         FROM (SELECT COALESCE(platform, 'web') AS platform, count(*) AS n FROM public.push_subscriptions GROUP BY 1) p
       ), '{}'::jsonb)
     ),
+    'funnel', jsonb_build_object(
+      'registered', (SELECT count(*) FROM auth.users),
+      'confirmed',  (SELECT count(*) FROM auth.users WHERE email_confirmed_at IS NOT NULL),
+      'onboarded',  (SELECT count(*) FROM public.app_state WHERE data->>'onboarded' = 'true'),
+      'with_runs',  (SELECT count(*) FROM public.app_state WHERE jsonb_typeof(data->'runs') = 'array' AND jsonb_array_length(data->'runs') > 0)
+    ),
+    'activity', (
+      WITH r AS (
+        SELECT a.user_id, left(e->>'date', 10) AS d
+        FROM public.app_state a,
+             jsonb_array_elements(CASE WHEN jsonb_typeof(a.data->'runs') = 'array' THEN a.data->'runs' ELSE '[]'::jsonb END) e
+        WHERE (e->>'date') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+      )
+      SELECT jsonb_build_object(
+        'ran_7d',   (SELECT count(DISTINCT user_id) FROM r WHERE d::date >= current_date - 7),
+        'ran_30d',  (SELECT count(DISTINCT user_id) FROM r WHERE d::date >= current_date - 30),
+        'runs_7d',  (SELECT count(*) FROM r WHERE d::date >= current_date - 7),
+        'runs_30d', (SELECT count(*) FROM r WHERE d::date >= current_date - 30)
+      )
+    ),
+    'db', jsonb_build_object(
+      'size_bytes',           pg_database_size(current_database()),
+      'app_state_total_bytes', (SELECT COALESCE(sum(pg_column_size(data)), 0) FROM public.app_state),
+      'app_state_avg_bytes',   (SELECT COALESCE(avg(pg_column_size(data)), 0)::bigint FROM public.app_state),
+      'app_state_max_bytes',   (SELECT COALESCE(max(pg_column_size(data)), 0) FROM public.app_state)
+    ),
+    'chat', jsonb_build_object(
+      'today_messages', (SELECT COALESCE(sum(count), 0) FROM public.chat_usage WHERE usage_date = current_date),
+      'today_users',    (SELECT count(*) FROM public.chat_usage WHERE usage_date = current_date),
+      'max_user_today', (SELECT COALESCE(max(count), 0) FROM public.chat_usage WHERE usage_date = current_date),
+      'week_messages',  (SELECT COALESCE(sum(count), 0) FROM public.chat_usage WHERE usage_date >= current_date - 6)
+    ),
+    'notifications_sent', jsonb_build_object(
+      'last_7d',  (SELECT count(*) FROM public.sent_notifications WHERE sent_at > now() - interval '7 days'),
+      'last_30d', (SELECT count(*) FROM public.sent_notifications WHERE sent_at > now() - interval '30 days')
+    ),
+    'sync_errors', jsonb_build_object(
+      'strava', (SELECT count(*) FROM public.app_state a JOIN public.strava_connections c ON c.user_id = a.user_id
+                  WHERE a.data->'stravaSync'->>'lastError' IS NOT NULL)
+    ),
     'watches', jsonb_build_object(
       'strava', (SELECT count(*) FROM public.strava_connections),
       'suunto', (SELECT count(*) FROM public.suunto_connections),

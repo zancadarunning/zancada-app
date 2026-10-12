@@ -22,6 +22,23 @@ function adminList() {
     .filter(Boolean);
 }
 
+const MB = 1024 * 1024;
+const num = (v, d) => { const n = parseFloat(v); return Number.isFinite(n) && n > 0 ? n : d; };
+
+// Límites a vigilar. Los valores por defecto son los del plan GRATIS de cada servicio y del cupo que tiene hoy
+// la app en Strava; se pueden ajustar con variables de entorno si cambiás de plan o Strava te da más cupo.
+//   STRAVA_ATHLETE_LIMIT (10), SUPABASE_DB_LIMIT_MB (500), SUPABASE_MAU_LIMIT (50000), CHAT_DAILY_LIMIT (60, el mismo de chat.js)
+function buildLimits(s) {
+  const u = s.users || {}, w = s.watches || {}, db = s.db || {}, chat = s.chat || {};
+  const chatLimit = num(process.env.CHAT_DAILY_LIMIT, 60);
+  return [
+    { key: 'strava', used: w.strava || 0, limit: num(process.env.STRAVA_ATHLETE_LIMIT, 10), unit: 'atletas' },
+    { key: 'db', used: Math.round((db.size_bytes || 0) / MB), limit: num(process.env.SUPABASE_DB_LIMIT_MB, 500), unit: 'MB' },
+    { key: 'mau', used: u.signed_in_30d || 0, limit: num(process.env.SUPABASE_MAU_LIMIT, 50000), unit: 'personas' },
+    { key: 'chat', used: chat.max_user_today || 0, limit: chatLimit, unit: 'mensajes' }
+  ].map(l => Object.assign(l, { pct: Math.round((l.used / l.limit) * 100) }));
+}
+
 module.exports = withSentry(async (req, res) => {
   applyCors(req, res);
   if (isPreflight(req, res)) return;
@@ -54,7 +71,9 @@ module.exports = withSentry(async (req, res) => {
       res.status(502).json({ error: 'No se pudo leer admin_stats() -- ¿ya corriste sql/admin_stats.sql en Supabase?' });
       return;
     }
-    res.status(200).json(await r.json());
+    const stats = await r.json();
+    stats.limits = buildLimits(stats);
+    res.status(200).json(stats);
   } catch (e) {
     reportError(e);
     res.status(500).json({ error: 'Error interno' });
