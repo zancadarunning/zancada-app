@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T22:04:59Z';
+const APP_VERSION = '2026-10-12T22:13:43Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1457,6 +1457,12 @@ function updateSignupButtonState(){
   const password = document.getElementById('signup-password').value;
   const legalOk = document.getElementById('signup-legal-check').checked;
   btn.disabled = !(email.includes('@') && isPasswordStrong(password) && legalOk);
+  const why = document.getElementById('signup-reason');
+  if(why){
+    // solo se avisa lo que falta, y solo después de que la persona empezó a completar (no con el formulario vacío)
+    const started = email.length > 0 || password.length > 0;
+    why.textContent = !started || !btn.disabled ? '' : (!email.includes('@') ? t('why_email') : (!isPasswordStrong(password) ? t('why_password') : t('why_legal')));
+  }
 }
 function translateAuthError(error){
   const msg = (error && error.message) || '';
@@ -3632,6 +3638,7 @@ function obGotoStep(n){
   { const c = document.getElementById('ob-step-count'); if(c) c.textContent = n + '/' + OB_STEP_COUNT; }
   document.getElementById('ob-back-btn').style.display = n>1 ? 'flex' : 'none';
   document.getElementById('onboard').scrollTop = 0;
+  if(n === 2) updateObStep2ButtonState();
 }
 // El paso 2 del onboarding (peso/altura/fecha de nacimiento) dejaba avanzar sin llenar nada
 // -- finishOnboard() al final caía en defaults silenciosos (70kg, 170cm, nacido en 1995) sin
@@ -3647,6 +3654,14 @@ function updateObStep2ButtonState(){
   const height = parseFloat(document.getElementById('ob-height').value);
   const birth = document.getElementById('ob-birth').value;
   btn.disabled = !(weight>0 && height>0 && birth);
+  const why = document.getElementById('ob-step2-reason');
+  if(why){
+    const missing = [];
+    if(!(weight>0)) missing.push(t('why_item_weight'));
+    if(!(height>0)) missing.push(t('why_item_height'));
+    if(!birth) missing.push(t('why_item_birth'));
+    why.textContent = missing.length ? t('why_missing', {items: missing.join(', ')}) : '';
+  }
 }
 function obNextStep(){
   haptic(10);

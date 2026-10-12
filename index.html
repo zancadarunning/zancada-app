@@ -2577,6 +2577,10 @@
     :root:not([data-theme="dark"]) .heat-legend i{background:linear-gradient(to right, rgba(94,143,0,.2), #5E8F00);}
   
   }
+
+  /* Motivo de un botón deshabilitado: una línea debajo, que dice qué falta */
+  .btn-reason{margin:8px 2px 0; font-size:12.5px; line-height:1.4; color:var(--mist); text-align:center;}
+  .btn-reason:empty{display:none;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -2754,7 +2758,7 @@
         <a href="/privacy.html" target="_blank" rel="noopener" style="color:var(--mist); text-decoration:underline;" data-i18n="legal_privacy_link"></a>.
       </span>
     </label>
-    <div class="field"><button class="btn btn-primary" id="signup-submit-btn" data-i18n="login_create_account" onclick="handleSignUp()" disabled></button></div>
+    <div class="field"><button class="btn btn-primary" id="signup-submit-btn" data-i18n="login_create_account" onclick="handleSignUp()" disabled></button><p class="btn-reason" id="signup-reason" role="status"></p></div>
     <div class="divider-or"><span data-i18n="login_or"></span></div>
     <button class="btn btn-outline" id="signup-google-btn" onclick="handleGoogleSignIn('signup-google-btn')"><span data-i18n="login_google"></span></button>
     <button class="btn btn-outline" id="signup-apple-btn" style="display:none; margin-top:10px;" onclick="handleAppleSignIn('signup-apple-btn')"><span data-i18n="login_apple"></span></button>
@@ -2836,7 +2840,7 @@
         <textarea id="ob-healthnotes" rows="2" data-i18n-ph="ob_healthnotes_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
       </div>
       <p class="muted" style="margin-top:10px; font-size:12px;" data-i18n="ob_step2_hint"></p>
-      <div class="field"><button class="btn btn-primary" id="ob-step2-continue-btn" data-i18n="login_continue" onclick="obNextStep()" disabled></button></div>
+      <div class="field"><button class="btn btn-primary" id="ob-step2-continue-btn" data-i18n="login_continue" onclick="obNextStep()" disabled></button><p class="btn-reason" id="ob-step2-reason" role="status"></p></div>
     </div>
 
     <div class="ob-step" data-step="3">
