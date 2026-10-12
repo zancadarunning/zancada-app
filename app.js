@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T02:54:58Z';
+const APP_VERSION = '2026-10-12T02:59:00Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6839,7 +6839,6 @@ function renderHome(){
       }
     }catch(e){}
   }
-  document.getElementById('home-runs-count').textContent = weekRuns.length;
 
   const goalWrap = document.getElementById('goal-progress-wrap');
   if(state.profile.weeklyGoalKm > 0){
@@ -12328,7 +12327,6 @@ function renderHistory(){
   const el = document.getElementById('history-list');
   const stravaSyncCard = buildStravaSyncBanner();
   const weekRuns = (state.runs||[]).filter(r => getMondayISO(new Date(r.date)) === state.weekStart);
-  document.getElementById('home-runs-count').textContent = weekRuns.length;
   const tr = computeTrends();
   const daily = computeDailyTrend(14);
   const maxKmDay = Math.max(...daily.map(x=>x.km), 1);
