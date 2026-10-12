@@ -1341,6 +1341,8 @@
   /* mientras carga el mapa vectorial: el dibujo de la ruta sobre el fondo, que se va con un fundido */
   .rd-map-ph{position:absolute; inset:0; z-index:5; background:var(--asphalt-3); transition:opacity .35s ease; pointer-events:none;}
   .rd-map-ph .hist-map-sketch{padding:44px 24px;}
+  .rd-map-ph-img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .3s ease;}
+  .rd-map-ph-img.loaded{opacity:1;}
   .rd-map-controls{position:absolute; top:12px; right:12px; z-index:1500; display:flex; flex-direction:column; gap:8px;}
   .rd-map-controls button{width:38px; height:38px; border-radius:50%; background:rgba(10,10,10,.82); border:1.5px solid var(--asphalt-4); color:var(--chalk); cursor:pointer; display:flex; align-items:center; justify-content:center;
     opacity:0; pointer-events:none; transform:scale(.85); transition:opacity .18s ease, transform .18s ease;}

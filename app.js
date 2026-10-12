@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T03:30:15Z';
+const APP_VERSION = '2026-10-12T03:37:52Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -12760,7 +12760,7 @@ function renderRDRuta(panel){
   const fastest = paces.length ? Math.min(...paces) : paceMin;
   panel.innerHTML = `
     <div class="rd-map-full" id="rd-map-full">
-      <div class="rd-map-ph" id="rd-map-ph">${routeSketchSvg(r.points)}</div>
+      <div class="rd-map-ph" id="rd-map-ph">${routeSketchSvg(r.points)}<img class="rd-map-ph-img" src="${buildHistMapStaticUrl(r, Math.min(640, window.innerWidth || 400), 340)}" alt="" decoding="async" onload="this.classList.add('loaded')" onerror="this.remove()"></div>
       <div id="rd-route-map" style="height:100%; width:100%;"></div>
       <div class="rd-map-fade"></div>
       <div class="rd-map-controls"><button onclick="rdRecenterMap()" data-i18n-aria="aria_recenter">${ICONS.locate}</button></div>
