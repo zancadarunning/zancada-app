@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T03:24:33Z';
+const APP_VERSION = '2026-10-12T03:30:15Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6641,6 +6641,7 @@ function refreshHomeAlerts(){
   limitHomeAlerts(2);
 }
 function renderHome(){
+  scheduleMapPreload();
   renderHomePain();
   renderHomeRecap();
   renderHomeRecal();
@@ -10181,6 +10182,22 @@ function loadMapboxGl(){
   });
   return mapboxGlPromise;
 }
+// Precarga en segundo plano (unos segundos después de abrir Inicio o Historial): la librería (1,6 MB), su worker y el estilo del mapa quedan en
+// caché, así que al abrir el detalle de una carrera el mapa aparece enseguida. Solo si hay carreras con ruta y no hay "ahorro de datos".
+let mapPreloadScheduled = false;
+function scheduleMapPreload(){
+  if(mapPreloadScheduled) return;
+  if(navigator.connection && navigator.connection.saveData) return;
+  if(!(state.runs || []).some(r => r.points && r.points.length > 1)) return;
+  mapPreloadScheduled = true;
+  setTimeout(() => {
+    loadMapboxGl().then(ok => {
+      if(!ok) return;
+      try{ fetch('vendor/mapbox-gl-csp-worker.js').catch(()=>{}); }catch(e){}
+      try{ fetch('https://api.mapbox.com/styles/v1/mapbox/' + MAPBOX_STYLE + '?access_token=' + MAPBOX_TOKEN).catch(()=>{}); }catch(e){}
+    });
+  }, 3000);
+}
 // Envoltorio con los mismos métodos de Leaflet que usa el resto del código (invalidateSize, remove, fitBounds, on)
 function glAdapter(map){
   return {
@@ -12408,6 +12425,7 @@ function renderHeatmapRaster(runs){
 }
 function renderHistory(){
   updateHeatmapButton();
+  scheduleMapPreload();
   const el = document.getElementById('history-list');
   const stravaSyncCard = buildStravaSyncBanner();
   const weekRuns = (state.runs||[]).filter(r => getMondayISO(new Date(r.date)) === state.weekStart);
@@ -12742,6 +12760,7 @@ function renderRDRuta(panel){
   const fastest = paces.length ? Math.min(...paces) : paceMin;
   panel.innerHTML = `
     <div class="rd-map-full" id="rd-map-full">
+      <div class="rd-map-ph" id="rd-map-ph">${routeSketchSvg(r.points)}</div>
       <div id="rd-route-map" style="height:100%; width:100%;"></div>
       <div class="rd-map-fade"></div>
       <div class="rd-map-controls"><button onclick="rdRecenterMap()" data-i18n-aria="aria_recenter">${ICONS.locate}</button></div>
@@ -12789,6 +12808,7 @@ function renderRDRuta(panel){
       mapboxTileLayer().addTo(detailMap);
       slimMapAttribution(detailMap);
       segs.forEach(seg=>{ L.polyline(seg.latlngs, {color:seg.color, weight:3.5, lineCap:'round', lineJoin:'round'}).addTo(detailMap); });
+      rdMapHidePlaceholder();
       rdMapProgrammaticMoveAt = Date.now();
       if(allLatLngs.length) detailMap.fitBounds(L.latLngBounds(allLatLngs), {padding:[20,20]});
     }
@@ -12803,6 +12823,13 @@ function renderRDRuta(panel){
   }, 60);
 }
 // Mapa vectorial del detalle: el recorrido va como trazo fino de color (el de cada tramo según su ritmo) con un borde blanco que lo despega del mapa.
+// Quita el marcador de posición (con un fundido) -- cuando el mapa ya se dibujó, o si algo falló
+function rdMapHidePlaceholder(){
+  const ph = document.getElementById('rd-map-ph');
+  if(!ph) return;
+  ph.style.opacity = '0';
+  setTimeout(() => { if(ph.parentNode) ph.parentNode.removeChild(ph); }, 400);
+}
 async function initDetailMapGl(segs, allLatLngs){
   if(!(await loadMapboxGl())) return null;
   const el = document.getElementById('rd-route-map');
@@ -12815,6 +12842,8 @@ async function initDetailMapGl(segs, allLatLngs){
     map.addLayer({id:'route', type:'line', source:'route', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':['get','color'],'line-width':3.2}});
   });
   map.on('error', e => { if(e && e.error && /style|token|401|403/i.test(String(e.error.message || ''))) console.warn('mapbox gl:', e.error.message); });
+  map.once('idle', rdMapHidePlaceholder);          // primer dibujo completo (estilo + tiles)
+  setTimeout(rdMapHidePlaceholder, 20000);         // por si el evento nunca llega
   const adapter = glAdapter(map);
   rdMapProgrammaticMoveAt = Date.now();
   adapter.fitBounds(L.latLngBounds(allLatLngs), {padding:[20,20]});
