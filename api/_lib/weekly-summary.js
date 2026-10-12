@@ -5,23 +5,45 @@
 // función pura (se prueba aparte); el cron solo decide a quién le toca y cómo se envía.
 
 const MI_PER_KM = 0.621371;
-// El resumen se reparte en 8 turnos de media hora del domingo a la noche (19:00 a 22:30, hora local de cada corredor) en vez de mandarlo
-// todo junto: cada usuario tiene un turno fijo (lo saca de su id), así cada corrida del cron (cada 30 minutos) atiende a la octava
-// parte y entra sin problema en el tiempo máximo de la función. No hace falta recordar a quién ya se le mandó: su turno es siempre el mismo.
-const WEEKLY_FIRST_HOUR = 19, WEEKLY_LAST_HOUR = 22;   // el último turno es 22:30 (se manda antes de las 23:00)
-const WEEKLY_SLOTS = (WEEKLY_LAST_HOUR - WEEKLY_FIRST_HOUR + 1) * 2;
-function weeklySlotOf(userId) {
+// El resumen se reparte en turnos de media hora del domingo a la noche (hora local de cada corredor), en vez de mandarlo todo junto: cada
+// usuario tiene un turno fijo (lo saca de su id), así cada corrida del cron (cada 30 minutos) atiende a una fracción chica y entra sin
+// problema en el tiempo máximo de la función. No hace falta recordar a quién ya se le mandó: su turno es siempre el mismo.
+//
+// Hay dos grupos, según el plan de la semana:
+//   - SIN sesión planeada el domingo: 6 turnos, de 19:00 a 21:30.
+//   - CON sesión planeada el domingo (es probable que corra a la tarde/noche): se posterga a la última instancia, 4 turnos, de 22:00 a
+//     23:30, para que el resumen ya incluya esa salida y no cuente como pendiente una sesión que todavía no hizo.
+// La franja total es de 19:00 a 23:30 (10 turnos: 0 = 19:00, 1 = 19:30, ... 9 = 23:30).
+const WEEKLY_FIRST_HOUR = 19, WEEKLY_LAST_HOUR = 23;
+const NORMAL_SLOTS = 6;              // turnos 0 a 5
+const LATE_FIRST_SLOT = 6, LATE_SLOTS = 4;   // turnos 6 a 9
+const WEEKLY_SLOTS = NORMAL_SLOTS + LATE_SLOTS;
+function hashOf(userId) {
   let h = 0;
   for (const ch of String(userId)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return h % WEEKLY_SLOTS;
+  return h;
 }
-// Turno que corresponde a la hora y minuto locales actuales (0 a 7), o -1 si está fuera de la franja
+// ¿Tiene sesión planeada el domingo de ESTA semana? (el plan guardado solo vale si es el de la semana en curso: lunes = hoy - 6)
+function mondayKeyFor(now, tz) {
+  const today = dayNum(localDateKey(now, tz));
+  return new Date(Date.UTC(1970, 0, 1) + (today - 6) * 86400000).toISOString().slice(0, 10);
+}
+function hasSundaySession(plan, weekStart, tz, now) {
+  return Array.isArray(plan) && weekStart === mondayKeyFor(now, tz) && !!(plan[6] && plan[6].dist > 0);
+}
+function weeklySlotOf(userId, sundaySession) {
+  const h = hashOf(userId);
+  return sundaySession ? LATE_FIRST_SLOT + (h % LATE_SLOTS) : h % NORMAL_SLOTS;
+}
+// Turno que corresponde a la hora y minuto locales actuales (0 a 9), o -1 si está fuera de la franja
 function currentWeeklySlot(localHour, localMinute) {
   if (localHour < WEEKLY_FIRST_HOUR || localHour > WEEKLY_LAST_HOUR) return -1;
   return (localHour - WEEKLY_FIRST_HOUR) * 2 + (localMinute >= 30 ? 1 : 0);
 }
 // ¿A este usuario le toca el resumen ahora? (hora y minuto actuales en SU huso horario, en un domingo)
-function isWeeklySlot(userId, localHour, localMinute) { return currentWeeklySlot(localHour, localMinute || 0) === weeklySlotOf(userId); }
+function isWeeklySlot(userId, localHour, localMinute, sundaySession) {
+  return currentWeeklySlot(localHour, localMinute || 0) === weeklySlotOf(userId, !!sundaySession);
+}
 
 const L = {
   es: { title: 'Tu semana en Zancada', runs: n => n === 1 ? '1 salida' : `${n} salidas`, head: (d, r, delta) => `${d} en ${r}${delta ? ` (${delta} vs la semana anterior)` : ''}.`, sessions: (a, b) => `Sesiones del plan: ${a} de ${b}.`, streak: n => `Racha: ${n} semanas seguidas.` },
@@ -71,7 +93,7 @@ function buildWeeklySummary({ runs, plan, weekStart, streak, tz, lang, imperial,
   const parts = [T.head(fmtKm(km, imperial), T.runs(n), delta)];
 
   // las sesiones del plan solo se cuentan si el plan guardado es el de ESTA semana (el cliente lo renueva al abrir la app)
-  const mondayKey = (() => { const t = new Date(Date.UTC(1970, 0, 1) + (today - 6) * 86400000); return t.toISOString().slice(0, 10); })();
+  const mondayKey = mondayKeyFor(now, tz);
   if (Array.isArray(plan) && plan.length && weekStart === mondayKey) {
     const planned = plan.filter(d => d && d.dist > 0).length;
     const done = plan.filter(d => d && d.dist > 0 && d.status === 'done').length;
@@ -81,4 +103,4 @@ function buildWeeklySummary({ runs, plan, weekStart, streak, tz, lang, imperial,
   return { title: T.title, body: parts.join(' ') };
 }
 
-module.exports = { buildWeeklySummary, WEEKLY_SLOTS, weeklySlotOf, currentWeeklySlot, isWeeklySlot, localDateKey };
+module.exports = { buildWeeklySummary, WEEKLY_SLOTS, NORMAL_SLOTS, LATE_FIRST_SLOT, LATE_SLOTS, weeklySlotOf, currentWeeklySlot, isWeeklySlot, hasSundaySession, localDateKey };

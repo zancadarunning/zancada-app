@@ -57,15 +57,31 @@ test('recordatorio diario: sale en la corrida de :00 y NO en la de :30 (no se du
   assert.equal(b.sent.length, 0, 'la corrida de :30 no manda el recordatorio diario otra vez');
 });
 
-test('resumen semanal: lo recibe en su turno de media hora y en ningún otro', async () => {
-  const slot = 3;   // 20:30 local
-  const id = userWithSlot(slot);
-  const users = [{ id, plan, weekStart: '2026-10-05', runs: [{ date: '2026-10-08T10:00:00Z', distanceKm: 7 }] }];
+// usuario cuyo turno (normal o tardío) sea el pedido
+function userWithSlot(slot, sunday) { for (let i = 0; ; i++) if (weeklySlotOf('user-' + i, sunday) === slot) return 'user-' + i; }
+const planNoSunday = plan.map((d, i) => i === 6 ? { ...d, dist: 0 } : d);
+
+test('resumen semanal SIN sesión el domingo: lo recibe en su turno (19:00-21:30) y en ningún otro', async () => {
+  const id = userWithSlot(3, false);   // 20:30 local
+  const users = [{ id, plan: planNoSunday, weekStart: '2026-10-05', runs: [{ date: '2026-10-08T10:00:00Z', distanceKm: 7 }] }];
   const inSlot = await runAt('2026-10-11T20:30:10Z', users);      // domingo 20:30 UTC
   assert.equal(inSlot.sent.filter(s => /Tu semana/.test(s.title)).length, 1);
   assert.equal(inSlot.res.body.weeklySent, 1);
-  for (const t of ['2026-10-11T20:00:10Z', '2026-10-11T21:00:10Z', '2026-10-11T19:30:10Z', '2026-10-12T20:30:10Z']) {
+  for (const t of ['2026-10-11T20:00:10Z', '2026-10-11T21:00:10Z', '2026-10-11T19:30:10Z', '2026-10-11T22:30:10Z', '2026-10-12T20:30:10Z']) {
     const r = await runAt(t, users);
     assert.equal(r.sent.filter(s => /Tu semana/.test(s.title)).length, 0, 'sin resumen a las ' + t);
   }
+});
+
+test('resumen semanal CON sesión el domingo: se posterga a la última instancia (22:00-23:30) y no sale antes', async () => {
+  const id = userWithSlot(8, true);    // 23:00 local
+  const users = [{ id, plan, weekStart: '2026-10-05', runs: [{ date: '2026-10-08T10:00:00Z', distanceKm: 7 }, { date: '2026-10-11T23:00:00Z', distanceKm: 10 }] }];
+  for (const t of ['2026-10-11T19:00:10Z', '2026-10-11T20:30:10Z', '2026-10-11T21:30:10Z', '2026-10-11T22:30:10Z']) {
+    const r = await runAt(t, users);
+    assert.equal(r.sent.filter(s => /Tu semana/.test(s.title)).length, 0, 'todavía no a las ' + t);
+  }
+  const last = await runAt('2026-10-11T23:00:10Z', users);
+  const m = last.sent.filter(s => /Tu semana/.test(s.title));
+  assert.equal(m.length, 1);
+  assert.match(m[0].body, /2 salidas/, 'ya incluye la salida del domingo a la noche');
 });

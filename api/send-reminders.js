@@ -2,7 +2,7 @@ const webpush = require('web-push');
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { sendFcmPush } = require('./_lib/fcm');
 const { isTrustedPushEndpoint } = require('./_lib/push-endpoint');
-const { buildWeeklySummary, isWeeklySlot } = require('./_lib/weekly-summary');
+const { buildWeeklySummary, isWeeklySlot, hasSundaySession } = require('./_lib/weekly-summary');
 
 // ANTES este cron corría UNA vez por día a una hora fija en UTC (11:00 UTC, ver
 // vercel.json) -- pensada para que le llegue a las 8am a un corredor en Argentina
@@ -132,12 +132,12 @@ module.exports = withSentry(async (req, res) => {
 
     let sent = 0, skipped = 0, failed = 0;
     const due = [];
-    const weekly = [];   // a quién le toca el resumen semanal (domingo, en la hora fija de cada uno entre las 19:00 y las 23:00, hora local)
+    const weekly = [];   // a quién le toca el resumen semanal (domingo, en el turno fijo de cada uno entre las 19:00 y las 23:30, hora local; con sesión planeada el domingo, al final de la noche)
     for (const row of (states || [])) {
       const subRow = subsByUser[row.user_id];
       if (!subRow) { skipped++; continue; }
       const wClock = localClock(row.tz || DEFAULT_TZ);
-      if (wClock.dayIdx === 6 && isWeeklySlot(row.user_id, wClock.hour, wClock.minute)) weekly.push({ row, subRow });
+      if (wClock.dayIdx === 6 && isWeeklySlot(row.user_id, wClock.hour, wClock.minute, hasSundaySession(row.plan, row.weekStart, row.tz || DEFAULT_TZ, Date.now()))) weekly.push({ row, subRow });
       const plan = row.plan;
       if (!plan || !plan.length) { skipped++; continue; }
 
@@ -228,8 +228,8 @@ module.exports = withSentry(async (req, res) => {
         if (sent > before) weeklySent++;
       } catch (e) { failed++; }
     }
-    // Tope de tiempo (la función serverless no puede pasarse). Como el resumen ya se reparte en 8 turnos de media hora, cada corrida atiende solo una
-    // octava parte; si aun así alguien no alcanza, queda contado en weeklyPending para verlo en los logs.
+    // Tope de tiempo (la función serverless no puede pasarse). Como el resumen ya se reparte en turnos de media hora, cada corrida atiende solo una
+    // fracción; si aun así alguien no alcanza, queda contado en weeklyPending para verlo en los logs.
     const weeklyStart = Date.now();
     let nextWeekly = 0;
     await Promise.all(Array.from({ length: Math.min(8, weekly.length) }, async () => {

@@ -67,35 +67,48 @@ test('mapa de calor: el encuadre ignora una salida aislada en otra ciudad', () =
 });
 
 // ---- reparto del resumen semanal en turnos de media hora ----
-const { weeklySlotOf, currentWeeklySlot, isWeeklySlot, WEEKLY_SLOTS } = require('../api/_lib/weekly-summary.js');
+const { weeklySlotOf, currentWeeklySlot, isWeeklySlot, hasSundaySession, WEEKLY_SLOTS, NORMAL_SLOTS, LATE_FIRST_SLOT } = require('../api/_lib/weekly-summary.js');
 
-test('resumen semanal: 8 turnos de media hora entre las 19:00 y las 23:00, y el reparto es parejo', () => {
-  assert.equal(WEEKLY_SLOTS, 8);
-  const counts = new Array(8).fill(0);
+test('resumen semanal: sin sesión el domingo, turnos 0-5 (19:00-21:30); con sesión el domingo, turnos 6-9 (22:00-23:30); reparto parejo', () => {
+  assert.equal(WEEKLY_SLOTS, 10);
+  const normal = new Array(NORMAL_SLOTS).fill(0), late = new Array(4).fill(0);
   for (let i = 0; i < 8000; i++) {
     const id = `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`;
-    const s = weeklySlotOf(id);
-    assert.ok(s >= 0 && s < 8);
-    assert.equal(weeklySlotOf(id), s, 'siempre el mismo turno para el mismo usuario');
-    counts[s]++;
+    const a = weeklySlotOf(id, false), b = weeklySlotOf(id, true);
+    assert.ok(a >= 0 && a < NORMAL_SLOTS, 'sin sesión: antes de las 22:00');
+    assert.ok(b >= LATE_FIRST_SLOT && b <= 9, 'con sesión: de 22:00 en adelante');
+    assert.equal(weeklySlotOf(id, true), b, 'siempre el mismo turno para el mismo usuario');
+    normal[a]++; late[b - LATE_FIRST_SLOT]++;
   }
-  counts.forEach(c => assert.ok(c > 800 && c < 1200, 'ningún turno concentra más de ~15% de los usuarios: ' + JSON.stringify(counts)));
+  normal.forEach(c => assert.ok(c > 1000 && c < 1700, 'reparto parejo (sin sesión): ' + JSON.stringify(normal)));
+  late.forEach(c => assert.ok(c > 1700 && c < 2300, 'reparto parejo (con sesión): ' + JSON.stringify(late)));
 });
 
-test('resumen semanal: el turno actual sale de la hora y el minuto locales, y fuera de 19:00-23:00 no hay turno', () => {
+test('resumen semanal: el turno actual sale de la hora y el minuto locales, y fuera de 19:00-24:00 no hay turno', () => {
   assert.equal(currentWeeklySlot(19, 0), 0);
   assert.equal(currentWeeklySlot(19, 29), 0);
   assert.equal(currentWeeklySlot(19, 30), 1);
   assert.equal(currentWeeklySlot(22, 0), 6);
-  assert.equal(currentWeeklySlot(22, 45), 7);
+  assert.equal(currentWeeklySlot(23, 30), 9);
   assert.equal(currentWeeklySlot(18, 59), -1);
-  assert.equal(currentWeeklySlot(23, 0), -1);
   assert.equal(currentWeeklySlot(8, 0), -1);
-  // cada usuario recibe el resumen en exactamente UNA de las 8 corridas de la noche
-  const id = 'usuario-de-prueba';
-  let hits = 0;
-  for (let h = 0; h < 24; h++) for (const m of [0, 30]) if (isWeeklySlot(id, h, m)) hits++;
-  assert.equal(hits, 1);
+  // cada usuario recibe el resumen en exactamente UNA de las corridas de la noche (con o sin sesión el domingo)
+  for (const sunday of [false, true]) {
+    let hits = 0;
+    for (let h = 0; h < 24; h++) for (const m of [0, 30]) if (isWeeklySlot('usuario-de-prueba', h, m, sunday)) hits++;
+    assert.equal(hits, 1);
+  }
+});
+
+test('hasSundaySession: solo cuenta el plan de la semana en curso y que el domingo tenga distancia', () => {
+  const now = Date.UTC(2026, 9, 11, 23, 0, 0);   // domingo 11/10, 20:00 en Buenos Aires
+  const tz = 'America/Argentina/Buenos_Aires';
+  const withSun = [{ dist: 5 }, { dist: 0 }, { dist: 5 }, { dist: 0 }, { dist: 5 }, { dist: 0 }, { dist: 10 }];
+  const noSun = [{ dist: 5 }, { dist: 0 }, { dist: 5 }, { dist: 0 }, { dist: 5 }, { dist: 8 }, { dist: 0 }];
+  assert.equal(hasSundaySession(withSun, '2026-10-05', tz, now), true);
+  assert.equal(hasSundaySession(noSun, '2026-10-05', tz, now), false);
+  assert.equal(hasSundaySession(withSun, '2026-09-28', tz, now), false, 'plan de otra semana');
+  assert.equal(hasSundaySession(null, '2026-10-05', tz, now), false);
 });
 
 // ---- pausa de racha ----
