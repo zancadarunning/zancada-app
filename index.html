@@ -191,6 +191,7 @@
      abajo para cuando sí forzó). Misma lista de variables que :root, valores nuevos. */
   @media (prefers-color-scheme:light){
     :root:not([data-theme="dark"]){
+      --clay-text:var(--clay); --danger-text:var(--danger); --zone5-text:var(--zone5); --header-bg:linear-gradient(180deg, var(--tabbar-bg) 55%, transparent);
       --asphalt:#F5F5F7; --asphalt-2:#FFFFFF; --asphalt-3:#EDEDF0; --asphalt-4:#D2D2D7;
       /* --mist-dim más oscuro que el original (#707476 daba 4.16:1 contra el fondo de
          página, por debajo del 4.5:1 que pide AA para texto chico -- etiquetas como
@@ -261,7 +262,8 @@
   }
   /* Tema claro forzado a mano (toggle en Perfil) -- gana pase lo que pase el sistema. */
   :root[data-theme="light"]{
-    --asphalt:#F5F5F7; --asphalt-2:#FFFFFF; --asphalt-3:#EDEDF0; --asphalt-4:#D2D2D7;
+    --clay-text:var(--clay); --danger-text:var(--danger); --zone5-text:var(--zone5); --header-bg:linear-gradient(180deg, var(--tabbar-bg) 55%, transparent);
+      --asphalt:#F5F5F7; --asphalt-2:#FFFFFF; --asphalt-3:#EDEDF0; --asphalt-4:#D2D2D7;
     --chalk:#1D1D1F; --mist:#5C6166; --mist-dim:#5F6365;
     --hivis:#D6FF3F; --hivis-dim:rgba(107,138,0,.16); --hivis-text:#5E7000; --ink:#121415;
     --clay:#A84E1C; --clay-dim:rgba(168,78,28,.15);
@@ -2317,6 +2319,112 @@
 
   /* Botón "Crear video del recorrido" en la pestaña Ruta del detalle */
   .rd-video-btn{margin-top:12px; width:auto; padding-left:18px; padding-right:18px;}
+
+  /* =====================================================================================================================
+     AUDITORÍA DE DISEÑO (2026-10-12) -- modo oscuro. Todo con tokens, así el tema claro hereda sus valores. Va al final a propósito:
+     pisa reglas anteriores con la misma especificidad.
+     ===================================================================================================================== */
+  :root{
+    --tap:44px;
+    --clay-text:#E08A4A;      /* clay como TEXTO sobre clay-dim: 5,5:1 (el clay original daba 3,7:1) */
+    --danger-text:#FF6B5F;    /* danger como texto sobre danger-dim: 5,4:1 (antes 4,2:1) */
+    --zone5-text:#DD8074;     /* zona 5 como texto en chips: 5:1 (antes 3,8:1) */
+    --header-bg:linear-gradient(180deg, var(--asphalt) 0, var(--asphalt) 74%, transparent 100%);
+  }
+  /* Barra superior: fondo del color de la página con fundido corto, así el contenido que pasa por abajo no se transparenta detrás del texto */
+  header.top{background:var(--header-bg); padding-bottom:18px;}
+  html[data-view="coach"] header.top{background:var(--asphalt);}
+  /* El botón flotante de Zonda ya no tapa el final de cada pantalla: las vistas dejan el espacio que ocupa */
+  .view{padding-bottom:96px;}
+  /* Objetivos táctiles de 44 px */
+  .btn-sm{min-height:var(--tap); padding:12px 18px;}
+  .small-link{display:inline-flex; align-items:center; min-height:var(--tap); padding:0 6px;}
+  .choice, .choice-row.segmented .choice{min-height:var(--tap);}
+  .heat-chip{min-height:var(--tap); padding:11px 16px;}
+  .heat-close{width:var(--tap); height:var(--tap);}
+  .rd-tab-btn{min-height:var(--tap);}
+  .chat-chip{min-height:var(--tap); display:inline-flex; align-items:center;}
+  .plan-secondary-btn{min-height:var(--tap);}
+  /* Contraste de texto chico */
+  .tag-trail, .tag-load-caution, .conn-hint{color:var(--clay-text);}
+  .tag-load-risk{color:var(--danger-text);}
+  .zone-5{color:var(--zone5-text);}
+  input::placeholder, textarea::placeholder{color:var(--mist-dim); opacity:1;}
+  .trend-tip span{color:var(--chalk); opacity:.75;}
+  /* Plan: las filas de descanso se leen (antes: toda la fila al 50% de opacidad, 2,4:1) */
+  .day-row.day-row-rest{opacity:1;}
+  .day-row.day-row-rest .day-info .t{color:var(--mist);}
+  .day-row.day-row-rest:not(.day-row-today) .day-badge .d, .day-row.day-row-rest:not(.day-row-today) .day-badge .mono{color:var(--mist-dim);}
+  /* Plan: notas explicativas en gris con una marca lima a la izquierda (antes bloques enteros de texto lima) */
+  #plan-taper-note, #plan-event-week-note, #plan-cutback-note, #plan-recovery-note{color:var(--mist) !important; background:var(--asphalt-2); border-left:3px solid var(--hivis); border-radius:var(--radius-sm); padding:12px 14px; font-size:13px; line-height:1.5;}
+  /* Plan: las flechas de semana ya no compiten con las sesiones */
+  .week-nav .week-nav-btn{background:var(--asphalt-3); color:var(--hivis-text); box-shadow:none;}
+  .week-nav .week-nav-btn:active{background:var(--asphalt-4);}
+  /* Inicio: la tarjeta principal alineada con las demás (el marco interno la corría ~7 px por lado) */
+  .card-shell{padding:0;}
+  .week-ring-fig .wr-track{stroke:var(--asphalt-4);}
+  /* Tamaño mínimo de texto: 11 px */
+  nav.tabbar button{font-size:11px;}
+  .trend-lbl, .wd-lbl, .stat-box .l, .stat-cell .l, .tp-unit, .soon-tag, .lt-badge i, .ws-row .l, .tag, .sum-kicker, .hl-kicker, .msg-time{font-size:11px;}
+  /* Historial: la pastilla de fuente y duración va a la izquierda (a la derecha la tapaba el botón flotante) y el borde rojo del borrar no asoma en reposo */
+  .hist-map-badge{right:auto; left:8px;}
+  #history-list .swipe-item:not(:has(.swipe-content[style*="translate3d(-"])) .swipe-action-delete{visibility:hidden;}
+  /* Detalle de carrera: las pestañas quedan fijas al hacer scroll y la leyenda del mapa muestra las 5 zonas que realmente se pintan */
+  .rd-tabs{position:sticky; top:0; z-index:20; background:var(--asphalt);}
+  .rd-legend-bar{background:linear-gradient(90deg, var(--zone1-fill), var(--zone2-fill), var(--zone3-fill), var(--zone4-fill), var(--zone5-fill)) !important;}
+  /* Botón destructivo sin borde (DESIGN.md: Danger silencioso) y las acciones de abajo separadas */
+  .btn-danger{border:none; box-shadow:none; color:var(--danger-text);}
+  .overlay .btn-outline{background:var(--asphalt-2);}
+  /* Reduced motion: lo que seguía animando */
+  @media (prefers-reduced-motion:reduce){
+    .overlay-sheet, .overlay-sheet.overlay-open{transition:opacity .01s;}
+    .overlay-sheet{transform:none;}
+    .ob-step.active, .plan-slide-left, .plan-slide-right, .km-pulse, .msg-enter, .coach-fab.pop, .skeleton, .hist-map:empty, .map-wrap, .typing span{animation:none;}
+  }
+
+  /* ---- Auditoría, tanda 2 ---- */
+  /* Chat: avisos del sistema compactos y legibles; burbuja de Zonda separada del fondo; nada asoma por encima de la cápsula de Zonda */
+  .msg.system{align-self:center; background:var(--asphalt); padding:5px 12px; margin:4px 0; width:fit-content; border-radius:999px; font-size:12px; font-weight:700; color:var(--hivis-text);}
+  .msg.coach{background:var(--asphalt-3);}
+  #chatLog{-webkit-mask-image:linear-gradient(180deg, transparent 0, transparent 8px, #000 8px); mask-image:linear-gradient(180deg, transparent 0, transparent 8px, #000 8px);}
+  .chat-chips{scroll-padding-inline:4px;}
+  /* Perfil: tipografía de los accesos pareja y alto parejo */
+  .settile{min-height:118px;}
+  .settile h3{font-size:14px; line-height:1.25;}
+  .settile p{font-size:12px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+  .settile .icon-sq svg{width:18px; height:18px;}
+  /* Hojas: formularios */
+  .add-row input, .add-row select{min-width:0;}
+  .add-row input{flex:1 1 auto;}
+  .add-row select{flex:0 0 38%;}
+  #event-overlay .add-row select, #event-overlay .add-row .date-box{flex:none; width:100%;}
+  .zone-input{width:64px; height:var(--tap); padding:0; text-align:center; background:var(--asphalt-3); border:1.5px solid var(--asphalt-4); border-radius:var(--radius-sm); color:var(--chalk); font:600 16px 'JetBrains Mono',monospace; -moz-appearance:textfield;}
+  .zone-input:focus{outline:none; border-color:var(--hivis); box-shadow:0 0 0 3px var(--hivis-dim);}
+  .zone-row{padding:8px 0;}
+  .day-picker{display:grid; grid-template-columns:repeat(7, 1fr); gap:4px;}
+  .day-pill{width:auto; height:auto; aspect-ratio:1; min-height:var(--tap);}
+  .perfil-save-btn{min-height:48px; padding:14px 22px; font-size:15px;}
+  .perfil-save-btn.dirty{position:sticky; bottom:calc(8px + var(--safe-bottom)); z-index:2;}
+  .field input[type="text"], .field input[type="number"], .field select{font-size:16px;}
+  textarea{resize:none;}
+  /* Dispositivos: lo conectado destaca, lo demás no hace ruido */
+  .conn-row-head .tag-quiet{display:none;}
+  #devices-overlay .card-shell-clay{background:none; border:none; padding:0; margin-top:16px;}
+  /* Semana de Inicio: unidad junto al número */
+  .ws-row .u{font-size:11px; color:var(--mist); margin-left:3px; margin-right:auto;}
+  .zone-chip{text-transform:uppercase; letter-spacing:.04em; font-size:10.5px;}
+  /* Detalle de carrera */
+  .pace-bar-row .pace-bar-label{width:32px; text-align:right; font-family:'JetBrains Mono',monospace; font-size:11.5px;}
+  .pace-bar-fill{font-family:'JetBrains Mono',monospace; font-size:11.5px;}
+  .rd-big-dist{font-family:'Bebas Neue',sans-serif; font-size:56px; font-weight:400; line-height:.9; letter-spacing:.02em;}
+  .rd-chart-wrap{position:relative;}
+  .rd-ax{position:absolute; left:2px; font:9.5px 'JetBrains Mono',monospace; color:var(--mist-dim); pointer-events:none;}
+  .rd-ax-top{top:0;} .rd-ax-bot{bottom:0;}
+  .rd-chart-svg path[stroke-width]{vector-effect:non-scaling-stroke;}
+  .profile-head{align-items:flex-start;}
+  #perfil-remove-photo{display:inline-flex; align-items:center; min-height:var(--tap);}
+  /* Mapa de calor: más oscuro para que las rutas brillen */
+  #heatmap-map::after{content:''; position:absolute; inset:0; background:rgba(10,10,10,.35); pointer-events:none; z-index:400;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -2558,7 +2666,7 @@
       </div>
       <div class="field">
         <label id="ob-gender-label" data-i18n="ob_gender_label"></label>
-        <div class="choice-row" id="ob-gender" role="group" aria-labelledby="ob-gender-label">
+        <div class="choice-row segmented" id="ob-gender" role="group" aria-labelledby="ob-gender-label">
           <div class="choice" data-v="f" data-i18n="ob_gender_f"></div>
           <div class="choice" data-v="m" data-i18n="ob_gender_m"></div>
           <div class="choice active" data-v="x" data-i18n="ob_gender_x"></div>
@@ -2875,8 +2983,8 @@
           <div class="wr-label" id="home-week-ring-pct">0%</div>
         </div>
         <div class="week-ring-stats">
-          <div class="ws-row"><span class="n" id="home-week-done-km">0</span><span class="l" data-i18n="home_km_done"></span></div>
-          <div class="ws-row"><span class="n" id="home-week-km">0</span><span class="l" data-i18n="home_km_planned"></span></div>
+          <div class="ws-row"><span class="n" id="home-week-done-km">0</span><span class="u week-unit"></span><span class="l" data-i18n="home_km_done"></span></div>
+          <div class="ws-row"><span class="n" id="home-week-km">0</span><span class="u week-unit"></span><span class="l" data-i18n="home_km_planned"></span></div>
           <div class="ws-row"><span class="n" id="home-week-sessions">0</span><span class="l" data-i18n="home_sessions"></span></div>
         </div>
       </div>
@@ -3257,7 +3365,7 @@
       </div>
       <div class="field">
         <label id="perfil-gender-label" data-i18n="ob_gender_label"></label>
-        <div class="choice-row" id="perfil-gender-choice" role="group" aria-labelledby="perfil-gender-label">
+        <div class="choice-row segmented" id="perfil-gender-choice" role="group" aria-labelledby="perfil-gender-label">
           <div class="choice" data-v="f" data-i18n="ob_gender_f"></div>
           <div class="choice" data-v="m" data-i18n="ob_gender_m"></div>
           <div class="choice" data-v="x" data-i18n="ob_gender_x"></div>
@@ -3315,7 +3423,7 @@
         <label for="perfil-goal-note" data-i18n="perfil_goal_note_label"></label>
         <textarea id="perfil-goal-note" rows="3" data-i18n-ph="perfil_goal_note_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
       </div>
-      <button class="btn btn-outline btn-sm perfil-save-btn" id="save-goals-btn" style="margin-top:10px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('goals')"></button>
+      <button class="btn btn-primary btn-sm perfil-save-btn" id="save-goals-btn" style="margin-top:10px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('goals')"></button>
     </div>
   </div>
 
@@ -3513,9 +3621,9 @@
     <div class="card" style="margin-top:16px;">
       <div id="event-box"></div>
       <button class="small-link" style="margin-top:10px; display:flex; align-items:center; gap:5px;" onclick="openPaceCalcModal()"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v2"/></svg></span><span data-i18n="pace_calc_open_btn"></span></button>
-      <div class="add-row" style="margin-top:10px;"><input type="text" id="ev-name" data-i18n-ph="perfil_ev_name_ph" data-i18n-aria="perfil_ev_name_ph"></div>
-      <div class="add-row" style="margin-top:8px;"><input type="number" id="ev-distance" step="0.1" min="0" inputmode="decimal" data-i18n-ph="perfil_ev_dist_ph" data-i18n-aria="perfil_ev_dist_ph"></div>
-      <div class="add-row" style="margin-top:8px;">
+      <div class="field" style="margin-top:14px;"><label for="ev-name" data-i18n="perfil_ev_name_ph"></label><input type="text" id="ev-name" data-i18n-aria="perfil_ev_name_ph"></div>
+      <div class="field"><label for="ev-distance" data-i18n="perfil_ev_dist_ph"></label><input type="number" id="ev-distance" step="0.1" min="0" inputmode="decimal" data-i18n-aria="perfil_ev_dist_ph"></div>
+      <div class="add-row" style="margin-top:8px; flex-direction:column;">
         <div class="date-box" style="flex:1;" role="button" tabindex="0" data-i18n-aria="hist_manual_date" onclick="openCalendar('ev-date','ev-date-text')"><span class="date-box-text" id="ev-date-text"></span></div>
         <input type="hidden" id="ev-date">
         <select id="ev-type" data-i18n-aria="aria_event_type">
@@ -3524,7 +3632,7 @@
           <option value="obstaculos" data-i18n="ev_type_obstaculos"></option>
         </select>
       </div>
-      <button class="btn btn-outline btn-sm" id="save-event-btn" style="margin-top:10px; width:100%;" data-i18n="perfil_ev_save" onclick="setEvent()"></button>
+      <button class="btn btn-primary btn-sm" id="save-event-btn" style="margin-top:10px; width:100%;" data-i18n="perfil_ev_save" onclick="setEvent()"></button>
     </div>
   </div>
 
@@ -3643,7 +3751,7 @@
     <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_days_title"></h2>
     <div class="card" id="perfil-days-card" style="margin-top:16px;">
       <div class="day-picker" id="perfil-days"></div>
-      <button class="btn btn-outline btn-sm perfil-save-btn" id="save-days-btn" style="margin-top:12px; width:100%;" data-i18n="perfil_days_save" onclick="confirmAndSave('days')"></button>
+      <button class="btn btn-primary btn-sm perfil-save-btn" id="save-days-btn" style="margin-top:12px; width:100%;" data-i18n="perfil_days_save" onclick="confirmAndSave('days')"></button>
     </div>
   </div>
 
@@ -3659,7 +3767,7 @@
         <label id="perfil-sport-days-label" data-i18n="ob_sport_days_label"></label>
         <div class="day-picker" id="perfil-sport-days"></div>
       </div>
-      <button class="btn btn-outline btn-sm perfil-save-btn" id="save-crosstraining-btn" style="margin-top:12px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('crosstraining')"></button>
+      <button class="btn btn-primary btn-sm perfil-save-btn" id="save-crosstraining-btn" style="margin-top:12px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('crosstraining')"></button>
     </div>
   </div>
 
@@ -3682,7 +3790,7 @@
     <div class="card" id="perfil-zones-card" style="margin-top:16px;">
       <p class="muted" id="zones-status" data-i18n="perfil_zones_manual_note"></p>
       <div id="zones-list" style="margin-top:8px;"></div>
-      <button class="btn btn-outline btn-sm perfil-save-btn" id="save-zones-btn" style="margin-top:12px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('zones')"></button>
+      <button class="btn btn-primary btn-sm perfil-save-btn" id="save-zones-btn" style="margin-top:12px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('zones')"></button>
     </div>
   </div>
 

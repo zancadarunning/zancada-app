@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T04:05:01Z';
+const APP_VERSION = '2026-10-12T16:06:13Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1650,7 +1650,7 @@ async function updateStravaStatusDisplay(){
     const { data } = await supabaseClient.from('strava_connections').select('athlete_id').eq('user_id', currentUserId).maybeSingle();
     deviceConnections.strava = !!data;
     if(data){
-      el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
+      el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
       if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectStrava; }
       // Mismo aviso que el cartel de Historial (ver getStravaSyncIssue), pero acá como
       // nota corta -- este es justo el lugar donde ya está el botón para reconectar.
@@ -1660,7 +1660,7 @@ async function updateStravaStatusDisplay(){
         else { note.style.display = 'none'; }
       }
     } else {
-      el.textContent = t('perfil_native'); el.className = 'tag tag-asfalto';
+      el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
       if(btn){ btn.textContent = t('perfil_strava_connect'); btn.onclick = connectStrava; }
       if(note) note.style.display = 'none';
     }
@@ -1741,10 +1741,10 @@ async function updatePolarStatusDisplay(){
     const { data } = await supabaseClient.from('polar_connections').select('polar_user_id').eq('user_id', currentUserId).maybeSingle();
     deviceConnections.polar = !!data;
     if(data){
-      el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
+      el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
       if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectPolar; }
     } else {
-      el.textContent = t('perfil_native'); el.className = 'tag tag-asfalto';
+      el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
       if(btn){ btn.textContent = t('perfil_polar_connect'); btn.onclick = connectPolar; }
     }
     renderPlan();
@@ -1818,10 +1818,10 @@ async function updateWahooStatusDisplay(){
     deviceConnections.wahoo = wahooConnected;
     if(wahooConnected) scheduleWahooSync(); // recién conectada (o al abrir Perfil): deja la semana en Wahoo
     if(wahooConnected){
-      el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
+      el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
       if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectWahoo; }
     } else {
-      el.textContent = t('perfil_native'); el.className = 'tag tag-asfalto';
+      el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
       if(btn){ btn.textContent = t('wahoo_connect'); btn.onclick = connectWahoo; }
     }
     renderPlan();
@@ -2025,10 +2025,10 @@ async function updateSuuntoStatusDisplay(){
     if(connected) scheduleSuuntoSync(); // recién conectada (o al abrir Perfil): deja la semana en Suunto
 
     if(connected){
-      el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
+      el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
       if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectSuunto; }
     } else {
-      el.textContent = t('perfil_native'); el.className = 'tag tag-asfalto';
+      el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
       if(btn){ btn.textContent = t('suunto_connect'); btn.onclick = connectSuunto; }
     }
     renderPlan();
@@ -2299,10 +2299,10 @@ async function updateCorosStatusDisplay(){
     const { data } = await supabaseClient.from('coros_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
     deviceConnections.coros = !!data;
     if(data){
-      el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
+      el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
       if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectCoros; }
     } else {
-      el.textContent = t('perfil_native'); el.className = 'tag tag-asfalto';
+      el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
       if(btn){ btn.textContent = t('coros_connect'); btn.onclick = connectCoros; }
     }
     renderPlan();
@@ -2489,10 +2489,10 @@ function updateHealthConnectStatusDisplay(){
   const btn = document.getElementById('healthconnect-connect-btn');
   if(!el) return;
   if(state.healthConnectConnected){
-    el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-asfalto';
+    el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
     if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectHealthConnect; }
   } else {
-    el.textContent = t('perfil_native'); el.className = 'tag tag-asfalto';
+    el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
     if(btn){ btn.textContent = t('healthconnect_connect'); btn.onclick = connectHealthConnect; }
   }
 }
@@ -6915,11 +6915,13 @@ function renderHome(){
     const doneMin = weekRuns.reduce((a,r)=>a+(r.durationSec||0),0)/60;
     const plannedMin = state.plan.reduce((a,d)=>a+planDurationMin(d),0);
     ringRatio = plannedMin > 0 ? doneMin / plannedMin : 0;
+    document.querySelectorAll('.week-unit').forEach(u => u.textContent = t('time_unit_min'));
     animateCountUp(document.getElementById('home-week-done-km'), doneMin, 0);
     animateCountUp(document.getElementById('home-week-km'), plannedMin, 0);
   } else {
     const doneKmDisplay = isImperial() ? doneKm * MI_PER_KM : doneKm;
     const weekKmDisplay = isImperial() ? weekKm * MI_PER_KM : weekKm;
+    document.querySelectorAll('.week-unit').forEach(u => u.textContent = distUnit());
     animateCountUp(document.getElementById('home-week-done-km'), doneKmDisplay, 1);
     animateCountUp(document.getElementById('home-week-km'), weekKmDisplay, 1);
   }
@@ -7211,7 +7213,7 @@ function buildDayListHtml(wd){
         // d.dist>0 acá es a propósito, no solo d.terrain/d.zone: un día de
         // descanso nunca debería mostrar cartel de terreno/zona, ni siquiera
         // si por algún dato viejo esos campos quedaran seteados.
-        if(d.terrain) meta += `<span class="tag tag-${d.terrain}">${t('ob_terrain_'+d.terrain)}</span>`;
+        if(d.terrain && d.terrain !== 'asfalto') meta += `<span class="tag tag-${d.terrain}">${t('ob_terrain_'+d.terrain)}</span>`;
         if(d.zone) meta += `<span class="zone-chip zone-${d.zone}">${t('zone_word')} ${d.zone}</span>`;
       }
     }
@@ -7561,9 +7563,9 @@ function renderZones(){
     <div class="zone-row">
       <div><span class="zone-chip zone-${n}">${t('zone_word')} ${n}</span><div class="zd">${t('zdesc_'+n)} · ${ZONE_PCT[n]}</div></div>
       <div style="display:flex; align-items:center; gap:6px;">
-        <input type="number" id="zone-${n}-min" aria-label="${t('zone_word')} ${n} min (bpm)" value="${z[n].min}" style="width:52px; background:var(--asphalt-3); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:6px 4px; border-radius:6px; text-align:center; font-size:13px;">
+        <input type="number" id="zone-${n}-min" class="zone-input" inputmode="numeric" aria-label="${t('zone_word')} ${n} min (bpm)" value="${z[n].min}">
         <span class="muted">–</span>
-        <input type="number" id="zone-${n}-max" aria-label="${t('zone_word')} ${n} max (bpm)" value="${z[n].max}" style="width:52px; background:var(--asphalt-3); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:6px 4px; border-radius:6px; text-align:center; font-size:13px;">
+        <input type="number" id="zone-${n}-max" class="zone-input" inputmode="numeric" aria-label="${t('zone_word')} ${n} max (bpm)" value="${z[n].max}">
       </div>
     </div>`).join('');
 }
@@ -9138,7 +9140,9 @@ function updateCoachFabVisibility(){
   // CSS), no 'block'; comparar contra un valor exacto de display es frágil, esto no depende
   // de cuál sea.
   const inExercise = document.getElementById('runActive').style.display !== 'none' && document.getElementById('runActive').style.display !== '';
-  document.getElementById('coach-fab-wrap').style.display = (inCoach || inExercise) ? 'none' : 'block';
+  const sumEl = document.getElementById('runSummary');
+  const inSummary = !!sumEl && sumEl.style.display === 'block';
+  document.getElementById('coach-fab-wrap').style.display = (inCoach || inExercise || inSummary) ? 'none' : 'block';
 }
 // Ver el comentario junto a .coach-fab-scrolling en el CSS: el personaje se achica y
 // atenúa mientras la página se mueve, y vuelve a su tamaño normal 300ms después del
@@ -12530,7 +12534,8 @@ async function renderHeatmapGl(runs){
     heatGl = glAdapter(map);
     heatGl.ready = new Promise(resolve => map.on('load', () => {
       map.addSource('heat', {type:'geojson', data});
-      map.addLayer({id:'heat', type:'line', source:'heat', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':'#D6FF3F','line-width':2,'line-opacity':0.32}});
+      map.addLayer({id:'heat', type:'line', source:'heat', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':'#D6FF3F','line-width':['interpolate',['linear'],['zoom'],10,1.5,15,3.5],'line-opacity':0.55}});
+      map.addLayer({id:'heat-glow', type:'line', source:'heat', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':'#D6FF3F','line-width':8,'line-blur':6,'line-opacity':0.18}}, 'heat');
       resolve();
     }));
   } else {
@@ -12649,10 +12654,9 @@ function renderHistory(){
           <div class="stat-cell"><div class="n">${avgHr||'—'}</div><div class="l">${t('hist_avg_hr')}</div></div>
           <div class="stat-cell"><div class="n">${cal}</div><div class="l">${t('run_calories')}</div></div>
         </div>
-        <p class="muted" style="margin-top:10px; font-size:12.5px;">${t('hist_benefit_'+runBenefitKey(r))}</p>
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:8px;">
-          <p class="muted" style="margin:0;">${t('hist_shoe')}: ${shoe? escapeHtml(shoe.name) : t('hist_no_shoe')}</p>
-          <button onclick="event.stopPropagation(); shareRunImage('${r.id}')" style="background:none; border:1.5px solid var(--asphalt-4); color:var(--hivis-text); font-size:12px; cursor:pointer; padding:5px 9px; border-radius:6px; display:flex; align-items:center; gap:5px; font-weight:700; flex-shrink:0;">${t('hist_share')}</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; gap:8px;">
+          ${shoe ? `<p class="muted" style="margin:0; font-size:12.5px;">${t('hist_shoe')}: ${escapeHtml(shoe.name)}</p>` : '<span></span>'}
+          <button onclick="event.stopPropagation(); shareRunImage('${r.id}')" style="background:none; border:1px solid var(--asphalt-4); color:var(--mist); font-size:12.5px; cursor:pointer; min-height:var(--tap); padding:0 14px; border-radius:var(--radius-sm); display:flex; align-items:center; gap:5px; font-weight:700; flex-shrink:0;">${t('hist_share')}</button>
         </div>
       </div>
     </div>`;
@@ -12761,9 +12765,8 @@ function openRunDetail(runId){
   const dateStr = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long', year:'numeric'});
 
   document.getElementById('run-detail-content').innerHTML = `
-    <h2 class="display" style="font-size:20px; margin-bottom:2px;">${escapeHtml(r.name) || dateStr}</h2>
+    <h2 class="subtitle" style="font-size:22px; margin-bottom:2px;">${escapeHtml(r.name) || dateStr}</h2>
     ${r.name ? `<p class="muted" style="margin-bottom:10px;">${dateStr}</p>` : '<div style="margin-bottom:10px;"></div>'}
-    ${(function(){ const hl = runHighlightText(r, (state.runs||[]).filter(x => x !== r && new Date(x.date) < new Date(r.date))); return hl ? `<div class="rd-hl"><span class="hl-kicker">${t('nav_coach')}</span><p>${escapeHtml(hl)}</p></div>` : ''; })()}
     <div class="rd-tabs">${tabs.map(tb=>`<button class="rd-tab-btn" id="rd-tabbtn-${tb}" onclick="switchRDTab('${tb}')">${tabLabels[tb]}</button>`).join('')}</div>
     ${tabs.map(tb=>`<div class="rd-panel" id="rd-panel-${tb}"></div>`).join('')}
     <button class="btn btn-outline" style="width:100%; margin-top:24px;" onclick="openEditRun('${r.id}')">${t('edit_run_btn')}</button>
@@ -13101,6 +13104,10 @@ function rdRecenterMap(){
     detailMap.fitBounds(L.latLngBounds(pts.map(p=>[p.lat,p.lon])), {padding:[20,20]});
   }
 }
+function runHighlightBlock(r){
+  const hl = runHighlightText(r, (state.runs||[]).filter(x => x !== r && new Date(x.date) < new Date(r.date)));
+  return hl ? `<div class="rd-hl"><span class="hl-kicker">${t('nav_coach')}</span><p>${escapeHtml(hl)}</p></div>` : '';
+}
 function renderRDRitmo(panel){
   const {r, paceMin} = rdCurrent;
   const splits = getDisplaySplits(r);
@@ -13113,16 +13120,17 @@ function renderRDRitmo(panel){
   const maxPaceForBar = Math.max(...splitPaces, paceMin) * 1.02 || 1;
   const pacingAnalysis = analyzeSplitPacing(splits);
   panel.innerHTML = `
+    ${runHighlightBlock(r)}
     <div style="display:flex; justify-content:space-around; text-align:center; margin-bottom:20px;">
       <div><span class="mono" style="font-size:22px; font-weight:800; display:block;">${fmtPace(paceMin)}</span><span class="muted" style="font-size:12px;">${t('rd_avg_pace')}</span></div>
       <div><span class="mono" style="font-size:22px; font-weight:800; display:block;">${fmtPace(fastest)}</span><span class="muted" style="font-size:12px;">${t('rd_fastest_pace')}</span></div>
     </div>
-    ${pacingAnalysis ? `<p style="font-weight:700; margin-bottom:${pacingDetailText(splits) ? 4 : 14}px; font-size:13.5px;">${t('hist_split_'+pacingAnalysis.kind)}</p>` : ''}
+    ${pacingAnalysis ? `<p style="font-weight:700; margin-bottom:${pacingDetailText(splits) ? 4 : 14}px; font-size:13.5px;">${(pacingStats(splits) && pacingStats(splits).cv > 12) ? t('rd_irregular') : t('hist_split_'+pacingAnalysis.kind)}</p>` : ''}
     ${pacingAnalysis && pacingDetailText(splits) ? `<p class="muted" style="margin:0 0 14px; font-size:12.5px;">${pacingDetailText(splits)}</p>` : ''}
     <div class="muted" style="font-size:11px; margin-bottom:8px; display:flex; justify-content:space-between;"><span>${unitLabel}</span><span>${t('run_pace_word')} (/${distUnit()})</span></div>
     ${splits.map(s=>{
       const zone = classifyPaceRelative(s.paceMin, paceMin);
-      const widthPct = s.paceMin>0 ? Math.max(22, Math.min(100, (s.paceMin/maxPaceForBar)*100)) : 22;
+      const widthPct = s.paceMin>0 ? Math.max(30, Math.min(100, (Math.min(...splitPaces, paceMin) / s.paceMin) * 100)) : 30;   // más largo = más rápido
       return `<div class="pace-bar-row">
         <div class="pace-bar-label">${s.km}</div>
         <div class="pace-bar-track"><div class="pace-bar-fill" style="width:${widthPct}%; background:${zoneColorVar(zone)};">${fmtPace(s.paceMin)}</div></div>
@@ -13191,32 +13199,37 @@ function renderRDSegmentos(panel){
 // más pulsaciones = más arriba); invertY=false deja los valores más BAJOS
 // arriba (para ritmo: correr más rápido = número más chico = arriba, como
 // leería cualquier corredor el gráfico).
-function buildAreaChartSVG(tArr, valArr, colorHex, invertY){
+function buildAreaChartSVG(tArr, valArr, colorHex, invertY, fmt){
   const W=300, H=100, padT=6, padB=6;
   const pairs = tArr.map((tv,i)=>({tv, v:valArr[i]})).filter(p=>p.v!=null);
   if(pairs.length<2) return '';
-  const vals = pairs.map(p=>p.v);
-  const minV = Math.min(...vals), maxV = Math.max(...vals);
+  // percentiles 3 y 97: una parada o un pico suelto no aplastan el resto de la curva
+  const sorted = pairs.map(p=>p.v).sort((a,b)=>a-b);
+  const median = sorted[Math.floor(sorted.length/2)];
+  const minV = sorted[Math.floor((sorted.length-1)*0.03)];
+  // en ritmo, lo que pasa de ~1,6 veces la mediana son paradas (no un ritmo): se corta ahí para que no aplasten la curva
+  const maxV = invertY ? sorted[Math.ceil((sorted.length-1)*0.97)] : Math.min(sorted[Math.ceil((sorted.length-1)*0.97)], median*1.6);
   const spanV = (maxV-minV) || 1;
   const minT = pairs[0].tv, maxT = pairs[pairs.length-1].tv;
   const spanT = (maxT-minT) || 1;
   const pts = pairs.map(p=>{
     const x = ((p.tv-minT)/spanT) * W;
-    const frac = (p.v-minV)/spanV;
+    const frac = Math.max(0, Math.min(1, (p.v-minV)/spanV));
     const y = invertY ? (padT + (1-frac)*(H-padT-padB)) : (padT + frac*(H-padT-padB));
     return [x,y];
   });
   const linePath = pts.map((p,i)=> (i===0?'M':'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
   const areaPath = `M${pts[0][0].toFixed(1)},${H} L` + pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' L') + ` L${pts[pts.length-1][0].toFixed(1)},${H} Z`;
   const gradId = 'rdgrad'+Math.random().toString(36).slice(2,9);
-  return `<svg class="rd-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+  const ax = fmt ? `<span class="rd-ax rd-ax-top">${fmt(invertY ? maxV : minV)}</span><span class="rd-ax rd-ax-bot">${fmt(invertY ? minV : maxV)}</span>` : '';
+  return `<div class="rd-chart-wrap">${ax}<svg class="rd-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
     <defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="${colorHex}" stop-opacity="0.45"/>
       <stop offset="100%" stop-color="${colorHex}" stop-opacity="0"/>
     </linearGradient></defs>
     <path d="${areaPath}" fill="url(#${gradId})" stroke="none"/>
     <path d="${linePath}" fill="none" stroke="${colorHex}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`;
+  </svg></div>`;
 }
 // Minutos pasados en cada zona (1-5) a lo largo de una serie en el tiempo.
 // classifyFn recibe (valor, extra) -- extra es el promedio de la carrera para
@@ -13260,7 +13273,7 @@ function renderRDGraficos(panel){
         <div><span class="mono" style="font-size:20px; font-weight:800; display:block;">${avgHr||'–'}</span><span class="muted" style="font-size:11.5px;">${t('rd_avg_hr_full')}</span></div>
         <div><span class="mono" style="font-size:20px; font-weight:800; display:block;">${maxHr||'–'}</span><span class="muted" style="font-size:11.5px;">${t('hist_max_hr')}</span></div>
       </div>
-      ${buildAreaChartSVG(r.series.t, r.series.hr, hrColor, true)}
+      ${buildAreaChartSVG(r.series.t, r.series.hr, hrColor, true, v => Math.round(v))}
       <div class="rd-donut-row">
         ${buildDonutCSS(zoneMin)}
         <div class="rd-donut-legend">
@@ -13277,9 +13290,9 @@ function renderRDGraficos(panel){
       <h3 style="font-size:16px; margin-bottom:14px;">${t('rd_chart_pace')}</h3>
       <div style="display:flex; justify-content:space-around; text-align:center; margin-bottom:12px;">
         <div><span class="mono" style="font-size:20px; font-weight:800; display:block;">${fmtPace(paceMin)}</span><span class="muted" style="font-size:11.5px;">${t('rd_avg_pace')}</span></div>
-        <div><span class="mono" style="font-size:20px; font-weight:800; display:block;">${fmtPace(fastest)}</span><span class="muted" style="font-size:11.5px;">${t('rd_fastest_pace')}</span></div>
+        <div><span class="mono" style="font-size:20px; font-weight:800; display:block;">${fmtPace(fastest)}</span><span class="muted" style="font-size:11.5px;">${t('rd_peak_pace')}</span></div>
       </div>
-      ${buildAreaChartSVG(r.series.t, r.series.paceMin, paceColor, false)}
+      ${buildAreaChartSVG(r.series.t, r.series.paceMin, paceColor, false, v => fmtPace(v))}
       <div class="rd-donut-row">
         ${buildDonutCSS(zoneMin)}
         <div class="rd-donut-legend">
