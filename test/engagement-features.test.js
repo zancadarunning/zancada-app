@@ -658,3 +658,10 @@ test('mapas vectoriales: el envoltorio traduce fitBounds/on/resize a Mapbox GL (
   ad.invalidateSize(); ad.remove();
   assert.deepEqual(calls.slice(-2).map(c => c[0]), ['resize', 'remove']);
 });
+
+test('vendor/mapbox-gl-csp.js va envuelto en su propia función (si no, declara var e,t globales y pisa la t() de traducciones de la app)', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'vendor', 'mapbox-gl-csp.js'), 'utf8');
+  assert.match(src.slice(0, 400), /^\/\*[^]*?\*\/\s*\(function\(\)\{\s*var e,t;/, 'envuelto al principio');
+  assert.match(src.slice(-200), /\}\)\.call\(/, 'cierre del envoltorio al final');
+});
