@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T16:41:56Z';
+const APP_VERSION = '2026-10-12T16:46:10Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10875,6 +10875,17 @@ function restoreTrackerFromSaved(saved){
 // cuenta regresiva, no arrancamos una carrera de verdad (GPS + timer) en segundo plano sin que
 // la vea -- en vez de eso, dejamos #runIdle como estaba.
 let countdownActive = false;
+let countdownTimer = null;
+// Tocar la pantalla durante la cuenta regresiva la cancela: no se arranca GPS ni timer y vuelve la pantalla de inicio.
+function cancelRunCountdown(){
+  if(!countdownActive) return;
+  clearTimeout(countdownTimer); countdownTimer = null;
+  countdownActive = false;
+  document.getElementById('runCountdown').style.display = 'none';
+  document.getElementById('countdown-num').classList.remove('go');
+  document.getElementById('runIdle').style.display = '';
+  try{ haptic(15); }catch(e){}
+}
 function startRunWithCountdown(){
   if(countdownActive) return;
   countdownActive = true;
@@ -10889,8 +10900,9 @@ function startRunWithCountdown(){
     numEl.classList.toggle('go', i === steps.length - 1);
     numEl.classList.remove('pop'); void numEl.offsetWidth; numEl.classList.add('pop');
     i++;
-    if(i < steps.length){ setTimeout(showStep, 800); return; }
-    setTimeout(()=>{
+    if(i < steps.length){ countdownTimer = setTimeout(showStep, 800); return; }
+    countdownTimer = setTimeout(()=>{
+      countdownTimer = null;
       overlay.style.display = 'none';
       numEl.classList.remove('go');
       countdownActive = false;

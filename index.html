@@ -2454,6 +2454,10 @@
   .streak-chip{gap:5px;}
   .streak-badge .ico, .streak-chip .ico{color:var(--hivis-text);}
   .event-delete-btn{width:100%; margin-top:14px;}
+
+  /* Cuenta regresiva: tocar la pantalla la cancela (antes había que esperar y parar una carrera fantasma) */
+  #runCountdown{cursor:pointer; -webkit-tap-highlight-color:transparent;}
+  .countdown-hint{position:absolute; left:16px; right:16px; bottom:calc(36px + env(safe-area-inset-bottom, 0px)); margin:0; text-align:center; font-size:14px; font-weight:600; color:var(--mist);}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -3112,7 +3116,7 @@
     <p id="geo-warning" role="alert" style="display:none;"></p>
     <!-- Cuenta regresiva de 3 segundos antes de arrancar a correr -- ver el comentario largo
          junto a #runCountdown en el CSS y startRunWithCountdown() en app.js. -->
-    <div id="runCountdown"><div class="countdown-num display" id="countdown-num">3</div></div>
+    <div id="runCountdown" onclick="cancelRunCountdown()"><div class="countdown-num display" id="countdown-num">3</div><p class="countdown-hint" data-i18n="run_countdown_cancel"></p></div>
     <div id="runIdle">
       <div class="card" id="run-done-today-card" style="display:none; text-align:left; margin-top:10px;">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
