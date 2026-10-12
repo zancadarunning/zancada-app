@@ -45,7 +45,7 @@
     var pref = localStorage.getItem('zancada_theme');
     if(pref === 'light' || pref === 'dark') document.documentElement.setAttribute('data-theme', pref);
     var isLight = pref === 'light' || (pref !== 'dark' && window.matchMedia('(prefers-color-scheme: light)').matches);
-    document.getElementById('theme-color-meta').setAttribute('content', isLight ? '#F0F1EE' : '#0A0A0A');
+    document.getElementById('theme-color-meta').setAttribute('content', isLight ? '#F2F4EC' : '#0A0A0A');
   }catch(e){}
 })();</script>
 <!-- Mismo motivo que el bloque de arriba (tema), pero para #splash/#login: ninguno de los
@@ -186,121 +186,6 @@
     --cs:dark;
     --safe-top:env(safe-area-inset-top); --safe-bottom:env(safe-area-inset-bottom);
   }
-  /* Tema claro "de sistema" -- solo aplica si el usuario no forzó nada a mano
-     (:not([data-theme="dark"]) dentro del media query, ver el bloque explícito de
-     abajo para cuando sí forzó). Misma lista de variables que :root, valores nuevos. */
-  @media (prefers-color-scheme:light){
-    :root:not([data-theme="dark"]){
-      --clay-text:var(--clay); --danger-text:var(--danger); --zone5-text:var(--zone5); --header-bg:linear-gradient(180deg, var(--tabbar-bg) 55%, transparent);
-      --asphalt:#F5F5F7; --asphalt-2:#FFFFFF; --asphalt-3:#EDEDF0; --asphalt-4:#D2D2D7;
-      /* --mist-dim más oscuro que el original (#707476 daba 4.16:1 contra el fondo de
-         página, por debajo del 4.5:1 que pide AA para texto chico -- etiquetas como
-         "Preferencias", los encabezados de mes en Historial, y "Sin marca"/"Te faltan
-         X km" en los logros bloqueados quedaban todos por debajo del mínimo, éste último
-         caso el peor porque esas medallas usan --asphalt-3 como fondo, más oscuro que el
-         fondo de página general). #5F6365 da 4.93:1 incluso contra ese fondo más oscuro. */
-      --chalk:#1D1D1F; --mist:#5C6166; --mist-dim:#5F6365;
-      --hivis:#D6FF3F; --hivis-dim:rgba(107,138,0,.16); --hivis-text:#5E7000; --ink:#121415;
-      --clay:#A84E1C; --clay-dim:rgba(168,78,28,.15);
-      --danger:#D6291C; --danger-dim:rgba(214,41,28,.13);
-      --press:rgba(0,0,0,.05); --overlay-hairline:rgba(0,0,0,.10);
-      --contour-line:rgba(0,0,0,.05);
-      --tabbar-bg:rgba(255,255,255,.88);
-      --toast-error-bg:#FDEBEA; --toast-error-fg:#B0241A;
-      /* Mismo achique de blur que la versión oscura de arriba -- ver ese comentario. */
-      --shadow-card:none; --shadow-lg:0 3px 6px rgba(20,22,18,.15);
-      --hivis-glow:rgba(150,186,0,.32);
-    --glow-a:rgba(150,186,0,.42); --glow-b:rgba(150,186,0,.2); --glow-c:rgba(150,186,0,.08); --sk-hl:rgba(255,255,255,.75); --ambient:rgba(150,186,0,.12); --ambient-card:rgba(150,186,0,.2); --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 8px 1px rgba(150,186,0,.5), 0 0 14px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
-      /* Las 5 zonas del modo oscuro (azul pizarra → verde salvia → dorado apagado →
-         terracota → ladrillo apagado, ver el comentario grande junto a --zone1 de :root)
-         son un registro deliberadamente desaturado -- "para que las cinco lean como parte
-         del registro apagado, carbón y arcilla de este sistema, no como una paleta
-         importada de Material" dice ese mismo comentario. La primera versión de este tema
-         claro no respetaba eso: eran azul/verde/ámbar/naranja/rojo bien saturados, casi
-         literal a los tokens de Tailwind (blue-700/green-700/amber-700/orange-700/red-700)
-         -- reconocibles como zona, pero rompiendo la identidad "apagada" que el propio
-         sistema define como marca. Estas son las mismas 5 tonalidades del oscuro,
-         oscurecidas (mismo hue, más lightness abajo, saturación reforzada un poco para
-         que no se laven al bajar la luminosidad) lo necesario para leerse como texto
-         sobre blanco -- 4.8-8.2:1 de contraste según la zona, ver el detalle en cada
-         línea. */
-      --zone1:#2A4F84; --zone1-bg:rgba(42,79,132,.12); --zone1-bg-live:rgba(42,79,132,.10);
-      --zone2:#29653C; --zone2-bg:rgba(41,101,60,.12); --zone2-bg-live:rgba(41,101,60,.10);
-      --zone3:#7B6014; --zone3-bg:rgba(123,96,20,.12); --zone3-bg-live:rgba(123,96,20,.10);
-      --zone4:#8B5023; --zone4-bg:rgba(139,80,35,.12); --zone4-bg-live:rgba(139,80,35,.10);
-      --zone5:#96382C; --zone5-bg:rgba(150,56,44,.12); --zone5-bg-live:rgba(150,56,44,.10);
-      /* --zoneN-fill: las mismas 5 tonalidades vívidas del tema oscuro (ver el comentario
-         junto a --zone1-fill de :root) -- acá SÍ funcionan bien como fondo sólido con
-         --ink encima (4.98-9.13:1 de contraste), a diferencia de las --zoneN oscurecidas
-         de arriba (pensadas para texto, no para ser fondo). */
-      --zone1-fill:#7B9BC9; --zone2-fill:#7CB88F; --zone3-fill:#D4B356;
-      --zone4-fill:#CC8A56; --zone5-fill:#C9695C;
-      --cs:light;
-    }
-    /* .card-highlight, .confirm-card y las dos .card-shell-* degradan/tiñen hacia un color
-       escrito a mano (no una variable) porque necesitan mezclarse con el vidrio esmerilado o
-       apenas insinuar un tinte -- los valores pensados para fundirse en el carbón oscuro
-       original (u opacidades de 3-4%, invisibles sobre blanco) se reemplazan acá por
-       equivalentes que sí se notan sobre un fondo claro. */
-    :root:not([data-theme="dark"]) .card-highlight{
-      background:linear-gradient(160deg, rgba(150,186,0,.12), rgba(255,255,255,.65) 55%);
-      box-shadow:0 0 0 1px rgba(150,186,0,.28), 0 0 4px rgba(150,186,0,.22), 0 3px 5px rgba(20,22,18,.12);}
-    :root:not([data-theme="dark"]) .confirm-card{
-      background:linear-gradient(160deg, rgba(255,255,255,.92), rgba(231,232,227,.9) 55%);}
-    :root:not([data-theme="dark"]) .card-shell-hivis{
-      background:rgba(150,186,0,.08); border-color:rgba(150,186,0,.28);
-      box-shadow:0 3px 6px -2px rgba(150,186,0,.22);}
-    :root:not([data-theme="dark"]) .card-shell-clay{
-      background:rgba(168,78,28,.06); border-color:rgba(168,78,28,.26);
-      box-shadow:0 3px 6px -2px rgba(168,78,28,.18);}
-    /* #offline-banner usa --ink (texto oscuro) sobre --clay como fondo -- funciona bien en
-       oscuro (--clay ahí es más clarito, 4.7:1 con --ink) pero en claro --clay se oscurece
-       a propósito para servir como TEXTO legible en otros lugares (ver el comentario grande
-       del sistema de temas), y ese mismo tono oscuro como FONDO deja a --ink casi sin
-       contraste (3.32:1, por debajo del 4.5:1 mínimo). Blanco encima sí funciona (5.57:1). */
-    :root:not([data-theme="dark"]) #offline-banner{ color:#FFFFFF; }
-  }
-  /* Tema claro forzado a mano (toggle en Perfil) -- gana pase lo que pase el sistema. */
-  :root[data-theme="light"]{
-    --clay-text:var(--clay); --danger-text:var(--danger); --zone5-text:var(--zone5); --header-bg:linear-gradient(180deg, var(--tabbar-bg) 55%, transparent);
-      --asphalt:#F5F5F7; --asphalt-2:#FFFFFF; --asphalt-3:#EDEDF0; --asphalt-4:#D2D2D7;
-    --chalk:#1D1D1F; --mist:#5C6166; --mist-dim:#5F6365;
-    --hivis:#D6FF3F; --hivis-dim:rgba(107,138,0,.16); --hivis-text:#5E7000; --ink:#121415;
-    --clay:#A84E1C; --clay-dim:rgba(168,78,28,.15);
-    --danger:#D6291C; --danger-dim:rgba(214,41,28,.13);
-    --press:rgba(0,0,0,.05); --overlay-hairline:rgba(0,0,0,.10);
-    --contour-line:rgba(0,0,0,.05);
-    --tabbar-bg:rgba(255,255,255,.88);
-    --toast-error-bg:#FDEBEA; --toast-error-fg:#B0241A;
-    /* Mismo achique de blur que la versión oscura -- ver ese comentario. */
-    --shadow-card:none; --shadow-lg:0 3px 6px rgba(20,22,18,.15);
-    --hivis-glow:rgba(150,186,0,.32);
-    --glow-a:rgba(150,186,0,.42); --glow-b:rgba(150,186,0,.2); --glow-c:rgba(150,186,0,.08); --sk-hl:rgba(255,255,255,.75); --ambient:rgba(150,186,0,.12); --ambient-card:rgba(150,186,0,.2); --neon-rim:#9CCB00; --neon:0 0 0 1.5px var(--neon-rim), 0 0 8px 1px rgba(150,186,0,.5), 0 0 14px 2px rgba(150,186,0,.22); --neon-press:0 0 0 1.5px var(--neon-rim), 0 0 5px 0 rgba(150,186,0,.45), 0 0 11px 1px rgba(150,186,0,.2);
-    /* Mismas 5 zonas que en el bloque de arriba (@media prefers-color-scheme:light) --
-       ver ese comentario grande para el porqué de oscurecer estos tonos en vez de usar
-       los saturados tipo Tailwind que tenía antes. */
-    --zone1:#2A4F84; --zone1-bg:rgba(42,79,132,.12); --zone1-bg-live:rgba(42,79,132,.10);
-    --zone2:#29653C; --zone2-bg:rgba(41,101,60,.12); --zone2-bg-live:rgba(41,101,60,.10);
-    --zone3:#7B6014; --zone3-bg:rgba(123,96,20,.12); --zone3-bg-live:rgba(123,96,20,.10);
-    --zone4:#8B5023; --zone4-bg:rgba(139,80,35,.12); --zone4-bg-live:rgba(139,80,35,.10);
-    --zone5:#96382C; --zone5-bg:rgba(150,56,44,.12); --zone5-bg-live:rgba(150,56,44,.10);
-    /* --zoneN-fill: ver el comentario junto a este mismo bloque en @media(prefers-color-scheme:light). */
-    --zone1-fill:#7B9BC9; --zone2-fill:#7CB88F; --zone3-fill:#D4B356;
-    --zone4-fill:#CC8A56; --zone5-fill:#C9695C;
-    --cs:light;
-  }
-  :root[data-theme="light"] .card-highlight{
-    background:linear-gradient(160deg, rgba(150,186,0,.12), rgba(255,255,255,.65) 55%);
-    box-shadow:0 0 0 1px rgba(150,186,0,.28), 0 0 4px rgba(150,186,0,.22), 0 3px 5px rgba(20,22,18,.12);}
-  :root[data-theme="light"] .confirm-card{
-    background:linear-gradient(160deg, rgba(255,255,255,.92), rgba(231,232,227,.9) 55%);}
-  :root[data-theme="light"] .card-shell-hivis{
-    background:rgba(150,186,0,.08); border-color:rgba(150,186,0,.28);
-    box-shadow:0 3px 6px -2px rgba(150,186,0,.22);}
-  :root[data-theme="light"] .card-shell-clay{
-    background:rgba(168,78,28,.06); border-color:rgba(168,78,28,.26);
-    box-shadow:0 3px 6px -2px rgba(168,78,28,.18);}
-  :root[data-theme="light"] #offline-banner{ color:#FFFFFF; }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   /* text-size-adjust:100% -- sin esto, Chrome en Android "booster" automáticamente el
      tamaño de fuente más allá del font-size real declarado en CSS (pensado para texto en
@@ -1918,8 +1803,6 @@
 
   /* Fondo del chat: una pista de atletismo vista desde arriba (carriles + línea de largada), como el dibujo de fondo de un chat de mensajería. */
   #coachChatWrap{--track-line:rgba(214,255,63,.26); --track-glow:rgba(214,255,63,.45);}
-  :root[data-theme="light"] #coachChatWrap{--track-line:rgba(94,112,0,.22);}
-  @media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #coachChatWrap{--track-line:rgba(94,112,0,.22);} }
   #coachChatWrap::before{content:''; position:absolute; inset:0; z-index:0; pointer-events:none; background:var(--track-line);
     -webkit-mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20400%20900%22%20preserveAspectRatio%3D%22xMidYMid%20slice%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M30%20260A170%20170%200%200%201%20370%20260L370%20640A170%20170%200%200%201%2030%20640Z%22%2F%3E%3Cpath%20d%3D%22M51%20260A149%20149%200%200%201%20349%20260L349%20640A149%20149%200%200%201%2051%20640Z%22%2F%3E%3Cpath%20d%3D%22M72%20260A128%20128%200%200%201%20328%20260L328%20640A128%20128%200%200%201%2072%20640Z%22%2F%3E%3Cpath%20d%3D%22M93%20260A107%20107%200%200%201%20307%20260L307%20640A107%20107%200%200%201%2093%20640Z%22%2F%3E%3Cpath%20d%3D%22M114%20260A86%2086%200%200%201%20286%20260L286%20640A86%2086%200%200%201%20114%20640Z%22%2F%3E%3Cpath%20d%3D%22M135%20260A65%2065%200%200%201%20265%20260L265%20640A65%2065%200%200%201%20135%20640Z%22%2F%3E%3Cpath%20d%3D%22M156%20260A44%2044%200%200%201%20244%20260L244%20640A44%2044%200%200%201%20156%20640Z%22%2F%3E%3Cpath%20d%3D%22M30%20320H156M244%20320H370%22%20stroke-width%3D%223%22%2F%3E%3Cpath%20d%3D%22M30%20580H156M244%20580H370%22%20stroke-width%3D%221.5%22%20stroke-dasharray%3D%223%205%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") center/cover no-repeat; mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20400%20900%22%20preserveAspectRatio%3D%22xMidYMid%20slice%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M30%20260A170%20170%200%200%201%20370%20260L370%20640A170%20170%200%200%201%2030%20640Z%22%2F%3E%3Cpath%20d%3D%22M51%20260A149%20149%200%200%201%20349%20260L349%20640A149%20149%200%200%201%2051%20640Z%22%2F%3E%3Cpath%20d%3D%22M72%20260A128%20128%200%200%201%20328%20260L328%20640A128%20128%200%200%201%2072%20640Z%22%2F%3E%3Cpath%20d%3D%22M93%20260A107%20107%200%200%201%20307%20260L307%20640A107%20107%200%200%201%2093%20640Z%22%2F%3E%3Cpath%20d%3D%22M114%20260A86%2086%200%200%201%20286%20260L286%20640A86%2086%200%200%201%20114%20640Z%22%2F%3E%3Cpath%20d%3D%22M135%20260A65%2065%200%200%201%20265%20260L265%20640A65%2065%200%200%201%20135%20640Z%22%2F%3E%3Cpath%20d%3D%22M156%20260A44%2044%200%200%201%20244%20260L244%20640A44%2044%200%200%201%20156%20640Z%22%2F%3E%3Cpath%20d%3D%22M30%20320H156M244%20320H370%22%20stroke-width%3D%223%22%2F%3E%3Cpath%20d%3D%22M30%20580H156M244%20580H370%22%20stroke-width%3D%221.5%22%20stroke-dasharray%3D%223%205%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") center/cover no-repeat;}
   #coachChatWrap > .coach-head, #coachChatWrap > #chatLog, #coachChatWrap > .chat-input-bar{position:relative; z-index:1;}
@@ -2170,24 +2053,6 @@
   .recap-actions{display:flex; align-items:center; gap:14px; margin-top:14px;} .recap-actions .btn{flex:1;}
   .empty-card{text-align:center; padding:30px 18px 24px;} .empty-card .empty-track{margin-bottom:10px;}
   .empty-card h3.empty-title{margin:0 0 6px; font-family:'Bebas Neue',sans-serif; font-weight:400; font-size:28px; letter-spacing:.01em; text-transform:none; color:var(--chalk);}
-
-  /* ===== Tema claro: gráficos y medallas con el lima oscuro legible ===== */
-  :root[data-theme="light"] .pg-line{stroke:var(--hivis-text);}
-  :root[data-theme="light"] .pg-dot{stroke:var(--hivis-text);}
-  :root[data-theme="light"] .pg-dot.cur{fill:var(--hivis-text);}
-  :root[data-theme="light"] .pr-medal.achieved .mdl-rib{fill:var(--hivis-text); fill-opacity:.5;}
-  :root[data-theme="light"] .pr-medal.achieved .mdl-rib.b{fill-opacity:.32;}
-  @media (prefers-color-scheme: light){
-  :root:not([data-theme="dark"]) .pg-line{stroke:var(--hivis-text);}
-    :root:not([data-theme="dark"]) .pg-dot{stroke:var(--hivis-text);}
-    :root:not([data-theme="dark"]) .pg-dot.cur{fill:var(--hivis-text);}
-    :root:not([data-theme="dark"]) .pr-medal.achieved .mdl-rib{fill:var(--hivis-text); fill-opacity:.5;}
-    :root:not([data-theme="dark"]) .pr-medal.achieved .mdl-rib.b{fill-opacity:.32;}
-  }
-
-  /* Tema claro: el resaltado de hoy en el Plan, más suave */
-  :root[data-theme="light"] .day-row.day-row-today::after{background:linear-gradient(90deg, rgba(107,138,0,.09) 0%, rgba(107,138,0,.04) 55%, transparent 90%);}
-  @media (prefers-color-scheme: light){ :root:not([data-theme="dark"]) .day-row.day-row-today::after{background:linear-gradient(90deg, rgba(107,138,0,.09) 0%, rgba(107,138,0,.04) 55%, transparent 90%);} }
 
   /* ===== Resumen de carrera, frase del día y personaje más grande ===== */
   .sum-hero{padding:14px 14px 16px;}
@@ -2473,6 +2338,12 @@
 
 
 
+
+
+
+
+
+
   /* =====================================================================================================================
      ZONAS DE FRECUENCIA CARDÍACA -- color fuerte en los dos temas (azul, verde, amarillo, naranja, rojo).
      Relleno vivo para barras, anillos, mapas y chips; el texto sobre fondo usa una variante legible por tema.
@@ -2490,253 +2361,187 @@
   .zone-4, .zone-badge-live.zone-4{background:var(--zone4-fill); color:#0F1114;}
   .zone-5, .zone-badge-live.zone-5{background:var(--zone5-fill); color:#0F1114;}
   .pace-bar-fill{filter:none;}
-  /* Sin barras de color al costado de más de 1px (tarjetas, notas, avisos): el peso lo da el texto, no un filete */
-  .hl-card, .rd-hl, #plan-taper-note, #plan-event-week-note, #plan-cutback-note, #plan-recovery-note, .ob-callout{border-left-width:0;}
-  .hl-card, #plan-taper-note, #plan-event-week-note, #plan-cutback-note, #plan-recovery-note, .ob-callout{background:var(--asphalt-3);}
-  .rd-hl{padding-left:0;}
   /* ícono de cabecera de los modales: centrado (el margen auto no centraba un contenedor inline-flex) */
   .overlay > .icon-sq[style*="margin:0 auto"]{display:flex;}
   /* acción de borrar por deslizamiento: oculta en reposo en TODAS las listas (en Zapatillas asomaban rayas rojas al borde) */
   .swipe-item:not(:has(.swipe-content[style*="translate3d(-"])) .swipe-action-delete{visibility:hidden;}
 
   /* =====================================================================================================================
-     TEMA CLARO -- papel y tinta: tarjetas planas, lima solo para acción, selección y progreso. Sin superficies negras.
+     TEMA CLARO -- hecho de cero: el mismo diseño que el oscuro, en blanco con el lima de marca como relleno.
      Un solo bloque al final: pisa los dos bloques de tokens claros de más arriba.
      ===================================================================================================================== */
   :root[data-theme="light"]{
-    /* Papel y tinta. Papel cálido (no gris azulado), tarjetas blancas planas con un filete, tinta casi negra.
-       El lima de marca se reserva para lo que se toca o avanza: acción principal, selección, progreso. */
-    --asphalt:#F3F1EA; --asphalt-2:#FFFFFF; --asphalt-3:#EBE8DF; --asphalt-4:#D9D5C8;
-    --chalk:#1B1A16; --mist:#5C594E; --mist-dim:#68655A;
-    --hivis:#CDF51A; --hivis-edge:#7A9A00; --hivis-text:#3A5300; --hivis-dim:rgba(160,205,0,.22); --hivis-glow:rgba(150,190,0,.30);
-    --hivis-line:#86B000; --zone3-stroke:#D49A00; --volt:#D6FF3F;
+    /* Modo claro hecho de cero: el mismo diseño que el oscuro (tarjetas más claras que el fondo, brillo de marca, mismas formas), en blanco.
+       Fondo gris-blanco con un dejo verdoso, tarjetas blancas, tinta casi negra. El lima de marca se mantiene como RELLENO con texto de tinta
+       encima (como en oscuro); como TEXTO o trazo fino pasa a un verde oliva profundo, porque el lima sobre blanco no se ve. */
+    --cs:light;
+    --asphalt:#F2F4EC; --asphalt-2:#FFFFFF; --asphalt-3:#E8EBDF; --asphalt-4:#D3D8C6;
+    --chalk:#171A10; --mist:#586050; --mist-dim:#626A58;
+    --hivis:#D6FF3F; --hivis-dim:rgba(200,240,20,.30); --hivis-text:#476000; --hivis-edge:#8DB600; --hivis-line:#7FAA00; --ink:#14170C; --volt:#D6FF3F;
+    --clay:#A8501B; --clay-dim:rgba(168,80,27,.14); --clay-text:#A8501B;
+    --danger:#D6291C; --danger-dim:rgba(214,41,28,.11); --danger-text:#D6291C;
+    --hivis-glow:rgba(140,190,0,.32);
+    --glow-a:rgba(140,190,0,.40); --glow-b:rgba(140,190,0,.20); --glow-c:rgba(140,190,0,.08);
+    --sk-hl:rgba(255,255,255,.7); --ambient:rgba(170,215,0,.10); --ambient-card:rgba(140,190,0,.16);
+    --neon-rim:#8DB600;
+    --neon:0 0 0 1.5px var(--neon-rim), 0 5px 14px -3px rgba(140,190,0,.5);
+    --neon-press:0 0 0 1.5px var(--neon-rim), 0 2px 7px -2px rgba(140,190,0,.5);
+    --press:rgba(23,26,16,.05); --overlay-hairline:rgba(23,26,16,.09);
+    --contour-line:rgba(23,26,16,.05);
+    --tabbar-bg:rgba(255,255,255,.94);
+    --shadow-card:none; --shadow-lg:0 4px 10px rgba(23,26,16,.16);
+    --toast-error-bg:#FDEAE7; --toast-error-fg:#B0241A;
+    --header-bg:linear-gradient(180deg, var(--asphalt) 0, var(--asphalt) 74%, transparent 100%);
     --zone1-fill:#2E86F0; --zone2-fill:#22B35A; --zone3-fill:#F2C200; --zone4-fill:#FF8A1F; --zone5-fill:#E5392F;
     --zone1:#1B5FBF; --zone2:#17803D; --zone3:#8A6800; --zone4:#B25500; --zone5:#C0281E; --zone5-text:#C0281E;
     --zone1-bg:rgba(46,134,240,.14); --zone2-bg:rgba(34,179,90,.14); --zone3-bg:rgba(242,194,0,.20); --zone4-bg:rgba(255,138,31,.16); --zone5-bg:rgba(229,57,47,.13);
     --zone1-bg-live:rgba(46,134,240,.12); --zone2-bg-live:rgba(34,179,90,.12); --zone3-bg-live:rgba(242,194,0,.16); --zone4-bg-live:rgba(255,138,31,.13); --zone5-bg-live:rgba(229,57,47,.11);
-    --press:rgba(40,35,20,.05); --overlay-hairline:rgba(40,35,20,.11);
-    --contour-line:rgba(40,35,20,.035);
-    --tabbar-bg:rgba(255,255,255,.96);
-    --header-bg:linear-gradient(180deg, var(--asphalt) 0, var(--asphalt) 74%, transparent 100%);
-    --ambient:transparent; --ambient-card:transparent;
   }
-  /* Fondo: solo las curvas de nivel de la marca, sin las manchas de color */
-  :root[data-theme="light"] #app{background:
-    repeating-radial-gradient(circle at 15% 8%, transparent 0, transparent 64px, var(--contour-line) 65px, var(--contour-line) 66px, transparent 67px),
-    repeating-radial-gradient(circle at 95% 55%, transparent 0, transparent 84px, var(--contour-line) 85px, var(--contour-line) 86px, transparent 87px),
-    var(--asphalt);}
-  :root[data-theme="light"] #app::after{display:none;}
-  /* Tarjetas: planas, un solo filete. Sin sombra (la profundidad queda para lo que flota: barra, avisos, hojas) */
-  :root[data-theme="light"] .card{background:#fff; border:1px solid var(--overlay-hairline); box-shadow:none;}
-  :root[data-theme="light"] .card.card-highlight{background:#fff; border:1.5px solid var(--chalk); box-shadow:none;}
-  :root[data-theme="light"] .card-shell.card-shell-hivis{background:none; box-shadow:none;}
-  :root[data-theme="light"] .card-quiet{background:transparent; border-color:var(--overlay-hairline);}
-  :root[data-theme="light"] .rp-entry{background:#fff; border:1px solid var(--overlay-hairline); box-shadow:none;}
-  :root[data-theme="light"] .rp-entry-ic{background:var(--hivis); color:var(--chalk);}
-  :root[data-theme="light"] .sum-big .n{color:var(--chalk);}
-  :root[data-theme="light"] .stat-box{background:var(--asphalt); box-shadow:none; border-color:transparent;}
-  /* Etiquetas y chips: neutros. Nada de verde tintado con borde */
-  :root[data-theme="light"] .tag, :root[data-theme="light"] .tag-asfalto{background:var(--asphalt-3); color:var(--chalk); box-shadow:none;}
-  :root[data-theme="light"] .streak-badge, :root[data-theme="light"] .streak-chip{background:var(--asphalt-3); color:var(--chalk); box-shadow:none;}
-  :root[data-theme="light"] .wx-chip{background:var(--asphalt-3); box-shadow:none;}
-  :root[data-theme="light"] .streak-badge .ico, :root[data-theme="light"] .streak-chip .ico{color:var(--hivis-text);}
-  /* Día de hoy en el Plan: una pastilla sólida suave, sin degradé */
-  :root[data-theme="light"] .day-row.day-row-today::after{inset:0; border-radius:var(--radius-sm); background:var(--asphalt-3); -webkit-mask-image:none; mask-image:none;}
-  :root[data-theme="light"] .day-row.day-row-today .day-badge{background:var(--hivis);}
-  :root[data-theme="light"] .day-row.day-row-today .day-badge .d{color:var(--chalk);}
-  /* Notas y avisos: texto sobre papel hundido, sin barra de color al costado */
-  :root[data-theme="light"] #plan-taper-note, :root[data-theme="light"] #plan-event-week-note, :root[data-theme="light"] #plan-cutback-note, :root[data-theme="light"] #plan-recovery-note, :root[data-theme="light"] .ob-callout{background:var(--asphalt-3); border-left:0; color:var(--mist);}
-  :root[data-theme="light"] .hl-card{border-left:0; background:var(--asphalt-3);}
-  :root[data-theme="light"] .rd-hl{border-left:0; padding:0; margin:0 0 14px;}
-  /* Logos de marca: wordmarks blancos para el oscuro; en claro pasan a negro */
+  /* Valores del oscuro con el lima escrito a mano, adaptados */
+  :root[data-theme="light"] #app{background:radial-gradient(60% 40% at 50% 0%, rgba(170,215,0,.10), transparent 60%),
+      radial-gradient(55% 35% at 100% 12%, rgba(168,80,27,.05), transparent 62%),
+      repeating-radial-gradient(circle at 15% 8%, transparent 0, transparent 64px, var(--contour-line) 65px, var(--contour-line) 66px, transparent 67px),
+      repeating-radial-gradient(circle at 95% 55%, transparent 0, transparent 84px, var(--contour-line) 85px, var(--contour-line) 86px, transparent 87px),
+      var(--asphalt);}
+  :root[data-theme="light"] #runCountdown{background:radial-gradient(60% 40% at 50% 0%, rgba(170,215,0,.10), transparent 60%),
+      repeating-radial-gradient(circle at 15% 8%, transparent 0, transparent 64px, var(--contour-line) 65px, var(--contour-line) 66px, transparent 67px),
+      repeating-radial-gradient(circle at 95% 55%, transparent 0, transparent 84px, var(--contour-line) 85px, var(--contour-line) 86px, transparent 87px),
+      var(--asphalt);}
+  :root[data-theme="light"] .card{border-color:var(--overlay-hairline); box-shadow:0 1px 2px rgba(23,26,16,.04);}
+  :root[data-theme="light"] .card-highlight{background:linear-gradient(160deg, rgba(190,235,0,.16), rgba(255,255,255,.8) 55%); box-shadow:0 0 0 1px rgba(140,190,0,.4), 0 0 4px rgba(140,190,0,.25), 0 3px 5px rgba(23,26,16,.08);}
+  :root[data-theme="light"] .confirm-card{background:linear-gradient(160deg, rgba(255,255,255,.97), rgba(240,243,232,.95) 55%); box-shadow:0 -12px 40px -14px rgba(23,26,16,.4);}
+  :root[data-theme="light"] .card-shell-hivis{background:rgba(170,215,0,.07); border-color:rgba(140,190,0,.3); box-shadow:0 4px 8px -2px rgba(140,190,0,.18);}
+  :root[data-theme="light"] .card-shell-clay{background:rgba(168,80,27,.05); border-color:rgba(168,80,27,.24); box-shadow:0 3px 6px -2px rgba(168,80,27,.16);}
+  :root[data-theme="light"] .toast.success{border-color:rgba(140,190,0,.5);}
+  :root[data-theme="light"] .idle-map-dot{box-shadow:0 0 0 2px rgba(140,190,0,.45);}
+  :root[data-theme="light"] .coach-fab-thinking-bubble{box-shadow:0 2px 10px rgba(140,190,0,.25), 0 1px 3px rgba(23,26,16,.15);}
+  :root[data-theme="light"] #coachChatWrap{--track-line:rgba(120,165,0,.30); --track-glow:rgba(140,190,0,.25);}
+  :root[data-theme="light"] .day-row.day-row-today::after{background:linear-gradient(90deg, transparent 0%, rgba(190,235,0,.30) 14%, transparent 85%);}
+  :root[data-theme="light"] .pr-medal.achieved{background:var(--hivis-dim); box-shadow:0 0 0 1px rgba(140,190,0,.4), 0 2px 4px -1px var(--hivis-glow);}
+  :root[data-theme="light"] .pr-row.achieved{background:var(--hivis-dim); box-shadow:0 0 0 1px rgba(140,190,0,.4);}
+  :root[data-theme="light"] .rp-entry{background:var(--hivis-dim); border-color:rgba(140,190,0,.5);}
+  :root[data-theme="light"] .pg-line, :root[data-theme="light"] .pg-dot{stroke:var(--hivis-line);} :root[data-theme="light"] .pg-dot.cur{fill:var(--hivis-line);}
+  /* Copas y medallas: el relleno lima con contorno oliva para que se despegue del blanco */
+  :root[data-theme="light"] .pr-medal.achieved .mdl-rib, :root[data-theme="light"] .sum-pr .mdl-rib{fill:var(--hivis-edge); fill-opacity:.8;}
+  :root[data-theme="light"] .pr-medal.achieved .mdl-rib.b, :root[data-theme="light"] .sum-pr .mdl-rib.b{fill-opacity:.5;}
+  :root[data-theme="light"] .pr-medal.achieved .mdl-disc, :root[data-theme="light"] .sum-pr .mdl-disc{fill:var(--hivis); stroke:var(--hivis-edge); stroke-width:1.6; stroke-dasharray:none;}
+  :root[data-theme="light"] .pr-medal.achieved .mdl-ring{stroke:var(--ink); stroke-opacity:.35;}
+  :root[data-theme="light"] .pr-row.achieved .cup-handle{stroke:var(--hivis-edge); stroke-width:2.4;}
+  :root[data-theme="light"] .pr-row.achieved .cup-body{fill:var(--hivis); stroke:var(--hivis-edge); stroke-width:1.6;}
+  :root[data-theme="light"] .pr-row.achieved .cup-stem, :root[data-theme="light"] .pr-row.achieved .cup-base{fill:var(--hivis-edge); fill-opacity:1;}
+  :root[data-theme="light"] .pr-row.achieved .cup-shine{stroke:#fff;}
+  :root[data-theme="light"] .pr-share{background:rgba(23,26,16,.07); color:var(--hivis-text);}
+  /* Logos de marca: en oscuro se pasan a blanco; acá a negro */
   :root[data-theme="light"] .brand-logo-chip img{filter:brightness(0);}
   :root[data-theme="light"] .brand-logo-chip img.brand-logo-color{filter:none;}
-  /* Trazos y barras de avance: lima profundo, el vivo no se ve sobre blanco */
+  /* Sobre un mapa, la duración va en píldora oscura con letra clara (igual que en oscuro) */
+  :root[data-theme="light"] .hist-map-badge .hist-map-duration{color:#F4F7EA; background:rgba(20,23,12,.72);}
+  /* Lo que en oscuro es lima fino sobre negro, acá en oliva profundo */
   :root[data-theme="light"] .week-ring-fig .wr-fill{stroke:var(--hivis-line);}
-  :root[data-theme="light"] .week-ring-fig .wr-track{stroke:var(--asphalt-3);}
   :root[data-theme="light"] .ob-progress-fill, :root[data-theme="light"] .wearbar > div, :root[data-theme="light"] #goal-progress-bar, :root[data-theme="light"] #workout-guide-progress-bar{background:var(--hivis-line) !important;}
-  :root[data-theme="light"] .trend-stroke{background:var(--chalk);}
-  :root[data-theme="light"] .trend-stroke.trend-planned{background:var(--mist-dim);}
-  :root[data-theme="light"] .trend-stroke.trend-rest{background:var(--asphalt-4);}
   :root[data-theme="light"] .trend-stroke.trend-today, :root[data-theme="light"] .week-days .wd-col.today .wd-bar{background:var(--hivis-line); box-shadow:none;}
-  :root[data-theme="light"] header.top .brand .dot{background:var(--hivis-line); box-shadow:none;}
+  :root[data-theme="light"] header.top .brand .dot{background:var(--hivis-edge); box-shadow:0 0 0 3px rgba(140,190,0,.2);}
   :root[data-theme="light"] .switch input:checked + .switch-slider{background:var(--hivis-line);}
-  /* Acción principal: lima plano con filete olivo fino y texto de tinta. Un solo estilo para todo lo que "va" */
-  :root[data-theme="light"] .btn-primary, :root[data-theme="light"] .go-circle, :root[data-theme="light"] .track-pause-circle, :root[data-theme="light"] .chat-send{background:var(--hivis); color:var(--chalk); box-shadow:inset 0 0 0 1.5px var(--hivis-edge);}
-  :root[data-theme="light"] .go-circle, :root[data-theme="light"] .track-pause-circle{box-shadow:inset 0 0 0 1.5px var(--hivis-edge), 0 10px 20px -12px rgba(80,100,0,.55);}
-  :root[data-theme="light"] .btn-primary:disabled{background:var(--asphalt-3); color:var(--mist-dim); box-shadow:none;}
-  :root[data-theme="light"] nav.tabbar button.nav-btn-primary .nav-primary-circle{background:var(--hivis); color:var(--chalk); box-shadow:inset 0 0 0 1.5px var(--hivis-edge), 0 6px 14px -6px rgba(80,100,0,.5); border:0;}
-  :root[data-theme="light"] nav.tabbar button.nav-btn-primary.active .nav-primary-circle{box-shadow:inset 0 0 0 1.5px var(--hivis-edge), 0 0 0 4px rgba(160,205,0,.28);}
-  :root[data-theme="light"] nav.tabbar button.nav-btn-primary svg{color:var(--chalk);}
-  :root[data-theme="light"] nav.tabbar{box-shadow:0 8px 28px -10px rgba(40,35,20,.28), 0 0 0 1px var(--overlay-hairline);}
-  :root[data-theme="light"] nav.tabbar button.active{color:var(--chalk);}
-  :root[data-theme="light"] nav.tabbar button.active svg{background:var(--hivis); color:var(--chalk);}
-  /* Selección: lima con el mismo filete */
-  :root[data-theme="light"] .choice.active, :root[data-theme="light"] .choice-row.segmented .choice.active, :root[data-theme="light"] .day-pill.active{background:var(--hivis); border-color:var(--hivis-edge); color:var(--chalk); box-shadow:none;}
-  :root[data-theme="light"] .choice-row.segmented{background:var(--asphalt-3);}
-  :root[data-theme="light"] .btn-outline, :root[data-theme="light"] .overlay .btn-outline{background:#fff; box-shadow:inset 0 0 0 1px var(--asphalt-4);}
-  :root[data-theme="light"] .btn-gray{background:var(--asphalt-3);}
-  :root[data-theme="light"] .btn-danger{background:#FBE5E2; box-shadow:inset 0 0 0 1px rgba(214,41,28,.35);}
-  :root[data-theme="light"] input[type="text"], :root[data-theme="light"] input[type="number"], :root[data-theme="light"] input[type="email"], :root[data-theme="light"] input[type="password"], :root[data-theme="light"] input[type="search"], :root[data-theme="light"] select, :root[data-theme="light"] textarea{background:#fff; border-color:var(--asphalt-4);}
-  /* Chat */
-  :root[data-theme="light"] .msg.user{background:var(--hivis); color:var(--chalk); box-shadow:inset 0 0 0 1px var(--hivis-edge);}
-  :root[data-theme="light"] .msg.coach{background:#fff; box-shadow:inset 0 0 0 1px var(--overlay-hairline);}
-  :root[data-theme="light"] .typing span{background:var(--hivis-edge); box-shadow:none;}
-  :root[data-theme="light"] #coachChatWrap{--track-line:rgba(40,35,20,.07);}
-  /* Lo que flota */
-  :root[data-theme="light"] .toast{box-shadow:0 10px 26px -10px rgba(40,35,20,.4), inset 0 0 0 1px var(--overlay-hairline);}
-  :root[data-theme="light"] .confirm-card{background:#fff; box-shadow:0 -12px 40px -14px rgba(40,35,20,.4);}
-  :root[data-theme="light"] .countdown-num{color:var(--chalk); text-shadow:none;}
-  /* Tiempo sobre el mapa */
-  :root[data-theme="light"] .hist-map-badge .hist-map-duration{color:var(--chalk); background:rgba(255,255,255,.95); box-shadow:0 1px 3px rgba(0,0,0,.2);}
-  /* Copas y medallas: ganadas = lima con contorno de tinta sobre blanco; bloqueadas = grises */
-  :root[data-theme="light"] .pr-row.achieved, :root[data-theme="light"] .pr-medal.achieved{background:#fff; box-shadow:inset 0 0 0 1.5px var(--chalk);}
-  :root[data-theme="light"] .pr-row.achieved .pr-info b, :root[data-theme="light"] .pr-medal.achieved .pr-medal-label{color:var(--chalk);}
-  :root[data-theme="light"] .pr-row.achieved .pr-info small{color:var(--mist);}
-  :root[data-theme="light"] .pr-row.achieved .pr-time, :root[data-theme="light"] .pr-medal.achieved .pr-medal-time, :root[data-theme="light"] .pr-medal.achieved .icon-sq{color:var(--chalk);}
-  :root[data-theme="light"] .pr-share{background:var(--asphalt-3); color:var(--chalk);}
-  :root[data-theme="light"] .pr-row.achieved .cup-handle{stroke:var(--chalk); stroke-width:2.2;}
-  :root[data-theme="light"] .pr-row.achieved .cup-body{fill:var(--hivis); stroke:var(--chalk); stroke-width:1.6;}
-  :root[data-theme="light"] .pr-row.achieved .cup-stem, :root[data-theme="light"] .pr-row.achieved .cup-base{fill:var(--chalk); fill-opacity:1;}
-  :root[data-theme="light"] .pr-row.achieved .cup-star{fill:var(--chalk);}
-  :root[data-theme="light"] .pr-medal.achieved .mdl-rib, :root[data-theme="light"] .sum-pr .mdl-rib{fill:var(--chalk); fill-opacity:.9;}
-  :root[data-theme="light"] .pr-medal.achieved .mdl-rib.b, :root[data-theme="light"] .sum-pr .mdl-rib.b{fill-opacity:.55;}
-  :root[data-theme="light"] .pr-medal.achieved .mdl-disc, :root[data-theme="light"] .sum-pr .mdl-disc{fill:var(--hivis); stroke:var(--chalk); stroke-width:1.6; stroke-dasharray:none;}
-  :root[data-theme="light"] .pr-medal.achieved .mdl-star, :root[data-theme="light"] .sum-pr .mdl-star{fill:var(--chalk);}
-  :root[data-theme="light"] .cup-handle, :root[data-theme="light"] .cup-body{stroke:#8A877B;} :root[data-theme="light"] .cup-stem, :root[data-theme="light"] .cup-base{fill:#A9A699; fill-opacity:.55;}
-  :root[data-theme="light"] .mdl-rib{fill:#A9A699; fill-opacity:.5;} :root[data-theme="light"] .mdl-disc{stroke:#8A877B;} :root[data-theme="light"] .mdl-star{fill:#8A877B; fill-opacity:.7;}
-  :root[data-theme="light"] .sum-pr{background:#fff; border:1px solid var(--overlay-hairline);}
+  :root[data-theme="light"] .mascot-body{stroke:var(--hivis-edge); stroke-width:1.4;}
+  :root[data-theme="light"] .coach-head-avatar circle{stroke:var(--hivis-edge); stroke-width:1.2;}
   /* Mapa de calor claro */
   :root[data-theme="light"] .heat-overlay, :root[data-theme="light"] .heat-overlay .leaflet-container{background:var(--asphalt);}
   :root[data-theme="light"] #heatmap-map::after{display:none;}
-  :root[data-theme="light"] .heat-top{background:linear-gradient(to bottom, rgba(243,241,234,.97), rgba(243,241,234,0));}
-  :root[data-theme="light"] .heat-bottom{background:linear-gradient(to top, rgba(243,241,234,.98), rgba(243,241,234,0));}
+  :root[data-theme="light"] .heat-top{background:linear-gradient(to bottom, rgba(242,244,236,.97), rgba(242,244,236,0));}
+  :root[data-theme="light"] .heat-bottom{background:linear-gradient(to top, rgba(242,244,236,.98), rgba(242,244,236,0));}
   :root[data-theme="light"] .heat-top h2, :root[data-theme="light"] .heat-stats{color:var(--chalk);}
   :root[data-theme="light"] .heat-top p, :root[data-theme="light"] .heat-legend, :root[data-theme="light"] .heat-empty{color:var(--mist);}
-  :root[data-theme="light"] .heat-close{background:#fff; color:var(--chalk); box-shadow:0 1px 4px rgba(0,0,0,.2);}
+  :root[data-theme="light"] .heat-close{background:#fff; color:var(--chalk); box-shadow:0 1px 4px rgba(23,26,16,.25);}
   :root[data-theme="light"] .heat-chip{border-color:var(--asphalt-4); background:#fff; color:var(--chalk);}
-  :root[data-theme="light"] .heat-chip.on{background:var(--hivis); border-color:var(--hivis-edge); color:var(--chalk);}
-  :root[data-theme="light"] .heat-legend i{background:linear-gradient(to right, rgba(232,83,14,.2), #E8530E);}
-  :root[data-theme="light"] .coach-head{background:#fff; background-image:none; box-shadow:0 8px 24px -12px rgba(40,35,20,.3), inset 0 0 0 1px var(--overlay-hairline); -webkit-backdrop-filter:none; backdrop-filter:none;}
-  :root[data-theme="light"] .mascot-body{fill:var(--volt);}
+  :root[data-theme="light"] .heat-chip.on{background:var(--hivis); border-color:var(--hivis-edge); color:var(--ink);}
+  :root[data-theme="light"] .heat-legend i{background:linear-gradient(to right, rgba(94,143,0,.2), #5E8F00);}
 
   @media (prefers-color-scheme: light){
     :root:not([data-theme="dark"]){
-      /* Papel y tinta. Papel cálido (no gris azulado), tarjetas blancas planas con un filete, tinta casi negra.
-         El lima de marca se reserva para lo que se toca o avanza: acción principal, selección, progreso. */
-      --asphalt:#F3F1EA; --asphalt-2:#FFFFFF; --asphalt-3:#EBE8DF; --asphalt-4:#D9D5C8;
-      --chalk:#1B1A16; --mist:#5C594E; --mist-dim:#68655A;
-      --hivis:#CDF51A; --hivis-edge:#7A9A00; --hivis-text:#3A5300; --hivis-dim:rgba(160,205,0,.22); --hivis-glow:rgba(150,190,0,.30);
-      --hivis-line:#86B000; --zone3-stroke:#D49A00; --volt:#D6FF3F;
+      /* Modo claro hecho de cero: el mismo diseño que el oscuro (tarjetas más claras que el fondo, brillo de marca, mismas formas), en blanco.
+         Fondo gris-blanco con un dejo verdoso, tarjetas blancas, tinta casi negra. El lima de marca se mantiene como RELLENO con texto de tinta
+         encima (como en oscuro); como TEXTO o trazo fino pasa a un verde oliva profundo, porque el lima sobre blanco no se ve. */
+      --cs:light;
+      --asphalt:#F2F4EC; --asphalt-2:#FFFFFF; --asphalt-3:#E8EBDF; --asphalt-4:#D3D8C6;
+      --chalk:#171A10; --mist:#586050; --mist-dim:#626A58;
+      --hivis:#D6FF3F; --hivis-dim:rgba(200,240,20,.30); --hivis-text:#476000; --hivis-edge:#8DB600; --hivis-line:#7FAA00; --ink:#14170C; --volt:#D6FF3F;
+      --clay:#A8501B; --clay-dim:rgba(168,80,27,.14); --clay-text:#A8501B;
+      --danger:#D6291C; --danger-dim:rgba(214,41,28,.11); --danger-text:#D6291C;
+      --hivis-glow:rgba(140,190,0,.32);
+      --glow-a:rgba(140,190,0,.40); --glow-b:rgba(140,190,0,.20); --glow-c:rgba(140,190,0,.08);
+      --sk-hl:rgba(255,255,255,.7); --ambient:rgba(170,215,0,.10); --ambient-card:rgba(140,190,0,.16);
+      --neon-rim:#8DB600;
+      --neon:0 0 0 1.5px var(--neon-rim), 0 5px 14px -3px rgba(140,190,0,.5);
+      --neon-press:0 0 0 1.5px var(--neon-rim), 0 2px 7px -2px rgba(140,190,0,.5);
+      --press:rgba(23,26,16,.05); --overlay-hairline:rgba(23,26,16,.09);
+      --contour-line:rgba(23,26,16,.05);
+      --tabbar-bg:rgba(255,255,255,.94);
+      --shadow-card:none; --shadow-lg:0 4px 10px rgba(23,26,16,.16);
+      --toast-error-bg:#FDEAE7; --toast-error-fg:#B0241A;
+      --header-bg:linear-gradient(180deg, var(--asphalt) 0, var(--asphalt) 74%, transparent 100%);
       --zone1-fill:#2E86F0; --zone2-fill:#22B35A; --zone3-fill:#F2C200; --zone4-fill:#FF8A1F; --zone5-fill:#E5392F;
       --zone1:#1B5FBF; --zone2:#17803D; --zone3:#8A6800; --zone4:#B25500; --zone5:#C0281E; --zone5-text:#C0281E;
       --zone1-bg:rgba(46,134,240,.14); --zone2-bg:rgba(34,179,90,.14); --zone3-bg:rgba(242,194,0,.20); --zone4-bg:rgba(255,138,31,.16); --zone5-bg:rgba(229,57,47,.13);
       --zone1-bg-live:rgba(46,134,240,.12); --zone2-bg-live:rgba(34,179,90,.12); --zone3-bg-live:rgba(242,194,0,.16); --zone4-bg-live:rgba(255,138,31,.13); --zone5-bg-live:rgba(229,57,47,.11);
-      --press:rgba(40,35,20,.05); --overlay-hairline:rgba(40,35,20,.11);
-      --contour-line:rgba(40,35,20,.035);
-      --tabbar-bg:rgba(255,255,255,.96);
-      --header-bg:linear-gradient(180deg, var(--asphalt) 0, var(--asphalt) 74%, transparent 100%);
-      --ambient:transparent; --ambient-card:transparent;
     }
-    /* Fondo: solo las curvas de nivel de la marca, sin las manchas de color */
-    :root:not([data-theme="dark"]) #app{background:
-      repeating-radial-gradient(circle at 15% 8%, transparent 0, transparent 64px, var(--contour-line) 65px, var(--contour-line) 66px, transparent 67px),
-      repeating-radial-gradient(circle at 95% 55%, transparent 0, transparent 84px, var(--contour-line) 85px, var(--contour-line) 86px, transparent 87px),
-      var(--asphalt);}
-    :root:not([data-theme="dark"]) #app::after{display:none;}
-    /* Tarjetas: planas, un solo filete. Sin sombra (la profundidad queda para lo que flota: barra, avisos, hojas) */
-    :root:not([data-theme="dark"]) .card{background:#fff; border:1px solid var(--overlay-hairline); box-shadow:none;}
-    :root:not([data-theme="dark"]) .card.card-highlight{background:#fff; border:1.5px solid var(--chalk); box-shadow:none;}
-    :root:not([data-theme="dark"]) .card-shell.card-shell-hivis{background:none; box-shadow:none;}
-    :root:not([data-theme="dark"]) .card-quiet{background:transparent; border-color:var(--overlay-hairline);}
-    :root:not([data-theme="dark"]) .rp-entry{background:#fff; border:1px solid var(--overlay-hairline); box-shadow:none;}
-    :root:not([data-theme="dark"]) .rp-entry-ic{background:var(--hivis); color:var(--chalk);}
-    :root:not([data-theme="dark"]) .sum-big .n{color:var(--chalk);}
-    :root:not([data-theme="dark"]) .stat-box{background:var(--asphalt); box-shadow:none; border-color:transparent;}
-    /* Etiquetas y chips: neutros. Nada de verde tintado con borde */
-    :root:not([data-theme="dark"]) .tag, :root:not([data-theme="dark"]) .tag-asfalto{background:var(--asphalt-3); color:var(--chalk); box-shadow:none;}
-    :root:not([data-theme="dark"]) .streak-badge, :root:not([data-theme="dark"]) .streak-chip{background:var(--asphalt-3); color:var(--chalk); box-shadow:none;}
-    :root:not([data-theme="dark"]) .wx-chip{background:var(--asphalt-3); box-shadow:none;}
-    :root:not([data-theme="dark"]) .streak-badge .ico, :root:not([data-theme="dark"]) .streak-chip .ico{color:var(--hivis-text);}
-    /* Día de hoy en el Plan: una pastilla sólida suave, sin degradé */
-    :root:not([data-theme="dark"]) .day-row.day-row-today::after{inset:0; border-radius:var(--radius-sm); background:var(--asphalt-3); -webkit-mask-image:none; mask-image:none;}
-    :root:not([data-theme="dark"]) .day-row.day-row-today .day-badge{background:var(--hivis);}
-    :root:not([data-theme="dark"]) .day-row.day-row-today .day-badge .d{color:var(--chalk);}
-    /* Notas y avisos: texto sobre papel hundido, sin barra de color al costado */
-    :root:not([data-theme="dark"]) #plan-taper-note, :root:not([data-theme="dark"]) #plan-event-week-note, :root:not([data-theme="dark"]) #plan-cutback-note, :root:not([data-theme="dark"]) #plan-recovery-note, :root:not([data-theme="dark"]) .ob-callout{background:var(--asphalt-3); border-left:0; color:var(--mist);}
-    :root:not([data-theme="dark"]) .hl-card{border-left:0; background:var(--asphalt-3);}
-    :root:not([data-theme="dark"]) .rd-hl{border-left:0; padding:0; margin:0 0 14px;}
-    /* Logos de marca: wordmarks blancos para el oscuro; en claro pasan a negro */
+    /* Valores del oscuro con el lima escrito a mano, adaptados */
+    :root:not([data-theme="dark"]) #app{background:radial-gradient(60% 40% at 50% 0%, rgba(170,215,0,.10), transparent 60%),
+        radial-gradient(55% 35% at 100% 12%, rgba(168,80,27,.05), transparent 62%),
+        repeating-radial-gradient(circle at 15% 8%, transparent 0, transparent 64px, var(--contour-line) 65px, var(--contour-line) 66px, transparent 67px),
+        repeating-radial-gradient(circle at 95% 55%, transparent 0, transparent 84px, var(--contour-line) 85px, var(--contour-line) 86px, transparent 87px),
+        var(--asphalt);}
+    :root:not([data-theme="dark"]) #runCountdown{background:radial-gradient(60% 40% at 50% 0%, rgba(170,215,0,.10), transparent 60%),
+        repeating-radial-gradient(circle at 15% 8%, transparent 0, transparent 64px, var(--contour-line) 65px, var(--contour-line) 66px, transparent 67px),
+        repeating-radial-gradient(circle at 95% 55%, transparent 0, transparent 84px, var(--contour-line) 85px, var(--contour-line) 86px, transparent 87px),
+        var(--asphalt);}
+    :root:not([data-theme="dark"]) .card{border-color:var(--overlay-hairline); box-shadow:0 1px 2px rgba(23,26,16,.04);}
+    :root:not([data-theme="dark"]) .card-highlight{background:linear-gradient(160deg, rgba(190,235,0,.16), rgba(255,255,255,.8) 55%); box-shadow:0 0 0 1px rgba(140,190,0,.4), 0 0 4px rgba(140,190,0,.25), 0 3px 5px rgba(23,26,16,.08);}
+    :root:not([data-theme="dark"]) .confirm-card{background:linear-gradient(160deg, rgba(255,255,255,.97), rgba(240,243,232,.95) 55%); box-shadow:0 -12px 40px -14px rgba(23,26,16,.4);}
+    :root:not([data-theme="dark"]) .card-shell-hivis{background:rgba(170,215,0,.07); border-color:rgba(140,190,0,.3); box-shadow:0 4px 8px -2px rgba(140,190,0,.18);}
+    :root:not([data-theme="dark"]) .card-shell-clay{background:rgba(168,80,27,.05); border-color:rgba(168,80,27,.24); box-shadow:0 3px 6px -2px rgba(168,80,27,.16);}
+    :root:not([data-theme="dark"]) .toast.success{border-color:rgba(140,190,0,.5);}
+    :root:not([data-theme="dark"]) .idle-map-dot{box-shadow:0 0 0 2px rgba(140,190,0,.45);}
+    :root:not([data-theme="dark"]) .coach-fab-thinking-bubble{box-shadow:0 2px 10px rgba(140,190,0,.25), 0 1px 3px rgba(23,26,16,.15);}
+    :root:not([data-theme="dark"]) #coachChatWrap{--track-line:rgba(120,165,0,.30); --track-glow:rgba(140,190,0,.25);}
+    :root:not([data-theme="dark"]) .day-row.day-row-today::after{background:linear-gradient(90deg, transparent 0%, rgba(190,235,0,.30) 14%, transparent 85%);}
+    :root:not([data-theme="dark"]) .pr-medal.achieved{background:var(--hivis-dim); box-shadow:0 0 0 1px rgba(140,190,0,.4), 0 2px 4px -1px var(--hivis-glow);}
+    :root:not([data-theme="dark"]) .pr-row.achieved{background:var(--hivis-dim); box-shadow:0 0 0 1px rgba(140,190,0,.4);}
+    :root:not([data-theme="dark"]) .rp-entry{background:var(--hivis-dim); border-color:rgba(140,190,0,.5);}
+    :root:not([data-theme="dark"]) .pg-line, :root:not([data-theme="dark"]) .pg-dot{stroke:var(--hivis-line);} :root:not([data-theme="dark"]) .pg-dot.cur{fill:var(--hivis-line);}
+    /* Copas y medallas: el relleno lima con contorno oliva para que se despegue del blanco */
+    :root:not([data-theme="dark"]) .pr-medal.achieved .mdl-rib, :root:not([data-theme="dark"]) .sum-pr .mdl-rib{fill:var(--hivis-edge); fill-opacity:.8;}
+    :root:not([data-theme="dark"]) .pr-medal.achieved .mdl-rib.b, :root:not([data-theme="dark"]) .sum-pr .mdl-rib.b{fill-opacity:.5;}
+    :root:not([data-theme="dark"]) .pr-medal.achieved .mdl-disc, :root:not([data-theme="dark"]) .sum-pr .mdl-disc{fill:var(--hivis); stroke:var(--hivis-edge); stroke-width:1.6; stroke-dasharray:none;}
+    :root:not([data-theme="dark"]) .pr-medal.achieved .mdl-ring{stroke:var(--ink); stroke-opacity:.35;}
+    :root:not([data-theme="dark"]) .pr-row.achieved .cup-handle{stroke:var(--hivis-edge); stroke-width:2.4;}
+    :root:not([data-theme="dark"]) .pr-row.achieved .cup-body{fill:var(--hivis); stroke:var(--hivis-edge); stroke-width:1.6;}
+    :root:not([data-theme="dark"]) .pr-row.achieved .cup-stem, :root:not([data-theme="dark"]) .pr-row.achieved .cup-base{fill:var(--hivis-edge); fill-opacity:1;}
+    :root:not([data-theme="dark"]) .pr-row.achieved .cup-shine{stroke:#fff;}
+    :root:not([data-theme="dark"]) .pr-share{background:rgba(23,26,16,.07); color:var(--hivis-text);}
+    /* Logos de marca: en oscuro se pasan a blanco; acá a negro */
     :root:not([data-theme="dark"]) .brand-logo-chip img{filter:brightness(0);}
     :root:not([data-theme="dark"]) .brand-logo-chip img.brand-logo-color{filter:none;}
-    /* Trazos y barras de avance: lima profundo, el vivo no se ve sobre blanco */
+    /* Sobre un mapa, la duración va en píldora oscura con letra clara (igual que en oscuro) */
+    :root:not([data-theme="dark"]) .hist-map-badge .hist-map-duration{color:#F4F7EA; background:rgba(20,23,12,.72);}
+    /* Lo que en oscuro es lima fino sobre negro, acá en oliva profundo */
     :root:not([data-theme="dark"]) .week-ring-fig .wr-fill{stroke:var(--hivis-line);}
-    :root:not([data-theme="dark"]) .week-ring-fig .wr-track{stroke:var(--asphalt-3);}
     :root:not([data-theme="dark"]) .ob-progress-fill, :root:not([data-theme="dark"]) .wearbar > div, :root:not([data-theme="dark"]) #goal-progress-bar, :root:not([data-theme="dark"]) #workout-guide-progress-bar{background:var(--hivis-line) !important;}
-    :root:not([data-theme="dark"]) .trend-stroke{background:var(--chalk);}
-    :root:not([data-theme="dark"]) .trend-stroke.trend-planned{background:var(--mist-dim);}
-    :root:not([data-theme="dark"]) .trend-stroke.trend-rest{background:var(--asphalt-4);}
     :root:not([data-theme="dark"]) .trend-stroke.trend-today, :root:not([data-theme="dark"]) .week-days .wd-col.today .wd-bar{background:var(--hivis-line); box-shadow:none;}
-    :root:not([data-theme="dark"]) header.top .brand .dot{background:var(--hivis-line); box-shadow:none;}
+    :root:not([data-theme="dark"]) header.top .brand .dot{background:var(--hivis-edge); box-shadow:0 0 0 3px rgba(140,190,0,.2);}
     :root:not([data-theme="dark"]) .switch input:checked + .switch-slider{background:var(--hivis-line);}
-    /* Acción principal: lima plano con filete olivo fino y texto de tinta. Un solo estilo para todo lo que "va" */
-    :root:not([data-theme="dark"]) .btn-primary, :root:not([data-theme="dark"]) .go-circle, :root:not([data-theme="dark"]) .track-pause-circle, :root:not([data-theme="dark"]) .chat-send{background:var(--hivis); color:var(--chalk); box-shadow:inset 0 0 0 1.5px var(--hivis-edge);}
-    :root:not([data-theme="dark"]) .go-circle, :root:not([data-theme="dark"]) .track-pause-circle{box-shadow:inset 0 0 0 1.5px var(--hivis-edge), 0 10px 20px -12px rgba(80,100,0,.55);}
-    :root:not([data-theme="dark"]) .btn-primary:disabled{background:var(--asphalt-3); color:var(--mist-dim); box-shadow:none;}
-    :root:not([data-theme="dark"]) nav.tabbar button.nav-btn-primary .nav-primary-circle{background:var(--hivis); color:var(--chalk); box-shadow:inset 0 0 0 1.5px var(--hivis-edge), 0 6px 14px -6px rgba(80,100,0,.5); border:0;}
-    :root:not([data-theme="dark"]) nav.tabbar button.nav-btn-primary.active .nav-primary-circle{box-shadow:inset 0 0 0 1.5px var(--hivis-edge), 0 0 0 4px rgba(160,205,0,.28);}
-    :root:not([data-theme="dark"]) nav.tabbar button.nav-btn-primary svg{color:var(--chalk);}
-    :root:not([data-theme="dark"]) nav.tabbar{box-shadow:0 8px 28px -10px rgba(40,35,20,.28), 0 0 0 1px var(--overlay-hairline);}
-    :root:not([data-theme="dark"]) nav.tabbar button.active{color:var(--chalk);}
-    :root:not([data-theme="dark"]) nav.tabbar button.active svg{background:var(--hivis); color:var(--chalk);}
-    /* Selección: lima con el mismo filete */
-    :root:not([data-theme="dark"]) .choice.active, :root:not([data-theme="dark"]) .choice-row.segmented .choice.active, :root:not([data-theme="dark"]) .day-pill.active{background:var(--hivis); border-color:var(--hivis-edge); color:var(--chalk); box-shadow:none;}
-    :root:not([data-theme="dark"]) .choice-row.segmented{background:var(--asphalt-3);}
-    :root:not([data-theme="dark"]) .btn-outline, :root:not([data-theme="dark"]) .overlay .btn-outline{background:#fff; box-shadow:inset 0 0 0 1px var(--asphalt-4);}
-    :root:not([data-theme="dark"]) .btn-gray{background:var(--asphalt-3);}
-    :root:not([data-theme="dark"]) .btn-danger{background:#FBE5E2; box-shadow:inset 0 0 0 1px rgba(214,41,28,.35);}
-    :root:not([data-theme="dark"]) input[type="text"], :root:not([data-theme="dark"]) input[type="number"], :root:not([data-theme="dark"]) input[type="email"], :root:not([data-theme="dark"]) input[type="password"], :root:not([data-theme="dark"]) input[type="search"], :root:not([data-theme="dark"]) select, :root:not([data-theme="dark"]) textarea{background:#fff; border-color:var(--asphalt-4);}
-    /* Chat */
-    :root:not([data-theme="dark"]) .msg.user{background:var(--hivis); color:var(--chalk); box-shadow:inset 0 0 0 1px var(--hivis-edge);}
-    :root:not([data-theme="dark"]) .msg.coach{background:#fff; box-shadow:inset 0 0 0 1px var(--overlay-hairline);}
-    :root:not([data-theme="dark"]) .typing span{background:var(--hivis-edge); box-shadow:none;}
-    :root:not([data-theme="dark"]) #coachChatWrap{--track-line:rgba(40,35,20,.07);}
-    /* Lo que flota */
-    :root:not([data-theme="dark"]) .toast{box-shadow:0 10px 26px -10px rgba(40,35,20,.4), inset 0 0 0 1px var(--overlay-hairline);}
-    :root:not([data-theme="dark"]) .confirm-card{background:#fff; box-shadow:0 -12px 40px -14px rgba(40,35,20,.4);}
-    :root:not([data-theme="dark"]) .countdown-num{color:var(--chalk); text-shadow:none;}
-    /* Tiempo sobre el mapa */
-    :root:not([data-theme="dark"]) .hist-map-badge .hist-map-duration{color:var(--chalk); background:rgba(255,255,255,.95); box-shadow:0 1px 3px rgba(0,0,0,.2);}
-    /* Copas y medallas: ganadas = lima con contorno de tinta sobre blanco; bloqueadas = grises */
-    :root:not([data-theme="dark"]) .pr-row.achieved, :root:not([data-theme="dark"]) .pr-medal.achieved{background:#fff; box-shadow:inset 0 0 0 1.5px var(--chalk);}
-    :root:not([data-theme="dark"]) .pr-row.achieved .pr-info b, :root:not([data-theme="dark"]) .pr-medal.achieved .pr-medal-label{color:var(--chalk);}
-    :root:not([data-theme="dark"]) .pr-row.achieved .pr-info small{color:var(--mist);}
-    :root:not([data-theme="dark"]) .pr-row.achieved .pr-time, :root:not([data-theme="dark"]) .pr-medal.achieved .pr-medal-time, :root:not([data-theme="dark"]) .pr-medal.achieved .icon-sq{color:var(--chalk);}
-    :root:not([data-theme="dark"]) .pr-share{background:var(--asphalt-3); color:var(--chalk);}
-    :root:not([data-theme="dark"]) .pr-row.achieved .cup-handle{stroke:var(--chalk); stroke-width:2.2;}
-    :root:not([data-theme="dark"]) .pr-row.achieved .cup-body{fill:var(--hivis); stroke:var(--chalk); stroke-width:1.6;}
-    :root:not([data-theme="dark"]) .pr-row.achieved .cup-stem, :root:not([data-theme="dark"]) .pr-row.achieved .cup-base{fill:var(--chalk); fill-opacity:1;}
-    :root:not([data-theme="dark"]) .pr-row.achieved .cup-star{fill:var(--chalk);}
-    :root:not([data-theme="dark"]) .pr-medal.achieved .mdl-rib, :root:not([data-theme="dark"]) .sum-pr .mdl-rib{fill:var(--chalk); fill-opacity:.9;}
-    :root:not([data-theme="dark"]) .pr-medal.achieved .mdl-rib.b, :root:not([data-theme="dark"]) .sum-pr .mdl-rib.b{fill-opacity:.55;}
-    :root:not([data-theme="dark"]) .pr-medal.achieved .mdl-disc, :root:not([data-theme="dark"]) .sum-pr .mdl-disc{fill:var(--hivis); stroke:var(--chalk); stroke-width:1.6; stroke-dasharray:none;}
-    :root:not([data-theme="dark"]) .pr-medal.achieved .mdl-star, :root:not([data-theme="dark"]) .sum-pr .mdl-star{fill:var(--chalk);}
-    :root:not([data-theme="dark"]) .cup-handle, :root:not([data-theme="dark"]) .cup-body{stroke:#8A877B;} :root:not([data-theme="dark"]) .cup-stem, :root:not([data-theme="dark"]) .cup-base{fill:#A9A699; fill-opacity:.55;}
-    :root:not([data-theme="dark"]) .mdl-rib{fill:#A9A699; fill-opacity:.5;} :root:not([data-theme="dark"]) .mdl-disc{stroke:#8A877B;} :root:not([data-theme="dark"]) .mdl-star{fill:#8A877B; fill-opacity:.7;}
-    :root:not([data-theme="dark"]) .sum-pr{background:#fff; border:1px solid var(--overlay-hairline);}
+    :root:not([data-theme="dark"]) .mascot-body{stroke:var(--hivis-edge); stroke-width:1.4;}
+    :root:not([data-theme="dark"]) .coach-head-avatar circle{stroke:var(--hivis-edge); stroke-width:1.2;}
     /* Mapa de calor claro */
     :root:not([data-theme="dark"]) .heat-overlay, :root:not([data-theme="dark"]) .heat-overlay .leaflet-container{background:var(--asphalt);}
     :root:not([data-theme="dark"]) #heatmap-map::after{display:none;}
-    :root:not([data-theme="dark"]) .heat-top{background:linear-gradient(to bottom, rgba(243,241,234,.97), rgba(243,241,234,0));}
-    :root:not([data-theme="dark"]) .heat-bottom{background:linear-gradient(to top, rgba(243,241,234,.98), rgba(243,241,234,0));}
+    :root:not([data-theme="dark"]) .heat-top{background:linear-gradient(to bottom, rgba(242,244,236,.97), rgba(242,244,236,0));}
+    :root:not([data-theme="dark"]) .heat-bottom{background:linear-gradient(to top, rgba(242,244,236,.98), rgba(242,244,236,0));}
     :root:not([data-theme="dark"]) .heat-top h2, :root:not([data-theme="dark"]) .heat-stats{color:var(--chalk);}
     :root:not([data-theme="dark"]) .heat-top p, :root:not([data-theme="dark"]) .heat-legend, :root:not([data-theme="dark"]) .heat-empty{color:var(--mist);}
-    :root:not([data-theme="dark"]) .heat-close{background:#fff; color:var(--chalk); box-shadow:0 1px 4px rgba(0,0,0,.2);}
+    :root:not([data-theme="dark"]) .heat-close{background:#fff; color:var(--chalk); box-shadow:0 1px 4px rgba(23,26,16,.25);}
     :root:not([data-theme="dark"]) .heat-chip{border-color:var(--asphalt-4); background:#fff; color:var(--chalk);}
-    :root:not([data-theme="dark"]) .heat-chip.on{background:var(--hivis); border-color:var(--hivis-edge); color:var(--chalk);}
-    :root:not([data-theme="dark"]) .heat-legend i{background:linear-gradient(to right, rgba(232,83,14,.2), #E8530E);}
-    :root:not([data-theme="dark"]) .coach-head{background:#fff; background-image:none; box-shadow:0 8px 24px -12px rgba(40,35,20,.3), inset 0 0 0 1px var(--overlay-hairline); -webkit-backdrop-filter:none; backdrop-filter:none;}
-    :root:not([data-theme="dark"]) .mascot-body{fill:var(--volt);}
+    :root:not([data-theme="dark"]) .heat-chip.on{background:var(--hivis); border-color:var(--hivis-edge); color:var(--ink);}
+    :root:not([data-theme="dark"]) .heat-legend i{background:linear-gradient(to right, rgba(94,143,0,.2), #5E8F00);}
   
   }
 </style>

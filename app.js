@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T21:23:01Z';
+const APP_VERSION = '2026-10-12T21:50:39Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2880,7 +2880,7 @@ function applyTheme(pref){
   else document.documentElement.removeAttribute('data-theme');
   const isLight = pref==='light' || (pref!=='dark' && window.matchMedia('(prefers-color-scheme: light)').matches);
   const meta = document.getElementById('theme-color-meta');
-  if(meta) meta.setAttribute('content', isLight ? '#F0F1EE' : '#0A0A0A');
+  if(meta) meta.setAttribute('content', isLight ? '#F2F4EC' : '#0A0A0A');
   [...document.getElementById('theme-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v===pref));
   syncSystemBars();
 }
@@ -2899,7 +2899,7 @@ window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', ()
   const stored = localStorage.getItem(THEME_KEY);
   if(stored!=='light' && stored!=='dark'){
     const meta = document.getElementById('theme-color-meta');
-    if(meta) meta.setAttribute('content', window.matchMedia('(prefers-color-scheme: light)').matches ? '#F0F1EE' : '#0A0A0A');
+    if(meta) meta.setAttribute('content', window.matchMedia('(prefers-color-scheme: light)').matches ? '#F2F4EC' : '#0A0A0A');
     [...document.getElementById('theme-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v===currentThemePref()));
     syncSystemBars();
   }
@@ -12564,7 +12564,7 @@ function updateHeatmapButton(){
   if(b) b.style.display = heatmapRuns('all').length >= 2 ? 'flex' : 'none';
 }
 // El mapa de calor sigue el tema: mapa claro con trazos naranja, u oscuro con trazos lima. Si el tema cambió desde la última vez, se recrea.
-function heatPalette(){ return isLightThemeNow() ? {style:'light-v11', line:'#E8530E', glow:0.10, opacity:0.62} : {style:'navigation-night-v1', line:'#D6FF3F', glow:0.18, opacity:0.55}; }
+function heatPalette(){ return isLightThemeNow() ? {style:'light-v11', line:'#3F7A00', glow:0.22, opacity:0.9, w0:2.5, w1:5} : {style:'navigation-night-v1', line:'#D6FF3F', glow:0.18, opacity:0.55, w0:1.5, w1:3.5}; }
 function openHeatmap(){
   const ov = document.getElementById('heatmap-overlay');
   if(!ov) return;
@@ -12606,7 +12606,7 @@ async function renderHeatmapGl(runs){
     heatGl = glAdapter(map);
     heatGl.ready = new Promise(resolve => map.on('load', () => {
       map.addSource('heat', {type:'geojson', data});
-      map.addLayer({id:'heat', type:'line', source:'heat', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':hp.line,'line-width':['interpolate',['linear'],['zoom'],10,1.5,15,3.5],'line-opacity':hp.opacity}});
+      map.addLayer({id:'heat', type:'line', source:'heat', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':hp.line,'line-width':['interpolate',['linear'],['zoom'],10,hp.w0,15,hp.w1],'line-opacity':hp.opacity}});
       map.addLayer({id:'heat-glow', type:'line', source:'heat', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':hp.line,'line-width':8,'line-blur':6,'line-opacity':hp.glow}}, 'heat');
       resolve();
     }));
@@ -12644,7 +12644,7 @@ function renderHeatmapRaster(runs){
     const step = Math.max(1, Math.floor(r.points.length / 500));   // 500 puntos por carrera alcanzan de sobra para dibujar el trazo
     const ll = [];
     for(let i=0;i<r.points.length;i+=step){ const p = r.points[i]; if(Number.isFinite(p.lat) && Number.isFinite(p.lon)) ll.push([p.lat, p.lon]); }
-    if(ll.length > 1) L.polyline(ll, {color:heatPalette().line, weight:2, opacity:isLightThemeNow() ? 0.5 : 0.32, lineCap:'round', lineJoin:'round', interactive:false}).addTo(heatLayer);
+    if(ll.length > 1) L.polyline(ll, {color:heatPalette().line, weight:isLightThemeNow() ? 3 : 2, opacity:isLightThemeNow() ? 0.7 : 0.32, lineCap:'round', lineJoin:'round', interactive:false}).addTo(heatLayer);
   });
   setTimeout(() => {
     heatMap.invalidateSize();
