@@ -2470,6 +2470,7 @@
 
 
 
+
   /* =====================================================================================================================
      ZONAS DE FRECUENCIA CARDÍACA -- color fuerte en los dos temas (azul, verde, amarillo, naranja, rojo).
      Relleno vivo para barras, anillos, mapas y chips; el texto sobre fondo usa una variante legible por tema.
@@ -2487,6 +2488,8 @@
   .zone-4, .zone-badge-live.zone-4{background:var(--zone4-fill); color:#0F1114;}
   .zone-5, .zone-badge-live.zone-5{background:var(--zone5-fill); color:#0F1114;}
   .pace-bar-fill{filter:none;}
+  /* ícono de cabecera de los modales: centrado (el margen auto no centraba un contenedor inline-flex) */
+  .overlay > .icon-sq[style*="margin:0 auto"]{display:flex;}
   /* acción de borrar por deslizamiento: oculta en reposo en TODAS las listas (en Zapatillas asomaban rayas rojas al borde) */
   .swipe-item:not(:has(.swipe-content[style*="translate3d(-"])) .swipe-action-delete{visibility:hidden;}
 
@@ -2586,6 +2589,19 @@
   :root[data-theme="light"] .heat-chip.on{background:var(--hivis); border-color:var(--hivis-edge); color:#0F1A00;}
   :root[data-theme="light"] .heat-legend i{background:linear-gradient(to right, rgba(232,83,14,.2), #E8530E);}
   :root[data-theme="light"] #heatmap-map::after{display:none;}
+  /* ---- Más modo claro ---- */
+  :root[data-theme="light"] #coachChatWrap{--track-line:rgba(111,143,0,.13);}
+  :root[data-theme="light"] .track-pause-circle{box-shadow:inset 0 0 0 2px var(--hivis-edge), 0 8px 18px -8px rgba(111,143,0,.45);}
+  :root[data-theme="light"] .track-stop-circle{box-shadow:0 8px 18px -8px rgba(214,41,28,.5);}
+  :root[data-theme="light"] .countdown-num{color:var(--hivis-text); text-shadow:none;}
+  :root[data-theme="light"] .btn-danger{background:#FBE3E0; box-shadow:inset 0 0 0 1px rgba(214,41,28,.35);}
+  :root[data-theme="light"] .btn-outline{background:#FFFFFF; box-shadow:inset 0 0 0 1px var(--asphalt-4);}
+  :root[data-theme="light"] .overlay .btn-outline{background:#FFFFFF;}
+  :root[data-theme="light"] .msg.user{background:var(--hivis); color:#0F1A00; box-shadow:inset 0 0 0 1px var(--hivis-edge);}
+  :root[data-theme="light"] .typing span{background:var(--hivis-edge); box-shadow:none;}
+  :root[data-theme="light"] .toast{box-shadow:0 8px 24px -8px rgba(30,30,10,.35), inset 0 0 0 1px rgba(30,30,10,.08);}
+  :root[data-theme="light"] .confirm-card{box-shadow:0 -10px 40px -12px rgba(30,30,10,.35);}
+  :root[data-theme="light"] input[type="text"], :root[data-theme="light"] input[type="number"], :root[data-theme="light"] input[type="email"], :root[data-theme="light"] input[type="password"], :root[data-theme="light"] input[type="search"], :root[data-theme="light"] select{border-color:#C9C9BE;}
   /* la mascota conserva el lima de marca */
   :root[data-theme="light"] .mascot-body{fill:var(--volt);}
 
@@ -2682,6 +2698,19 @@
     :root:not([data-theme="dark"]) .heat-chip.on{background:var(--hivis); border-color:var(--hivis-edge); color:#0F1A00;}
     :root:not([data-theme="dark"]) .heat-legend i{background:linear-gradient(to right, rgba(232,83,14,.2), #E8530E);}
     :root:not([data-theme="dark"]) #heatmap-map::after{display:none;}
+    /* ---- Más modo claro ---- */
+    :root:not([data-theme="dark"]) #coachChatWrap{--track-line:rgba(111,143,0,.13);}
+    :root:not([data-theme="dark"]) .track-pause-circle{box-shadow:inset 0 0 0 2px var(--hivis-edge), 0 8px 18px -8px rgba(111,143,0,.45);}
+    :root:not([data-theme="dark"]) .track-stop-circle{box-shadow:0 8px 18px -8px rgba(214,41,28,.5);}
+    :root:not([data-theme="dark"]) .countdown-num{color:var(--hivis-text); text-shadow:none;}
+    :root:not([data-theme="dark"]) .btn-danger{background:#FBE3E0; box-shadow:inset 0 0 0 1px rgba(214,41,28,.35);}
+    :root:not([data-theme="dark"]) .btn-outline{background:#FFFFFF; box-shadow:inset 0 0 0 1px var(--asphalt-4);}
+    :root:not([data-theme="dark"]) .overlay .btn-outline{background:#FFFFFF;}
+    :root:not([data-theme="dark"]) .msg.user{background:var(--hivis); color:#0F1A00; box-shadow:inset 0 0 0 1px var(--hivis-edge);}
+    :root:not([data-theme="dark"]) .typing span{background:var(--hivis-edge); box-shadow:none;}
+    :root:not([data-theme="dark"]) .toast{box-shadow:0 8px 24px -8px rgba(30,30,10,.35), inset 0 0 0 1px rgba(30,30,10,.08);}
+    :root:not([data-theme="dark"]) .confirm-card{box-shadow:0 -10px 40px -12px rgba(30,30,10,.35);}
+    :root:not([data-theme="dark"]) input[type="text"], :root:not([data-theme="dark"]) input[type="number"], :root:not([data-theme="dark"]) input[type="email"], :root:not([data-theme="dark"]) input[type="password"], :root:not([data-theme="dark"]) input[type="search"], :root:not([data-theme="dark"]) select{border-color:#C9C9BE;}
     /* la mascota conserva el lima de marca */
     :root:not([data-theme="dark"]) .mascot-body{fill:var(--volt);}
   
