@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T03:12:02Z';
+const APP_VERSION = '2026-10-12T03:15:58Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10160,6 +10160,12 @@ function computePaceSeriesFromPoints(points){
 const MAPBOX_TOKEN = 'pk.eyJ1IjoiemFuY2FkYSIsImEiOiJjbXU0cm9sbGEwM2tzMndwczE4emExdzVnIn0.kzrV4ltOY_PjTd_YIuh1vQ';
 const MAPBOX_STYLE = 'streets-v12';
 const MAPBOX_TILE_URL = `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/tiles/256/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`;
+// Capa de mapa de Leaflet con la mejor nitidez: tiles de 512 px pedidas siempre en versión @2x (1024 px reales) -- en una pantalla común (no retina)
+// el navegador las reduce y se ven mucho más definidas; en una retina son 1:1. tileSize 512 + zoomOffset -1 mantiene la misma escala y el mismo
+// tamaño de texto que antes. (detectRetina no se usa: pediría el doble de zoom con tiles de 512.)
+function mapboxTileLayer(style, extra){
+  return L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/${style || MAPBOX_STYLE}/tiles/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`, Object.assign({tileSize:512, zoomOffset:-1, r:'@2x', maxZoom:20, attribution:MAPBOX_ATTRIBUTION}, extra || {}));
+}
 // Mapbox y OpenStreetMap EXIGEN que su atribución (y el logo de Mapbox en las imágenes estáticas) quede visible:
 // no se puede quitar ni recortar. Lo único que sí se saca es el prefijo propio de Leaflet (el texto "Leaflet" con
 // la bandera), que no es parte de ninguna de esas obligaciones. El tamaño y el fondo del recuadro se ajustan en el CSS.
@@ -10296,7 +10302,7 @@ function buildHistMapStaticUrl(r, width, height){
 function initLiveMap(){
   if(liveMap){ liveMap.remove(); liveMap=null; }
   liveMap = L.map('liveMap', {zoomControl:false, attributionControl:true}).setView([0,0], 15);
-  L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20, detectRetina:true, attribution:MAPBOX_ATTRIBUTION}).addTo(liveMap);
+  mapboxTileLayer().addTo(liveMap);
   slimMapAttribution(liveMap);
   livePolyline = L.polyline([], {color:'#0B5D2E', weight:5, lineCap:'round', lineJoin:'round'}).addTo(liveMap);
   liveMarker = null; startMarker = null;
@@ -10471,7 +10477,7 @@ function drawIdleMap(latitude, longitude){
   if(idleMap){ idleMap.remove(); idleMap = null; }
   idleMap = L.map('idleMap', {zoomControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, touchZoom:false, boxZoom:false, keyboard:false, tap:false, attributionControl:true})
     .setView([latitude, longitude], 16);
-  L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20, detectRetina:true, attribution:MAPBOX_ATTRIBUTION}).addTo(idleMap);
+  mapboxTileLayer().addTo(idleMap);
   slimMapAttribution(idleMap);
   const dotIcon = L.divIcon({
     className: '',
@@ -12303,7 +12309,7 @@ function renderHeatmap(){
   const runs = heatmapRuns(heatRange);
   if(!heatMap){
     heatMap = L.map('heatmap-map', {zoomControl:false, attributionControl:true, preferCanvas:true}).setView([0,0], 2);
-    L.tileLayer(MAPBOX_TILE_URL.replace(MAPBOX_STYLE, 'dark-v11'), {maxZoom:20, detectRetina:true, attribution:MAPBOX_ATTRIBUTION}).addTo(heatMap);
+    mapboxTileLayer('navigation-night-v1').addTo(heatMap);
   }
   if(heatLayer){ heatLayer.remove(); heatLayer = null; }
   heatLayer = L.layerGroup().addTo(heatMap);
@@ -12693,7 +12699,7 @@ function renderRDRuta(panel){
   setTimeout(()=>{
     if(detailMap){ detailMap.remove(); detailMap=null; }
     detailMap = L.map('rd-route-map', {zoomControl:false, attributionControl:true});
-    L.tileLayer(MAPBOX_TILE_URL, {maxZoom:20, detectRetina:true, attribution:MAPBOX_ATTRIBUTION}).addTo(detailMap);
+    mapboxTileLayer().addTo(detailMap);
     slimMapAttribution(detailMap);
     const segs = buildColoredRouteSegments(r);
     const allLatLngs = [];
