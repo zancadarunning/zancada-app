@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T16:08:18Z';
+const APP_VERSION = '2026-10-12T16:16:14Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2523,7 +2523,7 @@ async function handleSignIn(){
   const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
   const err = document.getElementById('login-err');
-  err.style.display='none';
+  err.style.display='none'; err.style.color='';
   if(!email || !email.includes('@')){ err.textContent = t('login_err'); err.style.display='block'; return; }
   if(!password){ err.textContent = t('login_err_password'); err.style.display='block'; return; }
   // Antes de firmar in: dualAuthStorage (ver la creación de supabaseClient) mira esta
@@ -2584,7 +2584,7 @@ async function handleSignUp(){
   const email = document.getElementById('signup-email').value.trim();
   const password = document.getElementById('signup-password').value;
   const err = document.getElementById('signup-err');
-  err.style.display='none';
+  err.style.display='none'; err.style.color='';
   if(!email || !email.includes('@')){ err.textContent = t('login_err'); err.style.display='block'; return; }
   if(!password || !isPasswordStrong(password)){ err.textContent = t('login_err_password_weak'); err.style.display='block'; return; }
   if(!checkLegalAccepted()) return;
@@ -2689,13 +2689,13 @@ async function handleForgotPassword(){
   if(document.getElementById('login-forgot-btn')?.disabled) return;
   const email = document.getElementById('login-email').value.trim();
   const err = document.getElementById('login-err');
-  err.style.display='none';
+  err.style.display='none'; err.style.color='';
   if(!email || !email.includes('@')){ err.textContent = t('login_err'); err.style.display='block'; return; }
   setBtnBusy('login-forgot-btn', true, t('forgot_loading'));
   try{
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: window.location.href.split('#')[0] });
     if(error){ err.textContent = translateAuthError(error); err.style.display='block'; return; }
-    err.style.color = 'var(--hivis)';
+    err.style.color = 'var(--hivis-text)';
     err.textContent = t('login_recovery_sent'); err.style.display='block';
   }finally{ setBtnBusy('login-forgot-btn', false); }
 }
@@ -2711,7 +2711,7 @@ async function submitNewPassword(){
   if(document.getElementById('recovery-submit-btn')?.disabled) return;
   const newPw = document.getElementById('recovery-new-pw').value;
   const err = document.getElementById('recovery-new-pw-err');
-  err.style.display='none';
+  err.style.display='none'; err.style.color='';
   if(!newPw || !isPasswordStrong(newPw)){ err.textContent = t('login_err_password_weak'); err.style.display='block'; return; }
   setBtnBusy('recovery-submit-btn', true, t('login_loading'));
   try{
@@ -3443,6 +3443,13 @@ function openCalendar(inputId){
   const input = document.getElementById(inputId);
   calSelectedDate = input.value ? new Date(input.value+'T00:00:00') : null;
   calViewDate = calSelectedDate ? new Date(calSelectedDate) : new Date();
+  if(inputId === 'ob-birth' && !calSelectedDate){
+    calViewDate = new Date(new Date().getFullYear() - 30, 0, 1);
+    renderCalendar();
+    document.getElementById('calendar-modal').style.display = 'block';
+    try{ calShowYears(); }catch(e){}
+    return;
+  }
   renderCalendar();
   document.getElementById('calendar-modal').style.display = 'block';
 }
@@ -3923,6 +3930,7 @@ const openOverlayStack = [];
 let ignoreNextPopstate = false;
 let closingOverlayFromBackButton = false;
 function isBackHandledOverlay(el){
+  if(el instanceof HTMLElement && ['login','signup','onboard','confirm-email','recovery-set-password'].includes(el.id)) return false;   // pantallas de entrada: no son hojas que el atrás cierre
   return el instanceof HTMLElement && (el.classList.contains('overlay') || el.id === 'rd-video-overlay');
 }
 function isOverlayCurrentlyVisible(el){
@@ -11022,7 +11030,7 @@ function onPosition(pos){
   // de arriba (setInterval, línea ~4642) ya guarda cada 15s, y pausar/reanudar guarda al
   // toque -- de sobra para no perder progreso real ante un cierre inesperado.
 }
-function onPosError(){ document.getElementById('geo-warning').style.display='block'; document.getElementById('geo-warning').textContent=t('geo_err_permission'); }
+function onPosError(){ try{ showToast(t('geo_err_permission'), 'error'); }catch(e){} document.getElementById('geo-warning').style.display='block'; document.getElementById('geo-warning').textContent=t('geo_err_permission'); }
 function updateRunUnitLabels(){
   const distLbl = distUnit().toUpperCase();
   const paceLbl = `${t('run_pace_word')} /${distUnit()}`;

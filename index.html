@@ -2426,6 +2426,27 @@
   #perfil-remove-photo{display:inline-flex; align-items:center; min-height:var(--tap);}
   /* Mapa de calor: más oscuro para que las rutas brillen */
   #heatmap-map::after{content:''; position:absolute; inset:0; background:rgba(10,10,10,.35); pointer-events:none; z-index:400;}
+
+  /* ---- Auditoría, tanda 3 (flujos) ---- */
+  #geo-warning{background:var(--danger-dim); color:var(--danger-text); padding:12px 14px; border-radius:var(--radius-sm); font-size:13px; line-height:1.4; margin:10px 0 0; text-align:left;}
+  #onboard .field label{text-transform:none; letter-spacing:0; font-size:14px; line-height:1.4; color:var(--chalk); font-weight:600;}
+  #onboard .two-col .field label{text-transform:uppercase; letter-spacing:.07em; font-size:12px; color:var(--mist); font-weight:700;}
+  .ob-callout{background:var(--asphalt-2); border-left:3px solid var(--hivis); border-radius:var(--radius-sm); padding:12px 14px; color:var(--chalk); font-size:13.5px; line-height:1.5;}
+  .field textarea, #pain-note, #pain-update-note, #ob-healthnotes{width:100%; background:var(--asphalt-2) !important; border:1.5px solid var(--asphalt-4) !important; color:var(--chalk); padding:13px 15px !important; border-radius:var(--radius-sm); font:16px/1.4 inherit !important; resize:none !important; outline:none;}
+  .field textarea:focus, #pain-note:focus, #pain-update-note:focus, #ob-healthnotes:focus{border-color:var(--hivis) !important; box-shadow:0 0 0 3px var(--hivis-dim);}
+  /* selector de sesión programada / carrera libre: indicador de selección tipo radio */
+  .run-mode-card{position:relative; padding-right:48px;}
+  .run-mode-card::after{content:''; position:absolute; right:16px; top:50%; width:20px; height:20px; margin-top:-10px; border-radius:50%; border:1.5px solid var(--asphalt-4);}
+  .run-mode-card.active::after{border-color:var(--hivis); background:radial-gradient(circle, var(--hivis) 0 5px, transparent 6px);}
+  /* tamaños táctiles que faltaban */
+  .run-mute-btn{width:var(--tap); height:var(--tap); margin:-11px 0 -11px 4px;}
+  .pw-toggle{padding:13px; right:0;}
+  .map-recenter-btn{width:var(--tap); height:var(--tap);}
+  .legal-checkbox-row{min-height:var(--tap); align-items:center;}
+  .legal-checkbox-row input[type="checkbox"]{width:22px; height:22px;}
+  .legal-checkbox-row a{color:var(--chalk);}
+  #login h2, #signup h2, #recovery-set-password h2, #confirm-email h2{font-size:36px; line-height:.95;}
+  #cal-month-label{min-height:var(--tap); display:inline-flex; align-items:center; gap:6px; text-decoration:underline; text-decoration-color:var(--asphalt-4); text-underline-offset:4px;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -2692,7 +2713,7 @@
       <h2 class="display" data-i18n="ob_step3_title"></h2>
       <div class="field">
         <label id="ob-runnertype-label" data-i18n="ob_runnertype_label"></label>
-        <div class="choice-row" id="ob-runnertype" role="group" aria-labelledby="ob-runnertype-label">
+        <div class="choice-row segmented" id="ob-runnertype" role="group" aria-labelledby="ob-runnertype-label">
           <div class="choice active" data-v="new" data-i18n="ob_runnertype_new"></div>
           <div class="choice" data-v="active" data-i18n="ob_runnertype_active"></div>
         </div>
@@ -2748,7 +2769,7 @@
       </div>
       <div class="field">
         <label id="ob-terrain-label" data-i18n="ob_terrain_label"></label>
-        <div class="choice-row" id="ob-terrain" role="group" aria-labelledby="ob-terrain-label">
+        <div class="choice-row segmented" id="ob-terrain" role="group" aria-labelledby="ob-terrain-label">
           <div class="choice active" data-v="asfalto" data-i18n="ob_terrain_asfalto"></div>
           <div class="choice" data-v="trail" data-i18n="ob_terrain_trail"></div>
           <div class="choice" data-v="mixto" data-i18n="ob_terrain_mixto"></div>
@@ -2805,7 +2826,7 @@
         <input type="hidden" id="ob-racedate">
         <p class="muted" style="margin-top:6px;" data-i18n="ob_racedate_hint"></p>
       </div>
-      <p class="muted" style="margin:4px 0 14px; font-size:13px; line-height:1.5;" data-i18n="ob_test_note"></p>
+      <p class="ob-callout" style="margin:4px 0 14px;" data-i18n="ob_test_note"></p>
       <div class="field"><button class="btn btn-primary" data-i18n="ob_submit" onclick="finishOnboard()"></button></div>
     </div>
   </div>
@@ -3081,6 +3102,7 @@
 
   <section class="view" id="view-correr">
     <h2 class="display" style="font-size:25px;" data-i18n="run_title"></h2>
+    <p id="geo-warning" role="alert" style="display:none;"></p>
     <!-- Cuenta regresiva de 3 segundos antes de arrancar a correr -- ver el comentario largo
          junto a #runCountdown en el CSS y startRunWithCountdown() en app.js. -->
     <div id="runCountdown"><div class="countdown-num display" id="countdown-num">3</div></div>
@@ -3142,7 +3164,6 @@
         </svg></div>
         <button class="go-circle" onclick="startRun()"><span class="display" data-i18n="run_start"></span><span style="font-size:12.5px; opacity:.7; margin-top:2px;" data-i18n="run_start_hint"></span></button>
       </div>
-      <p class="muted" id="geo-warning" style="display:none; color:var(--danger);"></p>
     </div>
 
     <div id="runActive">
