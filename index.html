@@ -2597,10 +2597,12 @@
 #boot.zc-boot-out{opacity:0;pointer-events:none;}
 /* Arranque en claro: fondo crema y barra en oliva (el atributo de tema ya se puso en el <head>, antes de pintar) */
 :root[data-theme="light"] #boot{background:#F2F4EC;}
+:root[data-theme="light"] #boot .boot-mark{content:url(/img/boot-mark-light.png);}
 :root[data-theme="light"] #boot .boot-bar{background:rgba(111,143,0,.18);}
 :root[data-theme="light"] #boot .boot-bar::after{background:#8DB600;}
 @media (prefers-color-scheme:light){
   :root:not([data-theme="dark"]) #boot{background:#F2F4EC;}
+  :root:not([data-theme="dark"]) #boot .boot-mark{content:url(/img/boot-mark-light.png);}
   :root:not([data-theme="dark"]) #boot .boot-bar{background:rgba(111,143,0,.18);}
   :root:not([data-theme="dark"]) #boot .boot-bar::after{background:#8DB600;}
 }
