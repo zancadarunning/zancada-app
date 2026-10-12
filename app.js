@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T23:52:32Z';
+const APP_VERSION = '2026-10-12T23:54:51Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8390,7 +8390,7 @@ function renderAdminStats(s){
   const langs = Object.entries(s.languages || {}).sort((x, y) => y[1] - x[1]);
   const goals = Object.entries(s.goals || {}).sort((x, y) => y[1] - x[1]);
   const plats = Object.entries(p.by_platform || {}).sort((x, y) => y[1] - x[1]);
-  const funnelSteps = [['Registradas', f.registered], ['Confirmaron el mail', f.confirmed], ['Completaron el onboarding', f.onboarded], ['Tienen una carrera', f.with_runs], ['Conectaron un reloj', w.users_with_any]];
+  const funnelSteps = [['Se registraron', f.registered], ['Confirmaron mail', f.confirmed], ['Onboarding listo', f.onboarded], ['Tienen carrera', f.with_runs], ['Conectaron reloj', w.users_with_any]];
   const funnel = funnelSteps.map(([k, n]) => '<div class="adm-row"><span style="grid-column:auto;">' + escapeHtml(k) + '</span><div class="track"><i style="width:' + admPct(n || 0, f.registered || 0) + '%;"></i></div><span class="v">' + (n || 0) + ' <span style="font-weight:600; color:var(--mist); font-size:11.5px;">' + admPct(n || 0, f.registered || 0) + '%</span></span></div>').join('');
   const limits = (s.limits || []).map(admLimitRow).join('') || '<p class="muted">Sin datos.</p>';
   const avg = db.app_state_avg_bytes || 0;
