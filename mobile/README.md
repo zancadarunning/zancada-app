@@ -69,7 +69,7 @@ de `icon-appstore-1024.png` en la raíz del proyecto padre). Para regenerar los
 
 ```
 cd mobile
-npx capacitor-assets generate --android --splashBackgroundColor '#0A0A0A' --splashBackgroundColorDark '#0A0A0A'
+npx --yes @capacitor/assets@3 generate --android --splashBackgroundColor '#0A0A0A' --splashBackgroundColorDark '#0A0A0A'
 ```
 
 El fondo del splash se fuerza a `#0A0A0A` (mismo `--asphalt` que usa la app) a
