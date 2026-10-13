@@ -124,6 +124,15 @@ create table if not exists public.run_feed (
 );
 create index if not exists run_feed_user_date_idx on public.run_feed(user_id, run_date desc);
 
+-- Valores razonables: sin esto cualquier usuario podía publicar carreras imposibles (9999 km en 1 segundo) que ven sus seguidores.
+-- Ritmo entre 2:00 y 20:00 por km, hasta 500 km y hasta 48 h. NOT VALID: no revisa las filas que ya existen.
+alter table public.run_feed drop constraint if exists run_feed_sane;
+alter table public.run_feed add constraint run_feed_sane check (
+  distance_km <= 500
+  and duration_sec <= 172800
+  and duration_sec::numeric / distance_km between 120 and 1200
+) not valid;
+
 alter table public.run_feed enable row level security;
 
 -- Se puede ver la carrera si es propia, o si el que mira sigue a quien la

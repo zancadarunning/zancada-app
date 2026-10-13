@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-13T01:01:06Z';
+const APP_VERSION = '2026-10-13T14:41:27Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4100,6 +4100,15 @@ function openOverlaySheetEl(el){
 function confirmLogout(){
   showConfirm(t('logout_confirm'), {danger: true, confirmText: t('perfil_logout')}).then(ok=>{ if(ok) logout(); });
 }
+// Borra del teléfono lo que quedó guardado de esta cuenta (respaldo del estado completo con salud, GPS y chat, posición, clima).
+function wipeLocalUserData(uid){
+  try{
+    const keys = [];
+    for(let i=0; i<localStorage.length; i++){ const k = localStorage.key(i); if(k && (k.indexOf('zancada_pending_') === 0 || k === 'zancada_run_in_progress' || k.indexOf('zancada_run_in_progress') === 0 || k === WX_KEY)) keys.push(k); }
+    keys.forEach(k => { try{ localStorage.removeItem(k); }catch(e){} });
+  }catch(e){}
+  try{ clearLastKnownPosition(); }catch(e){}
+}
 async function logout(){
   await waitForPendingPersist();
   await clearNativeCalendarQuietly();
@@ -4111,6 +4120,8 @@ async function logout(){
   // no existe.
   try{ localStorage.removeItem('zancada_run_in_progress'); }catch(e){}
   clearLastKnownPosition();
+  // Si hay cambios que todavía no se subieron, el respaldo local se conserva (para no perderlos); si ya está todo sincronizado, no queda copia.
+  try{ if(!hasPendingBackup()) wipeLocalUserData(currentUserId); }catch(e){}
   await supabaseClient.auth.signOut();
   location.reload();
 }
@@ -4118,10 +4129,23 @@ async function resetApp(){
   if(!(await showConfirm(t('reset_confirm_text'), {danger:true, confirmText:t('delete_word')}))) return;
   await waitForPendingPersist();
   await clearNativeCalendarQuietly();
-  if(currentUserId){
-    try{ await supabaseClient.from('app_state').delete().eq('user_id', currentUserId); }catch(e){}
+  // El servidor borra TODO (conexiones y tokens de relojes con su revocación, notificaciones, contadores, lo social y el estado) y confirma
+  // cada borrado. Antes solo se borraba app_state y se ignoraba el error: el usuario creía que se había borrado todo y no era así.
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session) throw new Error('sin sesión');
+    const res = await fetch(apiUrl('/api/delete-account'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
+      body: JSON.stringify({mode:'data'})
+    });
+    if(!res.ok) throw new Error('delete data failed');
+  }catch(e){
+    console.error('resetApp:', e);
+    showToast(t('delete_account_error'), 'error');
+    return;   // NO se cierra la sesión ni se simula el borrado: sigue todo como estaba
   }
-  clearLastKnownPosition();
+  wipeLocalUserData(currentUserId);
   await supabaseClient.auth.signOut();
   location.reload();
 }
@@ -4137,7 +4161,7 @@ async function deleteAccount(){
       headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
     });
     if(!res.ok) throw new Error('delete-account failed');
-    clearLastKnownPosition();
+    wipeLocalUserData(currentUserId);
     await supabaseClient.auth.signOut();
     location.reload();
   }catch(e){
@@ -8345,7 +8369,8 @@ const ADMIN_HELP = {
     ['Strava', 'Cuántas personas conectaron Strava contra el cupo de atletas que tiene tu app en Strava. Si se llena, nadie más puede conectarse. Se ajusta con STRAVA_ATHLETE_LIMIT.'],
     ['Base de datos', 'Tamaño real de la base de Supabase contra el máximo del plan (500 MB en el gratis). Se ajusta con SUPABASE_DB_LIMIT_MB.'],
     ['Usuarios activos', 'Personas que iniciaron sesión en los últimos 30 días contra los usuarios activos por mes que incluye tu plan de Supabase (50.000 en el gratis). Se ajusta con SUPABASE_MAU_LIMIT.'],
-    ['Zonda (IA)', 'La persona que más usó el chat hoy contra el límite diario por persona (CHAT_DAILY_LIMIT). Si alguien llega al tope, deja de poder escribirle a Zonda hasta mañana.']
+    ['Zonda (IA)', 'La persona que más usó el chat hoy contra el límite diario por persona (CHAT_DAILY_LIMIT). Si alguien llega al tope, deja de poder escribirle a Zonda hasta mañana.'],
+    ['Zonda, total', 'Mensajes de TODAS las cuentas hoy contra el tope global diario (CHAT_GLOBAL_DAILY_LIMIT, 2.000 por defecto). Si se llena, nadie puede usar a Zonda hasta mañana: protege tu gasto en la API de IA.']
   ],
   funnel: [
     ['Registradas', 'Cuentas creadas.'],
@@ -8415,7 +8440,7 @@ function toggleAdminHelp(btn){
   btn.classList.toggle('on', open);
 }
 function admLimitRow(l){
-  const name = { strava: 'Strava (atletas)', db: 'Base de datos', mau: 'Usuarios activos (30 d)', chat: 'Zonda: máximo por persona hoy' }[l.key] || l.key;
+  const name = { strava: 'Strava (atletas)', db: 'Base de datos', mau: 'Usuarios activos (30 d)', chat: 'Zonda: máximo por persona hoy', chat_global: 'Zonda: total de hoy (todas las cuentas)' }[l.key] || l.key;
   const pct = Math.max(0, l.pct || 0);
   const tone = pct >= 90 ? 'hi' : (pct >= 70 ? 'mid' : 'ok');
   const unit = l.unit === 'MB' ? ' MB' : '';

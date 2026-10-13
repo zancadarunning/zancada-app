@@ -14,6 +14,28 @@
 
 const Sentry = require('@sentry/node');
 
+// Los pedidos salientes (a Supabase, Strava, etc.) llevan secretos en la query string: el token del calendario de una persona, access_token de Strava,
+// filtros con datos. El SDK los agregaba como breadcrumbs a cualquier error reportado. Acá se sacan antes de enviar nada a Sentry.
+const stripQuery = u => (typeof u === 'string' ? u.split('?')[0] : u);
+function scrubBreadcrumb(b) {
+  if (b && b.data) {
+    for (const k of ['http.query', 'url.query', 'query', 'http.fragment']) delete b.data[k];
+    for (const k of ['url', 'http.url', 'to', 'from']) if (typeof b.data[k] === 'string') b.data[k] = stripQuery(b.data[k]);
+  }
+  return b;
+}
+function scrubEvent(e) {
+  if (e && e.request) {
+    delete e.request.query_string;
+    delete e.request.cookies;
+    delete e.request.data;
+    if (e.request.url) e.request.url = stripQuery(e.request.url);
+    if (e.request.headers) { delete e.request.headers.authorization; delete e.request.headers.Authorization; delete e.request.headers.cookie; delete e.request.headers.Cookie; }
+  }
+  if (e && Array.isArray(e.breadcrumbs)) e.breadcrumbs.forEach(scrubBreadcrumb);
+  return e;
+}
+
 let initialized = false;
 function ensureInit() {
   if (initialized) return;
@@ -23,7 +45,7 @@ function ensureInit() {
     console.error('sentry: falta configurar SENTRY_DSN -- los errores no se van a reportar.');
     return;
   }
-  Sentry.init({ dsn, tracesSampleRate: 0 });
+  Sentry.init({ dsn, tracesSampleRate: 0, sendDefaultPii: false, beforeBreadcrumb: scrubBreadcrumb, beforeSend: scrubEvent });
 }
 
 // Envuelve un endpoint (module.exports = async (req,res) => {...}) para que
@@ -73,9 +95,11 @@ async function reportSecurityEvent(message, context) {
 // Diagnóstico puntual (nivel info, no es un error): para ver qué está llegando desde un proveedor
 // cuando algo no aparece como debería (TEMPORAL mientras se verifica la recepción de carreras de Suunto).
 async function reportDiagnostic(message, context) {
+  // Apagado por defecto: mandaba metadatos de entrenamientos (distancia, fecha, actividad) a Sentry aunque no hubiera ningún error. Solo con SENTRY_DIAGNOSTICS=1.
+  if (process.env.SENTRY_DIAGNOSTICS !== '1') return;
   ensureInit();
   Sentry.captureMessage(message, { level: 'info', extra: context });
   await Sentry.flush(2000).catch(() => {});
 }
 
-module.exports = { Sentry, withSentry, reportError, reportSecurityEvent, reportDiagnostic };
+module.exports = { Sentry, withSentry, reportError, reportSecurityEvent, reportDiagnostic, scrubBreadcrumb, scrubEvent };

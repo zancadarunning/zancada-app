@@ -10,6 +10,32 @@
 -- Es seguro volver a correrlo (CREATE OR REPLACE).
 -- ============================================================================
 
+-- Convierte un texto a fecha SIN romper si viene mal (los datos de app_state los escribe cada cuenta con su propio JWT: una fecha
+-- inválida, por ejemplo '2026-13-45', hacía fallar admin_stats() entero). Devuelve NULL si no es una fecha válida.
+CREATE OR REPLACE FUNCTION public.safe_date(p text)
+RETURNS date
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+BEGIN
+  IF p IS NULL OR p !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN RETURN NULL; END IF;
+  RETURN p::date;
+EXCEPTION WHEN others THEN
+  RETURN NULL;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.safe_date(text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.safe_date(text) TO service_role;
+
+-- Largo de un array jsonb, 0 si no es un array (data.runs lo escribe cada cuenta: podría ser un texto o un número y jsonb_array_length fallaría).
+CREATE OR REPLACE FUNCTION public.safe_array_len(j jsonb)
+RETURNS integer
+LANGUAGE sql
+IMMUTABLE
+AS $$ SELECT CASE WHEN jsonb_typeof(j) = 'array' THEN jsonb_array_length(j) ELSE 0 END $$;
+REVOKE ALL ON FUNCTION public.safe_array_len(jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.safe_array_len(jsonb) TO service_role;
+
 CREATE OR REPLACE FUNCTION public.admin_stats()
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -43,8 +69,8 @@ BEGIN
       'onboarded',        (SELECT count(*) FROM public.app_state WHERE data->>'onboarded' = 'true'),
       'data_saved_7d',    (SELECT count(*) FROM public.app_state WHERE updated_at > now() - interval '7 days'),
       'data_saved_30d',   (SELECT count(*) FROM public.app_state WHERE updated_at > now() - interval '30 days'),
-      'users_with_runs',  (SELECT count(*) FROM public.app_state WHERE jsonb_typeof(data->'runs') = 'array' AND jsonb_array_length(data->'runs') > 0),
-      'total_runs',       (SELECT COALESCE(sum(jsonb_array_length(data->'runs')), 0) FROM public.app_state WHERE jsonb_typeof(data->'runs') = 'array')
+      'users_with_runs',  (SELECT count(*) FROM public.app_state WHERE public.safe_array_len(data->'runs') > 0),
+      'total_runs',       (SELECT COALESCE(sum(public.safe_array_len(data->'runs')), 0) FROM public.app_state)
     ),
     'languages', COALESCE((
       SELECT jsonb_object_agg(l.lang, l.n)
@@ -66,20 +92,20 @@ BEGIN
       'registered', (SELECT count(*) FROM auth.users),
       'confirmed',  (SELECT count(*) FROM auth.users WHERE email_confirmed_at IS NOT NULL),
       'onboarded',  (SELECT count(*) FROM public.app_state WHERE data->>'onboarded' = 'true'),
-      'with_runs',  (SELECT count(*) FROM public.app_state WHERE jsonb_typeof(data->'runs') = 'array' AND jsonb_array_length(data->'runs') > 0)
+      'with_runs',  (SELECT count(*) FROM public.app_state WHERE public.safe_array_len(data->'runs') > 0)
     ),
     'activity', (
       WITH r AS (
         SELECT a.user_id, left(e->>'date', 10) AS d
         FROM public.app_state a,
              jsonb_array_elements(CASE WHEN jsonb_typeof(a.data->'runs') = 'array' THEN a.data->'runs' ELSE '[]'::jsonb END) e
-        WHERE (e->>'date') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+        WHERE public.safe_date(left(e->>'date', 10)) IS NOT NULL
       )
       SELECT jsonb_build_object(
-        'ran_7d',   (SELECT count(DISTINCT user_id) FROM r WHERE d::date >= current_date - 7),
-        'ran_30d',  (SELECT count(DISTINCT user_id) FROM r WHERE d::date >= current_date - 30),
-        'runs_7d',  (SELECT count(*) FROM r WHERE d::date >= current_date - 7),
-        'runs_30d', (SELECT count(*) FROM r WHERE d::date >= current_date - 30)
+        'ran_7d',   (SELECT count(DISTINCT user_id) FROM r WHERE public.safe_date(d) >= current_date - 7),
+        'ran_30d',  (SELECT count(DISTINCT user_id) FROM r WHERE public.safe_date(d) >= current_date - 30),
+        'runs_7d',  (SELECT count(*) FROM r WHERE public.safe_date(d) >= current_date - 7),
+        'runs_30d', (SELECT count(*) FROM r WHERE public.safe_date(d) >= current_date - 30)
       )
     ),
     'db', jsonb_build_object(
@@ -89,10 +115,12 @@ BEGIN
       'app_state_max_bytes',   (SELECT COALESCE(max(pg_column_size(data)), 0) FROM public.app_state)
     ),
     'chat', jsonb_build_object(
-      'today_messages', (SELECT COALESCE(sum(count), 0) FROM public.chat_usage WHERE usage_date = current_date),
-      'today_users',    (SELECT count(*) FROM public.chat_usage WHERE usage_date = current_date),
-      'max_user_today', (SELECT COALESCE(max(count), 0) FROM public.chat_usage WHERE usage_date = current_date),
-      'week_messages',  (SELECT COALESCE(sum(count), 0) FROM public.chat_usage WHERE usage_date >= current_date - 6)
+      -- user_id 0000... es el contador GLOBAL del día (api/chat.js), no una persona: se excluye de los totales por persona
+      'today_messages', (SELECT COALESCE(sum(count), 0) FROM public.chat_usage WHERE usage_date = current_date AND user_id <> '00000000-0000-0000-0000-000000000000'),
+      'today_users',    (SELECT count(*) FROM public.chat_usage WHERE usage_date = current_date AND user_id <> '00000000-0000-0000-0000-000000000000'),
+      'max_user_today', (SELECT COALESCE(max(count), 0) FROM public.chat_usage WHERE usage_date = current_date AND user_id <> '00000000-0000-0000-0000-000000000000'),
+      'week_messages',  (SELECT COALESCE(sum(count), 0) FROM public.chat_usage WHERE usage_date >= current_date - 6 AND user_id <> '00000000-0000-0000-0000-000000000000'),
+      'global_today',   (SELECT COALESCE(sum(count), 0) FROM public.chat_usage WHERE usage_date = current_date AND user_id = '00000000-0000-0000-0000-000000000000')
     ),
     'notifications_sent', jsonb_build_object(
       'last_7d',  (SELECT count(*) FROM public.sent_notifications WHERE sent_at > now() - interval '7 days'),

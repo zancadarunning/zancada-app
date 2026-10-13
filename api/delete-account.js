@@ -12,6 +12,9 @@
 
 const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
+const { ensureFreshSuuntoToken, suuntoApiHeaders, SUUNTO_API_BASE } = require('./_lib/suunto-activity-helpers');
+const { removeAllZancada } = require('./_lib/wahoo-plans-sync');
+const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 
 const { withSentry, reportError } = require('./_lib/sentry');
 
@@ -26,6 +29,8 @@ module.exports = withSentry(async (req, res) => {
   const auth = await verifyUser(req);
   if (!auth.ok) { res.status(auth.status).json({ error: auth.error }); return; }
   const userId = auth.userId;
+  // mode 'data' = "Borrar mis datos" (Perfil): borra TODO lo de la persona pero conserva la cuenta de acceso. Sin mode = borrar la cuenta entera.
+  const wipeDataOnly = !!(req.body && req.body.mode === 'data');
 
   const base = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_KEY;
@@ -74,12 +79,32 @@ module.exports = withSentry(async (req, res) => {
     try {
       const conn = await readConnection('wahoo_connections', 'access_token');
       if (conn && conn.access_token) {
+        // primero los entrenamientos que Zancada subió a su cuenta de Wahoo (igual que wahoo-disconnect.js)
+        try { await removeAllZancada(conn.access_token, userId); } catch (e) { console.error('delete-account: wahoo plans cleanup failed', e && e.message); }
         await fetch('https://api.wahooligan.com/v1/permissions', {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${conn.access_token}` }
         });
       }
     } catch (e) { console.error('delete-account: wahoo revoke failed', e); }
+
+    // Suunto: no documenta un endpoint público para revocar el permiso, pero sí se pueden borrar las guías que Zancada subió a su cuenta
+    // (igual que suunto-disconnect.js). Antes el borrado de cuenta no tocaba Suunto en absoluto.
+    try {
+      const sRes = await fetch(`${base}/rest/v1/suunto_connections?user_id=eq.${userId}&select=*`, { headers });
+      const sRows = sRes.ok ? await sRes.json() : [];
+      if (Array.isArray(sRows) && sRows.length) {
+        const accessToken = await ensureFreshSuuntoToken(base, headers, sRows[0]);
+        if (accessToken) {
+          const listRes = await fetchWithTimeout(`${SUUNTO_API_BASE}/v2/guides/items`, { headers: suuntoApiHeaders(accessToken) }, 8000);
+          const data = listRes.ok ? await listRes.json().catch(() => null) : null;
+          const mine = ((data && data.payload) || []).filter(g => g && g.owner === 'Zancada' && String(g.externalId || '').startsWith('zancada-'));
+          for (const g of mine) {
+            await fetchWithTimeout(`${SUUNTO_API_BASE}/v2/guides/files/${encodeURIComponent(g.id)}`, { method: 'DELETE', headers: suuntoApiHeaders(accessToken) }, 8000).catch(() => {});
+          }
+        }
+      }
+    } catch (e) { console.error('delete-account: suunto cleanup failed', e && e.message); }
 
     // COROS se sumó después de que se hiciera este mismo arreglo para Polar/Wahoo (ver el
     // comentario de arriba) y quedó afuera -- mismo problema: sin este bloque, el borrado
@@ -96,6 +121,32 @@ module.exports = withSentry(async (req, res) => {
         });
       }
     } catch (e) { console.error('delete-account: coros revoke failed', e); }
+
+    if (wipeDataOnly) {
+      // Borra TODO lo de la persona (conexiones con sus tokens, notificaciones, contadores, lo social y el estado de la app), sin tocar
+      // su usuario de acceso. Cada borrado se verifica: si algo falla se responde error y la app NO le dice al usuario que se borró.
+      const failed = [];
+      const wipe = async (table, filter) => {
+        try {
+          const r = await fetch(`${base}/rest/v1/${table}?${filter}`, { method: 'DELETE', headers });
+          if (!r.ok && r.status !== 404) failed.push(table);   // 404 = la tabla no existe en esta base
+        } catch (e) { failed.push(table); }
+      };
+      for (const t of ['strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'suunto_connections', 'push_subscriptions',
+        'chat_usage', 'sent_notifications', 'sync_cooldowns', 'run_likes', 'run_feed', 'usernames']) {
+        await wipe(t, `user_id=eq.${userId}`);
+      }
+      await wipe('follows', `follower_id=eq.${userId}`);
+      await wipe('follows', `followee_id=eq.${userId}`);
+      await wipe('app_state', `user_id=eq.${userId}`);
+      if (failed.length) {
+        console.error('delete-account: no se pudo borrar', failed.join(','));
+        res.status(500).json({ error: 'Could not delete all data', failed });
+        return;
+      }
+      res.status(200).json({ ok: true, mode: 'data' });
+      return;
+    }
 
     // Borramos el usuario de autenticación ANTES que los datos de la app -- a
     // propósito, en este orden y no al revés. Antes se borraban primero
@@ -134,7 +185,7 @@ module.exports = withSentry(async (req, res) => {
     // sin REFERENCES), así que el borrado de arriba no la toca -- sin este loop
     // quedaría huérfana para siempre una fila por cada día que el usuario haya usado
     // el chat con el coach.
-    const tables = ['app_state', 'push_subscriptions', 'strava_connections', 'chat_usage'];
+    const tables = ['app_state', 'push_subscriptions', 'strava_connections', 'chat_usage', 'sent_notifications', 'sync_cooldowns'];
     for (const table of tables) {
       try {
         await fetch(`${base}/rest/v1/${table}?user_id=eq.${userId}`, { method: 'DELETE', headers });

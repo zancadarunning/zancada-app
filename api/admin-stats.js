@@ -36,7 +36,8 @@ function buildLimits(s) {
     { key: 'strava', used: w.strava || 0, limit: num(process.env.STRAVA_ATHLETE_LIMIT, 10), unit: 'atletas' },
     { key: 'db', used: Math.round((db.size_bytes || 0) / MB), limit: num(process.env.SUPABASE_DB_LIMIT_MB, 500), unit: 'MB' },
     { key: 'mau', used: u.signed_in_30d || 0, limit: num(process.env.SUPABASE_MAU_LIMIT, 50000), unit: 'personas' },
-    { key: 'chat', used: chat.max_user_today || 0, limit: chatLimit, unit: 'mensajes' }
+    { key: 'chat', used: chat.max_user_today || 0, limit: chatLimit, unit: 'mensajes' },
+    { key: 'chat_global', used: chat.global_today || 0, limit: num(process.env.CHAT_GLOBAL_DAILY_LIMIT, 2000), unit: 'mensajes' }
   ].map(l => Object.assign(l, { pct: Math.round((l.used / l.limit) * 100) }));
 }
 

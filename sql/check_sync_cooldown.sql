@@ -1,30 +1,24 @@
 -- ============================================================================
--- check_sync_cooldown: auditoría de costos -- strava-sync-now.js/polar-sync-now.js/
--- wahoo-sync-now.js/coros-sync-now.js/remux-video.js (el botón "Sincronizar ahora"
--- de cada proveedor, y el reprocesado de video con ffmpeg) no tenían NINGÚN límite
--- de cuántas veces por minuto un usuario logueado podía dispararlos -- solo pedían
--- estar logueado. Un script (o alguien tocando muy seguido) podía disparar muchas
--- invocaciones seguidas; lo más grave no es el costo de Vercel en sí, sino que
--- golpear demasiado rápido a Strava/Polar/Wahoo/COROS puede hacer que esas
--- plataformas empiecen a limitar o suspender temporalmente las credenciales de la
--- app entera -- rompiendo la sincronización para TODOS los usuarios, no solo el
--- que abusó.
+-- check_sync_cooldown: límite de frecuencia por usuario y por proveedor ("Sincronizar ahora", reprocesado de video, feedback, envío
+-- de planes a Suunto/Wahoo). VERSIÓN SEGURA: el estado vive en public.sync_cooldowns, una tabla que SOLO el servidor puede tocar
+-- (RLS activada y sin políticas). La versión anterior guardaba el estado dentro de app_state.data, que el propio usuario puede editar
+-- o borrar con su sesión, así que cualquiera podía saltearse el límite -- por eso este archivo ya no la contiene: volver a ejecutarlo
+-- no puede reintroducir esa vulnerabilidad.
 --
--- Esta función es un "check-and-set" atómico: en una sola transacción (FOR UPDATE)
--- mira cuándo fue el último intento de ESTE usuario para ESTE proveedor, y si ya
--- pasó el cooldown, deja pasar y anota el intento actual; si no, lo rechaza sin
--- tocar nada. Mismo patrón que set_strava_sync_status.sql: solo toca la clave
--- `syncCooldown` de app_state.data, deja runs/plan/chat/etc. tal cual estén.
+-- p_provider: un namespace por endpoint ('strava', 'polar', 'wahoo', 'coros', 'suunto', 'remux', 'feedback', 'suunto-plan', 'wahoo-plan',
+-- 'wahoo-workout'). p_cooldown_ms: ventana mínima entre intentos. Devuelve true si se permite seguir (y queda registrado el intento).
 --
--- p_provider: 'strava' | 'polar' | 'wahoo' | 'coros' | 'remux' (un namespace por
--- endpoint, para que sincronizar Strava no bloquee sincronizar Polar).
--- p_cooldown_ms: ventana mínima entre intentos permitidos, en milisegundos.
--- Devuelve true si se permite seguir (y ya quedó registrado el intento), false si
--- todavía está en cooldown.
---
--- Cómo correrlo: pegar este archivo entero en el SQL Editor de Supabase y
--- ejecutarlo. Seguro de volver a correr (CREATE OR REPLACE).
+-- Cómo correrlo: pegar este archivo entero en el SQL Editor de Supabase y ejecutarlo. Es seguro volver a correrlo.
 -- ============================================================================
+
+CREATE TABLE IF NOT EXISTS public.sync_cooldowns (
+  user_id  uuid   NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  provider text   NOT NULL,
+  last_ms  bigint NOT NULL,
+  PRIMARY KEY (user_id, provider)
+);
+ALTER TABLE public.sync_cooldowns ENABLE ROW LEVEL SECURITY;      -- sin políticas: nadie con sesión de usuario la ve ni la escribe
+REVOKE ALL ON public.sync_cooldowns FROM PUBLIC, anon, authenticated;
 
 CREATE OR REPLACE FUNCTION public.check_sync_cooldown(
   p_user_id uuid,
@@ -37,38 +31,14 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_data jsonb;
   v_now bigint := (extract(epoch from now()) * 1000)::bigint;
-  v_last bigint;
-  v_cooldowns jsonb;
 BEGIN
-  SELECT data INTO v_data FROM public.app_state WHERE user_id = p_user_id FOR UPDATE;
-  IF v_data IS NULL THEN
-    -- no hay fila de app_state para este usuario todavía -- no hay nada contra qué
-    -- limitar, dejamos pasar (no debería pasar en la práctica: para llegar hasta acá
-    -- ya tuvo que haber pasado el onboarding, que crea la fila).
-    RETURN true;
-  END IF;
-
-  v_cooldowns := COALESCE(v_data->'syncCooldown', '{}'::jsonb);
-  v_last := NULLIF(v_cooldowns->>p_provider, '')::bigint;
-
-  IF v_last IS NOT NULL AND (v_now - v_last) < p_cooldown_ms THEN
-    RETURN false; -- todavía en cooldown, no tocamos nada
-  END IF;
-
-  v_cooldowns := jsonb_set(v_cooldowns, ARRAY[p_provider], to_jsonb(v_now));
-  v_data := jsonb_set(v_data, '{syncCooldown}', v_cooldowns);
-
-  -- A propósito NO actualizamos updated_at (mismo criterio que set_strava_sync_status.sql)
-  -- -- esto no es un dato real del usuario, no debería disparar el aviso de "conflicto
-  -- entre dispositivos" en ningún otro dispositivo abierto.
-  UPDATE public.app_state SET data = v_data WHERE user_id = p_user_id;
-  RETURN true;
+  -- Inserta el intento, o lo actualiza SOLO si ya pasó el tiempo de espera. Si no tocó ninguna fila, sigue en cooldown.
+  INSERT INTO public.sync_cooldowns AS c (user_id, provider, last_ms)
+  VALUES (p_user_id, p_provider, v_now)
+  ON CONFLICT (user_id, provider) DO UPDATE SET last_ms = v_now
+    WHERE c.last_ms <= v_now - p_cooldown_ms;
+  RETURN FOUND;
 END;
 $$;
-
--- Sin esto, cualquiera con la clave pública podría llamar esta función directo por
--- /rest/v1/rpc/check_sync_cooldown con el p_user_id de OTRO usuario y resetearle
--- (o pisarle) el cooldown -- ver revoke_merge_runs_execute.sql.
 REVOKE EXECUTE ON FUNCTION public.check_sync_cooldown(uuid, text, bigint) FROM PUBLIC, anon, authenticated;
