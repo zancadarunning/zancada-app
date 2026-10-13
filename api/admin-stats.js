@@ -16,7 +16,8 @@ const { applyCors, isPreflight } = require('./_lib/cors');
 const { withSentry, reportError } = require('./_lib/sentry');
 
 function adminList() {
-  return String(process.env.ADMIN_EMAILS || '')
+  // ADMIN_EMAILS (lista, separada por coma); también se acepta ADMIN_EMAIL (singular) por si se cargó con ese nombre.
+  return String(process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || '')
     .split(',')
     .map(s => s.trim().toLowerCase())
     .filter(Boolean);

@@ -92,3 +92,11 @@ test('los límites se pueden ajustar con variables de entorno', async () => {
   assert.equal(r.body.limits.find(l => l.key === 'strava').limit, 100);
   delete process.env.STRAVA_ATHLETE_LIMIT;
 });
+
+test('también acepta ADMIN_EMAIL (singular) si ADMIN_EMAILS no está', async () => {
+  delete process.env.ADMIN_EMAILS;
+  process.env.ADMIN_EMAIL = 'yo@x.com';
+  global.fetch = fakeFetch({ id: 'u1', email: 'yo@x.com', email_confirmed_at: '2026-01-01' }, {});
+  assert.equal((await call({ probe: '1' })).code, 200);
+  delete process.env.ADMIN_EMAIL;
+});
