@@ -4,6 +4,7 @@ const { sendFcmPush } = require('./_lib/fcm');
 const { isTrustedPushEndpoint } = require('./_lib/push-endpoint');
 const { buildWeeklySummary, isWeeklySlot, isWeeklyDue, sundayPending, currentWeeklySlot, mondayKeyFor } = require('./_lib/weekly-summary');
 const sentRegistry = require('./_lib/sent-registry');
+const { pick, ownKey } = require('./_lib/own');
 
 // ANTES este cron corría UNA vez por día a una hora fija en UTC (11:00 UTC, ver
 // vercel.json) -- pensada para que le llegue a las 8am a un corredor en Argentina
@@ -135,6 +136,7 @@ module.exports = withSentry(async (req, res) => {
     const due = [];
     const weekly = [];   // a quién le toca el resumen semanal (domingo, en el turno fijo de cada uno entre las 19:00 y las 23:30, hora local; con sesión planeada el domingo, al final de la noche)
     for (const row of (states || [])) {
+     try {
       const subRow = subsByUser[row.user_id];
       if (!subRow) { skipped++; continue; }
       const wClock = localClock(row.tz || DEFAULT_TZ);
@@ -177,11 +179,16 @@ module.exports = withSentry(async (req, res) => {
       // "Hoy toca: ..." como si no hubiera corrido todavía.
       if (!today || !today.dist || today.status) { skipped++; continue; } // día de descanso o sesión ya resuelta, no molestamos
 
-      const lang = MSGS[row.lang] ? row.lang : 'es';
-      const typeLabel = today.custom ? today.type : (MSGS[lang].types[today.typeKey] || today.typeKey);
+      const lang = ownKey(MSGS, row.lang, 'es');
+      const typeLabel = today.custom ? String(today.type) : (pick(MSGS[lang].types, today.typeKey, '__none__') || String(today.typeKey));
       const body = MSGS[lang].body(typeLabel, today.dist);
 
       due.push({ row, subRow, body });
+     } catch (rowErr) {
+      // los datos de app_state los escribe cada cuenta con su propio JWT: una fila rara se salta, nunca aborta a las demás
+      failed++;
+      console.error('send-reminders: fila omitida por datos inválidos', row && row.user_id, rowErr && rowErr.message);
+     }
     }
 
     // El envío (una llamada de red por usuario) va en paralelo, de a SEND_CONCURRENCY: a las 8 am de un huso populoso pueden
@@ -255,7 +262,7 @@ module.exports = withSentry(async (req, res) => {
         const runs = Array.isArray(rows) && rows[0] && Array.isArray(rows[0].runs) ? rows[0].runs : [];
         const msg = buildWeeklySummary({
           runs, plan: row.plan, weekStart: row.weekStart, streak: row.streak, tz: row.tz || DEFAULT_TZ,
-          lang: MSGS[row.lang] ? row.lang : 'es', imperial: row.units === 'imperial', now: Date.now()
+          lang: ownKey(MSGS, row.lang, 'es'), imperial: row.units === 'imperial', now: Date.now()
         });
         if (!msg) return;                          // sin salidas esta semana: queda registrado como atendido, no se vuelve a evaluar
         const r = await sendOne({ row, subRow, body: msg.body, title: msg.title });

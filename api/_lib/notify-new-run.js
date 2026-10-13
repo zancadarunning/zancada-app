@@ -13,6 +13,7 @@
 
 const { sendFcmPush } = require('./fcm');
 const { isTrustedPushEndpoint } = require('./push-endpoint');
+const { pick } = require('./own');
 
 const BRANDS = { suunto: 'Suunto', wahoo: 'Wahoo', coros: 'COROS', polar: 'Polar', strava: 'Strava' };
 const MAX_AGE_MS = 36 * 3600 * 1000;   // solo entrenos recientes: un reenvío o un relleno de historial viejo no avisa
@@ -48,7 +49,7 @@ function fmtPace(durationSec, km, imperial) {
 
 // Arma título y cuerpo para una o varias carreras nuevas. Función pura (se prueba aparte).
 function buildMessage(runs, source, lang, imperial) {
-  const T = TEXTS[lang] || TEXTS.es;
+  const T = pick(TEXTS, lang, 'es');
   const brand = BRANDS[source] || 'tu reloj';
   if (runs.length === 1) {
     const r = runs[0];

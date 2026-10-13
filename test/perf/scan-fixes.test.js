@@ -64,7 +64,8 @@ test('el SQL nuevo del limitador no lee estado editable por el usuario y las tab
   }
 });
 
-test('el chat cuenta también un "system" que no es texto en el tope de tamaño', () => {
+test('el chat valida el pedido del cliente (system de texto, tools permitidas, tope de tamaño) antes de llamar a Anthropic', () => {
   const src = fs.readFileSync(path.join(ROOT, 'api', 'chat.js'), 'utf8');
-  assert.match(src, /JSON\.stringify\(system \|\| ''\)\.length/);
+  assert.match(src, /sanitizeChatRequest\(req\.body\)/);
+  assert.doesNotMatch(src, /const \{ system, tools, messages \} = req\.body/);
 });

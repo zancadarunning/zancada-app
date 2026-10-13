@@ -1,4 +1,5 @@
 const { withSentry, reportError } = require('./_lib/sentry');
+const { pick } = require('./_lib/own');
 
 // Feed de calendario suscribible (webcal://) -- ver ensureCalendarToken()/
 // openCalendarSubscribe() en app.js para el porqué: reemplaza el viejo "bajar un .ics de
@@ -55,7 +56,7 @@ function typeLabel(d, lang){
   // Un día "custom" (texto libre que el coach escribió por chat) ya trae su propio
   // d.type listo para mostrar -- no hace falta traducción.
   if(d.custom && d.type) return d.type;
-  const dict = TYPE_LABELS[lang] || TYPE_LABELS.es;
+  const dict = pick(TYPE_LABELS, lang, 'es');
   return dict[d.typeKey] || d.typeKey || dict.easy;
 }
 function amountText(d, profile){
@@ -74,7 +75,7 @@ function buildWeekEvents(plan, weekStart, lang, profile, nowStamp){
     // ✓ en las sesiones ya hechas: el calendario sirve también de registro de lo que
     // se cumplió. Las saltadas directamente no aparecen (ya no van a pasar).
     const summary = `${d.status === 'done' ? '✓ ' : ''}${typeLabel(d, lang)} · ${amountText(d, profile)}`;
-    const zoneLine = d.zone ? `${ZONE_WORD[lang] || ZONE_WORD.es} ${d.zone}` : '';
+    const zoneLine = d.zone ? `${pick(ZONE_WORD, lang, 'es')} ${d.zone}` : '';
     // Mismo UID que generaba el viejo generateWeekICS() del lado del cliente -- si algún
     // usuario todavía tiene eventos de una exportación manual anterior con este mismo UID,
     // un cliente de calendario que respete RFC 5545 los trata como el mismo evento

@@ -1,4 +1,5 @@
 // api/_lib/weekly-summary.js
+const { pick } = require('./own');
 //
 // Resumen de la semana que send-reminders.js (cron cada hora) manda el domingo entre las 19:00 y las 23:00, hora local de cada corredor:
 // kilómetros y salidas de la semana, comparación con la anterior, sesiones del plan cumplidas y racha. buildWeeklySummary es una
@@ -82,7 +83,7 @@ function fmtKm(km, imperial) {
 // runs: [{date, distanceKm}], plan: [{dist, status}] de la semana en curso (o null), weekStart: 'YYYY-MM-DD' del lunes de ese plan.
 // Devuelve {title, body} o null si no hubo ninguna salida esta semana (no se manda nada: un "0 km" desanima más de lo que ayuda).
 function buildWeeklySummary({ runs, plan, weekStart, streak, tz, lang, imperial, now }) {
-  const T = L[lang] || L.es;
+  const T = pick(L, lang, 'es');
   const today = dayNum(localDateKey(now, tz));
   let km = 0, n = 0, prevKm = 0;
   for (const r of runs || []) {

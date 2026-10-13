@@ -2,6 +2,8 @@
 const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
+const { pick } = require('./_lib/own');
+const { sanitizeChatRequest } = require('./_lib/chat-guard');
 
 // Mensajes que sí le mostramos al corredor tal cual, en su idioma. Antes, cualquier error
 // que no fuera "muy solicitado" (token de sesión faltante/vencido, un error interno de la
@@ -40,6 +42,10 @@ const GENERIC_ERROR_MSG = {
 // una cuenta comprometida antes de que la cuota de Claude se dispare.
 // Ajustable sin tocar código con la variable de entorno CHAT_DAILY_LIMIT.
 const CHAT_DAILY_LIMIT = parseInt(process.env.CHAT_DAILY_LIMIT, 10) || 60;
+// Tope GLOBAL por día (todas las cuentas juntas): el límite por cuenta no frena a quien abre muchas cuentas. Se cuenta con la misma
+// función de siempre (increment_chat_usage) usando un user_id fijo "de nadie". Ajustable con CHAT_GLOBAL_DAILY_LIMIT.
+const CHAT_GLOBAL_DAILY_LIMIT = parseInt(process.env.CHAT_GLOBAL_DAILY_LIMIT, 10) || 2000;
+const GLOBAL_COUNTER_ID = '00000000-0000-0000-0000-000000000000';
 // Tope al tamaño de lo que se manda a Claude por pedido -- el chat en app.js arma
 // "system"/"tools"/"messages" del lado del cliente y se los pasamos casi tal cual (ver el
 // comentario más abajo, junto a donde se arma el body), así que sin este chequeo cualquier
@@ -48,7 +54,6 @@ const CHAT_DAILY_LIMIT = parseInt(process.env.CHAT_DAILY_LIMIT, 10) || 60;
 // acota CUÁNTOS pedidos por día, pero no CUÁNTO puede pesar cada uno. Una conversación real
 // con el coach (perfil + plan de la semana + historial de mensajes) nunca se acerca a esto;
 // es un piso generoso pensado para frenar un abuso deliberado, no para un uso normal.
-const MAX_INPUT_CHARS = 200000;
 const LIMIT_MSG = {
   es: 'Llegaste al límite de mensajes al coach por hoy. Probá de nuevo mañana.',
   en: "You've reached today's limit of messages to the coach. Try again tomorrow.",
@@ -78,14 +83,21 @@ module.exports = withSentry(async (req, res) => {
   const auth = await verifyUser(req);
   if (!auth.ok) {
     console.error('chat: auth failed —', auth.error);
-    res.status(auth.status).json({ error: { message: AUTH_ERROR_MSG[lang] || AUTH_ERROR_MSG.es } });
+    res.status(auth.status).json({ error: { message: pick(AUTH_ERROR_MSG, lang, 'es') } });
+    return;
+  }
+
+  // Un mail sin confirmar no alcanza: las cuentas descartables sin confirmar no pueden gastar la cuota de la IA.
+  if (!auth.emailConfirmed) {
+    console.error('chat: cuenta sin mail confirmado, usuario', auth.userId);
+    res.status(403).json({ error: { message: pick(AUTH_ERROR_MSG, lang, 'es') } });
     return;
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     console.error('chat: falta configurar ANTHROPIC_API_KEY en las variables de entorno de Vercel.');
-    res.status(500).json({ error: { message: GENERIC_ERROR_MSG[lang] || GENERIC_ERROR_MSG.es } });
+    res.status(500).json({ error: { message: pick(GENERIC_ERROR_MSG, lang, 'es') } });
     return;
   }
 
@@ -106,7 +118,18 @@ module.exports = withSentry(async (req, res) => {
     if (rpcRes.ok) {
       const withinLimit = await rpcRes.json();
       if (withinLimit === false) {
-        res.status(200).json({ error: { message: LIMIT_MSG[lang] || LIMIT_MSG.es } });
+        res.status(200).json({ error: { message: pick(LIMIT_MSG, lang, 'es') } });
+        return;
+      }
+      // tope global del día (todas las cuentas)
+      const gRes = await fetch(`${base}/rest/v1/rpc/increment_chat_usage`, {
+        method: 'POST',
+        headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_user_id: GLOBAL_COUNTER_ID, p_limit: CHAT_GLOBAL_DAILY_LIMIT })
+      });
+      if (gRes.ok && (await gRes.json()) === false) {
+        console.error('chat: tope global diario superado (' + CHAT_GLOBAL_DAILY_LIMIT + ')');
+        res.status(200).json({ error: { message: pick(BUSY_MSG, lang, 'es') } });
         return;
       }
     } else {
@@ -117,15 +140,14 @@ module.exports = withSentry(async (req, res) => {
   }
 
   try {
-    const { system, tools, messages } = req.body || {};
-    const busyMessage = BUSY_MSG[lang] || BUSY_MSG.es;
-
-    const inputChars = (typeof system === 'string' ? system.length : JSON.stringify(system || '').length) + JSON.stringify(messages || []).length + JSON.stringify(tools || []).length;
-    if (inputChars > MAX_INPUT_CHARS) {
-      console.error('chat: pedido rechazado por tamaño —', inputChars, 'chars, usuario', auth.userId);
-      res.status(200).json({ error: { message: GENERIC_ERROR_MSG[lang] || GENERIC_ERROR_MSG.es } });
+    const checked = sanitizeChatRequest(req.body);
+    if (!checked.ok) {
+      console.error('chat: pedido rechazado —', checked.reason, '— usuario', auth.userId);
+      res.status(200).json({ error: { message: pick(GENERIC_ERROR_MSG, lang, 'es') } });
       return;
     }
+    const { system, tools, messages } = checked.value;
+    const busyMessage = pick(BUSY_MSG, lang, 'es');
 
     // A diferencia de Gemini (ver historial de este archivo), acá NO hace falta traducir
     // nada: el chat en app.js ya arma system/tools/messages directo en el formato nativo
@@ -189,7 +211,7 @@ module.exports = withSentry(async (req, res) => {
       const retryable = data ? isRetryable(lastStatus, lastError || data.error) : true;
       if (!data) console.error('chat: fetch a Claude falló después de reintentos —', lastError);
       else if (!retryable) console.error('chat: error no reintentable de Claude —', lastStatus, data.error);
-      const friendlyMessage = retryable ? busyMessage : (GENERIC_ERROR_MSG[lang] || GENERIC_ERROR_MSG.es);
+      const friendlyMessage = retryable ? busyMessage : (pick(GENERIC_ERROR_MSG, lang, 'es'));
       res.status(200).json({ error: { message: friendlyMessage } });
       return;
     }
@@ -201,6 +223,6 @@ module.exports = withSentry(async (req, res) => {
   } catch (err) {
     console.error('chat: excepción no manejada —', err);
     await reportError(err, { endpoint: 'chat' });
-    res.status(500).json({ error: { message: GENERIC_ERROR_MSG[lang] || GENERIC_ERROR_MSG.es } });
+    res.status(500).json({ error: { message: pick(GENERIC_ERROR_MSG, lang, 'es') } });
   }
 });
