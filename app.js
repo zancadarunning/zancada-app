@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-12T23:54:51Z';
+const APP_VERSION = '2026-10-13T00:34:10Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1022,6 +1022,22 @@ function initNativePushListeners(){
   nativePush.addListener('registrationError', (err)=>{ console.error('push nativo: registro falló', err); });
 }
 initNativePushListeners();
+// Al abrir la app con las notificaciones ya activadas, se vuelve a pedir el registro a FCM: devuelve el token actual y el
+// listener de arriba lo guarda. Sin esto, el token solo se guardaba al tocar el interruptor, así que una reinstalación,
+// un token rotado o una cuenta que venía de la web (con su suscripción web guardada) dejaban al celular sin token de Android
+// y los avisos nunca llegaban. register() es idempotente: no vuelve a pedir permiso.
+let nativePushRefreshed = false;
+async function refreshNativePushRegistration(){
+  if(nativePushRefreshed) return;
+  const nativePush = nativePushPlugin();
+  if(!nativePush || !currentUserId || !state.nativePushEnabled) return;
+  try{
+    const status = await nativePush.checkPermissions();
+    if(status.receive !== 'granted') return;
+    nativePushRefreshed = true;
+    await nativePush.register();
+  }catch(e){ nativePushRefreshed = false; console.error('push nativo: no se pudo renovar el registro', e); }
+}
 async function enableNativePushNotifications(nativePush){
   try{
     let status = await nativePush.checkPermissions();
@@ -3868,6 +3884,7 @@ window.addEventListener('resize', syncAppMinHeight);
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) syncAppMinHeight(); });
 window.addEventListener('pageshow', syncAppMinHeight);
 function enterApp(){
+  setTimeout(()=>{ try{ refreshNativePushRegistration(); }catch(e){} }, 1500);
   document.getElementById('splash').style.display='none';
   document.getElementById('login').style.display='none';
   document.getElementById('onboard').style.display='none';
