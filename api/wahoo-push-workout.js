@@ -18,6 +18,7 @@
 // Wahoo con el token guardado.
 
 const verifyUser = require('./_lib/verify-user');
+const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 const { refreshWahooToken } = require('./_lib/wahoo-activity-helpers');
 const { applyCors, isPreflight } = require('./_lib/cors');
 
@@ -38,6 +39,13 @@ module.exports = withSentry(async (req, res) => {
   const base = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_KEY;
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
+
+  // Límite de frecuencia por usuario: la cuota de la API de la marca es de la APP (compartida por todos), así que un usuario que
+  // mande pedidos en bucle podía agotarla y cortar la sincronización de los demás. Falla cerrado (si el limitador no responde, no pasa).
+  if (!(await checkSyncCooldown(base, headers, userId, 'wahoo-workout', 10000, { failClosed: true }))) {
+    res.status(200).json({ pushed: 0, reason: 'rate_limited' });
+    return;
+  }
 
   try {
     const connRes = await fetch(`${base}/rest/v1/wahoo_connections?user_id=eq.${userId}&select=*`, { headers });

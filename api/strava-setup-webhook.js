@@ -20,7 +20,7 @@ module.exports = withSentry(async (req, res) => {
       body: JSON.stringify({
         client_id: process.env.STRAVA_CLIENT_ID,
         client_secret: process.env.STRAVA_CLIENT_SECRET,
-        callback_url: `${process.env.SITE_URL}/api/strava-webhook`,
+        callback_url: `${process.env.SITE_URL}/api/strava-webhook${process.env.STRAVA_WEBHOOK_SECRET ? '?k=' + encodeURIComponent(process.env.STRAVA_WEBHOOK_SECRET) : ''}`,
         verify_token: process.env.STRAVA_VERIFY_TOKEN
       })
     });

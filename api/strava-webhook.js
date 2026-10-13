@@ -1,4 +1,27 @@
+const crypto = require('crypto');
 const { activityToRun, mergeStravaRuns, purgeStravaRunsForUser, deleteStravaRun } = require('./_lib/strava-activity-helpers');
+
+// Comparación en tiempo constante (se hashea para que el largo no se filtre).
+function safeEqual(a, b) {
+  const ha = crypto.createHash('sha256').update(String(a)).digest();
+  const hb = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
+// Strava no firma los webhooks, así que antes de ACTUAR sobre un evento destructivo lo confirmamos contra Strava mismo:
+//  - "el usuario revocó el acceso": solo es cierto si Strava ya no deja refrescar su token (refresh -> 400/401).
+//    Si el refresh funciona, el acceso sigue vigente y el evento era falso: se ignora (y de paso se guardan los tokens nuevos).
+//  - "se borró la actividad": solo es cierto si Strava responde 404 para esa actividad.
+// Ante cualquier duda (error de red, 5xx, rate limit) no se borra nada: el cron de sincronización corrige después.
+async function stravaRefresh(conn) {
+  const r = await fetch('https://www.strava.com/oauth/token', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_id: process.env.STRAVA_CLIENT_ID, client_secret: process.env.STRAVA_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: conn.refresh_token })
+  });
+  let data = null;
+  try { data = await r.json(); } catch (e) { data = null; }
+  return { status: r.status, ok: r.ok && data && data.access_token, data };
+}
 
 // Mensajes cortos por idioma para el aviso que le queda al usuario en el chat del coach
 // cuando revocó el acceso desde la propia Strava (ver deauthorizeAthlete más abajo) -- no
@@ -88,11 +111,22 @@ async function deleteActivity(athleteId, activityId) {
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
   if (!Number.isInteger(athleteId)) return; // se interpola en un filtro PostgREST: solo enteros (segunda capa, ver el chequeo de owner_id/object_id abajo)
-  const connRes = await fetch(`${base}/rest/v1/strava_connections?athlete_id=eq.${athleteId}&select=user_id`, { headers });
+  const connRes = await fetch(`${base}/rest/v1/strava_connections?athlete_id=eq.${athleteId}&select=user_id,access_token,refresh_token,expires_at`, { headers });
   const conns = await connRes.json();
-  if (!conns || !conns.length) return;
+  if (!Array.isArray(conns) || !conns.length) return;
+  const conn = conns[0];
 
-  await deleteStravaRun(base, headers, conns[0].user_id, activityId);
+  // Confirmar con Strava que la actividad de verdad ya no existe (404). Si el token venció, se renueva primero.
+  let token = conn.access_token;
+  if (conn.expires_at < Math.floor(Date.now() / 1000)) {
+    const rf = await stravaRefresh(conn);
+    if (!rf.ok) return;
+    token = rf.data.access_token;
+  }
+  const check = await fetch(`https://www.strava.com/api/v3/activities/${encodeURIComponent(activityId)}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (check.status !== 404) return;   // sigue existiendo (o no se pudo comprobar): no se borra
+
+  await deleteStravaRun(base, headers, conn.user_id, activityId);
 }
 
 // Strava manda este evento cuando el usuario revoca el acceso de la app
@@ -110,10 +144,19 @@ async function deauthorizeAthlete(athleteId) {
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
   if (!Number.isInteger(athleteId)) return; // se interpola en un filtro PostgREST: solo enteros (segunda capa, ver el chequeo de owner_id/object_id abajo)
-  const connRes = await fetch(`${base}/rest/v1/strava_connections?athlete_id=eq.${athleteId}&select=user_id`, { headers });
+  const connRes = await fetch(`${base}/rest/v1/strava_connections?athlete_id=eq.${athleteId}&select=user_id,refresh_token`, { headers });
   const conns = await connRes.json();
-  if (!conns || !conns.length) return;
+  if (!Array.isArray(conns) || !conns.length) return;
   const userId = conns[0].user_id;
+
+  // Confirmar la revocación: si Strava todavía deja refrescar el token, el acceso sigue vigente y el evento era falso.
+  const rf = await stravaRefresh(conns[0]);
+  if (rf.ok) {
+    await fetch(`${base}/rest/v1/strava_connections?user_id=eq.${userId}`, { method: 'PATCH', headers, body: JSON.stringify({ access_token: rf.data.access_token, refresh_token: rf.data.refresh_token, expires_at: rf.data.expires_at }) }).catch(() => {});
+    console.error('strava-webhook: evento de revocación ignorado, el acceso sigue vigente (posible evento falso)');
+    return;
+  }
+  if (rf.status !== 400 && rf.status !== 401) return;   // error de red / 5xx / rate limit: no se borra nada
 
   await fetch(`${base}/rest/v1/strava_connections?athlete_id=eq.${athleteId}`, { method: 'DELETE', headers });
   await purgeStravaRunsForUser(base, headers, userId, (count, lang) => (REVOKED_MSGS[lang] || REVOKED_MSGS.es)(count));
@@ -149,10 +192,18 @@ module.exports = withSentry(async (req, res) => {
       // Strava mismo documenta para esto es validar el subscription_id que trae cada
       // evento contra el de TU suscripción (uno solo, fijo) -- ver STRAVA_SUBSCRIPTION_ID
       // en las variables de entorno (lo devuelve GET /api/strava-check-subscription).
+      // Segunda barrera: un secreto largo en la URL del callback (se registra en strava-setup-webhook.js). Si STRAVA_WEBHOOK_SECRET
+      // está configurado, un POST sin el secreto correcto se ignora. Sin la variable queda el comportamiento anterior.
+      const webhookSecret = process.env.STRAVA_WEBHOOK_SECRET;
+      if (webhookSecret && !safeEqual((req.query && req.query.k) || '', webhookSecret)) {
+        console.error('strava-webhook: falta o no coincide el secreto del callback, se ignora el evento');
+        await reportSecurityEvent('Webhook de Strava sin el secreto correcto', {}).catch(() => {});
+        return;
+      }
       const expectedSubId = process.env.STRAVA_SUBSCRIPTION_ID;
       if (!expectedSubId || String(event && event.subscription_id) !== String(expectedSubId)) {
         console.error('strava-webhook: subscription_id no coincide, se ignora el evento', event && event.subscription_id);
-        await reportSecurityEvent('Posible webhook de Strava forjado: subscription_id no coincide', { received: event && event.subscription_id, event }).catch(() => {});
+        await reportSecurityEvent('Posible webhook de Strava forjado: subscription_id no coincide', { received: event && event.subscription_id }).catch(() => {});
         return;
       }
       // owner_id/object_id se interpolan sin comillas en un filtro PostgREST
