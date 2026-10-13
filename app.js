@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-13T00:58:42Z';
+const APP_VERSION = '2026-10-13T01:01:06Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6555,6 +6555,27 @@ function estimateRaceTime(km){
   return {sec: adj.sec, rawSec: adj.rawSec, source, basis, endurance: adj.endurance, calib: adj.calib, exp};
 }
 // Guarda la estimación (sin calibrar) en el evento mientras falta para la carrera: es lo que se compara con el resultado real. Solo si cambió más de 1%.
+// Rango realista del tiempo estimado: prudente / probable / ambicioso. Qué tan ancho es depende de cuánta confianza da la base:
+// una carrera reciente de distancia parecida angosta el rango; un test de nivel, una distancia muy distinta o poca resistencia lo ensanchan.
+// Es asimétrico a propósito: es más común quedarse corto de lo previsto que superarlo.
+function raceRange(sec, info){
+  info = info || {};
+  let spread = info.source === 'runs' ? 0.03 : (info.source === 'level' ? 0.06 : 0.045);
+  if(info.endurance) spread += 0.015;
+  if(info.calib) spread -= 0.01;
+  if(info.basis && info.km > 0 && info.basis.distKm > 0){
+    const ratio = Math.max(info.km / info.basis.distKm, info.basis.distKm / info.km);
+    if(ratio > 2) spread += 0.01;
+  }
+  spread = Math.max(0.025, Math.min(0.09, spread));
+  return { spread, ambitious: sec * (1 - spread * 0.8), likely: sec, prudent: sec * (1 + spread * 1.3) };
+}
+function raceRangeHtml(sec, info){
+  const r = raceRange(sec, info);
+  const cell = (key, v, strong) => '<div class="rp-range-cell' + (strong ? ' on' : '') + '"><span>' + t(key) + '</span><b>' + fmtRaceTime(Math.round(v)) + '</b></div>';
+  return '<div class="rp-range" role="group" aria-label="' + escapeHtml(t('rp_range_title')) + '"><div class="rp-lbl" style="margin-bottom:8px;">' + t('rp_range_title') + '</div><div class="rp-range-row">'
+    + cell('rp_range_bold', r.ambitious) + cell('rp_range_likely', r.likely, true) + cell('rp_range_safe', r.prudent) + '</div><p class="rp-note" style="margin-top:8px;">' + t('rp_range_note') + '</p></div>';
+}
 function snapshotRacePrediction(est){
   const ev = state.event;
   if(!ev || !est || !(est.rawSec > 0)) return;
@@ -6637,7 +6658,7 @@ function openRacePlan(){
     const unit = distUnit();
     html += '<div class="card rp-target"><div class="rp-target-row"><div><div class="rp-lbl">' + t('rp_target') + '</div><div class="rp-big">' + fmtRaceTime(sec) + '</div></div>' +
       '<div><div class="rp-lbl" style="text-align:right;">' + t('rp_pace_lbl') + '</div><div class="rp-pace">' + fmtPace(est.sec / 60 / km) + ' <small>/' + unit + '</small></div></div></div>' +
-      '<p class="rp-note">' + t(est.source === 'runs' ? 'rp_hint_runs' : (est.source === 'level' ? 'rp_hint_level' : 'rp_hint_pr')) + (est.endurance ? ' ' + t('rp_endurance', {dist: fmtDist(est.endurance.longestKm, 1) + ' ' + distUnit(), pct: Math.round(est.endurance.pct * 100)}) : '') + (est.calib ? ' ' + t('rp_calib', {n: est.calib.n, pct: (est.calib.factor >= 1 ? '+' : '') + ((est.calib.factor - 1) * 100).toFixed(1) + '%'}) : '') + (est.basis ? ' ' + t('rp_basis', {dist: fmtDist(est.basis.distKm, 1) + ' ' + distUnit(), pace: fmtPace(est.basis.paceMin), unit: distUnit(), date: new Date(est.basis.date).toLocaleDateString(LOCALE_MAP[lang], {day:'numeric', month:'short'})}) : '') + '</p></div>' +
+      raceRangeHtml(est.sec, {source: est.source, endurance: est.endurance, calib: est.calib, basis: est.basis, km: km}) + '<p class="rp-note">' + t(est.source === 'runs' ? 'rp_hint_runs' : (est.source === 'level' ? 'rp_hint_level' : 'rp_hint_pr')) + (est.endurance ? ' ' + t('rp_endurance', {dist: fmtDist(est.endurance.longestKm, 1) + ' ' + distUnit(), pct: Math.round(est.endurance.pct * 100)}) : '') + (est.calib ? ' ' + t('rp_calib', {n: est.calib.n, pct: (est.calib.factor >= 1 ? '+' : '') + ((est.calib.factor - 1) * 100).toFixed(1) + '%'}) : '') + (est.basis ? ' ' + t('rp_basis', {dist: fmtDist(est.basis.distKm, 1) + ' ' + distUnit(), pace: fmtPace(est.basis.paceMin), unit: distUnit(), date: new Date(est.basis.date).toLocaleDateString(LOCALE_MAP[lang], {day:'numeric', month:'short'})}) : '') + '</p></div>' +
       '<div class="card"><div class="rp-lbl" style="margin-bottom:6px;">' + t('rp_strategy') + '</div><div class="rp-strat-name">' + t('rp_strategy_name') + '</div><p class="rp-strat-body">' + t('rp_strategy_body') + '</p></div>' +
       '<div class="card"><div class="rp-lbl" style="margin-bottom:4px;">' + t('rp_splits') + '</div>' +
       shown.map((s, i) => {

@@ -763,3 +763,18 @@ test('calibración: tras la carrera se guarda lo estimado vs lo hecho, y corrige
   app.state.runs = [{ id: 'r', date: evDate + 'T12:00:00', distanceKm: 5, durationSec: 1700 }];
   assert.equal(app.recordRaceCalibration(ev), false, 'una salida de 5 km no es la carrera de 10');
 });
+
+test('rango realista de la carrera: prudente > probable > ambicioso, y el ancho depende de la confianza de la base', () => {
+  const app = loadApp();
+  const base = 3600;
+  const recent = app.raceRange(base, { source: 'runs', basis: { distKm: 10 }, km: 10 });
+  const level = app.raceRange(base, { source: 'level', endurance: { pct: 0.05 }, km: 21, basis: null });
+  for (const r of [recent, level]) {
+    assert.ok(r.ambitious < r.likely && r.likely < r.prudent, 'el orden tiene que ser ambicioso < probable < prudente');
+    assert.equal(r.likely, base);
+    assert.ok(r.spread >= 0.025 && r.spread <= 0.09, 'el ancho se mantiene entre 2,5% y 9%');
+  }
+  assert.ok(level.spread > recent.spread, 'con menos confianza el rango es más ancho');
+  // asimétrico: quedarse corto es más probable que superarse
+  assert.ok(recent.prudent - base > base - recent.ambitious);
+});

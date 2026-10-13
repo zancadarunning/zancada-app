@@ -2387,6 +2387,15 @@
   .adm-limit.mid .pct{color:var(--zone4); font-weight:700;}
   .adm-limit.hi .pct{color:var(--zone5-text); font-weight:800;}
 
+  /* Plan de carrera: rango prudente / probable / ambicioso */
+  .rp-range{margin-top:14px; padding-top:14px; border-top:1px solid var(--overlay-hairline);}
+  .rp-range-row{display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;}
+  .rp-range-cell{background:var(--asphalt-3); border-radius:var(--radius-sm); padding:10px 6px; text-align:center;}
+  .rp-range-cell span{display:block; font-size:11px; color:var(--mist); font-weight:700; letter-spacing:.02em;}
+  .rp-range-cell b{display:block; margin-top:3px; font-family:'JetBrains Mono',monospace; font-size:15px; font-variant-numeric:tabular-nums;}
+  .rp-range-cell.on{background:var(--hivis-dim); box-shadow:inset 0 0 0 1px var(--hivis-edge, var(--hivis));}
+  .rp-range-cell.on b{color:var(--hivis-text);}
+
   /* =====================================================================================================================
      ZONAS DE FRECUENCIA CARDÍACA -- color fuerte pero no estridente, en los dos temas (azul, verde, amarillo, naranja, rojo).
      Relleno suave para chips, barras, anillos y mapas; el texto encima es una tinta oscura del MISMO tono (--zoneN-ink).
