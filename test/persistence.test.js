@@ -122,3 +122,18 @@ test('persist: varios pedidos en el mismo instante que uno está en vuelo se jun
 
   pending[1]({ data: null, error: null });
 });
+
+test('persist: si Supabase devuelve un error de red (no lanza), el cambio queda respaldado en el teléfono y se reintenta', async () => {
+  let fail = true;
+  const app = loadApp({
+    onUpsert() { return Promise.resolve(fail ? { data: null, error: { message: 'TypeError: Failed to fetch' } } : { data: null, error: null }); },
+  });
+  app.setCurrentUserId('user-sin-conexion');
+  app.state.chat = [{ role: 'user', text: 'un cambio hecho sin conexión', ts: 1 }];
+  await app.persist();
+  assert.equal(app.hasPendingBackup(), true, 'sin conexión debería quedar un respaldo pendiente');
+
+  fail = false; // vuelve la conexión
+  await app.persist();
+  assert.equal(app.hasPendingBackup(), false, 'con conexión el respaldo pendiente se limpia');
+});

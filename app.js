@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-13T00:34:10Z';
+const APP_VERSION = '2026-10-13T00:58:42Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1270,7 +1270,10 @@ async function persist(){
       refreshCalendarCache();
       scheduleNativeCalendarSync();
       scheduleWatchSync();
-      await supabaseClient.from('app_state').upsert({ user_id: currentUserId, data: state, updated_at: nowIso });
+      // supabase-js NO lanza una excepción cuando falla la red: devuelve { error }. Sin revisarlo, un guardado sin conexión
+      // se daba por bueno (se borraba el respaldo local y se avanzaba la versión conocida) y el cambio se perdía.
+      const { error: saveError } = await supabaseClient.from('app_state').upsert({ user_id: currentUserId, data: state, updated_at: nowIso });
+      if(saveError) throw saveError;
       loadedStateVersion = nowIso; // este guardado ya es la versión más nueva que conocemos
       clearPendingBackup();
     }
