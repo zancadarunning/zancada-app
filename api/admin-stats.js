@@ -51,6 +51,10 @@ module.exports = withSentry(async (req, res) => {
   const admins = adminList();
   const email = String(auth.email || '').toLowerCase();
   if (!admins.length || !email || !auth.emailConfirmed || !admins.includes(email)) {
+    // Solo al log del servidor (Vercel → Logs), nunca en la respuesta: dice POR QUÉ se rechazó sin revelárselo a nadie más.
+    const why = !admins.length ? 'ADMIN_EMAILS vacía o sin definir en este despliegue'
+      : (!auth.emailConfirmed ? 'el mail de la cuenta no está confirmado' : 'el mail de la cuenta no está en ADMIN_EMAILS (' + admins.length + ' en la lista)');
+    console.warn('admin-stats: acceso rechazado --', why);
     res.status(403).json({ error: 'Forbidden' });
     return;
   }
