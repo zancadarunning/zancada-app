@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-14T19:42:58Z';
+const APP_VERSION = '2026-10-14T19:48:17Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4321,13 +4321,21 @@ function calcWeeklyKm(profile){
   // recuperando de a poco en las semanas siguientes.
   return profile.returningFromBreak ? Math.round(base*0.6) : base;
 }
+// Crecimiento semanal máximo y techo de volumen (múltiplo del volumen base) según la cautela
+// del corredor. Vive aparte para que weekMultiplier (curva de siempre) y phasedWeeklyKm (plan
+// por fases) usen exactamente los mismos números y no se desfasen si uno de los dos cambia.
+function growthParams(caution){
+  return {
+    growth: caution && caution.level>=2 ? 1.04 : caution && caution.level>=1 ? 1.05 : 1.06,
+    cap: caution && caution.level>=2 ? 1.5 : caution && caution.level>=1 ? 1.65 : 1.8
+  };
+}
 function weekMultiplier(n, caution, skipCutback){
   n = n || 1;
   const growthSteps = n - Math.floor(n/4) - 1;
   // corredores con más cautela (mayor edad y/o contextura) progresan más despacio
   // semana a semana y con un techo de volumen más bajo, en vez de la misma curva para todos
-  const growthRate = caution && caution.level>=2 ? 1.04 : caution && caution.level>=1 ? 1.05 : 1.06;
-  const cap = caution && caution.level>=2 ? 1.5 : caution && caution.level>=1 ? 1.65 : 1.8;
+  const { growth: growthRate, cap } = growthParams(caution);
   let mult = Math.pow(growthRate, Math.max(0, growthSteps));
   // skipCutback: esta semana YA tiene una reducción de volumen deliberada y más específica
   // (taper antes de la carrera objetivo, recuperación post-carrera, o la semana puntual de
@@ -4450,6 +4458,38 @@ function phaseForWeek(p, weekStartDate, schedule){
   const first = split.indexOf(phase);
   const phaseWeeks = split.lastIndexOf(phase) - first + 1;
   return { active: true, phase, weekIdx, R, weeksToRace, weekInPhase: weekIdx - first + 1, phaseWeeks };
+}
+// Kilometraje semanal pico por distancia de carrera: lo máximo que el plan por fases busca
+// alcanzar en las semanas 'peak' (techo de la distancia, no una meta para todos).
+const PEAK_KM = { '5k': 35, '10k': 45, '15k': 50, '21k': 55, '42k': 70 };
+// Volumen de la semana descrita por `info` (resultado ACTIVO de phaseForWeek) en el plan por
+// fases. PURA. Devuelve {km, peakKm, limited}:
+//  - peakKm: el pico al que se llega, que no pasa del techo de la distancia, ni del techo por
+//    cautela (growthParams.cap x baseKm), ni de lo que alcanza a crecer baseKm con el
+//    crecimiento semanal máximo durante las semanas de rampa; y nunca baja de baseKm (si ya
+//    corre más que el pico de la distancia, se mantiene ahí en vez de recortarlo).
+//  - rampa (base/build/specific): geométrica de baseKm a peakKm. Con razón constante r =
+//    (peakKm/baseKm)^(1/rampCount) <= growth por construcción, así que el límite de
+//    crecimiento semanal se cumple sin tener que chequearlo semana a semana.
+//  - descarga: en cada 4ta semana de rampa (weekIdx % 4 === 3) x0,75 sobre el valor de esa
+//    semana; la siguiente vuelve a su valor normal (rebote). Nunca en peak ni en taper.
+//  - peak y taper valen peakKm: la baja del taper la aplica generatePlan con taperMultiplier.
+//  - limited: ni el pico ni el punto de partida llegan al de la distancia (el plan no alcanza
+//    a preparar esa carrera con el tiempo y la cautela que hay).
+// No redondea nada: generatePlan redondea por sesión.
+function phasedWeeklyKm(p, caution, info, baseKm){
+  const { growth, cap } = growthParams(caution);
+  const goalPeak = PEAK_KM[p && p.goal];
+  const peakWeeks = phaseSplit(info.R).filter(x => x === 'peak').length;
+  const rampCount = info.R - peakWeeks; // >=1 porque R>=4
+  const peakKm = goalPeak === undefined ? baseKm
+    : Math.max(baseKm, Math.min(goalPeak, baseKm * cap, baseKm * Math.pow(growth, rampCount)));
+  const limited = goalPeak !== undefined && peakKm < goalPeak && baseKm < goalPeak;
+  if(info.phase === 'taper' || info.weekIdx >= rampCount) return { km: peakKm, peakKm, limited };
+  const ratio = baseKm > 0 ? peakKm / baseKm : 1;
+  let km = baseKm * Math.pow(ratio, (info.weekIdx + 1) / rampCount);
+  if(info.weekIdx % 4 === 3) km *= 0.75;
+  return { km, peakKm, limited };
 }
 // Deja state.phaseSchedule al día con el perfil: lo crea si falta, lo reemplaza si la carrera o
 // la meta cambiaron (el ancla se recalcula desde hoy), o lo pone en null si el perfil ya no

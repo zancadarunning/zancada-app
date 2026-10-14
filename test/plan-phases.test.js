@@ -406,3 +406,170 @@ test('refreshPhaseSchedule: sin cronograma y sin perfil que califique no hace na
   assert.equal(b.app.state.phaseSchedule, null);
   assert.equal(b.calls.persist, 0);
 });
+
+// ---- growthParams / phasedWeeklyKm: volumen semanal por fases ----
+
+// Arma el `info` activo de phaseForWeek para la semana útil/taper número `i` de un plan de R
+// semanas útiles, sin pasar por fechas (phasedWeeklyKm solo mira phase, weekIdx y R).
+function infoAt(app, R, i) {
+  const split = app.phaseSplit(R);
+  const phase = i < R ? split[i] : 'taper';
+  return { active: true, phase, weekIdx: i, R };
+}
+
+// Serie completa de km: R semanas útiles + 3 de taper.
+function kmSeries(app, p, caution, baseKm, R) {
+  const out = [];
+  for (let i = 0; i < R + 3; i++) out.push(plain(app.phasedWeeklyKm(p, caution, infoAt(app, R, i), baseKm)));
+  return out;
+}
+
+test('growthParams: crecimiento y techo por nivel de cautela (los mismos que weekMultiplier)', () => {
+  const app = loadApp();
+  assert.deepEqual(plain(app.growthParams({ level: 0 })), { growth: 1.06, cap: 1.8 });
+  assert.deepEqual(plain(app.growthParams({ level: 1 })), { growth: 1.05, cap: 1.65 });
+  assert.deepEqual(plain(app.growthParams({ level: 2 })), { growth: 1.04, cap: 1.5 });
+  assert.deepEqual(plain(app.growthParams({ level: 3 })), { growth: 1.04, cap: 1.5 });
+  assert.deepEqual(plain(app.growthParams(null)), { growth: 1.06, cap: 1.8 });
+  assert.deepEqual(plain(app.growthParams(undefined)), { growth: 1.06, cap: 1.8 });
+});
+
+test('weekMultiplier: mismos valores que antes de extraer growthParams', () => {
+  const app = loadApp();
+  // valores calculados a mano con la fórmula original: 1.06^(n - floor(n/4) - 1), tope 1.8,
+  // y x0.75 en las semanas múltiplo de 4 salvo skipCutback
+  const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-12, `${a} vs ${b}`);
+  near(app.weekMultiplier(1, { level: 0 }), 1);
+  near(app.weekMultiplier(4, { level: 0 }), Math.pow(1.06, 2) * 0.75);
+  near(app.weekMultiplier(4, { level: 0 }, true), Math.pow(1.06, 2));
+  near(app.weekMultiplier(9, { level: 1 }), Math.pow(1.05, 6));
+  near(app.weekMultiplier(9, { level: 2 }), Math.pow(1.04, 6));
+  assert.equal(app.weekMultiplier(60, { level: 0 }, true), 1.8);
+  assert.equal(app.weekMultiplier(60, { level: 1 }, true), 1.65);
+  assert.equal(app.weekMultiplier(60, { level: 2 }, true), 1.5);
+  assert.equal(app.weekMultiplier(60, null, true), 1.8);
+});
+
+test('phasedWeeklyKm: baseKm 30, 10k, cautela 0, R=16 -> pico 45 (tope de la distancia), no limitado', () => {
+  const app = loadApp();
+  const r = plain(app.phasedWeeklyKm({ goal: '10k' }, { level: 0 }, infoAt(app, 16, 0), 30));
+  assert.equal(r.peakKm, 45);
+  assert.equal(r.limited, false);
+});
+
+test('phasedWeeklyKm: baseKm 10, 42k, cautela 0, R=16 -> pico limitado por el techo/crecimiento, limited true', () => {
+  const app = loadApp();
+  const peakWeeks = Array.from(app.phaseSplit(16)).filter(x => x === 'peak').length;
+  const expected = Math.min(70, 10 * 1.8, 10 * Math.pow(1.06, 16 - peakWeeks));
+  const r = plain(app.phasedWeeklyKm({ goal: '42k' }, { level: 0 }, infoAt(app, 16, 0), 10));
+  assert.equal(r.peakKm, expected);
+  assert.equal(r.peakKm, 18);
+  assert.equal(r.limited, true);
+});
+
+test('phasedWeeklyKm: baseKm mayor que el pico de la distancia -> pico = baseKm, no limitado', () => {
+  const app = loadApp();
+  const r = plain(app.phasedWeeklyKm({ goal: '10k' }, { level: 0 }, infoAt(app, 16, 5), 60));
+  assert.equal(r.peakKm, 60);
+  assert.equal(r.limited, false);
+  // igual al tope exacto de la distancia: tampoco está limitado
+  const eq = plain(app.phasedWeeklyKm({ goal: '10k' }, { level: 0 }, infoAt(app, 16, 5), 45));
+  assert.equal(eq.peakKm, 45);
+  assert.equal(eq.limited, false);
+});
+
+test('phasedWeeklyKm: la rampa es geométrica y llega al pico justo en la última semana de rampa', () => {
+  const app = loadApp();
+  const R = 16;
+  const rampCount = R - 2;
+  const s = kmSeries(app, { goal: '21k' }, { level: 0 }, 30, R);
+  const peakKm = s[0].peakKm;
+  assert.equal(peakKm, 54); // 30 x 1.8 (el tope de 55 de la distancia no llega a usarse)
+  const ramp = i => 30 * Math.pow(peakKm / 30, (i + 1) / rampCount);
+  for (let i = 0; i < rampCount; i++) {
+    const want = i % 4 === 3 ? ramp(i) * 0.75 : ramp(i);
+    assert.ok(Math.abs(s[i].km - want) < 1e-9, `semana ${i}: ${s[i].km} vs ${want}`);
+  }
+  // peak y taper: exactamente peakKm (el taper lo aplica generatePlan después)
+  for (let i = rampCount; i < R + 3; i++) assert.equal(s[i].km, peakKm, `semana ${i}`);
+});
+
+test('phasedWeeklyKm: el crecimiento semanal respeta el límite, las descargas son x0.75 y el pico es el máximo', () => {
+  const app = loadApp();
+  const bases = [3, 10, 20, 30, 44, 45, 60];
+  const goals = ['5k', '10k', '15k', '21k', '42k'];
+  const levels = [0, 1, 2];
+  const Rs = [4, 5, 8, 16, 24, 30, 60];
+  let combos = 0;
+  bases.forEach(baseKm => goals.forEach(goal => levels.forEach(level => Rs.forEach(R => {
+    combos++;
+    const caution = { level };
+    const { growth, cap } = app.growthParams(caution);
+    const s = kmSeries(app, { goal }, caution, baseKm, R);
+    const peakKm = s[0].peakKm;
+    const label = `base ${baseKm} ${goal} nivel ${level} R=${R}`;
+    // el pico respeta el techo y nunca baja de baseKm
+    assert.ok(peakKm >= baseKm, label);
+    assert.ok(peakKm <= Math.max(baseKm, baseKm * cap) + 1e-9, label);
+    const split = Array.from(app.phaseSplit(R));
+    const isCut = i => i < R && split[i] !== 'peak' && i % 4 === 3;
+    let prevNonCut = baseKm; // última semana sin descarga (la primera de rampa se compara con baseKm)
+    let prevWasCut = false;
+    let beforeCut = baseKm;
+    s.forEach((w, i) => {
+      assert.equal(w.peakKm, peakKm, `${label} peakKm constante, semana ${i}`);
+      if (i >= R || split[i] === 'peak') {
+        // peak y taper nunca son descarga y valen el pico
+        assert.equal(w.km, peakKm, `${label} semana ${i} (${i >= R ? 'taper' : 'peak'})`);
+      }
+      if (isCut(i)) {
+        // descarga: baja respecto de la semana anterior sin descarga
+        assert.ok(w.km < prevNonCut + 1e-9, `${label} semana ${i} descarga`);
+        beforeCut = prevNonCut;
+        prevWasCut = true;
+        return;
+      }
+      if (prevWasCut) {
+        // rebote: vuelve a su valor normal, que como mucho es dos pasos de rampa sobre la
+        // semana previa a la descarga (no se mide contra la descarga misma)
+        assert.ok(w.km <= beforeCut * growth * growth + 1e-9, `${label} semana ${i} rebote`);
+        assert.ok(w.km >= beforeCut - 1e-9, `${label} semana ${i} rebote no baja`);
+      } else {
+        assert.ok(w.km / prevNonCut <= growth + 1e-9, `${label} semana ${i}: ${w.km} / ${prevNonCut}`);
+        assert.ok(w.km >= prevNonCut - 1e-9, `${label} semana ${i} no baja sin descarga`);
+      }
+      prevWasCut = false;
+      prevNonCut = w.km;
+    });
+    // el pico es >= cualquier semana anterior
+    const firstPeak = split.indexOf('peak');
+    for (let i = 0; i < firstPeak; i++) assert.ok(s[firstPeak].km >= s[i].km - 1e-9, `${label} pico >= semana ${i}`);
+  }))));
+  assert.equal(combos, bases.length * goals.length * levels.length * Rs.length);
+});
+
+test('phasedWeeklyKm: la descarga cae cada 4 semanas (índices 3, 7, 11...) solo en rampa', () => {
+  const app = loadApp();
+  // R=16: rampa = 14 semanas, descargas en 3, 7, 11; el índice 15 es peak y no se descarga
+  const s = kmSeries(app, { goal: '21k' }, { level: 0 }, 30, 16);
+  [3, 7, 11].forEach(i => {
+    const full = 30 * Math.pow(s[0].peakKm / 30, (i + 1) / 14);
+    assert.ok(Math.abs(s[i].km - full * 0.75) < 1e-9, `descarga en ${i}`);
+    assert.ok(s[i + 1].km > s[i].km, `rebote en ${i + 1}`);
+  });
+  assert.equal(s[15].km, s[0].peakKm);
+  assert.equal(s[16].km, s[0].peakKm);
+});
+
+test('phasedWeeklyKm: es pura (no lee state) y no modifica sus argumentos', () => {
+  const app = loadApp();
+  app.state.profile = null;
+  const p = { goal: '10k' };
+  const caution = { level: 1 };
+  const info = infoAt(app, 12, 4);
+  const a = plain(app.phasedWeeklyKm(p, caution, info, 25));
+  const b = plain(app.phasedWeeklyKm(p, caution, info, 25));
+  assert.deepEqual(a, b);
+  assert.deepEqual(plain(info), infoAt(app, 12, 4));
+  assert.deepEqual(plain(caution), { level: 1 });
+});
