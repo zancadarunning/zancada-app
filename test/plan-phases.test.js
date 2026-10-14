@@ -591,3 +591,285 @@ test('phasedWeeklyKm: es pura (no lee state) y no modifica sus argumentos', () =
   assert.deepEqual(plain(info), infoAt(app, 12, 4));
   assert.deepEqual(plain(caution), { level: 1 });
 });
+
+// ---- generatePlan con volumen por fases + versión del plan ----
+
+// Semana 'build' del cronograma SCHEDULE (weekIdx 4, no es descarga) y una semana anterior al ancla.
+// (A volúmenes más altos la sesión de cuestas se recalcula por su estructura de repeticiones y no
+// conserva su parte del total, ver el cálculo de hills: por eso no se usa una semana build tardía.)
+const BUILD_WEEK = '2026-11-30';
+const PRE_ANCHOR_WEEK = '2026-10-26';
+
+// App con reloj congelado, perfil, cronograma y sin carreras cargadas. persist() espiado (así
+// no toca red ni disco y se puede comprobar que generatePlan no persiste).
+function phasedApp(profile, schedule, nowIso) {
+  const app = loadApp();
+  app.Date = makeFrozenDate(nowIso || '2026-10-28T12:00:00');
+  app.state.profile = profile;
+  app.state.event = null;
+  app.state.lastEventDate = null;
+  app.state.phaseSchedule = schedule === undefined ? plain(SCHEDULE) : schedule;
+  const calls = { persist: 0 };
+  app.persist = () => { calls.persist++; return Promise.resolve(); };
+  return { app, calls };
+}
+const sumDist = plan => plan.reduce((a, d) => a + (d.dist || 0), 0);
+
+test('generatePlan: con cronograma activo en semana build, el total semanal sigue phasedWeeklyKm x taperMultiplier (+-1,5 km)', () => {
+  const p = racingProfile();
+  const { app } = phasedApp(p);
+  const info = plain(app.phaseForWeek(p, BUILD_WEEK, app.state.phaseSchedule));
+  assert.equal(info.phase, 'build');
+  const expected = app.phasedWeeklyKm(p, app.trainingCaution(p), info, 30).km * app.taperMultiplier(p, BUILD_WEEK);
+  const plan = plain(app.generatePlan(p, 1, BUILD_WEEK));
+  assert.ok(Math.abs(sumDist(plan) - expected) <= 1.5, `suma ${sumDist(plan)} vs esperado ${expected}`);
+  // y no es el volumen de v4 (30 km en la semana 1): el plan por fases ya subió
+  assert.ok(expected > 35, `esperado ${expected}`);
+});
+
+test('generatePlan: sin cronograma (null) o con uno que no coincide, el plan es el de v4', () => {
+  const p = racingProfile();
+  const v4 = plain(phasedApp(p, null).app.generatePlan(p, 1, BUILD_WEEK));
+  const desfasado = phasedApp(p, { anchor: '2026-11-02', raceDate: '2027-03-21', goal: '21k' }).app;
+  assert.deepEqual(plain(desfasado.generatePlan(p, 1, BUILD_WEEK)), v4);
+  const sinKey = phasedApp(p, undefined).app;
+  sinKey.state.phaseSchedule = undefined;
+  assert.deepEqual(plain(sinKey.generatePlan(p, 1, BUILD_WEEK)), v4);
+  // v4: semana 1 -> multiplicador 1 -> ~30 km, bien lejos del volumen por fases
+  assert.ok(Math.abs(sumDist(v4) - 30) <= 1.5, `v4 suma ${sumDist(v4)}`);
+});
+
+test('generatePlan: principiante con cronograma viejo -> plan de v4 (el guard de principiante manda)', () => {
+  const beginner = racingProfile({ runnerType: 'new', weeklyKm: 0, currentWeeklyKm: 0, trainingDays: ['tue', 'thu', 'sun'] });
+  const withStale = phasedApp(beginner, plain(SCHEDULE)).app;
+  const without = phasedApp(beginner, null).app;
+  assert.deepEqual(plain(withStale.generatePlan(beginner, 3, BUILD_WEEK)), plain(without.generatePlan(beginner, 3, BUILD_WEEK)));
+  assert.equal(withStale.state.phaseSchedule.peakKm, undefined, 'no escribe peakKm para un principiante');
+});
+
+test('generatePlan: la semana de recuperación posterior a una carrera cargada sigue multiplicando (0,6) sobre el volumen por fases', () => {
+  const p = racingProfile();
+  const { app } = phasedApp(p);
+  const base = sumDist(plain(app.generatePlan(p, 1, BUILD_WEEK)));
+  // una carrera cargada el domingo anterior a BUILD_WEEK -> semana de recuperación
+  app.state.event = { date: '2026-11-29' };
+  const rec = sumDist(plain(app.generatePlan(p, 1, BUILD_WEEK)));
+  assert.ok(rec < base * 0.75, `recuperación ${rec} vs normal ${base}`);
+});
+
+test('generatePlan: en la semana de taper el volumen por fases se multiplica por taperMultiplier', () => {
+  const p = racingProfile();
+  const { app } = phasedApp(p);
+  const week = '2027-03-01'; // taper, a 1 semana de la carrera
+  const info = plain(app.phaseForWeek(p, week, app.state.phaseSchedule));
+  assert.equal(info.phase, 'taper');
+  const tm = app.taperMultiplier(p, week);
+  assert.ok(tm < 1);
+  const expected = app.phasedWeeklyKm(p, app.trainingCaution(p), info, 30).km * tm;
+  const plan = plain(app.generatePlan(p, 1, week));
+  assert.ok(Math.abs(sumDist(plan) - expected) <= 1.5, `suma ${sumDist(plan)} vs esperado ${expected}`);
+});
+
+test('generatePlan: el volumen por fases parte de effectiveWeeklyKm (meta semanal propia acotada)', () => {
+  const p = racingProfile({ weeklyGoalKm: 40 });
+  const { app } = phasedApp(p);
+  const eff = Math.min(Math.max(30 * 1.3, 35), Math.max(30 * 0.7, 40)); // = 39
+  const info = plain(app.phaseForWeek(p, BUILD_WEEK, app.state.phaseSchedule));
+  const expected = app.phasedWeeklyKm(p, app.trainingCaution(p), info, eff).km;
+  const plan = plain(app.generatePlan(p, 1, BUILD_WEEK));
+  assert.ok(Math.abs(sumDist(plan) - expected) <= 1.5, `suma ${sumDist(plan)} vs esperado ${expected}`);
+});
+
+test('generatePlan: plan por TIEMPO también recibe el volumen por fases (rodaje + tirada escalan con el km de phasedWeeklyKm)', () => {
+  const p = racingProfile({ trainBy: 'time' });
+  const { app } = phasedApp(p);
+  const info = plain(app.phaseForWeek(p, BUILD_WEEK, app.state.phaseSchedule));
+  const phasedKm = app.phasedWeeklyKm(p, app.trainingCaution(p), info, 30).km;
+  // En minutos, tempo/series/cuestas tienen topes propios (TIME_MAX_BY_TYPE) y estructuras que se
+  // redondean aparte; rodaje suave y tirada larga no, y escalan 1:1 con el multiplicador de la
+  // semana. v4 en la semana 1 tiene multiplicador 1 (30 km), así que por fases escalan phasedKm/30.
+  const pickMin = plan => plan.filter(d => d.typeKey === 'easy' || d.typeKey === 'long').reduce((a, d) => a + d.durMin, 0);
+  const v4 = pickMin(plain(phasedApp(p, null).app.generatePlan(p, 1, BUILD_WEEK)));
+  const got = pickMin(plain(app.generatePlan(p, 1, BUILD_WEEK)));
+  const expected = v4 * phasedKm / 30;
+  // cada sesión se redondea a 5 min (+-2,5) en las dos versiones: hasta ~10 min de desvío
+  assert.ok(Math.abs(got - expected) <= 10, `minutos rodaje+tirada ${got} vs esperado ${expected} (v4 ${v4}, km ${phasedKm})`);
+  assert.ok(got > v4 + 15, `por fases ${got} min tiene que superar claramente v4 ${v4} min`);
+});
+
+test('generatePlan: guarda peakKm en el cronograma una sola vez, sin persistir', () => {
+  const p = racingProfile();
+  const { app, calls } = phasedApp(p);
+  const info = plain(app.phaseForWeek(p, BUILD_WEEK, app.state.phaseSchedule));
+  const peak = app.phasedWeeklyKm(p, app.trainingCaution(p), info, 30).peakKm;
+  assert.equal(app.state.phaseSchedule.peakKm, undefined);
+  app.generatePlan(p, 1, BUILD_WEEK);
+  assert.equal(app.state.phaseSchedule.peakKm, peak);
+  const ref = app.state.phaseSchedule;
+  app.generatePlan(p, 1, BUILD_WEEK);
+  app.generatePlan(p, 1, '2027-02-08');
+  assert.equal(app.state.phaseSchedule, ref, 'no reemplaza el objeto');
+  assert.equal(app.state.phaseSchedule.peakKm, peak);
+  assert.equal(calls.persist, 0, 'generatePlan no persiste');
+  // plan de v4 (sin cronograma que coincida): no escribe nada
+  const inactive = phasedApp(p, null).app;
+  inactive.generatePlan(p, 1, BUILD_WEEK);
+  assert.equal(inactive.state.phaseSchedule, null);
+});
+
+test('generatePlan: state.phaseNow solo se escribe para la semana actual (state.weekStart)', () => {
+  const p = racingProfile();
+  const { app } = phasedApp(p);
+  const info = plain(app.phaseForWeek(p, BUILD_WEEK, app.state.phaseSchedule));
+  const r = app.phasedWeeklyKm(p, app.trainingCaution(p), info, 30);
+  // otra semana distinta de la actual: phaseNow no se toca
+  app.state.weekStart = '2026-12-21';
+  app.state.phaseNow = 'centinela';
+  app.generatePlan(p, 1, BUILD_WEEK);
+  assert.equal(app.state.phaseNow, 'centinela');
+  // la semana actual: se escribe
+  app.state.weekStart = BUILD_WEEK;
+  app.generatePlan(p, 1, BUILD_WEEK);
+  assert.deepEqual(plain(app.state.phaseNow), { phase: 'build', weeksToRace: info.weeksToRace, limited: r.limited, peakKm: r.peakKm });
+  // semana actual sin fase activa (antes del ancla): null
+  app.state.weekStart = PRE_ANCHOR_WEEK;
+  app.generatePlan(p, 1, PRE_ANCHOR_WEEK);
+  assert.equal(app.state.phaseNow, null);
+});
+
+test('generatePlan: sin weekStartDate usa state.weekStart y escribe phaseNow', () => {
+  const p = racingProfile();
+  const { app } = phasedApp(p);
+  app.state.weekStart = BUILD_WEEK;
+  app.generatePlan(p, 1);
+  assert.equal(app.state.phaseNow.phase, 'build');
+});
+
+test('checkPlanAlgoVersion: con planAlgoVersion 4 (por distancia) solo anota la 5, no regenera el plan', () => {
+  const p = racingProfile();
+  const { app, calls } = phasedApp(p, undefined);
+  app.state.onboarded = true;
+  app.state.weekStart = BUILD_WEEK;
+  const plan = [{ day: 'mon', typeKey: 'rest', dist: 0 }, { day: 'tue', typeKey: 'easy', dist: 7, zone: 2 }];
+  app.state.plan = plan;
+  app.state.planAlgoVersion = 4;
+  app.checkPlanAlgoVersion();
+  assert.equal(app.state.planAlgoVersion, 5);
+  assert.equal(app.state.plan, plan, 'el mismo arreglo, sin regenerar');
+  assert.deepEqual(plain(app.state.plan), plain(plan));
+  assert.ok(calls.persist >= 1);
+});
+
+test('checkPlanAlgoVersion: con planAlgoVersion 3 por distancia sigue anotando sin regenerar; por tiempo regenera', () => {
+  const dist = phasedApp(racingProfile(), null);
+  dist.app.state.onboarded = true;
+  dist.app.state.weekStart = BUILD_WEEK;
+  const plan = [{ day: 'tue', typeKey: 'easy', dist: 7, zone: 2 }];
+  dist.app.state.plan = plan;
+  dist.app.state.planAlgoVersion = 3;
+  dist.app.checkPlanAlgoVersion();
+  assert.equal(dist.app.state.planAlgoVersion, 5);
+  assert.equal(dist.app.state.plan, plan);
+
+  const time = phasedApp(racingProfile({ trainBy: 'time' }), null);
+  time.app.state.onboarded = true;
+  time.app.state.weekStart = BUILD_WEEK;
+  const tplan = [{ day: 'tue', typeKey: 'easy', dist: 7, zone: 2 }];
+  time.app.state.plan = tplan;
+  time.app.state.planAlgoVersion = 3;
+  time.app.checkPlanAlgoVersion();
+  assert.equal(time.app.state.planAlgoVersion, 5);
+  assert.notEqual(time.app.state.plan, tplan, 'por tiempo se regenera');
+  assert.equal(time.app.state.plan.length, 7);
+});
+
+test('checkPlanAlgoVersion: con una versión más vieja (2) regenera el plan', () => {
+  const { app } = phasedApp(racingProfile(), null);
+  app.state.onboarded = true;
+  app.state.weekStart = BUILD_WEEK;
+  const plan = [{ day: 'tue', typeKey: 'easy', dist: 7, zone: 2 }];
+  app.state.plan = plan;
+  app.state.planAlgoVersion = 2;
+  app.checkPlanAlgoVersion();
+  assert.equal(app.state.planAlgoVersion, 5);
+  assert.equal(app.state.plan.length, 7);
+});
+
+// ---- cableado de refreshPhaseSchedule ----
+
+test('checkPlanAlgoVersion: deja el cronograma al día aunque la versión ya sea la actual', () => {
+  const { app } = phasedApp(racingProfile(), undefined);
+  app.state.phaseSchedule = undefined;
+  app.state.onboarded = true;
+  app.state.weekStart = '2026-10-26';
+  app.state.plan = [{ day: 'tue', typeKey: 'easy', dist: 7 }];
+  app.state.planAlgoVersion = 5;
+  app.checkPlanAlgoVersion();
+  assert.deepEqual(plain(app.state.phaseSchedule), SCHEDULE);
+});
+
+test('checkWeekRollover: deja el cronograma al día (con una semana que no cambia)', () => {
+  const { app } = phasedApp(racingProfile(), undefined);
+  app.state.phaseSchedule = undefined;
+  app.state.onboarded = true;
+  app.state.weekStart = app.getMondayISO(new app.Date()); // sin cambio de semana
+  app.checkWeekRollover();
+  assert.deepEqual(plain(app.state.phaseSchedule), SCHEDULE);
+});
+
+test('checkWeekRollover / checkPlanAlgoVersion: no tiran si falta el perfil', () => {
+  const { app } = phasedApp(null, undefined);
+  app.state.phaseSchedule = undefined;
+  app.state.onboarded = true;
+  app.state.weekStart = app.getMondayISO(new app.Date());
+  app.state.plan = [{ day: 'tue', typeKey: 'easy', dist: 7 }];
+  app.state.planAlgoVersion = 5;
+  assert.doesNotThrow(() => app.checkWeekRollover());
+  assert.doesNotThrow(() => app.checkPlanAlgoVersion());
+});
+
+test('checkWeekRollover: al cambiar de semana crea el cronograma y sella la versión del plan', () => {
+  const p = racingProfile();
+  // hoy es lunes 2026-11-30: el cronograma sale con ancla en el lunes siguiente (2026-12-07)
+  const { app } = phasedApp(p, undefined, '2026-11-30T10:00:00');
+  app.state.phaseSchedule = undefined;
+  app.state.onboarded = true;
+  app.state.weekNumber = 5;
+  app.state.weekStart = '2026-11-23';
+  app.state.plan = [{ day: 'tue', typeKey: 'easy', dist: 7, zone: 2, status: 'done' }];
+  app.state.runs = [];
+  app.checkWeekRollover();
+  assert.equal(app.state.phaseSchedule.anchor, '2026-12-07');
+  assert.equal(app.state.weekStart, '2026-11-30');
+  assert.equal(app.state.planAlgoVersion, 5);
+});
+
+test('applyProfileChange (herramienta del coach): cambiar fecha_carrera o objetivo reemplaza el cronograma', () => {
+  const p = racingProfile();
+  const { app } = phasedApp(p);
+  app.renderAll = () => {}; app.renderZones = () => {};
+  app.state.weekStart = '2026-10-26';
+  app.state.weekNumber = 1;
+  app.state.plan = plain(app.generatePlan(p, 1, '2026-10-26'));
+  app.applyProfileChange({ fecha_carrera: '2027-04-04' });
+  assert.equal(app.state.profile.raceDate, '2027-04-04');
+  assert.deepEqual(plain(app.state.phaseSchedule), { anchor: '2026-11-02', raceDate: '2027-04-04', goal: '21k' });
+  app.applyProfileChange({ objetivo: '10k' });
+  assert.deepEqual(plain(app.state.phaseSchedule), { anchor: '2026-11-02', raceDate: '2027-04-04', goal: '10k' });
+  app.applyProfileChange({ objetivo: 'general' });
+  assert.equal(app.state.phaseSchedule, null);
+});
+
+test('applyUndoLastChange: deshacer un cambio de carrera deja el cronograma coherente con el perfil restaurado', () => {
+  const p = racingProfile();
+  const { app } = phasedApp(p);
+  app.renderAll = () => {}; app.renderZones = () => {};
+  app.state.weekStart = '2026-10-26';
+  app.state.weekNumber = 1;
+  app.state.plan = plain(app.generatePlan(p, 1, '2026-10-26'));
+  app.applyProfileChange({ fecha_carrera: '2027-04-04' });
+  assert.equal(app.state.phaseSchedule.raceDate, '2027-04-04');
+  app.applyUndoLastChange();
+  assert.equal(app.state.profile.raceDate, '2027-03-14');
+  assert.equal(app.state.phaseSchedule.raceDate, '2027-03-14');
+});

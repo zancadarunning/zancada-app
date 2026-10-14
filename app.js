@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-14T19:52:43Z';
+const APP_VERSION = '2026-10-14T20:00:12Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3254,6 +3254,7 @@ function resolvePlanChangeTiming(choice){
   pendingPlanChangeContext = null;
   pendingPlanChangeBackup = null;
   if(ctx === 'personal'){
+    refreshPhaseSchedule(); // meta/fecha de carrera ya confirmadas (cancelPlanChangeTiming las restaura y no llega acá)
     if(choice === 'now') applyPersonalDataChangeNow(); else applyPersonalDataChangeNextWeek();
     finishPersonalDataSave();
   } else if(ctx === 'goals'){
@@ -3811,6 +3812,9 @@ async function finishOnboard(){
     });
   }
   state.onboarded = true;
+  // Cronograma del plan por fases para la carrera elegida (null si no califica). Directo, sin
+  // refreshPhaseSchedule(): el persist() de más abajo ya lo guarda y evita una escritura doble.
+  state.phaseSchedule = makePhaseSchedule(state.profile, new Date());
   state.lang = lang;
   state.voiceEnabled = true;
   state.nextWeekOverrides = {};
@@ -4954,12 +4958,22 @@ function computeReturnFromBreakAdjustment(gapWeeks){
 // merge seguro de siempre (preserveLivedDays: nunca toca un día ya vivido, cancelado, o
 // editado a mano por el chat -- solo refresca los días de acá en adelante que el algoritmo
 // generó sin que nadie los haya tocado).
-const PLAN_ALGO_VERSION = 4;
+const PLAN_ALGO_VERSION = 5;
 function checkPlanAlgoVersion(){
+  // Antes que nada, el cronograma del plan por fases al día con el perfil (es barato y no toca
+  // nada si ya coincide) -- incluso si la versión del plan ya es la actual.
+  if(state.onboarded) refreshPhaseSchedule();
   if(!state.onboarded || !state.plan || !state.plan.length) return;
   if(state.planAlgoVersion === PLAN_ALGO_VERSION) return;
   // v3 -> v4 solo cambió el plan POR TIEMPO (ahora se arma aparte, ver buildTimePlanDays) y sumó el test de nivel: a quien
   // entrena por distancia no se le rehace la semana (se perderían sus ajustes automáticos de volumen), solo se anota la versión.
+  // v4 -> v5 solo suma el volumen por fases (generatePlan), que arranca en la PRÓXIMA semana: el ancla del cronograma es
+  // el lunes siguiente a hoy. La semana ya armada no cambia, así que tampoco se rehace -- por tiempo o por distancia.
+  if(state.planAlgoVersion === 4){
+    state.planAlgoVersion = PLAN_ALGO_VERSION;
+    persist();
+    return;
+  }
   if(state.planAlgoVersion === 3 && state.profile && state.profile.trainBy !== 'time'){
     state.planAlgoVersion = PLAN_ALGO_VERSION;
     persist();
@@ -4971,6 +4985,8 @@ function checkPlanAlgoVersion(){
 }
 function checkWeekRollover(){
   if(!state.onboarded) return;
+  // Cronograma al día ANTES de armar la semana nueva (más abajo): así generatePlan ya lo ve.
+  refreshPhaseSchedule();
   const currentMonday = getMondayISO(new Date());
   if(state.weekStart !== currentMonday){
     if(!state.planHistory) state.planHistory = [];
@@ -5452,16 +5468,7 @@ function generatePlan(p, weekNumber, weekStartDate){
   // veces), generalizado a cualquier combinación de estos recortes en vez de solo ese caso
   // puntual.
   const skipPeriodicCutback = taperMult < 1 || isRecovery || postGoalRaceMult < 1 || isEventRaceWeek(weekStartDate);
-  const mult = weekMultiplier(weekNumber, caution, skipPeriodicCutback) * taperMult * postGoalRaceMult * recoveryMultiplier(weekStartDate) * eventRaceWeekMultiplier(weekStartDate, p);
   const beginner = isBeginnerProfile(p);
-  // Un principiante con base de un deporte de impacto (ver hasRunningImpactBase) ya tolera el
-  // golpe de correr aunque nunca haya salido a correr solo -- a ese lo sacamos del "todo zona 1,
-  // solo rodaje suave" desde el día 1 (zona 2 + algún fartlek), aunque siga siendo "principiante"
-  // para el CÁLCULO DE VOLUMEN (effectiveWeeklyKm/beginnerPerSessionKm más abajo no cambian: la
-  // base de otro deporte no le da eficiencia de carrera, solo tolerancia al impacto). easyOnly es
-  // el que de verdad decide zona/variedad de sesión; beginner sigue decidiendo el volumen.
-  const varietyOk = beginner && hasRunningImpactBase(p);
-  const easyOnly = beginner && !varietyOk;
   // si el corredor puso una meta semanal propia, la usamos como referencia de volumen en vez
   // del cálculo genérico -- pero acotada para no saltar de golpe a algo que podría lesionarlo
   let effectiveWeeklyKm = p.weeklyKm;
@@ -5470,6 +5477,34 @@ function generatePlan(p, weekNumber, weekStartDate){
     const minWk = p.weeklyKm * 0.7;
     effectiveWeeklyKm = Math.min(maxWk, Math.max(minWk, p.weeklyGoalKm));
   }
+  // Plan por fases (ver PLAN POR FASES): para quien tiene cronograma activo esta semana, el
+  // volumen de la semana sale de phasedWeeklyKm (base -> pico de la distancia) en vez de la
+  // curva de weekMultiplier. SOLO se reemplaza ese factor: taper, recuperación post-carrera y
+  // semana de carrera de "Próximos eventos" siguen multiplicando encima, igual que antes. El
+  // principiante nunca entra (mismo guard que makePhaseSchedule, por si quedó un cronograma
+  // viejo de antes de que cambiara de perfil). Sin fase activa, el camino es el de siempre.
+  const phaseInfo = beginner ? { active: false } : phaseForWeek(p, weekStartDate, state.phaseSchedule);
+  let weekFactor;
+  if(phaseInfo.active){
+    const phased = phasedWeeklyKm(p, caution, phaseInfo, effectiveWeeklyKm);
+    weekFactor = phased.km / Math.max(9, effectiveWeeklyKm);
+    // peakKm queda en el cronograma para que la pantalla de Plan lo muestre sin recalcular.
+    // No se persiste acá: lo guarda el persist() de quien llama (idempotente, solo escribe si cambió).
+    if(state.phaseSchedule.peakKm !== phased.peakKm) state.phaseSchedule.peakKm = phased.peakKm;
+    if(weekStartDate === state.weekStart) state.phaseNow = { phase: phaseInfo.phase, weeksToRace: phaseInfo.weeksToRace, limited: phased.limited, peakKm: phased.peakKm };
+  } else {
+    weekFactor = weekMultiplier(weekNumber, caution, skipPeriodicCutback);
+    if(weekStartDate === state.weekStart) state.phaseNow = null;
+  }
+  const mult = weekFactor * taperMult * postGoalRaceMult * recoveryMultiplier(weekStartDate) * eventRaceWeekMultiplier(weekStartDate, p);
+  // Un principiante con base de un deporte de impacto (ver hasRunningImpactBase) ya tolera el
+  // golpe de correr aunque nunca haya salido a correr solo -- a ese lo sacamos del "todo zona 1,
+  // solo rodaje suave" desde el día 1 (zona 2 + algún fartlek), aunque siga siendo "principiante"
+  // para el CÁLCULO DE VOLUMEN (effectiveWeeklyKm/beginnerPerSessionKm más abajo no cambian: la
+  // base de otro deporte no le da eficiencia de carrera, solo tolerancia al impacto). easyOnly es
+  // el que de verdad decide zona/variedad de sesión; beginner sigue decidiendo el volumen.
+  const varietyOk = beginner && hasRunningImpactBase(p);
+  const easyOnly = beginner && !varietyOk;
   const zoneMap = {easy:easyOnly?1:2, intervals:4, tempo:3, long:2, fartlek:3, hills:4, progression:3};
   const defaultDays = beginner ? ['tue','thu','sun'] : ['tue','wed','fri','sun'];
   const trainingDays = DAY_KEYS.filter(d => (p.trainingDays && p.trainingDays.length ? p.trainingDays : defaultDays).includes(d));
@@ -15572,6 +15607,7 @@ function applyUndoLastChange(){
   state.plan = state.coachUndoSnapshot.plan;
   state.nextWeekOverrides = state.coachUndoSnapshot.nextWeekOverrides;
   state.profile = state.coachUndoSnapshot.profile;
+  refreshPhaseSchedule(); // el perfil restaurado puede traer otra meta/fecha de carrera
   state.coachUndoSnapshot = null; // un solo nivel: no se puede deshacer dos veces seguidas
   renderAll(); renderZones(); persist();
   state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_undo_applied')), ts:Date.now()});
@@ -16041,6 +16077,8 @@ function applyProfileChange(input){
     return rejectedNotes.length ? `No se aplicó ningún cambio: ${rejectedNotes.join('; ')} -- confirmá el valor correcto con el corredor y volvé a llamar a modificar_perfil.` : 'No hubo cambios para aplicar.';
   }
   if(recalc){
+    // objetivo/fecha de carrera nuevos -> el cronograma por fases se rehace antes de regenerar el plan
+    refreshPhaseSchedule();
     state.profile.weeklyKm = calcWeeklyKm(state.profile);
     state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
     state.nextWeekOverrides = {}; // cambió la base del plan -> los cambios puntuales de la semana que viene ya no aplican
