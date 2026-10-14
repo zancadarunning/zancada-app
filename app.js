@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-14T20:43:51Z';
+const APP_VERSION = '2026-10-14T20:46:44Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7994,7 +7994,10 @@ function renderPlan(){
     cutbackNote.style.display='none';
   }
   const phaseNote = document.getElementById('plan-phase-note');
-  const phaseText = phaseLineText(state.phaseNow);
+  // state.phaseNow es la fase de la semana ACTUAL: en una semana pasada, la que sigue o una futura
+  // sería falsa (otra fase, y las semanas que faltan correrían con el desplazamiento), así que como
+  // las otras notas de esta función solo se muestra en la semana actual.
+  const phaseText = wd.mode === 'current' ? phaseLineText(state.phaseNow) : '';
   phaseNote.textContent = phaseText;
   phaseNote.style.display = phaseText ? 'block' : 'none';
   const recoveryNote = document.getElementById('plan-recovery-note');

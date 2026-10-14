@@ -1748,6 +1748,31 @@ test('plan en pantalla: limited con peakKm indefinido no imprime la nota ni romp
   });
 });
 
+test('plan en pantalla: en semanas no actuales (pasada, siguiente, futura) el aviso de fase y la nota del pico se ocultan', () => {
+  ['past', 'next', 'future'].forEach(mode => {
+    const { app, els } = planScreenApp({ phase: 'base', weeksToRace: 5, limited: true, peakKm: 42 });
+    const real = app.getWeekData;
+    app.getWeekData = (offset) => Object.assign({}, real(0), { mode, editable: false });
+    app.renderPlan();
+    assert.equal(els['plan-phase-note'].textContent, '', mode);
+    assert.equal(els['plan-phase-note'].style.display, 'none', mode);
+  });
+});
+
+test('plan en pantalla: en la semana actual (offset 0) el aviso sí se muestra (el filtro no lo oculta siempre)', () => {
+  const { app, els } = planScreenApp({ phase: 'base', weeksToRace: 5, limited: true, peakKm: 42 });
+  assert.equal(app.getWeekData(0).mode, 'current');
+  app.renderPlan();
+  assert.ok(els['plan-phase-note'].textContent.length > 0);
+  assert.equal(els['plan-phase-note'].style.display, 'block');
+});
+
+test('index.html tiene el elemento #plan-phase-note que busca renderPlan (el DOM de mentira no detectaría un id distinto)', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /id="plan-phase-note"/);
+  assert.ok(fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8').includes("getElementById('plan-phase-note')"));
+});
+
 test('plan en pantalla: sin fase activa (phaseNow null) no se muestra nada nuevo', () => {
   const { app, els } = planScreenApp(null);
   app.renderPlan();
