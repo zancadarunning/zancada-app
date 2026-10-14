@@ -459,8 +459,9 @@ test('phasedWeeklyKm: baseKm 30, 10k, cautela 0, R=16 -> pico 45 (tope de la dis
 
 test('phasedWeeklyKm: baseKm 10, 42k, cautela 0, R=16 -> pico limitado por el techo/crecimiento, limited true', () => {
   const app = loadApp();
-  const peakWeeks = Array.from(app.phaseSplit(16)).filter(x => x === 'peak').length;
-  const expected = Math.min(70, 10 * 1.8, 10 * Math.pow(1.06, 16 - peakWeeks));
+  // R=16: 2 semanas peak -> 14 de rampa, de las cuales 3 son descarga -> 11 pasos de crecimiento
+  const steps = 14 - 3;
+  const expected = Math.min(70, 10 * 1.8, 10 * Math.pow(1.06, steps));
   const r = plain(app.phasedWeeklyKm({ goal: '42k' }, { level: 0 }, infoAt(app, 16, 0), 10));
   assert.equal(r.peakKm, expected);
   assert.equal(r.peakKm, 18);
@@ -478,23 +479,33 @@ test('phasedWeeklyKm: baseKm mayor que el pico de la distancia -> pico = baseKm,
   assert.equal(eq.limited, false);
 });
 
-test('phasedWeeklyKm: la rampa es geométrica y llega al pico justo en la última semana de rampa', () => {
+test('phasedWeeklyKm: la rampa es geométrica sobre las semanas completas y llega al pico en la última', () => {
   const app = loadApp();
   const R = 16;
-  const rampCount = R - 2;
+  const rampCount = R - 2;   // 14 semanas de rampa
+  const steps = rampCount - 3; // 3 descargas (semanas 3, 7, 11) no cuentan como paso
   const s = kmSeries(app, { goal: '21k' }, { level: 0 }, 30, R);
   const peakKm = s[0].peakKm;
   assert.equal(peakKm, 54); // 30 x 1.8 (el tope de 55 de la distancia no llega a usarse)
-  const ramp = i => 30 * Math.pow(peakKm / 30, (i + 1) / rampCount);
+  // valor de la semana completa con k pasos ya dados
+  const full = k => 30 * Math.pow(peakKm / 30, k / steps);
+  let k = 0;
   for (let i = 0; i < rampCount; i++) {
-    const want = i % 4 === 3 ? ramp(i) * 0.75 : ramp(i);
-    assert.ok(Math.abs(s[i].km - want) < 1e-9, `semana ${i}: ${s[i].km} vs ${want}`);
+    if (i % 4 === 3) {
+      // descarga: 0,75 x la semana completa anterior (no consume un paso)
+      assert.ok(Math.abs(s[i].km - 0.75 * full(k)) < 1e-9, `descarga ${i}: ${s[i].km}`);
+    } else {
+      k++;
+      assert.ok(Math.abs(s[i].km - full(k)) < 1e-9, `semana ${i}: ${s[i].km} vs ${full(k)}`);
+    }
   }
+  assert.equal(k, steps);
+  assert.ok(Math.abs(s[rampCount - 1].km - peakKm) < 1e-9); // la última semana de rampa es completa y vale el pico
   // peak y taper: exactamente peakKm (el taper lo aplica generatePlan después)
   for (let i = rampCount; i < R + 3; i++) assert.equal(s[i].km, peakKm, `semana ${i}`);
 });
 
-test('phasedWeeklyKm: el crecimiento semanal respeta el límite, las descargas son x0.75 y el pico es el máximo', () => {
+test('phasedWeeklyKm: cada semana sin descarga sube como mucho `growth` sobre la semana completa anterior (incluido el rebote)', () => {
   const app = loadApp();
   const bases = [3, 10, 20, 30, 44, 45, 60];
   const goals = ['5k', '10k', '15k', '21k', '42k'];
@@ -513,9 +524,7 @@ test('phasedWeeklyKm: el crecimiento semanal respeta el límite, las descargas s
     assert.ok(peakKm <= Math.max(baseKm, baseKm * cap) + 1e-9, label);
     const split = Array.from(app.phaseSplit(R));
     const isCut = i => i < R && split[i] !== 'peak' && i % 4 === 3;
-    let prevNonCut = baseKm; // última semana sin descarga (la primera de rampa se compara con baseKm)
-    let prevWasCut = false;
-    let beforeCut = baseKm;
+    let prevFull = baseKm; // última semana sin descarga (la primera de rampa se compara con baseKm)
     s.forEach((w, i) => {
       assert.equal(w.peakKm, peakKm, `${label} peakKm constante, semana ${i}`);
       if (i >= R || split[i] === 'peak') {
@@ -523,23 +532,14 @@ test('phasedWeeklyKm: el crecimiento semanal respeta el límite, las descargas s
         assert.equal(w.km, peakKm, `${label} semana ${i} (${i >= R ? 'taper' : 'peak'})`);
       }
       if (isCut(i)) {
-        // descarga: baja respecto de la semana anterior sin descarga
-        assert.ok(w.km < prevNonCut + 1e-9, `${label} semana ${i} descarga`);
-        beforeCut = prevNonCut;
-        prevWasCut = true;
-        return;
+        // descarga: exactamente 0,75 x la semana completa anterior
+        assert.ok(Math.abs(w.km - 0.75 * prevFull) < 1e-9, `${label} semana ${i} descarga: ${w.km} vs ${0.75 * prevFull}`);
+        return; // no pasa a ser la referencia de la semana siguiente
       }
-      if (prevWasCut) {
-        // rebote: vuelve a su valor normal, que como mucho es dos pasos de rampa sobre la
-        // semana previa a la descarga (no se mide contra la descarga misma)
-        assert.ok(w.km <= beforeCut * growth * growth + 1e-9, `${label} semana ${i} rebote`);
-        assert.ok(w.km >= beforeCut - 1e-9, `${label} semana ${i} rebote no baja`);
-      } else {
-        assert.ok(w.km / prevNonCut <= growth + 1e-9, `${label} semana ${i}: ${w.km} / ${prevNonCut}`);
-        assert.ok(w.km >= prevNonCut - 1e-9, `${label} semana ${i} no baja sin descarga`);
-      }
-      prevWasCut = false;
-      prevNonCut = w.km;
+      // semana completa (rebote incluido): sube como mucho `growth` y nunca baja
+      assert.ok(w.km / prevFull <= growth + 1e-9, `${label} semana ${i}: ${w.km} / ${prevFull}`);
+      assert.ok(w.km >= prevFull - 1e-9, `${label} semana ${i} no baja sin descarga`);
+      prevFull = w.km;
     });
     // el pico es >= cualquier semana anterior
     const firstPeak = split.indexOf('peak');
@@ -548,17 +548,35 @@ test('phasedWeeklyKm: el crecimiento semanal respeta el límite, las descargas s
   assert.equal(combos, bases.length * goals.length * levels.length * Rs.length);
 });
 
-test('phasedWeeklyKm: la descarga cae cada 4 semanas (índices 3, 7, 11...) solo en rampa', () => {
+test('phasedWeeklyKm: la descarga cae cada 4 semanas (índices 3, 7, 11...) solo en rampa y el rebote sube un solo paso', () => {
   const app = loadApp();
-  // R=16: rampa = 14 semanas, descargas en 3, 7, 11; el índice 15 es peak y no se descarga
-  const s = kmSeries(app, { goal: '21k' }, { level: 0 }, 30, 16);
+  // base 30, 10k, nivel 0, R=16: rampa = 14 semanas, descargas en 3, 7, 11 -> 11 pasos hasta 45
+  const s = kmSeries(app, { goal: '10k' }, { level: 0 }, 30, 16);
+  const r = Math.pow(45 / 30, 1 / 11);
+  assert.equal(s[0].peakKm, 45);
   [3, 7, 11].forEach(i => {
-    const full = 30 * Math.pow(s[0].peakKm / 30, (i + 1) / 14);
-    assert.ok(Math.abs(s[i].km - full * 0.75) < 1e-9, `descarga en ${i}`);
-    assert.ok(s[i + 1].km > s[i].km, `rebote en ${i + 1}`);
+    assert.ok(Math.abs(s[i].km - 0.75 * s[i - 1].km) < 1e-9, `descarga en ${i}`);
+    // rebote: vuelve a la semana completa previa x r (un solo paso), NO x r^2
+    assert.ok(Math.abs(s[i + 1].km - s[i - 1].km * r) < 1e-9, `rebote en ${i + 1}: ${s[i + 1].km}`);
+    assert.ok(s[i + 1].km / s[i - 1].km <= 1.06 + 1e-9, `rebote en ${i + 1} dentro del límite`);
   });
-  assert.equal(s[15].km, s[0].peakKm);
-  assert.equal(s[16].km, s[0].peakKm);
+  // caso citado en la revisión (antes: 32.7 [25.3] 34.7, o sea r^2 sobre la semana previa a la descarga)
+  assert.ok(Math.abs(s[4].km - s[2].km * r) < 1e-9);
+  // las semanas 12 y 13 son rampa completa, la 14 la última de rampa (vale el pico) y 15 es peak
+  assert.ok(Math.abs(s[13].km - 45) < 1e-9);
+  assert.equal(s[14].km, 45);
+  assert.equal(s[15].km, 45);
+  assert.equal(s[16].km, 45);
+});
+
+test('phasedWeeklyKm: si la última semana de rampa es una descarga vale 0,75 x el pico y la primera peak vuelve al pico', () => {
+  const app = loadApp();
+  // R=5: build x2, specific x2, peak x1 -> rampCount 4, la semana 3 (última de rampa) es descarga
+  const s = kmSeries(app, { goal: '10k' }, { level: 0 }, 30, 5);
+  const peakKm = s[0].peakKm;
+  assert.ok(Math.abs(s[3].km - 0.75 * peakKm) < 1e-9);
+  assert.ok(Math.abs(s[2].km - peakKm) < 1e-9); // la última semana completa de rampa ya es el pico
+  assert.equal(s[4].km, peakKm);
 });
 
 test('phasedWeeklyKm: es pura (no lee state) y no modifica sus argumentos', () => {

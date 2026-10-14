@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-14T19:48:17Z';
+const APP_VERSION = '2026-10-14T19:52:43Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4464,16 +4464,21 @@ function phaseForWeek(p, weekStartDate, schedule){
 const PEAK_KM = { '5k': 35, '10k': 45, '15k': 50, '21k': 55, '42k': 70 };
 // Volumen de la semana descrita por `info` (resultado ACTIVO de phaseForWeek) en el plan por
 // fases. PURA. Devuelve {km, peakKm, limited}:
+//  - semanas de descarga: cada 4ta semana de rampa (weekIdx % 4 === 3). NO cuentan como paso de
+//    crecimiento (igual que weekMultiplier, donde growthSteps las salta): aportan 0,75 x la
+//    semana completa anterior y la siguiente retoma desde esa semana completa, subiendo un
+//    solo paso. Por eso steps = rampCount - (cantidad de descargas), >= 1.
 //  - peakKm: el pico al que se llega, que no pasa del techo de la distancia, ni del techo por
 //    cautela (growthParams.cap x baseKm), ni de lo que alcanza a crecer baseKm con el
-//    crecimiento semanal máximo durante las semanas de rampa; y nunca baja de baseKm (si ya
-//    corre más que el pico de la distancia, se mantiene ahí en vez de recortarlo).
-//  - rampa (base/build/specific): geométrica de baseKm a peakKm. Con razón constante r =
-//    (peakKm/baseKm)^(1/rampCount) <= growth por construcción, así que el límite de
-//    crecimiento semanal se cumple sin tener que chequearlo semana a semana.
-//  - descarga: en cada 4ta semana de rampa (weekIdx % 4 === 3) x0,75 sobre el valor de esa
-//    semana; la siguiente vuelve a su valor normal (rebote). Nunca en peak ni en taper.
-//  - peak y taper valen peakKm: la baja del taper la aplica generatePlan con taperMultiplier.
+//    crecimiento semanal máximo durante `steps` pasos; y nunca baja de baseKm (si ya corre
+//    más que el pico de la distancia, se mantiene ahí en vez de recortarlo).
+//  - rampa (base/build/specific): geométrica de baseKm a peakKm sobre las semanas completas.
+//    Con razón constante r = (peakKm/baseKm)^(1/steps) <= growth por construcción, cada semana
+//    completa sube como mucho `growth` sobre la semana completa anterior (la primera, sobre
+//    baseKm), también la que sigue a una descarga. La última semana completa de rampa vale
+//    exactamente peakKm; si la última de rampa es una descarga, vale 0,75 x peakKm.
+//  - peak y taper valen peakKm, nunca son descarga; la baja del taper la aplica generatePlan
+//    con taperMultiplier.
 //  - limited: ni el pico ni el punto de partida llegan al de la distancia (el plan no alcanza
 //    a preparar esa carrera con el tiempo y la cautela que hay).
 // No redondea nada: generatePlan redondea por sesión.
@@ -4481,15 +4486,18 @@ function phasedWeeklyKm(p, caution, info, baseKm){
   const { growth, cap } = growthParams(caution);
   const goalPeak = PEAK_KM[p && p.goal];
   const peakWeeks = phaseSplit(info.R).filter(x => x === 'peak').length;
-  const rampCount = info.R - peakWeeks; // >=1 porque R>=4
+  const rampCount = info.R - peakWeeks; // >=3 porque R>=4
+  // descargas dentro de la rampa: semanas 3, 7, 11... (índices con resto 3 módulo 4)
+  const steps = Math.max(1, rampCount - Math.floor(rampCount / 4));
   const peakKm = goalPeak === undefined ? baseKm
-    : Math.max(baseKm, Math.min(goalPeak, baseKm * cap, baseKm * Math.pow(growth, rampCount)));
+    : Math.max(baseKm, Math.min(goalPeak, baseKm * cap, baseKm * Math.pow(growth, steps)));
   const limited = goalPeak !== undefined && peakKm < goalPeak && baseKm < goalPeak;
   if(info.phase === 'taper' || info.weekIdx >= rampCount) return { km: peakKm, peakKm, limited };
   const ratio = baseKm > 0 ? peakKm / baseKm : 1;
-  let km = baseKm * Math.pow(ratio, (info.weekIdx + 1) / rampCount);
-  if(info.weekIdx % 4 === 3) km *= 0.75;
-  return { km, peakKm, limited };
+  const i = info.weekIdx;
+  const cutsBefore = Math.floor(i / 4); // descargas estrictamente anteriores a la semana i
+  if(i % 4 === 3) return { km: 0.75 * baseKm * Math.pow(ratio, (i - cutsBefore) / steps), peakKm, limited };
+  return { km: baseKm * Math.pow(ratio, (i + 1 - cutsBefore) / steps), peakKm, limited };
 }
 // Deja state.phaseSchedule al día con el perfil: lo crea si falta, lo reemplaza si la carrera o
 // la meta cambiaron (el ancla se recalcula desde hoy), o lo pone en null si el perfil ya no
