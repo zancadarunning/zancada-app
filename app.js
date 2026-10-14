@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-14T19:37:55Z';
+const APP_VERSION = '2026-10-14T19:42:58Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4394,6 +4394,77 @@ function phaseSplit(R){
   push('specific', specific);
   push('peak', peak);
   return out;
+}
+// Metas con plan por fases: carreras de ruta con distancia definida. 'general' y 'start' no
+// tienen una carrera contra la cual repartir bloques.
+const PHASE_GOALS = ['5k','10k','15k','21k','42k'];
+// Fecha YYYY-MM-DD -> Date a medianoche LOCAL (mismo parseo que taperMultiplier, a propósito
+// con 'T00:00:00': `new Date('YYYY-MM-DD')` a secas sería medianoche UTC y correría el día
+// en husos negativos). Devuelve null si no es una fecha real (ej. 2027-02-30 no pasa: el
+// Date la corre a marzo y el chequeo de ida y vuelta lo detecta).
+function parsePhaseIso(iso){
+  if(typeof iso !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+  const d = new Date(iso+'T00:00:00');
+  if(isNaN(d.getTime())) return null;
+  const back = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  return back === iso ? d : null;
+}
+// Cronograma del plan por fases: {anchor, raceDate, goal}. `anchor` es el lunes SIGUIENTE a
+// hoy (estricto: si hoy es lunes, el siguiente), o sea la primera semana completa del plan por
+// fases; queda fijo mientras no cambien raceDate/goal (ver refreshPhaseSchedule). null si el
+// perfil no entra en el plan por fases: principiante, meta sin carrera o sin fecha válida.
+function makePhaseSchedule(p, today){
+  if(!p || !PHASE_GOALS.includes(p.goal) || isBeginnerProfile(p)) return null;
+  if(!parsePhaseIso(p.raceDate)) return null;
+  // getMondayISO es el lunes de ESTA semana; +7 días (con el helper que no pasa por UTC ni se
+  // rompe en un cambio de horario) da el lunes siguiente.
+  const anchor = addDaysToIsoLocal(getMondayISO(today), 7);
+  return { anchor, raceDate: p.raceDate, goal: p.goal };
+}
+// Qué fase le toca a la semana que arranca el lunes `weekStartDate` según `schedule`. PURA (no
+// lee `state`). Las últimas 3 semanas hasta la carrera (la de la carrera y las 2 anteriores)
+// son 'taper' -- las mismas donde taperMultiplier() baja de 1 --, y las R anteriores (R =
+// semanas entre el ancla y el lunes de la semana de la carrera, menos esas 2) se reparten
+// con phaseSplit(R). weeksToRace = semanas que faltan para el lunes de la semana de la
+// carrera (0 en esa misma semana). Inactivo ({active:false}) si algo no cierra.
+function phaseForWeek(p, weekStartDate, schedule){
+  const off = { active: false };
+  if(!p || !schedule || schedule.raceDate !== p.raceDate || schedule.goal !== p.goal) return off;
+  const anchor = parsePhaseIso(schedule.anchor);
+  const start = parsePhaseIso(weekStartDate);
+  const race = parsePhaseIso(schedule.raceDate);
+  if(!anchor || !start || !race) return off;
+  // lunes de la semana de la carrera (local, sin UTC) y distancia en semanas desde el ancla.
+  // Math.round sobre días: un cambio de horario entre medio suma/resta 1 hora, nunca un día.
+  const raceMonday = parsePhaseIso(getMondayISO(race));
+  const weeksBetween = (a, b) => Math.round((b - a) / 86400000 / 7);
+  const totalWeeks = weeksBetween(anchor, raceMonday); // semanas hasta la semana de la carrera
+  const weekIdx = weeksBetween(anchor, start);
+  const R = totalWeeks - 2;
+  const split = phaseSplit(R);
+  if(!split) return off;
+  if(weekIdx < 0 || weekIdx > totalWeeks) return off; // antes del ancla o después de la carrera
+  const weeksToRace = totalWeeks - weekIdx;
+  if(weekIdx >= R) return { active: true, phase: 'taper', weekIdx, R, weeksToRace, weekInPhase: weekIdx - R + 1, phaseWeeks: 3 };
+  const phase = split[weekIdx];
+  const first = split.indexOf(phase);
+  const phaseWeeks = split.lastIndexOf(phase) - first + 1;
+  return { active: true, phase, weekIdx, R, weeksToRace, weekInPhase: weekIdx - first + 1, phaseWeeks };
+}
+// Deja state.phaseSchedule al día con el perfil: lo crea si falta, lo reemplaza si la carrera o
+// la meta cambiaron (el ancla se recalcula desde hoy), o lo pone en null si el perfil ya no
+// califica. Si sigue coincidiendo NO lo toca (el ancla no tiene que moverse cada semana).
+// Solo llama a persist() cuando cambió algo.
+function refreshPhaseSchedule(){
+  const cur = state.phaseSchedule || null;
+  const next = makePhaseSchedule(state.profile, new Date());
+  if(!next){
+    if(cur){ state.phaseSchedule = null; persist(); }
+    return;
+  }
+  if(cur && cur.raceDate === next.raceDate && cur.goal === next.goal) return;
+  state.phaseSchedule = next;
+  persist();
 }
 function isRecoveryWeek(weekStartDate){
   // La semana de recuperación es la que arranca el lunes siguiente a una carrera cargada
