@@ -1,6 +1,6 @@
 # Plan por fases: diseño
 
-Fecha: 2026-10-14 · Estado: **borrador para revisión** · Etapa 1 de 2 (la etapa 2 es "plan que aprende", fuera de este documento).
+Fecha: 2026-10-14 · Estado: **aprobado** (ajustes de implementación en `docs/superpowers/plans/2026-10-14-plan-por-fases.md`, sección "Cambios al diseño", que prevalece: cronograma anclado a un lunes, la semana de la carrera cuenta como una de las 3 de reducción final, y la proporción de tirada larga solo en modo distancia) · Etapa 1 de 2 (la etapa 2 es "plan que aprende", fuera de este documento).
 
 ## 1. Objetivo
 Que el plan de entrenamiento se acerque más al de un entrenador real cuando hay una carrera objetivo: que se arme **hacia atrás desde la fecha de la carrera**, con fases, un pico de volumen y una tirada larga propios de cada distancia, y con sesiones de calidad **específicas del ritmo de carrera**.
