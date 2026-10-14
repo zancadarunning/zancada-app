@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-14T17:55:50Z';
+const APP_VERSION = '2026-10-14T18:41:57Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2391,12 +2391,12 @@ function healthConnectExerciseToRun(ex){
     name: null,
     distanceKm: (ex.distanceMeters || 0) / 1000,
     durationSec: ex.durationSec || 0,
-    elevationGain: 0,
+    elevationGain: ex.elevationGainMeters > 0 ? Math.round(ex.elevationGainMeters) : 0,
     elevationLoss: null,
     avgHr: ex.avgHr ? Math.round(ex.avgHr) : null,
     maxHr: ex.maxHr ? Math.round(ex.maxHr) : null,
-    avgCadence: null,
-    calories: null,
+    avgCadence: ex.avgCadence > 0 ? Math.round(ex.avgCadence) : null,
+    calories: ex.calories > 0 ? Math.round(ex.calories) : null,
     hrLog: [],
     points: [],
     splits: [],
