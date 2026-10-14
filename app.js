@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-14T20:36:18Z';
+const APP_VERSION = '2026-10-14T20:43:51Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4727,6 +4727,30 @@ function refreshPhaseNow(){
     ? { phase: info.phase, weeksToRace: info.weeksToRace, limited: sched.limited, peakKm: sched.peakKm }
     : null;
 }
+// Texto del aviso de fase de la pantalla del plan (#plan-phase-note): una línea con la fase y las
+// semanas que faltan para la carrera, y -- solo si el pico quedó recortado por el tiempo que queda
+// y se conoce (peakKm puede faltar en un cronograma guardado sin él) -- la nota del pico seguro.
+// '' si no hay fase activa: la pantalla no muestra nada nuevo. Va como texto plano (textContent) y
+// el salto de línea lo respeta .muted (white-space:pre-line).
+function phaseLineText(pn){
+  if(!pn) return '';
+  const phase = t('plan_phase_'+pn.phase);
+  let text = pn.weeksToRace === 0 ? t('plan_phase_line_race', {phase})
+    : pn.weeksToRace === 1 ? t('plan_phase_line_one', {phase})
+    : t('plan_phase_line', {phase, weeks: pn.weeksToRace});
+  if(pn.limited && Number.isFinite(pn.peakKm)) text += '\n' + t('plan_peak_limited_note', {km: fmtDist(pn.peakKm, 0), unit: distUnit()});
+  return text;
+}
+// Frase para el contexto de Zonda (siempre en español, como el resto de buildContext). No incluye
+// el pico: solo la fase y cuánto falta. '' sin fase activa.
+const PHASE_CTX_LABEL = { base:'base', build:'desarrollo', specific:'específica', peak:'pico', taper:'reducción final' };
+function phaseCtxSentence(pn){
+  if(!pn || !PHASE_CTX_LABEL[pn.phase]) return '';
+  const when = pn.weeksToRace === 0 ? 'esta es la semana de la carrera objetivo'
+    : pn.weeksToRace === 1 ? 'falta 1 semana para la carrera objetivo'
+    : `faltan ${pn.weeksToRace} semanas para la carrera objetivo`;
+  return ` Fase actual del plan: ${PHASE_CTX_LABEL[pn.phase]} (${when}).`;
+}
 function isRecoveryWeek(weekStartDate){
   // La semana de recuperación es la que arranca el lunes siguiente a una carrera cargada
   // en "Próximos eventos", pero SOLO cuando esa carrera cayó en domingo -- así nos
@@ -7969,6 +7993,10 @@ function renderPlan(){
   } else {
     cutbackNote.style.display='none';
   }
+  const phaseNote = document.getElementById('plan-phase-note');
+  const phaseText = phaseLineText(state.phaseNow);
+  phaseNote.textContent = phaseText;
+  phaseNote.style.display = phaseText ? 'block' : 'none';
   const recoveryNote = document.getElementById('plan-recovery-note');
   if(showRecoveryUi){
     recoveryNote.style.display='block';
@@ -15664,6 +15692,9 @@ function buildContext(){
     const weeksLeft = Math.round((new Date(p.raceDate+'T00:00:00') - new Date()) / (7*86400000));
     ctx += ` Fecha de la carrera objetivo: ${p.raceDate} (${weeksLeft>0?`faltan ${weeksLeft} semanas`:'ya pasó'}).`;
   }
+  // Fase del plan por fases (solo si está activa, ver refreshPhaseNow): le damos la fase y cuánto falta,
+  // no el pico semanal -- el volumen real ya está en los bloques del plan de más abajo.
+  ctx += phaseCtxSentence(state.phaseNow);
   if(p.weeklyGoalKm > 0) ctx += ` Meta de km que el corredor se puso para esta semana: ${p.weeklyGoalKm}km (esto ya se usó para ajustar el volumen del plan actual, dentro de márgenes seguros).`;
   if(p.goalNote) ctx += ` Objetivo personal, en sus propias palabras: "${p.goalNote}".`;
   const aiRuns = aiVisibleRuns();   // sin las carreras de Strava (ver aiVisibleRuns)

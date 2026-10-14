@@ -1682,3 +1682,115 @@ test('locales: las seis definen desc_racepace_suffix y desc_racepace_long_suffix
     assert.deepEqual(dict.desc_racepace_long_suffix.match(/\{\w+\}/g).sort(), ['{km}', '{pace}', '{unit}', '{unit}']);
   });
 });
+
+// ---- Task 9: aviso de fase en la pantalla del plan y contexto de Zonda ----
+const PHASE_KEYS = ['plan_phase_base', 'plan_phase_build', 'plan_phase_specific', 'plan_phase_peak', 'plan_phase_taper',
+  'plan_phase_line', 'plan_phase_line_one', 'plan_phase_line_race', 'plan_peak_limited_note'];
+const PHASE_NAMES = ['base', 'build', 'specific', 'peak', 'taper'];
+
+// Una app con el reloj congelado y renderPlan listo para correr con elementos de mentira
+// propios (uno por id), para poder leer lo que escribe en #plan-phase-note.
+function planScreenApp(phaseNow, overrides) {
+  const p = racingProfile(overrides);
+  p.hrZones = { 1: { min: 100, max: 120 }, 2: { min: 120, max: 140 }, 3: { min: 140, max: 155 }, 4: { min: 155, max: 170 }, 5: { min: 170, max: 185 } };
+  const { app } = phasedApp(p, plain(SCHEDULE));
+  app.state.weekStart = BUILD_WEEK;
+  app.state.weekNumber = 1;
+  app.state.plan = plain(app.generatePlan(p, 1, BUILD_WEEK));
+  app.state.phaseNow = phaseNow;
+  const els = {};
+  app.document.getElementById = (id) => {
+    if (!els[id]) els[id] = { id, style: {}, textContent: '', innerHTML: '', disabled: false, classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } }, querySelectorAll: () => [], querySelector: () => null, setAttribute() {}, addEventListener() {} };
+    return els[id];
+  };
+  return { app, els };
+}
+
+test('plan en pantalla: con fase activa, #plan-phase-note muestra plan_phase_line con la fase y las semanas', () => {
+  const { app, els } = planScreenApp({ phase: 'build', weeksToRace: 12, limited: false, peakKm: 50 });
+  app.renderPlan();
+  const note = els['plan-phase-note'];
+  assert.equal(note.textContent, app.t('plan_phase_line', { phase: app.t('plan_phase_build'), weeks: 12 }));
+  assert.notEqual(note.style.display, 'none');
+  assert.ok(!note.textContent.includes(app.t('plan_peak_limited_note', { km: 50, unit: 'km' })), 'sin limited no hay nota del pico');
+});
+
+test('plan en pantalla: 1 semana usa plan_phase_line_one y la semana de la carrera plan_phase_line_race', () => {
+  const one = planScreenApp({ phase: 'peak', weeksToRace: 1, limited: false, peakKm: 50 });
+  one.app.renderPlan();
+  assert.equal(one.els['plan-phase-note'].textContent, one.app.t('plan_phase_line_one', { phase: one.app.t('plan_phase_peak') }));
+  const race = planScreenApp({ phase: 'taper', weeksToRace: 0, limited: false, peakKm: 50 });
+  race.app.renderPlan();
+  assert.equal(race.els['plan-phase-note'].textContent, race.app.t('plan_phase_line_race', { phase: race.app.t('plan_phase_taper') }));
+});
+
+test('plan en pantalla: con limited y peakKm finito se agrega plan_peak_limited_note (km redondeados)', () => {
+  const { app, els } = planScreenApp({ phase: 'base', weeksToRace: 5, limited: true, peakKm: 42.4 });
+  app.renderPlan();
+  const text = els['plan-phase-note'].textContent;
+  assert.ok(text.startsWith(app.t('plan_phase_line', { phase: app.t('plan_phase_base'), weeks: 5 })), text);
+  assert.ok(text.includes(app.t('plan_peak_limited_note', { km: '42', unit: 'km' })), text);
+});
+
+test('plan en pantalla: la nota del pico sale en millas para un usuario imperial', () => {
+  const { app, els } = planScreenApp({ phase: 'base', weeksToRace: 5, limited: true, peakKm: 40 }, { units: 'imperial' });
+  app.renderPlan();
+  const text = els['plan-phase-note'].textContent;
+  assert.ok(text.includes(app.t('plan_peak_limited_note', { km: app.fmtDist(40, 0), unit: 'mi' })), text);
+  assert.ok(text.includes('25 mi'), text);
+});
+
+test('plan en pantalla: limited con peakKm indefinido no imprime la nota ni rompe', () => {
+  [undefined, NaN, null].forEach(peakKm => {
+    const { app, els } = planScreenApp({ phase: 'base', weeksToRace: 5, limited: true, peakKm });
+    app.renderPlan();
+    assert.equal(els['plan-phase-note'].textContent, app.t('plan_phase_line', { phase: app.t('plan_phase_base'), weeks: 5 }), String(peakKm));
+  });
+});
+
+test('plan en pantalla: sin fase activa (phaseNow null) no se muestra nada nuevo', () => {
+  const { app, els } = planScreenApp(null);
+  app.renderPlan();
+  assert.equal(els['plan-phase-note'].textContent, '');
+  assert.equal(els['plan-phase-note'].style.display, 'none');
+});
+
+test('contexto de Zonda: con fase activa incluye la fase y las semanas que faltan, en singular y plural', () => {
+  const cases = [
+    [{ phase: 'base', weeksToRace: 12, limited: false, peakKm: 50 }, ' Fase actual del plan: base (faltan 12 semanas para la carrera objetivo).'],
+    [{ phase: 'build', weeksToRace: 9, limited: true, peakKm: 50 }, ' Fase actual del plan: desarrollo (faltan 9 semanas para la carrera objetivo).'],
+    [{ phase: 'specific', weeksToRace: 4, limited: false }, ' Fase actual del plan: específica (faltan 4 semanas para la carrera objetivo).'],
+    [{ phase: 'peak', weeksToRace: 1, limited: false }, ' Fase actual del plan: pico (falta 1 semana para la carrera objetivo).'],
+    [{ phase: 'taper', weeksToRace: 0, limited: false }, ' Fase actual del plan: reducción final (esta es la semana de la carrera objetivo).'],
+  ];
+  cases.forEach(([phaseNow, sentence]) => {
+    const { app } = planScreenApp(null);
+    const before = app.buildContext();
+    app.state.phaseNow = phaseNow;
+    const after = app.buildContext();
+    assert.ok(after.includes(sentence), `${sentence} en ${after.slice(0, 600)}`);
+    assert.equal(after.replace(sentence, ''), before, 'solo agrega esa frase');
+  });
+});
+
+test('contexto de Zonda: sin fase activa el texto es exactamente el de siempre (ni el volumen pico)', () => {
+  const { app } = planScreenApp(null);
+  const ctx = app.buildContext();
+  assert.ok(!ctx.includes('Fase actual del plan'), 'no hay frase de fase');
+  app.state.phaseNow = { phase: 'base', weeksToRace: 12, limited: true, peakKm: 77 };
+  assert.ok(!app.buildContext().includes('77'), 'nunca se le pasa el pico');
+});
+
+test('locales: las seis definen las claves de fase del plan con sus marcadores', () => {
+  const vm = require('node:vm');
+  ['es', 'en', 'pt', 'fr', 'it', 'de'].forEach(loc => {
+    const sandbox = {}; sandbox.window = sandbox; vm.createContext(sandbox);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'locales', loc + '.js'), 'utf8'), sandbox);
+    const dict = sandbox.I18N[loc];
+    PHASE_KEYS.forEach(k => assert.ok(typeof dict[k] === 'string' && dict[k].length >= 3, `${loc}.${k}`));
+    assert.deepEqual(dict.plan_phase_line.match(/\{\w+\}/g).sort(), ['{phase}', '{weeks}'], loc);
+    assert.deepEqual(dict.plan_phase_line_one.match(/\{\w+\}/g), ['{phase}'], loc);
+    assert.deepEqual(dict.plan_phase_line_race.match(/\{\w+\}/g), ['{phase}'], loc);
+    assert.deepEqual(dict.plan_peak_limited_note.match(/\{\w+\}/g).sort(), ['{km}', '{unit}'], loc);
+  });
+});
