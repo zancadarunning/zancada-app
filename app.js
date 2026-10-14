@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-14T20:22:49Z';
+const APP_VERSION = '2026-10-14T20:28:41Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4548,6 +4548,26 @@ function phasedWeeklyKm(p, caution, info, baseKm){
 // ya baja por taperMultiplier, no hace falta otra proporción más chica encima.
 const LONG_CAP_KM = { '5k': 12, '10k': 16, '15k': 20, '21k': 24, '42k': 32 };
 const LONG_SHARE = { base: 0.28, build: 0.30, specific: 0.32, peak: 0.33 };
+// Con 2 o 3 sesiones por semana la proporción de arriba sola invierte la semana: la "tirada
+// larga" (30% del total) queda más corta que un rodaje o un tempo que se llevan el 70% o el
+// 35% restante cada uno. Para que la tirada siga siendo la sesión más larga de la semana, en
+// semanas de 2 o 3 sesiones tiene un piso de esta fracción del total (v4 daba ~60% y ~45%).
+// Con 4 o más sesiones la proporción por fase alcanza y no hay piso.
+const LONG_FLOOR_FRAC = { 2: 0.55, 3: 0.40 };
+// Deja la tirada larga dentro de las reglas duras del plan por fases: nunca más que el tope de
+// la distancia y, en semanas de 2 o 3 sesiones, estrictamente más larga que cualquier otra
+// (si hace falta, esas otras se recortan y el total semanal queda más bajo: se acepta). PURA
+// salvo por distMap, que modifica en el lugar. No hace nada fuera del plan por fases. La usan
+// applyPhaseLongRun y generatePlan después del recorte de HIGH_IMPACT_SHARE_CAP, que devuelve
+// lo que sobra a las demás sesiones (incluida la tirada) y podía romper el tope.
+function clampPhaseLongRun(distMap, usedTypes, phaseInfo, goal){
+  if(!phaseInfo || !phaseInfo.active || !usedTypes.includes('long')) return;
+  const cap = LONG_CAP_KM[goal];
+  if(cap !== undefined) distMap.long = Math.min(distMap.long, cap);
+  if(usedTypes.length < 2 || usedTypes.length > 3) return;
+  const limit = Math.max(1, distMap.long - 1);
+  usedTypes.forEach(t=>{ if(t !== 'long') distMap[t] = Math.min(distMap[t], limit); });
+}
 // Ajusta EN EL LUGAR la tirada larga de `distMap` (km por tipo de sesión, el mismo que arma
 // generatePlan) para una semana con plan por fases activo, y reparte la diferencia entre las
 // demás sesiones de esa semana. No hace nada si la fase no está activa, si la semana no tiene
@@ -4555,6 +4575,10 @@ const LONG_SHARE = { base: 0.28, build: 0.30, specific: 0.32, peak: 0.33 };
 // no principiante: el llamador (generatePlan) ya filtra esos casos.
 //  - nueva tirada = min(tope de la distancia, targetTotal x proporción de la fase), x 0,8 en
 //    semana de descarga (isCutback), redondeada a km enteros como el resto del reparto.
+//    Con 2 o 3 sesiones (usedTypes.length) la tirada nunca baja de LONG_FLOOR_FRAC x
+//    targetTotal (sin descuento de descarga) para seguir siendo la sesión más larga, y al final
+//    clampPhaseLongRun recorta las demás a menos que la tirada: si entre el tope de la
+//    distancia y eso el total no se alcanza, el total semanal queda más bajo.
 //  - la diferencia con la tirada vieja (en cualquier sentido: puede achicarse o crecer) va a
 //    las demás sesiones en proporción a `ratio` (la tabla RATIO de generatePlan), igual que
 //    el recorte de HIGH_IMPACT_SHARE_CAP, pero ninguna baja de 1 km.
@@ -4581,10 +4605,12 @@ function applyPhaseLongRun(distMap, usedTypes, targetTotal, phaseInfo, goal, isC
   const weightOf = t => (ratio && ratio[t]) || 1;
   const remainingWeight = others.reduce((a, t) => a + weightOf(t) * occurrences[t], 0);
   const oldLong = distMap.long;
-  const newLong = Math.round(Math.min(cap, targetTotal * share * (isCutback ? 0.8 : 1)));
+  const shareKm = Math.round(targetTotal * share * (isCutback ? 0.8 : 1));
+  const floorFrac = LONG_FLOOR_FRAC[usedTypes.length];
+  const newLong = Math.min(cap, floorFrac === undefined ? shareKm : Math.max(shareKm, Math.ceil(targetTotal * floorFrac)));
   // km semanales que cede la tirada (negativo si crece y las demás tienen que ceder).
   const delta = (oldLong - newLong) * longOcc;
-  if(delta === 0) return;
+  if(delta === 0){ clampPhaseLongRun(distMap, usedTypes, phaseInfo, goal); return; }
   // Nunca baja de 1 km; una sesión que ya estaba en 0 (o por debajo) no se toca hacia abajo.
   const withFloor = (t, v) => Math.max(v, Math.min(distMap[t], 1));
   // Cambio ideal por sesión de cada tipo y sus dos redondeos posibles (hacia abajo / arriba).
@@ -4618,6 +4644,7 @@ function applyPhaseLongRun(distMap, usedTypes, targetTotal, phaseInfo, goal, isC
   let long = newLong;
   if(Math.abs(drift) > 1) long -= Math.sign(drift) * Math.ceil((Math.abs(drift) - 1) / longOcc);
   distMap.long = Math.max(1, Math.min(cap, long));
+  clampPhaseLongRun(distMap, usedTypes, phaseInfo, goal);
 }
 // Deja state.phaseSchedule al día con el perfil: lo crea si falta, lo reemplaza si la carrera o
 // la meta cambiaron (el ancla se recalcula desde hoy), o lo pone en null si el perfil ya no
@@ -5753,6 +5780,10 @@ function generatePlan(p, weekNumber, weekStartDate){
         });
       }
     });
+    // El recorte de arriba devuelve lo que sobra a las demás sesiones, tirada incluida: con plan
+    // por fases activo eso podía pasar el tope de la tirada (o dejarla más corta que otra en
+    // semanas de 2-3 sesiones). Se vuelve a acotar; lo que excede se pierde (total más bajo).
+    clampPhaseLongRun(distMap, usedTypes, phaseInfo, p.goal);
   }
   // "¿Cuántos minutos tenés disponibles por sesión?" (onboarding, opcional) se guardaba en el
   // perfil pero nunca tocaba el plan de verdad -- solo se lo pasábamos al coach del chat como

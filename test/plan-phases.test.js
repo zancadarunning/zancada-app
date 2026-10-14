@@ -1197,7 +1197,10 @@ test('applyPhaseLongRun: el total semanal después del ajuste coincide con el de
           const before = lrTotal(distMap, used);
           app.applyPhaseLongRun(distMap, used, total, { active: true, phase }, '42k', cut, LR_RATIO);
           const after = lrTotal(distMap, used);
-          assert.ok(Math.abs(after - before) <= 1, `${phase} ${used} total ${total} cut ${cut}: ${before} -> ${after}`);
+          // 4+ sesiones: el total se conserva a +-1 km. 2-3 sesiones (regla de tirada más larga
+          // que las demás): el total puede quedar más bajo, nunca más alto.
+          if (used.length >= 4) assert.ok(Math.abs(after - before) <= 1, `${phase} ${used} total ${total} cut ${cut}: ${before} -> ${after}`);
+          else assert.ok(after <= before + 1, `${phase} ${used} total ${total} cut ${cut}: ${before} -> ${after}`);
           used.filter(t => t !== 'long').forEach(t => assert.ok(distMap[t] >= 1, `${t} cayó a ${distMap[t]}`));
         });
       });
@@ -1207,8 +1210,8 @@ test('applyPhaseLongRun: el total semanal después del ajuste coincide con el de
 
 test('applyPhaseLongRun: la tirada puede bajar o crecer (las demás ceden) y las demás nunca bajan de 1 km', () => {
   const { app } = phasedApp(racingProfile(), null);
-  // la tirada del reparto proporcional (1,5 de 3,2 unidades) pesa más que 0,32 de la semana: baja
-  const used = ['easy', 'tempo', 'long'];
+  // la tirada del reparto proporcional (1,5 de 4,15 unidades) pesa más que 0,32 de la semana: baja
+  const used = USED4;
   const distMap = lrDist(used, 40);
   const oldLong = distMap.long;
   app.applyPhaseLongRun(distMap, used, 40, { active: true, phase: 'specific' }, '21k', false, LR_RATIO);
@@ -1243,18 +1246,62 @@ test('applyPhaseLongRun: la tirada puede bajar o crecer (las demás ceden) y las
   assert.ok(Math.abs(lrTotal(dm5, used5) - tot5) <= 1, `${tot5} -> ${lrTotal(dm5, used5)}`);
 });
 
-test('applyPhaseLongRun: con 2 días de entrenamiento la tirada nunca supera el 35% del total', () => {
+test('applyPhaseLongRun: con 4 o más sesiones la tirada nunca supera el 35% del total', () => {
   const { app } = phasedApp(racingProfile(), null);
-  const used = ['easy', 'long'];
-  ['base', 'build', 'specific', 'peak', 'taper'].forEach(phase => {
-    [20, 28, 40, 55, 70].forEach(total => {
-      [false, true].forEach(cut => {
-        const distMap = lrDist(used, total);
-        app.applyPhaseLongRun(distMap, used, total, { active: true, phase }, '42k', cut, LR_RATIO);
-        const sum = lrTotal(distMap, used);
-        assert.ok(distMap.long <= 0.35 * sum + 1e-9, `${phase} total ${total} cut ${cut}: ${distMap.long} de ${sum}`);
+  [USED4, ['easy', 'easy', 'tempo', 'easy', 'long'], ['easy', 'hills', 'easy', 'fartlek', 'long']].forEach(used => {
+    ['base', 'build', 'specific', 'peak', 'taper'].forEach(phase => {
+      [28, 40, 55, 70].forEach(total => {
+        [false, true].forEach(cut => {
+          const distMap = lrDist(used, total);
+          app.applyPhaseLongRun(distMap, used, total, { active: true, phase }, '42k', cut, LR_RATIO);
+          const sum = lrTotal(distMap, used);
+          assert.ok(distMap.long <= 0.35 * sum + 1e-9, `${used} ${phase} total ${total} cut ${cut}: ${distMap.long} de ${sum}`);
+        });
       });
     });
+  });
+});
+
+// Series de sesiones de 2 y 3 días, con y sin cuestas / series / fartlek.
+const SHORT_SETS = [
+  ['easy', 'long'], ['tempo', 'long'], ['progression', 'long'], ['intervals', 'long'], ['hills', 'long'], ['fartlek', 'long'],
+  ['easy', 'tempo', 'long'], ['easy', 'intervals', 'long'], ['hills', 'easy', 'long'], ['fartlek', 'progression', 'long'], ['easy', 'easy', 'long'],
+];
+const ALL_GOALS = ['5k', '10k', '15k', '21k', '42k'];
+const LR_CAP = { '5k': 12, '10k': 16, '15k': 20, '21k': 24, '42k': 32 };
+const LR_PHASES = ['base', 'build', 'specific', 'peak', 'taper'];
+
+test('applyPhaseLongRun: con 2 o 3 sesiones la tirada es estrictamente más larga que cualquier otra (barrido de metas x fases x totales x series)', () => {
+  const { app } = phasedApp(racingProfile(), null);
+  let cases = 0;
+  ALL_GOALS.forEach(goal => LR_PHASES.forEach(phase => [15, 20, 28, 35, 42, 55, 75].forEach(total => SHORT_SETS.forEach(used => [false, true].forEach(cut => {
+    const distMap = lrDist(used, total);
+    app.applyPhaseLongRun(distMap, used, total, { active: true, phase }, goal, cut, LR_RATIO);
+    used.filter(t => t !== 'long').forEach(t => {
+      assert.ok(distMap.long > distMap[t], `${goal} ${phase} ${total} ${used} cut ${cut}: long ${distMap.long} vs ${t} ${distMap[t]}`);
+      assert.ok(distMap[t] >= 1);
+    });
+    assert.ok(distMap.long <= LR_CAP[goal]);
+    cases++;
+  })))));
+  assert.ok(cases > 1000, `${cases}`);
+});
+
+test('applyPhaseLongRun: los seis ejemplos de semanas cortas del review dejan la tirada por encima de todas las demás', () => {
+  const { app } = phasedApp(racingProfile(), null);
+  const examples = [
+    ['10k', 'build', 35, ['easy', 'long'], 16],
+    ['42k', 'build', 55, ['tempo', 'long'], 31],
+    ['42k', 'peak', 75, ['progression', 'long'], 32],
+    ['42k', 'peak', 75, ['easy', 'tempo', 'long'], 30],
+    ['42k', 'build', 55, ['easy', 'tempo', 'long'], 22],
+    ['10k', 'peak', 42, ['easy', 'tempo', 'long'], 16],
+  ];
+  examples.forEach(([goal, phase, total, used, expectedLong]) => {
+    const distMap = lrDist(used, total);
+    app.applyPhaseLongRun(distMap, used, total, { active: true, phase }, goal, false, LR_RATIO);
+    assert.equal(distMap.long, expectedLong, `${goal} ${phase} ${total} ${used}`);
+    used.filter(t => t !== 'long').forEach(t => assert.ok(distMap.long > distMap[t], `${goal} ${phase} ${total} ${used}: long ${distMap.long} vs ${t} ${distMap[t]}`));
   });
 });
 
@@ -1302,7 +1349,7 @@ test('applyPhaseLongRun: el tope por distancia manda (42k pico de 70 km -> <= 32
   });
   const d5 = lrDist(used, 35);
   app.applyPhaseLongRun(d5, used, 35, { active: true, phase: 'peak' }, '5k', false, LR_RATIO);
-  assert.ok(d5.long <= 12, `5k pico: ${d5.long}`);
+  assert.equal(d5.long, 12, '5k pico: round(35 x 0,33) = 12, justo el tope');
 });
 
 test('applyPhaseLongRun: taper usa la proporción de peak', () => {
@@ -1372,25 +1419,47 @@ test('generatePlan: sin cronograma activo la tirada es la de v4; por tiempo y pr
   assert.equal(calls(p), 1, 'distancia no principiante: una vez');
 });
 
-test('generatePlan: con 2 días y fases la tirada no pasa del 35% del total semanal', () => {
+test('generatePlan: con 2 días y fases la tirada es la sesión más larga y no pasa del tope (también con cuestas, series y fartlek)', () => {
   const p = racingProfile({ trainingDays: ['wed', 'sun'] });
   const { app } = phasedApp(p);
-  // Las semanas con cuestas/series se saltean a propósito: ahí el techo HIGH_IMPACT_SHARE_CAP
-  // (0,3 del total para esa única sesión fuerte) corre DESPUÉS y devuelve lo que sobra a la
-  // tirada -- con solo 2 sesiones, es imposible cumplir los dos topes a la vez. Las de fartlek
-  // también: su dist sale de la estructura armada (fartlekActualKm), no de lo repartido.
-  let checked = 0;
-  ['base', 'build', 'specific', 'peak', 'taper'].forEach(phase => {
+  const seen = new Set();
+  LR_PHASES.forEach(phase => {
     const week = weekOfPhase(app, p, app.state.phaseSchedule, phase, 0);
     assert.ok(week, phase);
-    for (let wn = 1; wn <= 6; wn++) {
+    for (let wn = 1; wn <= 8; wn++) {
       const plan = plain(app.generatePlan(p, wn, week));
-      if (plan.some(d => ['hills', 'intervals', 'fartlek'].includes(d.typeKey))) continue;
       const longDay = plan.find(d => d.typeKey === 'long');
       assert.ok(longDay, `${phase} semana ${wn}: hay tirada`);
-      checked++;
-      assert.ok(longDay.dist <= 0.35 * sumDist(plan) + 1e-9, `${phase} semana ${wn}: ${longDay.dist} de ${sumDist(plan)}`);
+      plan.filter(d => d.typeKey !== 'rest' && d.typeKey !== 'long').forEach(d => {
+        seen.add(d.typeKey);
+        assert.ok(longDay.dist > d.dist, `${phase} semana ${wn}: tirada ${longDay.dist} vs ${d.typeKey} ${d.dist}`);
+      });
+      assert.ok(longDay.dist <= LR_CAP['21k'], `${phase} semana ${wn}: ${longDay.dist}`);
     }
   });
-  assert.ok(checked >= 10, `se revisaron ${checked} semanas`);
+  assert.ok(seen.has('hills') || seen.has('intervals'), `se cubrió cuestas/series: ${[...seen]}`);
+  assert.ok(seen.has('fartlek'), `se cubrió fartlek: ${[...seen]}`);
+});
+
+test('generatePlan: el recorte de HIGH_IMPACT_SHARE_CAP no hace pasar a la tirada del tope de la distancia (barrido con cuestas / series)', () => {
+  const dayChoices = [['wed', 'sun'], ['tue', 'sun'], ['tue', 'thu', 'sun'], ['tue', 'wed', 'fri', 'sun'], ['mon', 'tue', 'thu', 'fri', 'sun']];
+  let withHigh = 0, cases = 0;
+  ALL_GOALS.forEach(goal => dayChoices.forEach(trainingDays => [20, 35, 50, 70].forEach(km => {
+    const p = racingProfile({ goal, trainingDays, weeklyKm: km, currentWeeklyKm: km });
+    const schedule = { anchor: '2026-11-02', raceDate: '2027-03-14', goal };
+    const { app } = phasedApp(p, schedule);
+    LR_PHASES.forEach(phase => {
+      const week = weekOfPhase(app, p, schedule, phase, 0);
+      if (!week) return;
+      for (let wn = 1; wn <= 8; wn++) {
+        const plan = plain(app.generatePlan(p, wn, week));
+        const longDay = plan.find(d => d.typeKey === 'long');
+        cases++;
+        if (plan.some(d => d.typeKey === 'hills' || d.typeKey === 'intervals')) withHigh++;
+        if (!longDay) continue;
+        assert.ok(longDay.dist <= LR_CAP[goal], `${goal} ${trainingDays} ${km} km ${phase} semana ${wn}: tirada ${longDay.dist} > ${LR_CAP[goal]}`);
+      }
+    });
+  })));
+  assert.ok(withHigh > 50, `semanas con cuestas o series: ${withHigh} de ${cases}`);
 });
