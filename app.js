@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-13T14:43:35Z';
+const APP_VERSION = '2026-10-14T17:55:50Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7212,8 +7212,8 @@ function getPlanStartDate(){
 // corrió esta semana") -- no es un bug de cálculo, era el texto (home_load_hint_caution)
 // el que decía "esta semana" en vez de "los últimos 7 días", dando a entender que
 // contradecía a la card de arriba cuando en realidad miden cosas distintas a propósito.
-function calcTrainingLoad(){
-  const runs = state.runs || [];
+function calcTrainingLoad(runsList){
+  const runs = runsList || state.runs || [];
   if(!runs.length) return null;
   const planStart = getPlanStartDate();
   if(!planStart) return null;
@@ -12633,10 +12633,13 @@ function buildStravaSyncBanner(){
 // atrás) queda al final del array. Todo lo que necesite "las más recientes" o mostrarlas de nueva a vieja
 // tiene que ordenar por fecha. Devuelve una copia (la más vieja primero); el sort es estable, así que las
 // de la misma fecha mantienen el orden en que se guardaron.
-function runsByDateAsc(){
+function runsByDateAsc(list){
   const ts = r => { const x = new Date(r.date).getTime(); return isNaN(x) ? 0 : x; };
-  return (state.runs||[]).slice().sort((a,b)=>ts(a)-ts(b));
+  return (list || state.runs || []).slice().sort((a,b)=>ts(a)-ts(b));
 }
+// Carreras que pueden llegar a Zonda (la IA). El acuerdo de desarrollador de Strava (API Policy 2026, sección 5.3) prohíbe usar datos de Strava
+// en cualquier aplicación de IA, incluso como contexto de una conversación: las carreras importadas de Strava (source:'strava') quedan afuera.
+function aiVisibleRuns(){ return (state.runs || []).filter(r => r.source !== 'strava'); }
 // Boceto de la ruta (SVG) para las tarjetas del historial: se dibuja con los puntos del GPS, sin depender del mapa de Mapbox.
 // Queda detras de la imagen del mapa: si la imagen carga la tapa, si falla (sin red / sin token) se ve el trazo.
 function routeSketchSvg(points){
@@ -15218,6 +15221,9 @@ function buildContext(){
   }
   if(p.weeklyGoalKm > 0) ctx += ` Meta de km que el corredor se puso para esta semana: ${p.weeklyGoalKm}km (esto ya se usó para ajustar el volumen del plan actual, dentro de márgenes seguros).`;
   if(p.goalNote) ctx += ` Objetivo personal, en sus propias palabras: "${p.goalNote}".`;
+  const aiRuns = aiVisibleRuns();   // sin las carreras de Strava (ver aiVisibleRuns)
+  const hasStravaRuns = (state.runs||[]).some(r => r.source === 'strava');
+  // la pausa se mide sobre TODAS las carreras (es lo que ya redujo el plan), pero solo se le dice a Zonda que existe una pausa: nunca el contenido de una carrera de Strava
   const gapWeeks = detectTrainingGapWeeks(state.weekStart);
   if(gapWeeks >= 2) ctx += ` Hace ${gapWeeks} semanas que no registra una carrera -- si el volumen del plan actual parece bajo, es porque ya se lo redujo automáticamente por esta pausa.`;
   // Mismo problema que gapWeeks de arriba: generatePlan multiplica el volumen real de esta
@@ -15237,23 +15243,24 @@ function buildContext(){
   const todayReadiness = todayReadinessEntry();
   if(todayReadiness) ctx += ` Check-in de hoy sobre cómo durmió/energía: ${todayReadiness.quality}.` + (todayReadiness.sleep !== undefined ? ` (detalle de 0 = mal a 2 = bien: sueño ${todayReadiness.sleep}, piernas ${todayReadiness.legs}, ánimo ${todayReadiness.mood}.)` : '');
   if(state.event) ctx += ` Carrera cargada en "Próximos eventos" (informativa, no es necesariamente la carrera objetivo del perfil): ${state.event.name} (${state.event.type}) el ${state.event.date}.`;
-  if(state.runs.length){
+  if(aiRuns.length){
     // En vez de solo la última carrera, le damos al coach una tendencia real: las
     // últimas corridas con ritmo y cuánto volumen acumulado hay en las últimas semanas.
     // Así puede responder con criterio si le preguntan "¿cómo vengo?" o "¿mejoré el ritmo?",
     // en vez de solo reaccionar a lo último que pasó.
-    const recent = runsByDateAsc().slice(-5);
+    const recent = runsByDateAsc(aiRuns).slice(-5);
     const runsSummary = recent.map(r=>`${localDateISO(r.date)}: ${r.distanceKm.toFixed(2)}km en ${fmtTime(r.durationSec)} (ritmo ${paceMinPerKmOf(r)}/km)`).join('; ');
     const cutoff = Date.now() - 28*86400000;
-    const last4wKm = state.runs.filter(r=>new Date(r.date).getTime() >= cutoff).reduce((s,r)=>s+r.distanceKm,0);
+    const last4wKm = aiRuns.filter(r=>new Date(r.date).getTime() >= cutoff).reduce((s,r)=>s+r.distanceKm,0);
     ctx += ` Últimas carreras registradas (de más vieja a más nueva): ${runsSummary}. Total corrido en los últimos 28 días: ${last4wKm.toFixed(1)}km.`;
   }
+  if(hasStravaRuns) ctx += ` Parte de las carreras del corredor se importaron de Strava y NO las ves (las reglas de Strava no permiten pasarlas a una IA): no saques conclusiones sobre su volumen, ritmo o carga recientes a partir de las carreras que sí ves, porque pueden estar incompletas -- si te pregunta por eso, pedile que te cuente cómo viene o que lo mire en Historial.`;
   if(state.shoes.length) ctx += ` Zapatillas: ${state.shoes.map(s=>`${s.name} (${s.km.toFixed(0)}km, ${s.terrain})`).join(', ')}.`;
   // Le pasamos al coach el mismo indicador de carga (agudo:crónico) que ya ve el
   // corredor en la pantalla de Inicio -- antes lo calculábamos solo para mostrar el
   // tag ahí, y si preguntaban "¿cómo viene mi carga?" el coach no tenía ese dato y
   // podía contestar algo inconsistente con lo que el usuario ya está viendo en pantalla.
-  const load = calcTrainingLoad();
+  const load = hasStravaRuns ? null : calcTrainingLoad(aiRuns);   // con carreras de Strava el indicador saldría incompleto: mejor no mandarlo
   if(load) ctx += ` Indicador de carga de entrenamiento (semana actual vs. promedio reciente): ${load.level} (ratio ${load.ratio.toFixed(2)}, corrió ${load.acuteKm.toFixed(1)}km esta semana vs. promedio de ${load.chronicWeeklyAvg.toFixed(1)}km/semana). Este es el mismo indicador que ve en la pantalla de Inicio -- si te pregunta por su carga o riesgo de lesión por volumen, usá este dato en vez de estimarlo de nuevo.`;
   // trainBy: si el corredor eligió entrenar "por tiempo" en vez de "por distancia" (ver
   // Perfil/onboarding), el coach tiene que expresar y ajustar TODO en minutos -- series,
