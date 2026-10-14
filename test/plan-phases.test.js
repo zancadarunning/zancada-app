@@ -989,3 +989,166 @@ test('applyUndoLastChange: si el snapshot no trae cronograma (viejo) deja uno co
   app.applyUndoLastChange();
   assert.equal(app.state.phaseSchedule.raceDate, '2027-03-14');
 });
+
+// ---- Rotación de sesiones fuertes por fase ----
+
+const NO_CAUTION = { level: 0 };
+const HIGH_CAUTION = { level: 2 };
+
+test('hardSessionRotationForPhase: base y build no dependen de la meta', () => {
+  const { app } = phasedApp(racingProfile());
+  for (const goal of ['5k', '10k', '15k', '21k', '42k']) {
+    assert.deepEqual(plain(app.hardSessionRotationForPhase('base', goal, NO_CAUTION)), ['hills', 'fartlek', 'progression'], goal);
+    assert.deepEqual(plain(app.hardSessionRotationForPhase('build', goal, NO_CAUTION)), ['tempo', 'intervals', 'fartlek'], goal);
+  }
+});
+
+test('hardSessionRotationForPhase: specific / peak / taper dependen de la meta', () => {
+  const { app } = phasedApp(racingProfile());
+  const expected = {
+    '5k': ['intervals', 'tempo'],
+    '10k': ['tempo', 'intervals'],
+    '15k': ['tempo', 'progression'],
+    '21k': ['tempo', 'progression'],
+    '42k': ['tempo', 'progression'],
+  };
+  for (const phase of ['specific', 'peak', 'taper']) {
+    for (const goal of Object.keys(expected)) {
+      assert.deepEqual(plain(app.hardSessionRotationForPhase(phase, goal, NO_CAUTION)), expected[goal], `${phase} ${goal}`);
+    }
+  }
+});
+
+test('hardSessionRotationForPhase: con cautela >= 2 se quitan intervals y hills', () => {
+  const { app } = phasedApp(racingProfile());
+  const r = (phase, goal) => plain(app.hardSessionRotationForPhase(phase, goal, HIGH_CAUTION));
+  assert.deepEqual(r('base', '10k'), ['fartlek', 'progression']);
+  assert.deepEqual(r('build', '10k'), ['tempo', 'fartlek']);
+  assert.deepEqual(r('specific', '5k'), ['tempo']);
+  assert.deepEqual(r('peak', '5k'), ['tempo']);
+  assert.deepEqual(r('specific', '10k'), ['tempo']);
+  assert.deepEqual(r('taper', '10k'), ['tempo']);
+  assert.deepEqual(r('specific', '21k'), ['tempo', 'progression']);
+  assert.deepEqual(r('peak', '42k'), ['tempo', 'progression']);
+  // cautela 1 no filtra nada
+  assert.deepEqual(plain(app.hardSessionRotationForPhase('base', '10k', { level: 1 })), ['hills', 'fartlek', 'progression']);
+});
+
+test('hardSessionRotationForPhase: una fase desconocida devuelve lo mismo que hardSessionRotation', () => {
+  const { app } = phasedApp(racingProfile());
+  for (const phase of ['maintenance', 'post', undefined, null, '']) {
+    for (const goal of ['5k', '10k', '21k', '42k']) {
+      for (const caution of [NO_CAUTION, HIGH_CAUTION]) {
+        assert.deepEqual(
+          plain(app.hardSessionRotationForPhase(phase, goal, caution)),
+          plain(app.hardSessionRotation(goal, caution)),
+          `${phase} ${goal} ${caution.level}`
+        );
+      }
+    }
+  }
+});
+
+test('hardSessionRotationForPhase: devuelve una lista nueva (no deja mutar la rotación compartida)', () => {
+  const { app } = phasedApp(racingProfile());
+  const a = app.hardSessionRotationForPhase('base', '10k', NO_CAUTION);
+  a.push('x');
+  assert.deepEqual(plain(app.hardSessionRotationForPhase('base', '10k', NO_CAUTION)), ['hills', 'fartlek', 'progression']);
+});
+
+test('distributeSessionTypes: sin phase se comporta igual que antes (rotación de hardSessionRotation)', () => {
+  const { app } = phasedApp(racingProfile());
+  const days4 = ['tue', 'wed', 'fri', 'sun'];
+  const days3 = ['tue', 'thu', 'sun'];
+  const d = (days, beginner, wn, caution, cut, goal, vo) => plain(app.distributeSessionTypes(days, beginner, wn, caution, cut, goal, vo));
+  // 10k, 4 días: rotación corta ['intervals','fartlek','tempo','hills']
+  assert.deepEqual(d(days4, false, 1, NO_CAUTION, false, '10k', false), { tue: 'intervals', wed: 'easy', fri: 'fartlek', sun: 'long' });
+  assert.deepEqual(d(days4, false, 2, NO_CAUTION, false, '10k', false), { tue: 'fartlek', wed: 'easy', fri: 'tempo', sun: 'long' });
+  // 21k, 3 días, semana 1: rotación larga ['tempo','hills','progression','intervals']
+  assert.deepEqual(d(days3, false, 1, NO_CAUTION, false, '21k', false), { tue: 'tempo', thu: 'easy', sun: 'long' });
+  // explicitar undefined en el 8.º parámetro es lo mismo que omitirlo
+  for (const wn of [1, 2, 3, 4, 5]) {
+    for (const goal of ['5k', '21k']) {
+      assert.deepEqual(
+        plain(app.distributeSessionTypes(days4, false, wn, NO_CAUTION, false, goal, false, undefined)),
+        plain(app.distributeSessionTypes(days4, false, wn, NO_CAUTION, false, goal, false))
+      );
+    }
+  }
+});
+
+test('distributeSessionTypes: con phase usa la rotación de la fase; el resto de reglas no cambia', () => {
+  const { app } = phasedApp(racingProfile());
+  const days4 = ['tue', 'wed', 'fri', 'sun'];
+  const d = (days, beginner, wn, caution, cut, goal, vo, phase) => plain(app.distributeSessionTypes(days, beginner, wn, caution, cut, goal, vo, phase));
+  // base, semana 1 y 2 (dos días fuertes): hills + fartlek, luego fartlek + progression
+  assert.deepEqual(d(days4, false, 1, NO_CAUTION, false, '10k', false, 'base'), { tue: 'hills', wed: 'easy', fri: 'fartlek', sun: 'long' });
+  assert.deepEqual(d(days4, false, 2, NO_CAUTION, false, '10k', false, 'base'), { tue: 'fartlek', wed: 'easy', fri: 'progression', sun: 'long' });
+  // specific 10k
+  assert.deepEqual(d(days4, false, 1, NO_CAUTION, false, '10k', false, 'specific'), { tue: 'tempo', wed: 'easy', fri: 'intervals', sun: 'long' });
+  // semana de descarga: un solo día fuerte (maxHardDays - 1), sale de la rotación de la fase
+  assert.deepEqual(d(days4, false, 1, NO_CAUTION, true, '10k', false, 'base'), { tue: 'hills', wed: 'easy', fri: 'easy', sun: 'long' });
+  // principiante con variedad: sigue siendo solo fartlek aunque haya fase
+  const bv = d(['tue', 'thu', 'sat', 'sun'], true, 2, { level: 0 }, false, '10k', true, 'specific');
+  assert.ok(Object.values(bv).every(t => ['fartlek', 'easy', 'long'].includes(t)), JSON.stringify(bv));
+  // principiante sin variedad: todo rodaje suave igual que sin fase
+  assert.deepEqual(d(days4, true, 1, NO_CAUTION, false, '10k', false, 'base'), d(days4, true, 1, NO_CAUTION, false, '10k', false));
+  // phase desconocida: igual que sin phase
+  assert.deepEqual(d(days4, false, 3, NO_CAUTION, false, '21k', false, 'maintenance'), d(days4, false, 3, NO_CAUTION, false, '21k', false));
+});
+
+// Semana (lunes) de un cronograma activo cuya fase es `phase`, para un perfil/cronograma dado.
+function weekOfPhase(app, p, schedule, phase, nth) {
+  const hits = [];
+  for (let i = 0; i < 40; i++) {
+    const week = app.addDaysToIsoLocal(schedule.anchor, i * 7);
+    const info = plain(app.phaseForWeek(p, week, schedule));
+    if (info.active && info.phase === phase) hits.push(week);
+  }
+  return hits[nth || 0];
+}
+const hardTypes = plan => plan.map(d => d.typeKey).filter(k => k && k !== 'easy' && k !== 'long' && k !== 'rest');
+
+test('generatePlan: una semana base con cronograma activo solo tiene cuestas / fartlek / progresivo como sesión fuerte', () => {
+  const p = racingProfile();
+  const { app } = phasedApp(p);
+  const base = weekOfPhase(app, p, app.state.phaseSchedule, 'base', 0);
+  assert.ok(base, 'hay una semana base');
+  const seen = new Set();
+  for (let wn = 1; wn <= 6; wn++) {
+    const hard = hardTypes(plain(app.generatePlan(p, wn, base)));
+    assert.ok(hard.length >= 1, `semana ${wn}: ${hard}`);
+    for (const k of hard) {
+      assert.ok(['hills', 'fartlek', 'progression'].includes(k), `semana ${wn}: ${k}`);
+      seen.add(k);
+    }
+  }
+  assert.ok(!seen.has('tempo') && !seen.has('intervals'));
+  assert.ok(seen.size >= 2, `rota entre varios: ${[...seen]}`);
+});
+
+test('generatePlan: una semana specific de 10k tiene tempo o series y nunca cuestas ni fartlek', () => {
+  const p = racingProfile({ goal: '10k' });
+  const schedule = { anchor: '2026-11-02', raceDate: '2027-03-14', goal: '10k' };
+  const { app } = phasedApp(p, schedule);
+  const spec = weekOfPhase(app, p, app.state.phaseSchedule, 'specific', 0);
+  assert.ok(spec, 'hay una semana specific');
+  const seen = new Set();
+  for (let wn = 1; wn <= 6; wn++) {
+    const hard = hardTypes(plain(app.generatePlan(p, wn, spec)));
+    assert.ok(hard.length >= 1, `semana ${wn}: ${hard}`);
+    for (const k of hard) {
+      assert.ok(['tempo', 'intervals'].includes(k), `semana ${wn}: ${k}`);
+      seen.add(k);
+    }
+  }
+  assert.ok(seen.has('tempo') && seen.has('intervals'));
+});
+
+test('generatePlan: sin cronograma activo la rotación es la de siempre (series o cuestas aparecen)', () => {
+  const p = racingProfile();
+  const { app } = phasedApp(p, null);
+  const v4 = new Set();
+  for (let wn = 1; wn <= 8; wn++) hardTypes(plain(app.generatePlan(p, wn, '2026-11-02'))).forEach(k => v4.add(k));
+  assert.ok(v4.has('intervals') || v4.has('hills'), `v4 tiene series o cuestas: ${[...v4]}`);
+});

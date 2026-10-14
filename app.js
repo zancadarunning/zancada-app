@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-14T20:09:03Z';
+const APP_VERSION = '2026-10-14T20:13:42Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5147,6 +5147,35 @@ function hardSessionRotation(goal, caution){
   }
   return rotation;
 }
+function hardSessionRotationForPhase(phase, goal, caution){
+  // Versión por fase de hardSessionRotation: cuando el plan tiene cronograma por fases, el
+  // estímulo de calidad de la semana depende de DÓNDE está el corredor en el camino a la
+  // carrera, no solo de la meta. Base: fuerza y economía de carrera sin ritmo de carrera
+  // (cuestas, fartlek, progresivos). Build: se suma el trabajo de umbral y series. Specific /
+  // peak / taper: solo los estímulos propios de la distancia -- series primero en 5k (ritmo
+  // por encima del de carrera), tempo primero en 10k, y tempo + progresivo en las largas,
+  // donde lo que decide es sostener el ritmo cansado. El taper conserva el tipo de sesión
+  // (lo que baja es el volumen, ver taperMultiplier), no lo cambia por otro.
+  // Las fases que no son estas cinco (mantenimiento, post-carrera) no tienen rotación propia
+  // acá: caen en la rotación por meta de siempre.
+  let rotation;
+  if(phase==='base') rotation = ['hills','fartlek','progression'];
+  else if(phase==='build') rotation = ['tempo','intervals','fartlek'];
+  else if(phase==='specific' || phase==='peak' || phase==='taper'){
+    rotation = goal==='5k' ? ['intervals','tempo']
+      : goal==='10k' ? ['tempo','intervals']
+      : ['tempo','progression'];
+  } else {
+    return hardSessionRotation(goal, caution);
+  }
+  if(caution && caution.level>=2){
+    // misma regla que hardSessionRotation: el perfil más conservador no hace series en
+    // llano ni cuestas, en ninguna fase
+    rotation = rotation.filter(t=>t!=='intervals' && t!=='hills');
+    if(!rotation.length) rotation = ['tempo'];
+  }
+  return rotation;
+}
 function checkProactiveCoachNudge(){
   // El coach antes solo hablaba si le escribías. Acá lo hacemos un poco proactivo:
   // si la semana viene con varias sesiones salteadas o calificadas "mal" ANTES de
@@ -5224,7 +5253,7 @@ function pickSpacedDays(days, count, avoidDay){
   combo(0, []);
   return best;
 }
-function distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isCutback, goal, varietyOk){
+function distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isCutback, goal, varietyOk, phase){
   if(!trainingDays.length) return {};
   const pref = ['sun','sat','fri','thu','wed','tue','mon'];
   let longDay = trainingDays[trainingDays.length-1];
@@ -5242,7 +5271,9 @@ function distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isC
   // demasiada intensidad a un plan de 3 días. Un perfil de más cautela (edad/
   // contextura) baja este límite todavía más, sin eliminar la calidad del todo.
   const wn = weekNumber || 1;
-  let rotation = hardSessionRotation(goal, caution);
+  // Con plan por fases (phase es un string) la rotación sale de la fase; sin phase, de la meta
+  // como siempre -- el resto de la distribución no sabe de fases.
+  let rotation = typeof phase==='string' ? hardSessionRotationForPhase(phase, goal, caution) : hardSessionRotation(goal, caution);
   // Alguien que TODAVÍA es principiante en running (nunca corrió solo) pero ya tiene base
   // de un deporte de impacto (ver hasRunningImpactBase) puede salir de "todo zona 1" -- pero
   // no le sirve de nada una sesión de series o ritmo medio con técnica y paces que todavía no
@@ -5568,7 +5599,7 @@ function generatePlan(p, weekNumber, weekStartDate){
   const zoneMap = {easy:easyOnly?1:2, intervals:4, tempo:3, long:2, fartlek:3, hills:4, progression:3};
   const defaultDays = beginner ? ['tue','thu','sun'] : ['tue','wed','fri','sun'];
   const trainingDays = DAY_KEYS.filter(d => (p.trainingDays && p.trainingDays.length ? p.trainingDays : defaultDays).includes(d));
-  const sessionMap = distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isCutbackWeek(weekNumber), p.goal, varietyOk);
+  const sessionMap = distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isCutbackWeek(weekNumber), p.goal, varietyOk, phaseInfo.active ? phaseInfo.phase : undefined);
   if(isRecovery || postGoalRaceMult < 1){
     // En la semana de recuperación evitamos series/tempo/cuestas/fartlek/progresivo/rodaje
     // largo -- todo eso suma carga justo cuando el cuerpo todavía está absorbiendo el
