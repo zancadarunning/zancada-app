@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-14T18:41:57Z';
+const APP_VERSION = '2026-10-14T19:37:55Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4360,6 +4360,40 @@ function taperMultiplier(p, weekStartDate){
   if(weeksToRace < 2) return 0.7;
   if(weeksToRace < 3) return 0.85;
   return 1;
+}
+/* ===== PLAN POR FASES ===== */
+// Plan por fases: en vez de una sola curva de volumen, las semanas útiles hasta la carrera
+// objetivo se reparten en bloques (base -> build -> specific -> peak), cada uno con un
+// objetivo distinto. Esta sección es PURA (no lee `state`) para poder probarla sola.
+function phaseSplit(R){
+  // R = semanas útiles (sin contar las del taper final). Con menos de 4 no hay lugar para
+  // 3 bloques con sentido (build/specific/peak, 1 semana como mínimo cada uno): null le avisa
+  // a quien llama que NO use plan por fases y siga con la curva de siempre.
+  if(!(R >= 4)) return null;
+  // Más de 24 semanas no se reparten proporcionalmente (la base se haría gigante y el resto
+  // se diluiría): el bloque específico queda del tamaño de uno de 24 y lo que sobra se
+  // antepone como base extendida, que es donde de verdad conviene sumar tiempo.
+  const extraBase = Math.max(0, R - 24);
+  const n = R - extraBase;
+  // Con menos de 8 semanas no hay lugar para una base aparte (saldría de 1 semana, sin
+  // sentido): esas semanas se reparten entre build/specific/peak nada más.
+  const hasBase = n >= 8;
+  // Fracción de cada fase, redondeada con Math.round y con mínimo 1 semana por fase presente.
+  // 'build' NO se redondea: absorbe la diferencia para que la suma dé exactamente n (es la
+  // fase más larga y la que menos se nota si pierde o gana una semana por el redondeo).
+  const frac = hasBase ? { base: 0.25, specific: 0.25, peak: 0.15 } : { base: 0, specific: 0.4, peak: 0.15 };
+  const weeks = f => Math.max(1, Math.round(frac[f] * n));
+  const base = hasBase ? weeks('base') : 0;
+  const specific = weeks('specific');
+  const peak = weeks('peak');
+  const build = n - base - specific - peak;
+  const out = [];
+  const push = (name, count) => { for(let i=0;i<count;i++) out.push(name); };
+  push('base', extraBase + base);
+  push('build', build);
+  push('specific', specific);
+  push('peak', peak);
+  return out;
 }
 function isRecoveryWeek(weekStartDate){
   // La semana de recuperación es la que arranca el lunes siguiente a una carrera cargada

@@ -119,3 +119,53 @@ test('plan v4: sin cambios para casos fuera de alcance', () => {
     });
   });
 });
+
+// ---- phaseSplit: reparto de las semanas útiles entre las fases ----
+
+// Arma el arreglo esperado a partir de pares [fase, cantidad], así los casos de abajo
+// se leen igual que la tabla del diseño (ej. base×2, build×3, ...).
+function phases(...pairs) {
+  const out = [];
+  pairs.forEach(([name, n]) => { for (let i = 0; i < n; i++) out.push(name); });
+  return out;
+}
+
+test('phaseSplit: menos de 4 semanas útiles no alcanza para fases (null)', () => {
+  const app = loadApp();
+  assert.equal(app.phaseSplit(3), null);
+  assert.equal(app.phaseSplit(0), null);
+});
+
+test('phaseSplit: reparto exacto para R = 4, 5, 7, 8, 16, 24 y 30', () => {
+  const app = loadApp();
+  const expected = {
+    4: phases(['build', 1], ['specific', 2], ['peak', 1]),
+    5: phases(['build', 2], ['specific', 2], ['peak', 1]),
+    7: phases(['build', 3], ['specific', 3], ['peak', 1]),
+    8: phases(['base', 2], ['build', 3], ['specific', 2], ['peak', 1]),
+    16: phases(['base', 4], ['build', 6], ['specific', 4], ['peak', 2]),
+    24: phases(['base', 6], ['build', 8], ['specific', 6], ['peak', 4]),
+    // R>24: las semanas de más se anteponen como base extendida (6 + 6 = 12 de base)
+    30: phases(['base', 12], ['build', 8], ['specific', 6], ['peak', 4]),
+  };
+  Object.keys(expected).forEach(r => {
+    const got = app.phaseSplit(Number(r));
+    assert.deepEqual(Array.from(got), expected[r], `R=${r}`);
+    assert.equal(got.length, Number(r), `longitud para R=${r}`);
+  });
+});
+
+test('phaseSplit: para todo R>=4 devuelve R semanas, en orden, con al menos 1 de cada fase presente', () => {
+  const app = loadApp();
+  const ORDER = ['base', 'build', 'specific', 'peak'];
+  for (let r = 4; r <= 60; r++) {
+    const got = Array.from(app.phaseSplit(r));
+    assert.equal(got.length, r, `longitud para R=${r}`);
+    const idx = got.map(n => ORDER.indexOf(n));
+    assert.ok(idx.every(i => i >= 0), `R=${r}: nombre de fase desconocido`);
+    for (let i = 1; i < idx.length; i++) assert.ok(idx[i] >= idx[i - 1], `R=${r}: las fases tienen que ir en orden`);
+    ['build', 'specific', 'peak'].forEach(n => assert.ok(got.includes(n), `R=${r}: falta la fase ${n}`));
+    assert.equal(got.includes('base'), r >= 8, `R=${r}: base solo desde 8 semanas`);
+    assert.equal(got[got.length - 1], 'peak', `R=${r}: la última semana es de peak`);
+  }
+});
