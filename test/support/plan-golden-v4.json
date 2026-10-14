@@ -1,0 +1,1196 @@
+{
+  "activo-10k-sin-carrera-semana-1": [
+    {
+      "day": "mon",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "tue",
+      "typeKey": "intervals",
+      "dist": 8,
+      "terrain": "asfalto",
+      "zone": 4,
+      "beginner": false,
+      "interval": {
+        "reps": 8,
+        "repMeters": 1000,
+        "recoveryMin": 2
+      }
+    },
+    {
+      "day": "wed",
+      "typeKey": "easy",
+      "dist": 6,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    },
+    {
+      "day": "thu",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "fri",
+      "typeKey": "fartlek",
+      "dist": 7.3,
+      "terrain": "asfalto",
+      "zone": 3,
+      "beginner": false,
+      "interval": {
+        "reps": 10,
+        "workMin": 3,
+        "restMin": 1.5
+      }
+    },
+    {
+      "day": "sat",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "sun",
+      "typeKey": "long",
+      "dist": 10,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    }
+  ],
+  "activo-10k-sin-carrera-semana-5": [
+    {
+      "day": "mon",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "tue",
+      "typeKey": "intervals",
+      "dist": 9,
+      "terrain": "asfalto",
+      "zone": 4,
+      "beginner": false,
+      "interval": {
+        "reps": 9,
+        "repMeters": 1000,
+        "recoveryMin": 2
+      }
+    },
+    {
+      "day": "wed",
+      "typeKey": "easy",
+      "dist": 7,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    },
+    {
+      "day": "thu",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "fri",
+      "typeKey": "fartlek",
+      "dist": 4.8,
+      "terrain": "asfalto",
+      "zone": 3,
+      "beginner": false,
+      "interval": {
+        "reps": 10,
+        "workMin": 2,
+        "restMin": 1
+      }
+    },
+    {
+      "day": "sat",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "sun",
+      "typeKey": "long",
+      "dist": 12,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    }
+  ],
+  "activo-10k-sin-carrera-semana-9": [
+    {
+      "day": "mon",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "tue",
+      "typeKey": "intervals",
+      "dist": 11,
+      "terrain": "asfalto",
+      "zone": 4,
+      "beginner": false,
+      "interval": {
+        "reps": 11,
+        "repMeters": 1000,
+        "recoveryMin": 2
+      }
+    },
+    {
+      "day": "wed",
+      "typeKey": "easy",
+      "dist": 8,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    },
+    {
+      "day": "thu",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "fri",
+      "typeKey": "fartlek",
+      "dist": 8.7,
+      "terrain": "asfalto",
+      "zone": 3,
+      "beginner": false,
+      "interval": {
+        "reps": 9,
+        "workMin": 4,
+        "restMin": 2
+      }
+    },
+    {
+      "day": "sat",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "sun",
+      "typeKey": "long",
+      "dist": 14,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    }
+  ],
+  "21k-carrera-pasada-semana-1": [
+    {
+      "day": "mon",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "tue",
+      "typeKey": "tempo",
+      "dist": 6,
+      "terrain": "asfalto",
+      "zone": 3,
+      "beginner": false
+    },
+    {
+      "day": "wed",
+      "typeKey": "easy",
+      "dist": 7,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    },
+    {
+      "day": "thu",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "fri",
+      "typeKey": "hills",
+      "dist": 5,
+      "terrain": "asfalto",
+      "zone": 4,
+      "beginner": false,
+      "interval": {
+        "reps": 10,
+        "repMeters": 250
+      }
+    },
+    {
+      "day": "sat",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "sun",
+      "typeKey": "long",
+      "dist": 11,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    }
+  ],
+  "21k-carrera-pasada-semana-5": [
+    {
+      "day": "mon",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "tue",
+      "typeKey": "tempo",
+      "dist": 7,
+      "terrain": "asfalto",
+      "zone": 3,
+      "beginner": false
+    },
+    {
+      "day": "wed",
+      "typeKey": "easy",
+      "dist": 8,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    },
+    {
+      "day": "thu",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "fri",
+      "typeKey": "hills",
+      "dist": 8,
+      "terrain": "asfalto",
+      "zone": 4,
+      "beginner": false,
+      "interval": {
+        "reps": 10,
+        "repMeters": 400
+      }
+    },
+    {
+      "day": "sat",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "sun",
+      "typeKey": "long",
+      "dist": 13,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    }
+  ],
+  "21k-carrera-pasada-semana-9": [
+    {
+      "day": "mon",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "tue",
+      "typeKey": "tempo",
+      "dist": 9,
+      "terrain": "asfalto",
+      "zone": 3,
+      "beginner": false
+    },
+    {
+      "day": "wed",
+      "typeKey": "easy",
+      "dist": 9,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    },
+    {
+      "day": "thu",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "fri",
+      "typeKey": "hills",
+      "dist": 8,
+      "terrain": "asfalto",
+      "zone": 4,
+      "beginner": false,
+      "interval": {
+        "reps": 10,
+        "repMeters": 400
+      }
+    },
+    {
+      "day": "sat",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "sun",
+      "typeKey": "long",
+      "dist": 15,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    }
+  ],
+  "principiante-carrera-a-10-semanas-semana-1": [
+    {
+      "day": "mon",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": true
+    },
+    {
+      "day": "tue",
+      "typeKey": "easy",
+      "dist": 2,
+      "terrain": "asfalto",
+      "zone": 1,
+      "beginner": true
+    },
+    {
+      "day": "wed",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": true
+    },
+    {
+      "day": "thu",
+      "typeKey": "easy",
+      "dist": 2,
+      "terrain": "asfalto",
+      "zone": 1,
+      "beginner": true
+    },
+    {
+      "day": "fri",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": true
+    },
+    {
+      "day": "sat",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": true
+    },
+    {
+      "day": "sun",
+      "typeKey": "long",
+      "dist": 3,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": true
+    }
+  ],
+  "principiante-carrera-a-10-semanas-semana-5": [
+    {
+      "day": "mon",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": true
+    },
+    {
+      "day": "tue",
+      "typeKey": "easy",
+      "dist": 3,
+      "terrain": "asfalto",
+      "zone": 1,
+      "beginner": true
+    },
+    {
+      "day": "wed",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": true
+    },
+    {
+      "day": "thu",
+      "typeKey": "easy",
+      "dist": 3,
+      "terrain": "asfalto",
+      "zone": 1,
+      "beginner": true
+    },
+    {
+      "day": "fri",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": true
+    },
+    {
+      "day": "sat",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": true
+    },
+    {
+      "day": "sun",
+      "typeKey": "long",
+      "dist": 4,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": true
+    }
+  ],
+  "principiante-carrera-a-10-semanas-semana-9": [
+    {
+      "day": "mon",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": true
+    },
+    {
+      "day": "tue",
+      "typeKey": "easy",
+      "dist": 2,
+      "terrain": "asfalto",
+      "zone": 1,
+      "beginner": true
+    },
+    {
+      "day": "wed",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": true
+    },
+    {
+      "day": "thu",
+      "typeKey": "easy",
+      "dist": 2,
+      "terrain": "asfalto",
+      "zone": 1,
+      "beginner": true
+    },
+    {
+      "day": "fri",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": true
+    },
+    {
+      "day": "sat",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": true
+    },
+    {
+      "day": "sun",
+      "typeKey": "long",
+      "dist": 3,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": true
+    }
+  ],
+  "por-tiempo-semana-1": [
+    {
+      "day": "mon",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "tue",
+      "typeKey": "intervals",
+      "terrain": "asfalto",
+      "zone": 4,
+      "beginner": false,
+      "durMin": 40,
+      "timeBased": true,
+      "interval": {
+        "reps": 8,
+        "repSec": 180,
+        "recSec": 120,
+        "timeBased": true,
+        "recoveryMin": 2,
+        "repMeters": 500
+      },
+      "dist": 6.5
+    },
+    {
+      "day": "wed",
+      "typeKey": "easy",
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false,
+      "durMin": 40,
+      "timeBased": true,
+      "dist": 6.5
+    },
+    {
+      "day": "thu",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "fri",
+      "typeKey": "fartlek",
+      "terrain": "asfalto",
+      "zone": 3,
+      "beginner": false,
+      "durMin": 41,
+      "timeBased": true,
+      "interval": {
+        "reps": 9,
+        "workMin": 3,
+        "restMin": 1.5
+      },
+      "dist": 6.6
+    },
+    {
+      "day": "sat",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "sun",
+      "typeKey": "long",
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false,
+      "durMin": 65,
+      "timeBased": true,
+      "dist": 10.5
+    }
+  ],
+  "por-tiempo-semana-5": [
+    {
+      "day": "mon",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "tue",
+      "typeKey": "intervals",
+      "terrain": "asfalto",
+      "zone": 4,
+      "beginner": false,
+      "durMin": 40,
+      "timeBased": true,
+      "interval": {
+        "reps": 8,
+        "repSec": 180,
+        "recSec": 120,
+        "timeBased": true,
+        "recoveryMin": 2,
+        "repMeters": 500
+      },
+      "dist": 6.5
+    },
+    {
+      "day": "wed",
+      "typeKey": "easy",
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false,
+      "durMin": 45,
+      "timeBased": true,
+      "dist": 7.3
+    },
+    {
+      "day": "thu",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "fri",
+      "typeKey": "fartlek",
+      "terrain": "asfalto",
+      "zone": 3,
+      "beginner": false,
+      "durMin": 30,
+      "timeBased": true,
+      "interval": {
+        "reps": 10,
+        "workMin": 2,
+        "restMin": 1
+      },
+      "dist": 4.8
+    },
+    {
+      "day": "sat",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "sun",
+      "typeKey": "long",
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false,
+      "durMin": 75,
+      "timeBased": true,
+      "dist": 12.1
+    }
+  ],
+  "por-tiempo-semana-9": [
+    {
+      "day": "mon",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "tue",
+      "typeKey": "intervals",
+      "terrain": "asfalto",
+      "zone": 4,
+      "beginner": false,
+      "durMin": 40,
+      "timeBased": true,
+      "interval": {
+        "reps": 8,
+        "repSec": 180,
+        "recSec": 120,
+        "timeBased": true,
+        "recoveryMin": 2,
+        "repMeters": 500
+      },
+      "dist": 6.5
+    },
+    {
+      "day": "wed",
+      "typeKey": "easy",
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false,
+      "durMin": 55,
+      "timeBased": true,
+      "dist": 8.9
+    },
+    {
+      "day": "thu",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "fri",
+      "typeKey": "fartlek",
+      "terrain": "asfalto",
+      "zone": 3,
+      "beginner": false,
+      "durMin": 42,
+      "timeBased": true,
+      "interval": {
+        "reps": 7,
+        "workMin": 4,
+        "restMin": 2
+      },
+      "dist": 6.8
+    },
+    {
+      "day": "sat",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "sun",
+      "typeKey": "long",
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false,
+      "durMin": 90,
+      "timeBased": true,
+      "dist": 14.5
+    }
+  ],
+  "meta-semanal-40km-semana-1": [
+    {
+      "day": "mon",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "tue",
+      "typeKey": "intervals",
+      "dist": 10,
+      "terrain": "asfalto",
+      "zone": 4,
+      "beginner": false,
+      "interval": {
+        "reps": 10,
+        "repMeters": 1000,
+        "recoveryMin": 2
+      }
+    },
+    {
+      "day": "wed",
+      "typeKey": "easy",
+      "dist": 8,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    },
+    {
+      "day": "thu",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "fri",
+      "typeKey": "fartlek",
+      "dist": 7.3,
+      "terrain": "asfalto",
+      "zone": 3,
+      "beginner": false,
+      "interval": {
+        "reps": 10,
+        "workMin": 3,
+        "restMin": 1.5
+      }
+    },
+    {
+      "day": "sat",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "sun",
+      "typeKey": "long",
+      "dist": 13,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    }
+  ],
+  "meta-semanal-40km-semana-5": [
+    {
+      "day": "mon",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "tue",
+      "typeKey": "intervals",
+      "dist": 12,
+      "terrain": "asfalto",
+      "zone": 4,
+      "beginner": false,
+      "interval": {
+        "reps": 12,
+        "repMeters": 1000,
+        "recoveryMin": 2
+      }
+    },
+    {
+      "day": "wed",
+      "typeKey": "easy",
+      "dist": 9,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    },
+    {
+      "day": "thu",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "fri",
+      "typeKey": "fartlek",
+      "dist": 4.8,
+      "terrain": "asfalto",
+      "zone": 3,
+      "beginner": false,
+      "interval": {
+        "reps": 10,
+        "workMin": 2,
+        "restMin": 1
+      }
+    },
+    {
+      "day": "sat",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "sun",
+      "typeKey": "long",
+      "dist": 15,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    }
+  ],
+  "meta-semanal-40km-semana-9": [
+    {
+      "day": "mon",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "tue",
+      "typeKey": "intervals",
+      "dist": 12,
+      "terrain": "asfalto",
+      "zone": 4,
+      "beginner": false,
+      "interval": {
+        "reps": 12,
+        "repMeters": 1000,
+        "recoveryMin": 2
+      }
+    },
+    {
+      "day": "wed",
+      "typeKey": "easy",
+      "dist": 11,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    },
+    {
+      "day": "thu",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "fri",
+      "typeKey": "fartlek",
+      "dist": 9.7,
+      "terrain": "asfalto",
+      "zone": 3,
+      "beginner": false,
+      "interval": {
+        "reps": 10,
+        "workMin": 4,
+        "restMin": 2
+      }
+    },
+    {
+      "day": "sat",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "sun",
+      "typeKey": "long",
+      "dist": 18,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    }
+  ],
+  "dos-dias-de-entrenamiento-semana-1": [
+    {
+      "day": "mon",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "tue",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "wed",
+      "typeKey": "intervals",
+      "dist": 9,
+      "terrain": "asfalto",
+      "zone": 4,
+      "beginner": false,
+      "interval": {
+        "reps": 9,
+        "repMeters": 1000,
+        "recoveryMin": 2
+      }
+    },
+    {
+      "day": "thu",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "fri",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "sat",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "sun",
+      "typeKey": "long",
+      "dist": 21,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    }
+  ],
+  "dos-dias-de-entrenamiento-semana-5": [
+    {
+      "day": "mon",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "tue",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "wed",
+      "typeKey": "intervals",
+      "dist": 11,
+      "terrain": "asfalto",
+      "zone": 4,
+      "beginner": false,
+      "interval": {
+        "reps": 11,
+        "repMeters": 1000,
+        "recoveryMin": 2
+      }
+    },
+    {
+      "day": "thu",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "fri",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "sat",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "sun",
+      "typeKey": "long",
+      "dist": 25,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    }
+  ],
+  "dos-dias-de-entrenamiento-semana-9": [
+    {
+      "day": "mon",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "tue",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "wed",
+      "typeKey": "intervals",
+      "dist": 12,
+      "terrain": "asfalto",
+      "zone": 4,
+      "beginner": false,
+      "interval": {
+        "reps": 12,
+        "repMeters": 1000,
+        "recoveryMin": 2
+      }
+    },
+    {
+      "day": "thu",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "fri",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "sat",
+      "typeKey": "rest",
+      "dist": 0,
+      "terrain": null,
+      "zone": null,
+      "beginner": false
+    },
+    {
+      "day": "sun",
+      "typeKey": "long",
+      "dist": 29,
+      "terrain": "asfalto",
+      "zone": 2,
+      "beginner": false
+    }
+  ]
+}
