@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-14T20:28:41Z';
+const APP_VERSION = '2026-10-14T20:36:18Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -159,7 +159,10 @@ function t(key, vars){
   // cual, corrompiendo el texto mostrado. Con una función como reemplazo, su valor de
   // retorno se usa siempre literal, sin ningún procesamiento de "$" -- forma estándar de
   // evitar este problema con String.replace().
-  if(vars) Object.keys(vars).forEach(k=>{ s = s.replace('{'+k+'}', () => String(vars[k])); });
+  // split/join reemplaza TODAS las apariciones del marcador (replace() con un string solo cambia la
+  // primera: una clave con {unit} dos veces dejaba el segundo a la vista) y, como el valor va tal
+  // cual, tampoco interpreta patrones con "$".
+  if(vars) Object.keys(vars).forEach(k=>{ s = s.split('{'+k+'}').join(String(vars[k])); });
   return s;
 }
 function applyStaticTranslations(){
@@ -4646,6 +4649,39 @@ function applyPhaseLongRun(distMap, usedTypes, targetTotal, phaseInfo, goal, isC
   distMap.long = Math.max(1, Math.min(cap, long));
   clampPhaseLongRun(distMap, usedTypes, phaseInfo, goal);
 }
+// Ritmo de carrera (segundos por km) para una meta: el tiempo que predictRaceTime proyecta para
+// esa distancia dividido por los km. Es lo que se muestra en las sesiones de ritmo de las fases
+// específicas. Recibe la meta como argumento (getGoalRaceKm lee el perfil y se usa en otro lado)
+// y devuelve null si no hay predicción (sin marcas ni carrera de referencia) o la meta no se conoce.
+function phaseRacePaceSec(goal){
+  const km = {'5k':5, '10k':10, '15k':15, '21k':21.0975, '42k':42.195}[goal];
+  if(!km) return null;
+  const pred = predictRaceTime(km);
+  if(!pred || !(pred.predictedSec > 0)) return null;
+  return pred.predictedSec / km;
+}
+// Marca en las sesiones del plan por fases el ritmo de carrera de la persona (d.racePaceSec, seg/km):
+// tempo y series en specific / peak / taper (el taper conserva la intensidad: baja el volumen, no el
+// ritmo), y, solo si `withLongBlock` (modo distancia), un bloque final de la tirada larga al ritmo de
+// carrera (d.racePaceBlockKm, ~30% de la tirada) en specific / peak para media y maratón. Es solo
+// una anotación: no cambia d.dist ni d.durMin (por eso se llama cuando la distancia ya es la final).
+// Sin predicción no se marca nada -- ni siquiera el bloque, que sin ritmo no tendría qué mostrar.
+function applyPhaseRacePace(days, phaseInfo, goal, easyOnly, withLongBlock){
+  if(!phaseInfo || !phaseInfo.active || easyOnly) return;
+  const phase = phaseInfo.phase;
+  if(phase !== 'specific' && phase !== 'peak' && phase !== 'taper') return;
+  const pace = phaseRacePaceSec(goal);
+  if(pace === null) return;
+  const sec = Math.round(pace);
+  days.forEach(dayObj => {
+    if(dayObj.typeKey === 'tempo' || dayObj.typeKey === 'intervals'){
+      dayObj.racePaceSec = sec;
+    } else if(withLongBlock && dayObj.typeKey === 'long' && phase !== 'taper' && (goal === '21k' || goal === '42k')){
+      dayObj.racePaceBlockKm = Math.max(1, Math.round(dayObj.dist * 0.3));
+      dayObj.racePaceSec = sec;
+    }
+  });
+}
 // Deja state.phaseSchedule al día con el perfil: lo crea si falta, lo reemplaza si la carrera o
 // la meta cambiaron (el ancla se recalcula desde hoy), o lo pone en null si el perfil ya no
 // califica. Si sigue coincidiendo NO lo toca (el ancla no tiene que moverse cada semana).
@@ -5719,7 +5755,7 @@ function generatePlan(p, weekNumber, weekStartDate){
   // Entrenar POR TIEMPO ya no es el plan en km convertido a minutos: se arma aparte, directo en minutos
   // (ver buildTimePlanDays) -- con trote/caminata para principiantes, series y cuestas por duración, etc.
   if(p.trainBy === 'time'){
-    return applyLevelTestDay(buildTimePlanDays({p, weekNumber, mult, beginner, easyOnly, caution, sessionMap, trainingDays, effectiveWeeklyKm, zoneMap}), p, weekStartDate, beginner);
+    return applyLevelTestDay(buildTimePlanDays({p, weekNumber, mult, beginner, easyOnly, caution, sessionMap, trainingDays, effectiveWeeklyKm, zoneMap, phaseInfo, goal: p.goal}), p, weekStartDate, beginner);
   }
   // Reparto del volumen semanal entre las sesiones que de verdad va a tener esta semana, en
   // vez de calcular cada tipo de sesión por separado con una proporción fija (0.85x a 1.5x)
@@ -5825,6 +5861,10 @@ function generatePlan(p, weekNumber, weekStartDate){
     }
     return dayObj;
   });
+  // Ritmo de carrera en las sesiones de las fases específicas: recién acá, con dist ya final
+  // (tirada ajustada y series recalculadas por su estructura), para que el bloque de la tirada
+  // salga de la distancia que de verdad se va a correr.
+  applyPhaseRacePace(kmDays, phaseInfo, p.goal, easyOnly, true);
   return applyLevelTestDay(kmDays, p, weekStartDate, beginner);
 }
 /* ================= TEST DE NIVEL + PLAN POR TIEMPO PROPIO =================
@@ -6002,7 +6042,7 @@ const TIME_MIN_BY_TYPE = {easy:20, intervals:20, tempo:20, long:30, fartlek:20, 
 // Tope por sesión (parte principal): un tempo continuo de más de ~35 min ya no es tempo, y las series/cuestas largas lesionan.
 const TIME_MAX_BY_TYPE = {easy:90, intervals:40, tempo:35, long:150, fartlek:40, hills:30, progression:60};
 function buildTimePlanDays(ctx){
-  const {p, weekNumber, mult, beginner, easyOnly, caution, sessionMap, trainingDays, effectiveWeeklyKm, zoneMap} = ctx;
+  const {p, weekNumber, mult, beginner, easyOnly, caution, sessionMap, trainingDays, effectiveWeeklyKm, zoneMap, phaseInfo, goal} = ctx;
   const pace = estimateBasePaceMinPerKm(p);
   const RATIO_T = {easy:EASY_SESSION_RATIO, intervals:1.0, tempo:0.85, long:beginner ? BEGINNER_LONG_RATIO : 1.5, fartlek:1.0, hills:0.9, progression:1.0};
   const usedTypes = trainingDays.map(d => sessionMap[d]).filter(Boolean);
@@ -6037,7 +6077,7 @@ function buildTimePlanDays(ctx){
   }
   const availCap = p.availableMinPerSession > 0 ? Math.max(10, p.availableMinPerSession - 20) : null;
   const continuousBeginner = !!(p.levelTest && p.levelTest.continuousOk);
-  return DAY_KEYS.map(day => {
+  const timeDays = DAY_KEYS.map(day => {
     const typeKey = sessionMap[day];
     if(!typeKey) return {day, typeKey:'rest', dist:0, terrain:null, zone:null, beginner};
     const terrain = typeKey === 'intervals' ? 'asfalto' : p.terrain;
@@ -6068,6 +6108,10 @@ function buildTimePlanDays(ctx){
     dayObj.dist = Math.max(0.1, Math.round(dayObj.durMin / pace * 10) / 10); // estimación, para estadísticas y relojes
     return dayObj;
   });
+  // Ritmo de carrera en tempo y series de las fases específicas. La tirada larga por tiempo no lleva
+  // bloque a ritmo de carrera (en minutos no hay una distancia sobre la que calcularlo).
+  applyPhaseRacePace(timeDays, phaseInfo, goal, easyOnly, false);
+  return timeDays;
 }
 
 /* ---- test de nivel: pantalla, resultado y avisos ---- */
@@ -6451,6 +6495,13 @@ function planLabelBody(d){
     desc += t('desc_zone_suffix', {zone:d.zone});
   }
   desc += paceHintFor(d);
+  // Ritmo de carrera (plan por fases): después del ritmo orientativo. En tempo/series va el ritmo
+  // objetivo; en la tirada, el bloque final a ese ritmo (sin ritmo no hay nada que mostrar).
+  if(d.racePaceSec > 0){
+    const racePace = fmtPace(d.racePaceSec/60), unit = distUnit();
+    if(d.typeKey==='tempo' || d.typeKey==='intervals') desc += ' ' + t('desc_racepace_suffix', {pace: racePace, unit});
+    else if(d.typeKey==='long' && d.racePaceBlockKm > 0) desc += ' ' + t('desc_racepace_long_suffix', {km: fmtDist(d.racePaceBlockKm, 1), pace: racePace, unit});
+  }
   return {type:t('type_'+d.typeKey), desc};
 }
 function planLabel(d){

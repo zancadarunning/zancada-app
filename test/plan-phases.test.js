@@ -1463,3 +1463,222 @@ test('generatePlan: el recorte de HIGH_IMPACT_SHARE_CAP no hace pasar a la tirad
   })));
   assert.ok(withHigh > 50, `semanas con cuestas o series: ${withHigh} de ${cases}`);
 });
+
+// ---- Task 8: ritmo de carrera en las sesiones (racePaceSec / racePaceBlockKm) ----
+
+const RP_GOAL_KM = { '5k': 5, '10k': 10, '15k': 15, '21k': 21.0975, '42k': 42.195 };
+const RP_KEYS = ['desc_racepace_suffix', 'desc_racepace_long_suffix'];
+
+// App con cronograma de la meta pedida (carrera 2027-03-14) y, si `withPrediction`, una marca de
+// referencia de 10 km en 50:00 (predictRaceBase la usa como refRace cuando no hay carreras).
+function racePaceApp(overrides, withPrediction) {
+  const goal = (overrides && overrides.goal) || '21k';
+  const p = racingProfile(Object.assign({ goal }, overrides || {}));
+  if (withPrediction !== false) p.refRace = { distanceKm: 10, durationSec: 3000 };
+  const schedule = { anchor: '2026-11-02', raceDate: '2027-03-14', goal };
+  const { app } = phasedApp(p, schedule);
+  return { app, p, schedule };
+}
+const expectedRacePace = (app, goal) => Math.round(plain(app.predictRaceTime(RP_GOAL_KM[goal])).predictedSec / RP_GOAL_KM[goal]);
+// Los días de las semanas 1..8 de numeracion (cambia la rotacion) de la primera semana de una fase.
+function rpPlans(app, p, schedule, phase) {
+  const week = weekOfPhase(app, p, schedule, phase, 0);
+  assert.ok(week, `hay una semana ${phase}`);
+  const out = [];
+  for (let wn = 1; wn <= 8; wn++) out.push(...plain(app.generatePlan(p, wn, week)));
+  return out;
+}
+const isRpType = d => d.typeKey === 'tempo' || d.typeKey === 'intervals';
+const NO_RP_TEXT = 'objetivo de tu carrera';
+
+test('phaseRacePaceSec: seg/km a partir de predictRaceTime; null sin datos o con meta desconocida', () => {
+  const { app } = racePaceApp({ goal: '10k' });
+  Object.keys(RP_GOAL_KM).forEach(goal => {
+    const km = RP_GOAL_KM[goal];
+    assert.equal(app.phaseRacePaceSec(goal), plain(app.predictRaceTime(km)).predictedSec / km, goal);
+  });
+  assert.equal(app.phaseRacePaceSec('nope'), null);
+  assert.equal(app.phaseRacePaceSec(undefined), null);
+  const sin = racePaceApp({ goal: '10k' }, false).app;
+  assert.equal(sin.phaseRacePaceSec('10k'), null, 'sin marcas no hay prediccion');
+  // getGoalRaceKm sigue leyendo el perfil
+  assert.equal(app.getGoalRaceKm(), 10);
+});
+
+test('racePaceSec: en specific con prediccion, tempo e intervals lo llevan (= round(predicha / km))', () => {
+  ['10k', '21k'].forEach(goal => {
+    const { app, p, schedule } = racePaceApp({ goal });
+    const want = expectedRacePace(app, goal);
+    const hard = rpPlans(app, p, schedule, 'specific').filter(isRpType);
+    // (la rotacion de 21k en specific solo usa tempo; la de 10k, tempo e intervals)
+    assert.ok(hard.some(d => d.typeKey === 'tempo'), `${goal}: hay tempo`);
+    if(goal === '10k') assert.ok(hard.some(d => d.typeKey === 'intervals'), '10k: hay intervals');
+    hard.forEach(d => assert.equal(d.racePaceSec, want, `${goal} ${d.typeKey}`));
+  });
+});
+
+test('racePaceSec: sin prediccion no hay campos nuevos y el texto es el de siempre', () => {
+  const { app, p, schedule } = racePaceApp({ goal: '21k' }, false);
+  ['specific', 'peak', 'taper'].forEach(phase => {
+    rpPlans(app, p, schedule, phase).forEach(d => {
+      assert.equal('racePaceSec' in d, false, `${phase} ${d.typeKey}`);
+      assert.equal('racePaceBlockKm' in d, false, `${phase} ${d.typeKey}`);
+      assert.ok(!plain(app.planLabelBody(d)).desc.includes(NO_RP_TEXT), `${phase} ${d.typeKey}`);
+    });
+  });
+});
+
+test('racePaceSec: base y build nunca lo llevan (tampoco bloque en la tirada)', () => {
+  const { app, p, schedule } = racePaceApp({ goal: '21k' });
+  ['base', 'build'].forEach(phase => {
+    const days = rpPlans(app, p, schedule, phase);
+    assert.ok(days.length > 0);
+    days.forEach(d => {
+      assert.equal('racePaceSec' in d, false, `${phase} ${d.typeKey}`);
+      assert.equal('racePaceBlockKm' in d, false, `${phase} ${d.typeKey}`);
+    });
+  });
+});
+
+test('racePaceSec: sin cronograma activo (v4) no hay campos nuevos', () => {
+  const p = racingProfile({ goal: '21k' });
+  p.refRace = { distanceKm: 10, durationSec: 3000 };
+  const { app } = phasedApp(p, null);
+  for (let wn = 1; wn <= 6; wn++) plain(app.generatePlan(p, wn, '2026-11-30')).forEach(d => {
+    assert.equal('racePaceSec' in d, false);
+    assert.equal('racePaceBlockKm' in d, false);
+  });
+});
+
+test('racePaceSec: en taper tempo e intervals lo llevan pero la tirada no tiene bloque', () => {
+  const { app, p, schedule } = racePaceApp({ goal: '10k' });
+  const want = expectedRacePace(app, '10k');
+  const days = rpPlans(app, p, schedule, 'taper');
+  const hard = days.filter(isRpType);
+  assert.ok(hard.length > 0, 'el taper conserva alguna sesion de ritmo');
+  hard.forEach(d => assert.equal(d.racePaceSec, want, d.typeKey));
+  // tampoco con 21k/42k
+  ['10k', '21k', '42k'].forEach(goal => {
+    const c = racePaceApp({ goal });
+    rpPlans(c.app, c.p, c.schedule, 'taper').filter(d => d.typeKey === 'long').forEach(d => {
+      assert.equal('racePaceBlockKm' in d, false, goal);
+      assert.equal('racePaceSec' in d, false, goal);
+    });
+  });
+});
+
+test('racePaceBlockKm: tirada de specific/peak en 21k y 42k = max(1, round(dist x 0,3)) con el ritmo; 10k no', () => {
+  ['21k', '42k'].forEach(goal => {
+    const { app, p, schedule } = racePaceApp({ goal });
+    const want = expectedRacePace(app, goal);
+    ['specific', 'peak'].forEach(phase => {
+      const longs = rpPlans(app, p, schedule, phase).filter(d => d.typeKey === 'long');
+      assert.ok(longs.length > 0, `${goal} ${phase}`);
+      longs.forEach(d => {
+        assert.equal(d.racePaceBlockKm, Math.max(1, Math.round(d.dist * 0.3)), `${goal} ${phase} dist ${d.dist}`);
+        assert.equal(d.racePaceSec, want, `${goal} ${phase}`);
+      });
+    });
+  });
+  const c = racePaceApp({ goal: '10k' });
+  ['specific', 'peak'].forEach(phase => rpPlans(c.app, c.p, c.schedule, phase).filter(d => d.typeKey === 'long').forEach(d => {
+    assert.equal('racePaceBlockKm' in d, false, '10k ' + phase);
+    assert.equal('racePaceSec' in d, false, '10k ' + phase);
+  }));
+});
+
+test('racePaceSec / racePaceBlockKm: no tocan dist, y las sesiones faciles no los llevan', () => {
+  const a = racePaceApp({ goal: '21k' });
+  const b = racePaceApp({ goal: '21k' }, false);
+  const withP = rpPlans(a.app, a.p, a.schedule, 'specific');
+  const without = rpPlans(b.app, b.p, b.schedule, 'specific');
+  assert.deepEqual(withP.map(d => d.dist), without.map(d => d.dist));
+  withP.filter(d => !isRpType(d) && d.typeKey !== 'long').forEach(d => assert.equal('racePaceSec' in d, false, d.typeKey));
+});
+
+test('racePaceSec: por tiempo, tempo e intervals de specific/peak/taper lo llevan; base/build no; la tirada no tiene bloque', () => {
+  const { app, p, schedule } = racePaceApp({ goal: '21k', trainBy: 'time' });
+  const want = expectedRacePace(app, '21k');
+  ['specific', 'peak', 'taper'].forEach(phase => {
+    const days = rpPlans(app, p, schedule, phase);
+    days.filter(isRpType).forEach(d => { assert.equal(d.racePaceSec, want, `${phase} ${d.typeKey}`); assert.equal(d.timeBased, true); });
+    days.filter(d => !isRpType(d)).forEach(d => {
+      assert.equal('racePaceSec' in d, false, `${phase} ${d.typeKey}`);
+      assert.equal('racePaceBlockKm' in d, false, `${phase} ${d.typeKey}`);
+    });
+  });
+  assert.ok(rpPlans(app, p, schedule, 'specific').some(isRpType));
+  ['base', 'build'].forEach(phase => rpPlans(app, p, schedule, phase).forEach(d => assert.equal('racePaceSec' in d, false, phase)));
+  const sin = racePaceApp({ goal: '21k', trainBy: 'time' }, false);
+  rpPlans(sin.app, sin.p, sin.schedule, 'specific').forEach(d => assert.equal('racePaceSec' in d, false));
+});
+
+test('planLabelBody: el sufijo del ritmo de carrera va despues del ritmo orientativo, en tempo/intervals y en la tirada (con bloque)', () => {
+  const { app, p, schedule } = racePaceApp({ goal: '21k' });
+  const days = rpPlans(app, p, schedule, 'specific');
+  const tempo = days.find(d => d.typeKey === 'tempo');
+  const ten = racePaceApp({ goal: '10k' });
+  const inter = rpPlans(ten.app, ten.p, ten.schedule, 'specific').find(d => d.typeKey === 'intervals');
+  const long = days.find(d => d.typeKey === 'long');
+  assert.ok(inter && tempo && long);
+  const pace = app.fmtPace(tempo.racePaceSec / 60);
+  const suffix = app.t('desc_racepace_suffix', { pace, unit: 'km' });
+  assert.ok(suffix.includes(pace) && !suffix.includes('{'), suffix);
+  assert.ok(plain(app.planLabelBody(tempo)).desc.endsWith(' ' + suffix));
+  const interSuffix = ten.app.t('desc_racepace_suffix', { pace: ten.app.fmtPace(inter.racePaceSec / 60), unit: 'km' });
+  assert.ok(plain(ten.app.planLabelBody(inter)).desc.endsWith(' ' + interSuffix));
+  const longSuffix = app.t('desc_racepace_long_suffix', { km: app.fmtDist(long.racePaceBlockKm, 1), pace, unit: 'km' });
+  assert.ok(longSuffix.includes(pace) && !longSuffix.includes('{'), longSuffix);
+  assert.ok(plain(app.planLabelBody(long)).desc.endsWith(' ' + longSuffix));
+  // con el test de nivel hecho el ritmo orientativo va primero y el sufijo despues
+  p.levelTest = { done: true, vdot: 45, paces: { easy: [5.8, 6.6], tempo: [4.7, 4.9], interval: [4.2, 4.4] } };
+  const withHint = plain(app.planLabelBody(tempo)).desc;
+  const hint = app.t('desc_pace_hint', { range: app.fmtPaceRange(p.levelTest.paces.tempo), unit: 'km' });
+  assert.ok(withHint.includes(hint) && withHint.indexOf(hint) < withHint.indexOf(suffix), withHint);
+  assert.ok(withHint.endsWith(suffix));
+});
+
+test('planLabelBody: sin los campos nuevos (o en dias custom) el texto es el de siempre', () => {
+  const { app, p, schedule } = racePaceApp({ goal: '21k' });
+  const days = rpPlans(app, p, schedule, 'specific');
+  const tempo = days.find(d => d.typeKey === 'tempo');
+  const bare = Object.assign({}, tempo); delete bare.racePaceSec;
+  assert.ok(!plain(app.planLabelBody(bare)).desc.includes(NO_RP_TEXT));
+  // un dia custom no suma el sufijo aunque tenga el campo
+  const custom = Object.assign({}, tempo, { custom: true, desc: 'Texto del coach', type: 'Tempo' });
+  assert.equal(plain(app.planLabelBody(custom)).desc, 'Texto del coach');
+  // una tirada con racePaceSec pero sin bloque no suma el sufijo largo
+  const long = Object.assign({}, days.find(d => d.typeKey === 'long')); delete long.racePaceBlockKm;
+  assert.ok(!plain(app.planLabelBody(long)).desc.includes(NO_RP_TEXT));
+  // el ritmo de carrera solo se muestra en tempo/intervals/long
+  const easy = { day: 'tue', typeKey: 'easy', dist: 6, zone: 2, terrain: 'asfalto', racePaceSec: 330 };
+  assert.ok(!plain(app.planLabelBody(easy)).desc.includes(NO_RP_TEXT));
+});
+
+test('planLabelBody: en imperial el ritmo y la unidad se muestran por milla', () => {
+  const { app, p, schedule } = racePaceApp({ goal: '21k', units: 'imperial' });
+  const days = rpPlans(app, p, schedule, 'specific');
+  const tempo = days.find(d => d.typeKey === 'tempo');
+  const long = days.find(d => d.typeKey === 'long');
+  const perMi = tempo.racePaceSec / 60 * 1.609344;
+  const expectedPace = `${Math.floor(perMi)}:${String(Math.round((perMi % 1) * 60)).padStart(2, '0')}`;
+  const desc = plain(app.planLabelBody(tempo)).desc;
+  assert.ok(desc.endsWith(app.t('desc_racepace_suffix', { pace: expectedPace, unit: 'mi' })), desc);
+  assert.ok(!desc.includes('/km'), desc);
+  const longDesc = plain(app.planLabelBody(long)).desc;
+  const miBlock = (long.racePaceBlockKm / 1.609344).toFixed(1);
+  assert.equal(app.fmtDist(long.racePaceBlockKm, 1), miBlock, 'el bloque esta en millas');
+  assert.ok(longDesc.endsWith(app.t('desc_racepace_long_suffix', { km: miBlock, pace: expectedPace, unit: 'mi' })), longDesc);
+});
+
+test('locales: las seis definen desc_racepace_suffix y desc_racepace_long_suffix con los mismos marcadores', () => {
+  const vm = require('node:vm');
+  ['es', 'en', 'pt', 'fr', 'it', 'de'].forEach(loc => {
+    const sandbox = {}; sandbox.window = sandbox; vm.createContext(sandbox);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'locales', loc + '.js'), 'utf8'), sandbox);
+    const dict = sandbox.I18N[loc];
+    RP_KEYS.forEach(k => assert.ok(typeof dict[k] === 'string' && dict[k].length > 10, `${loc}.${k}`));
+    assert.deepEqual(dict.desc_racepace_suffix.match(/\{\w+\}/g).sort(), ['{pace}', '{unit}']);
+    assert.deepEqual(dict.desc_racepace_long_suffix.match(/\{\w+\}/g).sort(), ['{km}', '{pace}', '{unit}', '{unit}']);
+  });
+});
