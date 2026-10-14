@@ -41,6 +41,9 @@ import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.aggregate.AggregationResult
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.DistanceRecord
+import androidx.health.connect.client.records.ElevationGainedRecord
+import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.request.AggregateRequest
@@ -69,11 +72,21 @@ private val RUNNING_EXERCISE_TYPES = setOf(
 @CapacitorPlugin(name = "HealthConnectBridge")
 class HealthConnectBridgePlugin : Plugin() {
 
-    private val permissions = setOf(
+    // Obligatorios: sin estos tres no hay carrera. Los opcionales (desnivel, calorías y pasos para la
+    // cadencia) se piden en el mismo diálogo, pero si la persona no los da la carrera se importa igual,
+    // sin esos datos. Quien ya había conectado Health Connect antes solo tiene los tres obligatorios y
+    // sigue funcionando: nunca se le exige un permiso nuevo.
+    private val requiredPermissions = setOf(
         HealthPermission.getReadPermission(ExerciseSessionRecord::class),
         HealthPermission.getReadPermission(DistanceRecord::class),
         HealthPermission.getReadPermission(HeartRateRecord::class)
     )
+    private val optionalPermissions = setOf(
+        HealthPermission.getReadPermission(ElevationGainedRecord::class),
+        HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
+        HealthPermission.getReadPermission(StepsRecord::class)
+    )
+    private val permissions = requiredPermissions + optionalPermissions
 
     private fun client(): HealthConnectClient? {
         val status = HealthConnectClient.sdkStatus(context)
@@ -121,7 +134,7 @@ class HealthConnectBridgePlugin : Plugin() {
             val hc = client()
             val granted = hc?.permissionController?.getGrantedPermissions() ?: emptySet()
             val result = JSObject()
-            result.put("granted", granted.containsAll(permissions))
+            result.put("granted", granted.containsAll(requiredPermissions))
             call.resolve(result)
         }
     }
@@ -146,18 +159,23 @@ class HealthConnectBridgePlugin : Plugin() {
                     )
                 ).records.filter { it.exerciseType in RUNNING_EXERCISE_TYPES }
 
+                val granted = hc.permissionController.getGrantedPermissions()
+                val canElevation = granted.contains(HealthPermission.getReadPermission(ElevationGainedRecord::class))
+                val canCalories = granted.contains(HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class))
+                val canSteps = granted.contains(HealthPermission.getReadPermission(StepsRecord::class))
                 val out = JSArray()
                 for (session in sessions) {
                     val range = TimeRangeFilter.between(session.startTime, session.endTime)
+                    val metrics = mutableSetOf(
+                        DistanceRecord.DISTANCE_TOTAL,
+                        HeartRateRecord.BPM_AVG,
+                        HeartRateRecord.BPM_MAX
+                    )
+                    if (canElevation) metrics.add(ElevationGainedRecord.ELEVATION_GAINED_TOTAL)
+                    if (canCalories) metrics.add(TotalCaloriesBurnedRecord.ENERGY_TOTAL)
+                    if (canSteps) metrics.add(StepsRecord.COUNT_TOTAL)
                     val agg: AggregationResult = hc.aggregate(
-                        AggregateRequest(
-                            metrics = setOf(
-                                DistanceRecord.DISTANCE_TOTAL,
-                                HeartRateRecord.BPM_AVG,
-                                HeartRateRecord.BPM_MAX
-                            ),
-                            timeRangeFilter = range
-                        )
+                        AggregateRequest(metrics = metrics, timeRangeFilter = range)
                     )
                     val item = JSObject()
                     item.put("id", session.metadata.id)
@@ -167,6 +185,12 @@ class HealthConnectBridgePlugin : Plugin() {
                     item.put("distanceMeters", agg[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0)
                     item.put("avgHr", agg[HeartRateRecord.BPM_AVG])
                     item.put("maxHr", agg[HeartRateRecord.BPM_MAX])
+                    val durationMin = java.time.Duration.between(session.startTime, session.endTime).seconds / 60.0
+                    if (canElevation) item.put("elevationGainMeters", agg[ElevationGainedRecord.ELEVATION_GAINED_TOTAL]?.inMeters)
+                    if (canCalories) item.put("calories", agg[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories)
+                    // cadencia = pasos por minuto de la sesión (solo si el reloj registró pasos en ese rango)
+                    val steps = if (canSteps) agg[StepsRecord.COUNT_TOTAL] else null
+                    if (steps != null && steps > 0 && durationMin > 0) item.put("avgCadence", steps / durationMin)
                     out.put(item)
                 }
                 val result = JSObject()
