@@ -3,14 +3,23 @@
 Estado: **borrador (2026-10-14), nada enviado.** Los pasos y plazos salen de la documentación pública de Huawei y de resúmenes de terceros; los detalles exactos (formulario, URLs, nombres de los permisos) están detrás del login del portal y hay que confirmarlos ahí.
 Huawei ahora llama al producto "Health Service Kit" (antes "Health Kit").
 
+## Requisitos reales (leídos en developer.huawei.com el 2026-10-14)
+- **Persona individual:** solo puede acceder a datos de nivel **básico** (candado abierto en su tabla "Open Data Overview"). Los de nivel **avanzado** (candado cerrado) exigen ser empresa.
+- **Empresa fuera de Europa, Japón y China continental:** capital integrado de al menos CNY 500.000 para nivel básico, y más de un año de existencia. Zancada no cumple.
+- **Exigencia clave para individuos:** la app tiene que estar **publicada en AppGallery** (la tienda de Huawei); si no, los datos de Health Service Kit no se abren a la app. Además, no tener antecedentes crediticios adversos.
+- **Datos que Zancada necesita:** `Exercise records` (resumen), `Exercise record detailed data` (frecuencia cardíaca, velocidad, cadencia y altitud del entrenamiento) y opcionalmente `Activity record location details`: los tres son nivel **básico**. En cambio `Heart rate` suelto (frecuencia cardíaca diaria, en reposo, variabilidad), `Sleep`, presión, glucosa, etc. son **avanzados**: no se piden.
+- Fase de prueba: hasta 100 usuarios sin aprobación final. Datos de menores no se abren.
+- Se necesitan los formularios Excel/PDF "Application Material" (versión individuo o empresa) que se bajan de la página "Qualifications Requirements for Developers".
+
 ## Camino recomendado
 Usar la API en la nube (REST) con inicio de sesión HUAWEI ID, igual que Polar/Wahoo: el usuario autoriza una vez y el backend de Zancada trae sus carreras. Funciona en la web y en Android, con o sin servicios de Huawei en el teléfono. El SDK de Android obliga a tener Huawei Health/HMS en el teléfono.
 No se escribe código hasta tener credenciales aprobadas.
 
 ## Pasos y plazos (aprox. 5 a 6 semanas)
+0. **Publicar la app en AppGallery** (requisito para individuos). Hoy Zancada solo está pensada para Google Play y su web.
 1. Cuenta de desarrollador en developer.huawei.com y verificación de identidad (la hace el titular).
 2. Configurar el servicio **HUAWEI ID** para la app (~3 días hábiles).
-3. Pedir **Health Service Kit** y los permisos de lectura (~15 días hábiles; la frecuencia cardíaca es dato restringido y pasa por revisión manual).
+3. Pedir **Health Service Kit** y los permisos de lectura (~15 días hábiles).
 4. **Verificación** con video de demostración y checklist (~15 días hábiles). Los permisos aprobados se activan en unas 24 h.
 5. Recién ahí se construye la integración (api/huawei-*.js, tabla huawei_connections, tarjeta en Perfil → Conectividad, 6 idiomas) y se actualiza privacy.html.
 
@@ -37,9 +46,9 @@ A user with a Huawei watch connects their HUAWEI ID from Profile > Connectivity.
 
 **Data scopes requested (read only)**
 1. Exercise / activity records, running only: start and end time, duration, distance and calories. Needed to log the run and compare it with the plan.
-2. Heart rate summary (average and maximum): needed to show the heart-rate zones of the run, which is central to the training plan.
+2. Exercise record detailed data (workout heart rate, speed, cadence and altitude samples, running workouts only): needed to show the heart-rate zones, pace and cadence of the run, which are central to the training plan.
 
-**Not requested:** location/route, sleep, blood pressure, blood glucose, blood oxygen, weight, any write scope.
+**Not requested:** location/route, all-day heart rate, sleep, blood pressure, blood glucose, blood oxygen, weight, any write scope.
 
 **Data handling**
 - Only running workouts are imported; other activity types are ignored.
