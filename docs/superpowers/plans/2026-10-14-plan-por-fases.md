@@ -33,8 +33,8 @@
 ## Cambios al diseño
 - **Cronograma anclado** (reemplaza "R desde la semana a generar" de §4 del spec): `state.phaseSchedule = {anchor, raceDate, goal}`. `R` se mide una sola vez desde `anchor` hasta la semana de la carrera, así los límites de fase no se corren cada semana. `anchor` = lunes siguiente al momento en que se crea el cronograma.
 - **Semana de la carrera cuenta como una de las 3 de reducción final.** `R = semanasEntre(anchor, lunesDeLaCarrera) - 2`.
-- **Modo por tiempo:** recibe volumen por fases, rotación por fase y ritmo de carrera; la proporción y el tope de la tirada larga se aplican solo en modo distancia (v1).
-- **Después de la carrera:** ver Task 10, **pendiente de aprobación del dueño**.
+- **Modo por tiempo:** recibe volumen por fases, rotación por fase, ritmo de carrera y la fase posterior a la carrera; la proporción y el tope de la tirada larga se aplican solo en modo distancia (v1).
+- **Después de la carrera:** ver Task 10 (aprobada por el dueño el 2026-10-14).
 
 ## File Structure
 - Modify `app.js`: bloque nuevo `/* ===== PLAN POR FASES ===== */` junto a `taperMultiplier` (~línea 4342) con constantes y funciones puras; ajustes puntuales en `weekMultiplier`, `distributeSessionTypes`, `generatePlan`, `buildTimePlanDays`, `planLabelBody`, `renderPlan`, el contexto de Zonda (~línea 15200) y `checkPlanAlgoVersion`.
@@ -150,19 +150,35 @@
 - [ ] **Step 2:** Run → FAIL. **Step 3:** Implementar. Sin fase activa no se muestra ninguna línea nueva.
 - [ ] **Step 4:** Run `npm test` → PASS. **Step 5:** Commit `feat: phase banner and coach context`.
 
-### Task 10: Ejemplos de planes y publicación
+### Task 10: Después de la carrera (aprobada por el dueño)
+Comportamiento actual verificado: pasada la fecha el plan no se corta, pero tras una sola semana de recuperación (×0,6, solo si la carrera fue domingo) vuelve a crecer hasta el tope y la meta queda "ya pasó" sin ningún aviso. Esta tarea aplica **solo a perfiles con cronograma de fases** (`state.phaseSchedule` vigente para ese `goal`/`raceDate`); para el resto la salida sigue idéntica a v4.
+
+**Files:** Modify `app.js` (`phaseForWeek`, `generatePlan`, `renderPlan`, contexto de Zonda); `locales/*.js`; Test `test/plan-phases.test.js`.
+
+**Interfaces:**
+- Consumes: `phasedWeeklyKm` (devuelve `peakKm`), `state.phaseSchedule`.
+- Produces:
+  - `state.phaseSchedule.peakKm: number`: `generatePlan` lo guarda la primera vez que calcula `phasedWeeklyKm` para ese cronograma (idempotente).
+  - `phaseForWeek` pasa a devolver, para semanas posteriores a la de la carrera y con `schedule.peakKm` guardado, `{active:true, phase:'post'|'maintenance', weeksAfter:number}` (`weeksAfter` = semanas entre el lunes de la carrera y el lunes de la semana; 1 = la semana siguiente).
+  - Volumen: `post` con `weeksAfter===1` → `peakKm×0,6`; `weeksAfter===2` → `peakKm×0,8`; `maintenance` (`weeksAfter>=3`) → `peakKm×0,85`. En estas fases `recoveryMultiplier` y `postGoalRaceRecoveryMultiplier` valen 1 (no se descuenta dos veces) y no se aplica descarga periódica en `post`.
+  - Sesiones: en `post` todas las sesiones fuertes y la tirada larga pasan a `easy` (mismo criterio que la semana de recuperación actual); en `maintenance` se usa la rotación de siempre (`hardSessionRotation(goal, caution)`).
+  - Claves de texto: `plan_phase_post`, `plan_phase_maintenance`, `plan_post_race_banner` ("Tu carrera ya pasó. Elegí una nueva meta para seguir con un plan por fases."), `plan_post_race_cta` ("Elegir nueva meta"); el botón abre Perfil en la sección de metas (usar la función que ya abre esa sección).
+
+- [ ] **Step 1:** Tests: con `schedule.peakKm=50` y carrera el `2027-03-14`: la semana del `2027-03-15` (`weeksAfter` 1) es `post` con `km===30`; `2027-03-22` es `post` con `km===40`; `2027-03-29` es `maintenance` con `km===42,5` y se mantiene igual semanas después; en `post` ninguna sesión es `intervals`, `tempo`, `hills`, `fartlek`, `progression` ni `long`; sin `peakKm` guardado la semana posterior a la carrera sale idéntica a v4; un cambio de `raceDate` o `goal` a una fecha futura crea un cronograma nuevo (`phaseSchedule.raceDate` actualizada) y deja de aplicar `post`; `renderPlan` muestra `plan_post_race_banner` y el botón solo en `post`/`maintenance`; el contexto de Zonda dice que la carrera ya pasó y que está en recuperación o mantenimiento; las 6 locales tienen las claves.
+- [ ] **Step 2:** Run → FAIL.
+- [ ] **Step 3:** Implementar según Interfaces.
+- [ ] **Step 4:** Run `npm test` completo → PASS. **Step 5:** Commit `feat: post-race recovery and maintenance phases`.
+
+### Task 11: Ejemplos de planes y publicación
 **Files:** Create `scripts/plan-examples.js`; sync a `mobile/www`.
 
-- [ ] **Step 1:** Script que carga la app (`test/support/load-app`) e imprime, semana por semana, volumen, fase y sesiones para: activo a 10k en 10 semanas; activo a 21k en 16 semanas; activo a 42k en 20 y en 30 semanas; activo a 5k en 6 semanas; y cada uno comparado con el plan de v4.
+- [ ] **Step 1:** Script que carga la app (`test/support/load-app`) e imprime, semana por semana, volumen, fase y sesiones para: activo a 10k en 10 semanas; activo a 21k en 16 semanas; activo a 42k en 20 y en 30 semanas; activo a 5k en 6 semanas; y un activo a 21k con la carrera ya pasada (semanas posteriores incluidas); y cada uno comparado con el plan de v4.
 - [ ] **Step 2:** Mostrar la salida al dueño del producto y **esperar su aprobación**. Ajustar `PEAK_KM`, `LONG_CAP_KM` o proporciones si lo pide, con su test.
 - [ ] **Step 3:** `npm test` completo, `git push`, `cp app.js locales/* mobile/www/`, `npx cap sync android`, compilar e instalar en el celular, y verificar un perfil con carrera objetivo en pantalla.
-
-### Task 11 (**pendiente de aprobación del dueño; no ejecutar sin su sí**): Después de la carrera
-Comportamiento actual verificado: pasada la fecha, el plan **no se corta**. Tras una sola semana de recuperación (×0,6, solo si la carrera fue un domingo) vuelve el crecimiento de siempre, con tope de 1,5 a 1,8 veces la base, la meta sigue guardada como "ya pasó" y solo se le avisa a Zonda. Propuesta: fase `post` de 2 semanas (×0,6 y ×0,8 del pico, sin sesiones fuertes), luego `maintenance` a 0,85 del pico con la rotación de siempre, y un aviso en el plan que lleve a Perfil para elegir una nueva meta. Detalle y tests a definir cuando se apruebe.
 
 ---
 
 ## Self-Review
-- **Spec coverage:** §3 alcance (Tasks 3, 5), §4 fases (2, 3), §5 volumen (4, 5), §6 contenido (6, 7, 8), §7 compatibilidad (5, 10), §8 verificación (1, 10), contexto de Zonda (9). Ajustes explícitos en "Cambios al diseño".
+- **Spec coverage:** §3 alcance (Tasks 3, 5), §4 fases (2, 3), §5 volumen (4, 5), §6 contenido (6, 7, 8), §7 compatibilidad (5, 11), §8 verificación (1, 11), contexto de Zonda (9), después de la carrera (10). Ajustes explícitos en "Cambios al diseño".
 - **Consistencia de tipos:** `phaseInfo` (Task 5) lo consumen 6, 7, 8 y 9; `phasedWeeklyKm` devuelve `{km, peakKm, limited}` y 9 usa `limited`/`peakKm`.
 - **Proporción:** 11 tareas para un diseño de 9 secciones; los cuerpos de funciones quedan para quien implementa.
