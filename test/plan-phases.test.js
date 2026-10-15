@@ -2463,3 +2463,82 @@ test('el prev se arrastra hasta el domingo anterior al ancla y se corta exactame
   assert.deepEqual(plain(b.phaseForWeek(b.state.profile, MAINT_W1, b.state.phaseSchedule)), { active: false });
   assert.equal(b.state.phaseNow, null);
 });
+
+// ---- scripts/plan-examples.js: los ejemplos que se le muestran al dueño ----
+
+const { buildExamples, renderExamples } = require('../scripts/plan-examples');
+
+let EXAMPLES_CACHE = null;
+function examples() {
+  if (!EXAMPLES_CACHE) EXAMPLES_CACHE = buildExamples();
+  return EXAMPLES_CACHE;
+}
+function allRuns() { return examples().flatMap(g => g.runs); }
+const RAMP_PHASES = ['base', 'build', 'specific', 'peak'];
+
+test('plan-examples: devuelve los 6 grupos de ejemplos con semanas y cronograma', () => {
+  const groups = examples();
+  assert.deepEqual(groups.map(g => g.id), [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(groups.map(g => g.runs.length), [1, 1, 2, 1, 1, 1]);
+  allRuns().forEach(run => {
+    assert.ok(run.rows.length >= 7, run.label);
+    assert.ok(Number.isFinite(run.peakKm), run.label);
+    assert.ok(run.rows.some(r => r.phase !== 'v4'), `${run.label}: tiene que haber fases activas`);
+    assert.ok(run.racePace, `${run.label}: la marca de referencia tiene que dar ritmo de carrera`);
+  });
+  // la carrera ya pasada trae las dos semanas de recuperacion y despues mantenimiento
+  const past = groups[4].runs[0].rows.map(r => r.phase);
+  assert.deepEqual(past.slice(-8), ['post', 'post', 'maintenance', 'maintenance', 'maintenance', 'maintenance', 'maintenance', 'maintenance']);
+});
+
+test('plan-examples: el volumen que se propone el motor respeta el crecimiento maximo y el pico', () => {
+  allRuns().forEach(run => {
+    let prevFull = null;
+    run.rows.forEach((row, i) => {
+      if (!RAMP_PHASES.includes(row.phase)) return;
+      const target = row.plan.targetKm;
+      assert.ok(Number.isFinite(target), `${run.label} semana ${row.weekNumber}`);
+      assert.ok(target <= run.peakKm * 1.0001, `${run.label} semana ${row.weekNumber}: objetivo ${target} pasa el pico ${run.peakKm}`);
+      if (row.cutback) return; // la descarga no es referencia: la semana siguiente sube sobre la ultima completa
+      // la primera semana de rampa es la unica exenta: sube desde el volumen actual, no desde una semana del plan
+      if (prevFull !== null && i > 0) {
+        assert.ok(target <= prevFull * 1.06 + 0.1, `${run.label} semana ${row.weekNumber}: objetivo ${target} vs ${prevFull} (x${(target / prevFull).toFixed(3)})`);
+      }
+      prevFull = target;
+    });
+  });
+});
+
+test('plan-examples: las semanas impresas no pasan el pico en mas de 7% ni la tirada el tope de la distancia', () => {
+  allRuns().forEach(run => {
+    run.rows.forEach(row => {
+      assert.ok(row.plan.km <= run.peakKm * 1.07, `${run.label} semana ${row.weekNumber}: ${row.plan.km} km con pico ${run.peakKm}`);
+      if (row.phase !== 'v4') {
+        assert.ok(row.plan.longKm <= run.longCapKm, `${run.label} semana ${row.weekNumber}: tirada ${row.plan.longKm} km, tope ${run.longCapKm}`);
+      }
+    });
+  });
+});
+
+// Hallazgo conocido (ver el informe de la Task 11): los km que SUMAN las sesiones ya armadas
+// (fartlek/cuestas/series se recalculan por su estructura) quedan por debajo del objetivo en unas
+// semanas y la siguiente "se pone al dia", asi que el salto entre semanas impresas llega a +22%
+// aunque el objetivo del motor sube como mucho 6%. Queda como `todo` hasta que el dueño decida.
+test('plan-examples: ninguna semana impresa pasa 1,06 x la anterior completa', { todo: 'los km impresos saltan mas que el objetivo (fartlek/cuestas recalculan la distancia)' }, () => {
+  allRuns().forEach(run => {
+    let prevFull = null;
+    run.rows.forEach((row, i) => {
+      if (!RAMP_PHASES.includes(row.phase) || row.cutback) return;
+      if (prevFull !== null && i > 0) {
+        assert.ok(row.plan.km <= prevFull * 1.06, `${run.label} semana ${row.weekNumber}: ${row.plan.km} vs ${prevFull}`);
+      }
+      prevFull = row.plan.km;
+    });
+  });
+});
+
+test('plan-examples: la salida es determinista (dos corridas dan el mismo texto)', () => {
+  const again = buildExamples();
+  assert.equal(renderExamples(again, false), renderExamples(examples(), false));
+  assert.equal(renderExamples(again, true), renderExamples(examples(), true));
+});
