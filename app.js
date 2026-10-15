@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-15T20:37:38Z';
+const APP_VERSION = '2026-10-15T23:43:55Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4885,8 +4885,11 @@ function refreshPhaseSchedule(){
     return;
   }
   if(cur && cur.raceDate === next.raceDate && cur.goal === next.goal){ refreshPhaseNow(); return; }
+  // Entrada desde v4 (sin saliente): el corrimiento de la curva NO se toca acá. El ancla es el lunes que
+  // viene y la semana actual sigue siendo de v4: si se regenera antes del lunes (coach, "a partir de
+  // ahora", cambio de días) tiene que seguir en la misma curva. Vuelve a 0 recién cuando una semana por
+  // fases pasa a ser la actual (checkWeekRollover) o con el reinicio por parate largo (ruling 36).
   if(cur) bridgePhaseExitCurve(cur, next);
-  else if(Number.isFinite(next.peakKm)) state.curveWeekOffset = 0; // entrada desde v4: la rampa ya arrancó en esa curva
   state.phaseSchedule = next;
   refreshPhaseNow();
   persist();
@@ -5631,6 +5634,9 @@ function checkWeekRollover(){
     // Parate largo: v4 reinicia weekNumber; el plan por fases reinicia su rampa desde la semana de la
     // vuelta con la base ya reducida (ver restartPhaseRampAfterBreak).
     if(breakReset) restartPhaseRampAfterBreak();
+    // Ya es la semana actual una del plan por fases: el corrimiento de la curva de v4 de una salida
+    // anterior no se usa más (si después se sale otra vez, el empalme lo vuelve a calcular).
+    if(state.profile && !isBeginnerProfile(state.profile) && phaseForWeek(state.profile, state.weekStart, state.phaseSchedule).active) state.curveWeekOffset = 0;
     refreshPhaseNow(); // la semana actual cambió: la fase que muestra la UI también
     state.plan = promotedPlan || generatePlan(state.profile, state.weekNumber);
     // Ver checkPlanAlgoVersion(): esto ya corrió generatePlan con el código de HOY, así que

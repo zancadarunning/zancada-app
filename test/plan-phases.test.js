@@ -2884,7 +2884,7 @@ test('I4: reemplazar el cronograma a mitad de plan ("a partir de ahora") no salt
   assert.ok(nowV4 <= current * growth + 1e-9 && nowV4 >= current / growth / growth - 1e-9, `semana actual v4 ${nowV4} vs ${current}`);
 });
 
-test('I4: el empalme no toca weekNumber ni la curva si no había plan por fases; volver a fases la pone en 0', () => {
+test('I4: el empalme no toca weekNumber ni la curva si no había plan por fases; la curva vuelve a 0 recién cuando una semana por fases pasa a ser la actual', () => {
   const p = fwProfile({ goal: '10k' });
   const app = fwApp(p);
   app.state.onboarded = true;
@@ -2901,15 +2901,71 @@ test('I4: el empalme no toca weekNumber ni la curva si no había plan por fases;
   fresh.refreshPhaseSchedule(); // sin cronograma antes: nada que empalmar
   assert.equal(fresh.state.weekNumber, 20);
   assert.ok(!fresh.state.curveWeekOffset);
-  // con un corrimiento de una salida anterior, elegir una carrera nueva arranca la rampa en ESA curva y lo vuelve a 0
+  // con un corrimiento de una salida anterior, elegir una carrera nueva arranca la rampa en ESA curva...
   const back = fwApp(fwProfile({ goal: '10k' }));
+  back.state.onboarded = true;
   back.state.weekNumber = 20;
   back.state.curveWeekOffset = -15; // la curva de v4 iba en la semana 5
   back.state.weekStart = app.state.weekStart;
   back.state.profile.raceDate = p.raceDate;
+  back.state.plan = plain(back.generatePlan(back.state.profile, 20, back.state.weekStart));
   back.refreshPhaseSchedule();
   assert.ok(Math.abs(back.state.phaseSchedule.rampStartKm - 30 * back.weekMultiplier(6, { level: 0 }, true)) < 1e-9, String(back.state.phaseSchedule.rampStartKm));
+  // ...pero la semana actual sigue siendo v4 (el ancla es el lunes que viene): el corrimiento se queda (ruling 36)
+  assert.equal(back.state.curveWeekOffset, -15);
+  // el lunes del ancla, al pasar de semana, la semana actual ya es por fases: ahí vuelve a 0
+  back.Date = makeFrozenDate(back.state.phaseSchedule.anchor + 'T08:00:00');
+  back.state.runs = [{ id: 'r', date: back.state.weekStart + 'T08:00:00', distanceKm: 8, durationSec: 2700 }];
+  back.checkWeekRollover();
+  assert.equal(back.state.weekStart, back.state.phaseSchedule.anchor);
   assert.equal(back.state.curveWeekOffset, 0);
+});
+
+test('W3: salir del plan, volver a elegir carrera y regenerar la semana actual no salta a la curva cruda de v4', () => {
+  // escenarios del re-review (rv3/reentry.js): 10k/30 en la misma semana y tras 3 semanas en v4, 21k/35 tras 5,
+  // 5k/50 tras 2, 42k/40 tras 6; la carrera nueva (10k) para dentro de 12 semanas, por el coach o por Perfil.
+  [['10k', 30, 18, 0, 'coach'], ['10k', 30, 18, 3, 'coach'], ['21k', 35, 20, 5, 'coach'], ['21k', 35, 20, 5, 'perfil'], ['5k', 50, 19, 2, 'coach'], ['42k', 40, 22, 6, 'coach']].forEach(([goal, base, idx, gap, mode]) => {
+    const { app, p } = midPlanApp(goal, base, 16, idx);
+    app.renderPerfil = () => {};
+    const label = `${goal} ${base} idx ${idx} +${gap} semanas en v4 (${mode})`;
+    const growth = app.growthParams(app.trainingCaution(p)).growth;
+    app.applyProfileChange({ objetivo: 'general' });
+    // semanas en v4 (como las deja el rollover: weekNumber y weekStart avanzan, la curva sigue corrida)
+    let wk = app.addDaysToIsoLocal(app.state.weekStart, 7 * gap);
+    app.state.weekStart = wk;
+    app.state.weekNumber += gap;
+    app.Date = makeFrozenDate(app.addDaysToIsoLocal(wk, 1) + 'T12:00:00');
+    app.state.plan = plain(app.generatePlan(p, app.state.weekNumber, wk));
+    const v4Now = sumDist(app.state.plan);
+    const curveNow = v4Km(app, p, app.state.weekNumber);
+    if (mode === 'coach') app.applyProfileChange({ objetivo: '10k', fecha_carrera: app.addDaysToIsoLocal(wk, 12 * 7 + 6) });
+    else { p.goal = '10k'; p.raceDate = app.addDaysToIsoLocal(wk, 12 * 7 + 6); app.refreshPhaseSchedule(); app.applyPersonalDataChangeNow(); }
+    assert.ok(app.state.phaseSchedule && Number.isFinite(app.state.phaseSchedule.peakKm), label);
+    const reCur = sumDist(app.state.plan);
+    // la curva de la semana actual no cambia y la semana regenerada no pasa growth x la de antes
+    assert.ok(Math.abs(v4Km(app, p, app.state.weekNumber) - curveNow) < 1e-9, `${label}: curva ${v4Km(app, p, app.state.weekNumber)} vs ${curveNow}`);
+    assert.ok(reCur <= v4Now * growth + 1, `${label}: semana actual ${v4Now} -> ${reCur}`);
+  });
+});
+
+test('W3: volver a elegir carrera "desde la semana que viene" y después cambiar días el mismo día no salta (rv3/reentry2.js)', () => {
+  const { app, p } = midPlanApp('21k', 35, 16, 20);
+  app.renderPerfil = () => {};
+  const growth = app.growthParams(app.trainingCaution(p)).growth;
+  app.applyProfileChange({ objetivo: 'general' });
+  const wk = app.addDaysToIsoLocal(app.state.weekStart, 28);
+  app.state.weekStart = wk;
+  app.state.weekNumber += 4;
+  app.Date = makeFrozenDate(wk + 'T08:00:00');
+  app.state.plan = plain(app.generatePlan(p, app.state.weekNumber, wk));
+  const cur = sumDist(app.state.plan);
+  p.goal = '21k';
+  p.raceDate = app.addDaysToIsoLocal(wk, 14 * 7 + 6);
+  app.refreshPhaseSchedule();
+  app.applyPersonalDataChangeNextWeek();
+  app.applyProfileChange({ dias_entreno: ['tue', 'thu', 'sat', 'sun'] });
+  const after = sumDist(app.state.plan);
+  assert.ok(after <= cur * growth + 1, `semana actual ${cur} -> ${after}`);
 });
 
 test('I4: deshacer el cambio que terminó el plan por fases devuelve el cronograma y la curva', () => {
@@ -3454,7 +3510,7 @@ test('W2-35: tirada del 42k por fase base 0,28 / build 0,32 / specific 0,37 / pe
   assert.equal(dm.long, 32);
 });
 
-test('W2-35: 42k con fases: la tirada sigue siendo la sesión más larga, dentro del tope, y el motor no salta más que growth', () => {
+test('W2-35: 42k con fases: la tirada no pasa su tope y los rodajes quedan por debajo de ella', () => {
   sweepPhaseWeeks({ goals: ['42k'], bases: [30, 40, 60], days: [3, 4, 5], Ws: [12, 20], offs: [0, 1] }, (app, p, ws, info, plan, label) => {
     if (info.phase === 'post') return;
     const long = plan.find(d => d.typeKey === 'long');
