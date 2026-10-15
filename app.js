@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-15T15:16:35Z';
+const APP_VERSION = '2026-10-15T15:18:26Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4775,12 +4775,15 @@ function phaseRacePaceSec(goal){
   }
   return sec > 0 ? sec / km : null;
 }
-// Marca en las sesiones del plan por fases el ritmo de carrera de la persona (d.racePaceSec, seg/km):
-// tempo y series en specific / peak / taper (el taper conserva la intensidad: baja el volumen, no el
-// ritmo), y, solo si `withLongBlock` (modo distancia), un bloque final de la tirada larga al ritmo de
-// carrera (d.racePaceBlockKm, ~30% de la tirada) en specific / peak para media y maratón. Es solo
-// una anotación: no cambia d.dist ni d.durMin (por eso se llama cuando la distancia ya es la final).
-// Sin predicción no se marca nada -- ni siquiera el bloque, que sin ritmo no tendría qué mostrar.
+// Marca en las sesiones del plan por fases el ritmo de carrera de la persona (d.racePaceSec, seg/km)
+// en specific / peak / taper (el taper conserva la intensidad: baja el volumen, no el ritmo), en la
+// sesión donde ese ritmo tiene sentido según la distancia (spec §6): en 5k y 10k las series (tramos
+// cortos a ritmo de carrera; un tempo de 7-8 km a ritmo de 5k sería más largo que la carrera misma),
+// en 15k, 21k y 42k el tempo (bloque continuo a ritmo de carrera), y, solo si `withLongBlock` (modo
+// distancia), un bloque final de la tirada larga al ritmo de carrera (d.racePaceBlockKm, ~30% de la
+// tirada) en specific / peak para media y maratón. Es solo una anotación: no cambia d.dist ni d.durMin
+// (por eso se llama cuando la distancia ya es la final). Sin predicción no se marca nada -- ni
+// siquiera el bloque, que sin ritmo no tendría qué mostrar.
 function applyPhaseRacePace(days, phaseInfo, goal, easyOnly, withLongBlock){
   if(!phaseInfo || !phaseInfo.active || easyOnly) return;
   const phase = phaseInfo.phase;
@@ -4788,8 +4791,9 @@ function applyPhaseRacePace(days, phaseInfo, goal, easyOnly, withLongBlock){
   const pace = phaseRacePaceSec(goal);
   if(pace === null) return;
   const sec = Math.round(pace);
+  const carrier = goal === '5k' || goal === '10k' ? 'intervals' : 'tempo';
   days.forEach(dayObj => {
-    if(dayObj.typeKey === 'tempo' || dayObj.typeKey === 'intervals'){
+    if(dayObj.typeKey === carrier){
       dayObj.racePaceSec = sec;
     } else if(withLongBlock && dayObj.typeKey === 'long' && phase !== 'taper' && (goal === '21k' || goal === '42k')){
       dayObj.racePaceBlockKm = Math.max(1, Math.round(dayObj.dist * 0.3));
@@ -6243,6 +6247,10 @@ function fmtPaceRange(range){
 function paceHintFor(d){
   const lt = state.profile && state.profile.levelTest;
   if(!lt || !lt.done || !lt.paces || d.custom || d.runWalk) return '';
+  // Tempo / series con ritmo de carrera (plan por fases): ese es EL ritmo objetivo de la sesión; el
+  // rango del test al lado sería un segundo ritmo distinto para lo mismo. (La tirada con bloque a ritmo
+  // de carrera sí conserva su rango suave: es para el resto de la tirada, otro tramo.)
+  if(d.racePaceSec > 0 && (d.typeKey === 'tempo' || d.typeKey === 'intervals')) return '';
   const P = lt.paces;
   const unit = distUnit();
   switch(d.typeKey){

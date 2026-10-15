@@ -1523,7 +1523,7 @@ test('phaseRacePaceSec: seg/km a partir de predictRaceTime; null sin datos o con
   assert.equal(app.getGoalRaceKm(), 10);
 });
 
-test('racePaceSec: en specific con prediccion, tempo e intervals lo llevan (= round(predicha / km))', () => {
+test('racePaceSec: en specific con prediccion lo lleva la sesion de la distancia (= round(predicha / km)): series en 10k, tempo en 21k', () => {
   ['10k', '21k'].forEach(goal => {
     const { app, p, schedule } = racePaceApp({ goal });
     const want = expectedRacePace(app, goal);
@@ -1531,7 +1531,11 @@ test('racePaceSec: en specific con prediccion, tempo e intervals lo llevan (= ro
     // (la rotacion de 21k en specific solo usa tempo; la de 10k, tempo e intervals)
     assert.ok(hard.some(d => d.typeKey === 'tempo'), `${goal}: hay tempo`);
     if(goal === '10k') assert.ok(hard.some(d => d.typeKey === 'intervals'), '10k: hay intervals');
-    hard.forEach(d => assert.equal(d.racePaceSec, want, `${goal} ${d.typeKey}`));
+    const carrier = goal === '10k' ? 'intervals' : 'tempo';
+    hard.forEach(d => {
+      if (d.typeKey === carrier) assert.equal(d.racePaceSec, want, `${goal} ${d.typeKey}`);
+      else assert.equal('racePaceSec' in d, false, `${goal} ${d.typeKey}`);
+    });
   });
 });
 
@@ -1568,13 +1572,14 @@ test('racePaceSec: sin cronograma activo (v4) no hay campos nuevos', () => {
   });
 });
 
-test('racePaceSec: en taper tempo e intervals lo llevan pero la tirada no tiene bloque', () => {
+test('racePaceSec: en taper la sesion de la distancia lo lleva pero la tirada no tiene bloque', () => {
   const { app, p, schedule } = racePaceApp({ goal: '10k' });
   const want = expectedRacePace(app, '10k');
   const days = rpPlans(app, p, schedule, 'taper');
-  const hard = days.filter(isRpType);
+  const hard = days.filter(d => d.typeKey === 'intervals');
   assert.ok(hard.length > 0, 'el taper conserva alguna sesion de ritmo');
   hard.forEach(d => assert.equal(d.racePaceSec, want, d.typeKey));
+  days.filter(d => d.typeKey === 'tempo').forEach(d => assert.equal('racePaceSec' in d, false, '10k tempo'));
   // tampoco con 21k/42k
   ['10k', '21k', '42k'].forEach(goal => {
     const c = racePaceApp({ goal });
@@ -1631,7 +1636,7 @@ test('racePaceSec: por tiempo, tempo e intervals de specific/peak/taper lo lleva
   rpPlans(sin.app, sin.p, sin.schedule, 'specific').forEach(d => assert.equal('racePaceSec' in d, false));
 });
 
-test('planLabelBody: el sufijo del ritmo de carrera va despues del ritmo orientativo, en tempo/intervals y en la tirada (con bloque)', () => {
+test('planLabelBody: el sufijo del ritmo de carrera va al final, en tempo/intervals y en la tirada (con bloque)', () => {
   const { app, p, schedule } = racePaceApp({ goal: '21k' });
   const days = rpPlans(app, p, schedule, 'specific');
   const tempo = days.find(d => d.typeKey === 'tempo');
@@ -1648,12 +1653,16 @@ test('planLabelBody: el sufijo del ritmo de carrera va despues del ritmo orienta
   const longSuffix = app.t('desc_racepace_long_suffix', { km: app.fmtDist(long.racePaceBlockKm, 1), pace, unit: 'km' });
   assert.ok(longSuffix.includes(pace) && !longSuffix.includes('{'), longSuffix);
   assert.ok(plain(app.planLabelBody(long)).desc.endsWith(' ' + longSuffix));
-  // con el test de nivel hecho el ritmo orientativo va primero y el sufijo despues
+  // con el test de nivel hecho: el tempo con ritmo de carrera NO suma el rango del test (un solo ritmo,
+  // ver I2) y la tirada con bloque lleva primero su rango suave y al final el sufijo del bloque
   p.levelTest = { done: true, vdot: 45, paces: { easy: [5.8, 6.6], tempo: [4.7, 4.9], interval: [4.2, 4.4] } };
   const withHint = plain(app.planLabelBody(tempo)).desc;
   const hint = app.t('desc_pace_hint', { range: app.fmtPaceRange(p.levelTest.paces.tempo), unit: 'km' });
-  assert.ok(withHint.includes(hint) && withHint.indexOf(hint) < withHint.indexOf(suffix), withHint);
+  assert.ok(!withHint.includes(hint), withHint);
   assert.ok(withHint.endsWith(suffix));
+  const longHint = app.t('desc_pace_hint', { range: app.fmtPaceRange(p.levelTest.paces.easy), unit: 'km' });
+  const longDesc = plain(app.planLabelBody(long)).desc;
+  assert.ok(longDesc.indexOf(longHint) >= 0 && longDesc.indexOf(longHint) < longDesc.indexOf(longSuffix), longDesc);
 });
 
 test('planLabelBody: sin los campos nuevos (o en dias custom) el texto es el de siempre', () => {
@@ -2995,4 +3004,41 @@ test('M6: GOAL_RACE_KM es la tabla única de km por meta (getGoalRaceKm y phaseR
   assert.equal(app.getGoalRaceKm(), 42.195);
   app.state.profile = { goal: 'general' };
   assert.equal(app.getGoalRaceKm(), null);
+});
+
+test('I2: 5k y 10k llevan el ritmo de carrera solo en series; 15k, 21k y 42k solo en tempo (+ bloque de la tirada en 21k/42k)', () => {
+  ['5k', '10k', '15k', '21k', '42k'].forEach(goal => ['distance', 'time'].forEach(trainBy => {
+    const { app, p, schedule } = racePaceApp({ goal, trainBy, trainingDays: ['mon', 'tue', 'thu', 'fri', 'sun'] });
+    const want = expectedRacePace(app, goal);
+    const short = goal === '5k' || goal === '10k';
+    const carrier = short ? 'intervals' : 'tempo';
+    let carried = 0;
+    ['specific', 'peak', 'taper'].forEach(phase => rpPlans(app, p, schedule, phase).forEach(d => {
+      const label = `${goal} ${trainBy} ${phase} ${d.typeKey}`;
+      if (d.typeKey === carrier) { assert.equal(d.racePaceSec, want, label); carried++; }
+      else if (d.typeKey === 'long' && d.racePaceBlockKm) assert.ok(!short && trainBy === 'distance' && phase !== 'taper', label);
+      else assert.equal('racePaceSec' in d, false, label);
+    }));
+    assert.ok(carried > 0, `${goal} ${trainBy}: alguna sesión lleva el ritmo`);
+  }));
+});
+
+test('I2: una sesión con ritmo de carrera no muestra además el rango del test de nivel (un solo ritmo objetivo)', () => {
+  [['10k', 'intervals'], ['21k', 'tempo']].forEach(([goal, type]) => {
+    const { app, p, schedule } = racePaceApp({ goal });
+    p.levelTest = { done: true, vdot: 45, paces: { easy: [5.8, 6.6], tempo: [4.7, 4.9], interval: [4.2, 4.4] } };
+    const days = rpPlans(app, p, schedule, 'specific');
+    const d = days.find(x => x.typeKey === type && x.racePaceSec);
+    assert.ok(d, `${goal}: hay ${type} con ritmo`);
+    const desc = plain(app.planLabelBody(d)).desc;
+    const range = app.fmtPaceRange(type === 'tempo' ? p.levelTest.paces.tempo : p.levelTest.paces.interval);
+    assert.ok(!desc.includes(range), `${goal}: ${desc}`);
+    assert.ok(desc.includes(app.fmtPace(d.racePaceSec / 60)), desc);
+    // la misma sesión sin ritmo de carrera sí muestra el rango del test
+    const bare = Object.assign({}, d); delete bare.racePaceSec;
+    assert.ok(plain(app.planLabelBody(bare)).desc.includes(range));
+    // la tirada con bloque conserva el rango suave para el resto de la tirada (otro tramo, otro ritmo)
+    const long = days.find(x => x.typeKey === 'long' && x.racePaceBlockKm);
+    if (long) assert.ok(plain(app.planLabelBody(long)).desc.includes(app.fmtPaceRange(p.levelTest.paces.easy)));
+  });
 });
