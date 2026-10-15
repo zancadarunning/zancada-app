@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-15T20:32:42Z';
+const APP_VERSION = '2026-10-15T20:37:38Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4496,7 +4496,7 @@ function phaseForWeek(p, weekStartDate, schedule){
     const post = weeksAfter <= 2;
     // phaseWeeks null en mantenimiento: no tiene fin fijo.
     return { active: true, phase: post ? 'post' : 'maintenance', weekIdx, R, weeksToRace: 0,
-      weekInPhase: post ? weeksAfter : weeksAfter - 2, phaseWeeks: post ? 2 : null, weeksAfter, peakKm: schedule.peakKm, baseKm: schedule.baseKm };
+      weekInPhase: post ? weeksAfter : weeksAfter - 2, phaseWeeks: post ? 2 : null, weeksAfter, peakKm: schedule.peakKm, baseKm: schedule.baseKm, goal: schedule.goal };
   }
   const weeksToRace = totalWeeks - weekIdx;
   let info;
@@ -4583,17 +4583,31 @@ function phaseEffectiveWeeklyKm(p, beginner){
 // ritmo de carrera ni rotación propia -- el plan vuelve a las reglas de siempre con otro volumen.
 function isPostRacePhase(phase){ return phase === 'post' || phase === 'maintenance'; }
 // Volumen después de la carrera, sobre el pico que se guardó en el cronograma (info.peakKm, NO
-// recalculado con el weeklyKm de hoy): recuperación 0,6 y 0,8 x el pico las 2 semanas siguientes
-// y mantenimiento en 0,85 x el pico. Eso es un TECHO: si la base de hoy (baseKmNow, la base
+// recalculado con el weeklyKm de hoy): recuperación (POST_RACE_FACTORS, por distancia) x el pico las 2 semanas siguientes
+// y mantenimiento entre 0,75 y 0,85 x el pico (ver abajo). Eso es un TECHO: si la base de hoy (baseKmNow, la base
 // efectiva del perfil que recibe generatePlan, que ya trae el ajuste automático semanal o la
 // vuelta de un parate) es menor que la base con la que se calculó el pico (info.baseKm), el
 // volumen baja en la misma proporción, hasta la mitad como mucho; nunca sube. Sin info.baseKm
 // (cronograma guardado antes de que existiera) no se ajusta. PURA.
+// Recuperación (semana +1, semana +2) por distancia de la carrera corrida, sobre el pico (valores
+// aprobados por el dueño, ruling 35): cuanto más larga la carrera, más profunda y más larga la baja.
+const POST_RACE_FACTORS = { '42k': [0.40, 0.65], '21k': [0.50, 0.75] };
+const POST_RACE_FACTORS_DEFAULT = [0.60, 0.80]; // 5k, 10k, 15k
 function postRaceWeeklyKm(info, baseKmNow){
-  const factor = info.phase === 'maintenance' ? 0.85 * (phaseIsCutbackWeek(info) ? 0.75 : 1) : info.weeksAfter === 1 ? 0.6 : 0.8;
-  const load = Number.isFinite(info.baseKm) && info.baseKm > 0 && Number.isFinite(baseKmNow)
-    ? Math.min(1, Math.max(0.5, baseKmNow / info.baseKm)) : 1;
-  return { km: info.peakKm * factor * load, peakKm: info.peakKm, limited: false };
+  const hasBase = Number.isFinite(info.baseKm) && info.baseKm > 0;
+  const load = hasBase && Number.isFinite(baseKmNow) ? Math.min(1, Math.max(0.5, baseKmNow / info.baseKm)) : 1;
+  let km;
+  if(info.phase === 'maintenance'){
+    // Mantenimiento: 0,85 x el pico como techo, pero sin bajar de la base con la que se armó el plan ni
+    // de 0,75 x el pico (no hace falta sostener el volumen de una preparación sin carrera). Sin base
+    // guardada (cronograma viejo), 0,85 x el pico como antes. Descarga cada 4ta semana.
+    const level = hasBase ? Math.min(0.85 * info.peakKm, Math.max(info.baseKm, 0.75 * info.peakKm)) : 0.85 * info.peakKm;
+    km = level * (phaseIsCutbackWeek(info) ? 0.75 : 1);
+  } else {
+    const f = POST_RACE_FACTORS[info.goal] || POST_RACE_FACTORS_DEFAULT;
+    km = info.peakKm * (info.weeksAfter === 1 ? f[0] : f[1]);
+  }
+  return { km: km * load, peakKm: info.peakKm, limited: false };
 }
 // Volumen de la semana descrita por `info` (resultado ACTIVO de phaseForWeek) en el plan por
 // fases. PURA. Devuelve {km, peakKm, limited} (post / maintenance: ver postRaceWeeklyKm):
@@ -4657,6 +4671,9 @@ function phasedWeeklyKm(p, caution, info, baseKm){
 // ya baja por taperMultiplier, no hace falta otra proporción más chica encima.
 const LONG_CAP_KM = { '5k': 12, '10k': 16, '15k': 20, '21k': 24, '42k': 32 };
 const LONG_SHARE = { base: 0.28, build: 0.30, specific: 0.32, peak: 0.33 };
+// Maratón (ruling 35): la tirada pesa más a medida que se acerca la carrera (sigue con el tope de 32 km,
+// agrandado como en phaseLongCapKm, y con las reglas de tirada más larga de siempre).
+const LONG_SHARE_42K = { base: 0.28, build: 0.32, specific: 0.37, peak: 0.40 };
 // Con 2 o 3 sesiones por semana la proporción de arriba sola invierte la semana: la "tirada
 // larga" (30% del total) queda más corta que un rodaje o un tempo que se llevan el 70% o el
 // 35% restante cada uno. Para que la tirada siga siendo la sesión más larga de la semana, en
@@ -4723,7 +4740,7 @@ function phaseLongCapKm(goal, peakKm){
 //    todas las sesiones pesan igual.
 function applyPhaseLongRun(distMap, usedTypes, targetTotal, phaseInfo, goal, isCutback, ratio){
   if(!phaseInfo || !phaseInfo.active) return;
-  const share = LONG_SHARE[phaseInfo.phase === 'taper' ? 'peak' : phaseInfo.phase];
+  const share = (goal === '42k' ? LONG_SHARE_42K : LONG_SHARE)[phaseInfo.phase === 'taper' ? 'peak' : phaseInfo.phase];
   const cap = phaseInfo.longCapKm || LONG_CAP_KM[goal];
   if(share === undefined || cap === undefined) return;
   const occurrences = {};
@@ -6098,7 +6115,7 @@ function generatePlan(p, weekNumber, weekStartDate){
   // generatePlan NO escribe state.phaseSchedule ni state.phaseNow: también arma semanas de vista
   // previa (con otro weeklyKm), así que no puede ser la fuente de eso -- ver refreshPhaseNow.
   // En la recuperación del plan por fases ('post') el volumen ya trae la baja post-carrera
-  // (0,6 / 0,8 del pico, ver postRaceWeeklyKm): los dos multiplicadores de recuperación quedan en
+  // (POST_RACE_FACTORS x el pico, ver postRaceWeeklyKm): los dos multiplicadores de recuperación quedan en
   // 1 para no descontar la misma carrera dos veces. En mantenimiento siguen como siempre (una
   // carrera de "Próximos eventos" corrida en esas semanas sí merece su semana de recuperación).
   const postRaceWeek = phaseInfo.active && phaseInfo.phase === 'post';

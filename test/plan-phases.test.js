@@ -1270,20 +1270,20 @@ test('applyPhaseLongRun: la tirada puede bajar o crecer (las demás ceden) y las
   assert.ok(Math.abs(lrTotal(dm5, used5) - tot5) <= 1, `${tot5} -> ${lrTotal(dm5, used5)}`);
 });
 
-test('applyPhaseLongRun: con 4 o más sesiones la tirada nunca supera el 35% del total', () => {
+test('applyPhaseLongRun: con 4 o más sesiones la tirada nunca supera el 35% del total (42k: 42%, su proporción de peak es 0,40)', () => {
   const { app } = phasedApp(racingProfile(), null);
-  [USED4, ['easy', 'easy', 'tempo', 'easy', 'long'], ['easy', 'hills', 'easy', 'fartlek', 'long']].forEach(used => {
+  [['21k', 0.35], ['42k', 0.42]].forEach(([goal, bound]) => [USED4, ['easy', 'easy', 'tempo', 'easy', 'long'], ['easy', 'hills', 'easy', 'fartlek', 'long']].forEach(used => {
     ['base', 'build', 'specific', 'peak', 'taper'].forEach(phase => {
       [28, 40, 55, 70].forEach(total => {
         [false, true].forEach(cut => {
           const distMap = lrDist(used, total);
-          app.applyPhaseLongRun(distMap, used, total, { active: true, phase }, '42k', cut, LR_RATIO);
+          app.applyPhaseLongRun(distMap, used, total, { active: true, phase }, goal, cut, LR_RATIO);
           const sum = lrTotal(distMap, used);
-          assert.ok(distMap.long <= 0.35 * sum + 1e-9, `${used} ${phase} total ${total} cut ${cut}: ${distMap.long} de ${sum}`);
+          assert.ok(distMap.long <= bound * sum + 1e-9, `${goal} ${used} ${phase} total ${total} cut ${cut}: ${distMap.long} de ${sum}`);
         });
       });
     });
-  });
+  }));
 });
 
 // Series de sesiones de 2 y 3 días, con y sin cuestas / series / fartlek.
@@ -1361,10 +1361,10 @@ test('applyPhaseLongRun: el tope por distancia manda (42k pico de 70 km -> <= 32
   const used = ['easy', 'tempo', 'easy', 'long'];
   const d42 = lrDist(used, 70);
   app.applyPhaseLongRun(d42, used, 70, { active: true, phase: 'peak' }, '42k', false, LR_RATIO);
-  assert.equal(d42.long, 23, 'round(70 x 0,33) = 23, por debajo del tope');
+  assert.equal(d42.long, 28, 'round(70 x 0,40) = 28 (42k, ruling 35), por debajo del tope');
   const d42b = lrDist(used, 110);
   app.applyPhaseLongRun(d42b, used, 110, { active: true, phase: 'peak' }, '42k', false, LR_RATIO);
-  assert.equal(d42b.long, 32, 'el tope de 32 km frena a 0,33 x 110 = 36');
+  assert.equal(d42b.long, 32, 'el tope de 32 km frena a 0,40 x 110 = 44');
   ['5k', '10k', '15k', '21k', '42k'].forEach(goal => {
     const cap = { '5k': 12, '10k': 16, '15k': 20, '21k': 24, '42k': 32 }[goal];
     const dm = lrDist(used, 200);
@@ -1866,9 +1866,9 @@ test('phaseForWeek: con peakKm guardado, las 2 semanas después de la carrera so
   const app = loadApp();
   const p = postProfile();
   const at = week => plain(app.phaseForWeek(p, week, POST_SCHEDULE));
-  assert.deepEqual(at(POST_W1), { active: true, phase: 'post', weekIdx: 19, R: 16, weeksToRace: 0, weekInPhase: 1, phaseWeeks: 2, weeksAfter: 1, peakKm: 50 });
-  assert.deepEqual(at(POST_W2), { active: true, phase: 'post', weekIdx: 20, R: 16, weeksToRace: 0, weekInPhase: 2, phaseWeeks: 2, weeksAfter: 2, peakKm: 50 });
-  assert.deepEqual(at(MAINT_W1), { active: true, phase: 'maintenance', weekIdx: 21, R: 16, weeksToRace: 0, weekInPhase: 1, phaseWeeks: null, weeksAfter: 3, peakKm: 50 });
+  assert.deepEqual(at(POST_W1), { active: true, phase: 'post', weekIdx: 19, R: 16, weeksToRace: 0, weekInPhase: 1, phaseWeeks: 2, weeksAfter: 1, peakKm: 50, goal: '10k' });
+  assert.deepEqual(at(POST_W2), { active: true, phase: 'post', weekIdx: 20, R: 16, weeksToRace: 0, weekInPhase: 2, phaseWeeks: 2, weeksAfter: 2, peakKm: 50, goal: '10k' });
+  assert.deepEqual(at(MAINT_W1), { active: true, phase: 'maintenance', weekIdx: 21, R: 16, weeksToRace: 0, weekInPhase: 1, phaseWeeks: null, weeksAfter: 3, peakKm: 50, goal: '10k' });
   // la semana de la carrera sigue siendo taper
   assert.equal(at('2027-03-08').phase, 'taper');
   // peakKm no numérico -> inactivo como antes
@@ -2172,12 +2172,13 @@ test('postRaceWeeklyKm: escala por base de hoy / base del cronograma, entre 0,5 
   const caution = app.trainingCaution(p);
   const info = week => app.phaseForWeek(p, week, POST_SCHEDULE_B);
   const km = (week, base) => app.phasedWeeklyKm(p, caution, info(week), base).km;
-  assert.equal(km(MAINT_W1, 30), 42.5);
-  assert.ok(Math.abs(km(MAINT_W1, 27) - 42.5 * 0.9) < 1e-9, 'x0,9');
+  // (ruling 35: con la base guardada, 30, el mantenimiento es min(0,85 x 50, max(30, 0,75 x 50)) = 37,5)
+  assert.equal(km(MAINT_W1, 30), 37.5);
+  assert.ok(Math.abs(km(MAINT_W1, 27) - 37.5 * 0.9) < 1e-9, 'x0,9');
   assert.ok(Math.abs(km(POST_W1, 27) - 30 * 0.9) < 1e-9, 'post también');
-  assert.equal(km(MAINT_W1, 10), 42.5 * 0.5, 'nunca baja de la mitad');
-  assert.equal(km(MAINT_W1, 0), 42.5 * 0.5);
-  assert.equal(km(MAINT_W1, 40), 42.5, 'nunca sube');
+  assert.equal(km(MAINT_W1, 10), 37.5 * 0.5, 'nunca baja de la mitad');
+  assert.equal(km(MAINT_W1, 0), 37.5 * 0.5);
+  assert.equal(km(MAINT_W1, 40), 37.5, 'nunca sube');
   assert.equal(km(POST_W2, 60), 40);
   // cronograma sin baseKm (viejo): factor 1
   const sinBase = app.phaseForWeek(p, MAINT_W1, POST_SCHEDULE);
@@ -2189,16 +2190,16 @@ test('postRaceWeeklyKm: escala por base de hoy / base del cronograma, entre 0,5 
 });
 
 test('generatePlan: el ajuste semanal (vista previa con weeklyKm x 0,9) baja el mantenimiento a 0,9 x', () => {
-  const { app } = postApp({}, plain(POST_SCHEDULE_B));
+  const { app } = postApp({}, plain(POST_SCHEDULE_B)); // mantenimiento con base 30: 37,5 (ruling 35)
   const p = app.state.profile;
   const full = sumDist(plain(app.generatePlan(p, 1, '2027-04-05')));
   const preview = Object.assign({}, p, { weeklyKm: 27 }); // como getNextWeekPlan con factor 0,9
   const scaled = sumDist(plain(app.generatePlan(preview, 1, '2027-04-05')));
-  assert.ok(Math.abs(full - 42.5) <= 1.5, `completo ${full}`);
-  assert.ok(Math.abs(scaled - 42.5 * 0.9) <= 1.5, `x0,9 ${scaled}`);
+  assert.ok(Math.abs(full - 37.5) <= 1.5, `completo ${full}`);
+  assert.ok(Math.abs(scaled - 37.5 * 0.9) <= 1.5, `x0,9 ${scaled}`);
   // vuelta de un parate largo (base a la mitad o menos): como mucho la mitad
   const back = sumDist(plain(app.generatePlan(Object.assign({}, p, { weeklyKm: 9 }), 1, '2027-04-05')));
-  assert.ok(Math.abs(back - 42.5 * 0.5) <= 1.5, `vuelta ${back}`);
+  assert.ok(Math.abs(back - 37.5 * 0.5) <= 1.5, `vuelta ${back}`);
   // getNextWeekPlan usa ese mismo camino (factor del ajuste automático)
   app.state.weekStart = '2027-03-29';
   app.state.weekNumber = 2;
@@ -2207,7 +2208,7 @@ test('generatePlan: el ajuste semanal (vista previa con weeklyKm x 0,9) baja el 
   app.computeWeekAdjustment = () => ({ factor: 0.9 });
   const nw = plain(app.getNextWeekPlan());
   assert.equal(nw.weekStart, '2027-04-05');
-  assert.ok(Math.abs(sumDist(nw.plan) - 42.5 * 0.9) <= 1.5, `próxima ${sumDist(nw.plan)}`);
+  assert.ok(Math.abs(sumDist(nw.plan) - 37.5 * 0.9) <= 1.5, `próxima ${sumDist(nw.plan)}`);
 });
 
 // ---- etiqueta de descarga según el plan por fases ----
@@ -2455,9 +2456,9 @@ test('ya en el plan de B, mover su fecha no revive el mantenimiento de A en la s
   ref.state.curveWeekOffset = 0;
   assert.ok(Math.abs(sumDist(plain(ref.generatePlan(ref.state.profile, 1, '2027-06-14'))) - 30) <= 1.5);
   const maintA = postApp({}, plain(POST_SCHEDULE_B), '2027-06-16T12:00:00').app;
-  // (2027-06-14 es la 12da semana de mantenimiento de A: descarga, 42,5 x 0,75)
+  // (2027-06-14 es la 12da semana de mantenimiento de A: descarga, 37,5 x 0,75 -- ruling 35 con base 30)
   assert.ok(maintA.phaseIsCutbackWeek(maintA.phaseForWeek(maintA.state.profile, '2027-06-14', maintA.state.phaseSchedule)));
-  assert.ok(Math.abs(sumDist(plain(maintA.generatePlan(maintA.state.profile, 1, '2027-06-14'))) - 42.5 * 0.75) <= 1.5, 'referencia: mantenimiento de A');
+  assert.ok(Math.abs(sumDist(plain(maintA.generatePlan(maintA.state.profile, 1, '2027-06-14'))) - 37.5 * 0.75) <= 1.5, 'referencia: mantenimiento de A');
   // y desde el ancla nuevo, el plan por fases de B
   const next = plain(app.phaseForWeek(app.state.profile, '2027-06-21', s));
   assert.equal(next.weekIdx, 0);
@@ -2521,10 +2522,10 @@ function examples() {
 function allRuns() { return examples().flatMap(g => g.runs); }
 const RAMP_PHASES = ['base', 'build', 'specific', 'peak'];
 
-test('plan-examples: devuelve los 11 grupos de ejemplos (6 originales + 5 de transiciones) con semanas y cronograma', () => {
+test('plan-examples: devuelve los 12 grupos de ejemplos (6 originales + 6 de transiciones) con semanas y cronograma', () => {
   const groups = examples();
-  assert.deepEqual(groups.map(g => g.id), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
-  assert.deepEqual(groups.map(g => g.runs.length), [1, 1, 2, 1, 1, 1, 1, 2, 1, 2, 1]);
+  assert.deepEqual(groups.map(g => g.id), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.deepEqual(groups.map(g => g.runs.length), [1, 1, 2, 1, 1, 1, 1, 2, 1, 2, 1, 1]);
   allRuns().forEach(run => {
     assert.ok(run.rows.length >= 7, run.label);
     assert.ok(Number.isFinite(run.peakKm), run.label);
@@ -3156,6 +3157,10 @@ test('I5: con fases (modo distancia) cada semana impresa queda a +-10% del volum
     const target = Math.max(9, app.phasedWeeklyKm(p, app.trainingCaution(p), info, app.phaseEffectiveWeeklyKm(p, false)).km * app.taperMultiplier(p, ws));
     const got = sumDist(plan);
     weeks++;
+    // (rincón documentado: la recuperación de un 42k con base 20 en 6 días pide ~1,8 km por sesión y el
+    // mínimo de un rodaje es 2 km; ahí solo vale que nada pase de 2 km por sesión)
+    const sessions = plan.filter(d => d.typeKey !== 'rest').length;
+    if (target < 2 * sessions) { assert.ok(got <= 2 * sessions + 1e-9, `${label}: ${got}`); return; }
     assert.ok(Math.abs(got - target) <= target * 0.10, `${label}: ${got} km vs ${target.toFixed(1)}`);
   });
   assert.ok(weeks > 2000, `semanas: ${weeks}`);
@@ -3388,4 +3393,83 @@ test('plan-examples: transiciones sin saltos (entrada desde v4, cambio de fecha,
   const brk = examples()[8].runs[0];
   const back = brk.rows.find((r, k) => k > 0 && brk.rows[k - 1].phase === 'parate' && r.phase !== 'parate');
   assert.ok(back.plan.km <= back.v4.km * 1.06 + 1, `vuelta del parate: ${back.plan.km} vs v4 ${back.v4.km}`);
+});
+
+// ---- Wave 2, ruling 35: valores de entrenamiento aprobados por el dueño ----
+
+// info activo de post/maintenance de un cronograma con pico y base guardados, sin pasar por fechas.
+const postInfo = (goal, peakKm, baseKm, weeksAfter) => ({
+  active: true, phase: weeksAfter <= 2 ? 'post' : 'maintenance', weekIdx: 18 + weeksAfter, R: 16, weeksToRace: 0,
+  weekInPhase: weeksAfter <= 2 ? weeksAfter : weeksAfter - 2, phaseWeeks: weeksAfter <= 2 ? 2 : null, weeksAfter, peakKm, baseKm, goal });
+const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs ${b}`);
+
+test('W2-35: recuperación por distancia: 42k x0,40 / x0,65, 21k x0,50 / x0,75, 5k-10k-15k x0,60 / x0,80 (sobre el pico, con la carga)', () => {
+  const app = loadApp();
+  const km = (goal, peak, base, wa, now) => app.phasedWeeklyKm({ goal }, { level: 0 }, postInfo(goal, peak, base, wa), now === undefined ? base : now).km;
+  near(km('42k', 70, 40, 1), 28, '42k post 1');
+  near(km('42k', 70, 40, 2), 45.5, '42k post 2');
+  near(km('21k', 55, 35, 1), 27.5, '21k post 1');
+  near(km('21k', 55, 35, 2), 41.25, '21k post 2');
+  ['5k', '10k', '15k'].forEach(goal => {
+    near(km(goal, 50, 30, 1), 30, goal + ' post 1');
+    near(km(goal, 50, 30, 2), 40, goal + ' post 2');
+  });
+  // la carga de hoy sigue escalando (entre 0,5 y 1)
+  near(km('42k', 70, 40, 1, 30), 28 * 0.75, '42k post 1 con base 30/40');
+  near(km('21k', 55, 35, 2, 10), 41.25 * 0.5, '21k post 2, piso 0,5');
+});
+
+test('W2-35: mantenimiento = min(0,85 x pico, max(base, 0,75 x pico)) x carga, con descarga x0,75 cada 4ta semana', () => {
+  const app = loadApp();
+  const km = (goal, peak, base, wa, now) => app.phasedWeeklyKm({ goal }, { level: 0 }, postInfo(goal, peak, base, wa), now === undefined ? base : now).km;
+  near(km('42k', 70, 40, 3), 52.5, '42k pico 70 base 40');        // min(59,5, max(40, 52,5))
+  near(km('21k', 55, 35, 3), 41.25, '21k pico 55 base 35');       // min(46,75, max(35, 41,25))
+  near(km('10k', 50, 30, 3), 37.5, '10k pico 50 base 30');        // min(42,5, max(30, 37,5))
+  near(km('21k', 55, 50, 3), 46.75, 'base alta: tope 0,85 x pico'); // min(46,75, max(50, 41,25))
+  near(km('10k', 45, 40, 3), 38.25, 'base entre 0,75 y 0,85 del pico: la base'.replace('la base', '0,85 x 45 = 38,25'));
+  near(km('10k', 46, 36, 3), 36, 'base entre 0,75 y 0,85 del pico manda la base');
+  near(km('42k', 70, 40, 6), 52.5 * 0.75, '4ta semana de mantenimiento: descarga');
+  near(km('42k', 70, 40, 3, 30), 52.5 * 0.75, 'carga 30/40');
+  // cronograma guardado sin base: como antes (0,85 x pico)
+  const sinBase = Object.assign(postInfo('10k', 50, undefined, 3), {});
+  delete sinBase.baseKm;
+  near(app.phasedWeeklyKm({ goal: '10k' }, { level: 0 }, sinBase, 30).km, 42.5, 'sin base guardada');
+});
+
+test('W2-35: tirada del 42k por fase base 0,28 / build 0,32 / specific 0,37 / peak 0,40 (taper = peak); las demás metas sin cambio', () => {
+  const { app } = phasedApp(racingProfile(), null);
+  [['base', 0.28], ['build', 0.32], ['specific', 0.37], ['peak', 0.40], ['taper', 0.40]].forEach(([phase, share]) => {
+    const dm = lrDist(USED4, 50);
+    app.applyPhaseLongRun(dm, USED4, 50, { active: true, phase }, '42k', false, LR_RATIO);
+    assert.equal(dm.long, Math.round(50 * share), '42k ' + phase);
+  });
+  [['base', 0.28], ['build', 0.30], ['specific', 0.32], ['peak', 0.33]].forEach(([phase, share]) => ['5k', '10k', '15k', '21k'].forEach(goal => {
+    const dm = lrDist(USED4, 40);
+    app.applyPhaseLongRun(dm, USED4, 40, { active: true, phase }, goal, false, LR_RATIO);
+    assert.equal(dm.long, Math.min(LR_CAP[goal], Math.round(40 * share)), `${goal} ${phase}`);
+  }));
+  // el tope de la distancia manda: 42k con pico 70 y semana de 90 km -> 32 (no 36)
+  const dm = lrDist(USED4, 90);
+  app.applyPhaseLongRun(dm, USED4, 90, { active: true, phase: 'peak' }, '42k', false, LR_RATIO);
+  assert.equal(dm.long, 32);
+});
+
+test('W2-35: 42k con fases: la tirada sigue siendo la sesión más larga, dentro del tope, y el motor no salta más que growth', () => {
+  sweepPhaseWeeks({ goals: ['42k'], bases: [30, 40, 60], days: [3, 4, 5], Ws: [12, 20], offs: [0, 1] }, (app, p, ws, info, plan, label) => {
+    if (info.phase === 'post') return;
+    const long = plan.find(d => d.typeKey === 'long');
+    if (!long) return;
+    const peak = app.phasedWeeklyKm(p, app.trainingCaution(p), info, app.phaseEffectiveWeeklyKm(p, false)).peakKm;
+    assert.ok(long.dist <= app.phaseLongCapKm('42k', peak), `${label}: tirada ${long.dist}`);
+    plan.filter(d => d.typeKey === 'easy').forEach(d => assert.ok(d.dist < long.dist, `${label}: rodaje ${d.dist} >= ${long.dist}`));
+  });
+});
+
+test('plan-examples: carrera nueva corta elegida en el mantenimiento: la semana después del mantenimiento no salta', () => {
+  const run = examples()[11].runs[0];
+  const i = run.rows.findIndex((r, k) => k > 0 && r.phase === 'v4' && run.rows[k - 1].phase === 'maintenance');
+  assert.ok(i > 0, 'hay una semana v4 justo después del mantenimiento');
+  const before = run.rows[i - 1], after = run.rows[i];
+  assert.ok(after.plan.km <= before.plan.km * 1.10 + 1, `${before.plan.km} -> ${after.plan.km}`);
+  assert.ok(after.v4.km > after.plan.km, 'el v4 sin empalme habría saltado más');
 });
