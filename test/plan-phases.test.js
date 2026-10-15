@@ -2509,10 +2509,10 @@ function examples() {
 function allRuns() { return examples().flatMap(g => g.runs); }
 const RAMP_PHASES = ['base', 'build', 'specific', 'peak'];
 
-test('plan-examples: devuelve los 6 grupos de ejemplos con semanas y cronograma', () => {
+test('plan-examples: devuelve los 11 grupos de ejemplos (6 originales + 5 de transiciones) con semanas y cronograma', () => {
   const groups = examples();
-  assert.deepEqual(groups.map(g => g.id), [1, 2, 3, 4, 5, 6]);
-  assert.deepEqual(groups.map(g => g.runs.length), [1, 1, 2, 1, 1, 1]);
+  assert.deepEqual(groups.map(g => g.id), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+  assert.deepEqual(groups.map(g => g.runs.length), [1, 1, 2, 1, 1, 1, 1, 2, 1, 2, 1]);
   allRuns().forEach(run => {
     assert.ok(run.rows.length >= 7, run.label);
     assert.ok(Number.isFinite(run.peakKm), run.label);
@@ -2559,7 +2559,10 @@ test('plan-examples: las semanas impresas no pasan el pico en mas de 7% ni la ti
 // motor sube como mucho 6% y el resto es el redondeo a km enteros por sesión (en el ejemplo de 10 km
 // de base, 11 -> 12 km = +9%). 1,06 exacto no se alcanza por ese redondeo.
 test('plan-examples: ninguna semana impresa pasa 1,10 x la anterior completa', () => {
-  allRuns().forEach(run => {
+  // Salvo con 2 días: la tirada tiene tope y la otra sesión (de calidad, que el reparto no toca) queda
+  // por debajo de la tirada, así que lo que entregan fartlek/cuestas mueve todo el total (16,6 -> 23 km
+  // en el 5k de 2 días). Ese caso lo acota la regla de tirada más larga, no el reparto.
+  allRuns().filter(run => run.trainingDays.split('/').length > 2).forEach(run => {
     let prevFull = null;
     run.rows.forEach((row, i) => {
       if (!RAMP_PHASES.includes(row.phase) || row.cutback) return;
@@ -3288,4 +3291,25 @@ test('M11: plan por fases con cautela >= 2 (60+ años): sin series ni cuestas, u
       prevFull = km;
     }
   }
+});
+
+test('plan-examples: en las semanas con fases los rodajes quedan por debajo de la tirada y el 5k de 3+ días tiene sesión fuerte en peak', () => {
+  allRuns().forEach(run => run.rows.forEach(row => {
+    if (row.phase === 'v4' || row.phase === 'parate' || row.phase === 'post') return;
+    if (row.plan.longKm > 0) assert.ok(row.plan.maxEasyKm < row.plan.longKm, `${run.label} semana ${row.weekNumber}: rodaje ${row.plan.maxEasyKm} vs tirada ${row.plan.longKm}`);
+    if (run.goal === '5k' && row.phase === 'peak' && run.trainingDays.split('/').length >= 3) assert.ok(row.plan.hard.length >= 1, `${run.label} semana ${row.weekNumber}`);
+  }));
+});
+
+test('plan-examples: transiciones sin saltos (entrada desde v4, cambio de fecha, vuelta de un parate)', () => {
+  const [entry] = examples()[6].runs;
+  assert.equal(entry.rows[0].phase, 'v4');
+  assert.ok(entry.rows[1].plan.targetKm >= entry.rows[0].v4.km * 0.75, 'la primera semana por fases no cae');
+  const [edit, sameWeek] = examples()[7].runs;
+  const i = edit.rows.findIndex(r => r.weekStart === '2026-12-07');
+  assert.ok(edit.rows[i].plan.targetKm >= edit.rows[i - 1].plan.targetKm - 0.1, 'después del cambio de fecha sigue desde donde venía');
+  assert.equal(sameWeek.anchor, edit.anchor);
+  const brk = examples()[8].runs[0];
+  const back = brk.rows.find((r, k) => k > 0 && brk.rows[k - 1].phase === 'parate' && r.phase !== 'parate');
+  assert.ok(back.plan.km <= back.v4.km * 1.06 + 1, `vuelta del parate: ${back.plan.km} vs v4 ${back.v4.km}`);
 });

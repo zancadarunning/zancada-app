@@ -59,12 +59,35 @@ function exampleDefs() {
       runs: [{ label: '21k, carrera pasada', profile: prof('21k', 35, d4, 21.0975, 115 * 60), weeksToRace: 16, after: 8 }] },
     { id: 6, title: 'Base baja y ambicioso: 10 km/sem a un 42k en 24 semanas (3 dias)',
       runs: [{ label: '42k en 24 semanas, base 10 km', profile: prof('42k', 10, ['tue', 'thu', 'sun'], 5, 33 * 60), weeksToRace: 24 }] },
+    // Escenarios agregados en la tanda de arreglos de la revisión final (transiciones y casos borde).
+    { id: 7, title: 'Entrada desde v4: 10k, ya en la semana 13 de v4 (30 km/sem de base, ~46 km reales, 4 dias)',
+      runs: [{ label: '10k en 12 semanas, desde la semana 13 de v4', profile: prof('10k', 30, d4, 10, 52 * 60), weeksToRace: 12, wn0: 13, showCurrent: true,
+        note: 'La primera fila (v4) es la semana en curso cuando se crea el cronograma; la rampa arranca en lo que v4 daba la semana siguiente.' }] },
+    { id: 8, title: 'Cambio de la fecha de carrera a mitad del plan (21k, 35 km/sem, 4 dias)',
+      runs: [
+        { label: '21k: carrera 1 semana mas tarde (cambio en la semana 7)', profile: prof('21k', 35, d4, 21.0975, 115 * 60), weeksToRace: 16, edit: { atIdx: 6, shiftDays: 7 },
+          note: 'El miercoles de la semana 7 se corre la carrera una semana; desde la semana 8 manda el cronograma nuevo.' },
+        { label: '21k: carrera 1 dia antes (misma semana, cambio en la semana 7)', profile: prof('21k', 35, d4, 21.0975, 115 * 60), weeksToRace: 16, edit: { atIdx: 6, shiftDays: -1 },
+          note: 'Mover la carrera de domingo a sabado de la misma semana conserva el cronograma entero.' },
+      ] },
+    { id: 9, title: 'Parate de 5 semanas en la fase especifica (42k, 40 km/sem, 5 dias, carrera en 24 semanas)',
+      runs: [{ label: '42k: parate de 5 semanas en specific', profile: prof('42k', 40, ['mon', 'tue', 'thu', 'fri', 'sun'], 42.195, 250 * 60), weeksToRace: 24, brk: { lastIdx: 13, backIdx: 18 },
+        note: 'Ultima carrera el miercoles de la semana 14; vuelve el miercoles de la semana 19 (rollover con parate: base x0,65, weekNumber 2).' }] },
+    { id: 10, title: '5k: corredor de 2 dias (25 km/sem) y corredor de mucho volumen (65 km/sem, 5 dias)',
+      runs: [
+        { label: '5k en 10 semanas, 2 dias', profile: prof('5k', 25, ['wed', 'sun'], 5, 26 * 60), weeksToRace: 10 },
+        { label: '5k en 12 semanas, 65 km/sem', profile: prof('5k', 65, ['mon', 'tue', 'thu', 'fri', 'sun'], 5, 19 * 60), weeksToRace: 12 },
+      ] },
+    { id: 11, title: 'weekNumber distinto de la semana del plan (21k, 35 km/sem, el plan arranca en la semana 3 de v4)',
+      runs: [{ label: '21k en 16 semanas, weekNumber = semana + 2', profile: prof('21k', 35, d4, 21.0975, 115 * 60), weeksToRace: 16, wn0: 2,
+        note: 'Las descargas (cut) siguen al plan por fases, no a weekNumber (columna v4 desc.).' }] },
   ];
 }
 
 function runExample(def) {
   const app = loadApp();
   const profile = JSON.parse(JSON.stringify(def.profile));
+  const startKm = profile.weeklyKm;
   app.Date = makeFrozenDate(FROZEN_TODAY);
   app.persist = () => Promise.resolve(); // sin red ni disco
   app.state.profile = profile;
@@ -72,37 +95,86 @@ function runExample(def) {
   app.state.lastEventDate = null;
   app.state.phaseSchedule = null;
 
-  const anchor = app.addDaysToIsoLocal(app.getMondayISO(new app.Date()), 7);
+  app.renderChat = () => {};
+  app.state.chat = [];
+  app.state.runs = [];
+  app.state.onboarded = true;
+  // weekNumber de v4 en la semana en que se crea el cronograma (wn0, 1 si no se dice): la semana
+  // idx del plan es la weekNumber wnBase + idx (wnBase cambia si un evento mueve state.weekNumber).
+  const wn0 = def.wn0 || 1;
+  app.state.weekNumber = wn0;
+  app.state.weekStart = app.getMondayISO(new app.Date());
+  const anchor = app.addDaysToIsoLocal(app.state.weekStart, 7);
   const raceMonday = app.addDaysToIsoLocal(anchor, def.weeksToRace * 7);
   profile.raceDate = app.addDaysToIsoLocal(raceMonday, 6); // el domingo de esa semana
   app.refreshPhaseSchedule();
   const schedule = JSON.parse(JSON.stringify(app.state.phaseSchedule));
   if (def.after) app.Date = makeFrozenDate(app.addDaysToIsoLocal(raceMonday, def.after * 7 + 2) + 'T12:00:00');
+  let wnBase = wn0 + 1;
 
   // Semanas a imprimir: desde el ancla hasta la de la carrera (o, con `after`, desde 2 antes de
-  // la de la carrera hasta N despues de ella). weekNumber de v4 = semanas desde el ancla + 1.
-  const firstIdx = def.after ? def.weeksToRace - 2 : 0;
-  const lastIdx = def.weeksToRace + (def.after || 0);
+  // la de la carrera hasta N despues de ella; con showCurrent, desde la semana en curso, -1).
+  const firstIdx = def.after ? def.weeksToRace - 2 : def.showCurrent ? -1 : 0;
+  const shiftWeeks = def.edit && def.edit.shiftDays > 0 ? Math.round(def.edit.shiftDays / 7) : 0;
+  const lastIdx = def.weeksToRace + (def.after || 0) + shiftWeeks;
   const caps = vm.runInContext('({ LONG_CAP_KM, PEAK_KM })', app);
+  const weekOf = idx => app.addDaysToIsoLocal(anchor, idx * 7);
+  const wednesday = idx => makeFrozenDate(app.addDaysToIsoLocal(weekOf(idx), 2) + 'T12:00:00');
+  // Parate: historia de 8 semanas corriendo la base hasta el miércoles de la semana brk.lastIdx.
+  if (def.brk) {
+    for (let w = 0; w < 8; w++) {
+      app.state.runs.push({ id: 'r' + w, source: 'manual', date: app.addDaysToIsoLocal(weekOf(def.brk.lastIdx), -7 * w + 2) + 'T08:00:00',
+        distanceKm: profile.weeklyKm / 3, durationSec: profile.weeklyKm / 3 * 330 });
+    }
+  }
+  const events = [];
 
   const summarize = (days) => {
     const hard = {};
-    let km = 0, longKm = 0, racePace = false, racePaceBlock = false;
+    let km = 0, longKm = 0, maxEasyKm = 0, racePace = false, racePaceBlock = false;
     days.forEach(d => {
       km += d.dist || 0;
       if (d.typeKey === 'long') longKm = Math.max(longKm, d.dist || 0);
+      if (d.typeKey === 'easy') maxEasyKm = Math.max(maxEasyKm, d.dist || 0);
       if (HARD_TYPES.includes(d.typeKey)) hard[d.typeKey] = (hard[d.typeKey] || 0) + 1;
       if (d.racePaceSec) racePace = true;
       if (d.racePaceBlockKm) racePaceBlock = true;
     });
     const hardList = Object.keys(hard).sort().map(k => hard[k] > 1 ? k + 'x' + hard[k] : k);
-    return { km: r1(km), longKm: r1(longKm), hard: hardList, racePace, racePaceBlock };
+    return { km: r1(km), longKm: r1(longKm), maxEasyKm: r1(maxEasyKm), hard: hardList, racePace, racePaceBlock };
   };
 
   const rows = [];
   for (let idx = firstIdx; idx <= lastIdx; idx++) {
-    const weekStart = app.addDaysToIsoLocal(anchor, idx * 7);
-    const weekNumber = idx + 1;
+    const weekStart = weekOf(idx);
+    // Cambio de fecha de carrera: el miércoles de la semana edit.atIdx (lo que sigue usa el cronograma nuevo).
+    if (def.edit && idx === def.edit.atIdx + 1) {
+      app.Date = wednesday(def.edit.atIdx);
+      app.state.weekStart = weekOf(def.edit.atIdx);
+      app.state.weekNumber = wnBase + def.edit.atIdx;
+      profile.raceDate = app.addDaysToIsoLocal(profile.raceDate, def.edit.shiftDays);
+      app.refreshPhaseSchedule();
+      wnBase = app.state.weekNumber - def.edit.atIdx;
+      events.push('semana ' + (def.edit.atIdx + 1) + ': carrera movida a ' + profile.raceDate + ' (ancla ' + app.state.phaseSchedule.anchor + ')');
+    }
+    // Parate: semanas sin correr (no hay plan que mostrar) y la vuelta por el rollover de verdad.
+    if (def.brk && idx > def.brk.lastIdx && idx < def.brk.backIdx) {
+      const zero = { km: 0, longKm: 0, maxEasyKm: 0, hard: [], racePace: false, racePaceBlock: false, targetKm: null };
+      rows.push({ weekNumber: wnBase + idx, weekStart, phase: 'parate', weeksToRace: null, weeksAfter: 0, cutback: false, plan: zero, v4: Object.assign({ cutback: false }, zero) });
+      continue;
+    }
+    if (def.brk && idx === def.brk.backIdx) {
+      app.state.weekStart = weekOf(def.brk.lastIdx);
+      app.state.weekNumber = wnBase + def.brk.lastIdx;
+      app.state.plan = app.generatePlan(profile, app.state.weekNumber, app.state.weekStart);
+      app.Date = wednesday(def.brk.backIdx);
+      const before = profile.weeklyKm;
+      app.checkWeekRollover();
+      wnBase = app.state.weekNumber - idx;
+      events.push('semana ' + (idx + 1) + ': vuelta del parate, base ' + before + ' -> ' + profile.weeklyKm + ' km, weekNumber ' + app.state.weekNumber +
+        (app.state.phaseSchedule && Number.isFinite(app.state.phaseSchedule.peakKm) ? ', rampa reiniciada (ancla ' + app.state.phaseSchedule.anchor + ', pico ' + r1(app.state.phaseSchedule.peakKm) + ' km)' : ', vuelve a v4'));
+    }
+    const weekNumber = wnBase + idx;
     const info = app.phaseForWeek(profile, weekStart, app.state.phaseSchedule);
     const phased = summarize(app.generatePlan(profile, weekNumber, weekStart));
     // Volumen que el motor se propone esa semana (antes del taper): lo que km deberia seguir.
@@ -125,19 +197,23 @@ function runExample(def) {
   }
 
   const pace = app.phaseRacePaceSec(profile.goal);
+  const finalSched = app.state.phaseSchedule;
   return {
+    note: def.note || null, events,
+    peakAfterKm: finalSched && Number.isFinite(finalSched.peakKm) && r1(finalSched.peakKm) !== r1(schedule.peakKm) ? r1(finalSched.peakKm) : null,
     label: def.label, goal: profile.goal, raceDate: profile.raceDate, anchor,
-    weeklyKm: profile.weeklyKm, trainingDays: profile.trainingDays.join('/'),
+    weeklyKm: startKm, trainingDays: profile.trainingDays.join('/'),
     refRace: profile.refRace.distanceKm + ' km en ' + app.fmtDurationShort(profile.refRace.durationSec),
     racePace: pace ? app.fmtPace(pace / 60) + ' /km' : null,
     peakKm: Number.isFinite(schedule.peakKm) ? r1(schedule.peakKm) : null,
     limited: !!schedule.limited,
-    goalPeakKm: caps.PEAK_KM[profile.goal], longCapKm: caps.LONG_CAP_KM[profile.goal],
+    // tope de la tirada del plan por fases: el de la distancia, agrandado si el pico lo pasa (phaseLongCapKm)
+    goalPeakKm: caps.PEAK_KM[profile.goal], longCapKm: app.phaseLongCapKm(profile.goal, schedule.peakKm),
     rows,
   };
 }
 
-// Devuelve los 6 grupos de ejemplos: [{id, title, runs: [{label, rows, ...}]}].
+// Devuelve los grupos de ejemplos (los 6 originales + 5 de transiciones y casos borde): [{id, title, runs: [{label, rows, ...}]}].
 function buildExamples() {
   return exampleDefs().map(g => ({ id: g.id, title: g.title, runs: g.runs.map(runExample) }));
 }
@@ -149,6 +225,7 @@ function tagsOf(row) {
   return t.join(' ');
 }
 function weekLabel(row) {
+  if (row.phase === 'parate') return '-';
   if (row.weeksAfter) return '+' + row.weeksAfter;
   return row.weeksToRace === null ? '-' : String(row.weeksToRace);
 }
@@ -168,8 +245,10 @@ function renderRun(run, md) {
     'Perfil: ' + run.weeklyKm + ' km/sem, dias ' + run.trainingDays + '   Marca de referencia: ' + run.refRace,
     'Ritmo de carrera: ' + (run.racePace || 'sin prediccion') + '   Pico del cronograma (peakKm): ' +
       (run.peakKm === null ? 'n/d' : run.peakKm + ' km') + ' (techo de la distancia ' + run.goalPeakKm + ' km)   limited: ' +
-      run.limited + '   Tope de tirada: ' + run.longCapKm + ' km',
+      run.limited + '   Tope de tirada: ' + run.longCapKm + ' km' + (run.peakAfterKm !== null ? '   Pico despues del evento: ' + run.peakAfterKm + ' km' : ''),
   ];
+  if (run.note) info.push('Escenario: ' + run.note);
+  run.events.forEach(e => info.push('Evento: ' + e));
   if (md) {
     lines.push('### ' + run.label, '');
     info.forEach(l => lines.push('- ' + l));
