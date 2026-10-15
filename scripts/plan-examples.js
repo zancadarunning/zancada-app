@@ -110,7 +110,8 @@ function runExample(def) {
   app.refreshPhaseSchedule();
   const schedule = JSON.parse(JSON.stringify(app.state.phaseSchedule));
   if (def.after) app.Date = makeFrozenDate(app.addDaysToIsoLocal(raceMonday, def.after * 7 + 2) + 'T12:00:00');
-  let wnBase = wn0 + 1;
+  // sin wn0 (los 6 ejemplos originales) las filas siguen numeradas como antes: weekNumber = semana del plan
+  let wnBase = def.wn0 ? wn0 + 1 : 1;
 
   // Semanas a imprimir: desde el ancla hasta la de la carrera (o, con `after`, desde 2 antes de
   // la de la carrera hasta N despues de ella; con showCurrent, desde la semana en curso, -1).
