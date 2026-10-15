@@ -2677,3 +2677,91 @@ test('phasedWeeklyKm con rampStartKm: arranca ahí, llega al pico en la última 
   const hold = Array.from({ length: 19 }, (_, i) => plain(app.phasedWeeklyKm({ goal: '10k' }, { level: 0 }, Object.assign(infoAt(app, 16, i), { rampStartKm: 54, baseKm: 30 }), 30)));
   hold.forEach((w, i) => assert.ok(Math.abs(w.km - (i < 14 && i % 4 === 3 ? 0.75 * 54 : 54)) < 1e-9, `semana ${i}: ${w.km}`));
 });
+
+// Corredor de 21k (35 km/sem) con cronograma creado el 2026-10-14 (ancla 2026-10-19, carrera 18
+// semanas después); su última carrera fue el miércoles de la semana `lastIdx` del plan y vuelve a
+// abrir la app el miércoles de la semana `backIdx`.
+function breakApp(goal, base, lastIdx, backIdx) {
+  const p = fwProfile({ goal, weeklyKm: base, currentWeeklyKm: base });
+  const app = fwApp(p);
+  app.state.onboarded = true;
+  app.state.weekNumber = 1;
+  app.state.weekStart = app.getMondayISO(new app.Date());
+  const anchor = app.addDaysToIsoLocal(app.state.weekStart, 7);
+  p.raceDate = app.addDaysToIsoLocal(anchor, 18 * 7 + 6);
+  app.refreshPhaseSchedule();
+  const lastWeek = app.addDaysToIsoLocal(anchor, lastIdx * 7);
+  // historia: 8 semanas corriendo ~base km hasta la última carrera
+  for (let w = 0; w < 8; w++) {
+    const d = app.addDaysToIsoLocal(lastWeek, -7 * w + 2);
+    app.state.runs.push({ id: 'r' + w, date: d + 'T08:00:00', distanceKm: base, durationSec: base * 330 });
+  }
+  app.state.weekStart = lastWeek;
+  app.state.weekNumber = lastIdx + 2;
+  app.state.plan = plain(app.generatePlan(p, app.state.weekNumber, lastWeek));
+  const back = app.addDaysToIsoLocal(anchor, backIdx * 7);
+  app.Date = makeFrozenDate(app.addDaysToIsoLocal(back, 2) + 'T12:00:00');
+  return { app, p, back };
+}
+
+test('C1: volver de un parate de 4+ semanas a mitad del plan reinicia la rampa desde la base reducida (rollover)', () => {
+  [['21k', 35, 7, 12], ['42k', 40, 4, 12], ['10k', 30, 6, 11]].forEach(([goal, base, lastIdx, backIdx]) => {
+    const { app, p, back } = breakApp(goal, base, lastIdx, backIdx);
+    app.checkWeekRollover();
+    const label = `${goal} base ${base}`;
+    assert.equal(app.state.weekStart, back, label);
+    const reset = app.state.weekNumber;
+    assert.ok(reset === 1 || reset === 2, `${label}: weekNumber reiniciado (${reset})`);
+    const reduced = p.weeklyKm;
+    assert.ok(reduced < base, label);
+    // el plan de v4 con el mismo perfil reducido y el weekNumber reiniciado: la referencia segura
+    const sched = app.state.phaseSchedule;
+    app.state.phaseSchedule = null;
+    const v4Target = reduced * app.weekMultiplier(reset, app.trainingCaution(p), true);
+    const v4Printed = sumDist(plain(app.generatePlan(p, reset, back)));
+    app.state.phaseSchedule = sched;
+    const target = engineKm(app, p, back);
+    if (target !== null) {
+      assert.equal(sched.anchor, back, `${label}: la rampa arranca en la semana de la vuelta`);
+      assert.ok(Math.abs(target - v4Target) < 1e-9, `${label}: objetivo ${target} vs v4 ${v4Target}`);
+    }
+    const printed = sumDist(app.state.plan);
+    assert.ok(printed <= v4Printed * 1.06 + 1, `${label}: primera semana ${printed} km vs v4 ${v4Printed}`);
+    // y la semana siguiente sigue subiendo de a un paso, no salta al volumen de antes del parate
+    const nextWs = app.addDaysToIsoLocal(back, 7);
+    const next = engineKm(app, p, nextWs);
+    if (next !== null && target !== null) assert.ok(next <= target * 1.06 + 1e-9, `${label}: semana siguiente ${next} vs ${target}`);
+  });
+});
+
+test('C1: "Armar plan de regreso" (applyReturnPlan) con un parate largo reinicia la rampa igual', () => {
+  const { app, p, back } = breakApp('21k', 35, 6, 12);
+  // la app ya pasó el lunes (rollover hecho sin detectar parate: el corredor lo pide desde la tarjeta)
+  app.state.weekStart = back;
+  app.state.weekNumber = 14;
+  app.state.breakAdjLastRunMs = null;
+  app.state.plan = plain(app.generatePlan(p, 14, back));
+  const before = sumDist(app.state.plan);
+  app.applyReturnPlan();
+  assert.equal(p.returningFromBreak, true);
+  const reset = app.state.weekNumber;
+  assert.equal(reset, 2);
+  const sched = app.state.phaseSchedule;
+  app.state.phaseSchedule = null;
+  const v4Printed = sumDist(plain(app.generatePlan(p, reset, back)));
+  app.state.phaseSchedule = sched;
+  const after = sumDist(app.state.plan);
+  assert.ok(after <= v4Printed * 1.06 + 1, `vuelta ${after} km vs v4 ${v4Printed} (antes ${before})`);
+  assert.equal(sched.anchor, back);
+  assert.ok(Math.abs(engineKm(app, p, back) - p.weeklyKm * app.weekMultiplier(2, app.trainingCaution(p), true)) < 1e-9);
+});
+
+test('C1: si desde la vuelta ya no quedan 4 semanas útiles, el plan vuelve a v4 con el weekNumber reiniciado', () => {
+  const { app, p, back } = breakApp('10k', 30, 10, 16);
+  app.checkWeekRollover();
+  assert.equal(app.state.weekStart, back);
+  assert.equal(app.phaseForWeek(p, back, app.state.phaseSchedule).active, false);
+  const reset = app.state.weekNumber;
+  app.state.phaseSchedule = null;
+  assert.deepEqual(plain(app.state.plan), plain(app.generatePlan(p, reset, back)));
+});

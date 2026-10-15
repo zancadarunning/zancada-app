@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-15T15:04:40Z';
+const APP_VERSION = '2026-10-15T15:06:51Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4849,6 +4849,29 @@ function fillPhaseScheduleVolume(sched, goal, baseKm, startKm, caution, R){
   sched.rampStartKm = startKm;
   return sched;
 }
+// Vuelta de un parate largo (computeReturnFromBreakAdjustment con weekNumberReset: rollover de
+// checkWeekRollover o "Armar plan de regreso"). v4 se protege reiniciando weekNumber (la curva vuelve
+// a empezar); el plan por fases no mira weekNumber, así que hay que reiniciar su rampa: el cronograma
+// se rearma con ancla en la semana de la vuelta (state.weekStart), la base ya reducida y la rampa
+// arrancando en lo mismo que daría v4 con el weekNumber reiniciado. Si desde ahí ya no quedan 4
+// semanas útiles (R < 4) el cronograma queda sin pico (inactivo) y manda v4 con su reinicio. Solo si
+// la semana de la vuelta era de rampa / pico / taper: en post / maintenance el volumen ya se ajusta
+// solo con la base reducida (postRaceWeeklyKm). Llamar DESPUÉS de reducir weeklyKm y reiniciar
+// weekNumber/weekStart, y antes de generar la semana.
+function restartPhaseRampAfterBreak(){
+  const cur = state.phaseSchedule, p = state.profile;
+  if(!cur || !p || !state.weekStart || isBeginnerProfile(p)) return;
+  const info = phaseForWeek(p, state.weekStart, cur);
+  if(!info.active || isPostRacePhase(info.phase)) return;
+  const sched = { anchor: state.weekStart, raceDate: cur.raceDate, goal: cur.goal };
+  const R = phaseScheduleR(sched);
+  if(R !== null && phaseSplit(R)){
+    const base = phaseEffectiveWeeklyKm(p, false), caution = trainingCaution(p);
+    fillPhaseScheduleVolume(sched, p.goal, base, base * weekMultiplier(state.weekNumber || 1, caution, true), caution, R);
+  }
+  state.phaseSchedule = sched;
+  refreshPhaseNow();
+}
 // Volumen de "continuación" de un cronograma en la semana que arranca el lunes `mondayIso`: lo que
 // esa semana iba a pedir SIN descarga (la rampa en base/build/specific, el pico en peak/taper -- el
 // taper lo aplica generatePlan aparte --, el de recuperación / mantenimiento después de la carrera),
@@ -5414,7 +5437,7 @@ function checkWeekRollover(){
     if(!state.planHistory) state.planHistory = [];
     const prevMonday = new Date(state.weekStart || currentMonday);
     const diffWeeks = Math.max(1, Math.round((new Date(currentMonday) - prevMonday)/(7*86400000)));
-    let adjustNote = null, recapMsg = null, goalUpsellMsg = null, breakMsg = null;
+    let adjustNote = null, recapMsg = null, goalUpsellMsg = null, breakMsg = null, breakReset = false;
     let promotedPlan = null, promotedWeekNumber = (state.weekNumber||1) + diffWeeks, promotedWeekStart = currentMonday;
     const breakAdj = (state.breakAdjLastRunMs && state.breakAdjLastRunMs === lastRunTimeMs()) ? null : computeReturnFromBreakAdjustment(detectTrainingGapWeeks(state.weekStart));
     if(state.weekStart && state.plan && state.plan.length){
@@ -5431,7 +5454,7 @@ function checkWeekRollover(){
       }
       if(breakAdj){
         state.profile.weeklyKm = Math.max(5, Math.round(state.profile.weeklyKm * breakAdj.kmFactor));
-        if(breakAdj.weekNumberReset) promotedWeekNumber = breakAdj.weekNumberReset;
+        if(breakAdj.weekNumberReset){ promotedWeekNumber = breakAdj.weekNumberReset; breakReset = true; }
         breakMsg = t('coach_return_from_break', {weeks: breakAdj.gapWeeks});
         // checkWeekRollover() solo corre una vez por transición real de semana (no en cada
         // render), así que esto es un "che, tanto tiempo" genuino, no algo que se repita cada
@@ -5462,6 +5485,9 @@ function checkWeekRollover(){
     }
     state.weekNumber = promotedWeekNumber;
     state.weekStart = promotedWeekStart;
+    // Parate largo: v4 reinicia weekNumber; el plan por fases reinicia su rampa desde la semana de la
+    // vuelta con la base ya reducida (ver restartPhaseRampAfterBreak).
+    if(breakReset) restartPhaseRampAfterBreak();
     refreshPhaseNow(); // la semana actual cambió: la fase que muestra la UI también
     state.plan = promotedPlan || generatePlan(state.profile, state.weekNumber);
     // Ver checkPlanAlgoVersion(): esto ya corrió generatePlan con el código de HOY, así que
@@ -7461,7 +7487,10 @@ function applyReturnPlan(){
   p.returningFromBreak = true;
   p.currentWeeklyKm = Math.max(5, Math.round(info.prev));
   p.weeklyKm = calcWeeklyKm(p);
-  if(adj && adj.weekNumberReset) state.weekNumber = adj.weekNumberReset;
+  if(adj && adj.weekNumberReset){
+    state.weekNumber = adj.weekNumberReset;
+    restartPhaseRampAfterBreak(); // mismo reinicio que el rollover con parate largo
+  }
   state.plan = preserveLivedDays(state.plan, generatePlan(p, state.weekNumber || 1));
   state.breakAdjLastRunMs = info.last;
   state.chat.push({role: 'coach', text: t('return_done_msg'), ts: Date.now()});
