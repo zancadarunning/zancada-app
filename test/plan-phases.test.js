@@ -109,6 +109,10 @@ function runGoldenCase(c, nowIso) {
 
 module.exports = { goldenCases, runGoldenCase, FROZEN_NOWS, GOLDEN_PATH };
 
+// La foto dorada (test/support/plan-golden-v4.json) se generó UNA vez, a partir de v4 en el commit
+// 48759b6 (antes del plan por fases), y NO se regenera: es la prueba de que los usuarios fuera del plan
+// por fases reciben exactamente el plan de siempre. Si este test falla, el cambio tocó v4: se arregla
+// el código, no la foto.
 test('plan v4: sin cambios para casos fuera de alcance', () => {
   const golden = JSON.parse(fs.readFileSync(GOLDEN_PATH, 'utf8'));
   const cases = goldenCases();
@@ -1820,23 +1824,7 @@ test('plan en pantalla: sin fase activa (phaseNow null) no se muestra nada nuevo
   assert.equal(els['plan-phase-note'].style.display, 'none');
 });
 
-test('contexto de Zonda: con fase activa incluye la fase y las semanas que faltan, en singular y plural', () => {
-  const cases = [
-    [{ phase: 'base', weeksToRace: 12, limited: false, peakKm: 50 }, ' Fase actual del plan: base (faltan 12 semanas para la carrera objetivo).'],
-    [{ phase: 'build', weeksToRace: 9, limited: true, peakKm: 50 }, ' Fase actual del plan: desarrollo (faltan 9 semanas para la carrera objetivo).'],
-    [{ phase: 'specific', weeksToRace: 4, limited: false }, ' Fase actual del plan: específica (faltan 4 semanas para la carrera objetivo).'],
-    [{ phase: 'peak', weeksToRace: 1, limited: false }, ' Fase actual del plan: pico (falta 1 semana para la carrera objetivo).'],
-    [{ phase: 'taper', weeksToRace: 0, limited: false }, ' Fase actual del plan: reducción final (esta es la semana de la carrera objetivo).'],
-  ];
-  cases.forEach(([phaseNow, sentence]) => {
-    const { app } = planScreenApp(null);
-    const before = app.buildContext();
-    app.state.phaseNow = phaseNow;
-    const after = app.buildContext();
-    assert.ok(after.includes(sentence), `${sentence} en ${after.slice(0, 600)}`);
-    assert.equal(after.replace(sentence, ''), before, 'solo agrega esa frase');
-  });
-});
+// (contexto de Zonda con fase activa: ver la prueba M2 más abajo -- solo la fase, sin un segundo conteo de semanas)
 
 test('contexto de Zonda: sin fase activa el texto es exactamente el de siempre (ni el volumen pico)', () => {
   const { app } = planScreenApp(null);
@@ -3159,4 +3147,145 @@ test('I5: en la rampa (20-50 km, 4-6 días) ninguna semana impresa completa pasa
     prev[key] = km;
   });
   assert.ok(pairs > 3000, `pares: ${pairs}`);
+});
+
+// ---- Fix wave: menores ----
+
+test('M2: el contexto de Zonda nombra la fase sin un segundo conteo de semanas (el de la carrera ya está)', () => {
+  [['base', 'base'], ['build', 'desarrollo'], ['specific', 'específica'], ['peak', 'pico'], ['taper', 'reducción final']].forEach(([phase, label]) => {
+    const { app } = planScreenApp(null);
+    const before = app.buildContext();
+    app.state.phaseNow = { phase, weeksToRace: 7, limited: false, peakKm: 50 };
+    const after = app.buildContext();
+    const sentence = ` Fase actual del plan: ${label}.`;
+    assert.ok(after.includes(sentence), after.slice(0, 400));
+    assert.equal(after.replace(sentence, ''), before, 'solo agrega esa frase');
+    assert.ok(!after.includes('faltan 7 semanas para la carrera objetivo'));
+  });
+});
+
+test('M3: al refrescar el estado desde el servidor, phaseNow se recalcula (no queda el guardado)', async () => {
+  const vm = require('node:vm');
+  const p = racingProfile();
+  const sched = withPeak(loadApp(), p, SCHEDULE);
+  const { app } = phasedApp(p, sched);
+  app.setCurrentUserId('u1');
+  const server = { onboarded: true, profile: plain(p), phaseSchedule: plain(sched), weekStart: BUILD_WEEK, weekNumber: 5, runs: [], plan: [], chat: [],
+    phaseNow: { phase: 'base', weeksToRace: 99, limited: false, peakKm: 1 } };
+  vm.runInContext('supabaseClient', app).from = () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { data: server, updated_at: '2026-10-28T00:00:00Z' } }) }) }) });
+  await app.refreshStateFromServer();
+  const now = vm.runInContext('state.phaseNow', app);
+  assert.equal(now.phase, 'build');
+  assert.equal(now.weeksToRace, 14);
+});
+
+test('M4: una versión del plan más nueva que la de este build no se regenera (build viejo instalado)', () => {
+  const { app } = phasedApp(racingProfile(), null);
+  app.state.onboarded = true;
+  app.state.weekStart = BUILD_WEEK;
+  const plan = [{ day: 'tue', typeKey: 'easy', dist: 7, zone: 2 }];
+  app.state.plan = plan;
+  app.state.planAlgoVersion = 6;
+  app.checkPlanAlgoVersion();
+  assert.equal(app.state.plan, plan);
+  assert.equal(app.state.planAlgoVersion, 6);
+});
+
+test('M5: la nota del pico limitado solo sale si el pico queda por debajo del 90% del de la distancia', () => {
+  // 21k: pico de la distancia 55 -> umbral 49,5
+  const close = planScreenApp({ phase: 'base', weeksToRace: 5, limited: true, peakKm: 52 });
+  close.app.renderPlan();
+  assert.equal(close.els['plan-phase-note'].textContent, close.app.t('plan_phase_line', { phase: close.app.t('plan_phase_base'), weeks: 5 }));
+  const far = planScreenApp({ phase: 'base', weeksToRace: 5, limited: true, peakKm: 49 });
+  far.app.renderPlan();
+  assert.ok(far.els['plan-phase-note'].textContent.includes(far.app.t('plan_peak_limited_note', { km: '49', unit: 'km' })));
+  // 10k con 42,6 de 45 (el caso de la revisión): sin nota
+  const ten = planScreenApp({ phase: 'base', weeksToRace: 5, limited: true, peakKm: 42.6 }, { goal: '10k' });
+  ten.app.renderPlan();
+  assert.ok(!ten.els['plan-phase-note'].textContent.includes('\n'), ten.els['plan-phase-note'].textContent);
+});
+
+test('M7: phaseRampCount / phaseRampSteps / phaseRampCutback no tiran con R < 4', () => {
+  const app = loadApp();
+  [3, 2, 0, -1, NaN].forEach(R => {
+    assert.doesNotThrow(() => app.phaseRampCount(R), String(R));
+    assert.equal(app.phaseRampCount(R), 0, String(R));
+    assert.equal(app.phaseRampSteps(R), 1, String(R));
+    assert.equal(app.phaseRampCutback(3, R), false, String(R));
+  });
+});
+
+test('M11: t() reemplaza un marcador repetido y no interpreta $& en los valores', () => {
+  const app = loadApp();
+  const out = app.t('desc_racepace_long_suffix', { km: '5', pace: '$&', unit: 'km' });
+  assert.ok(!out.includes('{'), out);
+  assert.ok(out.split('km').length - 1 >= 2, out);
+  assert.ok(out.includes('$&'), out);
+});
+
+test('M11: finishOnboard crea el cronograma con la rampa que arranca en lo de v4 para la semana 2', async () => {
+  const vm = require('node:vm');
+  const app = loadApp();
+  app.Date = makeFrozenDate('2026-10-28T12:00:00');
+  app.persist = () => Promise.resolve();
+  app.renderChat = () => {}; app.seedCoachGreeting = () => {};
+  const vals = { 'ob-name': 'Ana', 'ob-weight': '60', 'ob-height': '165', 'ob-birth': '1990-01-01', 'ob-currentkm': '30', 'ob-goal': '21k', 'ob-racedate': '2027-03-14' };
+  const choice = { '#ob-runnertype': 'active', '#ob-terrain': 'asfalto', '#ob-trainby': 'distance', '#ob-gender': 'f' };
+  const days = ['tue', 'wed', 'fri', 'sun'];
+  app.document.getElementById = id => ({ id, value: vals[id] || '', checked: false, style: {}, textContent: '', innerHTML: '', dataset: {}, classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } }, querySelectorAll: () => [], querySelector: () => null, setAttribute() {}, addEventListener() {}, focus() {}, appendChild() {}, insertAdjacentHTML() {}, getAttribute() { return null; } });
+  app.document.querySelector = sel => {
+    for (const k in choice) if (sel.startsWith(k)) return { dataset: { v: choice[k] } };
+    const m = sel.match(/data-v="(\w+)"/);
+    return m ? { classList: { contains: () => days.includes(m[1]) } } : null;
+  };
+  try { await app.finishOnboard(); } catch (e) { /* lo que viene después del cronograma (saludo, pantallas) no importa acá */ }
+  const st = vm.runInContext('state', app);
+  assert.equal(st.weekNumber, 1);
+  assert.equal(st.phaseSchedule.anchor, '2026-11-02');
+  assert.equal(st.phaseSchedule.raceDate, '2027-03-14');
+  assert.ok(Math.abs(st.phaseSchedule.rampStartKm - 30 * 1.06) < 1e-9, String(st.phaseSchedule.rampStartKm));
+  assert.equal(st.phaseSchedule.baseKm, 30);
+});
+
+test('M11: guardar Datos personales con fecha nueva ("a partir de ahora") reemplaza el cronograma y regenera la semana', () => {
+  const p = racingProfile();
+  const { app } = phasedApp(p, withPeak(loadApp(), p, SCHEDULE), '2026-12-02T12:00:00');
+  app.renderAll = () => {}; app.renderPerfil = () => {}; app.flashSaved = () => {};
+  app.state.weekStart = '2026-11-30';
+  app.state.weekNumber = 6;
+  app.state.plan = plain(app.generatePlan(p, 6, '2026-11-30'));
+  app.openPlanChangeTimingModal('personal', { raceDate: p.raceDate });
+  p.raceDate = '2027-04-04';
+  app.resolvePlanChangeTiming('now');
+  assert.equal(app.state.phaseSchedule.raceDate, '2027-04-04');
+  assert.equal(app.state.phaseSchedule.anchor, '2026-12-07');
+  assert.equal(app.state.plan.length, 7);
+});
+
+test('M11: plan por fases con cautela >= 2 (60+ años): sin series ni cuestas, un día fuerte, crecimiento <= 4% y pico <= 1,5 x base', () => {
+  const p = fwProfile({ goal: '21k', birth: '1960-01-01' });
+  const app = fwApp(p);
+  assert.equal(app.trainingCaution(p).level, 2);
+  app.state.weekNumber = 1;
+  app.state.weekStart = app.getMondayISO(new app.Date());
+  const anchor = app.addDaysToIsoLocal(app.state.weekStart, 7);
+  p.raceDate = app.addDaysToIsoLocal(anchor, 16 * 7 + 6);
+  app.refreshPhaseSchedule();
+  const s = app.state.phaseSchedule;
+  assert.ok(s.peakKm <= 30 * 1.5 + 1e-9, `pico ${s.peakKm}`);
+  let prevFull = null;
+  for (let idx = 0; idx <= 18; idx++) {
+    const ws = app.addDaysToIsoLocal(anchor, idx * 7);
+    const info = app.phaseForWeek(p, ws, s);
+    for (let wn = 1; wn <= 4; wn++) {
+      const plan = plain(app.generatePlan(p, idx + wn, ws));
+      assert.ok(!plan.some(d => d.typeKey === 'intervals' || d.typeKey === 'hills'), `idx ${idx} ${info.phase}`);
+      assert.ok(hardCount(plan) <= 1, `idx ${idx} ${info.phase}: ${hardCount(plan)} días fuertes`);
+    }
+    if (['base', 'build', 'specific', 'peak'].includes(info.phase) && !app.phaseIsCutbackWeek(info)) {
+      const km = engineKm(app, p, ws);
+      if (prevFull !== null) assert.ok(km <= prevFull * 1.04 + 1e-9, `idx ${idx}: ${km} / ${prevFull}`);
+      prevFull = km;
+    }
+  }
 });

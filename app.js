@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-15T18:47:53Z';
+const APP_VERSION = '2026-10-15T18:52:30Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1396,6 +1396,8 @@ async function loadUserAndEnter(user, isRetry){
         state = pending.data; lang = state.lang || lang;
         persist();
       }
+      // phaseNow guardado puede ser de otra semana (se guardó la semana pasada): se deriva de nuevo
+      refreshPhaseNow();
       // El idioma guardado en la cuenta puede no ser el que index.html adivinó por
       // navigator.language y cargó de entrada (alguien que configuró el teléfono en
       // inglés pero eligió español en Perfil, por ejemplo) -- si es otro, hace falta
@@ -4395,8 +4397,9 @@ function phaseSplit(R){
   // sentido): esas semanas se reparten entre build/specific/peak nada más.
   const hasBase = n >= 8;
   // Fracción de cada fase, redondeada con Math.round y con mínimo 1 semana por fase presente.
-  // 'build' NO se redondea: absorbe la diferencia para que la suma dé exactamente n (es la
-  // fase más larga y la que menos se nota si pierde o gana una semana por el redondeo).
+  // 'build' NO se redondea: absorbe la diferencia para que la suma dé exactamente n. Suele ser la
+  // fase más larga pero no siempre (R=10 da 3/2/3/2, R=11 3/3/3/2, R=14 4/4/4/2): con pocas semanas el
+  // redondeo de base/specific se lleva una de más; es la fase que menos se nota si pierde una.
   const frac = hasBase ? { base: 0.25, specific: 0.25, peak: 0.15 } : { base: 0, specific: 0.4, peak: 0.15 };
   const weeks = f => Math.max(1, Math.round(frac[f] * n));
   const base = hasBase ? weeks('base') : 0;
@@ -4524,7 +4527,10 @@ function phaseRampSteps(R){
   return Math.max(1, rampCount - Math.floor(rampCount / 4));
 }
 // Semanas de rampa (base/build/specific) de R semanas útiles: todas menos las 'peak'. >= 3 si R >= 4.
-function phaseRampCount(R){ return R - phaseSplit(R).filter(x => x === 'peak').length; }
+function phaseRampCount(R){
+  const split = phaseSplit(R);
+  return split ? R - split.filter(x => x === 'peak').length : 0; // R < 4: sin plan por fases, sin rampa
+}
 // ¿La semana weekIdx es una descarga de la rampa? Cada 4ta semana de rampa (índices 3, 7, 11...).
 // Es LA regla de phasedWeeklyKm; la pantalla del plan la usa para la etiqueta de descarga.
 function phaseRampCutback(weekIdx, R){ return weekIdx < phaseRampCount(R) && weekIdx % 4 === 3; }
@@ -5040,11 +5046,15 @@ function phaseLineText(pn){
   let text = pn.weeksToRace === 0 ? t('plan_phase_line_race', {phase})
     : pn.weeksToRace === 1 ? t('plan_phase_line_one', {phase})
     : t('plan_phase_line', {phase, weeks: pn.weeksToRace});
-  if(pn.limited && Number.isFinite(pn.peakKm)) text += '\n' + t('plan_peak_limited_note', {km: fmtDist(pn.peakKm, 0), unit: distUnit()});
+  // Solo si el recorte es de verdad (pico < 90% del de la distancia): 42,6 de 45 km no amerita nota.
+  // `limited` del cronograma no cambia (es el dato); el umbral es solo de esta pantalla.
+  const goalPeak = state.profile && PEAK_KM[state.profile.goal];
+  const worthIt = !(goalPeak > 0) || pn.peakKm < 0.9 * goalPeak;
+  if(pn.limited && Number.isFinite(pn.peakKm) && worthIt) text += '\n' + t('plan_peak_limited_note', {km: fmtDist(pn.peakKm, 0), unit: distUnit()});
   return text;
 }
 // Frase para el contexto de Zonda (siempre en español, como el resto de buildContext). No incluye
-// el pico: solo la fase y cuánto falta. '' sin fase activa.
+// el pico ni las semanas que faltan (ver abajo): solo la fase. '' sin fase activa.
 const PHASE_CTX_LABEL = { base:'base', build:'desarrollo', specific:'específica', peak:'pico', taper:'reducción final' };
 function phaseCtxSentence(pn){
   // Después de la carrera: que Zonda sepa que ya pasó y en qué fase está el plan, y que la salida
@@ -5056,10 +5066,9 @@ function phaseCtxSentence(pn){
     return ` La carrera objetivo ya pasó; el plan está en fase de ${pn.phase === 'post' ? 'recuperación' : 'mantenimiento'}. Si el corredor quiere seguir con un plan por fases, sugerile elegir una nueva meta (objetivo y fecha de carrera) en Perfil > Datos personales.`;
   }
   if(!pn || !PHASE_CTX_LABEL[pn.phase]) return '';
-  const when = pn.weeksToRace === 0 ? 'esta es la semana de la carrera objetivo'
-    : pn.weeksToRace === 1 ? 'falta 1 semana para la carrera objetivo'
-    : `faltan ${pn.weeksToRace} semanas para la carrera objetivo`;
-  return ` Fase actual del plan: ${PHASE_CTX_LABEL[pn.phase]} (${when}).`;
+  // Solo la fase: cuántas semanas faltan para la carrera ya va en el contexto (weeksLeft, contado en
+  // días / 7); un segundo conteo con otra cuenta (weeksToRace, por lunes) podía diferir en 1.
+  return ` Fase actual del plan: ${PHASE_CTX_LABEL[pn.phase]}.`;
 }
 function isRecoveryWeek(weekStartDate){
   // La semana de recuperación es la que arranca el lunes siguiente a una carrera cargada
@@ -5508,6 +5517,9 @@ function checkPlanAlgoVersion(){
   if(state.onboarded) refreshPhaseSchedule();
   if(!state.onboarded || !state.plan || !state.plan.length) return;
   if(state.planAlgoVersion === PLAN_ALGO_VERSION) return;
+  // Un build viejo instalado (app nativa sin actualizar) que ve una versión más nueva, guardada por
+  // otro dispositivo, no la pisa regenerando con su algoritmo viejo.
+  if(state.planAlgoVersion > PLAN_ALGO_VERSION) return;
   // v3 -> v4 solo cambió el plan POR TIEMPO (ahora se arma aparte, ver buildTimePlanDays) y sumó el test de nivel: a quien
   // entrena por distancia no se le rehace la semana (se perderían sus ajustes automáticos de volumen), solo se anota la versión.
   // v4 -> v5 solo suma el volumen por fases (generatePlan), que arranca en la PRÓXIMA semana: el ancla del cronograma es
@@ -9594,6 +9606,8 @@ async function refreshStateFromServer(){
       } else {
         const prevRunIds = new Set((state.runs||[]).map(r=>String(r.id)));
         state = data.data;
+        // el phaseNow que viene del servidor puede ser de otra semana: se deriva de nuevo (ver refreshPhaseNow)
+        refreshPhaseNow();
         // Reportado en una auditoría: esto pisaba state con lo que acaba de llegar del servidor
         // pero nunca actualizaba loadedStateVersion -- checkForRemoteConflict() (más arriba en
         // este archivo) compara justo esta variable contra el updated_at real del servidor para
