@@ -2422,10 +2422,13 @@ test('ya en el plan de B, mover su fecha no revive el mantenimiento de A en la s
   // 2027-06-16 (miércoles): semana de build de B (descarga de su rampa, weekIdx 11)
   app.Date = makeFrozenDate('2027-06-16T12:00:00');
   app.state.weekStart = '2027-06-14';
+  app.state.weekNumber = 16; // la semana actual es la 16 (mismo número que se le pasa a generatePlan abajo)
   app.refreshPhaseNow();
   assert.equal(app.state.phaseNow.phase, 'build');
   assert.ok(!('fromPrev' in app.state.phaseNow));
   const buildKm = sumDist(plain(app.generatePlan(app.state.profile, 16, '2027-06-14')));
+  // la semana de B es descarga: su continuación (semana completa) es buildKm / 0,75 aprox.
+  const contB = app.phaseContinuationKm(app.state.phaseSchedule, '2027-06-14', app.phaseEffectiveWeeklyKm(app.state.profile, false), app.trainingCaution(app.state.profile));
   // se corre la carrera una semana
   app.state.profile.raceDate = '2027-10-17';
   app.refreshPhaseSchedule();
@@ -2438,12 +2441,19 @@ test('ya en el plan de B, mover su fecha no revive el mantenimiento de A en la s
   assert.equal(app.state.phaseNow, null);
   assert.deepEqual(plain(app.phaseForWeek(app.state.profile, '2027-06-14', s)), { active: false });
   const ref = postApp({ raceDate: '2027-10-17' }, null, '2027-06-16T12:00:00').app;
+  // v4 con la misma curva corrida por el empalme (ruling 34: la semana actual sale del cronograma)
+  ref.state.curveWeekOffset = app.state.curveWeekOffset;
   const now = plain(app.generatePlan(app.state.profile, 16, '2027-06-14'));
   assert.deepEqual(now, plain(ref.generatePlan(ref.state.profile, 16, '2027-06-14')));
-  // el volumen sale de la curva de v4 (weekNumber), no del pico de A: con weekNumber 1 v4 da ~30 km,
-  // mientras que el mantenimiento de A daría 42,5 km con cualquier weekNumber. (Con weekNumber 16 la
-  // curva de v4 da justo 45 km y coincide en sesiones con el mantenimiento de A: por eso esta prueba.)
-  assert.ok(Math.abs(sumDist(plain(app.generatePlan(app.state.profile, 1, '2027-06-14'))) - 30) <= 1.5, `build era ${buildKm} km`);
+  // el volumen sale de la curva de v4 empalmada con la semana de B que se reemplazó (ruling 34), no
+  // del pico de A: queda cerca de lo que era esa semana de build de B
+  const nowKm = sumDist(now);
+  const curveKm = Math.max(9, app.phaseEffectiveWeeklyKm(app.state.profile, false)) * app.weekMultiplier(app.legacyCurveWeek(16, app.state.profile), app.trainingCaution(app.state.profile), true);
+  assert.ok(curveKm >= contB - 1e-9 && curveKm <= contB * 1.06 + 1e-9, `curva ${curveKm} vs continuación de B ${contB} (build era ${buildKm} km, descarga)`);
+  assert.ok(Math.abs(nowKm - curveKm) <= curveKm * 0.1 + 1, `ahora ${nowKm} km vs ${curveKm}`);
+  // sin empalme (corrimiento 0) la curva de v4 en la semana 1 da ~30 km, distinto del mantenimiento de A
+  ref.state.curveWeekOffset = 0;
+  assert.ok(Math.abs(sumDist(plain(ref.generatePlan(ref.state.profile, 1, '2027-06-14'))) - 30) <= 1.5);
   const maintA = postApp({}, plain(POST_SCHEDULE_B), '2027-06-16T12:00:00').app;
   // (2027-06-14 es la 12da semana de mantenimiento de A: descarga, 42,5 x 0,75)
   assert.ok(maintA.phaseIsCutbackWeek(maintA.phaseForWeek(maintA.state.profile, '2027-06-14', maintA.state.phaseSchedule)));
@@ -2472,6 +2482,8 @@ test('B sin pico (R<4 tras correr el ancla): después de su carrera, cambiar de 
   assert.equal(app.state.phaseSchedule.prev, undefined);
   assert.equal(app.state.phaseNow, null);
   const ref = postApp({ raceDate: '2027-10-10' }, null, '2027-06-16T12:00:00').app;
+  // v4 con la misma curva corrida por el empalme (ruling 34: la semana actual sale del cronograma)
+  ref.state.curveWeekOffset = app.state.curveWeekOffset;
   assert.deepEqual(plain(app.generatePlan(app.state.profile, 16, '2027-06-14')), plain(ref.generatePlan(ref.state.profile, 16, '2027-06-14')));
 });
 
@@ -2814,26 +2826,34 @@ function midPlanApp(goal, base, weeksToRace, idx, wn0) {
   return { app, p, wk, next: app.addDaysToIsoLocal(wk, 7) };
 }
 // Volumen v4 (objetivo del motor) de la semana número n para el perfil.
-const v4Km = (app, p, n) => Math.max(9, app.phaseEffectiveWeeklyKm(p, false)) * app.weekMultiplier(n, app.trainingCaution(p), true);
+// Volumen v4 (objetivo del motor, sin descarga) de la semana número n, sobre la curva de v4 que usa
+// generatePlan (weekNumber + state.curveWeekOffset, ver legacyCurveWeek).
+const v4Km = (app, p, n) => Math.max(9, app.phaseEffectiveWeeklyKm(p, false)) * app.weekMultiplier(app.legacyCurveWeek(n, p), app.trainingCaution(p), true);
 
-// Empalme: la semana que viene de v4 alcanza la continuación y sube como mucho un paso más (dos si la
-// actual se corrió para no caer en una descarga de v4); ni la actual ni la siguiente son descarga de v4.
-function assertBridge(app, nextV4, cont, growth, msg) {
-  const wn = app.state.weekNumber;
-  const limit = (wn % 4 === 1 && wn > 1) ? growth * growth : growth;
-  assert.ok(nextV4 >= cont - 1e-9 && nextV4 <= cont * limit + 1e-9, msg);
-  assert.ok(wn % 4 !== 0 && (wn + 1) % 4 !== 0, 'sin descarga de v4 en la semana actual ni en la siguiente: ' + wn);
+// Empalme (ruling 34): en el primer lunes que el cronograma nuevo no cubre (semana número n), la curva de
+// v4 alcanza la continuación del saliente y la pasa como mucho en un paso de crecimiento; esa semana de
+// la curva nunca es una descarga de v4. Si la base declarada ya supera la continuación, el piso de v4 es
+// la base (curva en la semana 1): ese caso queda documentado (no se recorta).
+function assertBridge(app, p, n, cont, growth, msg) {
+  const v = v4Km(app, p, n);
+  const curve = app.legacyCurveWeek(n, p);
+  assert.ok(v >= cont - 1e-9, `${msg}: ${v} < ${cont}`);
+  if (curve > 1) assert.ok(v <= cont * growth + 1e-9, `${msg}: ${v} > ${cont} x ${growth}`);
+  assert.ok(curve % 4 !== 0, `${msg}: semana ${curve} de la curva es descarga`);
 }
+// Continuación del cronograma `old` en el lunes `ws` (semana completa).
+const contAt = (app, p, old, ws) => app.phaseContinuationKm(old, ws, app.phaseEffectiveWeeklyKm(p, false), app.trainingCaution(p));
 
 test('I4: dejar el plan por fases (meta general en mantenimiento) no salta al volumen de v4 de weekNumber alto', () => {
   const { app, p, wk, next } = midPlanApp('10k', 30, 10, 16); // carrera en la semana 10: idx 16 = mantenimiento
   assert.equal(app.phaseForWeek(p, wk, app.state.phaseSchedule).phase, 'maintenance');
   const growth = app.growthParams(app.trainingCaution(p)).growth;
-  const cont = engineKm(app, p, next) / (app.phaseIsCutbackWeek(app.phaseForWeek(p, next, app.state.phaseSchedule)) ? 0.75 : 1);
+  const wn = app.state.weekNumber;
+  const cont = contAt(app, p, app.state.phaseSchedule, next);
   app.applyProfileChange({ objetivo: 'general' });
   assert.equal(app.state.phaseSchedule, null);
-  const nextV4 = v4Km(app, p, app.state.weekNumber + 1);
-  assertBridge(app, nextV4, cont, growth, `semana siguiente v4 ${nextV4} vs mantenimiento ${cont}`);
+  assert.equal(app.state.weekNumber, wn, 'la semana mostrada no cambia de número');
+  assertBridge(app, p, wn + 1, cont, growth, 'semana siguiente');
   // lo que se imprime también: la semana que viene (getNextWeekPlan) no salta
   const printed = sumDist(app.getNextWeekPlan().plan);
   assert.ok(printed <= cont * growth * 1.1 + 1, `impresa ${printed} vs ${cont}`);
@@ -2842,12 +2862,12 @@ test('I4: dejar el plan por fases (meta general en mantenimiento) no salta al vo
 test('I4: una carrera nueva con menos de 4 semanas útiles empalma la curva de v4 con el volumen que venía', () => {
   const { app, p, wk, next } = midPlanApp('5k', 30, 16, 9); // pico 35; v4 en weekNumber 11 daría ~45
   const growth = app.growthParams(app.trainingCaution(p)).growth;
-  const info = app.phaseForWeek(p, next, app.state.phaseSchedule);
-  const cont = engineKm(app, p, next) / (app.phaseIsCutbackWeek(info) ? 0.75 : 1);
+  const cont = contAt(app, p, app.state.phaseSchedule, next);
+  const wn = app.state.weekNumber;
   app.applyProfileChange({ fecha_carrera: app.addDaysToIsoLocal(wk, 3 * 7 + 6) }); // R < 4
   assert.equal(app.phaseForWeek(p, next, app.state.phaseSchedule).active, false);
-  const nextV4 = v4Km(app, p, app.state.weekNumber + 1);
-  assertBridge(app, nextV4, cont, growth, `v4 ${nextV4} vs ${cont}`);
+  assert.equal(app.state.weekNumber, wn);
+  assertBridge(app, p, wn + 1, cont, growth, 'semana siguiente');
 });
 
 test('I4: reemplazar el cronograma a mitad de plan ("a partir de ahora") no salta la semana actual a v4', () => {
@@ -2863,7 +2883,7 @@ test('I4: reemplazar el cronograma a mitad de plan ("a partir de ahora") no salt
   assert.ok(nowV4 <= current * growth + 1e-9 && nowV4 >= current / growth / growth - 1e-9, `semana actual v4 ${nowV4} vs ${current}`);
 });
 
-test('I4: el empalme no toca weekNumber si no había plan por fases o si la semana actual sigue cubierta', () => {
+test('I4: el empalme no toca weekNumber ni la curva si no había plan por fases; volver a fases la pone en 0', () => {
   const p = fwProfile({ goal: '10k' });
   const app = fwApp(p);
   app.state.onboarded = true;
@@ -2872,24 +2892,80 @@ test('I4: el empalme no toca weekNumber si no había plan por fases o si la sema
   p.raceDate = app.addDaysToIsoLocal(app.state.weekStart, 7 + 12 * 7 + 6);
   app.refreshPhaseSchedule(); // entrada desde v4: weekNumber queda igual
   assert.equal(app.state.weekNumber, 20);
+  assert.ok(!app.state.curveWeekOffset, 'cronograma activo: sin corrimiento de la curva');
   p.goal = 'general';
   const fresh = fwApp(p);
   fresh.state.weekNumber = 20;
   fresh.state.weekStart = app.state.weekStart;
   fresh.refreshPhaseSchedule(); // sin cronograma antes: nada que empalmar
   assert.equal(fresh.state.weekNumber, 20);
+  assert.ok(!fresh.state.curveWeekOffset);
+  // con un corrimiento de una salida anterior, elegir una carrera nueva arranca la rampa en ESA curva y lo vuelve a 0
+  const back = fwApp(fwProfile({ goal: '10k' }));
+  back.state.weekNumber = 20;
+  back.state.curveWeekOffset = -15; // la curva de v4 iba en la semana 5
+  back.state.weekStart = app.state.weekStart;
+  back.state.profile.raceDate = p.raceDate;
+  back.refreshPhaseSchedule();
+  assert.ok(Math.abs(back.state.phaseSchedule.rampStartKm - 30 * back.weekMultiplier(6, { level: 0 }, true)) < 1e-9, String(back.state.phaseSchedule.rampStartKm));
+  assert.equal(back.state.curveWeekOffset, 0);
 });
 
-test('I4: deshacer el cambio que terminó el plan por fases devuelve también el weekNumber', () => {
+test('I4: deshacer el cambio que terminó el plan por fases devuelve el cronograma y la curva', () => {
   const { app, p } = midPlanApp('10k', 30, 10, 16);
   const wn = app.state.weekNumber;
   const sched = plain(app.state.phaseSchedule);
   app.applyProfileChange({ objetivo: 'general' });
-  assert.notEqual(app.state.weekNumber, wn);
+  assert.ok(app.state.curveWeekOffset < 0, String(app.state.curveWeekOffset));
   app.applyUndoLastChange();
   assert.equal(app.state.weekNumber, wn);
+  assert.ok(!app.state.curveWeekOffset);
   assert.deepEqual(plain(app.state.phaseSchedule), sched);
   assert.equal(app.state.profile.goal, '10k');
+});
+
+test('W2-A: carrera nueva con < 4 semanas útiles elegida en la recuperación o el mantenimiento: sin salto al terminar el prev', () => {
+  // casos del re-review (rr_prev.js): 21k/35 en mantenimiento -> 10k en 4 semanas; desde post 1 -> 10k en
+  // 5 semanas; 10k/30 en mantenimiento -> 10k en 4 semanas. Carrera vieja en la semana 16 del plan.
+  [['21k', 35, 20, 4], ['21k', 35, 17, 5], ['10k', 30, 21, 4], ['5k', 50, 21, 3]].forEach(([goal, base, idx, weeksOut]) => {
+    const { app, p, wk } = midPlanApp(goal, base, 16, idx);
+    const old = app.state.phaseSchedule;
+    const label = `${goal} ${base} idx ${idx} -> 10k en ${weeksOut}`;
+    const wn = app.state.weekNumber;
+    const growth = app.growthParams(app.trainingCaution(p)).growth;
+    app.applyProfileChange({ objetivo: '10k', fecha_carrera: app.addDaysToIsoLocal(wk, weeksOut * 7 + 6) });
+    const s = app.state.phaseSchedule;
+    assert.ok(s && s.prev && !Number.isFinite(s.peakKm), `${label}: el nuevo tiene prev y no tiene rampa`);
+    assert.equal(app.state.weekNumber, wn, label);
+    // primer lunes que el cronograma nuevo no cubre
+    let k = 1, T = app.addDaysToIsoLocal(wk, 7);
+    while (app.phaseForWeek(p, T, s).active) { k++; T = app.addDaysToIsoLocal(wk, 7 * k); }
+    const cont = contAt(app, p, old, T);
+    assertBridge(app, p, wn + k, cont, growth, `${label} (lunes ${T})`);
+    // y la semana impresa ahí (con el taper de la carrera nueva encima, si toca) no salta
+    const printed = sumDist(plain(app.generatePlan(p, wn + k, T)));
+    assert.ok(printed <= cont * growth * 1.1 + 1, `${label}: impresa ${printed} vs ${cont}`);
+    // las semanas de en medio siguen siendo la recuperación / mantenimiento de la carrera vieja
+    for (let j = 1; j < k; j++) assert.ok(app.isPostRacePhase(app.phaseForWeek(p, app.addDaysToIsoLocal(wk, 7 * j), s).phase), label);
+  });
+});
+
+test('W2-B: cambiar la carrera o salir del plan no mueve el número de semana ni el historial', () => {
+  [['21k', 16, 6, '+1w'], ['10k', 10, 18, 'general'], ['21k', 16, 9, 'r<4']].forEach(([goal, W, idx, change]) => {
+    const { app, p, wk } = midPlanApp(goal, 35, W, idx);
+    app.state.planHistory = [];
+    for (let k = -1; k < idx; k++) app.state.planHistory.push({ weekNumber: k + 2, weekStart: app.addDaysToIsoLocal(wk, 7 * (k - idx)), plan: [] });
+    const wn = app.state.weekNumber;
+    const before = plain(app.getWeekData(-1));
+    if (change === '+1w') app.applyProfileChange({ fecha_carrera: app.addDaysToIsoLocal(p.raceDate, 7) });
+    else if (change === 'general') app.applyProfileChange({ objetivo: 'general' });
+    else app.applyProfileChange({ fecha_carrera: app.addDaysToIsoLocal(wk, 3 * 7 + 6) });
+    assert.equal(app.state.weekNumber, wn, change);
+    const after = plain(app.getWeekData(-1));
+    assert.deepEqual(after, before, change);
+    assert.equal(after.weekStart, app.addDaysToIsoLocal(wk, -7), change);
+    assert.equal(after.exists, true, change);
+  });
 });
 
 const HARD_KEYS = ['tempo', 'intervals', 'hills', 'fartlek', 'progression'];

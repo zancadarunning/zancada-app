@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-15T18:52:30Z';
+const APP_VERSION = '2026-10-15T20:32:42Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3819,7 +3819,7 @@ async function finishOnboard(){
   state.onboarded = true;
   // Cronograma del plan por fases para la carrera elegida (null si no califica), con su pico
   // ya calculado. Directo, sin refreshPhaseSchedule(): el persist() de más abajo ya lo guarda y evita una escritura doble.
-  state.phaseSchedule = newPhaseSchedule(state.profile, new Date(), state.phaseSchedule, state.weekNumber);
+  state.phaseSchedule = newPhaseSchedule(state.profile, new Date(), state.phaseSchedule, legacyCurveWeek(state.weekNumber, state.profile));
   refreshPhaseNow();
   state.lang = lang;
   state.voiceEnabled = true;
@@ -4861,46 +4861,62 @@ function applyPhaseRacePace(days, phaseInfo, goal, easyOnly, withLongBlock){
 // (refreshPhaseNow), también cuando el cronograma no cambió.
 function refreshPhaseSchedule(){
   const cur = state.phaseSchedule || null;
-  const next = newPhaseSchedule(state.profile, new Date(), cur, state.weekNumber);
+  const next = newPhaseSchedule(state.profile, new Date(), cur, legacyCurveWeek(state.weekNumber, state.profile));
   if(!next){
-    if(cur){ bridgePhaseExitWeekNumber(cur, null); state.phaseSchedule = null; refreshPhaseNow(); persist(); }
+    if(cur){ bridgePhaseExitCurve(cur, null); state.phaseSchedule = null; refreshPhaseNow(); persist(); }
     else refreshPhaseNow();
     return;
   }
   if(cur && cur.raceDate === next.raceDate && cur.goal === next.goal){ refreshPhaseNow(); return; }
-  if(cur) bridgePhaseExitWeekNumber(cur, next);
+  if(cur) bridgePhaseExitCurve(cur, next);
+  else if(Number.isFinite(next.peakKm)) state.curveWeekOffset = 0; // entrada desde v4: la rampa ya arrancó en esa curva
   state.phaseSchedule = next;
   refreshPhaseNow();
   persist();
 }
-// Empalme con v4 cuando el plan por fases deja de mandar en la semana actual (meta sin carrera, una
-// carrera con menos de 4 semanas útiles, o un cronograma nuevo que arranca recién el lunes que viene y
-// la semana actual se regenera "a partir de ahora"). v4 calcula con weekMultiplier(state.weekNumber),
-// y weekNumber siguió sumando durante todo el plan por fases: sin esto la semana v4 saltaba a su
-// curva de semana 20-30 (de 36 km de mantenimiento a 54). Se elige el weekNumber para que la semana
-// que viene (weekNumber + 1, la que arma getNextWeekPlan y la que promueve el rollover) sea la primera
-// de la curva de v4 que alcanza el volumen de continuación del cronograma saliente
-// (phaseContinuationKm en el lunes siguiente): nunca menos (no baja) y como mucho un paso de
-// crecimiento más. Puede BAJAR weekNumber (es justamente el salto que hay que evitar; quedarse con
-// el más alto de los dos repetiría el salto), con el mismo efecto que ya tiene el reinicio por parate
-// largo sobre la etiqueta "Semana N". No toca nada si la semana actual sigue cubierta por el
-// cronograma nuevo (prev de una carrera pasada) o si el saliente no tenía nada activo el lunes que
-// viene, ni con un principiante (su volumen de v4 no sale de weeklyKm).
-function bridgePhaseExitWeekNumber(outgoing, next){
+// Semana de la curva de v4 (weekMultiplier / descarga periódica) que le toca a la semana número
+// `weekNumber`: el número de semana más state.curveWeekOffset (ver bridgePhaseExitCurve), nunca menos
+// de 1. weekNumber sigue siendo el número que se muestra ("Semana N") y la llave del historial; solo la
+// curva de volumen de v4 se corre. Sin corrimiento (undefined, estados guardados antes) o para un
+// principiante (su volumen no sale de esa curva sola), es el mismo weekNumber.
+function legacyCurveWeek(weekNumber, p){
+  const wn = weekNumber || 1;
+  const off = typeof state !== 'undefined' && state && Number.isFinite(state.curveWeekOffset) ? state.curveWeekOffset : 0;
+  if(!off || (p && isBeginnerProfile(p))) return wn;
+  return Math.max(1, wn + off);
+}
+// Empalme con v4 cuando el plan por fases deja de cubrir semanas (meta sin carrera, una carrera con menos
+// de 4 semanas útiles -- también elegida en la recuperación de la anterior, cuyo prev cubre unas semanas
+// más --, o un cronograma nuevo que arranca recién el lunes que viene y la semana actual se regenera "a
+// partir de ahora"). v4 calcula con weekMultiplier(weekNumber), y weekNumber siguió sumando durante todo el
+// plan por fases: sin esto la semana v4 saltaba a su curva de semana 20-30 (de 36 km de mantenimiento a
+// 54). En vez de tocar weekNumber (que es la etiqueta "Semana N" y la llave del historial: moverlo dejaba
+// la semana pasada vacía o en otra fecha) se corre solo la curva: state.curveWeekOffset, que generatePlan
+// suma en el camino de v4 (legacyCurveWeek). T = el primer lunes, desde el que viene, que el cronograma
+// nuevo no cubre; el corrimiento hace que la curva en T sea la primera semana de v4 que alcanza la
+// continuación del saliente en T (phaseContinuationKm, sin descarga): nunca menos y como mucho un paso de
+// crecimiento más, y nunca una descarga de v4 (weekMultiplier(4k) sin descarga vale lo mismo que 4k-1, así
+// que la búsqueda frena antes). Si el cronograma nuevo cubre todas las semanas (otra rampa), el
+// corrimiento vuelve a 0. Sin T a la vista o sin continuación, no toca nada; tampoco con un principiante.
+function bridgePhaseExitCurve(outgoing, next){
   const p = state.profile;
   if(!outgoing || !p || !state.weekStart || isBeginnerProfile(p)) return;
-  if(next && phaseForWeek(p, state.weekStart, next).active) return;
+  const covered = j => !!next && phaseForWeek(p, addDaysToIsoLocal(state.weekStart, 7 * j), next).active;
+  // Un reemplazo que arranca el lunes que viene deja afuera solo la semana actual: esa es T (por si se
+  // regenera "a partir de ahora"). Si no, T es el primer lunes sin cubrir desde el que viene.
+  let k = null;
+  if(!covered(0) && covered(1)) k = 0;
+  else for(let j = 1; j <= 104; j++){ if(!covered(j)){ k = j; break; } }
+  if(k === null){ state.curveWeekOffset = 0; return; }
+  const T = addDaysToIsoLocal(state.weekStart, 7 * k);
   const base = phaseEffectiveWeeklyKm(p, false), caution = trainingCaution(p);
-  const cont = phaseContinuationKm(outgoing, addDaysToIsoLocal(state.weekStart, 7), base, caution);
+  const cont = phaseContinuationKm(outgoing, T, base, caution);
   if(cont === null) return;
   const ref = Math.max(9, base); // mismo piso que generatePlan
   const { cap } = growthParams(caution);
   let n = 1;
   while(n < 200 && ref * weekMultiplier(n, caution, true) < cont - 1e-9 && weekMultiplier(n, caution, true) < cap) n++;
-  // n = la semana que viene (nunca múltiplo de 4: weekMultiplier(4k) sin descarga vale lo mismo que
-  // 4k-1, así que la búsqueda frena antes). La actual queda en n-1, salvo que n-1 sea una descarga
-  // de v4 (múltiplo de 4): regenerarla "a partir de ahora" la bajaría a 0,75; ahí la actual es n.
-  state.weekNumber = n - 1 >= 1 && (n - 1) % 4 !== 0 ? n - 1 : n;
+  state.curveWeekOffset = n - ((state.weekNumber || 1) + k);
 }
 // Cronograma nuevo (makePhaseSchedule) con el pico semanal y `limited` ya calculados A PARTIR
 // DEL PERFIL, una sola vez al crearlo/reemplazarlo: así no dependen de qué vista (semana actual,
@@ -4917,7 +4933,7 @@ function bridgePhaseExitWeekNumber(outgoing, next){
 // que v4 iba a dar esa semana (base x weekMultiplier(weekNumber + semanas hasta el ancla), sin
 // descarga). Sin eso la rampa arrancaba siempre en la base declarada y entrar al plan, o mover la
 // carrera a mitad de camino, bajaba de golpe el volumen (de 46 a 29 km en un corredor de la semana 13).
-// `weekNumber` = el número de la semana actual (state.weekNumber; 1 si falta).
+// `weekNumber` = la semana de la curva de v4 de la semana actual (legacyCurveWeek(state.weekNumber); 1 si falta).
 // Si solo se mueve el día de la carrera DENTRO de la misma semana (misma meta, plan en curso), el
 // cronograma es el mismo: se conserva entero (ancla, rampa, pico, prev) y solo cambia raceDate.
 function newPhaseSchedule(p, today, outgoing, weekNumber){
@@ -4982,7 +4998,7 @@ function restartPhaseRampAfterBreak(){
 // con la base de hoy (baseKmNow, mismo escalado que generatePlan). null si ese cronograma no tenía
 // nada activo ese lunes (no existe, antes de su ancla sin prev, carrera pasada sin pico, R < 4).
 // Es lo que no puede perderse cuando ese cronograma deja de mandar: el que lo reemplaza arranca ahí
-// (newPhaseSchedule) y, si nada lo reemplaza, v4 retoma desde ahí (bridgePhaseExitWeekNumber). PURA.
+// (newPhaseSchedule) y, si nada lo reemplaza, v4 retoma desde ahí (bridgePhaseExitCurve). PURA.
 function phaseContinuationKm(schedule, mondayIso, baseKmNow, caution){
   if(!schedule) return null;
   const info = phaseForWeek({ raceDate: schedule.raceDate, goal: schedule.goal }, mondayIso, schedule);
@@ -5564,7 +5580,7 @@ function checkWeekRollover(){
       }
       if(breakAdj){
         state.profile.weeklyKm = Math.max(5, Math.round(state.profile.weeklyKm * breakAdj.kmFactor));
-        if(breakAdj.weekNumberReset){ promotedWeekNumber = breakAdj.weekNumberReset; breakReset = true; }
+        if(breakAdj.weekNumberReset){ promotedWeekNumber = breakAdj.weekNumberReset; breakReset = true; state.curveWeekOffset = 0; }
         breakMsg = t('coach_return_from_break', {weeks: breakAdj.gapWeeks});
         // checkWeekRollover() solo corre una vez por transición real de semana (no en cada
         // render), así que esto es un "che, tanto tiempo" genuino, no algo que se repita cada
@@ -6077,7 +6093,7 @@ function generatePlan(p, weekNumber, weekStartDate){
     // clampPhaseLongRun y el reparto de spreadPhaseShortfall
     phaseInfo.longCapKm = phaseLongCapKm(p.goal, phased.peakKm);
   } else {
-    weekFactor = weekMultiplier(weekNumber, caution, skipPeriodicCutback);
+    weekFactor = weekMultiplier(legacyCurveWeek(weekNumber, p), caution, skipPeriodicCutback);
   }
   // generatePlan NO escribe state.phaseSchedule ni state.phaseNow: también arma semanas de vista
   // previa (con otro weeklyKm), así que no puede ser la fuente de eso -- ver refreshPhaseNow.
@@ -6105,7 +6121,7 @@ function generatePlan(p, weekNumber, weekStartDate){
   // Descarga de intensidad / tirada: con fases manda la del plan por fases (la misma semana en la que
   // baja el volumen, phaseIsCutbackWeek); weekNumber no tiene relación con weekIdx y las dos cadencias
   // se desfasaban (semana peak de 5k sin sesión fuerte, tirada de descarga en una semana completa).
-  const cutback = phaseInfo.active ? phaseIsCutbackWeek(phaseInfo) : isCutbackWeek(weekNumber);
+  const cutback = phaseInfo.active ? phaseIsCutbackWeek(phaseInfo) : isCutbackWeek(legacyCurveWeek(weekNumber, p));
   const sessionMap = distributeSessionTypes(trainingDays, beginner, weekNumber, caution, cutback, p.goal, varietyOk, sessionPhase);
   // La recuperación del plan por fases ('post') sigue el mismo criterio de sesiones (solo suaves).
   if(isRecovery || postGoalRaceMult < 1 || postRaceWeek){
@@ -7654,6 +7670,7 @@ function applyReturnPlan(){
   p.weeklyKm = calcWeeklyKm(p);
   if(adj && adj.weekNumberReset){
     state.weekNumber = adj.weekNumberReset;
+    state.curveWeekOffset = 0; // la curva de v4 vuelve a empezar con el weekNumber reiniciado
     restartPhaseRampAfterBreak(); // mismo reinicio que el rollover con parate largo
   }
   state.plan = preserveLivedDays(state.plan, generatePlan(p, state.weekNumber || 1));
@@ -8344,7 +8361,7 @@ function renderPlan(){
   // activa (o principiante, que generatePlan deja fuera de las fases) sigue la de siempre.
   const shownPhase = wd.weekStart && state.profile && !isBeginnerProfile(state.profile)
     ? phaseForWeek(state.profile, wd.weekStart, state.phaseSchedule) : { active: false };
-  const isShownCutback = shownPhase.active ? phaseIsCutbackWeek(shownPhase) : isCutbackWeek(wn);
+  const isShownCutback = shownPhase.active ? phaseIsCutbackWeek(shownPhase) : isCutbackWeek(legacyCurveWeek(wn, state.profile));
   const isPlainCutbackWeek = wd.exists && wd.mode!=='future' && isShownCutback && !isEventWeek;
   // "Semana N" solo -- las etiquetas de estado van en #plan-week-tags, una fila aparte (ver
   // el comentario largo junto a esa clase en el CSS). Antes se concatenaban todas acá mismo,
@@ -16305,8 +16322,9 @@ function captureUndoSnapshot(){
     // el cronograma por fases incluido: sin él, deshacer un cambio de carrera/meta rearma uno
     // NUEVO anclado a la semana que viene en vez de volver al original
     phaseSchedule: state.phaseSchedule ? JSON.parse(JSON.stringify(state.phaseSchedule)) : null,
-    // terminar o reemplazar el plan por fases puede mover weekNumber (bridgePhaseExitWeekNumber)
-    weekNumber: state.weekNumber
+    // terminar o reemplazar el plan por fases corre la curva de v4 (bridgePhaseExitCurve)
+    weekNumber: state.weekNumber,
+    curveWeekOffset: state.curveWeekOffset || 0
   };
 }
 function applyUndoLastChange(){
@@ -16317,6 +16335,7 @@ function applyUndoLastChange(){
   // primero el cronograma original; refreshPhaseSchedule lo conserva si sigue coincidiendo con el perfil restaurado
   if('phaseSchedule' in state.coachUndoSnapshot) state.phaseSchedule = state.coachUndoSnapshot.phaseSchedule;
   if(state.coachUndoSnapshot.weekNumber > 0) state.weekNumber = state.coachUndoSnapshot.weekNumber;
+  if('curveWeekOffset' in state.coachUndoSnapshot) state.curveWeekOffset = state.coachUndoSnapshot.curveWeekOffset;
   refreshPhaseSchedule();
   refreshPhaseNow();
   state.coachUndoSnapshot = null; // un solo nivel: no se puede deshacer dos veces seguidas
