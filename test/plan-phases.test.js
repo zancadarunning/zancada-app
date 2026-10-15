@@ -2765,3 +2765,100 @@ test('C1: si desde la vuelta ya no quedan 4 semanas útiles, el plan vuelve a v4
   app.state.phaseSchedule = null;
   assert.deepEqual(plain(app.state.plan), plain(app.generatePlan(p, reset, back)));
 });
+
+// Corredor con cronograma creado en la semana v4 `wn0` y el reloj en el miércoles de la semana `idx`
+// del plan (weekNumber = wn0 + idx + 1, como lo deja el rollover).
+function midPlanApp(goal, base, weeksToRace, idx, wn0) {
+  const p = fwProfile({ goal, weeklyKm: base, currentWeeklyKm: base });
+  const app = fwApp(p);
+  app.state.onboarded = true;
+  app.state.weekNumber = wn0 || 1;
+  app.state.weekStart = app.getMondayISO(new app.Date());
+  const anchor = app.addDaysToIsoLocal(app.state.weekStart, 7);
+  p.raceDate = app.addDaysToIsoLocal(anchor, weeksToRace * 7 + 6);
+  app.refreshPhaseSchedule();
+  const wk = app.addDaysToIsoLocal(anchor, idx * 7);
+  app.Date = makeFrozenDate(app.addDaysToIsoLocal(wk, 2) + 'T12:00:00');
+  app.state.weekStart = wk;
+  app.state.weekNumber = (wn0 || 1) + idx + 1;
+  app.state.plan = plain(app.generatePlan(p, app.state.weekNumber, wk));
+  return { app, p, wk, next: app.addDaysToIsoLocal(wk, 7) };
+}
+// Volumen v4 (objetivo del motor) de la semana número n para el perfil.
+const v4Km = (app, p, n) => Math.max(9, app.phaseEffectiveWeeklyKm(p, false)) * app.weekMultiplier(n, app.trainingCaution(p), true);
+
+// Empalme: la semana que viene de v4 alcanza la continuación y sube como mucho un paso más (dos si la
+// actual se corrió para no caer en una descarga de v4); ni la actual ni la siguiente son descarga de v4.
+function assertBridge(app, nextV4, cont, growth, msg) {
+  const wn = app.state.weekNumber;
+  const limit = (wn % 4 === 1 && wn > 1) ? growth * growth : growth;
+  assert.ok(nextV4 >= cont - 1e-9 && nextV4 <= cont * limit + 1e-9, msg);
+  assert.ok(wn % 4 !== 0 && (wn + 1) % 4 !== 0, 'sin descarga de v4 en la semana actual ni en la siguiente: ' + wn);
+}
+
+test('I4: dejar el plan por fases (meta general en mantenimiento) no salta al volumen de v4 de weekNumber alto', () => {
+  const { app, p, wk, next } = midPlanApp('10k', 30, 10, 16); // carrera en la semana 10: idx 16 = mantenimiento
+  assert.equal(app.phaseForWeek(p, wk, app.state.phaseSchedule).phase, 'maintenance');
+  const growth = app.growthParams(app.trainingCaution(p)).growth;
+  const cont = engineKm(app, p, next) / (app.phaseIsCutbackWeek(app.phaseForWeek(p, next, app.state.phaseSchedule)) ? 0.75 : 1);
+  app.applyProfileChange({ objetivo: 'general' });
+  assert.equal(app.state.phaseSchedule, null);
+  const nextV4 = v4Km(app, p, app.state.weekNumber + 1);
+  assertBridge(app, nextV4, cont, growth, `semana siguiente v4 ${nextV4} vs mantenimiento ${cont}`);
+  // lo que se imprime también: la semana que viene (getNextWeekPlan) no salta
+  const printed = sumDist(app.getNextWeekPlan().plan);
+  assert.ok(printed <= cont * growth * 1.1 + 1, `impresa ${printed} vs ${cont}`);
+});
+
+test('I4: una carrera nueva con menos de 4 semanas útiles empalma la curva de v4 con el volumen que venía', () => {
+  const { app, p, wk, next } = midPlanApp('5k', 30, 16, 9); // pico 35; v4 en weekNumber 11 daría ~45
+  const growth = app.growthParams(app.trainingCaution(p)).growth;
+  const info = app.phaseForWeek(p, next, app.state.phaseSchedule);
+  const cont = engineKm(app, p, next) / (app.phaseIsCutbackWeek(info) ? 0.75 : 1);
+  app.applyProfileChange({ fecha_carrera: app.addDaysToIsoLocal(wk, 3 * 7 + 6) }); // R < 4
+  assert.equal(app.phaseForWeek(p, next, app.state.phaseSchedule).active, false);
+  const nextV4 = v4Km(app, p, app.state.weekNumber + 1);
+  assertBridge(app, nextV4, cont, growth, `v4 ${nextV4} vs ${cont}`);
+});
+
+test('I4: reemplazar el cronograma a mitad de plan ("a partir de ahora") no salta la semana actual a v4', () => {
+  // 5k (pico 35) en la semana 10 del plan: v4 en weekNumber 12 daría ~48 km
+  const { app, p, wk } = midPlanApp('5k', 30, 14, 10);
+  const growth = app.growthParams(app.trainingCaution(p)).growth;
+  const current = engineKm(app, p, wk) / (app.phaseIsCutbackWeek(app.phaseForWeek(p, wk, app.state.phaseSchedule)) ? 0.75 : 1);
+  p.raceDate = app.addDaysToIsoLocal(p.raceDate, 14);
+  app.refreshPhaseSchedule();
+  app.applyPersonalDataChangeNow(); // "a partir de ahora": regenera la semana actual
+  assert.equal(app.phaseForWeek(p, wk, app.state.phaseSchedule).active, false, 'la semana actual queda fuera del cronograma nuevo');
+  const nowV4 = v4Km(app, p, app.state.weekNumber);
+  assert.ok(nowV4 <= current * growth + 1e-9 && nowV4 >= current / growth / growth - 1e-9, `semana actual v4 ${nowV4} vs ${current}`);
+});
+
+test('I4: el empalme no toca weekNumber si no había plan por fases o si la semana actual sigue cubierta', () => {
+  const p = fwProfile({ goal: '10k' });
+  const app = fwApp(p);
+  app.state.onboarded = true;
+  app.state.weekNumber = 20;
+  app.state.weekStart = app.getMondayISO(new app.Date());
+  p.raceDate = app.addDaysToIsoLocal(app.state.weekStart, 7 + 12 * 7 + 6);
+  app.refreshPhaseSchedule(); // entrada desde v4: weekNumber queda igual
+  assert.equal(app.state.weekNumber, 20);
+  p.goal = 'general';
+  const fresh = fwApp(p);
+  fresh.state.weekNumber = 20;
+  fresh.state.weekStart = app.state.weekStart;
+  fresh.refreshPhaseSchedule(); // sin cronograma antes: nada que empalmar
+  assert.equal(fresh.state.weekNumber, 20);
+});
+
+test('I4: deshacer el cambio que terminó el plan por fases devuelve también el weekNumber', () => {
+  const { app, p } = midPlanApp('10k', 30, 10, 16);
+  const wn = app.state.weekNumber;
+  const sched = plain(app.state.phaseSchedule);
+  app.applyProfileChange({ objetivo: 'general' });
+  assert.notEqual(app.state.weekNumber, wn);
+  app.applyUndoLastChange();
+  assert.equal(app.state.weekNumber, wn);
+  assert.deepEqual(plain(app.state.phaseSchedule), sched);
+  assert.equal(app.state.profile.goal, '10k');
+});

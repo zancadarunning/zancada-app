@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-15T15:06:51Z';
+const APP_VERSION = '2026-10-15T15:10:42Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4789,14 +4789,44 @@ function refreshPhaseSchedule(){
   const cur = state.phaseSchedule || null;
   const next = newPhaseSchedule(state.profile, new Date(), cur, state.weekNumber);
   if(!next){
-    if(cur){ state.phaseSchedule = null; refreshPhaseNow(); persist(); }
+    if(cur){ bridgePhaseExitWeekNumber(cur, null); state.phaseSchedule = null; refreshPhaseNow(); persist(); }
     else refreshPhaseNow();
     return;
   }
   if(cur && cur.raceDate === next.raceDate && cur.goal === next.goal){ refreshPhaseNow(); return; }
+  if(cur) bridgePhaseExitWeekNumber(cur, next);
   state.phaseSchedule = next;
   refreshPhaseNow();
   persist();
+}
+// Empalme con v4 cuando el plan por fases deja de mandar en la semana actual (meta sin carrera, una
+// carrera con menos de 4 semanas útiles, o un cronograma nuevo que arranca recién el lunes que viene y
+// la semana actual se regenera "a partir de ahora"). v4 calcula con weekMultiplier(state.weekNumber),
+// y weekNumber siguió sumando durante todo el plan por fases: sin esto la semana v4 saltaba a su
+// curva de semana 20-30 (de 36 km de mantenimiento a 54). Se elige el weekNumber para que la semana
+// que viene (weekNumber + 1, la que arma getNextWeekPlan y la que promueve el rollover) sea la primera
+// de la curva de v4 que alcanza el volumen de continuación del cronograma saliente
+// (phaseContinuationKm en el lunes siguiente): nunca menos (no baja) y como mucho un paso de
+// crecimiento más. Puede BAJAR weekNumber (es justamente el salto que hay que evitar; quedarse con
+// el más alto de los dos repetiría el salto), con el mismo efecto que ya tiene el reinicio por parate
+// largo sobre la etiqueta "Semana N". No toca nada si la semana actual sigue cubierta por el
+// cronograma nuevo (prev de una carrera pasada) o si el saliente no tenía nada activo el lunes que
+// viene, ni con un principiante (su volumen de v4 no sale de weeklyKm).
+function bridgePhaseExitWeekNumber(outgoing, next){
+  const p = state.profile;
+  if(!outgoing || !p || !state.weekStart || isBeginnerProfile(p)) return;
+  if(next && phaseForWeek(p, state.weekStart, next).active) return;
+  const base = phaseEffectiveWeeklyKm(p, false), caution = trainingCaution(p);
+  const cont = phaseContinuationKm(outgoing, addDaysToIsoLocal(state.weekStart, 7), base, caution);
+  if(cont === null) return;
+  const ref = Math.max(9, base); // mismo piso que generatePlan
+  const { cap } = growthParams(caution);
+  let n = 1;
+  while(n < 200 && ref * weekMultiplier(n, caution, true) < cont - 1e-9 && weekMultiplier(n, caution, true) < cap) n++;
+  // n = la semana que viene (nunca múltiplo de 4: weekMultiplier(4k) sin descarga vale lo mismo que
+  // 4k-1, así que la búsqueda frena antes). La actual queda en n-1, salvo que n-1 sea una descarga
+  // de v4 (múltiplo de 4): regenerarla "a partir de ahora" la bajaría a 0,75; ahí la actual es n.
+  state.weekNumber = n - 1 >= 1 && (n - 1) % 4 !== 0 ? n - 1 : n;
 }
 // Cronograma nuevo (makePhaseSchedule) con el pico semanal y `limited` ya calculados A PARTIR
 // DEL PERFIL, una sola vez al crearlo/reemplazarlo: así no dependen de qué vista (semana actual,
@@ -16134,7 +16164,9 @@ function captureUndoSnapshot(){
     profile: JSON.parse(JSON.stringify(state.profile)),
     // el cronograma por fases incluido: sin él, deshacer un cambio de carrera/meta rearma uno
     // NUEVO anclado a la semana que viene en vez de volver al original
-    phaseSchedule: state.phaseSchedule ? JSON.parse(JSON.stringify(state.phaseSchedule)) : null
+    phaseSchedule: state.phaseSchedule ? JSON.parse(JSON.stringify(state.phaseSchedule)) : null,
+    // terminar o reemplazar el plan por fases puede mover weekNumber (bridgePhaseExitWeekNumber)
+    weekNumber: state.weekNumber
   };
 }
 function applyUndoLastChange(){
@@ -16144,6 +16176,7 @@ function applyUndoLastChange(){
   state.profile = state.coachUndoSnapshot.profile;
   // primero el cronograma original; refreshPhaseSchedule lo conserva si sigue coincidiendo con el perfil restaurado
   if('phaseSchedule' in state.coachUndoSnapshot) state.phaseSchedule = state.coachUndoSnapshot.phaseSchedule;
+  if(state.coachUndoSnapshot.weekNumber > 0) state.weekNumber = state.coachUndoSnapshot.weekNumber;
   refreshPhaseSchedule();
   refreshPhaseNow();
   state.coachUndoSnapshot = null; // un solo nivel: no se puede deshacer dos veces seguidas
