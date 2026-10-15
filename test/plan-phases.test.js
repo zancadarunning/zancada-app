@@ -3529,3 +3529,71 @@ test('plan-examples: carrera nueva corta elegida en el mantenimiento: la semana 
   assert.ok(after.plan.km <= before.plan.km * 1.10 + 1, `${before.plan.km} -> ${after.plan.km}`);
   assert.ok(after.v4.km > after.plan.km, 'el v4 sin empalme habría saltado más');
 });
+
+// ---- Fix wave 4 (ruling 37): el corrimiento no se borra en semanas servidas por el prev ----
+
+// 10k con base `base`: carrera A en la semana `wkA` del plan; la semana siguiente a A (post 1, miércoles)
+// elige la carrera B (miércoles, `bWeeks` semanas después del ancla de B = lunes de A + 21 días).
+function prevGapApp(base, wkA, bWeeks) {
+  const p = fwProfile({ goal: '10k', weeklyKm: base, currentWeeklyKm: base });
+  const app = fwApp(p);
+  app.state.onboarded = true;
+  app.state.weekNumber = 1;
+  app.state.weekStart = app.getMondayISO(new app.Date());
+  const anchor = app.addDaysToIsoLocal(app.state.weekStart, 7);
+  p.raceDate = app.addDaysToIsoLocal(anchor, wkA * 7 + 6);
+  app.refreshPhaseSchedule();
+  const raceMon = app.addDaysToIsoLocal(anchor, wkA * 7);
+  const wk = app.addDaysToIsoLocal(raceMon, 7);
+  app.Date = makeFrozenDate(wk + 'T08:00:00');
+  app.state.weekStart = wk;
+  app.state.weekNumber = wkA + 3;
+  app.state.plan = plain(app.generatePlan(p, app.state.weekNumber, wk));
+  const anchorB = app.addDaysToIsoLocal(raceMon, 21);
+  p.raceDate = app.addDaysToIsoLocal(anchorB, bWeeks * 7 + 2);
+  app.refreshPhaseSchedule();
+  return { app, p, wk, anchorB };
+}
+// Rollover real a la semana `ws` (con una carrera el día anterior: sin parate).
+function rollTo(app, ws) {
+  app.Date = makeFrozenDate(ws + 'T08:00:00');
+  app.state.runs = [{ id: 'r' + ws, date: app.addDaysToIsoLocal(ws, -1) + 'T08:00:00', distanceKm: 8, durationSec: 2700 }];
+  app.checkWeekRollover();
+  assert.equal(app.state.weekStart, ws);
+}
+
+test('W4: carrera corta elegida en la recuperación: el rollover a una semana del prev no borra el empalme y la semana sin cubrir sale empalmada', () => {
+  // casos del re-review (rv3/prevgap.js): 10k/30 -> 31,8 km en T (sin el arreglo 45,8); 10k/40 -> 33,8 (53,7)
+  [[30, 12, 3, 31.8], [40, 16, 2, 33.8]].forEach(([base, wkA, bWeeks, want]) => {
+    const { app, p, wk, anchorB } = prevGapApp(base, wkA, bWeeks);
+    const s = app.state.phaseSchedule;
+    assert.ok(s.prev && !Number.isFinite(s.peakKm), 'B no tiene rampa (R < 4)');
+    const off = app.state.curveWeekOffset;
+    assert.ok(off < 0, String(off));
+    const mid = app.addDaysToIsoLocal(wk, 7);
+    assert.ok(app.phaseForWeek(p, mid, s).fromPrev, 'la semana siguiente la sirve el prev');
+    rollTo(app, mid);
+    assert.equal(app.state.curveWeekOffset, off, `${base}: el rollover a una semana del prev conserva el empalme`);
+    rollTo(app, anchorB);
+    assert.equal(app.phaseForWeek(p, anchorB, app.state.phaseSchedule).active, false, 'T es v4');
+    assert.equal(app.state.curveWeekOffset, off);
+    const got = sumDist(app.state.plan);
+    assert.ok(Math.abs(got - want) <= 1.5, `${base}: semana en T ${got} km vs ${want}`);
+  });
+});
+
+test('W4: el corrimiento sí vuelve a 0 cuando la semana actual pasa a ser una semana real (no del prev) del plan por fases', () => {
+  // desde la recuperación elige una carrera larga (R >= 4): las semanas antes del ancla las sirve el prev
+  const { app, p, wk, anchorB } = prevGapApp(30, 12, 12);
+  const s = app.state.phaseSchedule;
+  assert.ok(s.prev && Number.isFinite(s.peakKm), 'B con rampa');
+  app.state.curveWeekOffset = -9; // corrimiento de una salida anterior todavía guardado
+  const mid = app.addDaysToIsoLocal(wk, 7);
+  rollTo(app, mid);
+  assert.ok(app.phaseForWeek(p, mid, s).fromPrev);
+  assert.equal(app.state.curveWeekOffset, -9, 'semana del prev: se conserva');
+  rollTo(app, anchorB);
+  const info = app.phaseForWeek(p, anchorB, app.state.phaseSchedule);
+  assert.ok(info.active && !info.fromPrev, 'semana real de B');
+  assert.equal(app.state.curveWeekOffset, 0);
+});

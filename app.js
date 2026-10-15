@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-15T23:43:55Z';
+const APP_VERSION = '2026-10-15T23:51:23Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5635,8 +5635,13 @@ function checkWeekRollover(){
     // vuelta con la base ya reducida (ver restartPhaseRampAfterBreak).
     if(breakReset) restartPhaseRampAfterBreak();
     // Ya es la semana actual una del plan por fases: el corrimiento de la curva de v4 de una salida
-    // anterior no se usa más (si después se sale otra vez, el empalme lo vuelve a calcular).
-    if(state.profile && !isBeginnerProfile(state.profile) && phaseForWeek(state.profile, state.weekStart, state.phaseSchedule).active) state.curveWeekOffset = 0;
+    // anterior no se usa más (si después se sale otra vez, el empalme lo vuelve a calcular). Una semana
+    // servida por el prev (recuperación / mantenimiento de la carrera anterior, antes del ancla) no
+    // cuenta: puede haber un empalme pendiente para el primer lunes que el cronograma nuevo no cubre.
+    if(state.profile && !isBeginnerProfile(state.profile)){
+      const nowInfo = phaseForWeek(state.profile, state.weekStart, state.phaseSchedule);
+      if(nowInfo.active && !nowInfo.fromPrev) state.curveWeekOffset = 0;
+    }
     refreshPhaseNow(); // la semana actual cambió: la fase que muestra la UI también
     state.plan = promotedPlan || generatePlan(state.profile, state.weekNumber);
     // Ver checkPlanAlgoVersion(): esto ya corrió generatePlan con el código de HOY, así que
