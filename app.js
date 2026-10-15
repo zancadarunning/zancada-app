@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-15T15:15:04Z';
+const APP_VERSION = '2026-10-15T15:16:35Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4515,6 +4515,8 @@ function phaseForWeek(p, weekStartDate, schedule){
 // Kilometraje semanal pico por distancia de carrera: lo máximo que el plan por fases busca
 // alcanzar en las semanas 'peak' (techo de la distancia, no una meta para todos).
 const PEAK_KM = { '5k': 35, '10k': 45, '15k': 50, '21k': 55, '42k': 70 };
+// Km oficiales de cada meta con carrera (getGoalRaceKm para el perfil, phaseRacePaceSec para una meta dada).
+const GOAL_RACE_KM = { '5k': 5, '10k': 10, '15k': 15, '21k': 21.0975, '42k': 42.195 };
 // Pasos de crecimiento de la rampa para R semanas útiles: semanas de rampa menos las descargas
 // (semanas 3, 7, 11... con resto 3 módulo 4), que no cuentan como paso. >= 1 porque R >= 4.
 function phaseRampSteps(R){
@@ -4750,16 +4752,28 @@ function applyPhaseLongRun(distMap, usedTypes, targetTotal, phaseInfo, goal, isC
   distMap.long = Math.max(1, Math.min(cap, long));
   clampPhaseLongRun(distMap, usedTypes, phaseInfo, goal);
 }
-// Ritmo de carrera (segundos por km) para una meta: el tiempo que predictRaceTime proyecta para
-// esa distancia dividido por los km. Es lo que se muestra en las sesiones de ritmo de las fases
-// específicas. Recibe la meta como argumento (getGoalRaceKm lee el perfil y se usa en otro lado)
-// y devuelve null si no hay predicción (sin marcas ni carrera de referencia) o la meta no se conoce.
+// Ritmo de carrera (segundos por km) para una meta: la proyección de Riegel para esa distancia
+// dividida por los km. Es lo que se muestra en las sesiones de ritmo de las fases específicas -- y
+// viaja a los relojes (Suunto/Wahoo) dentro del texto de la sesión --, así que SOLO usa datos que no
+// vienen de Strava (nada nuevo se calcula con datos de Strava): la marca de referencia del perfil y
+// las carreras propias (aiVisibleRuns: source !== 'strava') para las marcas, el exponente personal y
+// el margen por distancia; sin la corrección aprendida (raceCalibration), que puede salir de una
+// carrera importada de Strava. Sin ninguna marca así, el test de nivel (raceSecFromVdot con su
+// VDOT); sin nada, null. predictRaceTime (Perfil, calculadora) no cambia.
 function phaseRacePaceSec(goal){
-  const km = {'5k':5, '10k':10, '15k':15, '21k':21.0975, '42k':42.195}[goal];
+  const km = GOAL_RACE_KM[goal];
   if(!km) return null;
-  const pred = predictRaceTime(km);
-  if(!pred || !(pred.predictedSec > 0)) return null;
-  return pred.predictedSec / km;
+  const runs = aiVisibleRuns();
+  const base = predictRaceBase(km, runs);
+  let sec = null;
+  if(base && base.predictedSec > 0){
+    const endurance = enduranceSurcharge(km, runs);
+    sec = base.predictedSec * (1 + (endurance ? endurance.pct : 0));
+  } else {
+    const lt = state.profile && state.profile.levelTest;
+    if(lt && lt.vdot > 0) sec = raceSecFromVdot(lt.vdot, km * 1000);
+  }
+  return sec > 0 ? sec / km : null;
 }
 // Marca en las sesiones del plan por fases el ritmo de carrera de la persona (d.racePaceSec, seg/km):
 // tempo y series en specific / peak / taper (el taper conserva la intensidad: baja el volumen, no el
@@ -7222,8 +7236,9 @@ function racePlanKm(){
 const RIEGEL_BASE = 1.06;
 // Exponente de Riegel de este corredor. Parte de uno según la experiencia (semanas corriendo y km semanales) y, si hay datos de salidas de
 // distintos largos, se mezcla 50/50 con el que sale de sus propias marcas. Sin ninguna carrera ni dato de perfil: el 1,06 clásico.
-function riegelExponent(){
-  const runs = (state.runs || []).filter(r => r && r.distanceKm > 0 && r.durationSec > 0 && r.date);
+function riegelExponent(runList){
+  // runList (opcional): las carreras a mirar en vez de state.runs (ver getPersonalRecords)
+  const runs = (runList || state.runs || []).filter(r => r && r.distanceKm > 0 && r.durationSec > 0 && r.date);
   const p = state.profile || {};
   if(!runs.length && !p.runnerType) return RIEGEL_BASE;
   const now = Date.now();
@@ -7255,10 +7270,10 @@ function riegelExponent(){
 }
 // Margen por falta de distancia: según la salida más larga de las últimas 8 semanas respecto de la carrera. null si no hay carreras recientes
 // (sin datos no se castiga) o si ya llegó a una distancia parecida.
-function enduranceSurcharge(km){
+function enduranceSurcharge(km, runs){
   const cut = Date.now() - 56 * 864e5;
   let longest = 0, any = false;
-  (state.runs || []).forEach(r => { if(r && r.date && new Date(r.date).getTime() >= cut && r.distanceKm > 0){ any = true; if(r.distanceKm > longest) longest = r.distanceKm; } });
+  (runs || state.runs || []).forEach(r => { if(r && r.date && new Date(r.date).getTime() >= cut && r.distanceKm > 0){ any = true; if(r.distanceKm > longest) longest = r.distanceKm; } });
   if(!any || !(km > 0)) return null;
   const ratio = longest / km;
   const pct = ratio >= 0.8 ? 0 : (ratio >= 0.65 ? 0.02 : (ratio >= 0.5 ? 0.04 : (ratio >= 0.35 ? 0.07 : 0.10)));
@@ -12570,11 +12585,13 @@ function runBenefitKey(r){
   if(thisPace <= avgPace*0.92) return 'tempo';
   return 'easy';
 }
-function getPersonalRecords(excludeRunId){
+function getPersonalRecords(excludeRunId, runs){
   // Mejor tiempo registrado por distancia estándar. excludeRunId sirve para comparar
   // una carrera recién agregada contra "lo que había antes" y saber si es récord nuevo.
+  // runs (opcional): la lista a mirar en vez de state.runs (el plan por fases pasa solo las que no
+  // vienen de Strava, ver phaseRacePaceSec); sin él, todas como siempre.
   const records = {};
-  (state.runs||[]).forEach(r=>{
+  (runs || state.runs || []).forEach(r=>{
     if(excludeRunId!=null && String(r.id)===String(excludeRunId)) return;
     if(!r.distanceKm || !r.durationSec) return;
     const bucket = nearestPRBucket(r.distanceKm);
@@ -13145,11 +13162,12 @@ function levelRaceFloor(km){
   return {sec: raceSecFromVdot(lt.vdot, km * 1000) * (1 - allowance), refDistanceKm: (lt.distanceM || 0) / 1000, refDurationSec: 720};
 }
 // Misma proyección de siempre (marca más cercana en distancia) pero con el exponente personal y el piso del test de nivel; sin el margen ni la calibración.
-function predictRaceBase(targetKm){
+function predictRaceBase(targetKm, runs){
   // Estima el tiempo objetivo para `targetKm` con la fórmula de Riegel (T2 = T1 *
   // (D2/D1)^1.06), usando como referencia la marca personal más cercana en distancia
   // (cuanto más parecidas son las distancias, más confiable es la proyección).
-  const records = Object.values(getPersonalRecords());
+  // runs (opcional): limitar marcas y exponente a esas carreras (ver phaseRacePaceSec); sin él, todas.
+  const records = Object.values(getPersonalRecords(null, runs));
   // Misma lógica que estimateBasePaceMinPerKm: si todavía no hay carreras registradas
   // como para tener una PR real, la marca de referencia del onboarding sirve igual de
   // base para la proyección de Riegel.
@@ -13162,7 +13180,7 @@ function predictRaceBase(targetKm){
     if(diff < bestDiff){ bestDiff = diff; best = rec; }
   });
   if(!best) return null;
-  const predictedSec = best.durationSec * Math.pow(targetKm/best.distanceKm, riegelExponent());
+  const predictedSec = best.durationSec * Math.pow(targetKm/best.distanceKm, riegelExponent(runs));
   // con el test de nivel hecho, la proyección no puede ser más rápida que lo que ese nivel permite (con su margen de mejora)
   const floor = levelRaceFloor(targetKm);
   if(floor && predictedSec < floor.sec && floor.refDistanceKm > 0) return { predictedSec: floor.sec, refDistanceKm: floor.refDistanceKm, refDurationSec: floor.refDurationSec, floored: true };
@@ -13176,7 +13194,7 @@ function predictRaceTime(targetKm){
   return Object.assign({}, p, {predictedSec: adj.sec});
 }
 function getGoalRaceKm(){
-  return {'5k':5, '10k':10, '15k':15, '21k':21.0975, '42k':42.195}[state.profile.goal] || null;
+  return GOAL_RACE_KM[state.profile.goal] || null;
 }
 /* ================= CALCULADORA DE RITMO DE CARRERA =================
    Dada una distancia y un tiempo objetivo, arma el plan de ritmo km a km del

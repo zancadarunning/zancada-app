@@ -2949,3 +2949,50 @@ test('I7: modificar_perfil con carrera y km nuevos a la vez calcula el cronogram
   assert.equal(s.peakKm, want.peakKm);
   assert.ok(s.peakKm <= 20 * 1.8 + 1e-9, `pico ${s.peakKm} con base 20`);
 });
+
+// Carreras: una de Strava (rapidísima, 10 km en 40:00) y, opcionalmente, una propia (10 km en 55:00).
+function stravaRuns(withOwn) {
+  const runs = [{ id: 's1', source: 'strava', date: '2026-10-04T08:00:00', distanceKm: 10, durationSec: 2400 }];
+  if (withOwn) runs.push({ id: 'o1', source: 'manual', date: '2026-10-05T08:00:00', distanceKm: 10, durationSec: 3300 });
+  return runs;
+}
+
+test('I3: el ritmo de carrera del plan por fases no usa carreras de Strava (marcas propias o refRace)', () => {
+  const p = racingProfile({ goal: '10k' });
+  const { app } = phasedApp(p, null, '2026-10-14T12:00:00');
+  app.state.runs = stravaRuns(true);
+  // predictRaceTime del resto de la app sigue igual: con la de Strava, 40:00
+  assert.ok(Math.abs(plain(app.predictRaceTime(10)).predictedSec - 2400) < 60, 'Perfil sigue viendo todas las carreras');
+  // el plan por fases solo ve la propia (55:00)
+  const pace = app.phaseRacePaceSec('10k');
+  const own = app.predictRaceBase(10, app.state.runs.filter(r => r.source !== 'strava'));
+  assert.ok(Math.abs(pace - own.predictedSec / 10) < 1e-6, `${pace} vs ${own.predictedSec / 10}`);
+  assert.ok(pace > 300, `ritmo ${pace} s/km no sale de la de Strava (240 s/km)`);
+});
+
+test('I3: solo con carreras de Strava el ritmo sale del test de nivel; sin datos, null', () => {
+  const p = racingProfile({ goal: '21k' });
+  const { app } = phasedApp(p, null, '2026-10-14T12:00:00');
+  app.state.runs = stravaRuns(false);
+  assert.equal(app.phaseRacePaceSec('21k'), null, 'sin refRace, sin propias y sin test: null');
+  p.levelTest = { required: true, done: true, vdot: 45, distanceM: 2900, date: '2026-10-01', paces: { easy: [5.8, 6.6], tempo: [4.7, 4.9], interval: [4.2, 4.4] } };
+  const want = app.raceSecFromVdot(45, 21097.5) / 21.0975;
+  assert.ok(Math.abs(app.phaseRacePaceSec('21k') - want) < 1e-6, `${app.phaseRacePaceSec('21k')} vs ${want}`);
+  // y las sesiones lo llevan
+  const { app: a2 } = phasedApp(Object.assign({}, p), Object.assign(plain(SCHEDULE), { goal: '21k' }), '2026-10-14T12:00:00');
+  a2.state.runs = stravaRuns(false);
+  const week = weekOfPhase(a2, a2.state.profile, a2.state.phaseSchedule, 'specific', 0);
+  const days = [];
+  for (let wn = 1; wn <= 4; wn++) days.push(...plain(a2.generatePlan(a2.state.profile, wn, week)));
+  assert.ok(days.some(d => d.racePaceSec === Math.round(want)), 'specific con el ritmo del test');
+});
+
+test('M6: GOAL_RACE_KM es la tabla única de km por meta (getGoalRaceKm y phaseRacePaceSec)', () => {
+  const app = loadApp();
+  const vm = require('node:vm');
+  assert.deepEqual(plain(vm.runInContext('GOAL_RACE_KM', app)), { '5k': 5, '10k': 10, '15k': 15, '21k': 21.0975, '42k': 42.195 });
+  app.state.profile = { goal: '42k' };
+  assert.equal(app.getGoalRaceKm(), 42.195);
+  app.state.profile = { goal: 'general' };
+  assert.equal(app.getGoalRaceKm(), null);
+});
