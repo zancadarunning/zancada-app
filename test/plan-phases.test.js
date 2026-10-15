@@ -355,8 +355,9 @@ test('phaseForWeek: cruza el cambio de horario (octubre-marzo) sin correr el ín
 // (volumen de referencia del perfil -> phasePeakKm con los pasos de rampa de su R).
 function withPeak(app, p, base) {
   const R = app.phaseScheduleR(base);
-  const pk = app.phasePeakKm(p.goal, app.phaseEffectiveWeeklyKm(p, false), app.trainingCaution(p), app.phaseRampSteps(R));
-  return Object.assign({}, base, { peakKm: pk.peakKm, limited: pk.limited });
+  const baseKm = app.phaseEffectiveWeeklyKm(p, false);
+  const pk = app.phasePeakKm(p.goal, baseKm, app.trainingCaution(p), app.phaseRampSteps(R));
+  return Object.assign({}, base, { peakKm: pk.peakKm, limited: pk.limited, baseKm });
 }
 
 // Prepara una app con reloj congelado y persist() espiado (así no toca red ni disco).
@@ -1893,12 +1894,11 @@ test('generatePlan: en post la recuperación de "Próximos eventos" de la misma 
 });
 
 test('generatePlan: maintenance usa la rotación, la tirada y el reparto de v4 (solo cambia el volumen a 42,5 km)', () => {
-  // 3 días: con fases activas la tirada de 10k quedaría topeada en 16 km; en maintenance no.
-  const days3 = { trainingDays: ['tue', 'thu', 'sun'] };
+  // 5 días: la tirada de v4 (~12 km) queda bajo el tope de 10k, así que el clamp no la toca.
   for (let wn = 1; wn <= 6; wn++) {
     [MAINT_W1, '2027-05-03'].forEach(week => {
-      const got = postApp(days3).app;
-      const v4 = postApp(days3, null).app;
+      const got = postApp().app;
+      const v4 = postApp({}, null).app;
       // v4 con el mismo volumen semanal: weekMultiplier forzado a 42,5 / 30
       v4.weekMultiplier = () => 42.5 / 30;
       const a = plain(got.generatePlan(got.state.profile, wn, week));
@@ -1907,12 +1907,9 @@ test('generatePlan: maintenance usa la rotación, la tirada y el reparto de v4 (
       assert.ok(!a.some(d => 'racePaceSec' in d || 'racePaceBlockKm' in d), 'sin ritmo de carrera');
     });
   }
-  const { app } = postApp(days3);
-  const long = plain(app.generatePlan(app.state.profile, 1, MAINT_W1)).find(d => d.typeKey === 'long');
-  assert.ok(long.dist > 16, `tirada de v4 sin tope por fases: ${long.dist}`);
 });
 
-test('applyPhaseLongRun / clampPhaseLongRun / applyPhaseRacePace no hacen nada en post ni en maintenance', () => {
+test('applyPhaseLongRun / applyPhaseRacePace no hacen nada en post ni maintenance; clampPhaseLongRun solo actúa en maintenance', () => {
   const app = loadApp();
   ['post', 'maintenance'].forEach(phase => {
     const info = { active: true, phase, weeksAfter: 3, peakKm: 50 };
@@ -1921,12 +1918,41 @@ test('applyPhaseLongRun / clampPhaseLongRun / applyPhaseRacePace no hacen nada e
     const before = JSON.stringify(dm);
     app.applyPhaseLongRun(dm, used, 44, info, '10k', false, LR_RATIO);
     assert.equal(JSON.stringify(dm), before, `applyPhaseLongRun ${phase}`);
-    app.clampPhaseLongRun(dm, used, info, '10k');
-    assert.equal(JSON.stringify(dm), before, `clampPhaseLongRun ${phase}`);
     const days = [{ typeKey: 'tempo', dist: 9 }, { typeKey: 'intervals', dist: 8 }, { typeKey: 'long', dist: 25 }];
     const daysBefore = JSON.stringify(days);
     app.applyPhaseRacePace(days, info, '21k', false, true);
     assert.equal(JSON.stringify(days), daysBefore, `applyPhaseRacePace ${phase}`);
+    app.clampPhaseLongRun(dm, used, info, '10k');
+    if (phase === 'post') assert.equal(JSON.stringify(dm), before, 'clampPhaseLongRun post');
+    else assert.deepEqual(plain(dm), { easy: 10, tempo: 9, long: 16, intervals: 0, fartlek: 0, hills: 0, progression: 0 }, 'clamp maintenance: tope 16 de 10k');
+  });
+  // semana corta en maintenance: las demás quedan por debajo de la tirada
+  const dm2 = { easy: 20, tempo: 0, long: 30, intervals: 0, fartlek: 0, hills: 0, progression: 0 };
+  app.clampPhaseLongRun(dm2, ['easy', 'long'], { active: true, phase: 'maintenance' }, '10k');
+  assert.equal(dm2.long, 16);
+  assert.equal(dm2.easy, 15);
+});
+
+test('generatePlan: maintenance con 2-3 días respeta el tope de la tirada y la deja como la sesión más larga (casos del review)', () => {
+  const cases = [
+    ['10k 2 días', { goal: '10k', trainingDays: ['wed', 'sun'] }, Object.assign({}, POST_SCHEDULE)],
+    ['10k 3 días', { goal: '10k', trainingDays: ['tue', 'thu', 'sun'] }, Object.assign({}, POST_SCHEDULE)],
+    ['42k 2 días pico 70', { goal: '42k', trainingDays: ['wed', 'sun'] }, Object.assign({}, POST_SCHEDULE, { goal: '42k', peakKm: 70 })],
+    ['42k 3 días pico 70', { goal: '42k', trainingDays: ['tue', 'thu', 'sun'] }, Object.assign({}, POST_SCHEDULE, { goal: '42k', peakKm: 70 })],
+  ];
+  cases.forEach(([name, overrides, schedule]) => {
+    const cap = LR_CAP[schedule.goal];
+    for (let wn = 1; wn <= 8; wn++) {
+      [MAINT_W1, '2027-04-05', '2027-06-14'].forEach(week => {
+        const { app } = postApp(overrides, plain(schedule));
+        const plan = plain(app.generatePlan(app.state.profile, wn, week));
+        const long = plan.find(d => d.typeKey === 'long');
+        assert.ok(long, `${name} ${week} ${wn}: hay tirada`);
+        assert.ok(long.dist <= cap, `${name} ${week} ${wn}: tirada ${long.dist} > ${cap}`);
+        plan.filter(d => d.typeKey !== 'long' && d.typeKey !== 'rest').forEach(d =>
+          assert.ok(d.dist < long.dist, `${name} ${week} ${wn}: ${d.typeKey} ${d.dist} >= tirada ${long.dist}`));
+      });
+    }
   });
 });
 
@@ -1967,32 +1993,275 @@ test('refreshPhaseNow: post y maintenance llegan a state.phaseNow (weeksToRace 0
   assert.deepEqual(plain(app.state.phaseNow), { phase: 'maintenance', weeksToRace: 0, limited: false, peakKm: 50, weeksAfter: 6 });
 });
 
-test('cambiar a una meta / fecha futura reemplaza el cronograma y deja de aplicar post', () => {
-  // fecha nueva
-  const a = postApp();
-  a.app.state.weekStart = POST_W1;
-  a.app.refreshPhaseSchedule();
-  assert.equal(a.app.state.phaseNow.phase, 'post');
-  a.app.state.profile.raceDate = '2027-10-10';
-  a.app.refreshPhaseSchedule();
-  assert.equal(a.app.state.phaseSchedule.raceDate, '2027-10-10');
-  assert.equal(a.app.state.phaseSchedule.anchor, '2027-03-22');
-  assert.ok(Number.isFinite(a.app.state.phaseSchedule.peakKm));
-  assert.equal(a.app.state.phaseNow, null, 'la semana actual queda antes del ancla nuevo');
-  const next = plain(a.app.phaseForWeek(a.app.state.profile, POST_W2, a.app.state.phaseSchedule));
-  assert.equal(next.active, true);
-  assert.ok(next.phase !== 'post' && next.phase !== 'maintenance', next.phase);
-  const v4 = postApp({ raceDate: '2027-10-10' }, null).app;
-  assert.deepEqual(plain(a.app.generatePlan(a.app.state.profile, 1, POST_W1)), plain(v4.generatePlan(v4.state.profile, 1, POST_W1)));
-  // meta nueva con fecha futura
-  const b = postApp();
-  b.app.state.weekStart = POST_W1;
-  b.app.state.profile.goal = '21k';
-  b.app.state.profile.raceDate = '2027-09-19';
-  b.app.refreshPhaseSchedule();
-  assert.equal(b.app.state.phaseSchedule.goal, '21k');
-  assert.equal(b.app.state.phaseSchedule.raceDate, '2027-09-19');
-  assert.equal(b.app.state.phaseNow, null);
+// Cronograma de la carrera vieja con base guardada (para ver que prev.baseKm se copia).
+const POST_SCHEDULE_B = Object.assign({}, POST_SCHEDULE, { baseKm: 30 });
+const PREV_OF_B = { anchor: '2026-11-02', raceDate: '2027-03-14', goal: '10k', peakKm: 50, baseKm: 30 };
+
+test('elegir una meta nueva en la semana de recuperación (botón del aviso): la recuperación de la carrera vieja se mantiene', () => {
+  // el caso del review: semana post 1 (2027-03-15, miércoles 17), nueva carrera 2027-10-10
+  const { app } = postApp({}, plain(POST_SCHEDULE_B));
+  app.renderAll = () => {}; app.renderPerfil = () => {}; app.flashSaved = () => {};
+  app.state.weekStart = POST_W1;
+  app.state.weekNumber = 1;
+  app.state.runs = [];
+  app.state.plan = plain(app.generatePlan(app.state.profile, 1, POST_W1));
+  app.refreshPhaseNow();
+  assert.equal(app.state.phaseNow.phase, 'post');
+  app.state.profile.raceDate = '2027-10-10';
+  app.refreshPhaseSchedule();
+  const s = app.state.phaseSchedule;
+  assert.equal(s.raceDate, '2027-10-10');
+  assert.equal(s.anchor, MAINT_W1, 'el ancla nuevo espera a que terminen las 2 semanas de recuperación');
+  assert.deepEqual(plain(s.prev), PREV_OF_B);
+  assert.ok(Number.isFinite(s.peakKm) && s.baseKm === 30);
+  // la semana actual sigue siendo post (y "a partir de ahora" la deja así en state.plan)
+  assert.deepEqual(plain(app.state.phaseNow), { phase: 'post', weeksToRace: 0, limited: false, peakKm: 50, weeksAfter: 1, fromPrev: true });
+  const beforeChange = plain(app.state.plan);
+  app.applyPersonalDataChangeNow();
+  // hoy es miércoles: lunes y martes quedan como descanso (preserveLivedDays); de hoy en adelante
+  // el plan de la semana es el mismo de recuperación que tenía antes del cambio
+  assert.deepEqual(plain(app.state.plan).slice(2), beforeChange.slice(2));
+  [[app.generatePlan(app.state.profile, 1, POST_W1), 30], [app.generatePlan(app.state.profile, 2, POST_W2), 40]].forEach(([plan, km]) => {
+    plan = plain(plan);
+    const types = plan.map(d => d.typeKey);
+    POST_HEAVY.forEach(k => assert.ok(!types.includes(k), `${km}: ${types}`));
+    assert.ok(Math.abs(sumDist(plan) - km) <= 1.5, `suma ${sumDist(plan)} vs ${km}`);
+  });
+  const w2 = plain(app.phaseForWeek(app.state.profile, POST_W2, s));
+  assert.equal(w2.phase, 'post');
+  assert.equal(w2.weeksAfter, 2);
+  const a = plain(app.phaseForWeek(app.state.profile, MAINT_W1, s));
+  assert.equal(a.phase, 'base');
+  assert.equal(a.weekIdx, 0);
+  assert.ok(!('fromPrev' in a));
+});
+
+test('meta nueva durante el mantenimiento: ancla = el lunes siguiente y la semana actual sigue en maintenance', () => {
+  const { app } = postApp({}, plain(POST_SCHEDULE_B), '2027-04-14T12:00:00');
+  app.state.weekStart = '2027-04-12'; // weeksAfter 5
+  app.refreshPhaseNow();
+  assert.equal(app.state.phaseNow.phase, 'maintenance');
+  assert.equal(app.state.phaseNow.weeksAfter, 5);
+  app.state.profile.raceDate = '2027-10-10';
+  app.refreshPhaseSchedule();
+  const s = app.state.phaseSchedule;
+  assert.equal(s.anchor, '2027-04-19');
+  assert.deepEqual(plain(s.prev), PREV_OF_B);
+  assert.equal(app.state.phaseNow.phase, 'maintenance');
+  assert.equal(app.state.phaseNow.fromPrev, true);
+  assert.equal(app.state.phaseNow.weeksAfter, 5);
+  const before = plain(app.phaseForWeek(app.state.profile, '2027-04-12', s));
+  assert.equal(before.phase, 'maintenance');
+  const at = plain(app.phaseForWeek(app.state.profile, '2027-04-19', s));
+  assert.equal(at.weekIdx, 0);
+  assert.ok(!app.isPostRacePhase(at.phase), at.phase);
+  // la semana actual sale igual que antes del cambio (mismo volumen y sesiones de mantenimiento)
+  const ref = postApp({}, plain(POST_SCHEDULE_B), '2027-04-14T12:00:00').app;
+  assert.deepEqual(plain(app.generatePlan(app.state.profile, 3, '2027-04-12')), plain(ref.generatePlan(ref.state.profile, 3, '2027-04-12')));
+});
+
+test('meta nueva ANTES de que pase la carrera vieja (también en su misma semana): sin prev, ancla = lunes siguiente', () => {
+  [['2027-02-17T12:00:00', '2027-02-15', '2027-02-22'], ['2027-03-10T12:00:00', '2027-03-08', POST_W1]].forEach(([now, week, nextMonday]) => {
+    const { app } = postApp({}, plain(POST_SCHEDULE_B), now);
+    app.state.weekStart = week;
+    app.state.profile.raceDate = '2027-10-10';
+    app.refreshPhaseSchedule();
+    assert.equal(app.state.phaseSchedule.prev, undefined, now);
+    assert.equal(app.state.phaseSchedule.anchor, nextMonday, now);
+    assert.deepEqual(plain(app.phaseForWeek(app.state.profile, week, app.state.phaseSchedule)), { active: false }, now);
+  });
+});
+
+test('dos cambios de meta seguidos en la recuperación conservan la carrera vieja; prev no se anida', () => {
+  const { app } = postApp({}, plain(POST_SCHEDULE_B));
+  app.state.weekStart = POST_W1;
+  app.state.profile.raceDate = '2027-10-10';
+  app.refreshPhaseSchedule();
+  app.state.profile.raceDate = '2027-11-07';
+  app.refreshPhaseSchedule();
+  const s = app.state.phaseSchedule;
+  assert.equal(s.raceDate, '2027-11-07');
+  assert.equal(s.anchor, MAINT_W1);
+  assert.deepEqual(plain(s.prev), PREV_OF_B);
+  assert.equal(app.state.phaseNow.phase, 'post');
+});
+
+test('sin pico en la carrera vieja o sin prev, las semanas antes del ancla siguen inactivas', () => {
+  const app = loadApp();
+  const p = postProfile({ raceDate: '2027-10-10' });
+  const s = { anchor: MAINT_W1, raceDate: '2027-10-10', goal: '10k', peakKm: 45, baseKm: 30 };
+  assert.deepEqual(plain(app.phaseForWeek(p, POST_W1, s)), { active: false });
+  const sinPico = Object.assign({}, s, { prev: { anchor: '2026-11-02', raceDate: '2027-03-14', goal: '10k' } });
+  assert.deepEqual(plain(app.phaseForWeek(p, POST_W1, sinPico)), { active: false });
+  // prev con pico pero semana anterior a la carrera vieja (weeksAfter < 1) -> inactivo
+  const conPrev = Object.assign({}, s, { prev: PREV_OF_B });
+  assert.deepEqual(plain(app.phaseForWeek(p, '2027-03-08', conPrev)), { active: false });
+  assert.deepEqual(plain(app.phaseForWeek(p, '2027-02-15', conPrev)), { active: false });
+  assert.equal(plain(app.phaseForWeek(p, POST_W1, conPrev)).phase, 'post');
+  // principiante: generatePlan no aplica nada (guard de siempre)
+  const beginner = postProfile({ raceDate: '2027-10-10', runnerType: 'new', weeklyKm: 0, currentWeeklyKm: 0, trainingDays: ['tue', 'thu', 'sun'] });
+  const a = postApp({ raceDate: '2027-10-10', runnerType: 'new', weeklyKm: 0, currentWeeklyKm: 0, trainingDays: ['tue', 'thu', 'sun'] }, plain(conPrev)).app;
+  const b = postApp({ raceDate: '2027-10-10', runnerType: 'new', weeklyKm: 0, currentWeeklyKm: 0, trainingDays: ['tue', 'thu', 'sun'] }, null).app;
+  assert.deepEqual(plain(a.generatePlan(beginner, 1, POST_W1)), plain(b.generatePlan(beginner, 1, POST_W1)));
+});
+
+test('applyUndoLastChange: deshacer restaura el cronograma con su prev', () => {
+  const vm = require('node:vm');
+  const { app } = postApp({}, plain(POST_SCHEDULE_B));
+  app.renderAll = () => {}; app.renderZones = () => {};
+  app.state.weekStart = POST_W1;
+  app.state.weekNumber = 1;
+  app.state.plan = plain(app.generatePlan(app.state.profile, 1, POST_W1));
+  app.applyProfileChange({ fecha_carrera: '2027-10-10' });
+  const conPrev = plain(app.state.phaseSchedule);
+  assert.deepEqual(conPrev.prev, PREV_OF_B);
+  // otro turno del chat: otro cambio, y deshacerlo vuelve al cronograma con prev
+  vm.runInContext('coachUndoTurnSnapshotTaken = false', app);
+  app.applyProfileChange({ fecha_carrera: '2027-11-07' });
+  assert.equal(app.state.phaseSchedule.raceDate, '2027-11-07');
+  app.applyUndoLastChange();
+  assert.deepEqual(plain(app.state.phaseSchedule), conPrev);
+  assert.equal(app.state.phaseNow.phase, 'post');
+});
+
+test('fromPrev: sin aviso de meta nueva en el plan y Zonda no sugiere elegirla (ya la eligió)', () => {
+  const { app, els } = planScreenApp({ phase: 'post', weeksToRace: 0, limited: false, peakKm: 50, weeksAfter: 1, fromPrev: true });
+  app.renderPlan();
+  assert.equal(els['plan-post-race'].style.display, 'none');
+  assert.equal(els['plan-phase-note'].textContent, app.t('plan_phase_line_nogoal', { phase: app.t('plan_phase_post') }));
+  const s = app.phaseCtxSentence(app.state.phaseNow);
+  assert.ok(s.includes('ya pasó') && s.includes('recuperación'), s);
+  assert.ok(!s.includes('sugerile'), s);
+  assert.ok(!/\d/.test(s));
+});
+
+// ---- volumen post / maintenance según la carga real (baseKm) ----
+test('postRaceWeeklyKm: escala por base de hoy / base del cronograma, entre 0,5 y 1; sin base guardada no cambia', () => {
+  const app = loadApp();
+  const p = postProfile();
+  const caution = app.trainingCaution(p);
+  const info = week => app.phaseForWeek(p, week, POST_SCHEDULE_B);
+  const km = (week, base) => app.phasedWeeklyKm(p, caution, info(week), base).km;
+  assert.equal(km(MAINT_W1, 30), 42.5);
+  assert.ok(Math.abs(km(MAINT_W1, 27) - 42.5 * 0.9) < 1e-9, 'x0,9');
+  assert.ok(Math.abs(km(POST_W1, 27) - 30 * 0.9) < 1e-9, 'post también');
+  assert.equal(km(MAINT_W1, 10), 42.5 * 0.5, 'nunca baja de la mitad');
+  assert.equal(km(MAINT_W1, 0), 42.5 * 0.5);
+  assert.equal(km(MAINT_W1, 40), 42.5, 'nunca sube');
+  assert.equal(km(POST_W2, 60), 40);
+  // cronograma sin baseKm (viejo): factor 1
+  const sinBase = app.phaseForWeek(p, MAINT_W1, POST_SCHEDULE);
+  assert.equal(app.phasedWeeklyKm(p, caution, sinBase, 10).km, 42.5);
+  [NaN, 0, -5].forEach(b => {
+    const i = app.phaseForWeek(p, MAINT_W1, Object.assign({}, POST_SCHEDULE, { baseKm: b }));
+    assert.equal(app.phasedWeeklyKm(p, caution, i, 10).km, 42.5, String(b));
+  });
+});
+
+test('generatePlan: el ajuste semanal (vista previa con weeklyKm x 0,9) baja el mantenimiento a 0,9 x', () => {
+  const { app } = postApp({}, plain(POST_SCHEDULE_B));
+  const p = app.state.profile;
+  const full = sumDist(plain(app.generatePlan(p, 1, '2027-04-05')));
+  const preview = Object.assign({}, p, { weeklyKm: 27 }); // como getNextWeekPlan con factor 0,9
+  const scaled = sumDist(plain(app.generatePlan(preview, 1, '2027-04-05')));
+  assert.ok(Math.abs(full - 42.5) <= 1.5, `completo ${full}`);
+  assert.ok(Math.abs(scaled - 42.5 * 0.9) <= 1.5, `x0,9 ${scaled}`);
+  // vuelta de un parate largo (base a la mitad o menos): como mucho la mitad
+  const back = sumDist(plain(app.generatePlan(Object.assign({}, p, { weeklyKm: 9 }), 1, '2027-04-05')));
+  assert.ok(Math.abs(back - 42.5 * 0.5) <= 1.5, `vuelta ${back}`);
+  // getNextWeekPlan usa ese mismo camino (factor del ajuste automático)
+  app.state.weekStart = '2027-03-29';
+  app.state.weekNumber = 3;
+  app.state.plan = plain(app.generatePlan(p, 3, '2027-03-29'));
+  app.state.nextWeekOverrides = {};
+  app.computeWeekAdjustment = () => ({ factor: 0.9 });
+  const nw = plain(app.getNextWeekPlan());
+  assert.equal(nw.weekStart, '2027-04-05');
+  assert.ok(Math.abs(sumDist(nw.plan) - 42.5 * 0.9) <= 1.5, `próxima ${sumDist(nw.plan)}`);
+});
+
+// ---- etiqueta de descarga según el plan por fases ----
+// Pantalla del plan con el perfil/cronograma dados, mostrando la semana `weekStart` como la actual.
+function tagScreen(profileOverrides, schedule, weekStart, weekNumber) {
+  const p = racingProfile(profileOverrides);
+  p.hrZones = { 1: { min: 100, max: 120 }, 2: { min: 120, max: 140 }, 3: { min: 140, max: 155 }, 4: { min: 155, max: 170 }, 5: { min: 170, max: 185 } };
+  const { app } = phasedApp(p, schedule);
+  app.state.weekStart = weekStart;
+  app.state.weekNumber = weekNumber;
+  app.state.plan = plain(app.generatePlan(p, weekNumber, weekStart));
+  app.refreshPhaseNow();
+  const els = {};
+  app.document.getElementById = (id) => {
+    if (!els[id]) els[id] = { id, style: {}, textContent: '', innerHTML: '', disabled: false, classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } }, querySelectorAll: () => [], querySelector: () => null, setAttribute() {}, addEventListener() {} };
+    return els[id];
+  };
+  app.renderPlan();
+  const tag = `>${app.t('plan_cutback')}<`;
+  return { tag: (els['plan-week-tags'].innerHTML || '').includes(tag), note: els['plan-cutback-note'].style.display === 'block' };
+}
+
+test('phaseIsCutbackWeek: coincide con las semanas 0,75 de phasedWeeklyKm, solo en la rampa', () => {
+  const app = loadApp();
+  const p = racingProfile();
+  const caution = app.trainingCaution(p);
+  for (let R = 4; R <= 30; R++) {
+    const split = app.phaseSplit(R);
+    for (let i = 0; i < R + 3; i++) {
+      const phase = i >= R ? 'taper' : split[i];
+      const info = { active: true, phase, weekIdx: i, R };
+      const cut = app.phaseIsCutbackWeek(info);
+      if (i > 0 && phase !== 'peak' && phase !== 'taper') {
+        const prev = { active: true, phase: i - 1 >= R ? 'taper' : split[i - 1], weekIdx: i - 1, R };
+        const km = app.phasedWeeklyKm(p, caution, info, 30).km;
+        const kmPrev = app.phasedWeeklyKm(p, caution, prev, 30).km;
+        assert.equal(cut, km < kmPrev, `R=${R} i=${i}`);
+      }
+      if (phase === 'peak' || phase === 'taper') assert.equal(cut, false, `R=${R} i=${i} ${phase}`);
+    }
+  }
+  assert.equal(app.phaseIsCutbackWeek({ active: true, phase: 'post', weekIdx: 19, R: 16 }), false);
+  assert.equal(app.phaseIsCutbackWeek({ active: true, phase: 'maintenance', weekIdx: 23, R: 16 }), false);
+  assert.equal(app.phaseIsCutbackWeek({ active: false }), false);
+});
+
+test('plan en pantalla: con fases la etiqueta/nota de descarga va en las semanas de descarga de la rampa, no por weekNumber', () => {
+  const sched = plain(SCHEDULE); // 21k, ancla 2026-11-02, R=16
+  // weekIdx 3, 7, 11: descarga aunque weekNumber no sea múltiplo de 4
+  ['2026-11-23', '2026-12-21', '2027-01-18'].forEach(week => {
+    assert.deepEqual(tagScreen({}, sched, week, 1), { tag: true, note: true }, week);
+  });
+  // weekNumber múltiplo de 4 en semanas que no son descarga de la rampa (build, peak, taper)
+  ['2026-11-30', '2027-02-15', '2027-03-01'].forEach(week => {
+    assert.deepEqual(tagScreen({}, sched, week, 4), { tag: false, note: false }, week);
+  });
+  // post y maintenance: nunca
+  const withPeak10 = plain(POST_SCHEDULE);
+  [POST_W1, POST_W2, MAINT_W1, '2027-04-19'].forEach(week => {
+    assert.deepEqual(tagScreen({ goal: '10k' }, withPeak10, week, 4), { tag: false, note: false }, week);
+  });
+});
+
+test('plan en pantalla: sin fase activa (o principiante) la etiqueta de descarga sigue a weekNumber como siempre', () => {
+  // sin cronograma
+  assert.deepEqual(tagScreen({}, null, '2026-11-30', 4), { tag: true, note: true });
+  assert.deepEqual(tagScreen({}, null, '2026-11-23', 3), { tag: false, note: false });
+  // antes del ancla
+  assert.deepEqual(tagScreen({}, plain(SCHEDULE), '2026-10-26', 8), { tag: true, note: true });
+  // principiante con cronograma viejo: legacy
+  const beg = { runnerType: 'new', weeklyKm: 0, currentWeeklyKm: 0, trainingDays: ['tue', 'thu', 'sun'] };
+  assert.deepEqual(tagScreen(beg, plain(SCHEDULE), '2026-11-30', 4), { tag: true, note: true });
+  assert.deepEqual(tagScreen(beg, plain(SCHEDULE), '2026-11-23', 3), { tag: false, note: false });
+});
+
+test('locales: fr y de usan Maintien / Erhaltungsphase para el mantenimiento', () => {
+  const vm = require('node:vm');
+  const dictOf = loc => {
+    const sandbox = {}; sandbox.window = sandbox; vm.createContext(sandbox);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'locales', loc + '.js'), 'utf8'), sandbox);
+    return sandbox.I18N[loc];
+  };
+  assert.equal(dictOf('fr').plan_phase_maintenance, 'Maintien');
+  assert.equal(dictOf('de').plan_phase_maintenance, 'Erhaltungsphase');
 });
 
 test('un cronograma creado con la fecha de carrera ya pasada nunca llega a post ni maintenance (no tiene peakKm)', () => {
