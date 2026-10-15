@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-15T15:10:42Z';
+const APP_VERSION = '2026-10-15T15:14:13Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4526,11 +4526,14 @@ function phaseRampCount(R){ return R - phaseSplit(R).filter(x => x === 'peak').l
 // ¿La semana weekIdx es una descarga de la rampa? Cada 4ta semana de rampa (índices 3, 7, 11...).
 // Es LA regla de phasedWeeklyKm; la pantalla del plan la usa para la etiqueta de descarga.
 function phaseRampCutback(weekIdx, R){ return weekIdx < phaseRampCount(R) && weekIdx % 4 === 3; }
-// ¿La semana descrita por `info` (phaseForWeek) es de descarga en el plan por fases? Solo en la
-// rampa (base/build/specific); nunca en peak, taper, post ni maintenance. PURA.
+// ¿La semana descrita por `info` (phaseForWeek) es de descarga en el plan por fases? En la rampa
+// (base/build/specific) cada 4ta semana de rampa; en mantenimiento, cada 4ta semana de mantenimiento
+// (weekInPhase 4, 8, 12...: x0,75 en postRaceWeeklyKm), para que un mantenimiento sin fin no sea un
+// bloque plano sin descargas. Nunca en peak, taper ni post (post ya es una baja). PURA.
 function phaseIsCutbackWeek(info){
-  return !!(info && info.active && (info.phase === 'base' || info.phase === 'build' || info.phase === 'specific')
-    && phaseRampCutback(info.weekIdx, info.R));
+  if(!info || !info.active) return false;
+  if(info.phase === 'maintenance') return info.weekInPhase > 0 && info.weekInPhase % 4 === 0;
+  return (info.phase === 'base' || info.phase === 'build' || info.phase === 'specific') && phaseRampCutback(info.weekIdx, info.R);
 }
 // Pico semanal {peakKm, limited} para una meta, un volumen base y `steps` pasos de crecimiento.
 // PURA; es la fórmula que usa phasedWeeklyKm (ver su comentario) y la que fija el cronograma.
@@ -4579,7 +4582,7 @@ function isPostRacePhase(phase){ return phase === 'post' || phase === 'maintenan
 // volumen baja en la misma proporción, hasta la mitad como mucho; nunca sube. Sin info.baseKm
 // (cronograma guardado antes de que existiera) no se ajusta. PURA.
 function postRaceWeeklyKm(info, baseKmNow){
-  const factor = info.phase === 'maintenance' ? 0.85 : info.weeksAfter === 1 ? 0.6 : 0.8;
+  const factor = info.phase === 'maintenance' ? 0.85 * (phaseIsCutbackWeek(info) ? 0.75 : 1) : info.weeksAfter === 1 ? 0.6 : 0.8;
   const load = Number.isFinite(info.baseKm) && info.baseKm > 0 && Number.isFinite(baseKmNow)
     ? Math.min(1, Math.max(0.5, baseKmNow / info.baseKm)) : 1;
   return { km: info.peakKm * factor * load, peakKm: info.peakKm, limited: false };
@@ -6019,7 +6022,11 @@ function generatePlan(p, weekNumber, weekStartDate){
   const trainingDays = DAY_KEYS.filter(d => (p.trainingDays && p.trainingDays.length ? p.trainingDays : defaultDays).includes(d));
   // Después de la carrera (post / maintenance) no hay rotación por fase: la de siempre por meta.
   const sessionPhase = phaseInfo.active && !isPostRacePhase(phaseInfo.phase) ? phaseInfo.phase : undefined;
-  const sessionMap = distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isCutbackWeek(weekNumber), p.goal, varietyOk, sessionPhase);
+  // Descarga de intensidad / tirada: con fases manda la del plan por fases (la misma semana en la que
+  // baja el volumen, phaseIsCutbackWeek); weekNumber no tiene relación con weekIdx y las dos cadencias
+  // se desfasaban (semana peak de 5k sin sesión fuerte, tirada de descarga en una semana completa).
+  const cutback = phaseInfo.active ? phaseIsCutbackWeek(phaseInfo) : isCutbackWeek(weekNumber);
+  const sessionMap = distributeSessionTypes(trainingDays, beginner, weekNumber, caution, cutback, p.goal, varietyOk, sessionPhase);
   // La recuperación del plan por fases ('post') sigue el mismo criterio de sesiones (solo suaves).
   if(isRecovery || postGoalRaceMult < 1 || postRaceWeek){
     // En la semana de recuperación evitamos series/tempo/cuestas/fartlek/progresivo/rodaje
@@ -6064,7 +6071,7 @@ function generatePlan(p, weekNumber, weekStartDate){
     // tope por distancia) en vez del peso fijo de RATIO. Va ANTES del recorte de abajo a
     // propósito: la tirada reparte lo que cede/pide entre las otras sesiones, y después el
     // techo de series/cuestas (HIGH_IMPACT_SHARE_CAP) se sigue aplicando sobre ese reparto.
-    applyPhaseLongRun(distMap, usedTypes, targetTotal, phaseInfo, p.goal, isCutbackWeek(weekNumber), RATIO);
+    applyPhaseLongRun(distMap, usedTypes, targetTotal, phaseInfo, p.goal, cutback, RATIO);
     // El reparto proporcional de arriba no tiene techo por sí solo -- con pocos días de
     // entreno (2-3 por semana) le puede tocar a una sola sesión de alto impacto (series o
     // cuestas) una porción desmedida del total semanal, porque el peso de RATIO se reparte

@@ -1395,10 +1395,15 @@ test('generatePlan: semana build con cronograma activo -> tirada = round(total x
   const longDay = plan.find(d => d.typeKey === 'long');
   assert.ok(longDay, 'hay tirada larga');
   assert.equal(longDay.dist, Math.min(24, Math.round(total * 0.30)));
-  // weekNumber 4: isCutbackWeek -> x 0,8 (la fase y el volumen salen del cronograma, no del número)
-  const planCut = plain(app.generatePlan(p, 4, BUILD_WEEK));
-  const longCut = planCut.find(d => d.typeKey === 'long');
-  assert.equal(longCut.dist, Math.min(24, Math.round(total * 0.30 * 0.8)));
+  // weekNumber 4 ya no es descarga con fases (manda phaseIsCutbackWeek): la misma tirada
+  assert.equal(plain(app.generatePlan(p, 4, BUILD_WEEK)).find(d => d.typeKey === 'long').dist, longDay.dist);
+  // la descarga es la de la rampa (weekIdx 7, 2026-12-21, build): x 0,8 sobre su propio total
+  const CUT_WEEK = '2026-12-21';
+  const cutInfo = plain(app.phaseForWeek(p, CUT_WEEK, app.state.phaseSchedule));
+  assert.equal(app.phaseIsCutbackWeek(cutInfo), true);
+  const cutTotal = app.phasedWeeklyKm(p, app.trainingCaution(p), cutInfo, 30).km;
+  const longCut = plain(app.generatePlan(p, 1, CUT_WEEK)).find(d => d.typeKey === 'long');
+  assert.equal(longCut.dist, Math.min(24, Math.round(cutTotal * 0.30 * 0.8)));
   assert.ok(longCut.dist < longDay.dist);
   // el total semanal sigue el volumen por fases (la tirada solo reparte distinto)
   assert.ok(Math.abs(sumDist(plan) - total) <= 2, `suma ${sumDist(plan)} vs ${total}`);
@@ -1863,7 +1868,7 @@ test('phaseForWeek: con peakKm guardado, las 2 semanas después de la carrera so
   });
 });
 
-test('phasedWeeklyKm: post 1 = pico x 0,6 (30), post 2 = x 0,8 (40), maintenance = x 0,85 (42,5) estable', () => {
+test('phasedWeeklyKm: post 1 = pico x 0,6 (30), post 2 = x 0,8 (40), maintenance = x 0,85 (42,5) con descarga cada 4 semanas', () => {
   const app = loadApp();
   const p = postProfile();
   const caution = app.trainingCaution(p);
@@ -1875,7 +1880,9 @@ test('phasedWeeklyKm: post 1 = pico x 0,6 (30), post 2 = x 0,8 (40), maintenance
     const info = plain(app.phaseForWeek(p, week, POST_SCHEDULE));
     assert.equal(info.phase, 'maintenance', week);
     assert.equal(info.weeksAfter, 3 + i, week);
-    assert.deepEqual(km(week), { km: 42.5, peakKm: 50, limited: false }, week);
+    // cada 4ta semana de mantenimiento es descarga (x0,75)
+    const got = km(week);
+    assert.deepEqual(Object.assign({}, got, { km: Math.round(got.km * 1e6) / 1e6 }), { km: (i + 1) % 4 === 0 ? 31.875 : 42.5, peakKm: 50, limited: false }, week);
   }
   // usa el pico del cronograma, no el que saldría de baseKm
   assert.equal(app.phasedWeeklyKm(p, caution, app.phaseForWeek(p, POST_W1, POST_SCHEDULE), 12).km, 30);
@@ -1907,8 +1914,10 @@ test('generatePlan: maintenance usa la rotación, la tirada y el reparto de v4 (
     [MAINT_W1, '2027-05-03'].forEach(week => {
       const got = postApp().app;
       const v4 = postApp({}, null).app;
-      // v4 con el mismo volumen semanal: weekMultiplier forzado a 42,5 / 30
+      // v4 con el mismo volumen semanal: weekMultiplier forzado a 42,5 / 30; la descarga de intensidad
+      // sigue a la del mantenimiento (ninguna de estas dos semanas lo es), no a weekNumber
       v4.weekMultiplier = () => 42.5 / 30;
+      v4.isCutbackWeek = () => false;
       const a = plain(got.generatePlan(got.state.profile, wn, week));
       const b = plain(v4.generatePlan(v4.state.profile, wn, week));
       assert.deepEqual(a, b, `${week} semana ${wn}`);
@@ -2179,13 +2188,15 @@ test('generatePlan: el ajuste semanal (vista previa con weeklyKm x 0,9) baja el 
   assert.ok(Math.abs(back - 42.5 * 0.5) <= 1.5, `vuelta ${back}`);
   // getNextWeekPlan usa ese mismo camino (factor del ajuste automático)
   app.state.weekStart = '2027-03-29';
-  app.state.weekNumber = 3;
-  app.state.plan = plain(app.generatePlan(p, 3, '2027-03-29'));
+  app.state.weekNumber = 2;
+  app.state.plan = plain(app.generatePlan(p, 2, '2027-03-29'));
   app.state.nextWeekOverrides = {};
   app.computeWeekAdjustment = () => ({ factor: 0.9 });
   const nw = plain(app.getNextWeekPlan());
   assert.equal(nw.weekStart, '2027-04-05');
-  assert.ok(Math.abs(sumDist(nw.plan) - 42.5 * 0.9) <= 1.5, `próxima ${sumDist(nw.plan)}`);
+  // TEMPORAL (I1 -> I5): con la descarga del mantenimiento ya no atada a weekNumber, esta semana tiene 2
+  // sesiones fuertes y fartlek/cuestas entregan menos km; el reparto de I5 la vuelve a +-1,5
+  assert.ok(Math.abs(sumDist(nw.plan) - 42.5 * 0.9) <= 3, `próxima ${sumDist(nw.plan)}`);
 });
 
 // ---- etiqueta de descarga según el plan por fases ----
@@ -2244,7 +2255,8 @@ test('plan en pantalla: con fases la etiqueta/nota de descarga va en las semanas
   });
   // post y maintenance: nunca
   const withPeak10 = plain(POST_SCHEDULE);
-  [POST_W1, POST_W2, MAINT_W1, '2027-04-19'].forEach(week => {
+  // (la 4ta de mantenimiento, 2027-04-19, sí es descarga: ver la prueba de I1)
+  [POST_W1, POST_W2, MAINT_W1, '2027-04-12'].forEach(week => {
     assert.deepEqual(tagScreen({ goal: '10k' }, withPeak10, week, 4), { tag: false, note: false }, week);
   });
 });
@@ -2422,7 +2434,9 @@ test('ya en el plan de B, mover su fecha no revive el mantenimiento de A en la s
   // curva de v4 da justo 45 km y coincide en sesiones con el mantenimiento de A: por eso esta prueba.)
   assert.ok(Math.abs(sumDist(plain(app.generatePlan(app.state.profile, 1, '2027-06-14'))) - 30) <= 1.5, `build era ${buildKm} km`);
   const maintA = postApp({}, plain(POST_SCHEDULE_B), '2027-06-16T12:00:00').app;
-  assert.ok(Math.abs(sumDist(plain(maintA.generatePlan(maintA.state.profile, 1, '2027-06-14'))) - 42.5) <= 1.5, 'referencia: mantenimiento de A');
+  // (2027-06-14 es la 12da semana de mantenimiento de A: descarga, 42,5 x 0,75)
+  assert.ok(maintA.phaseIsCutbackWeek(maintA.phaseForWeek(maintA.state.profile, '2027-06-14', maintA.state.phaseSchedule)));
+  assert.ok(Math.abs(sumDist(plain(maintA.generatePlan(maintA.state.profile, 1, '2027-06-14'))) - 42.5 * 0.75) <= 1.5, 'referencia: mantenimiento de A');
   // y desde el ancla nuevo, el plan por fases de B
   const next = plain(app.phaseForWeek(app.state.profile, '2027-06-21', s));
   assert.equal(next.weekIdx, 0);
@@ -2861,4 +2875,60 @@ test('I4: deshacer el cambio que terminó el plan por fases devuelve también el
   assert.equal(app.state.weekNumber, wn);
   assert.deepEqual(plain(app.state.phaseSchedule), sched);
   assert.equal(app.state.profile.goal, '10k');
+});
+
+const HARD_KEYS = ['tempo', 'intervals', 'hills', 'fartlek', 'progression'];
+const hardCount = plan => plan.filter(d => HARD_KEYS.includes(d.typeKey)).length;
+
+test('I1: con fases, la descarga de intensidad y de tirada sigue a phaseIsCutbackWeek, no a weekNumber', () => {
+  ['distance', 'time'].forEach(trainBy => {
+    const p = racingProfile({ trainBy }); // 21k, 4 días, ancla 2026-11-02, R=16
+    const { app } = phasedApp(p);
+    for (let idx = 0; idx < 16; idx++) {
+      const week = app.addDaysToIsoLocal('2026-11-02', idx * 7);
+      const info = app.phaseForWeek(p, week, app.state.phaseSchedule);
+      const cut = app.phaseIsCutbackWeek(info);
+      const longs = [];
+      for (let wn = 1; wn <= 8; wn++) {
+        const plan = plain(app.generatePlan(p, wn, week));
+        // 4 días, cautela 0: 2 sesiones fuertes, 1 en la semana de descarga del plan por fases
+        assert.equal(hardCount(plan), cut ? 1 : 2, `${trainBy} idx ${idx} (${info.phase}) weekNumber ${wn}`);
+        longs.push(plan.find(d => d.typeKey === 'long')[trainBy === 'time' ? 'durMin' : 'dist']);
+      }
+      if (trainBy === 'distance') {
+        const total = app.phasedWeeklyKm(p, app.trainingCaution(p), info, 30).km;
+        const share = { base: 0.28, build: 0.30, specific: 0.32, peak: 0.33 }[info.phase];
+        const want = Math.min(24, Math.round(total * share * (cut ? 0.8 : 1)));
+        longs.forEach((l, i) => assert.ok(Math.abs(l - want) <= 1.5, `idx ${idx} weekNumber ${i + 1}: tirada ${l} vs ${want}`));
+      }
+    }
+  });
+});
+
+test('I1: una semana peak de 5k (3+ días) siempre tiene sesión fuerte, sea cual sea weekNumber', () => {
+  [['tue', 'thu', 'sun'], ['tue', 'wed', 'fri', 'sun']].forEach(days => {
+    const p = racingProfile({ goal: '5k', trainingDays: days });
+    const { app } = phasedApp(p, Object.assign(plain(SCHEDULE), { goal: '5k' }));
+    ['2027-02-08', '2027-02-15'].forEach(week => {
+      assert.equal(app.phaseForWeek(p, week, app.state.phaseSchedule).phase, 'peak');
+      for (let wn = 1; wn <= 8; wn++) assert.ok(hardCount(plain(app.generatePlan(p, wn, week))) >= 1, `${days.length} días ${week} weekNumber ${wn}`);
+    });
+  });
+});
+
+test('I1: mantenimiento tiene descarga cada 4ta semana (x0,75 y etiqueta); post nunca', () => {
+  const app = loadApp();
+  const p = postProfile();
+  const caution = app.trainingCaution(p);
+  [POST_W1, POST_W2].forEach(w => assert.equal(app.phaseIsCutbackWeek(app.phaseForWeek(p, w, POST_SCHEDULE)), false, w));
+  for (let i = 0; i < 12; i++) {
+    const week = app.addDaysToIsoLocal(MAINT_W1, i * 7);
+    const info = app.phaseForWeek(p, week, POST_SCHEDULE);
+    const cut = (i + 1) % 4 === 0;
+    assert.equal(app.phaseIsCutbackWeek(info), cut, week);
+    assert.ok(Math.abs(app.phasedWeeklyKm(p, caution, info, 30).km - (cut ? 42.5 * 0.75 : 42.5)) < 1e-9, week);
+  }
+  // la etiqueta de la pantalla la sigue: la 4ta semana de mantenimiento (2027-04-19) es descarga
+  assert.deepEqual(tagScreen({ goal: '10k' }, plain(POST_SCHEDULE), '2027-04-19', 3), { tag: true, note: true });
+  assert.deepEqual(tagScreen({ goal: '10k' }, plain(POST_SCHEDULE), '2027-04-12', 4), { tag: false, note: false });
 });
