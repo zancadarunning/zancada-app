@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-14T20:46:44Z';
+const APP_VERSION = '2026-10-15T13:54:43Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4471,7 +4471,19 @@ function phaseForWeek(p, weekStartDate, schedule){
   const R = totalWeeks - 2;
   const split = phaseSplit(R);
   if(!split) return off;
-  if(weekIdx < 0 || weekIdx > totalWeeks) return off; // antes del ancla o después de la carrera
+  if(weekIdx < 0) return off; // antes del ancla
+  if(weekIdx > totalWeeks){
+    // Después de la carrera: 2 semanas de recuperación ('post') y después mantenimiento, hasta
+    // que el corredor elija otra meta (refreshPhaseSchedule reemplaza el cronograma). Solo si el
+    // cronograma tiene el pico guardado: el volumen de estas fases sale de ahí, y un cronograma
+    // sin pico (viejo, o creado con la carrera ya pasada) sigue con el plan de siempre.
+    if(!Number.isFinite(schedule.peakKm)) return off;
+    const weeksAfter = weekIdx - totalWeeks; // 1 = la semana siguiente a la de la carrera
+    const post = weeksAfter <= 2;
+    // phaseWeeks null en mantenimiento: no tiene fin fijo.
+    return { active: true, phase: post ? 'post' : 'maintenance', weekIdx, R, weeksToRace: 0,
+      weekInPhase: post ? weeksAfter : weeksAfter - 2, phaseWeeks: post ? 2 : null, weeksAfter, peakKm: schedule.peakKm };
+  }
   const weeksToRace = totalWeeks - weekIdx;
   if(weekIdx >= R) return { active: true, phase: 'taper', weekIdx, R, weeksToRace, weekInPhase: weekIdx - R + 1, phaseWeeks: 3 };
   const phase = split[weekIdx];
@@ -4511,8 +4523,18 @@ function phaseEffectiveWeeklyKm(p, beginner){
   }
   return effectiveWeeklyKm;
 }
+// Fases de después de la carrera objetivo (ver phaseForWeek): no tienen rampa, tirada por fase,
+// ritmo de carrera ni rotación propia -- el plan vuelve a las reglas de siempre con otro volumen.
+function isPostRacePhase(phase){ return phase === 'post' || phase === 'maintenance'; }
+// Volumen después de la carrera, sobre el pico que se guardó en el cronograma (info.peakKm, NO
+// recalculado con el weeklyKm de hoy): recuperación 0,6 y 0,8 x el pico las 2 semanas siguientes
+// y mantenimiento estable en 0,85 x el pico. PURA.
+function postRaceWeeklyKm(info){
+  const factor = info.phase === 'maintenance' ? 0.85 : info.weeksAfter === 1 ? 0.6 : 0.8;
+  return { km: info.peakKm * factor, peakKm: info.peakKm, limited: false };
+}
 // Volumen de la semana descrita por `info` (resultado ACTIVO de phaseForWeek) en el plan por
-// fases. PURA. Devuelve {km, peakKm, limited}:
+// fases. PURA. Devuelve {km, peakKm, limited} (post / maintenance: ver postRaceWeeklyKm):
 //  - semanas de descarga: cada 4ta semana de rampa (weekIdx % 4 === 3). NO cuentan como paso de
 //    crecimiento (igual que weekMultiplier, donde growthSteps las salta): aportan 0,75 x la
 //    semana completa anterior y la siguiente retoma desde esa semana completa, subiendo un
@@ -4532,6 +4554,7 @@ function phaseEffectiveWeeklyKm(p, beginner){
 //    a preparar esa carrera con el tiempo y la cautela que hay).
 // No redondea nada: generatePlan redondea por sesión.
 function phasedWeeklyKm(p, caution, info, baseKm){
+  if(isPostRacePhase(info.phase)) return postRaceWeeklyKm(info);
   const peakWeeks = phaseSplit(info.R).filter(x => x === 'peak').length;
   const rampCount = info.R - peakWeeks; // >=3 porque R>=4
   const steps = phaseRampSteps(info.R);
@@ -4564,7 +4587,8 @@ const LONG_FLOOR_FRAC = { 2: 0.55, 3: 0.40 };
 // applyPhaseLongRun y generatePlan después del recorte de HIGH_IMPACT_SHARE_CAP, que devuelve
 // lo que sobra a las demás sesiones (incluida la tirada) y podía romper el tope.
 function clampPhaseLongRun(distMap, usedTypes, phaseInfo, goal){
-  if(!phaseInfo || !phaseInfo.active || !usedTypes.includes('long')) return;
+  // Después de la carrera la tirada vuelve a la fórmula de siempre (sin tope por distancia).
+  if(!phaseInfo || !phaseInfo.active || isPostRacePhase(phaseInfo.phase) || !usedTypes.includes('long')) return;
   const cap = LONG_CAP_KM[goal];
   if(cap !== undefined) distMap.long = Math.min(distMap.long, cap);
   if(usedTypes.length < 2 || usedTypes.length > 3) return;
@@ -4723,9 +4747,10 @@ function newPhaseSchedule(p, today){
 function refreshPhaseNow(){
   const sched = state.phaseSchedule;
   const info = state.profile && sched ? phaseForWeek(state.profile, state.weekStart, sched) : { active: false };
-  state.phaseNow = info.active
-    ? { phase: info.phase, weeksToRace: info.weeksToRace, limited: sched.limited, peakKm: sched.peakKm }
-    : null;
+  if(!info.active) state.phaseNow = null;
+  // Después de la carrera: el pico ya no "limita" nada y lo que importa es cuántas semanas pasaron.
+  else if(isPostRacePhase(info.phase)) state.phaseNow = { phase: info.phase, weeksToRace: 0, limited: false, peakKm: sched.peakKm, weeksAfter: info.weeksAfter };
+  else state.phaseNow = { phase: info.phase, weeksToRace: info.weeksToRace, limited: sched.limited, peakKm: sched.peakKm };
 }
 // Texto del aviso de fase de la pantalla del plan (#plan-phase-note): una línea con la fase y las
 // semanas que faltan para la carrera, y -- solo si el pico quedó recortado por el tiempo que queda
@@ -4735,6 +4760,9 @@ function refreshPhaseNow(){
 function phaseLineText(pn){
   if(!pn) return '';
   const phase = t('plan_phase_'+pn.phase);
+  // Después de la carrera no hay semanas que contar ni pico que alcanzar: solo la fase (el aviso
+  // #plan-post-race de al lado invita a elegir una meta nueva).
+  if(isPostRacePhase(pn.phase)) return t('plan_phase_line_nogoal', {phase});
   let text = pn.weeksToRace === 0 ? t('plan_phase_line_race', {phase})
     : pn.weeksToRace === 1 ? t('plan_phase_line_one', {phase})
     : t('plan_phase_line', {phase, weeks: pn.weeksToRace});
@@ -4745,6 +4773,12 @@ function phaseLineText(pn){
 // el pico: solo la fase y cuánto falta. '' sin fase activa.
 const PHASE_CTX_LABEL = { base:'base', build:'desarrollo', specific:'específica', peak:'pico', taper:'reducción final' };
 function phaseCtxSentence(pn){
+  // Después de la carrera: que Zonda sepa que ya pasó y en qué fase está el plan, y que la salida
+  // para volver a un plan por fases es elegir otra meta (objetivo y fecha se eligen en Perfil >
+  // Datos personales, o con modificar_perfil). Sin números de volumen, igual que el resto.
+  if(pn && isPostRacePhase(pn.phase)){
+    return ` La carrera objetivo ya pasó; el plan está en fase de ${pn.phase === 'post' ? 'recuperación' : 'mantenimiento'}. Si el corredor quiere seguir con un plan por fases, sugerile elegir una nueva meta (objetivo y fecha de carrera) en Perfil > Datos personales.`;
+  }
   if(!pn || !PHASE_CTX_LABEL[pn.phase]) return '';
   const when = pn.weeksToRace === 0 ? 'esta es la semana de la carrera objetivo'
     : pn.weeksToRace === 1 ? 'falta 1 semana para la carrera objetivo'
@@ -5753,7 +5787,14 @@ function generatePlan(p, weekNumber, weekStartDate){
   }
   // generatePlan NO escribe state.phaseSchedule ni state.phaseNow: también arma semanas de vista
   // previa (con otro weeklyKm), así que no puede ser la fuente de eso -- ver refreshPhaseNow.
-  const mult = weekFactor * taperMult * postGoalRaceMult * recoveryMultiplier(weekStartDate) * eventRaceWeekMultiplier(weekStartDate, p);
+  // En la recuperación del plan por fases ('post') el volumen ya trae la baja post-carrera
+  // (0,6 / 0,8 del pico, ver postRaceWeeklyKm): los dos multiplicadores de recuperación quedan en
+  // 1 para no descontar la misma carrera dos veces. En mantenimiento siguen como siempre (una
+  // carrera de "Próximos eventos" corrida en esas semanas sí merece su semana de recuperación).
+  const postRaceWeek = phaseInfo.active && phaseInfo.phase === 'post';
+  const recoveryFactor = postRaceWeek ? 1 : recoveryMultiplier(weekStartDate);
+  const postGoalRaceFactor = postRaceWeek ? 1 : postGoalRaceMult;
+  const mult = weekFactor * taperMult * postGoalRaceFactor * recoveryFactor * eventRaceWeekMultiplier(weekStartDate, p);
   // Un principiante con base de un deporte de impacto (ver hasRunningImpactBase) ya tolera el
   // golpe de correr aunque nunca haya salido a correr solo -- a ese lo sacamos del "todo zona 1,
   // solo rodaje suave" desde el día 1 (zona 2 + algún fartlek), aunque siga siendo "principiante"
@@ -5765,8 +5806,11 @@ function generatePlan(p, weekNumber, weekStartDate){
   const zoneMap = {easy:easyOnly?1:2, intervals:4, tempo:3, long:2, fartlek:3, hills:4, progression:3};
   const defaultDays = beginner ? ['tue','thu','sun'] : ['tue','wed','fri','sun'];
   const trainingDays = DAY_KEYS.filter(d => (p.trainingDays && p.trainingDays.length ? p.trainingDays : defaultDays).includes(d));
-  const sessionMap = distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isCutbackWeek(weekNumber), p.goal, varietyOk, phaseInfo.active ? phaseInfo.phase : undefined);
-  if(isRecovery || postGoalRaceMult < 1){
+  // Después de la carrera (post / maintenance) no hay rotación por fase: la de siempre por meta.
+  const sessionPhase = phaseInfo.active && !isPostRacePhase(phaseInfo.phase) ? phaseInfo.phase : undefined;
+  const sessionMap = distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isCutbackWeek(weekNumber), p.goal, varietyOk, sessionPhase);
+  // La recuperación del plan por fases ('post') sigue el mismo criterio de sesiones (solo suaves).
+  if(isRecovery || postGoalRaceMult < 1 || postRaceWeek){
     // En la semana de recuperación evitamos series/tempo/cuestas/fartlek/progresivo/rodaje
     // largo -- todo eso suma carga justo cuando el cuerpo todavía está absorbiendo el
     // esfuerzo de la carrera. Se reemplaza por rodaje suave (o descanso, si ese día ya
@@ -8000,6 +8044,11 @@ function renderPlan(){
   const phaseText = wd.mode === 'current' ? phaseLineText(state.phaseNow) : '';
   phaseNote.textContent = phaseText;
   phaseNote.style.display = phaseText ? 'block' : 'none';
+  // Pasada la carrera objetivo (post / maintenance), aviso con botón para elegir una meta nueva:
+  // mismo criterio de semana actual. El texto es fijo (data-i18n en index.html), sin interpolar.
+  const postRace = document.getElementById('plan-post-race');
+  const showPostRace = wd.mode === 'current' && !!state.phaseNow && isPostRacePhase(state.phaseNow.phase);
+  postRace.style.display = showPostRace ? 'block' : 'none';
   const recoveryNote = document.getElementById('plan-recovery-note');
   if(showRecoveryUi){
     recoveryNote.style.display='block';

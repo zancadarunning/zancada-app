@@ -3277,6 +3277,12 @@
     <div class="plan-week-tags" id="plan-week-tags" style="display:none;"></div>
     <p class="muted" style="margin-bottom:14px;" data-i18n="plan_lead"></p>
     <p class="muted" id="plan-phase-note" style="display:none; margin-bottom:14px;"></p>
+    <!-- Pasada la carrera objetivo (plan por fases en recuperación/mantenimiento): invita a elegir una
+         meta nueva. El botón abre Datos personales, que es donde se eligen objetivo y fecha de carrera. -->
+    <div id="plan-post-race" style="display:none; margin-bottom:14px;">
+      <p class="muted" style="margin-bottom:10px;" data-i18n="plan_post_race_banner"></p>
+      <button class="btn btn-outline btn-sm" data-i18n="plan_post_race_cta" onclick="openPersonalDataOverlay()"></button>
+    </div>
     <p class="muted" id="plan-taper-note" style="display:none; color:var(--hivis-text); margin-bottom:14px;"></p>
     <p class="muted" id="plan-event-week-note" style="display:none; color:var(--hivis-text); margin-bottom:14px;"></p>
     <p class="muted" id="plan-cutback-note" style="display:none; color:var(--hivis-text); margin-bottom:14px;"></p>
