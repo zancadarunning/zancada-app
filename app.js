@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-15T14:20:58Z';
+const APP_VERSION = '2026-10-15T15:04:40Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3817,7 +3817,7 @@ async function finishOnboard(){
   state.onboarded = true;
   // Cronograma del plan por fases para la carrera elegida (null si no califica), con su pico
   // ya calculado. Directo, sin refreshPhaseSchedule(): el persist() de más abajo ya lo guarda y evita una escritura doble.
-  state.phaseSchedule = newPhaseSchedule(state.profile, new Date(), state.phaseSchedule);
+  state.phaseSchedule = newPhaseSchedule(state.profile, new Date(), state.phaseSchedule, state.weekNumber);
   refreshPhaseNow();
   state.lang = lang;
   state.voiceEnabled = true;
@@ -4496,11 +4496,21 @@ function phaseForWeek(p, weekStartDate, schedule){
       weekInPhase: post ? weeksAfter : weeksAfter - 2, phaseWeeks: post ? 2 : null, weeksAfter, peakKm: schedule.peakKm, baseKm: schedule.baseKm };
   }
   const weeksToRace = totalWeeks - weekIdx;
-  if(weekIdx >= R) return { active: true, phase: 'taper', weekIdx, R, weeksToRace, weekInPhase: weekIdx - R + 1, phaseWeeks: 3 };
-  const phase = split[weekIdx];
-  const first = split.indexOf(phase);
-  const phaseWeeks = split.lastIndexOf(phase) - first + 1;
-  return { active: true, phase, weekIdx, R, weeksToRace, weekInPhase: weekIdx - first + 1, phaseWeeks };
+  let info;
+  if(weekIdx >= R) info = { active: true, phase: 'taper', weekIdx, R, weeksToRace, weekInPhase: weekIdx - R + 1, phaseWeeks: 3 };
+  else {
+    const phase = split[weekIdx];
+    const first = split.indexOf(phase);
+    const phaseWeeks = split.lastIndexOf(phase) - first + 1;
+    info = { active: true, phase, weekIdx, R, weeksToRace, weekInPhase: weekIdx - first + 1, phaseWeeks };
+  }
+  // Punto de partida de la rampa (ver newPhaseSchedule / phasedWeeklyKm): viaja en el info para que
+  // phasedWeeklyKm siga siendo pura. Solo en cronogramas que lo guardan; los viejos siguen igual.
+  if(Number.isFinite(schedule.rampStartKm) && schedule.rampStartKm > 0){
+    info.rampStartKm = schedule.rampStartKm;
+    if(Number.isFinite(schedule.baseKm) && schedule.baseKm > 0) info.baseKm = schedule.baseKm;
+  }
+  return info;
 }
 // Kilometraje semanal pico por distancia de carrera: lo máximo que el plan por fases busca
 // alcanzar en las semanas 'peak' (techo de la distancia, no una meta para todos).
@@ -4529,6 +4539,20 @@ function phasePeakKm(goal, baseKm, caution, steps){
   const goalPeak = PEAK_KM[goal];
   const peakKm = goalPeak === undefined ? baseKm
     : Math.max(baseKm, Math.min(goalPeak, baseKm * cap, baseKm * Math.pow(growth, steps)));
+  const limited = goalPeak !== undefined && peakKm < goalPeak && baseKm < goalPeak;
+  return { peakKm, limited };
+}
+// Igual que phasePeakKm pero para una rampa que arranca en startKm (la PRIMERA semana completa ya
+// vale startKm, ver phasedWeeklyKm): el crecimiento se mide desde startKm (steps - 1 pasos hasta la
+// última semana completa), el techo por cautela sigue siendo relativo a la base declarada (baseKm) y
+// si startKm ya supera todo eso el pico es startKm (se sostiene, nunca se recorta hacia abajo). A
+// diferencia de phasePeakKm el piso es startKm y no baseKm: con un arranque por debajo de la base
+// (volviendo de la recuperación de otra carrera) subir hasta baseKm podría pedir más que `growth`. PURA.
+function phasePeakFromStart(goal, baseKm, startKm, caution, steps){
+  const { growth, cap } = growthParams(caution);
+  const goalPeak = PEAK_KM[goal];
+  const peakKm = goalPeak === undefined ? startKm
+    : Math.max(startKm, Math.min(goalPeak, baseKm * cap, startKm * Math.pow(growth, Math.max(1, steps - 1))));
   const limited = goalPeak !== undefined && peakKm < goalPeak && baseKm < goalPeak;
   return { peakKm, limited };
 }
@@ -4580,10 +4604,32 @@ function postRaceWeeklyKm(info, baseKmNow){
 //  - limited: ni el pico ni el punto de partida llegan al de la distancia (el plan no alcanza
 //    a preparar esa carrera con el tiempo y la cautela que hay).
 // No redondea nada: generatePlan redondea por sesión.
+//
+// Cronogramas con rampStartKm (todos los creados desde el fix de transición, ver newPhaseSchedule):
+// la rampa NO arranca en la base declarada sino en el volumen con el que el corredor venía (el de
+// v4 para la semana del ancla, o el del cronograma que se reemplazó). La primera semana completa
+// vale rampStartKm y la última semana completa de rampa el pico (phasePeakFromStart), geométrica
+// entre las dos; si rampStartKm ya supera el pico, se sostiene ahí. Todo se escala por
+// baseKm / info.baseKm (base de hoy / base con la que se creó el cronograma, entre 0,5 y lo que
+// dé): el ajuste automático semanal y la vuelta de un parate siguen moviendo el volumen como antes.
+// Sin rampStartKm (cronograma guardado antes) la cuenta es la de siempre, desde baseKm.
 function phasedWeeklyKm(p, caution, info, baseKm){
   if(isPostRacePhase(info.phase)) return postRaceWeeklyKm(info, baseKm);
   const rampCount = phaseRampCount(info.R); // >=3 porque R>=4
   const steps = phaseRampSteps(info.R);
+  if(Number.isFinite(info.rampStartKm) && info.rampStartKm > 0){
+    const declared = Number.isFinite(info.baseKm) && info.baseKm > 0 ? info.baseKm : baseKm;
+    const scale = Number.isFinite(baseKm) && baseKm > 0 && declared > 0 ? Math.max(0.5, baseKm / declared) : 1;
+    const start = info.rampStartKm * scale;
+    const { peakKm, limited } = phasePeakFromStart(p && p.goal, declared * scale, start, caution, steps);
+    if(info.phase === 'taper' || info.weekIdx >= rampCount) return { km: peakKm, peakKm, limited };
+    const i = info.weekIdx;
+    const cutsBefore = Math.floor(i / 4);
+    // ordinal (desde 0) de la semana completa: la 0 vale start y la steps-1 (última completa) el pico
+    const full = ord => start * Math.pow(peakKm / start, Math.max(0, ord) / Math.max(1, steps - 1));
+    if(phaseRampCutback(i, info.R)) return { km: 0.75 * full(i - cutsBefore - 1), peakKm, limited };
+    return { km: full(i - cutsBefore), peakKm, limited };
+  }
   const { peakKm, limited } = phasePeakKm(p && p.goal, baseKm, caution, steps);
   if(info.phase === 'taper' || info.weekIdx >= rampCount) return { km: peakKm, peakKm, limited };
   const ratio = baseKm > 0 ? peakKm / baseKm : 1;
@@ -4741,7 +4787,7 @@ function applyPhaseRacePace(days, phaseInfo, goal, easyOnly, withLongBlock){
 // (refreshPhaseNow), también cuando el cronograma no cambió.
 function refreshPhaseSchedule(){
   const cur = state.phaseSchedule || null;
-  const next = newPhaseSchedule(state.profile, new Date(), cur);
+  const next = newPhaseSchedule(state.profile, new Date(), cur, state.weekNumber);
   if(!next){
     if(cur){ state.phaseSchedule = null; refreshPhaseNow(); persist(); }
     else refreshPhaseNow();
@@ -4761,9 +4807,19 @@ function refreshPhaseSchedule(){
 // arrastrando una, ver phaseRacePrev), el nuevo la guarda en `prev` y su ancla no arranca antes de
 // la 3ra semana posterior a esa carrera: elegir una meta nueva justo después de correr no se come
 // la recuperación (las semanas anteriores al ancla siguen con post / maintenance de la vieja).
-function newPhaseSchedule(p, today, outgoing){
+// rampStartKm = el volumen con el que arranca la rampa (su primera semana completa, ver
+// phasedWeeklyKm): si el saliente todavía tenía algo que servir en el lunes del ancla, su volumen de
+// "continuación" ahí (phaseContinuationKm: lo que iba a dar esa semana sin descarga); si no, lo
+// que v4 iba a dar esa semana (base x weekMultiplier(weekNumber + semanas hasta el ancla), sin
+// descarga). Sin eso la rampa arrancaba siempre en la base declarada y entrar al plan, o mover la
+// carrera a mitad de camino, bajaba de golpe el volumen (de 46 a 29 km en un corredor de la semana 13).
+// `weekNumber` = el número de la semana actual (state.weekNumber; 1 si falta).
+// Si solo se mueve el día de la carrera DENTRO de la misma semana (misma meta, plan en curso), el
+// cronograma es el mismo: se conserva entero (ancla, rampa, pico, prev) y solo cambia raceDate.
+function newPhaseSchedule(p, today, outgoing, weekNumber){
   const sched = makePhaseSchedule(p, today);
   if(!sched) return null;
+  if(phaseSameRaceWeek(outgoing, sched, today)) return Object.assign(JSON.parse(JSON.stringify(outgoing)), { raceDate: sched.raceDate });
   const prev = phaseRacePrev(outgoing, today);
   if(prev){
     sched.prev = prev;
@@ -4773,12 +4829,49 @@ function newPhaseSchedule(p, today, outgoing){
   const R = phaseScheduleR(sched);
   if(R !== null && phaseSplit(R)){
     const base = phaseEffectiveWeeklyKm(p, false); // makePhaseSchedule ya descartó al principiante
-    const pk = phasePeakKm(p.goal, base, trainingCaution(p), phaseRampSteps(R));
-    sched.peakKm = pk.peakKm;
-    sched.limited = pk.limited;
-    sched.baseKm = base;
+    const caution = trainingCaution(p);
+    let start = phaseContinuationKm(outgoing, sched.anchor, base, caution);
+    if(start === null){
+      const ahead = Math.max(1, phaseWeeksBetween(parsePhaseIso(getMondayISO(today)), parsePhaseIso(sched.anchor)));
+      start = base * weekMultiplier((weekNumber || 1) + ahead, caution, true);
+    }
+    fillPhaseScheduleVolume(sched, p.goal, base, start, caution, R);
   }
   return sched;
+}
+// Completa un cronograma (con fechas ya puestas y R >= 4) con su rampa: base declarada, punto de
+// partida, pico y `limited`. Una sola fórmula para crear, reemplazar y reiniciar tras un parate.
+function fillPhaseScheduleVolume(sched, goal, baseKm, startKm, caution, R){
+  const pk = phasePeakFromStart(goal, baseKm, startKm, caution, phaseRampSteps(R));
+  sched.peakKm = pk.peakKm;
+  sched.limited = pk.limited;
+  sched.baseKm = baseKm;
+  sched.rampStartKm = startKm;
+  return sched;
+}
+// Volumen de "continuación" de un cronograma en la semana que arranca el lunes `mondayIso`: lo que
+// esa semana iba a pedir SIN descarga (la rampa en base/build/specific, el pico en peak/taper -- el
+// taper lo aplica generatePlan aparte --, el de recuperación / mantenimiento después de la carrera),
+// con la base de hoy (baseKmNow, mismo escalado que generatePlan). null si ese cronograma no tenía
+// nada activo ese lunes (no existe, antes de su ancla sin prev, carrera pasada sin pico, R < 4).
+// Es lo que no puede perderse cuando ese cronograma deja de mandar: el que lo reemplaza arranca ahí
+// (newPhaseSchedule) y, si nada lo reemplaza, v4 retoma desde ahí (bridgePhaseExitWeekNumber). PURA.
+function phaseContinuationKm(schedule, mondayIso, baseKmNow, caution){
+  if(!schedule) return null;
+  const info = phaseForWeek({ raceDate: schedule.raceDate, goal: schedule.goal }, mondayIso, schedule);
+  if(!info.active) return null;
+  const km = phasedWeeklyKm({ goal: schedule.goal }, caution, info, baseKmNow).km;
+  return phaseIsCutbackWeek(info) ? km / 0.75 : km;
+}
+// ¿El cronograma nuevo `sched` es el mismo que `outgoing` salvo el día de la carrera? Misma meta,
+// la carrera sigue en la misma semana (lunes a domingo) y esa semana todavía no terminó. Así el ancla
+// y la rampa no se rehacen por mover la carrera de domingo a sábado.
+function phaseSameRaceWeek(outgoing, sched, today){
+  if(!outgoing || outgoing.goal !== sched.goal || !Number.isFinite(outgoing.peakKm)) return false;
+  const a = parsePhaseIso(outgoing.raceDate), b = parsePhaseIso(sched.raceDate);
+  if(!a || !b) return false;
+  const raceMonday = getMondayISO(a);
+  return raceMonday === getMondayISO(b) && raceMonday >= getMondayISO(today);
 }
 // Carrera vieja que un cronograma nuevo tiene que seguir sirviendo (post / maintenance), o null:
 // la del cronograma saliente si tiene el pico guardado y su semana de carrera ya terminó respecto

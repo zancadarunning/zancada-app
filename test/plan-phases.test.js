@@ -353,12 +353,19 @@ test('phaseForWeek: cruza el cambio de horario (octubre-marzo) sin correr el ín
 
 // Cronograma esperado de un perfil: `base` + el pico y `limited` que fija el cronograma al crearse
 // (volumen de referencia del perfil -> phasePeakKm con los pasos de rampa de su R).
-function withPeak(app, p, base) {
+// La rampa arranca en `startKm` (rampStartKm); sin él, en lo que v4 daba la semana del ancla
+// (base x weekMultiplier(weekNumber actual + 1), sin descarga): es la entrada al plan desde v4.
+// Para un reemplazo, el test pasa como startKm la continuación del cronograma reemplazado.
+function withPeak(app, p, base, startKm) {
   const R = app.phaseScheduleR(base);
   const baseKm = app.phaseEffectiveWeeklyKm(p, false);
-  const pk = app.phasePeakKm(p.goal, baseKm, app.trainingCaution(p), app.phaseRampSteps(R));
-  return Object.assign({}, base, { peakKm: pk.peakKm, limited: pk.limited, baseKm });
+  const caution = app.trainingCaution(p);
+  const start = startKm !== undefined ? startKm : baseKm * app.weekMultiplier((app.state.weekNumber || 1) + 1, caution, true);
+  const pk = app.phasePeakFromStart(p.goal, baseKm, start, caution, app.phaseRampSteps(R));
+  return Object.assign({}, base, { peakKm: pk.peakKm, limited: pk.limited, baseKm, rampStartKm: start });
 }
+// Continuación del cronograma `old` en el lunes `monday` con la base del perfil (para withPeak).
+const contOf = (app, p, old, monday) => app.phaseContinuationKm(old, monday, app.phaseEffectiveWeeklyKm(p, false), app.trainingCaution(p));
 
 // Prepara una app con reloj congelado y persist() espiado (así no toca red ni disco).
 function appForRefresh(profile, schedule) {
@@ -391,12 +398,12 @@ test('refreshPhaseSchedule: si ya coincide no cambia nada ni persiste (el ancla 
 test('refreshPhaseSchedule: lo reemplaza si cambió la fecha de la carrera o la meta', () => {
   const a = appForRefresh(racingProfile({ raceDate: '2027-04-04' }), SCHEDULE);
   a.app.refreshPhaseSchedule();
-  assert.deepEqual(plain(a.app.state.phaseSchedule), withPeak(a.app, a.app.state.profile, { anchor: '2026-11-02', raceDate: '2027-04-04', goal: '21k' }));
+  assert.deepEqual(plain(a.app.state.phaseSchedule), withPeak(a.app, a.app.state.profile, { anchor: '2026-11-02', raceDate: '2027-04-04', goal: '21k' }, contOf(a.app, a.app.state.profile, SCHEDULE, '2026-11-02')));
   assert.equal(a.calls.persist, 1);
 
   const b = appForRefresh(racingProfile({ goal: '10k' }), SCHEDULE);
   b.app.refreshPhaseSchedule();
-  assert.deepEqual(plain(b.app.state.phaseSchedule), withPeak(b.app, b.app.state.profile, { anchor: '2026-11-02', raceDate: '2027-03-14', goal: '10k' }));
+  assert.deepEqual(plain(b.app.state.phaseSchedule), withPeak(b.app, b.app.state.profile, { anchor: '2026-11-02', raceDate: '2027-03-14', goal: '10k' }, contOf(b.app, b.app.state.profile, SCHEDULE, '2026-11-02')));
   assert.equal(b.app.state.phaseSchedule.peakKm, 45);
   assert.equal(b.app.state.phaseSchedule.limited, false);
   assert.equal(b.calls.persist, 1);
@@ -957,9 +964,10 @@ test('applyProfileChange (herramienta del coach): cambiar fecha_carrera o objeti
   app.state.plan = plain(app.generatePlan(p, 1, '2026-10-26'));
   app.applyProfileChange({ fecha_carrera: '2027-04-04' });
   assert.equal(app.state.profile.raceDate, '2027-04-04');
-  assert.deepEqual(plain(app.state.phaseSchedule), withPeak(app, app.state.profile, { anchor: '2026-11-02', raceDate: '2027-04-04', goal: '21k' }));
+  assert.deepEqual(plain(app.state.phaseSchedule), withPeak(app, app.state.profile, { anchor: '2026-11-02', raceDate: '2027-04-04', goal: '21k' }, contOf(app, p, SCHEDULE, '2026-11-02')));
+  const first = plain(app.state.phaseSchedule);
   app.applyProfileChange({ objetivo: '10k' });
-  assert.deepEqual(plain(app.state.phaseSchedule), withPeak(app, app.state.profile, { anchor: '2026-11-02', raceDate: '2027-04-04', goal: '10k' }));
+  assert.deepEqual(plain(app.state.phaseSchedule), withPeak(app, app.state.profile, { anchor: '2026-11-02', raceDate: '2027-04-04', goal: '10k' }, contOf(app, app.state.profile, first, '2026-11-02')));
   app.applyProfileChange({ objetivo: 'general' });
   assert.equal(app.state.phaseSchedule, null);
 });
@@ -2541,4 +2549,131 @@ test('plan-examples: la salida es determinista (dos corridas dan el mismo texto)
   const again = buildExamples();
   assert.equal(renderExamples(again, false), renderExamples(examples(), false));
   assert.equal(renderExamples(again, true), renderExamples(examples(), true));
+});
+
+// ---- Fix wave (revisión final): transiciones de volumen, descargas, ritmo de carrera, reparto ----
+
+// App con reloj congelado en `nowIso`, persist() espiado y el corredor `p` sin carreras cargadas.
+function fwApp(p, nowIso) {
+  const app = loadApp();
+  app.Date = makeFrozenDate(nowIso || '2026-10-14T12:00:00');
+  app.persist = () => Promise.resolve();
+  app.renderAll = () => {}; app.renderZones = () => {}; app.renderChat = () => {};
+  app.state.profile = p;
+  app.state.event = null;
+  app.state.lastEventDate = null;
+  app.state.phaseSchedule = null;
+  app.state.runs = [];
+  app.state.chat = [];
+  return app;
+}
+// Volumen que el motor se propone para la semana `ws` con el cronograma actual (null si es v4).
+function engineKm(app, p, ws) {
+  const info = app.phaseForWeek(p, ws, app.state.phaseSchedule);
+  return info.active ? app.phasedWeeklyKm(p, app.trainingCaution(p), info, app.phaseEffectiveWeeklyKm(p, false)).km : null;
+}
+const fwProfile = overrides => baseProfile(Object.assign({ goal: '10k' }, overrides || {}));
+
+test('C2: entrar al plan por fases desde v4 sigue la curva de v4 (no vuelve a la base declarada)', () => {
+  [1, 6, 13, 25].forEach(wn => ['10k', '21k'].forEach(goal => {
+    const p = fwProfile({ goal });
+    const app = fwApp(p);
+    const caution = app.trainingCaution(p);
+    const thisMonday = app.getMondayISO(new app.Date());
+    const anchor = app.addDaysToIsoLocal(thisMonday, 7);
+    p.raceDate = app.addDaysToIsoLocal(anchor, 12 * 7 + 6);
+    app.state.weekStart = thisMonday;
+    app.state.weekNumber = wn;
+    app.refreshPhaseSchedule();
+    const label = `${goal} semana v4 ${wn}`;
+    const v4Next = 30 * app.weekMultiplier(wn + 1, caution, true);
+    const v4Now = 30 * app.weekMultiplier(wn, caution, true);
+    assert.ok(Math.abs(app.state.phaseSchedule.rampStartKm - v4Next) < 1e-9, label);
+    const first = engineKm(app, p, anchor);
+    assert.ok(Math.abs(first - v4Next) < 1e-9, `${label}: primera semana ${first} vs v4 ${v4Next}`);
+    // contra la semana v4 en curso: nunca baja y sube como mucho un paso de crecimiento
+    assert.ok(first >= v4Now - 1e-9 && first <= v4Now * 1.06 + 1e-9, `${label}: ${first} vs ${v4Now}`);
+  }));
+});
+
+test('C2: mover la carrera a mitad del plan no baja el volumen (la rampa nueva arranca en la continuación)', () => {
+  const p = fwProfile({ goal: '21k', weeklyKm: 35, currentWeeklyKm: 35 });
+  const app = fwApp(p);
+  app.state.weekNumber = 1;
+  app.state.weekStart = app.getMondayISO(new app.Date());
+  const anchor = app.addDaysToIsoLocal(app.state.weekStart, 7);
+  p.raceDate = app.addDaysToIsoLocal(anchor, 16 * 7 + 6);
+  app.refreshPhaseSchedule();
+  const growth = app.growthParams(app.trainingCaution(p)).growth;
+  [2, 5, 6, 8, 10].forEach(k => {
+    const saved = plain(app.state.phaseSchedule), savedRace = p.raceDate;
+    const wk = app.addDaysToIsoLocal(anchor, k * 7);
+    const nextWs = app.addDaysToIsoLocal(wk, 7);
+    app.Date = makeFrozenDate(app.addDaysToIsoLocal(wk, 2) + 'T12:00:00');
+    app.state.weekStart = wk;
+    app.state.weekNumber = k + 2;
+    const info = app.phaseForWeek(p, nextWs, app.state.phaseSchedule);
+    const before = engineKm(app, p, nextWs) / (app.phaseIsCutbackWeek(info) ? 0.75 : 1); // semana completa
+    const current = engineKm(app, p, wk);
+    p.raceDate = app.addDaysToIsoLocal(p.raceDate, 7); // una semana más tarde
+    app.refreshPhaseSchedule();
+    assert.equal(app.state.phaseSchedule.anchor, nextWs, `idx ${k}`);
+    const after = engineKm(app, p, nextWs);
+    assert.ok(Math.abs(after - before) < 1e-9, `idx ${k}: ${after} vs ${before}`);
+    assert.ok(after >= current * 0.75 - 1e-9 && after <= current / 0.75 * growth + 1e-9, `idx ${k}: ${after} vs semana actual ${current}`);
+    app.state.phaseSchedule = saved; p.raceDate = savedRace;
+  });
+});
+
+test('C2: mover la carrera dentro de la misma semana conserva el cronograma entero (ancla, rampa y pico)', () => {
+  const p = fwProfile({ goal: '21k', weeklyKm: 35, currentWeeklyKm: 35 });
+  const app = fwApp(p);
+  app.state.weekNumber = 1;
+  app.state.weekStart = app.getMondayISO(new app.Date());
+  const anchor = app.addDaysToIsoLocal(app.state.weekStart, 7);
+  p.raceDate = app.addDaysToIsoLocal(anchor, 16 * 7 + 6); // domingo
+  app.refreshPhaseSchedule();
+  const before = plain(app.state.phaseSchedule);
+  const wk = app.addDaysToIsoLocal(anchor, 7 * 7);
+  app.Date = makeFrozenDate(app.addDaysToIsoLocal(wk, 2) + 'T12:00:00');
+  app.state.weekStart = wk;
+  p.raceDate = app.addDaysToIsoLocal(p.raceDate, -1); // sábado de la misma semana
+  app.refreshPhaseSchedule();
+  assert.deepEqual(plain(app.state.phaseSchedule), Object.assign({}, before, { raceDate: p.raceDate }));
+});
+
+test('phasedWeeklyKm con rampStartKm: arranca ahí, llega al pico en la última semana completa, sube <= growth y escala con la base de hoy', () => {
+  const app = loadApp();
+  [[30, 31.8, '10k'], [30, 40, '21k'], [30, 54, '10k'], [20, 18, '42k'], [35, 60, '5k']].forEach(([baseKm, start, goal]) => [0, 2].forEach(level => [4, 7, 12, 16, 26].forEach(R => {
+    const caution = { level };
+    const { growth, cap } = app.growthParams(caution);
+    const steps = app.phaseRampSteps(R);
+    const split = Array.from(app.phaseSplit(R));
+    const at = (i, now) => {
+      const info = Object.assign(infoAt(app, R, i), { rampStartKm: start, baseKm });
+      return plain(app.phasedWeeklyKm({ goal }, caution, info, now === undefined ? baseKm : now));
+    };
+    const label = `base ${baseKm} inicio ${start} ${goal} nivel ${level} R=${R}`;
+    const peak = at(0).peakKm;
+    assert.ok(peak >= start - 1e-9, label);
+    assert.ok(peak <= Math.max(start, baseKm * cap) + 1e-9, `${label}: el techo por cautela es sobre la base declarada`);
+    assert.ok(Math.abs(at(0).km - start) < 1e-9, `${label}: la primera semana vale rampStartKm`);
+    let prevFull = start;
+    for (let i = 1; i < R + 3; i++) {
+      const w = at(i);
+      const cut = i < R && split[i] !== 'peak' && i % 4 === 3;
+      if (cut) { assert.ok(Math.abs(w.km - 0.75 * prevFull) < 1e-9, `${label} descarga ${i}`); continue; }
+      assert.ok(w.km >= prevFull - 1e-9 && w.km <= prevFull * growth + 1e-9, `${label} semana ${i}: ${w.km} / ${prevFull}`);
+      prevFull = w.km;
+    }
+    const lastRamp = split.indexOf('peak') - 1;
+    const lastFull = lastRamp % 4 === 3 ? lastRamp - 1 : lastRamp;
+    assert.ok(Math.abs(at(lastFull).km - peak) < 1e-9, `${label}: la última semana completa de rampa es el pico`);
+    // escala por base de hoy / base del cronograma (ajuste automático o parate), con piso 0,5
+    assert.ok(Math.abs(at(0, baseKm * 0.9).km - start * 0.9) < 1e-9, `${label}: x0,9`);
+    assert.ok(Math.abs(at(0, baseKm * 0.2).km - start * 0.5) < 1e-9, `${label}: piso 0,5`);
+  })));
+  // si arranca por encima del pico de la distancia, se sostiene ahí (nunca baja en la rampa)
+  const hold = Array.from({ length: 19 }, (_, i) => plain(app.phasedWeeklyKm({ goal: '10k' }, { level: 0 }, Object.assign(infoAt(app, 16, i), { rampStartKm: 54, baseKm: 30 }), 30)));
+  hold.forEach((w, i) => assert.ok(Math.abs(w.km - (i < 14 && i % 4 === 3 ? 0.75 * 54 : 54)) < 1e-9, `semana ${i}: ${w.km}`));
 });
