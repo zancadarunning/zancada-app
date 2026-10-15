@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-15T15:18:26Z';
+const APP_VERSION = '2026-10-15T18:47:53Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4666,13 +4666,30 @@ const LONG_FLOOR_FRAC = { 2: 0.55, 3: 0.40 };
 function clampPhaseLongRun(distMap, usedTypes, phaseInfo, goal){
   // En mantenimiento la tirada sale del peso de siempre (no de LONG_SHARE) pero sigue con el tope de
   // la distancia y la regla de semanas cortas: sin eso, 2-3 días a 0,85 x el pico dan tiradas
-  // desmedidas. En 'post' no hay tirada (todo es rodaje suave): no hay nada que acotar.
-  if(!phaseInfo || !phaseInfo.active || phaseInfo.phase === 'post' || !usedTypes.includes('long')) return;
-  const cap = LONG_CAP_KM[goal];
+  // desmedidas. En 'post' no hay tirada (todo es rodaje suave): los rodajes no pasan del tope de la
+  // tirada (sin eso, 5k con 80 km de base y 2 días daba dos rodajes de 24 km la semana post-carrera).
+  if(!phaseInfo || !phaseInfo.active) return;
+  const cap = phaseInfo.longCapKm || LONG_CAP_KM[goal];
+  if(phaseInfo.phase === 'post'){
+    if(cap !== undefined && usedTypes.includes('easy')) distMap.easy = Math.min(distMap.easy, cap);
+    return;
+  }
+  if(!usedTypes.includes('long')) return;
   if(cap !== undefined) distMap.long = Math.min(distMap.long, cap);
-  if(usedTypes.length < 2 || usedTypes.length > 3) return;
   const limit = Math.max(1, distMap.long - 1);
-  usedTypes.forEach(t=>{ if(t !== 'long') distMap[t] = Math.min(distMap[t], limit); });
+  // 2-3 sesiones: todas por debajo de la tirada. 4 o más: solo los rodajes (recortar una sesión de
+  // calidad le saca su estímulo; los rodajes son los que pueden ceder).
+  if(usedTypes.length >= 2 && usedTypes.length <= 3) usedTypes.forEach(t=>{ if(t !== 'long') distMap[t] = Math.min(distMap[t], limit); });
+  else if(usedTypes.length > 3 && usedTypes.includes('easy')) distMap.easy = Math.min(distMap.easy, limit);
+}
+// Tope de la tirada del plan por fases: LONG_CAP_KM de la distancia, agrandado (hasta x1,5) cuando el
+// pico semanal de la persona pasa el de la distancia (PEAK_KM): con 65 km/semana para un 5k una tirada
+// de 12 km quedaba más corta que los rodajes de 14-19 km. undefined para una meta sin tope.
+function phaseLongCapKm(goal, peakKm){
+  const cap = LONG_CAP_KM[goal];
+  if(cap === undefined) return undefined;
+  const f = Number.isFinite(peakKm) && PEAK_KM[goal] > 0 ? Math.min(1.5, Math.max(1, peakKm / PEAK_KM[goal])) : 1;
+  return Math.round(cap * f);
 }
 // Ajusta EN EL LUGAR la tirada larga de `distMap` (km por tipo de sesión, el mismo que arma
 // generatePlan) para una semana con plan por fases activo, y reparte la diferencia entre las
@@ -4701,7 +4718,7 @@ function clampPhaseLongRun(distMap, usedTypes, phaseInfo, goal){
 function applyPhaseLongRun(distMap, usedTypes, targetTotal, phaseInfo, goal, isCutback, ratio){
   if(!phaseInfo || !phaseInfo.active) return;
   const share = LONG_SHARE[phaseInfo.phase === 'taper' ? 'peak' : phaseInfo.phase];
-  const cap = LONG_CAP_KM[goal];
+  const cap = phaseInfo.longCapKm || LONG_CAP_KM[goal];
   if(share === undefined || cap === undefined) return;
   const occurrences = {};
   usedTypes.forEach(type=>{ occurrences[type] = (occurrences[type]||0) + 1; });
@@ -4751,6 +4768,36 @@ function applyPhaseLongRun(distMap, usedTypes, targetTotal, phaseInfo, goal, isC
   if(Math.abs(drift) > 1) long -= Math.sign(drift) * Math.ceil((Math.abs(drift) - 1) / longOcc);
   distMap.long = Math.max(1, Math.min(cap, long));
   clampPhaseLongRun(distMap, usedTypes, phaseInfo, goal);
+}
+// Reparto de lo que la semana armada (días de generatePlan, ya con las estructuras de series, cuestas
+// y fartlek recalculadas) quedó por debajo del total buscado (targetKm), de a 1 km: primero al rodaje
+// más corto que todavía pueda crecer -- cada rodaje queda al menos 1 km por debajo de la tirada y por
+// debajo del tope por sesión (easyCapKm, minutos disponibles) --, y cuando ningún rodaje puede, a la
+// tirada, hasta su tope (longCapKm). Las sesiones de calidad no se tocan. Lo que no entra se pierde (el
+// total queda más bajo): mismas reglas que clampPhaseLongRun. Modifica `days` en el lugar. Sin tirada
+// (semanas de recuperación, todo rodaje) los rodajes no pasan de longCapKm ni de easyCapKm.
+// Al revés también: si la semana se pasa (volúmenes chicos, donde el mínimo de 4 repeticiones de una
+// estructura ya es más que su parte), se saca de a 1 km del rodaje más largo, sin dejarlo en menos de
+// 2 km (por debajo de eso no es una sesión).
+function spreadPhaseShortfall(days, targetKm, longCapKm, easyCapKm){
+  let left = Math.round(targetKm - days.reduce((a, d) => a + (d.dist || 0), 0));
+  const easy = days.filter(d => d.typeKey === 'easy');
+  const longs = days.filter(d => d.typeKey === 'long');
+  while(left < 0){
+    const cand = easy.filter(d => d.dist - 1 >= 2 - 1e-9).sort((a, b) => b.dist - a.dist)[0];
+    if(!cand) break;
+    cand.dist = Math.round((cand.dist - 1) * 10) / 10;
+    left++;
+  }
+  while(left > 0){
+    const longKm = longs.length ? Math.min(...longs.map(d => d.dist)) : Infinity;
+    const limit = longs.length ? Math.min(longKm - 1, easyCapKm) : Math.min(longCapKm, easyCapKm);
+    const cand = easy.filter(d => d.dist + 1 <= limit + 1e-9).sort((a, b) => a.dist - b.dist)[0];
+    if(cand){ cand.dist = Math.round((cand.dist + 1) * 10) / 10; left--; continue; }
+    const lg = longs.length ? longs.reduce((m, d) => d.dist < m.dist ? d : m) : null;
+    if(lg && lg.dist + 1 <= longCapKm + 1e-9){ lg.dist = Math.round((lg.dist + 1) * 10) / 10; left--; continue; }
+    break;
+  }
 }
 // Ritmo de carrera (segundos por km) para una meta: la proyección de Riegel para esa distancia
 // dividida por los km. Es lo que se muestra en las sesiones de ritmo de las fases específicas -- y
@@ -6014,6 +6061,9 @@ function generatePlan(p, weekNumber, weekStartDate){
   if(phaseInfo.active){
     const phased = phasedWeeklyKm(p, caution, phaseInfo, effectiveWeeklyKm);
     weekFactor = phased.km / Math.max(9, effectiveWeeklyKm);
+    // tope de la tirada según el pico de esta persona (ver phaseLongCapKm); lo leen applyPhaseLongRun,
+    // clampPhaseLongRun y el reparto de spreadPhaseShortfall
+    phaseInfo.longCapKm = phaseLongCapKm(p.goal, phased.peakKm);
   } else {
     weekFactor = weekMultiplier(weekNumber, caution, skipPeriodicCutback);
   }
@@ -6074,6 +6124,7 @@ function generatePlan(p, weekNumber, weekStartDate){
   // puesto o calculado, así que este ajuste no le cambia nada).
   const RATIO = {easy:EASY_SESSION_RATIO, intervals:1.15, tempo:0.85, long:beginner?BEGINNER_LONG_RATIO:1.5, fartlek:1.0, hills:0.9, progression:1.0};
   let distMap;
+  let weekTargetKm = null; // total semanal que se busca (no principiante); lo usa el reparto de I5 más abajo
   if(beginner){
     const per = beginnerPerSessionKm(p) * mult;
     distMap = {};
@@ -6082,6 +6133,7 @@ function generatePlan(p, weekNumber, weekStartDate){
     const usedTypes = trainingDays.map(d=>sessionMap[d]).filter(Boolean);
     const weightSum = usedTypes.reduce((a,type)=> a + (RATIO[type]||1), 0);
     const targetTotal = Math.max(9, effectiveWeeklyKm) * mult;
+    weekTargetKm = targetTotal;
     const perUnit = weightSum>0 ? targetTotal/weightSum : 0;
     distMap = {};
     Object.keys(RATIO).forEach(type=>{ distMap[type] = Math.round(perUnit * RATIO[type]); });
@@ -6136,10 +6188,12 @@ function generatePlan(p, weekNumber, weekStartDate){
   // de convertir minutos a km con el ritmo estimado del corredor. No reparte el km "perdido"
   // en otro lado -- si de verdad tiene poco tiempo, el total semanal real es más bajo, así de
   // simple, en vez de inflarle la tirada larga para compensar.
+  let sessionCapKm = Infinity;
   if(p.availableMinPerSession > 0){
     const pace = estimateBasePaceMinPerKm(p);
     const maxSessionKm = Math.max(10, p.availableMinPerSession - 20) / pace;
-    Object.keys(distMap).forEach(type=>{ if(type!=='long') distMap[type] = Math.min(distMap[type], Math.round(maxSessionKm*10)/10); });
+    sessionCapKm = Math.round(maxSessionKm*10)/10;
+    Object.keys(distMap).forEach(type=>{ if(type!=='long') distMap[type] = Math.min(distMap[type], sessionCapKm); });
   }
   // La carrera cargada en "Próximos eventos" ya NO le saca la sesión propia al día en el que
   // cae (antes ese día quedaba fijo en descanso porque "la carrera era la sesión") -- ahora es
@@ -6168,6 +6222,14 @@ function generatePlan(p, weekNumber, weekStartDate){
   // Ritmo de carrera en las sesiones de las fases específicas: recién acá, con dist ya final
   // (tirada ajustada y series recalculadas por su estructura), para que el bloque de la tirada
   // salga de la distancia que de verdad se va a correr.
+  // Plan por fases: fartlek / cuestas / series se recalculan por su estructura (tope de repeticiones) y
+  // suelen quedar por debajo de su parte del total; sin esto una semana base de 65 km imprimía 42 y la
+  // siguiente "se ponía al día" con +51%. Lo que falta se reparte en rodajes y después en la tirada,
+  // dentro de las reglas de siempre (ver spreadPhaseShortfall). Antes del ritmo de carrera: el bloque de
+  // la tirada sale de su distancia final.
+  if(!beginner && phaseInfo.active && weekTargetKm !== null){
+    spreadPhaseShortfall(kmDays, weekTargetKm, phaseInfo.longCapKm || LONG_CAP_KM[p.goal] || Infinity, sessionCapKm);
+  }
   applyPhaseRacePace(kmDays, phaseInfo, p.goal, easyOnly, true);
   return applyLevelTestDay(kmDays, p, weekStartDate, beginner);
 }
@@ -6349,12 +6411,36 @@ function buildTimeFartlekStructure(mainMin, weekNumber){
 const TIME_MIN_BY_TYPE = {easy:20, intervals:20, tempo:20, long:30, fartlek:20, hills:20, progression:30};
 // Tope por sesión (parte principal): un tempo continuo de más de ~35 min ya no es tempo, y las series/cuestas largas lesionan.
 const TIME_MAX_BY_TYPE = {easy:90, intervals:40, tempo:35, long:150, fartlek:40, hills:30, progression:60};
+// spreadPhaseShortfall en minutos (plan por tiempo con fases): de a 5 minutos al rodaje más corto que
+// pueda crecer (5 min por debajo de la tirada, dentro de TIME_MAX_BY_TYPE.easy y del tope de minutos
+// disponibles), después a la tirada (hasta TIME_MAX_BY_TYPE.long); si sobra, se saca de los rodajes
+// más largos sin bajar de TIME_MIN_BY_TYPE.easy. Las sesiones de calidad no se tocan. Sin trote-caminata.
+function spreadPhaseShortfallMin(days, targetMin, availCapMin){
+  let left = Math.round((targetMin - days.reduce((a, d) => a + (d.durMin || 0), 0)) / 5);
+  const easy = days.filter(d => d.typeKey === 'easy' && !d.runWalk);
+  const longs = days.filter(d => d.typeKey === 'long' && !d.runWalk);
+  while(left < 0){
+    const cand = easy.filter(d => d.durMin - 5 >= TIME_MIN_BY_TYPE.easy).sort((a, b) => b.durMin - a.durMin)[0];
+    if(!cand) break;
+    cand.durMin -= 5; left++;
+  }
+  while(left > 0){
+    const longMin = longs.length ? Math.min(...longs.map(d => d.durMin)) : Infinity;
+    const limit = Math.min(longMin - 5, TIME_MAX_BY_TYPE.easy, availCapMin);
+    const cand = easy.filter(d => d.durMin + 5 <= limit).sort((a, b) => a.durMin - b.durMin)[0];
+    if(cand){ cand.durMin += 5; left--; continue; }
+    const lg = longs.length ? longs.reduce((m, d) => d.durMin < m.durMin ? d : m) : null;
+    if(lg && lg.durMin + 5 <= TIME_MAX_BY_TYPE.long){ lg.durMin += 5; left--; continue; }
+    break;
+  }
+}
 function buildTimePlanDays(ctx){
   const {p, weekNumber, mult, beginner, easyOnly, caution, sessionMap, trainingDays, effectiveWeeklyKm, zoneMap, phaseInfo, goal} = ctx;
   const pace = estimateBasePaceMinPerKm(p);
   const RATIO_T = {easy:EASY_SESSION_RATIO, intervals:1.0, tempo:0.85, long:beginner ? BEGINNER_LONG_RATIO : 1.5, fartlek:1.0, hills:0.9, progression:1.0};
   const usedTypes = trainingDays.map(d => sessionMap[d]).filter(Boolean);
   const minMap = {};
+  let weekTargetMin = null; // minutos semanales buscados (no principiante), para el reparto de más abajo
   if(beginner){
     // Sesión base de ~20 minutos que crece con la progresión semanal (mult), como beginnerPerSessionKm en km.
     const per = 20 * (hasCrossTrainingBase(p) ? CROSS_TRAINING_BASE_BOOST : 1) * mult;
@@ -6362,6 +6448,7 @@ function buildTimePlanDays(ctx){
   } else {
     const weightSum = usedTypes.reduce((a, type) => a + (RATIO_T[type] || 1), 0);
     const targetTotal = Math.max(9 * pace, effectiveWeeklyKm * pace) * mult; // minutos de la semana
+    weekTargetMin = targetTotal;
     const perUnit = weightSum > 0 ? targetTotal / weightSum : 0;
     Object.keys(RATIO_T).forEach(k => { minMap[k] = perUnit * RATIO_T[k]; });
     // misma regla que en km: una sola sesión de alto impacto no puede comerse más del 30% de la semana
@@ -6418,6 +6505,12 @@ function buildTimePlanDays(ctx){
   });
   // Ritmo de carrera en tempo y series de las fases específicas. La tirada larga por tiempo no lleva
   // bloque a ritmo de carrera (en minutos no hay una distancia sobre la que calcularlo).
+  // Mismo reparto que en distancia (spreadPhaseShortfall), en minutos: los topes por tipo (tempo 35,
+  // series 40, cuestas 30...) dejan la semana corta y la que sigue saltaba. Solo con fases activas.
+  if(!beginner && phaseInfo && phaseInfo.active && weekTargetMin !== null){
+    spreadPhaseShortfallMin(timeDays, weekTargetMin, availCap || Infinity);
+    timeDays.forEach(d => { if(d.typeKey === 'easy' || d.typeKey === 'long') d.dist = Math.max(0.1, Math.round(d.durMin / pace * 10) / 10); });
+  }
   applyPhaseRacePace(timeDays, phaseInfo, goal, easyOnly, false);
   return timeDays;
 }
