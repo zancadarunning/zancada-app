@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-15T14:11:58Z';
+const APP_VERSION = '2026-10-15T14:20:58Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4782,15 +4782,19 @@ function newPhaseSchedule(p, today, outgoing){
 }
 // Carrera vieja que un cronograma nuevo tiene que seguir sirviendo (post / maintenance), o null:
 // la del cronograma saliente si tiene el pico guardado y su semana de carrera ya terminó respecto
-// de `today`; si no, la que ese saliente ya venía arrastrando (cambiar de meta dos veces seguidas
-// en la recuperación no la pierde). Copia plana: un prev nunca tiene su propio prev.
+// de `today`; si no, la que ese saliente ya venía arrastrando, PERO solo mientras su plan todavía
+// no arrancó (el lunes de hoy es anterior a su ancla): cambiar de meta dos veces seguidas en la
+// recuperación no la pierde, y una vez que arrancó el plan nuevo el prev ya no sobrevive (si no,
+// cualquier cambio posterior revivía el mantenimiento de una carrera de hace meses en la semana
+// actual). Copia plana: un prev nunca tiene su propio prev.
 function phaseRacePrev(outgoing, today){
   if(!outgoing) return null;
   const race = parsePhaseIso(outgoing.raceDate);
-  if(race && Number.isFinite(outgoing.peakKm) && getMondayISO(race) < getMondayISO(today)){
+  const todayMonday = getMondayISO(today);
+  if(race && Number.isFinite(outgoing.peakKm) && getMondayISO(race) < todayMonday){
     return { anchor: outgoing.anchor, raceDate: outgoing.raceDate, goal: outgoing.goal, peakKm: outgoing.peakKm, baseKm: outgoing.baseKm };
   }
-  return outgoing.prev || null;
+  return outgoing.prev && typeof outgoing.anchor === 'string' && todayMonday < outgoing.anchor ? outgoing.prev : null;
 }
 // state.phaseNow = lo que la UI muestra de la semana ACTUAL (state.weekStart): {phase,
 // weeksToRace, limited, peakKm}, o null si no hay perfil, cronograma ni fase activa. Se deriva

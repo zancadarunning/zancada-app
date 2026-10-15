@@ -2373,3 +2373,93 @@ test('locales: las seis definen las claves de después de la carrera', () => {
   assert.equal(es.plan_phase_post, 'Recuperación');
   assert.equal(es.plan_phase_maintenance, 'Mantenimiento');
 });
+
+// ---- prev solo sobrevive hasta que arranca el plan nuevo (ruling 25) ----
+// Elige B (`raceDate`) el miércoles 2027-03-17, en la semana post 1 de A (2027-03-14). Devuelve la app.
+function appWithB(raceDate) {
+  const { app } = postApp({}, plain(POST_SCHEDULE_B));
+  app.state.weekStart = POST_W1;
+  app.state.profile.raceDate = raceDate;
+  app.refreshPhaseSchedule();
+  return app;
+}
+
+test('ya en el plan de B, mover su fecha no revive el mantenimiento de A en la semana actual', () => {
+  const app = appWithB('2027-10-10');
+  assert.equal(app.state.phaseSchedule.anchor, MAINT_W1);
+  assert.deepEqual(plain(app.state.phaseSchedule.prev), PREV_OF_B);
+  // 2027-06-16 (miércoles): semana de build de B (descarga de su rampa, weekIdx 11)
+  app.Date = makeFrozenDate('2027-06-16T12:00:00');
+  app.state.weekStart = '2027-06-14';
+  app.refreshPhaseNow();
+  assert.equal(app.state.phaseNow.phase, 'build');
+  assert.ok(!('fromPrev' in app.state.phaseNow));
+  const buildKm = sumDist(plain(app.generatePlan(app.state.profile, 16, '2027-06-14')));
+  // se corre la carrera una semana
+  app.state.profile.raceDate = '2027-10-17';
+  app.refreshPhaseSchedule();
+  const s = app.state.phaseSchedule;
+  assert.equal(s.raceDate, '2027-10-17');
+  assert.equal(s.prev, undefined, 'sin prev: el plan de B ya había arrancado');
+  assert.equal(s.anchor, '2027-06-21');
+  // la semana actual queda fuera de fases (como cualquier cambio de plazo "desde la semana que
+  // viene"), nunca en el mantenimiento de A con su pico
+  assert.equal(app.state.phaseNow, null);
+  assert.deepEqual(plain(app.phaseForWeek(app.state.profile, '2027-06-14', s)), { active: false });
+  const ref = postApp({ raceDate: '2027-10-17' }, null, '2027-06-16T12:00:00').app;
+  const now = plain(app.generatePlan(app.state.profile, 16, '2027-06-14'));
+  assert.deepEqual(now, plain(ref.generatePlan(ref.state.profile, 16, '2027-06-14')));
+  // el volumen sale de la curva de v4 (weekNumber), no del pico de A: con weekNumber 1 v4 da ~30 km,
+  // mientras que el mantenimiento de A daría 42,5 km con cualquier weekNumber. (Con weekNumber 16 la
+  // curva de v4 da justo 45 km y coincide en sesiones con el mantenimiento de A: por eso esta prueba.)
+  assert.ok(Math.abs(sumDist(plain(app.generatePlan(app.state.profile, 1, '2027-06-14'))) - 30) <= 1.5, `build era ${buildKm} km`);
+  const maintA = postApp({}, plain(POST_SCHEDULE_B), '2027-06-16T12:00:00').app;
+  assert.ok(Math.abs(sumDist(plain(maintA.generatePlan(maintA.state.profile, 1, '2027-06-14'))) - 42.5) <= 1.5, 'referencia: mantenimiento de A');
+  // y desde el ancla nuevo, el plan por fases de B
+  const next = plain(app.phaseForWeek(app.state.profile, '2027-06-21', s));
+  assert.equal(next.weekIdx, 0);
+  assert.ok(!app.isPostRacePhase(next.phase) && !('fromPrev' in next), next.phase);
+});
+
+test('B sin pico (R<4 tras correr el ancla): después de su carrera, cambiar de meta no revive el mantenimiento de A', () => {
+  const app = appWithB('2027-05-02'); // ancla 2027-03-29, semana de carrera 2027-04-26 -> R = 2
+  const b = app.state.phaseSchedule;
+  assert.equal(b.anchor, MAINT_W1);
+  assert.equal(b.peakKm, undefined);
+  assert.deepEqual(plain(b.prev), PREV_OF_B);
+  // la recuperación de A igual se sirve
+  assert.equal(plain(app.phaseForWeek(app.state.profile, POST_W2, b)).phase, 'post');
+  // pasada la carrera de B
+  app.Date = makeFrozenDate('2027-06-16T12:00:00');
+  app.state.weekStart = '2027-06-14';
+  app.refreshPhaseNow();
+  assert.equal(app.state.phaseNow, null);
+  app.state.profile.raceDate = '2027-10-10';
+  app.refreshPhaseSchedule();
+  assert.equal(app.state.phaseSchedule.prev, undefined);
+  assert.equal(app.state.phaseNow, null);
+  const ref = postApp({ raceDate: '2027-10-10' }, null, '2027-06-16T12:00:00').app;
+  assert.deepEqual(plain(app.generatePlan(app.state.profile, 16, '2027-06-14')), plain(ref.generatePlan(ref.state.profile, 16, '2027-06-14')));
+});
+
+test('el prev se arrastra hasta el domingo anterior al ancla y se corta exactamente el lunes del ancla', () => {
+  // domingo 2027-03-28: el plan de B todavía no arrancó -> se conserva
+  const a = appWithB('2027-10-10');
+  a.Date = makeFrozenDate('2027-03-28T20:00:00');
+  a.state.weekStart = POST_W2;
+  a.state.profile.raceDate = '2027-11-07';
+  a.refreshPhaseSchedule();
+  assert.deepEqual(plain(a.state.phaseSchedule.prev), PREV_OF_B);
+  assert.equal(a.state.phaseSchedule.anchor, MAINT_W1);
+  assert.equal(a.state.phaseNow.phase, 'post');
+  // lunes 2027-03-29 (el ancla de B): ya arrancó -> sin prev, ancla el lunes siguiente
+  const b = appWithB('2027-10-10');
+  b.Date = makeFrozenDate('2027-03-29T08:00:00');
+  b.state.weekStart = MAINT_W1;
+  b.state.profile.raceDate = '2027-11-07';
+  b.refreshPhaseSchedule();
+  assert.equal(b.state.phaseSchedule.prev, undefined);
+  assert.equal(b.state.phaseSchedule.anchor, '2027-04-05');
+  assert.deepEqual(plain(b.phaseForWeek(b.state.profile, MAINT_W1, b.state.phaseSchedule)), { active: false });
+  assert.equal(b.state.phaseNow, null);
+});
