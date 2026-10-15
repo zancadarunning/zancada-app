@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-15T15:14:13Z';
+const APP_VERSION = '2026-10-15T15:15:04Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -16655,9 +16655,10 @@ function applyProfileChange(input){
     return rejectedNotes.length ? `No se aplicó ningún cambio: ${rejectedNotes.join('; ')} -- confirmá el valor correcto con el corredor y volvé a llamar a modificar_perfil.` : 'No hubo cambios para aplicar.';
   }
   if(recalc){
-    // objetivo/fecha de carrera nuevos -> el cronograma por fases se rehace antes de regenerar el plan
-    refreshPhaseSchedule();
+    // weeklyKm primero: el cronograma por fases (que se rehace antes de regenerar el plan si cambiaron
+    // objetivo/fecha de carrera) fija su base y su pico con el weeklyKm de ese momento
     state.profile.weeklyKm = calcWeeklyKm(state.profile);
+    refreshPhaseSchedule();
     state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
     state.nextWeekOverrides = {}; // cambió la base del plan -> los cambios puntuales de la semana que viene ya no aplican
   }

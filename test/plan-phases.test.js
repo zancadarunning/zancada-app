@@ -2932,3 +2932,20 @@ test('I1: mantenimiento tiene descarga cada 4ta semana (x0,75 y etiqueta); post 
   assert.deepEqual(tagScreen({ goal: '10k' }, plain(POST_SCHEDULE), '2027-04-19', 3), { tag: true, note: true });
   assert.deepEqual(tagScreen({ goal: '10k' }, plain(POST_SCHEDULE), '2027-04-12', 4), { tag: false, note: false });
 });
+
+test('I7: modificar_perfil con carrera y km nuevos a la vez calcula el cronograma con el weeklyKm nuevo', () => {
+  const p = racingProfile();
+  const { app } = phasedApp(p);
+  app.renderAll = () => {}; app.renderZones = () => {};
+  app.state.weekStart = '2026-10-26';
+  app.state.weekNumber = 1;
+  app.state.plan = plain(app.generatePlan(p, 1, '2026-10-26'));
+  app.applyProfileChange({ fecha_carrera: '2027-04-04', km_actuales: 20 });
+  assert.equal(app.state.profile.weeklyKm, 20);
+  const s = app.state.phaseSchedule;
+  assert.equal(s.baseKm, 20, 'la base del cronograma es la nueva');
+  const caution = app.trainingCaution(app.state.profile);
+  const want = app.phasePeakFromStart('21k', 20, s.rampStartKm, caution, app.phaseRampSteps(app.phaseScheduleR(s)));
+  assert.equal(s.peakKm, want.peakKm);
+  assert.ok(s.peakKm <= 20 * 1.8 + 1e-9, `pico ${s.peakKm} con base 20`);
+});
