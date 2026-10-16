@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-15T23:51:23Z';
+const APP_VERSION = '2026-10-16T00:17:24Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4597,14 +4597,17 @@ function postRaceWeeklyKm(info, baseKmNow){
   const hasBase = Number.isFinite(info.baseKm) && info.baseKm > 0;
   const load = hasBase && Number.isFinite(baseKmNow) ? Math.min(1, Math.max(0.5, baseKmNow / info.baseKm)) : 1;
   let km;
+  const f = POST_RACE_FACTORS[info.goal] || POST_RACE_FACTORS_DEFAULT;
   if(info.phase === 'maintenance'){
     // Mantenimiento: 0,85 x el pico como techo, pero sin bajar de la base con la que se armó el plan ni
     // de 0,75 x el pico (no hace falta sostener el volumen de una preparación sin carrera). Sin base
-    // guardada (cronograma viejo), 0,85 x el pico como antes. Descarga cada 4ta semana.
-    const level = hasBase ? Math.min(0.85 * info.peakKm, Math.max(info.baseKm, 0.75 * info.peakKm)) : 0.85 * info.peakKm;
-    km = level * (phaseIsCutbackWeek(info) ? 0.75 : 1);
+    // guardada (cronograma viejo), 0,85 x el pico como antes. Se llega a ese nivel subiendo desde la
+    // semana +2 de la recuperación como mucho 15% por semana (un 42k pasaba de 0,65 a 0,75 x el pico,
+    // +31% con mucho volumen, de golpe). Descarga cada 4ta semana.
+    const target = hasBase ? Math.min(0.85 * info.peakKm, Math.max(info.baseKm, 0.75 * info.peakKm)) : 0.85 * info.peakKm;
+    const fromPost2 = info.peakKm * f[1] * Math.pow(1.15, Math.max(0, (info.weeksAfter || 3) - 2));
+    km = Math.min(target, fromPost2) * (phaseIsCutbackWeek(info) ? 0.75 : 1);
   } else {
-    const f = POST_RACE_FACTORS[info.goal] || POST_RACE_FACTORS_DEFAULT;
     km = info.peakKm * (info.weeksAfter === 1 ? f[0] : f[1]);
   }
   return { km: km * load, peakKm: info.peakKm, limited: false };

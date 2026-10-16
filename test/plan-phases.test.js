@@ -3478,14 +3478,14 @@ test('W2-35: recuperación por distancia: 42k x0,40 / x0,65, 21k x0,50 / x0,75, 
 test('W2-35: mantenimiento = min(0,85 x pico, max(base, 0,75 x pico)) x carga, con descarga x0,75 cada 4ta semana', () => {
   const app = loadApp();
   const km = (goal, peak, base, wa, now) => app.phasedWeeklyKm({ goal }, { level: 0 }, postInfo(goal, peak, base, wa), now === undefined ? base : now).km;
-  near(km('42k', 70, 40, 3), 52.5, '42k pico 70 base 40');        // min(59,5, max(40, 52,5))
+  near(km('42k', 70, 40, 4), 52.5, '42k pico 70 base 40 (2da semana: la 1ra sube desde la recuperación, ver W5-L3)');        // min(59,5, max(40, 52,5))
   near(km('21k', 55, 35, 3), 41.25, '21k pico 55 base 35');       // min(46,75, max(35, 41,25))
   near(km('10k', 50, 30, 3), 37.5, '10k pico 50 base 30');        // min(42,5, max(30, 37,5))
   near(km('21k', 55, 50, 3), 46.75, 'base alta: tope 0,85 x pico'); // min(46,75, max(50, 41,25))
   near(km('10k', 45, 40, 3), 38.25, 'base entre 0,75 y 0,85 del pico: la base'.replace('la base', '0,85 x 45 = 38,25'));
   near(km('10k', 46, 36, 3), 36, 'base entre 0,75 y 0,85 del pico manda la base');
   near(km('42k', 70, 40, 6), 52.5 * 0.75, '4ta semana de mantenimiento: descarga');
-  near(km('42k', 70, 40, 3, 30), 52.5 * 0.75, 'carga 30/40');
+  near(km('42k', 70, 40, 4, 30), 52.5 * 0.75, 'carga 30/40');
   // cronograma guardado sin base: como antes (0,85 x pico)
   const sinBase = Object.assign(postInfo('10k', 50, undefined, 3), {});
   delete sinBase.baseKm;
@@ -3596,4 +3596,39 @@ test('W4: el corrimiento sí vuelve a 0 cuando la semana actual pasa a ser una s
   const info = app.phaseForWeek(p, anchorB, app.state.phaseSchedule);
   assert.ok(info.active && !info.fromPrev, 'semana real de B');
   assert.equal(app.state.curveWeekOffset, 0);
+});
+
+// ---- Fix wave 5 (limitaciones) ----
+
+test('W5-L3: después de la recuperación el mantenimiento sube como mucho 15% por semana hasta su objetivo (42k pico 70, base 40)', () => {
+  const app = loadApp();
+  const km = (goal, peak, base, wa) => app.phasedWeeklyKm({ goal }, { level: 0 }, postInfo(goal, peak, base, wa), base).km;
+  // secuencia del motor: post 1 -> post 2 es la recuperación aprobada (+62,5%), después +15% como mucho
+  const seq = [1, 2, 3, 4, 5].map(wa => km('42k', 70, 40, wa));
+  near(seq[0], 28, 'post 1');
+  near(seq[1], 45.5, 'post 2');
+  near(seq[2], 45.5 * 1.15, 'mantenimiento 1: post 2 x 1,15');
+  near(seq[3], 52.5, 'mantenimiento 2: ya en el objetivo');
+  near(seq[4], 52.5, 'mantenimiento 3');
+  // 21k pico 55 base 35: post 2 = 41,25 = objetivo del mantenimiento -> sin subida
+  near(km('21k', 55, 35, 3), 41.25, '21k');
+  // la descarga de la 4ta semana de mantenimiento y la carga siguen igual
+  near(km('42k', 70, 40, 6), 52.5 * 0.75, 'descarga');
+});
+
+test('W5-L3: barrido: el paso post 2 -> mantenimiento del motor nunca pasa +15% (todas las metas, bases 15-70)', () => {
+  const app = loadApp();
+  let n = 0;
+  ['5k', '10k', '15k', '21k', '42k'].forEach(goal => [15, 25, 35, 50, 70].forEach(base => {
+    const peak = Math.max(base, { '5k': 35, '10k': 45, '15k': 50, '21k': 55, '42k': 70 }[goal]);
+    let prev = null;
+    for (let wa = 2; wa <= 12; wa++) {
+      const info = postInfo(goal, peak, base, wa);
+      if (app.phaseIsCutbackWeek(info)) continue;
+      const v = app.phasedWeeklyKm({ goal }, { level: 0 }, info, base).km;
+      if (prev !== null) { n++; assert.ok(v <= prev * 1.15 + 1e-9, `${goal} ${base} semana +${wa}: ${prev} -> ${v}`); }
+      prev = v;
+    }
+  }));
+  assert.ok(n > 100);
 });
