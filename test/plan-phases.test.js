@@ -3644,3 +3644,22 @@ test('W5-L5: en las semanas de descarga del plan por fases ninguna sesión es ta
   });
   assert.ok(cut > 200, `semanas de descarga: ${cut}`);
 });
+
+test('W5-L7: por tiempo, con fases la tirada tiene tope en minutos (tope de km de la distancia x ritmo base) además de los 150 min', () => {
+  let seen = 0;
+  sweepPhaseWeeks({ goals: ['5k', '10k', '21k'], bases: [30, 50, 70], days: [3, 4, 5], Ws: [12], offs: [0, 1], trainBy: 'time' }, (app, p, ws, info, plan, label) => {
+    const long = plan.find(d => d.typeKey === 'long');
+    if (!long || info.phase === 'post') return;
+    const peak = app.phasedWeeklyKm(p, app.trainingCaution(p), info, app.phaseEffectiveWeeklyKm(p, false)).peakKm;
+    const capMin = app.phaseLongCapMin(p.goal, peak, p);
+    seen++;
+    assert.ok(long.durMin <= Math.min(150, capMin), `${label}: tirada ${long.durMin} min > tope ${capMin}`);
+    plan.filter(d => d.typeKey === 'easy').forEach(d => assert.ok(d.durMin < long.durMin, `${label}: rodaje ${d.durMin} >= tirada ${long.durMin}`));
+  });
+  assert.ok(seen > 100);
+  // el tope existe y es el de km por el ritmo base, redondeado a 5 min
+  const app = loadApp();
+  const p = fwProfile({ goal: '5k', trainBy: 'time' });
+  const pace = app.estimateBasePaceMinPerKm(p);
+  assert.equal(app.phaseLongCapMin('5k', 35, p), Math.round(12 * pace / 5) * 5);
+});

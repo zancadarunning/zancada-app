@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-16T00:18:51Z';
+const APP_VERSION = '2026-10-16T00:20:25Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6504,7 +6504,15 @@ const TIME_MAX_BY_TYPE = {easy:90, intervals:40, tempo:35, long:150, fartlek:40,
 // pueda crecer (5 min por debajo de la tirada, dentro de TIME_MAX_BY_TYPE.easy y del tope de minutos
 // disponibles), después a la tirada (hasta TIME_MAX_BY_TYPE.long); si sobra, se saca de los rodajes
 // más largos sin bajar de TIME_MIN_BY_TYPE.easy. Las sesiones de calidad no se tocan. Sin trote-caminata.
-function spreadPhaseShortfallMin(days, targetMin, availCapMin){
+// Tope de la tirada del plan por fases en minutos (plan por tiempo): el de km (phaseLongCapKm, con la
+// escala por pico) por el ritmo base del corredor, redondeado a 5 min. Antes por tiempo solo había el
+// tope general de 150 min, así que un 5k podía tener una tirada de dos horas. undefined sin tope.
+function phaseLongCapMin(goal, peakKm, p){
+  const capKm = phaseLongCapKm(goal, peakKm);
+  if(capKm === undefined) return undefined;
+  return Math.max(TIME_MIN_BY_TYPE.long, Math.round(capKm * estimateBasePaceMinPerKm(p) / 5) * 5);
+}
+function spreadPhaseShortfallMin(days, targetMin, availCapMin, longCapMin){
   let left = Math.round((targetMin - days.reduce((a, d) => a + (d.durMin || 0), 0)) / 5);
   const easy = days.filter(d => d.typeKey === 'easy' && !d.runWalk);
   const longs = days.filter(d => d.typeKey === 'long' && !d.runWalk);
@@ -6519,7 +6527,7 @@ function spreadPhaseShortfallMin(days, targetMin, availCapMin){
     const cand = easy.filter(d => d.durMin + 5 <= limit).sort((a, b) => a.durMin - b.durMin)[0];
     if(cand){ cand.durMin += 5; left--; continue; }
     const lg = longs.length ? longs.reduce((m, d) => d.durMin < m.durMin ? d : m) : null;
-    if(lg && lg.durMin + 5 <= TIME_MAX_BY_TYPE.long){ lg.durMin += 5; left--; continue; }
+    if(lg && lg.durMin + 5 <= Math.min(TIME_MAX_BY_TYPE.long, longCapMin || Infinity)){ lg.durMin += 5; left--; continue; }
     break;
   }
 }
@@ -6560,12 +6568,16 @@ function buildTimePlanDays(ctx){
     });
   }
   const availCap = p.availableMinPerSession > 0 ? Math.max(10, p.availableMinPerSession - 20) : null;
+  const phaseLongCap = phaseInfo && phaseInfo.active && phaseInfo.phase !== 'post' && phaseInfo.longCapKm
+    ? Math.max(TIME_MIN_BY_TYPE.long, Math.round(phaseInfo.longCapKm * pace / 5) * 5) : null; // = phaseLongCapMin con el pico de la semana
   const continuousBeginner = !!(p.levelTest && p.levelTest.continuousOk);
   const timeDays = DAY_KEYS.map(day => {
     const typeKey = sessionMap[day];
     if(!typeKey) return {day, typeKey:'rest', dist:0, terrain:null, zone:null, beginner};
     const terrain = typeKey === 'intervals' ? 'asfalto' : p.terrain;
-    const maxM = typeKey === 'long' && beginner ? 60 : TIME_MAX_BY_TYPE[typeKey];
+    let maxM = typeKey === 'long' && beginner ? 60 : TIME_MAX_BY_TYPE[typeKey];
+    // con fases, la tirada también respeta el tope de la distancia pasado a minutos (phaseLongCapMin)
+    if(typeKey === 'long' && !beginner && phaseLongCap) maxM = Math.min(maxM, phaseLongCap);
     const minM = typeKey === 'long' && beginner ? 25 : TIME_MIN_BY_TYPE[typeKey];
     let m = Math.min(maxM, Math.max(minM, roundMin5(minMap[typeKey], minM)));
     if(availCap && typeKey !== 'long') m = Math.min(m, availCap);
@@ -6597,7 +6609,7 @@ function buildTimePlanDays(ctx){
   // Mismo reparto que en distancia (spreadPhaseShortfall), en minutos: los topes por tipo (tempo 35,
   // series 40, cuestas 30...) dejan la semana corta y la que sigue saltaba. Solo con fases activas.
   if(!beginner && phaseInfo && phaseInfo.active && weekTargetMin !== null){
-    spreadPhaseShortfallMin(timeDays, weekTargetMin, availCap || Infinity);
+    spreadPhaseShortfallMin(timeDays, weekTargetMin, availCap || Infinity, phaseLongCap);
     timeDays.forEach(d => { if(d.typeKey === 'easy' || d.typeKey === 'long') d.dist = Math.max(0.1, Math.round(d.durMin / pace * 10) / 10); });
   }
   applyPhaseRacePace(timeDays, phaseInfo, goal, easyOnly, false);
