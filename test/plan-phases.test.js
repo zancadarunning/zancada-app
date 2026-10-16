@@ -3632,3 +3632,15 @@ test('W5-L3: barrido: el paso post 2 -> mantenimiento del motor nunca pasa +15% 
   }));
   assert.ok(n > 100);
 });
+
+test('W5-L5: en las semanas de descarga del plan por fases ninguna sesión es tan larga como la tirada (también las de calidad)', () => {
+  let cut = 0;
+  sweepPhaseWeeks({ goals: ALL_GOALS, bases: [15, 30, 50, 65], days: [3, 4, 5, 6], Ws: [12, 18], offs: [0, 1] }, (app, p, ws, info, plan, label) => {
+    if (!app.phaseIsCutbackWeek(info)) return;
+    const long = plan.find(d => d.typeKey === 'long');
+    if (!long) return;
+    cut++;
+    plan.filter(d => d.typeKey !== 'long' && d.typeKey !== 'rest').forEach(d => assert.ok(d.dist < long.dist, `${label}: ${d.typeKey} ${d.dist} >= tirada ${long.dist}`));
+  });
+  assert.ok(cut > 200, `semanas de descarga: ${cut}`);
+});

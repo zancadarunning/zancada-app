@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-16T00:17:24Z';
+const APP_VERSION = '2026-10-16T00:18:51Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4703,9 +4703,10 @@ function clampPhaseLongRun(distMap, usedTypes, phaseInfo, goal){
   if(!usedTypes.includes('long')) return;
   if(cap !== undefined) distMap.long = Math.min(distMap.long, cap);
   const limit = Math.max(1, distMap.long - 1);
-  // 2-3 sesiones: todas por debajo de la tirada. 4 o más: solo los rodajes (recortar una sesión de
-  // calidad le saca su estímulo; los rodajes son los que pueden ceder).
-  if(usedTypes.length >= 2 && usedTypes.length <= 3) usedTypes.forEach(t=>{ if(t !== 'long') distMap[t] = Math.min(distMap[t], limit); });
+  // 2-3 sesiones, o una semana de descarga del plan por fases: todas por debajo de la tirada (en la
+  // descarga la idea es bajar la carga, también la de calidad). 4 o más sesiones en una semana normal:
+  // solo los rodajes (recortar una sesión de calidad le saca su estímulo; los rodajes pueden ceder).
+  if((usedTypes.length >= 2 && usedTypes.length <= 3) || phaseIsCutbackWeek(phaseInfo)) usedTypes.forEach(t=>{ if(t !== 'long') distMap[t] = Math.min(distMap[t], limit); });
   else if(usedTypes.length > 3 && usedTypes.includes('easy')) distMap.easy = Math.min(distMap.easy, limit);
 }
 // Tope de la tirada del plan por fases: LONG_CAP_KM de la distancia, agrandado (hasta x1,5) cuando el
@@ -4824,6 +4825,32 @@ function spreadPhaseShortfall(days, targetKm, longCapKm, easyCapKm){
     if(lg && lg.dist + 1 <= longCapKm + 1e-9){ lg.dist = Math.round((lg.dist + 1) * 10) / 10; left--; continue; }
     break;
   }
+}
+// Semana de descarga del plan por fases: ninguna sesión puede ser tan larga como la tirada (ver
+// clampPhaseLongRun). Las de estructura (series, cuestas, fartlek) se recalculan por repeticiones y pueden
+// quedar por encima de lo que se les asignó; acá se rearman con menos km hasta quedar por debajo de la
+// tirada y, si ni con la estructura mínima entran, esa sesión pasa a rodaje suave de tirada - 1 km.
+// Modifica `days` en el lugar (solo modo distancia; generatePlan ya filtró el resto).
+function shrinkCutbackQuality(days, caution, weekNumber, profile){
+  const longs = days.filter(d => d.typeKey === 'long');
+  if(!longs.length) return;
+  const longKm = Math.min(...longs.map(d => d.dist));
+  const rebuild = {
+    intervals: q => { const st = buildIntervalStructure(q, caution, weekNumber); return { st, km: intervalActualKm(st) }; },
+    hills: q => { const st = buildHillStructure(q, caution); return { st, km: hillActualKm(st) }; },
+    fartlek: q => { const st = buildFartlekStructure(q, weekNumber, profile); return { st, km: fartlekActualKm(st, profile) }; },
+  };
+  days.forEach(d => {
+    if(d.typeKey === 'long' || d.typeKey === 'rest' || !(d.dist >= longKm)) return;
+    if(rebuild[d.typeKey]){
+      for(let q = Math.floor(d.dist) - 1; q >= 1; q--){
+        const r = rebuild[d.typeKey](q);
+        if(r.km < longKm){ d.interval = r.st; d.dist = r.km; return; }
+      }
+    } else if(longKm - 1 >= 1){ d.dist = longKm - 1; return; }
+    d.typeKey = 'easy'; d.zone = 2; d.terrain = profile.terrain; delete d.interval;
+    d.dist = Math.max(1, longKm - 1);
+  });
 }
 // Ritmo de carrera (segundos por km) para una meta: la proyección de Riegel para esa distancia
 // dividida por los km. Es lo que se muestra en las sesiones de ritmo de las fases específicas -- y
@@ -6287,6 +6314,9 @@ function generatePlan(p, weekNumber, weekStartDate){
   // dentro de las reglas de siempre (ver spreadPhaseShortfall). Antes del ritmo de carrera: el bloque de
   // la tirada sale de su distancia final.
   if(!beginner && phaseInfo.active && weekTargetKm !== null){
+    // Descarga del plan por fases: la estructura de series / cuestas / fartlek (mínimo 4 repeticiones)
+    // puede quedar igual o más larga que la tirada aunque su parte ya se recortó; se rearma más chica.
+    if(phaseIsCutbackWeek(phaseInfo) && !easyOnly) shrinkCutbackQuality(kmDays, caution, weekNumber, p);
     spreadPhaseShortfall(kmDays, weekTargetKm, phaseInfo.longCapKm || LONG_CAP_KM[p.goal] || Infinity, sessionCapKm);
   }
   applyPhaseRacePace(kmDays, phaseInfo, p.goal, easyOnly, true);
