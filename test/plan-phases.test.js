@@ -3663,3 +3663,26 @@ test('W5-L7: por tiempo, con fases la tirada tiene tope en minutos (tope de km d
   const pace = app.estimateBasePaceMinPerKm(p);
   assert.equal(app.phaseLongCapMin('5k', 35, p), Math.round(12 * pace / 5) * 5);
 });
+
+test('W5-L6: la tarjeta de carrera de Inicio usa la misma fase que el plan cuando es la carrera objetivo con fase activa', () => {
+  const app = loadApp();
+  app.state.profile = racingProfile({ goal: '10k' });
+  // carrera objetivo con fase del plan: el nombre de la fase del plan
+  ['base', 'build', 'specific', 'peak'].forEach(phase => {
+    app.state.phaseNow = { phase, weeksToRace: 8, limited: false, peakKm: 45 };
+    const r = plain(app.homeRacePhaseLabel(56, true, false));
+    assert.equal(r.text, app.t('plan_phase_' + phase), phase);
+    assert.equal(r.noteKey, null, phase);
+  });
+  app.state.phaseNow = { phase: 'taper', weeksToRace: 1, limited: false, peakKm: 45 };
+  assert.deepEqual(plain(app.homeRacePhaseLabel(10, true, false)), { text: app.t('plan_phase_taper'), noteKey: 'home_race_phase_taper_note' });
+  // sin fase activa (o post / maintenance, o una carrera que no es la objetivo): como siempre
+  app.state.phaseNow = null;
+  assert.deepEqual(plain(app.homeRacePhaseLabel(56, true, false)), { text: app.t('home_race_phase_build'), noteKey: null });
+  assert.deepEqual(plain(app.homeRacePhaseLabel(10, true, false)), { text: app.t('home_race_phase_taper'), noteKey: 'home_race_phase_taper_note' });
+  app.state.phaseNow = { phase: 'maintenance', weeksToRace: 0, limited: false, peakKm: 45, weeksAfter: 4 };
+  assert.deepEqual(plain(app.homeRacePhaseLabel(56, true, false)), { text: app.t('home_race_phase_build'), noteKey: null });
+  app.state.phaseNow = { phase: 'build', weeksToRace: 8, limited: false, peakKm: 45 };
+  assert.deepEqual(plain(app.homeRacePhaseLabel(5, false, true)), { text: app.t('home_race_phase_taper_final'), noteKey: 'home_race_phase_taper_final_note' });
+  assert.deepEqual(plain(app.homeRacePhaseLabel(40, false, false)), { text: app.t('home_race_phase_build'), noteKey: null });
+});

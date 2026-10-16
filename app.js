@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-16T00:20:25Z';
+const APP_VERSION = '2026-10-16T00:21:25Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5136,6 +5136,28 @@ function phaseCtxSentence(pn){
   // días / 7); un segundo conteo con otra cuenta (weeksToRace, por lunes) podía diferir en 1.
   return ` Fase actual del plan: ${PHASE_CTX_LABEL[pn.phase]}.`;
 }
+// Etiqueta de fase (y nota opcional) de la tarjeta de carrera de Inicio. Por días a la carrera, como
+// siempre; pero si la tarjeta es la de la carrera OBJETIVO y el plan por fases tiene una fase de
+// preparación activa esta semana (state.phaseNow: base..taper), muestra el MISMO nombre de fase que la
+// pantalla del plan (plan_phase_*) en vez de "Fase de carga" / "Puesta a punto". En taper conserva la
+// nota por días; en las otras fases no hay nota.
+function homeRacePhaseLabel(daysToRace, isGoalRace, isEventWeek){
+  let phaseKey, noteKey;
+  if(isGoalRace){
+    if(daysToRace < 7){ phaseKey = 'home_race_phase_taper_final'; noteKey = 'home_race_phase_taper_final_note'; }
+    else if(daysToRace < 21){ phaseKey = 'home_race_phase_taper'; noteKey = 'home_race_phase_taper_note'; }
+    else { phaseKey = 'home_race_phase_build'; noteKey = null; }
+  } else if(isEventWeek){
+    phaseKey = 'home_race_phase_taper_final'; noteKey = 'home_race_phase_taper_final_note';
+  } else {
+    phaseKey = 'home_race_phase_build'; noteKey = null;
+  }
+  const pn = typeof state !== 'undefined' && state ? state.phaseNow : null;
+  if(isGoalRace && pn && PHASE_CTX_LABEL[pn.phase]){
+    return { text: t('plan_phase_' + pn.phase), noteKey: pn.phase === 'taper' ? noteKey : null };
+  }
+  return { text: t(phaseKey), noteKey };
+}
 function isRecoveryWeek(weekStartDate){
   // La semana de recuperación es la que arranca el lunes siguiente a una carrera cargada
   // en "Próximos eventos", pero SOLO cuando esa carrera cayó en domingo -- así nos
@@ -7874,17 +7896,8 @@ function renderHome(){
     const phaseTag = document.getElementById('home-race-phase-tag');
     const phaseNote = document.getElementById('home-race-phase-note');
     const isGoalRace = state.profile.raceDate && state.event.date === state.profile.raceDate;
-    let phaseKey, noteKey;
-    if(isGoalRace){
-      if(daysToRace < 7){ phaseKey = 'home_race_phase_taper_final'; noteKey = 'home_race_phase_taper_final_note'; }
-      else if(daysToRace < 21){ phaseKey = 'home_race_phase_taper'; noteKey = 'home_race_phase_taper_note'; }
-      else { phaseKey = 'home_race_phase_build'; noteKey = null; }
-    } else if(isEventRaceWeek(state.weekStart)){
-      phaseKey = 'home_race_phase_taper_final'; noteKey = 'home_race_phase_taper_final_note';
-    } else {
-      phaseKey = 'home_race_phase_build'; noteKey = null;
-    }
-    phaseTag.textContent = t(phaseKey);
+    const { text: phaseText, noteKey } = homeRacePhaseLabel(daysToRace, isGoalRace, isEventRaceWeek(state.weekStart));
+    phaseTag.textContent = phaseText;
     phaseTag.style.display = 'inline-block';
     if(noteKey){ phaseNote.textContent = t(noteKey); phaseNote.style.display = 'block'; }
     else { phaseNote.style.display = 'none'; }
