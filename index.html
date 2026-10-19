@@ -1464,9 +1464,9 @@
   .info-btn:active{transform:scale(.85); color:var(--hivis-text);}
   /* Requisitos de la contraseña: cada uno arranca con un círculo vacío y se pone verde con tilde al cumplirse */
   .pw-checklist{list-style:none; margin:10px 0 0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:6px 12px;}
-  .pw-checklist li{display:flex; align-items:center; gap:7px; font-size:12px; color:var(--mist); transition:color .15s ease;}
+  .pw-checklist li{display:flex; align-items:center; gap:7px; font-size:12px; line-height:16px; color:var(--mist); transition:color .15s ease;}
   .pw-checklist .pw-dot{flex:0 0 auto; width:16px; height:16px; border-radius:50%; box-shadow:inset 0 0 0 1.5px var(--mist-dim); display:inline-flex; align-items:center; justify-content:center; transition:background-color .15s ease, box-shadow .15s ease;}
-  .pw-checklist .pw-dot svg{width:10px; height:10px; stroke-width:3; color:var(--ink);}
+  .pw-checklist .pw-dot svg{display:block; width:10px; height:10px; stroke-width:3; color:var(--ink);}
   .pw-checklist li.ok{color:var(--chalk);}
   .pw-checklist li.ok .pw-dot{background:var(--zone2); box-shadow:none;}
   :root[data-theme="light"] .pw-checklist li.ok .pw-dot svg{color:#fff;}
