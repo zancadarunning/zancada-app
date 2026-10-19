@@ -126,12 +126,22 @@ test('REINTENTO: si en su turno la corrida falló, la corrida siguiente de la no
   assert.equal(weekly(await runAt('2026-10-11T21:00:10Z', users)).length, 0, 'ya recibido: no se duplica');
 });
 
-test('un usuario sin salidas esta semana queda registrado y no se reevalúa en cada corrida', async () => {
+test('un usuario que hace meses que no corre queda registrado y no se reevalúa en cada corrida', async () => {
+  resetRegistry();
+  const id = userWithSlot(0, false);
+  const users = [{ id, plan: planNoSunday, weekStart: '2026-10-05', runs: [{ date: '2026-07-20T10:00:00Z', distanceKm: 5 }] }];
+  assert.equal(weekly(await runAt('2026-10-11T19:00:10Z', users)).length, 0);
+  assert.equal(registry.rows.size, 1, 'queda atendido');
+});
+
+test('un usuario sin salidas esta semana pero que corrió hace poco recibe el empujón una sola vez', async () => {
   resetRegistry();
   const id = userWithSlot(0, false);
   const users = [{ id, plan: planNoSunday, weekStart: '2026-10-05', runs: [{ date: '2026-09-20T10:00:00Z', distanceKm: 5 }] }];
-  assert.equal(weekly(await runAt('2026-10-11T19:00:10Z', users)).length, 0);
-  assert.equal(registry.rows.size, 1, 'queda atendido');
+  const first = await runAt('2026-10-11T19:00:10Z', users);
+  assert.equal(weekly(first).length, 1);
+  assert.match(weekly(first)[0].body, /Retomamos mañana/);
+  assert.equal(weekly(await runAt('2026-10-11T19:30:10Z', users)).length, 0, 'ya recibido: no se duplica');
 });
 
 test('sin la tabla sent_notifications (todavía no creada): sigue funcionando solo en el turno exacto, sin duplicar', async () => {

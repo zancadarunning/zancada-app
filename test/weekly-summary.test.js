@@ -22,8 +22,33 @@ test('semana con salidas: km, cantidad, diferencia con la anterior, sesiones del
   assert.match(m.body, /Racha: 3 semanas seguidas\./);
 });
 
-test('sin ninguna salida esta semana: no se manda nada', () => {
-  assert.equal(buildWeeklySummary({ ...base, runs: [run('2026-09-20T10:00:00Z', 5)], plan: [], weekStart: '2026-10-05', streak: 0 }), null);
+test('sin salidas esta semana pero con una en las últimas 4 semanas: empujón para retomar, en los 6 idiomas', () => {
+  const textos = {
+    es: 'Esta semana no registraste salidas. ¿Retomamos mañana?',
+    en: "You didn't log any runs this week. Shall we get back to it tomorrow?",
+    pt: 'Esta semana você não registrou saídas. Retomamos amanhã?',
+    fr: "Cette semaine, tu n'as enregistré aucune sortie. On s'y remet demain ?",
+    it: 'Questa settimana non hai registrato uscite. Riprendiamo domani?',
+    de: 'Diese Woche hast du keinen Lauf aufgezeichnet. Wollen wir morgen wieder starten?'
+  };
+  for (const [lang, body] of Object.entries(textos)) {
+    const m = buildWeeklySummary({ ...base, lang, runs: [run('2026-09-20T10:00:00Z', 5)], plan: [], weekStart: '2026-10-05', streak: 0 });
+    assert.equal(m.body, body, lang);
+    assert.ok(m.title, lang);
+    assert.doesNotMatch(m.body, /0.0 km|0 mi/, 'nunca un "0 km"');
+  }
+});
+
+test('sin salidas esta semana ni en las últimas 4 semanas (o nunca corrió): no se manda nada', () => {
+  assert.equal(buildWeeklySummary({ ...base, runs: [run('2026-07-20T10:00:00Z', 5)], plan: [], weekStart: '2026-10-05', streak: 0 }), null, 'hace meses que no corre');
+  assert.equal(buildWeeklySummary({ ...base, runs: [], plan: [], weekStart: '2026-10-05', streak: 0 }), null, 'cuenta sin carreras');
+  assert.equal(buildWeeklySummary({ ...base, runs: undefined, plan: null, weekStart: null, streak: 0 }), null);
+});
+
+test('el límite de las 4 semanas: 27 días atrás todavía cuenta, 28 ya no', () => {
+  const ago = n => new Date(NOW - n * 86400000).toISOString();
+  assert.ok(buildWeeklySummary({ ...base, runs: [run(ago(27), 5)], plan: null, weekStart: null, streak: 0 }));
+  assert.equal(buildWeeklySummary({ ...base, runs: [run(ago(28), 5)], plan: null, weekStart: null, streak: 0 }), null);
 });
 
 test('una carrera de la noche del domingo (23:30 local) cuenta en esta semana, no en la siguiente', () => {

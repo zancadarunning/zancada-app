@@ -6,6 +6,8 @@ const { pick } = require('./own');
 // función pura (se prueba aparte); el cron solo decide a quién le toca y cómo se envía.
 
 const MI_PER_KM = 0.621371;
+// Cuántos días hacia atrás se mira para saber si alguien corrió "hace poco": solo a esas cuentas se les manda el empujón de la semana sin salidas.
+const IDLE_NUDGE_DAYS = 28;
 // El resumen se reparte en turnos de media hora del domingo a la noche (hora local de cada corredor), en vez de mandarlo todo junto: cada
 // usuario tiene un turno fijo (lo saca de su id), así cada corrida del cron (cada 30 minutos) atiende a una fracción chica y entra sin
 // problema en el tiempo máximo de la función. No hace falta recordar a quién ya se le mandó: su turno es siempre el mismo.
@@ -57,12 +59,12 @@ function isWeeklySlot(userId, localHour, localMinute, sundaySession) {
 }
 
 const L = {
-  es: { title: 'Tu semana en Zancada', runs: n => n === 1 ? '1 salida' : `${n} salidas`, head: (d, r, delta) => `${d} en ${r}${delta ? ` (${delta} vs la semana anterior)` : ''}.`, sessions: (a, b) => `Sesiones del plan: ${a} de ${b}.`, streak: n => `Racha: ${n} semanas seguidas.` },
-  en: { title: 'Your week in Zancada', runs: n => n === 1 ? '1 run' : `${n} runs`, head: (d, r, delta) => `${d} in ${r}${delta ? ` (${delta} vs last week)` : ''}.`, sessions: (a, b) => `Plan sessions: ${a} of ${b}.`, streak: n => `Streak: ${n} weeks in a row.` },
-  pt: { title: 'Sua semana no Zancada', runs: n => n === 1 ? '1 saída' : `${n} saídas`, head: (d, r, delta) => `${d} em ${r}${delta ? ` (${delta} vs a semana anterior)` : ''}.`, sessions: (a, b) => `Sessões do plano: ${a} de ${b}.`, streak: n => `Sequência: ${n} semanas seguidas.` },
-  fr: { title: 'Ta semaine sur Zancada', runs: n => n === 1 ? '1 sortie' : `${n} sorties`, head: (d, r, delta) => `${d} en ${r}${delta ? ` (${delta} vs la semaine précédente)` : ''}.`, sessions: (a, b) => `Séances du plan : ${a} sur ${b}.`, streak: n => `Série : ${n} semaines de suite.` },
-  it: { title: 'La tua settimana su Zancada', runs: n => n === 1 ? '1 uscita' : `${n} uscite`, head: (d, r, delta) => `${d} in ${r}${delta ? ` (${delta} rispetto alla settimana scorsa)` : ''}.`, sessions: (a, b) => `Sessioni del piano: ${a} su ${b}.`, streak: n => `Serie: ${n} settimane di fila.` },
-  de: { title: 'Deine Woche in Zancada', runs: n => n === 1 ? '1 Lauf' : `${n} Läufe`, head: (d, r, delta) => `${d} in ${r}${delta ? ` (${delta} ggü. Vorwoche)` : ''}.`, sessions: (a, b) => `Planeinheiten: ${a} von ${b}.`, streak: n => `Serie: ${n} Wochen in Folge.` }
+  es: { title: 'Tu semana en Zancada', idle: `Esta semana no registraste salidas. ¿Retomamos mañana?`, runs: n => n === 1 ? '1 salida' : `${n} salidas`, head: (d, r, delta) => `${d} en ${r}${delta ? ` (${delta} vs la semana anterior)` : ''}.`, sessions: (a, b) => `Sesiones del plan: ${a} de ${b}.`, streak: n => `Racha: ${n} semanas seguidas.` },
+  en: { title: 'Your week in Zancada', idle: `You didn't log any runs this week. Shall we get back to it tomorrow?`, runs: n => n === 1 ? '1 run' : `${n} runs`, head: (d, r, delta) => `${d} in ${r}${delta ? ` (${delta} vs last week)` : ''}.`, sessions: (a, b) => `Plan sessions: ${a} of ${b}.`, streak: n => `Streak: ${n} weeks in a row.` },
+  pt: { title: 'Sua semana no Zancada', idle: `Esta semana você não registrou saídas. Retomamos amanhã?`, runs: n => n === 1 ? '1 saída' : `${n} saídas`, head: (d, r, delta) => `${d} em ${r}${delta ? ` (${delta} vs a semana anterior)` : ''}.`, sessions: (a, b) => `Sessões do plano: ${a} de ${b}.`, streak: n => `Sequência: ${n} semanas seguidas.` },
+  fr: { title: 'Ta semaine sur Zancada', idle: `Cette semaine, tu n'as enregistré aucune sortie. On s'y remet demain ?`, runs: n => n === 1 ? '1 sortie' : `${n} sorties`, head: (d, r, delta) => `${d} en ${r}${delta ? ` (${delta} vs la semaine précédente)` : ''}.`, sessions: (a, b) => `Séances du plan : ${a} sur ${b}.`, streak: n => `Série : ${n} semaines de suite.` },
+  it: { title: 'La tua settimana su Zancada', idle: `Questa settimana non hai registrato uscite. Riprendiamo domani?`, runs: n => n === 1 ? '1 uscita' : `${n} uscite`, head: (d, r, delta) => `${d} in ${r}${delta ? ` (${delta} rispetto alla settimana scorsa)` : ''}.`, sessions: (a, b) => `Sessioni del piano: ${a} su ${b}.`, streak: n => `Serie: ${n} settimane di fila.` },
+  de: { title: 'Deine Woche in Zancada', idle: `Diese Woche hast du keinen Lauf aufgezeichnet. Wollen wir morgen wieder starten?`, runs: n => n === 1 ? '1 Lauf' : `${n} Läufe`, head: (d, r, delta) => `${d} in ${r}${delta ? ` (${delta} ggü. Vorwoche)` : ''}.`, sessions: (a, b) => `Planeinheiten: ${a} von ${b}.`, streak: n => `Serie: ${n} Wochen in Folge.` }
 };
 
 // Fecha local (YYYY-MM-DD) de un instante en un huso horario
@@ -81,19 +83,25 @@ function fmtKm(km, imperial) {
 }
 
 // runs: [{date, distanceKm}], plan: [{dist, status}] de la semana en curso (o null), weekStart: 'YYYY-MM-DD' del lunes de ese plan.
-// Devuelve {title, body} o null si no hubo ninguna salida esta semana (no se manda nada: un "0 km" desanima más de lo que ayuda).
+// Devuelve {title, body}. Sin salidas esta semana: un mensaje corto para retomar si corrió en las últimas 4 semanas (nunca un "0 km", que desanima más
+// de lo que ayuda); y null (no se manda nada) si hace más de 4 semanas que no corre o todavía no corrió nunca.
 function buildWeeklySummary({ runs, plan, weekStart, streak, tz, lang, imperial, now }) {
   const T = pick(L, lang, 'es');
   const today = dayNum(localDateKey(now, tz));
-  let km = 0, n = 0, prevKm = 0;
+  let km = 0, n = 0, prevKm = 0, ranRecently = false;
   for (const r of runs || []) {
     if (!r || !r.date) continue;
     const d = dayNum(localDateKey(new Date(r.date).getTime(), tz));
     const dist = Number(r.distanceKm) || 0;
     if (d > today - 7 && d <= today) { km += dist; n++; }
     else if (d > today - 14 && d <= today - 7) prevKm += dist;
+    if (d > today - IDLE_NUDGE_DAYS && d <= today) ranRecently = true;
   }
-  if (!n) return null;
+  if (!n) {
+    // Sin salidas esta semana: en vez de callar, un empujón corto para retomar ("0 km" no se muestra). Solo a quien corrió en las últimas
+    // 4 semanas: quien lleva meses sin abrir la app no recibe un reproche cada domingo, y a una cuenta nueva sin carreras no le decimos "retomamos".
+    return ranRecently ? { title: T.title, body: T.idle } : null;
+  }
 
   let delta = '';
   if (prevKm > 0.05) {
