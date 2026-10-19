@@ -1462,6 +1462,15 @@
   .small-link{color:var(--mist); font-size:12.5px; text-decoration:underline; background:none; border:none; cursor:pointer; padding:0; transition:opacity .12s ease;}
   .info-btn{background:none; border:none; color:var(--mist-dim); cursor:pointer; padding:4px; margin:-4px; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:color .12s ease, transform .12s ease;}
   .info-btn:active{transform:scale(.85); color:var(--hivis-text);}
+  /* Requisitos de la contraseña: cada uno arranca con un círculo vacío y se pone verde con tilde al cumplirse */
+  .pw-checklist{list-style:none; margin:10px 0 0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:6px 12px;}
+  .pw-checklist li{display:flex; align-items:center; gap:7px; font-size:12px; line-height:16px; color:var(--mist); transition:color .15s ease;}
+  .pw-checklist .pw-dot{flex:0 0 auto; width:16px; height:16px; border-radius:50%; box-shadow:inset 0 0 0 1.5px var(--mist-dim); display:inline-flex; align-items:center; justify-content:center; transition:background-color .15s ease, box-shadow .15s ease;}
+  .pw-checklist .pw-dot svg{display:block; width:10px; height:10px; stroke-width:3; color:var(--ink);}
+  .pw-checklist li.ok{color:var(--chalk);}
+  .pw-checklist li.ok .pw-dot{background:var(--zone2); box-shadow:none;}
+  :root[data-theme="light"] .pw-checklist li.ok .pw-dot svg{color:#fff;}
+  .sr-only{position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;}
   .pw-wrap{position:relative;}
   .pw-wrap input{padding-right:44px !important;}
   .pw-toggle{position:absolute; right:2px; top:0; bottom:0; margin:auto; height:fit-content; background:none; border:none; color:var(--mist-dim); cursor:pointer; padding:10px; display:flex; align-items:center; justify-content:center;}
@@ -2817,7 +2826,7 @@
         <input type="password" id="signup-password" autocomplete="new-password" minlength="8" data-i18n-ph="login_password_ph" oninput="updateSignupButtonState()" onkeydown="if(event.key==='Enter') handleSignUp();">
         <button type="button" class="pw-toggle" onclick="togglePasswordVisibility('signup-password', this)" data-i18n-aria="aria_show_password"><span class="icon-sq" style="width:18px; height:18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span></button>
       </div>
-      <p class="muted" style="margin:6px 0 0; font-size:11.5px;" data-i18n="password_requirements_hint"></p>
+      <ul class="pw-checklist" data-pw-list="signup-password" data-i18n-aria="password_requirements_hint"></ul>
       <p class="err-text" id="signup-err"></p>
     </div>
     <label class="legal-checkbox-row" for="signup-legal-check">
@@ -2856,10 +2865,10 @@
     <div class="field">
       <label for="recovery-new-pw" data-i18n="login_new_password_label"></label>
       <div class="pw-wrap">
-        <input type="password" id="recovery-new-pw" autocomplete="new-password" minlength="8" data-i18n-ph="login_password_ph" onkeydown="if(event.key==='Enter') submitNewPassword();">
+        <input type="password" id="recovery-new-pw" autocomplete="new-password" minlength="8" data-i18n-ph="login_password_ph" oninput="renderPasswordChecklist('recovery-new-pw')" onkeydown="if(event.key==='Enter') submitNewPassword();">
         <button type="button" class="pw-toggle" onclick="togglePasswordVisibility('recovery-new-pw', this)" data-i18n-aria="aria_show_password"><span class="icon-sq" style="width:18px; height:18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span></button>
       </div>
-      <p class="muted" style="margin:6px 0 0; font-size:11.5px;" data-i18n="password_requirements_hint"></p>
+      <ul class="pw-checklist" data-pw-list="recovery-new-pw" data-i18n-aria="password_requirements_hint"></ul>
       <p class="err-text" id="recovery-new-pw-err"></p>
     </div>
     <div class="field"><button class="btn btn-primary" id="recovery-submit-btn" data-i18n="login_recovery_submit" onclick="submitNewPassword()"></button></div>
