@@ -2485,6 +2485,7 @@ test('B sin pico (R<4 tras correr el ancla): después de su carrera, cambiar de 
   const ref = postApp({ raceDate: '2027-10-10' }, null, '2027-06-16T12:00:00').app;
   // v4 con la misma curva corrida por el empalme (ruling 34: la semana actual sale del cronograma)
   ref.state.curveWeekOffset = app.state.curveWeekOffset;
+  ref.state.curveCap = app.state.curveCap;
   assert.deepEqual(plain(app.generatePlan(app.state.profile, 16, '2027-06-14')), plain(ref.generatePlan(ref.state.profile, 16, '2027-06-14')));
 });
 
@@ -3573,7 +3574,8 @@ function rollTo(app, ws) {
 }
 
 test('W4: carrera corta elegida en la recuperación: el rollover a una semana del prev no borra el empalme y la semana sin cubrir sale empalmada', () => {
-  // casos del re-review (rv3/prevgap.js): 10k/30 -> 31,8 km en T (sin el arreglo 45,8); 10k/40 -> 33,8 (53,7)
+  // casos del re-review (rv3/prevgap.js): 10k/30 -> 31,8 km en T (sin el arreglo 45,8); 10k/40 -> 33,8 (53,7).
+  // Con el techo de v4 después de la salida (W6) la semana en T no pasa la continuación: <= esos valores.
   [[30, 12, 3, 31.8], [40, 16, 2, 33.8]].forEach(([base, wkA, bWeeks, want]) => {
     const { app, p, wk, anchorB } = prevGapApp(base, wkA, bWeeks);
     const s = app.state.phaseSchedule;
@@ -3588,7 +3590,7 @@ test('W4: carrera corta elegida en la recuperación: el rollover a una semana de
     assert.equal(app.phaseForWeek(p, anchorB, app.state.phaseSchedule).active, false, 'T es v4');
     assert.equal(app.state.curveWeekOffset, off);
     const got = sumDist(app.state.plan);
-    assert.ok(Math.abs(got - want) <= 1.5, `${base}: semana en T ${got} km vs ${want}`);
+    assert.ok(got <= want + 1.5 && got >= want * 0.85, `${base}: semana en T ${got} km vs ${want}`);
   });
 });
 
@@ -3974,4 +3976,38 @@ test('plan-examples (fix wave 5): día de carrera marcado, calidad debajo de la 
   const r16 = g(16);
   assert.equal(r16.trainBy, 'time');
   r16.rows.filter(r => r.phase !== 'v4' && r.plan.longMin > 0).forEach(r => assert.ok(r.plan.longMin <= 110, `semana ${r.weekNumber}: ${r.plan.longMin} min`));
+});
+
+// ---- Fix wave 6 ----
+
+test('W6: cambiar de meta en la semana de la carrera empalma v4 después de la recuperación con el mantenimiento, no con el pico', () => {
+  [['21k', 50, 'general'], ['42k', 70, 'general'], ['10k', 35, 'general'], ['21k', 50, 'race8'], ['42k', 40, 'race8']].forEach(([goal, base, edit]) => {
+    const { app, p, wk } = midPlanApp(goal, base, 12, 12); // semana 12 = la de la carrera (domingo)
+    const old = plain(app.state.phaseSchedule);
+    assert.equal(app.phaseForWeek(p, wk, app.state.phaseSchedule).phase, 'taper');
+    const growth = app.growthParams(app.trainingCaution(p)).growth;
+    const label = `${goal} ${base} ${edit}`;
+    if (edit === 'general') app.applyProfileChange({ objetivo: 'general' });
+    else app.applyProfileChange({ objetivo: goal === '10k' ? '21k' : '10k', fecha_carrera: app.addDaysToIsoLocal(wk, 8 * 7 + 6) });
+    const s = app.state.phaseSchedule;
+    // las 2 semanas siguientes siguen siendo la recuperación de la carrera vieja
+    [1, 2].forEach(j => assert.equal(app.phaseForWeek(p, app.addDaysToIsoLocal(wk, 7 * j), s).phase, 'post', `${label} +${j}`));
+    // primer lunes sin cubrir: la curva de v4 ahí es la continuación (mantenimiento), no el pico
+    let j = 1;
+    while (j < 40 && app.phaseForWeek(p, app.addDaysToIsoLocal(wk, 7 * j), s).active) j++;
+    if (j >= 40) return; // la carrera nueva cubre todo: no hay empalme
+    const T = app.addDaysToIsoLocal(wk, 7 * j);
+    const cont = contAt(app, p, old, T);
+    // objetivo de v4 en T: la curva corrida, con el techo de después de la salida (W6, curveCap)
+    const cap = app.legacyCurveCapKm(app.state.curveCap, T, app.trainingCaution(p));
+    const v = Math.min(v4Km(app, p, app.state.weekNumber + j), cap === null ? Infinity : cap);
+    assert.ok(cont < old.peakKm, `${label}: la continuación (${cont}) es la del mantenimiento`);
+    assert.ok(v >= cont / growth - 1e-9 && v <= cont * growth + 1e-9, `${label}: v4 en T ${v} vs continuación ${cont} (pico ${old.peakKm})`);
+    // y después de T v4 nunca pasa el pico de la carrera vieja (sin otra carrera por fases)
+    if (edit === 'general') for (let w = 0; w < 12; w++) {
+      const ws = app.addDaysToIsoLocal(T, 7 * w);
+      const c = app.legacyCurveCapKm(app.state.curveCap, ws, app.trainingCaution(p));
+      assert.ok(c !== null && c <= old.peakKm + 1e-9, `${label}: techo ${c} en ${ws}`);
+    }
+  });
 });

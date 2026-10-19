@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-19T02:30:43Z';
+const APP_VERSION = '2026-10-19T03:03:04Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5009,7 +5009,9 @@ function bridgePhaseExitCurve(outgoing, next){
   // Un reemplazo que arranca el lunes que viene deja afuera solo la semana actual: esa es T (por si se
   // regenera "a partir de ahora"). Si no, T es el primer lunes sin cubrir desde el que viene.
   let k = null;
-  if(!covered(0) && covered(1)) k = 0;
+  // (si el lunes que viene lo cubre el prev -- la recuperación de una carrera que es ESTA semana --, la
+  // semana actual no es la que hay que empalmar: es la de la carrera y su continuación sería el pico)
+  if(!covered(0) && covered(1) && !phaseForWeek(p, addDaysToIsoLocal(state.weekStart, 7), next).fromPrev) k = 0;
   else for(let j = 1; j <= 104; j++){ if(!covered(j)){ k = j; break; } }
   // Todo cubierto por el cronograma nuevo: el corrimiento no se usa mientras haya fases y se borra recién
   // cuando una semana real del plan por fases pasa a ser la actual (checkWeekRollover, ruling 36).
@@ -5028,6 +5030,28 @@ function bridgePhaseExitCurve(outgoing, next){
   // continuación), y la actual queda en n-3, que tampoco es descarga (ruling 38).
   if(k === 1 && n >= 5 && (n - 1) % 4 === 0) n -= 2;
   state.curveWeekOffset = n - ((state.weekNumber || 1) + k);
+  // Si después de T no queda ninguna rampa por fases (meta sin carrera, registro de solo recuperación o
+  // una carrera con R < 4), v4 además tiene un techo (state.curveCap, lo aplica generatePlan en el camino
+  // de v4): arranca en la continuación en T y sube como mucho `growth` por semana, sin pasar nunca el pico
+  // de la carrera que se dejó. Sin eso v4 seguía su curva por encima de ese pico en pocas semanas (hasta
+  // 1,21 x) y, si la base declarada ya superaba la continuación, arrancaba en la base (+11-44% de golpe
+  // después de la recuperación). Con otra rampa por fases más adelante, sin techo.
+  state.curveCap = (!next || !Number.isFinite(next.peakKm))
+    ? { from: T, fromCurve: n, startKm: cont, peakKm: Number.isFinite(outgoing.peakKm) && outgoing.peakKm > 0 ? outgoing.peakKm : null } : null;
+}
+// Techo de v4 después de salir del plan por fases sin otra carrera (ver bridgePhaseExitCurve), en km para
+// la semana que arranca `weekStartDate`, o null sin techo. PURA salvo por recibir el techo guardado.
+function legacyCurveCapKm(cap, weekStartDate, caution){
+  if(!cap || !(cap.startKm > 0) || !cap.from || !weekStartDate) return null;
+  const from = parsePhaseIso(cap.from), ws = parsePhaseIso(weekStartDate);
+  if(!from || !ws) return null;
+  // los pasos de crecimiento son los de la curva de v4 (sin contar sus semanas de descarga, igual que
+  // weekMultiplier): así después de una descarga el techo sube un paso, no dos
+  const w = phaseWeeksBetween(from, ws);
+  const steps = m => m - Math.floor(m / 4) - 1;
+  const n0 = cap.fromCurve > 0 ? cap.fromCurve : 1;
+  const km = cap.startKm * Math.pow(growthParams(caution).growth, steps(Math.max(1, n0 + w)) - steps(n0));
+  return cap.peakKm > 0 ? Math.min(km, cap.peakKm) : km;
 }
 // Cronograma nuevo (makePhaseSchedule) con el pico semanal y `limited` ya calculados A PARTIR
 // DEL PERFIL, una sola vez al crearlo/reemplazarlo: así no dependen de qué vista (semana actual,
@@ -5768,7 +5792,7 @@ function checkWeekRollover(){
       }
       if(breakAdj){
         state.profile.weeklyKm = Math.max(5, Math.round(state.profile.weeklyKm * breakAdj.kmFactor));
-        if(breakAdj.weekNumberReset){ promotedWeekNumber = breakAdj.weekNumberReset; breakReset = true; state.curveWeekOffset = 0; }
+        if(breakAdj.weekNumberReset){ promotedWeekNumber = breakAdj.weekNumberReset; breakReset = true; state.curveWeekOffset = 0; state.curveCap = null; }
         breakMsg = t('coach_return_from_break', {weeks: breakAdj.gapWeeks});
         // checkWeekRollover() solo corre una vez por transición real de semana (no en cada
         // render), así que esto es un "che, tanto tiempo" genuino, no algo que se repita cada
@@ -5808,7 +5832,7 @@ function checkWeekRollover(){
     // cuenta: puede haber un empalme pendiente para el primer lunes que el cronograma nuevo no cubre.
     if(state.profile && !isBeginnerProfile(state.profile)){
       const nowInfo = phaseForWeek(state.profile, state.weekStart, state.phaseSchedule);
-      if(nowInfo.active && !nowInfo.fromPrev) state.curveWeekOffset = 0;
+      if(nowInfo.active && !nowInfo.fromPrev){ state.curveWeekOffset = 0; state.curveCap = null; }
     }
     refreshPhaseNow(); // la semana actual cambió: la fase que muestra la UI también
     state.plan = promotedPlan || generatePlan(state.profile, state.weekNumber);
@@ -6290,6 +6314,10 @@ function generatePlan(p, weekNumber, weekStartDate){
     phaseInfo.longCapKm = phaseLongCapKm(p.goal, phased.peakKm);
   } else {
     weekFactor = weekMultiplier(legacyCurveWeek(weekNumber, p), caution, skipPeriodicCutback);
+    // Después de salir del plan por fases sin otra carrera, v4 sube desde la continuación sin pasar el pico
+    // de la carrera anterior (ver bridgePhaseExitCurve). Sin ese techo (todos los demás usuarios) nada cambia.
+    const legacyCap = !beginner && typeof state !== 'undefined' && state ? legacyCurveCapKm(state.curveCap, weekStartDate, caution) : null;
+    if(legacyCap !== null) weekFactor = Math.min(weekFactor, legacyCap / Math.max(9, effectiveWeeklyKm));
   }
   // generatePlan NO escribe state.phaseSchedule ni state.phaseNow: también arma semanas de vista
   // previa (con otro weeklyKm), así que no puede ser la fuente de eso -- ver refreshPhaseNow.
@@ -7900,6 +7928,7 @@ function applyReturnPlan(){
   if(adj && adj.weekNumberReset){
     state.weekNumber = adj.weekNumberReset;
     state.curveWeekOffset = 0; // la curva de v4 vuelve a empezar con el weekNumber reiniciado
+    state.curveCap = null;
     restartPhaseRampAfterBreak(); // mismo reinicio que el rollover con parate largo
   }
   state.plan = preserveLivedDays(state.plan, generatePlan(p, state.weekNumber || 1));
@@ -16544,7 +16573,8 @@ function captureUndoSnapshot(){
     phaseSchedule: state.phaseSchedule ? JSON.parse(JSON.stringify(state.phaseSchedule)) : null,
     // terminar o reemplazar el plan por fases corre la curva de v4 (bridgePhaseExitCurve)
     weekNumber: state.weekNumber,
-    curveWeekOffset: state.curveWeekOffset || 0
+    curveWeekOffset: state.curveWeekOffset || 0,
+    curveCap: state.curveCap ? JSON.parse(JSON.stringify(state.curveCap)) : null
   };
 }
 function applyUndoLastChange(){
@@ -16556,6 +16586,7 @@ function applyUndoLastChange(){
   if('phaseSchedule' in state.coachUndoSnapshot) state.phaseSchedule = state.coachUndoSnapshot.phaseSchedule;
   if(state.coachUndoSnapshot.weekNumber > 0) state.weekNumber = state.coachUndoSnapshot.weekNumber;
   if('curveWeekOffset' in state.coachUndoSnapshot) state.curveWeekOffset = state.coachUndoSnapshot.curveWeekOffset;
+  if('curveCap' in state.coachUndoSnapshot) state.curveCap = state.coachUndoSnapshot.curveCap;
   refreshPhaseSchedule();
   refreshPhaseNow();
   state.coachUndoSnapshot = null; // un solo nivel: no se puede deshacer dos veces seguidas
