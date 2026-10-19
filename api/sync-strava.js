@@ -2,6 +2,7 @@ const requireCronSecret = require('./_lib/require-cron-secret');
 const { rotateForFairness } = require('./_lib/cron-rotation');
 const { activityToRun, mergeStravaRuns, setStravaSyncStatus, fetchStreams } = require('./_lib/strava-activity-helpers');
 const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
+const { syncProbe, probeHasNew, probeMayBackfill } = require('./_lib/sync-probe');
 
 const { withSentry, reportError } = require('./_lib/sentry');
 const { mergeAndNotify } = require('./_lib/notify-new-run');
@@ -112,7 +113,10 @@ module.exports = withSentry(async (req, res) => {
         const acts = await actsRes.json();
         const runActs = Array.isArray(acts) ? acts.filter(a => ((a.sport_type || a.type || '').includes('Run'))) : [];
 
-        if (runActs.length) {
+        // Sonda liviana (sql/sync_probe.sql): evita bajar el estado completo de la cuenta en cada corrida cuando no hay nada nuevo
+        // ni carreras por completar. Sin la función en la base, hace lo de siempre.
+        const probe = await syncProbe(base, headers, conn.user_id, 'strava', 'stravaId', runActs.map(a => a.id));
+        if (runActs.length && probeHasNew(probe)) {
           const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${conn.user_id}&select=data`, { headers });
           const stateRows = await stateRes.json();
           if (stateRows && stateRows.length) {
@@ -126,7 +130,7 @@ module.exports = withSentry(async (req, res) => {
           }
         }
 
-        backfilled += await backfillStravaSplits(base, headers, conn, accessToken);
+        if (probeMayBackfill(probe)) backfilled += await backfillStravaSplits(base, headers, conn, accessToken);
         synced++;
         await setStravaSyncStatus(base, headers, conn.user_id, { ok: true });
       } catch (e) {

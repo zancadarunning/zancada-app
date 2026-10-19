@@ -7,6 +7,7 @@
 
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { rotateForFairness } = require('./_lib/cron-rotation');
+const { syncProbe, probeHasNew, probeMayBackfill } = require('./_lib/sync-probe');
 const { exerciseToRun, mergePolarRuns, fetchFitSplits } = require('./_lib/polar-activity-helpers');
 const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { withSentry, reportError } = require('./_lib/sentry');
@@ -103,7 +104,10 @@ module.exports = withSentry(async (req, res) => {
         const exercises = (exsData && exsData.exercises) || [];
         const runExercises = exercises.filter(ex => String(ex.sport || '').toUpperCase().includes('RUN'));
 
-        if (runExercises.length) {
+        // Sonda liviana (sql/sync_probe.sql): evita bajar el estado completo de la cuenta en cada corrida cuando no hay nada nuevo
+        // ni carreras por completar. Sin la función en la base, hace lo de siempre.
+        const probe = await syncProbe(base, headers, conn.user_id, 'polar', 'polarId', runExercises.map(ex => ex.id));
+        if (runExercises.length && probeHasNew(probe)) {
           const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${conn.user_id}&select=data`, { headers });
           const stateRows = await stateRes.json();
           if (stateRows && stateRows.length) {
@@ -119,7 +123,7 @@ module.exports = withSentry(async (req, res) => {
           }
         }
 
-        backfilled += await backfillPolarSplits(base, headers, conn);
+        if (probeMayBackfill(probe)) backfilled += await backfillPolarSplits(base, headers, conn);
         synced++;
       } catch (e) {
         errors++;
