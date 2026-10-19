@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-19T14:45:19Z';
+const APP_VERSION = '2026-10-19T14:57:45Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5698,7 +5698,11 @@ function buildWeeklyRecapMessage(weekPlan, weekStartIso, diffWeeks){
   // aunque el cartel dijera "mi". fmtDist()/distUnit() son las mismas funciones que ya usa
   // el resto de la app para esto (ver Historial, Plan, etc.), nunca hay que reinventar la
   // conversión a mano.
-  let msg = t('coach_weekly_recap', {km: fmtDist(km, 1), unit: distUnit(), done:doneCount, planned:plannedCount});
+  // Plan por tiempo: el resumen cuenta los minutos corridos, no los km.
+  const recapAmount = isTimeMode()
+    ? {km: Math.round(weekRuns.reduce((a,r)=>a+(r.durationSec||0), 0)/60), unit: t('time_unit_min')}
+    : {km: fmtDist(km, 1), unit: distUnit()};
+  let msg = t('coach_weekly_recap', {km: recapAmount.km, unit: recapAmount.unit, done:doneCount, planned:plannedCount});
   // Racha de constancia: cuenta semanas seguidas cumpliendo (al menos 70%) lo planeado.
   // Se corta apenas una semana no llega a ese umbral. Solo la mencionamos a partir de
   // la segunda semana seguida, para no sonar como un contador vacío en la primera.
@@ -12814,7 +12818,8 @@ function buildSessionFeedbackMessage(d, run, rating){
   if(!run || !(run.distanceKm>0) || !(run.durationSec>0)) return null;
   const pace = (run.durationSec/60)/run.distanceKm;
   const vars = {
-    actual: `${fmtDist(run.distanceKm,2)} ${distUnit()}`,
+    // Plan por tiempo: lo hecho y lo planeado se dicen en minutos, igual que en la tarjeta del plan (el ritmo se mantiene).
+    actual: isTimeMode() ? `${Math.max(1, Math.round(run.durationSec/60))} ${t('time_unit_min')}` : `${fmtDist(run.distanceKm,2)} ${distUnit()}`,
     pace: `${fmtPace(pace)}/${distUnit()}`
   };
   // d.dist>0 es el mismo criterio que ya usa renderPlan para distinguir un día CON sesión
@@ -12823,7 +12828,7 @@ function buildSessionFeedbackMessage(d, run, rating){
   if(d.dist>0){
     const typeLabel = t('type_'+d.typeKey);
     vars.type = typeLabel.charAt(0).toLowerCase() + typeLabel.slice(1);
-    vars.planned = `${fmtDist(d.dist,1)} ${distUnit()}`;
+    vars.planned = planAmountText(d);
     return t('coach_feedback_'+rating, vars);
   }
   return t('coach_feedback_'+rating+'_extra', vars);
@@ -16453,13 +16458,15 @@ function buildContext(){
   // se le arma la respuesta YA resuelta, en una sola frase corta, sin que tenga que buscar
   // ni cruzar nada -- mismo criterio que el aviso de "citá el número exacto" más abajo:
   // cuanto menos tenga que inferir el modelo, menos margen para que se equivoque.
+  // Cantidad de cada sesión en los bloques del plan: en plan por tiempo va SOLO en minutos (con los km al lado, el modelo cita los km).
+  const planCtxAmount = d => isTimeMode() ? `${planDurationMin(d)}min` : `${d.dist}km(~${planDurationMin(d)}min)`;
   const describePlanDayForCtx = d=>{
     if(!d) return 'sin datos';
     // el día de la carrera objetivo (plan por fases, ver applyGoalRaceDay) no es "descanso"
     if(d.raceDay) return 'el día de tu carrera objetivo' + (d.raceEventName ? ' (' + d.raceEventName + ')' : '');
     if(!(d.dist>0)) return 'descanso';
     const label = d.custom ? d.type : t('type_'+d.typeKey);
-    let s = `${label}, ${d.dist}km`;
+    let s = isTimeMode() ? `${label}, ${planDurationMin(d)} minutos` : `${label}, ${d.dist}km`;
     if(d.status==='done') s += ' (ya hecho' + (d.rating?', calificó: '+d.rating:'') + ')';
     else if(d.status==='skipped') s += ' (salteado)';
     return s;
@@ -16573,13 +16580,13 @@ function buildContext(){
   // contra DST que usa el resto del archivo para esto.
   const datesForWeek = weekStartIso => DAY_KEYS.map((d,i)=>`${d}=${addDaysToIsoLocal(weekStartIso, i)}`).join(', ');
   ctx += `\n\nFechas de calendario de cada día de esta semana: ${datesForWeek(state.weekStart)}. Fechas de calendario de cada día de la semana que viene: ${datesForWeek(nw.weekStart)}. Si te preguntan qué fecha del mes cae tal día, usá estos datos directo -- nunca calcules vos cuántos días faltan ni a qué fecha corresponde un día, aunque te parezca un cálculo simple.`;
-  ctx += `\n\n=== PLAN DE ESTA SEMANA (semana ${state.weekNumber}, la semana ACTUAL -- usá SIEMPRE este bloque para responder sobre "hoy", "mañana", "ayer" o "esta semana") ===\n${state.plan.map(d=>`${d.day}=${d.raceDay?'carrera objetivo ('+(d.raceEventName||'')+')':d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)${d.status?'/'+d.status:''}${d.rating?'/calificó:'+d.rating:''}`).join(', ')}.\n=== FIN plan de esta semana ===`;
-  ctx += `\n\n=== PLAN DE LA SEMANA QUE VIENE (semana ${nw.weekNumber}, todavía NO empezó -- es DISTINTA a la de arriba, ya calculada pero puede ajustarse según cómo termine esta semana. NUNCA uses estos km para responder sobre "hoy" o "mañana", esos están en el bloque de arriba) ===\n${nw.plan.map(d=>`${d.day}=${d.raceDay?'carrera objetivo ('+(d.raceEventName||'')+')':d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)`).join(', ')}.\n=== FIN plan de la semana que viene ===\n`;
+  ctx += `\n\n=== PLAN DE ESTA SEMANA (semana ${state.weekNumber}, la semana ACTUAL -- usá SIEMPRE este bloque para responder sobre "hoy", "mañana", "ayer" o "esta semana") ===\n${state.plan.map(d=>`${d.day}=${d.raceDay?'carrera objetivo ('+(d.raceEventName||'')+')':d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${planCtxAmount(d)}${d.status?'/'+d.status:''}${d.rating?'/calificó:'+d.rating:''}`).join(', ')}.\n=== FIN plan de esta semana ===`;
+  ctx += `\n\n=== PLAN DE LA SEMANA QUE VIENE (semana ${nw.weekNumber}, todavía NO empezó -- es DISTINTA a la de arriba, ya calculada pero puede ajustarse según cómo termine esta semana. NUNCA uses estos km para responder sobre "hoy" o "mañana", esos están en el bloque de arriba) ===\n${nw.plan.map(d=>`${d.day}=${d.raceDay?'carrera objetivo ('+(d.raceEventName||'')+')':d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${planCtxAmount(d)}`).join(', ')}.\n=== FIN plan de la semana que viene ===\n`;
   // Reportado por un usuario: le preguntó al coach cuánto tocaba un día puntual y respondió
   // con un número (7km) distinto al que estos mismos bloques ya traían (8km) -- no un dato
   // mal cargado, el bloque de arriba siempre tiene el número real, solo hacía falta pedirle
   // explícitamente que lo cite tal cual en vez de recordarlo/redondearlo de memoria.
-  ctx += `\n\nCuando cites la distancia, zona o tipo de una sesión de estos dos bloques, copiá el número EXACTO tal como está ahí -- nunca lo redondees ni lo digas de memoria.`;
+  ctx += `\n\nCuando cites la ${isTimeMode() ? 'duración (en minutos)' : 'distancia'}, zona o tipo de una sesión de estos dos bloques, copiá el número EXACTO tal como está ahí -- nunca lo redondees ni lo digas de memoria.` + (isTimeMode() ? ` Este corredor entrena por tiempo: no le hables de kilómetros ni para sus sesiones ni para el volumen de la semana (esta semana son ${state.plan.reduce((a,d)=>a+planDurationMin(d),0)} minutos en total); decile todo en minutos.` : '');
   return ctx;
 }
 const TOOLS = [
