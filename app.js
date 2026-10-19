@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-19T15:10:07Z';
+const APP_VERSION = '2026-10-19T16:53:58Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -170,6 +170,7 @@ function applyStaticTranslations(){
   document.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-ph]').forEach(el=>{ el.placeholder = t(el.dataset.i18nPh); });
   document.querySelectorAll('[data-i18n-aria]').forEach(el=>{ el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
+  renderPasswordChecklist('signup-password'); renderPasswordChecklist('recovery-new-pw');
   document.querySelectorAll('a[href^="/privacy.html"]').forEach(el=>{ el.href = apiUrl('/privacy.html?lang=' + lang); });
   document.querySelectorAll('a[href^="/terms.html"]').forEach(el=>{ el.href = apiUrl('/terms.html?lang=' + lang); });
   [...document.getElementById('perfil-lang-choice').children].forEach(c=>c.classList.toggle('active', c.dataset.v===lang));
@@ -1468,13 +1469,32 @@ function isPasswordStrong(pw){
   // se valida acá en el cliente ANTES de mandarla a Supabase -- Supabase solo exige un
   // mínimo de caracteres, no complejidad, así que sin este chequeo una contraseña como
   // "12345678" pasaría sin problema.
-  return typeof pw === 'string' && pw.length >= 8 && /[A-Z]/.test(pw) && /[a-z]/.test(pw) && /[0-9]/.test(pw);
+  return typeof pw === 'string' && PASSWORD_RULES.every(r => r.ok(pw));
+}
+// Los mismos 4 requisitos de isPasswordStrong, uno por uno: es lo que se muestra como lista debajo del campo de contraseña
+// y se va poniendo en verde a medida que se cumple cada uno.
+const PASSWORD_RULES = [
+  {key: 'pw_req_len', ok: pw => pw.length >= 8},
+  {key: 'pw_req_upper', ok: pw => /[A-Z]/.test(pw)},
+  {key: 'pw_req_lower', ok: pw => /[a-z]/.test(pw)},
+  {key: 'pw_req_num', ok: pw => /[0-9]/.test(pw)}
+];
+function renderPasswordChecklist(inputId){
+  const input = document.getElementById(inputId);
+  const list = document.querySelector('[data-pw-list="' + inputId + '"]');
+  if(!input || !list) return;
+  const pw = input.value || '';
+  list.innerHTML = PASSWORD_RULES.map(r => {
+    const ok = r.ok(pw);
+    return '<li class="' + (ok ? 'ok' : '') + '"><span class="pw-dot" aria-hidden="true">' + (ok ? ICONS.check : '') + '</span><span>' + t(r.key) + '</span>' + (ok ? '<span class="sr-only"> (' + t('pw_req_ok') + ')</span>' : '') + '</li>';
+  }).join('');
 }
 // "Crear cuenta" arranca deshabilitado (ver el atributo disabled en index.html) y solo se
 // habilita cuando los 3 requisitos están OK a la vez -- antes se podía tocar siempre y
 // recién al hacer click aparecía el error puntual de qué faltaba. Se llama desde los
 // oninput/onchange de email, contraseña y el checkbox legal (ver index.html).
 function updateSignupButtonState(){
+  renderPasswordChecklist('signup-password');
   const btn = document.getElementById('signup-submit-btn');
   if(!btn) return;
   const email = document.getElementById('signup-email').value.trim();
