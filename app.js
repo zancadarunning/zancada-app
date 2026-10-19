@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-19T03:03:04Z';
+const APP_VERSION = '2026-10-19T03:07:28Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6586,8 +6586,12 @@ function paceHintFor(d){
 // entrenamiento. Se aplica al final, con la semana ya armada (no toca el reparto ni la tirada): ese día
 // pasa a ser un día de carrera con el mismo formato que ya usaban los días de carrera guardados
 // (raceDay + raceEventName, dist 0: no se manda al reloj ni al calendario como sesión, y planLabel /
-// la pantalla del plan lo muestran como "Carrera"). Solo con fase activa (taper); sin fases (v4) o en
-// cualquier otra semana devuelve los días tal cual.
+// la pantalla del plan lo muestran como "Carrera"). Además, el día ANTERIOR a la carrera y todos los
+// días de esa semana DESPUÉS de la carrera pasan a ser un rodaje suave corto (5 km como mucho, o su
+// equivalente en minutos): una carrera un miércoles dejaba series el martes y tempo + tirada después.
+// Con cualquier fase activa que no sea la recuperación (en la práctica, la semana de la carrera es
+// taper); sin fases (v4) o en cualquier otra semana devuelve los días tal cual.
+const GOAL_RACE_HEAVY = ['intervals', 'tempo', 'fartlek', 'hills', 'progression', 'long'];
 function applyGoalRaceDay(days, p, weekStartDate, phaseInfo){
   if(!phaseInfo || !phaseInfo.active || isPostRacePhase(phaseInfo.phase) || !p || !weekStartDate) return days;
   const race = parsePhaseIso(p.raceDate), start = parsePhaseIso(weekStartDate);
@@ -6597,6 +6601,22 @@ function applyGoalRaceDay(days, p, weekStartDate, phaseInfo){
   const out = days.slice();
   out[idx] = { day: days[idx].day, typeKey: 'rest', dist: 0, terrain: null, zone: null, beginner: !!days[idx].beginner,
     raceDay: true, raceEventName: t('plan_goal_race_name', { dist: String(p.goal || '').toUpperCase() }) };
+  const pace = estimateBasePaceMinPerKm(p);
+  const shortEasy = d => {
+    if(!d || d.typeKey === 'rest' || d.typeKey === 'test' || (d.typeKey !== 'easy' && !GOAL_RACE_HEAVY.includes(d.typeKey))) return d;
+    const o = { day: d.day, typeKey: 'easy', terrain: p.terrain, zone: 2, beginner: !!d.beginner };
+    if(d.timeBased){
+      o.timeBased = true;
+      o.durMin = Math.min(d.durMin || 0, roundMin5(5 * pace, TIME_MIN_BY_TYPE.easy));
+      o.dist = Math.max(0.1, Math.round(o.durMin / pace * 10) / 10);
+    } else {
+      o.dist = Math.min(d.dist || 0, 5);
+    }
+    return o;
+  };
+  // el día anterior: solo si traía una sesión fuerte (un rodaje suave queda como estaba)
+  if(idx > 0 && GOAL_RACE_HEAVY.includes(out[idx - 1].typeKey)) out[idx - 1] = shortEasy(out[idx - 1]);
+  for(let i = idx + 1; i < out.length; i++) out[i] = shortEasy(out[i]);
   return out;
 }
 function applyLevelTestDay(days, p, weekStartDate, beginner){
@@ -6688,12 +6708,12 @@ const TIME_MAX_BY_TYPE = {easy:90, intervals:40, tempo:35, long:150, fartlek:40,
 // pueda crecer (5 min por debajo de la tirada, dentro de TIME_MAX_BY_TYPE.easy y del tope de minutos
 // disponibles), después a la tirada (hasta TIME_MAX_BY_TYPE.long); si sobra, se saca de los rodajes
 // más largos sin bajar de TIME_MIN_BY_TYPE.easy. Las sesiones de calidad no se tocan. Sin trote-caminata.
-// Tope de la tirada del plan por fases en minutos (plan por tiempo): el de km (phaseLongCapKm, con la
-// escala por pico) por el ritmo base del corredor, redondeado a 5 min. Antes por tiempo solo había el
-// tope general de 150 min, así que un 5k podía tener una tirada de dos horas. undefined sin tope.
-function phaseLongCapMin(goal, peakKm, p){
-  const capKm = phaseLongCapKm(goal, peakKm);
-  if(capKm === undefined) return undefined;
+// Tope de la tirada del plan por fases en minutos (plan por tiempo): capKm (el tope en km de
+// phaseLongCapKm, con la escala por pico) por el ritmo base del corredor, redondeado a 5 min. Antes por
+// tiempo solo había el tope general de 150 min, así que un 5k podía tener una tirada de dos horas. Se usa
+// solo en semanas de 4+ sesiones (ver buildTimePlanDays). undefined sin tope.
+function phaseLongCapMin(capKm, p){
+  if(!(capKm > 0)) return undefined;
   return Math.max(TIME_MIN_BY_TYPE.long, Math.round(capKm * estimateBasePaceMinPerKm(p) / 5) * 5);
 }
 function spreadPhaseShortfallMin(days, targetMin, availCapMin, longCapMin){
@@ -6752,8 +6772,10 @@ function buildTimePlanDays(ctx){
     });
   }
   const availCap = p.availableMinPerSession > 0 ? Math.max(10, p.availableMinPerSession - 20) : null;
-  const phaseLongCap = phaseInfo && phaseInfo.active && phaseInfo.phase !== 'post' && phaseInfo.longCapKm
-    ? Math.max(TIME_MIN_BY_TYPE.long, Math.round(phaseInfo.longCapKm * pace / 5) * 5) : null; // = phaseLongCapMin con el pico de la semana
+  // Solo con 4 o más sesiones: con 2-3 la semana ya queda corta por los topes de minutos de cada tipo y el
+  // tope de la tirada la recortaba más (5k a 35 km con 2 días: 110-140 min contra ~210 buscados).
+  const phaseLongCap = phaseInfo && phaseInfo.active && phaseInfo.phase !== 'post' && usedTypes.length >= 4
+    ? phaseLongCapMin(phaseInfo.longCapKm, p) || null : null;
   const continuousBeginner = !!(p.levelTest && p.levelTest.continuousOk);
   const timeDays = DAY_KEYS.map(day => {
     const typeKey = sessionMap[day];
@@ -7506,11 +7528,16 @@ function closeRaceTipsInfo(){ document.getElementById('race-tips-info-modal').st
 // applyMoveSession (herramienta mover_sesion del coach); también la usaba el botón
 // "reprogramar por lluvia" del aviso de clima, ya sacado de la app.
 function swapPlanDaySessions(dayA, dayB){
+  // El día de la carrera objetivo no se intercambia: la sesión que cayera ahí desaparecería de la
+  // pantalla y del reloj (los días de carrera no se muestran ni se mandan como sesión) y seguiría
+  // contando en el total. Devuelve false si no hizo nada.
+  if(!dayA || !dayB || dayA.raceDay || dayB.raceDay) return false;
   const fields = ['typeKey','dist','terrain','zone','interval','custom','cancelled','type','desc'];
   const aCopy = {};
   fields.forEach(f=>{ aCopy[f] = dayA[f]; });
   fields.forEach(f=>{ if(dayB[f]===undefined) delete dayA[f]; else dayA[f] = dayB[f]; });
   fields.forEach(f=>{ if(aCopy[f]===undefined) delete dayB[f]; else dayB[f] = aCopy[f]; });
+  return true;
 }
 // Domingo y lunes: tarjeta con los números de la semana (la que termina el domingo, o la que acaba de terminar el lunes).
 function renderHomeRecap(){
@@ -8518,7 +8545,7 @@ function buildDayListHtml(wd){
     if(d.typeKey==='test' && !d.testRead && d.status!=='skipped') statusBlock += `<div style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openLevelTest()">${t('ltest_load_btn')}</button></div>`;
     const kmHtml = isEventDay ? (eventAmountText ? `<span class="day-km-inline">${eventAmountText}</span>` : '') : (d.dist>0 ? `<span class="day-km-inline">${planAmountText(d)}</span>` : (extraRunAmountText ? `<span class="day-km-inline">${extraRunAmountText}</span>` : ''));
     return `<div>
-      <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" data-idx="${i}"${(wd.mode==='current' && canEdit && !isEventDay && !d.status) ? (d.dist>0 ? ' data-src="1" data-drop="1"' : ' data-drop="1"') : ''} data-zone="${(d.dist>0 && d.zone && !isEventDay)?d.zone:''}" onclick="toggleDay(${i})">
+      <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" data-idx="${i}"${(wd.mode==='current' && canEdit && !isEventDay && !d.status && !d.raceDay) ? (d.dist>0 ? ' data-src="1" data-drop="1"' : ' data-drop="1"') : ''} data-zone="${(d.dist>0 && d.zone && !isEventDay)?d.zone:''}" onclick="toggleDay(${i})">
         <div class="day-badge"><div class="d">${t('day_'+d.day).slice(0,3)}</div>${dateLbl?`<div class="mono muted" style="font-size:10px; margin-top:2px;">${dateLbl}</div>`:''}</div>
         <div class="day-info">
           <div class="day-info-title-row"><span class="t">${lblType}</span></div>
@@ -16339,6 +16366,8 @@ function buildContext(){
   // cuanto menos tenga que inferir el modelo, menos margen para que se equivoque.
   const describePlanDayForCtx = d=>{
     if(!d) return 'sin datos';
+    // el día de la carrera objetivo (plan por fases, ver applyGoalRaceDay) no es "descanso"
+    if(d.raceDay) return 'el día de tu carrera objetivo' + (d.raceEventName ? ' (' + d.raceEventName + ')' : '');
     if(!(d.dist>0)) return 'descanso';
     const label = d.custom ? d.type : t('type_'+d.typeKey);
     let s = `${label}, ${d.dist}km`;
@@ -16831,6 +16860,8 @@ function applyMoveSession(input){
   if(!origDay || !destDay) return 'Día no encontrado.';
   if(isDayLocked(input.dia_origen)) return `No puedo mover ${input.dia_origen}: ya pasó (o ya se corrió/salteó) esta semana.`;
   if(isDayLocked(input.dia_destino)) return `No puedo mover la sesión a ${input.dia_destino}: ese día ya pasó (o ya se corrió/salteó) esta semana.`;
+  if(origDay.raceDay) return `No puedo mover ${input.dia_origen}: ese día es la carrera objetivo del corredor, no una sesión de entrenamiento.`;
+  if(destDay.raceDay) return `No puedo mover la sesión a ${input.dia_destino}: ese día es la carrera objetivo del corredor (ahí no va ninguna otra sesión).`;
   // El snapshot de undo se toma recién acá, después de todas las validaciones -- ver el
   // comentario equivalente en applyPlanChange.
   captureUndoSnapshot();

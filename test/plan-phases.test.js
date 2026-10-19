@@ -3657,13 +3657,14 @@ test('W5-L5: en las semanas de descarga del plan por fases ninguna sesión es ta
   assert.ok(cut > 200, `semanas de descarga: ${cut}`);
 });
 
-test('W5-L7: por tiempo, con fases la tirada tiene tope en minutos (tope de km de la distancia x ritmo base) además de los 150 min', () => {
+test('W5-L7: por tiempo, con fases y 4+ sesiones la tirada tiene tope en minutos (tope de km de la distancia x ritmo base) además de los 150 min', () => {
   let seen = 0;
-  sweepPhaseWeeks({ goals: ['5k', '10k', '21k'], bases: [30, 50, 70], days: [3, 4, 5], Ws: [12], offs: [0, 1], trainBy: 'time' }, (app, p, ws, info, plan, label) => {
+  // (W6: con 2-3 sesiones no hay tope extra: ahí recortaba semanas que ya quedaban cortas)
+  sweepPhaseWeeks({ goals: ['5k', '10k', '21k'], bases: [30, 50, 70], days: [4, 5], Ws: [12], offs: [0, 1], trainBy: 'time' }, (app, p, ws, info, plan, label) => {
     const long = plan.find(d => d.typeKey === 'long');
     if (!long || info.phase === 'post') return;
     const peak = app.phasedWeeklyKm(p, app.trainingCaution(p), info, app.phaseEffectiveWeeklyKm(p, false)).peakKm;
-    const capMin = app.phaseLongCapMin(p.goal, peak, p);
+    const capMin = app.phaseLongCapMin(app.phaseLongCapKm(p.goal, peak), p);
     seen++;
     assert.ok(long.durMin <= Math.min(150, capMin), `${label}: tirada ${long.durMin} min > tope ${capMin}`);
     plan.filter(d => d.typeKey === 'easy').forEach(d => assert.ok(d.durMin < long.durMin, `${label}: rodaje ${d.durMin} >= tirada ${long.durMin}`));
@@ -3673,7 +3674,7 @@ test('W5-L7: por tiempo, con fases la tirada tiene tope en minutos (tope de km d
   const app = loadApp();
   const p = fwProfile({ goal: '5k', trainBy: 'time' });
   const pace = app.estimateBasePaceMinPerKm(p);
-  assert.equal(app.phaseLongCapMin('5k', 35, p), Math.round(12 * pace / 5) * 5);
+  assert.equal(app.phaseLongCapMin(app.phaseLongCapKm('5k', 35), p), Math.round(12 * pace / 5) * 5);
 });
 
 test('W5-L6: la tarjeta de carrera de Inicio usa la misma fase que el plan cuando es la carrera objetivo con fase activa', () => {
@@ -3858,9 +3859,7 @@ test('W5-L4: con fases, el día de la carrera objetivo es la carrera (no una ses
     assert.equal(d.dist, 0, label);
     assert.equal(d.raceEventName, app.t('plan_goal_race_name', { dist: '21K' }), label);
     assert.equal(plain(app.planLabel(d)).type, app.t('plan_race_day_type'), label);
-    // el resto de la semana no cambia: misma semana sin el reemplazo
-    const ref = plain(app.generatePlan(Object.assign({}, p, { raceDate: '2027-03-15' }), 19, '2027-03-08'));
-    // (con la carrera un día después, fuera de la semana, el cronograma no coincide: comparo solo los otros días con taper igual)
+    // solo ese día es el de la carrera
     plan.forEach((x, i) => { if (i !== idx) assert.ok(!x.raceDay, label + ' ' + i); });
     // Zonda ve el día como la carrera
     app.state.weekStart = '2027-03-08';
@@ -3939,15 +3938,19 @@ test('W5-L2: mucho volumen con 4-7 días (65-80 km): salto <= 1,34; con la tirad
   assert.ok(r.n > 300 && r.max <= 1.34, `máx ${r.max.toFixed(3)} (${r.worst})`);
 });
 
-test('W5-L2: por tiempo (mejor esfuerzo): 20-50 km con 4-6 días salto <= 1,11 (redondeo a 5 min); el resto <= 1,30', () => {
+test('W5-L2: por tiempo (mejor esfuerzo): 20-50 km con 4-6 días salto <= 1,11 (redondeo a 5 min); 2-3 días con mucho volumen <= 1,17; el resto <= 1,28', () => {
   // Por tiempo cada tipo de sesión tiene su techo de minutos (tempo 35, series 40, cuestas 30, fartlek 40,
   // progresivo 60) y la tirada su tope de fases: con 2-3 días o mucho volumen la semana depende del tipo
   // de la sesión de calidad. No hay piso por debajo de 20 min por sesión, así que las semanas chicas de
   // 5-7 días quedan por encima del objetivo (eso no es un salto: queda plano).
   const a = jumpsFor({ goals: ALL_GOALS, bases: [20, 35, 50], days: [4, 5, 6], Ws: [9, 18], offs: [0, 1], trainBy: 'time' });
   assert.ok(a.n > 200 && a.max <= 1.11, `A máx ${a.max.toFixed(3)} (${a.worst})`);
-  const b = jumpsFor({ goals: ALL_GOALS, bases: [8, 15, 35, 65], days: [2, 3, 7], Ws: [9, 18], offs: [0, 1], trainBy: 'time' });
-  assert.ok(b.n > 200 && b.max <= 1.30, `resto máx ${b.max.toFixed(3)} (${b.worst})`);
+  // 2-3 días con 35 km o más: <= 1,17 desde que el tope de la tirada en minutos es solo para 4+ sesiones (W6;
+  // con ese tope llegaba a 1,27). Semanas chicas o de 7 días: <= 1,28 (redondeo a 5 min y mínimos de 20 min).
+  const big = jumpsFor({ goals: ALL_GOALS, bases: [35, 65], days: [2, 3], Ws: [9, 18], offs: [0, 1], trainBy: 'time' });
+  assert.ok(big.n > 100 && big.max <= 1.17, `2-3 días máx ${big.max.toFixed(3)} (${big.worst})`);
+  const b = jumpsFor({ goals: ALL_GOALS, bases: [8, 15], days: [2, 3, 7], Ws: [9, 18], offs: [0, 1], trainBy: 'time' });
+  assert.ok(b.n > 100 && b.max <= 1.28, `resto máx ${b.max.toFixed(3)} (${b.worst})`);
 });
 
 test('W5-L10: terminología de fases coherente en pt/fr/it/de (pico = nota del pico, taper = el de Inicio) y mismos marcadores en todas', () => {
@@ -4010,4 +4013,86 @@ test('W6: cambiar de meta en la semana de la carrera empalma v4 después de la r
       assert.ok(c !== null && c <= old.peakKm + 1e-9, `${label}: techo ${c} en ${ws}`);
     }
   });
+});
+
+test('W6: por tiempo, con 2-3 sesiones la tirada no lleva el tope de fases (como antes de L7); con 4+ sí', () => {
+  // 5k a 35 km/sem con 2 días: la tirada vuelve a poder pasar el tope de 12 km x ritmo
+  let over = 0;
+  sweepPhaseWeeks({ goals: ['5k'], bases: [35, 50], days: [2, 3], Ws: [12], trainBy: 'time' }, (app, p, ws, info, plan) => {
+    const long = plan.find(d => d.typeKey === 'long');
+    if (!long || info.phase === 'post') return;
+    const peak = app.phasedWeeklyKm(p, app.trainingCaution(p), info, app.phaseEffectiveWeeklyKm(p, false)).peakKm;
+    if (long.durMin > app.phaseLongCapMin(app.phaseLongCapKm('5k', peak), p)) over++;
+    assert.ok(long.durMin <= 150);
+  });
+  assert.ok(over > 0, 'con 2-3 días la tirada puede pasar el tope de fases');
+});
+
+test('W6: Zonda: el día de la carrera objetivo es la carrera (hoy y mañana), no "descanso"', () => {
+  const p = racingProfile();
+  const { app } = phasedApp(p, { anchor: '2026-11-02', raceDate: '2027-03-14', goal: '21k' }, '2027-03-14T08:00:00');
+  app.state.weekStart = '2027-03-08';
+  app.state.weekNumber = 19;
+  app.state.plan = plain(app.generatePlan(p, 19, '2027-03-08'));
+  app.state.nextWeekOverrides = {};
+  const ctx = app.buildContext();
+  assert.ok(ctx.includes('La sesión de HOY es: el día de tu carrera objetivo'), ctx.slice(0, 900));
+  app.Date = makeFrozenDate('2027-03-13T08:00:00');
+  assert.ok(app.buildContext().includes('La sesión de MAÑANA es: el día de tu carrera objetivo'));
+});
+
+test('W6: el día de la carrera no se puede mover ni recibir una sesión (pantalla y mover_sesion)', () => {
+  const p = racingProfile({ trainingDays: ['tue', 'wed', 'fri', 'sun'] });
+  const { app } = phasedApp(p, { anchor: '2026-11-02', raceDate: '2027-03-14', goal: '21k' }, '2027-03-09T08:00:00');
+  app.renderAll = () => {}; app.renderZones = () => {};
+  app.state.weekStart = '2027-03-08';
+  app.state.weekNumber = 19;
+  app.state.plan = plain(app.generatePlan(p, 19, '2027-03-08'));
+  app.state.chat = [];
+  const before = plain(app.state.plan);
+  const toRace = app.applyMoveSession({ dia_origen: 'fri', dia_destino: 'sun' });
+  assert.ok(!/^OK/.test(toRace) && /carrera/i.test(toRace), toRace);
+  const fromRace = app.applyMoveSession({ dia_origen: 'sun', dia_destino: 'thu' });
+  assert.ok(!/^OK/.test(fromRace) && /carrera/i.test(fromRace), fromRace);
+  assert.deepEqual(plain(app.state.plan), before, 'el plan no cambia');
+  // el intercambio directo tampoco toca un día de carrera
+  const a = Object.assign({}, before[4]), b = Object.assign({}, before[6]);
+  assert.equal(app.swapPlanDaySessions(a, b), false);
+  assert.deepEqual(a, before[4]);
+  // la fila del día de carrera no es destino de arrastre en la pantalla
+  const els = {};
+  app.document.getElementById = id => { if (!els[id]) els[id] = { id, style: {}, textContent: '', innerHTML: '', classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } }, querySelectorAll: () => [], querySelector: () => null, setAttribute() {}, addEventListener() {} }; return els[id]; };
+  p.hrZones = { 1: { min: 100, max: 120 }, 2: { min: 120, max: 140 }, 3: { min: 140, max: 155 }, 4: { min: 155, max: 170 }, 5: { min: 170, max: 185 } };
+  app.renderPlan();
+  const html = els['plan-list'].innerHTML;
+  const sunRow = html.split('class="day-row').find(r => r.includes('data-idx="6"'));
+  assert.ok(sunRow && !sunRow.includes('data-drop'), 'domingo (carrera) sin data-drop');
+});
+
+test('W6: semana de la carrera un miércoles o un sábado: el día anterior y los posteriores quedan suaves (cortos); domingo sin cambios', () => {
+  const HEAVY = ['intervals', 'tempo', 'fartlek', 'hills', 'progression', 'long'];
+  [['42k', '2027-03-10'], ['10k', '2027-03-10'], ['42k', '2027-03-13'], ['10k', '2027-03-13']].forEach(([goal, raceDate]) => ['distance', 'time'].forEach(trainBy => {
+    const p = racingProfile({ goal, raceDate, trainBy, trainingDays: ['mon', 'tue', 'thu', 'fri', 'sat', 'sun'] });
+    const { app } = phasedApp(p, { anchor: '2026-11-02', raceDate, goal });
+    const plan = plain(app.generatePlan(p, 19, '2027-03-08'));
+    const idx = plan.findIndex(d => d.raceDay);
+    const label = `${goal} ${raceDate} ${trainBy}`;
+    assert.ok(idx > 0, label);
+    const pace = app.estimateBasePaceMinPerKm(p);
+    plan.forEach((d, i) => {
+      if (i === idx - 1 || i > idx) {
+        assert.ok(!HEAVY.includes(d.typeKey), `${label}: ${d.day} ${d.typeKey}`);
+        if (d.typeKey === 'easy') {
+          if (trainBy === 'time') assert.ok(d.durMin <= Math.max(20, Math.round(5 * pace / 5) * 5), `${label}: ${d.day} ${d.durMin} min`);
+          else assert.ok(d.dist <= 5, `${label}: ${d.day} ${d.dist} km`);
+        }
+      }
+    });
+  }));
+  // carrera el domingo: la semana es la de antes salvo el sábado (día anterior)
+  const p = racingProfile({ trainingDays: ['tue', 'wed', 'fri', 'sun'] });
+  const { app } = phasedApp(p, { anchor: '2026-11-02', raceDate: '2027-03-14', goal: '21k' });
+  const plan = plain(app.generatePlan(p, 19, '2027-03-08'));
+  assert.equal(plan[6].raceDay, true);
+  assert.ok(['tempo', 'progression', 'intervals', 'easy'].includes(plan[4].typeKey), 'el viernes (no es el día anterior) no cambia por esta regla');
 });
