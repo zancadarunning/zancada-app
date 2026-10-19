@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-19T14:00:17Z';
+const APP_VERSION = '2026-10-19T14:45:19Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7823,11 +7823,17 @@ function raceRange(sec, info){
   spread = Math.max(0.025, Math.min(0.09, spread));
   return { spread, ambitious: sec * (1 - spread * 0.8), likely: sec, prudent: sec * (1 + spread * 1.3) };
 }
+// Escenario elegido en el plan de carrera: 'bold' (ambicioso), 'likely' (probable) o 'safe' (prudente). Cambia el tiempo objetivo, el ritmo y los parciales.
+let racePlanScenario = 'likely';
+function racePlanScenarioSec(sec, info){
+  const r = raceRange(sec, info);
+  return racePlanScenario === 'bold' ? r.ambitious : (racePlanScenario === 'safe' ? r.prudent : r.likely);
+}
 function raceRangeHtml(sec, info){
   const r = raceRange(sec, info);
-  const cell = (key, v, strong) => '<div class="rp-range-cell' + (strong ? ' on' : '') + '"><span>' + t(key) + '</span><b>' + fmtRaceTime(Math.round(v)) + '</b></div>';
+  const cell = (key, v, id) => '<button type="button" class="rp-range-cell' + (racePlanScenario === id ? ' on' : '') + '" aria-pressed="' + (racePlanScenario === id) + '" onclick="setRacePlanScenario(&quot;' + id + '&quot;)"><span>' + t(key) + '</span><b>' + fmtRaceTime(Math.round(v)) + '</b></button>';
   return '<div class="rp-range" role="group" aria-label="' + escapeHtml(t('rp_range_title')) + '"><div class="rp-lbl" style="margin-bottom:8px;">' + t('rp_range_title') + '</div><div class="rp-range-row">'
-    + cell('rp_range_bold', r.ambitious) + cell('rp_range_likely', r.likely, true) + cell('rp_range_safe', r.prudent) + '</div><p class="rp-note" style="margin-top:8px;">' + t('rp_range_note') + '</p></div>';
+    + cell('rp_range_bold', r.ambitious, 'bold') + cell('rp_range_likely', r.likely, 'likely') + cell('rp_range_safe', r.prudent, 'safe') + '</div><p class="rp-note" style="margin-top:8px;">' + t('rp_range_note') + '</p></div>';
 }
 function snapshotRacePrediction(est){
   const ev = state.event;
@@ -7890,7 +7896,13 @@ function renderRacePlanEntry(){
     : t('rp_entry_open');
   el.style.display = '';
 }
-function openRacePlan(){
+function setRacePlanScenario(id){
+  if(!['bold', 'likely', 'safe'].includes(id) || id === racePlanScenario) return;
+  racePlanScenario = id;
+  openRacePlan(true);
+}
+function openRacePlan(keepScenario){
+  if(keepScenario !== true) racePlanScenario = 'likely';
   const ev = state.event, km = racePlanKm();
   const box = document.getElementById('race-plan-content');
   if(!ev || !box) return;
@@ -7904,14 +7916,16 @@ function openRacePlan(){
   } else if(!est){
     html += '<div class="card"><p class="muted" style="margin:0; font-size:13.5px; line-height:1.5;">' + t('rp_none') + '</p></div>';
   } else {
-    const sec = Math.round(est.sec);
-    const splits = buildRaceSplits(km, est.sec);
+    const info = {source: est.source, endurance: est.endurance, calib: est.calib, basis: est.basis, km: km};
+    const targetSec = racePlanScenarioSec(est.sec, info);
+    const sec = Math.round(targetSec);
+    const splits = buildRaceSplits(km, targetSec);
     const long = splits.length > 12;
     const shown = splits.filter((s, i) => !long || (s.n % 5 === 0) || i === splits.length - 1);
     const unit = distUnit();
     html += '<div class="card rp-target"><div class="rp-target-row"><div><div class="rp-lbl">' + t('rp_target') + '</div><div class="rp-big">' + fmtRaceTime(sec) + '</div></div>' +
-      '<div><div class="rp-lbl" style="text-align:right;">' + t('rp_pace_lbl') + '</div><div class="rp-pace">' + fmtPace(est.sec / 60 / km) + ' <small>/' + unit + '</small></div></div></div>' +
-      raceRangeHtml(est.sec, {source: est.source, endurance: est.endurance, calib: est.calib, basis: est.basis, km: km}) + '<p class="rp-note">' + t(est.source === 'runs' ? 'rp_hint_runs' : (est.source === 'level' ? 'rp_hint_level' : 'rp_hint_pr')) + (est.endurance ? ' ' + t('rp_endurance', {dist: fmtDist(est.endurance.longestKm, 1) + ' ' + distUnit(), pct: Math.round(est.endurance.pct * 100)}) : '') + (est.calib ? ' ' + t('rp_calib', {n: est.calib.n, pct: (est.calib.factor >= 1 ? '+' : '') + ((est.calib.factor - 1) * 100).toFixed(1) + '%'}) : '') + (est.basis ? ' ' + t('rp_basis', {dist: fmtDist(est.basis.distKm, 1) + ' ' + distUnit(), pace: fmtPace(est.basis.paceMin), unit: distUnit(), date: new Date(est.basis.date).toLocaleDateString(LOCALE_MAP[lang], {day:'numeric', month:'short'})}) : '') + '</p></div>' +
+      '<div><div class="rp-lbl" style="text-align:right;">' + t('rp_pace_lbl') + '</div><div class="rp-pace">' + fmtPace(targetSec / 60 / km) + ' <small>/' + unit + '</small></div></div></div>' +
+      raceRangeHtml(est.sec, info) + '<p class="rp-note">' + t(est.source === 'runs' ? 'rp_hint_runs' : (est.source === 'level' ? 'rp_hint_level' : 'rp_hint_pr')) + (est.endurance ? ' ' + t('rp_endurance', {dist: fmtDist(est.endurance.longestKm, 1) + ' ' + distUnit(), pct: Math.round(est.endurance.pct * 100)}) : '') + (est.calib ? ' ' + t('rp_calib', {n: est.calib.n, pct: (est.calib.factor >= 1 ? '+' : '') + ((est.calib.factor - 1) * 100).toFixed(1) + '%'}) : '') + (est.basis ? ' ' + t('rp_basis', {dist: fmtDist(est.basis.distKm, 1) + ' ' + distUnit(), pace: fmtPace(est.basis.paceMin), unit: distUnit(), date: new Date(est.basis.date).toLocaleDateString(LOCALE_MAP[lang], {day:'numeric', month:'short'})}) : '') + '</p></div>' +
       '<div class="card"><div class="rp-lbl" style="margin-bottom:6px;">' + t('rp_strategy') + '</div><div class="rp-strat-name">' + t('rp_strategy_name') + '</div><p class="rp-strat-body">' + t('rp_strategy_body') + '</p></div>' +
       '<div class="card"><div class="rp-lbl" style="margin-bottom:4px;">' + t('rp_splits') + '</div>' +
       shown.map((s, i) => {
@@ -7921,8 +7935,12 @@ function openRacePlan(){
       }).join('') + '</div>' +
       '<button class="btn btn-primary" onclick="shareRacePlan()">' + t('rp_share') + '</button>';
   }
+  const ov = document.getElementById('race-plan-overlay');
+  const scrollEl = ov && (ov.scrollHeight > ov.clientHeight ? ov : box.parentElement);
+  const top = scrollEl ? scrollEl.scrollTop : 0;
   box.innerHTML = html;
-  openOverlaySheetEl(document.getElementById('race-plan-overlay'));
+  if(keepScenario === true && ov.classList.contains('overlay-open')){ if(scrollEl) scrollEl.scrollTop = top; }
+  else openOverlaySheetEl(ov);
 }
 function closeRacePlan(){ document.getElementById('race-plan-overlay').classList.remove('overlay-open'); }
 function buildRacePlanImageBlob(){
@@ -7934,7 +7952,8 @@ function buildRacePlanImageBlob(){
       }catch(e){}
       const km = racePlanKm(), est = km ? estimateRaceTime(km) : null;
       if(!km || !est){ resolve(null); return; }
-      const splits = buildRaceSplits(km, est.sec);
+      const targetSec = racePlanScenarioSec(est.sec, {source: est.source, endurance: est.endurance, calib: est.calib, basis: est.basis, km: km});
+      const splits = buildRaceSplits(km, targetSec);
       const long = splits.length > 12;
       const rows = splits.filter((s, i) => !long || (s.n % 5 === 0) || i === splits.length - 1).slice(0, 12);
       const gap = rows.length > 9 ? 60 : 74;
@@ -7948,9 +7967,9 @@ function buildRacePlanImageBlob(){
       ctx.fillStyle = '#EDEFEF'; ctx.font = '400 120px "Bebas Neue", Arial, sans-serif';
       ctx.fillText(state.event.name + ' · ' + fmtDist(km, km % 1 ? 1 : 0) + ' ' + distUnit(), W/2, 490);
       ctx.font = '700 150px "JetBrains Mono", monospace';
-      ctx.fillText(fmtRaceTime(Math.round(est.sec)), W/2, 680);
+      ctx.fillText(fmtRaceTime(Math.round(targetSec)), W/2, 680);
       ctx.fillStyle = '#8B9296'; ctx.font = '700 48px "JetBrains Mono", monospace';
-      ctx.fillText(fmtPace(est.sec / 60 / km) + '/' + distUnit(), W/2, 760);
+      ctx.fillText(fmtPace(targetSec / 60 / km) + '/' + distUnit(), W/2, 760);
       ctx.font = '700 46px "JetBrains Mono", monospace';
       rows.forEach((s, i) => {
         const y = 900 + i * gap, fin = s === splits[splits.length - 1];
