@@ -3213,6 +3213,8 @@ test('I5: con fases (modo distancia) cada semana impresa queda a +-10% del volum
   let weeks = 0;
   sweepPhaseWeeks({ goals: ALL_GOALS, bases: [20, 30, 40, 50], days: [4, 5, 6], Ws: [9, 18], offs: [0, 1, 2, 3] }, (app, p, ws, info, plan, label) => {
     const target = Math.max(9, app.phasedWeeklyKm(p, app.trainingCaution(p), info, app.phaseEffectiveWeeklyKm(p, false)).km * app.taperMultiplier(p, ws));
+    // (la semana de la carrera: el día de la carrera reemplaza una sesión -- W5-L4 --, el total no es comparable)
+    if (plan.some(d => d.raceDay)) return;
     const got = sumDist(plan);
     weeks++;
     // (rincón documentado: la recuperación de un 42k con base 20 en 6 días pide ~1,8 km por sesión y el
@@ -3241,6 +3243,7 @@ test('I5: por tiempo (mejor esfuerzo) el reparto también llega: semanas de 4-5 
   sweepPhaseWeeks({ goals: ['10k', '21k'], bases: [25, 40], days: [4, 5], Ws: [12], offs: [0, 1], trainBy: 'time' }, (app, p, ws, info, plan, label) => {
     const km = app.phasedWeeklyKm(p, app.trainingCaution(p), info, app.phaseEffectiveWeeklyKm(p, false)).km * app.taperMultiplier(p, ws);
     const target = Math.max(9, km) * app.estimateBasePaceMinPerKm(p);
+    if (plan.some(d => d.raceDay)) return; // semana de la carrera (W5-L4)
     const got = plan.reduce((a, d) => a + (d.durMin || 0), 0);
     assert.ok(Math.abs(got - target) <= target * 0.10 + 5, `${label}: ${got} min vs ${target.toFixed(0)}`);
   });
@@ -3836,4 +3839,49 @@ test('W5-L8: sin cronograma por fases antes (usuario de v4) elegir "general" no 
   app.state.weekStart = POST_W1;
   app.refreshPhaseSchedule();
   assert.equal(app.state.phaseSchedule, null);
+});
+
+test('W5-L4: con fases, el día de la carrera objetivo es la carrera (no una sesión), en distancia y en tiempo', () => {
+  ['distance', 'time'].forEach(trainBy => ['2027-03-14', '2027-03-10'].forEach(raceDate => {
+    // carrera un domingo (día de la tirada) o un miércoles
+    const p = racingProfile({ trainBy, raceDate });
+    const { app } = phasedApp(p, { anchor: '2026-11-02', raceDate, goal: '21k' });
+    const plan = plain(app.generatePlan(p, 19, '2027-03-08'));
+    const idx = Math.round((new Date(raceDate + 'T00:00:00') - new Date('2027-03-08T00:00:00')) / 86400000);
+    const d = plan[idx];
+    const label = trainBy + ' ' + raceDate;
+    assert.equal(d.raceDay, true, label);
+    assert.equal(d.typeKey, 'rest', label);
+    assert.equal(d.dist, 0, label);
+    assert.equal(d.raceEventName, app.t('plan_goal_race_name', { dist: '21K' }), label);
+    assert.equal(plain(app.planLabel(d)).type, app.t('plan_race_day_type'), label);
+    // el resto de la semana no cambia: misma semana sin el reemplazo
+    const ref = plain(app.generatePlan(Object.assign({}, p, { raceDate: '2027-03-15' }), 19, '2027-03-08'));
+    // (con la carrera un día después, fuera de la semana, el cronograma no coincide: comparo solo los otros días con taper igual)
+    plan.forEach((x, i) => { if (i !== idx) assert.ok(!x.raceDay, label + ' ' + i); });
+    // Zonda ve el día como la carrera
+    app.state.weekStart = '2027-03-08';
+    app.state.weekNumber = 19;
+    app.state.plan = plan;
+    app.state.nextWeekOverrides = {};
+    assert.ok(app.buildContext().includes(`${d.day}=carrera objetivo`), label);
+  }));
+});
+
+test('W5-L4: sin fases (v4) o en otra semana, el día de la carrera sigue como siempre', () => {
+  const p = racingProfile();
+  const v4 = phasedApp(p, null).app;
+  assert.ok(!plain(v4.generatePlan(p, 19, '2027-03-08')).some(d => d.raceDay));
+  const { app } = phasedApp(p);
+  assert.ok(!plain(app.generatePlan(p, 18, '2027-03-01')).some(d => d.raceDay));
+});
+
+test('W5-L4: locales: las seis definen plan_goal_race_name con {dist}', () => {
+  const vm = require('node:vm');
+  ['es', 'en', 'pt', 'fr', 'it', 'de'].forEach(loc => {
+    const sandbox = {}; sandbox.window = sandbox; vm.createContext(sandbox);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'locales', loc + '.js'), 'utf8'), sandbox);
+    const v = sandbox.I18N[loc].plan_goal_race_name;
+    assert.ok(typeof v === 'string' && v.includes('{dist}') && v.length > 8, loc);
+  });
 });

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-19T02:18:05Z';
+const APP_VERSION = '2026-10-19T02:21:01Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6293,7 +6293,7 @@ function generatePlan(p, weekNumber, weekStartDate){
   // Entrenar POR TIEMPO ya no es el plan en km convertido a minutos: se arma aparte, directo en minutos
   // (ver buildTimePlanDays) -- con trote/caminata para principiantes, series y cuestas por duración, etc.
   if(p.trainBy === 'time'){
-    return applyLevelTestDay(buildTimePlanDays({p, weekNumber, mult, beginner, easyOnly, caution, sessionMap, trainingDays, effectiveWeeklyKm, zoneMap, phaseInfo, goal: p.goal}), p, weekStartDate, beginner);
+    return applyLevelTestDay(applyGoalRaceDay(buildTimePlanDays({p, weekNumber, mult, beginner, easyOnly, caution, sessionMap, trainingDays, effectiveWeeklyKm, zoneMap, phaseInfo, goal: p.goal}), p, weekStartDate, phaseInfo), p, weekStartDate, beginner);
   }
   // Reparto del volumen semanal entre las sesiones que de verdad va a tener esta semana, en
   // vez de calcular cada tipo de sesión por separado con una proporción fija (0.85x a 1.5x)
@@ -6418,7 +6418,7 @@ function generatePlan(p, weekNumber, weekStartDate){
     spreadPhaseShortfall(kmDays, weekTargetKm, phaseInfo.longCapKm || LONG_CAP_KM[p.goal] || Infinity, sessionCapKm);
   }
   applyPhaseRacePace(kmDays, phaseInfo, p.goal, easyOnly, true);
-  return applyLevelTestDay(kmDays, p, weekStartDate, beginner);
+  return applyLevelTestDay(applyGoalRaceDay(kmDays, p, weekStartDate, phaseInfo), p, weekStartDate, beginner);
 }
 /* ================= TEST DE NIVEL + PLAN POR TIEMPO PROPIO =================
    Dos cosas que se agregaron juntas porque se apoyan una en la otra:
@@ -6513,6 +6513,23 @@ function paceHintFor(d){
 // Pone el test en el primer día de entrenamiento disponible de la semana (desde hoy, si es la semana
 // actual) mientras el corredor no lo haya hecho. Una semana futura solo lo recibe si la actual ya no
 // tiene un test vivo (se pasó el día sin hacerlo): así nunca hay dos tests pendientes a la vez.
+// Plan por fases: el día de la carrera OBJETIVO (p.raceDate) es la carrera, no una sesión de
+// entrenamiento. Se aplica al final, con la semana ya armada (no toca el reparto ni la tirada): ese día
+// pasa a ser un día de carrera con el mismo formato que ya usaban los días de carrera guardados
+// (raceDay + raceEventName, dist 0: no se manda al reloj ni al calendario como sesión, y planLabel /
+// la pantalla del plan lo muestran como "Carrera"). Solo con fase activa (taper); sin fases (v4) o en
+// cualquier otra semana devuelve los días tal cual.
+function applyGoalRaceDay(days, p, weekStartDate, phaseInfo){
+  if(!phaseInfo || !phaseInfo.active || isPostRacePhase(phaseInfo.phase) || !p || !weekStartDate) return days;
+  const race = parsePhaseIso(p.raceDate), start = parsePhaseIso(weekStartDate);
+  if(!race || !start) return days;
+  const idx = Math.round((race - start) / 86400000);
+  if(idx < 0 || idx > 6 || !days[idx]) return days;
+  const out = days.slice();
+  out[idx] = { day: days[idx].day, typeKey: 'rest', dist: 0, terrain: null, zone: null, beginner: !!days[idx].beginner,
+    raceDay: true, raceEventName: t('plan_goal_race_name', { dist: String(p.goal || '').toUpperCase() }) };
+  return out;
+}
 function applyLevelTestDay(days, p, weekStartDate, beginner){
   if(!levelTestPending(p)) return days;
   const scheduled = (state.plan || []).some(d => d && d.typeKey === 'test' && d.status !== 'skipped' && (d.userTest || d.status === 'done'))
@@ -16368,8 +16385,8 @@ function buildContext(){
   // contra DST que usa el resto del archivo para esto.
   const datesForWeek = weekStartIso => DAY_KEYS.map((d,i)=>`${d}=${addDaysToIsoLocal(weekStartIso, i)}`).join(', ');
   ctx += `\n\nFechas de calendario de cada día de esta semana: ${datesForWeek(state.weekStart)}. Fechas de calendario de cada día de la semana que viene: ${datesForWeek(nw.weekStart)}. Si te preguntan qué fecha del mes cae tal día, usá estos datos directo -- nunca calcules vos cuántos días faltan ni a qué fecha corresponde un día, aunque te parezca un cálculo simple.`;
-  ctx += `\n\n=== PLAN DE ESTA SEMANA (semana ${state.weekNumber}, la semana ACTUAL -- usá SIEMPRE este bloque para responder sobre "hoy", "mañana", "ayer" o "esta semana") ===\n${state.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)${d.status?'/'+d.status:''}${d.rating?'/calificó:'+d.rating:''}`).join(', ')}.\n=== FIN plan de esta semana ===`;
-  ctx += `\n\n=== PLAN DE LA SEMANA QUE VIENE (semana ${nw.weekNumber}, todavía NO empezó -- es DISTINTA a la de arriba, ya calculada pero puede ajustarse según cómo termine esta semana. NUNCA uses estos km para responder sobre "hoy" o "mañana", esos están en el bloque de arriba) ===\n${nw.plan.map(d=>`${d.day}=${d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)`).join(', ')}.\n=== FIN plan de la semana que viene ===\n`;
+  ctx += `\n\n=== PLAN DE ESTA SEMANA (semana ${state.weekNumber}, la semana ACTUAL -- usá SIEMPRE este bloque para responder sobre "hoy", "mañana", "ayer" o "esta semana") ===\n${state.plan.map(d=>`${d.day}=${d.raceDay?'carrera objetivo ('+(d.raceEventName||'')+')':d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)${d.status?'/'+d.status:''}${d.rating?'/calificó:'+d.rating:''}`).join(', ')}.\n=== FIN plan de esta semana ===`;
+  ctx += `\n\n=== PLAN DE LA SEMANA QUE VIENE (semana ${nw.weekNumber}, todavía NO empezó -- es DISTINTA a la de arriba, ya calculada pero puede ajustarse según cómo termine esta semana. NUNCA uses estos km para responder sobre "hoy" o "mañana", esos están en el bloque de arriba) ===\n${nw.plan.map(d=>`${d.day}=${d.raceDay?'carrera objetivo ('+(d.raceEventName||'')+')':d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${d.dist}km(~${planDurationMin(d)}min)`).join(', ')}.\n=== FIN plan de la semana que viene ===\n`;
   // Reportado por un usuario: le preguntó al coach cuánto tocaba un día puntual y respondió
   // con un número (7km) distinto al que estos mismos bloques ya traían (8km) -- no un dato
   // mal cargado, el bloque de arriba siempre tiene el número real, solo hacía falta pedirle
