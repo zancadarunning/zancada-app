@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-19T02:13:55Z';
+const APP_VERSION = '2026-10-19T02:18:05Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4464,6 +4464,14 @@ function phaseScheduleR(schedule){
 }
 function phaseForWeek(p, weekStartDate, schedule){
   const off = { active: false };
+  if(schedule && schedule.recoveryOnly){
+    // registro de solo recuperación (phaseRecoveryOnly): solo las semanas 'post' de la carrera vieja
+    const start = parsePhaseIso(weekStartDate), anchor = parsePhaseIso(schedule.anchor);
+    if(!schedule.prev || !start || !anchor || phaseWeeksBetween(anchor, start) >= 0) return off;
+    const pv = schedule.prev;
+    const prevInfo = phaseForWeek({ raceDate: pv.raceDate, goal: pv.goal }, weekStartDate, pv);
+    return prevInfo.active && prevInfo.phase === 'post' ? Object.assign(prevInfo, { fromPrev: true, recoveryOnly: true }) : off;
+  }
   if(!p || !schedule || schedule.raceDate !== p.raceDate || schedule.goal !== p.goal) return off;
   const anchor = parsePhaseIso(schedule.anchor);
   const start = parsePhaseIso(weekStartDate);
@@ -4910,7 +4918,13 @@ function refreshPhaseSchedule(){
   const cur = state.phaseSchedule || null;
   const next = newPhaseSchedule(state.profile, new Date(), cur, legacyCurveWeek(state.weekNumber, state.profile));
   if(!next){
-    if(cur){ bridgePhaseExitCurve(cur, null); state.phaseSchedule = null; refreshPhaseNow(); persist(); }
+    // La meta nueva no califica para fases (general, sin fecha...) pero la carrera vieja acaba de
+    // pasar: sus semanas de recuperación se conservan con un registro de solo recuperación (ver
+    // phaseRecoveryOnly); al terminar, v4 sigue empalmado con el mantenimiento que venía.
+    const rec = cur ? phaseRecoveryOnly(cur, new Date(), state.profile) : null;
+    if(rec && cur.recoveryOnly){ refreshPhaseNow(); return; } // sigue igual
+    if(rec){ bridgePhaseExitCurve(cur, rec); state.phaseSchedule = rec; refreshPhaseNow(); persist(); return; }
+    if(cur){ if(!cur.recoveryOnly) bridgePhaseExitCurve(cur, null); state.phaseSchedule = null; refreshPhaseNow(); persist(); }
     else refreshPhaseNow();
     return;
   }
@@ -4957,7 +4971,9 @@ function bridgePhaseExitCurve(outgoing, next){
   let k = null;
   if(!covered(0) && covered(1)) k = 0;
   else for(let j = 1; j <= 104; j++){ if(!covered(j)){ k = j; break; } }
-  if(k === null){ state.curveWeekOffset = 0; return; }
+  // Todo cubierto por el cronograma nuevo: el corrimiento no se usa mientras haya fases y se borra recién
+  // cuando una semana real del plan por fases pasa a ser la actual (checkWeekRollover, ruling 36).
+  if(k === null) return;
   const T = addDaysToIsoLocal(state.weekStart, 7 * k);
   const base = phaseEffectiveWeeklyKm(p, false), caution = trainingCaution(p);
   const cont = phaseContinuationKm(outgoing, T, base, caution);
@@ -4997,7 +5013,7 @@ function newPhaseSchedule(p, today, outgoing, weekNumber){
   if(phaseSameRaceWeek(outgoing, sched, today)) return Object.assign(JSON.parse(JSON.stringify(outgoing)), { raceDate: sched.raceDate });
   const kept = phaseKeepAnchor(outgoing, sched, p, today);
   if(kept) return kept;
-  const prev = phaseRacePrev(outgoing, today);
+  const prev = phaseRacePrev(outgoing, today, p.goal);
   if(prev){
     sched.prev = prev;
     const afterRecovery = addDaysToIsoLocal(getMondayISO(parsePhaseIso(prev.raceDate)), 21);
@@ -5105,6 +5121,20 @@ function phaseSameRaceWeek(outgoing, sched, today){
   const raceMonday = getMondayISO(a);
   return raceMonday === getMondayISO(b) && raceMonday >= getMondayISO(today);
 }
+// Registro de "solo recuperación" {recoveryOnly, anchor, prev}: cuando la meta nueva no califica para
+// fases y la carrera del cronograma saliente (o la que ya arrastraba como prev) acaba de pasar, las 2
+// semanas de recuperación ('post') se siguen sirviendo con los factores de siempre hasta el ancla (lunes
+// de la carrera + 21 días); phaseForWeek lo atiende aunque la meta del perfil no coincida. null si no hay
+// recuperación pendiente, si la ventana ya terminó o con un principiante (que nunca usa fases).
+function phaseRecoveryOnly(cur, today, p){
+  if(!cur || !p || isBeginnerProfile(p)) return null;
+  const todayMonday = getMondayISO(today);
+  const prev = cur.recoveryOnly ? (todayMonday < cur.anchor ? cur.prev : null) : phaseRacePrev(cur, today, p.goal);
+  if(!prev) return null;
+  const anchor = addDaysToIsoLocal(getMondayISO(parsePhaseIso(prev.raceDate)), 21);
+  if(!(todayMonday < anchor)) return null;
+  return { recoveryOnly: true, anchor, prev };
+}
 // Carrera vieja que un cronograma nuevo tiene que seguir sirviendo (post / maintenance), o null:
 // la del cronograma saliente si tiene el pico guardado y su semana de carrera ya terminó respecto
 // de `today`; si no, la que ese saliente ya venía arrastrando, PERO solo mientras su plan todavía
@@ -5112,11 +5142,15 @@ function phaseSameRaceWeek(outgoing, sched, today){
 // recuperación no la pierde, y una vez que arrancó el plan nuevo el prev ya no sobrevive (si no,
 // cualquier cambio posterior revivía el mantenimiento de una carrera de hace meses en la semana
 // actual). Copia plana: un prev nunca tiene su propio prev.
-function phaseRacePrev(outgoing, today){
+// newGoal (opcional): la meta del perfil nuevo. En la MISMA semana de la carrera vieja, una meta distinta
+// (o una sin carrera) quiere decir que esa carrera se corre / se corrió: su recuperación también queda;
+// con la misma meta y otra fecha es una carrera postergada y no hay recuperación que guardar.
+function phaseRacePrev(outgoing, today, newGoal){
   if(!outgoing) return null;
   const race = parsePhaseIso(outgoing.raceDate);
   const todayMonday = getMondayISO(today);
-  if(race && Number.isFinite(outgoing.peakKm) && getMondayISO(race) < todayMonday){
+  const raceMonday = race ? getMondayISO(race) : null;
+  if(race && Number.isFinite(outgoing.peakKm) && (raceMonday < todayMonday || (raceMonday === todayMonday && newGoal !== undefined && newGoal !== outgoing.goal))){
     return { anchor: outgoing.anchor, raceDate: outgoing.raceDate, goal: outgoing.goal, peakKm: outgoing.peakKm, baseKm: outgoing.baseKm };
   }
   return outgoing.prev && typeof outgoing.anchor === 'string' && todayMonday < outgoing.anchor ? outgoing.prev : null;
@@ -5134,6 +5168,7 @@ function refreshPhaseNow(){
   else if(isPostRacePhase(info.phase)){
     state.phaseNow = { phase: info.phase, weeksToRace: 0, limited: false, peakKm: info.peakKm, weeksAfter: info.weeksAfter };
     if(info.fromPrev) state.phaseNow.fromPrev = true;
+    if(info.recoveryOnly) state.phaseNow.recoveryOnly = true;
   }
   else state.phaseNow = { phase: info.phase, weeksToRace: info.weeksToRace, limited: sched.limited, peakKm: sched.peakKm };
 }
@@ -5166,6 +5201,8 @@ function phaseCtxSentence(pn){
   // para volver a un plan por fases es elegir otra meta (objetivo y fecha se eligen en Perfil >
   // Datos personales, o con modificar_perfil). Sin números de volumen, igual que el resto.
   if(pn && isPostRacePhase(pn.phase)){
+    // eligió una meta sin carrera: termina la recuperación y vuelve el plan de siempre
+    if(pn.recoveryOnly) return ` La carrera objetivo ya pasó; el plan está en fase de recuperación y después sigue con el plan de siempre (la meta actual no tiene carrera).`;
     // ya eligió la meta nueva (su plan por fases arranca en unas semanas): no hay que sugerirle nada
     if(pn.fromPrev) return ` La carrera anterior ya pasó; el plan está en fase de ${pn.phase === 'post' ? 'recuperación' : 'mantenimiento'} hasta que arranque el plan por fases de la carrera objetivo nueva.`;
     return ` La carrera objetivo ya pasó; el plan está en fase de ${pn.phase === 'post' ? 'recuperación' : 'mantenimiento'}. Si el corredor quiere seguir con un plan por fases, sugerile elegir una nueva meta (objetivo y fecha de carrera) en Perfil > Datos personales.`;

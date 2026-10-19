@@ -3766,3 +3766,74 @@ test('W5-L9: con más de 7 días de diferencia, otra meta o la carrera ya pasada
   b.app.applyProfileChange({ objetivo: '10k' });
   assert.equal(b.app.state.phaseSchedule.anchor, b.next);
 });
+
+test('W5-L8: elegir una meta sin carrera (general) en la recuperación conserva la recuperación y después empalma con v4', () => {
+  // 10k, pico 50, base 30; carrera 2027-03-14. Miércoles de la semana post 1 elige "general".
+  const { app } = postApp({}, plain(POST_SCHEDULE_B));
+  app.renderAll = () => {}; app.renderZones = () => {};
+  const p = app.state.profile;
+  app.state.onboarded = true;
+  app.state.weekStart = POST_W1;
+  app.state.weekNumber = 21;
+  app.state.plan = plain(app.generatePlan(p, 21, POST_W1));
+  const old = plain(app.state.phaseSchedule);
+  app.applyProfileChange({ objetivo: 'general' });
+  const s = app.state.phaseSchedule;
+  assert.ok(s && s.recoveryOnly, 'queda un registro de recuperación');
+  assert.equal(s.anchor, MAINT_W1);
+  // post 2 sigue siendo recuperación de la carrera: volumen 0,8 x pico x carga y solo rodajes
+  const info = app.phaseForWeek(p, POST_W2, s);
+  assert.ok(info.active && info.phase === 'post' && info.fromPrev, JSON.stringify(info));
+  const plan = plain(app.generatePlan(p, 22, POST_W2));
+  POST_HEAVY.forEach(k => assert.ok(!plan.some(d => d.typeKey === k), k));
+  assert.ok(Math.abs(sumDist(plan) - 40) <= 1.5, `post 2: ${sumDist(plan)}`);
+  // la UI y Zonda: recuperación sin pedir meta nueva
+  app.refreshPhaseNow();
+  assert.equal(app.state.phaseNow.phase, 'post');
+  assert.ok(app.state.phaseNow.fromPrev);
+  assert.ok(app.phaseCtxSentence(app.state.phaseNow).includes('plan de siempre'), app.phaseCtxSentence(app.state.phaseNow));
+  // al terminar la recuperación vuelve v4, empalmado con el mantenimiento que seguía (no salta)
+  assert.equal(app.phaseForWeek(p, MAINT_W1, s).active, false);
+  const cont = contAt(app, p, old, MAINT_W1);
+  const growth = app.growthParams(app.trainingCaution(p)).growth;
+  assertBridge(app, p, 23, cont, growth, 'primera semana de v4');
+  // pasada la ventana, refrescar descarta el registro
+  app.Date = makeFrozenDate('2027-03-31T12:00:00');
+  app.state.weekStart = MAINT_W1;
+  app.refreshPhaseSchedule();
+  assert.equal(app.state.phaseSchedule, null);
+});
+
+test('W5-L8: cambiar de meta en la misma semana de la carrera conserva las 2 semanas de recuperación; mover la misma meta (postergar) no', () => {
+  // semana de la carrera (2027-03-08), miércoles; la carrera era el domingo 2027-03-14
+  const a = postApp({}, plain(POST_SCHEDULE_B), '2027-03-10T12:00:00').app;
+  a.state.weekStart = '2027-03-08';
+  a.state.profile.goal = '21k';
+  a.state.profile.raceDate = '2027-10-10';
+  a.refreshPhaseSchedule();
+  const s = a.state.phaseSchedule;
+  assert.ok(s.prev, 'meta distinta: la carrera vieja queda como prev');
+  assert.equal(s.anchor, MAINT_W1);
+  assert.equal(a.phaseForWeek(a.state.profile, POST_W1, s).phase, 'post');
+  assert.equal(a.phaseForWeek(a.state.profile, POST_W2, s).phase, 'post');
+  // a "general" en la semana de la carrera: también
+  const g = postApp({}, plain(POST_SCHEDULE_B), '2027-03-10T12:00:00').app;
+  g.state.weekStart = '2027-03-08';
+  g.state.profile.goal = 'general';
+  g.refreshPhaseSchedule();
+  assert.ok(g.state.phaseSchedule && g.state.phaseSchedule.recoveryOnly);
+  assert.equal(g.phaseForWeek(g.state.profile, POST_W1, g.state.phaseSchedule).phase, 'post');
+  // misma meta con la fecha más adelante (postergada): no hay recuperación que guardar
+  const b = postApp({}, plain(POST_SCHEDULE_B), '2027-03-10T12:00:00').app;
+  b.state.weekStart = '2027-03-08';
+  b.state.profile.raceDate = '2027-10-10';
+  b.refreshPhaseSchedule();
+  assert.equal(b.state.phaseSchedule.prev, undefined);
+});
+
+test('W5-L8: sin cronograma por fases antes (usuario de v4) elegir "general" no crea nada', () => {
+  const { app } = postApp({ goal: 'general' }, null);
+  app.state.weekStart = POST_W1;
+  app.refreshPhaseSchedule();
+  assert.equal(app.state.phaseSchedule, null);
+});
