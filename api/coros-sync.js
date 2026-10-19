@@ -9,6 +9,7 @@
 
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { rotateForFairness } = require('./_lib/cron-rotation');
+const { syncProbe, probeHasNew, probeMayBackfill } = require('./_lib/sync-probe');
 const { activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool, corosDateRangeArgs, getCorosRunRecords, getCorosRecordId } = require('./_lib/coros-activity-helpers');
 const { withSentry, reportError } = require('./_lib/sentry');
 const { mergeAndNotify } = require('./_lib/notify-new-run');
@@ -51,7 +52,10 @@ module.exports = withSentry(async (req, res) => {
         // confirmado en producción, ver parseCorosSportRecordsText en coros-activity-helpers.js.
         const runRecords = getCorosRunRecords(records);
 
-        if (runRecords.length) {
+        // Sonda liviana (sql/sync_probe.sql): evita bajar el estado completo de la cuenta en cada corrida cuando no hay nada nuevo
+        // ni carreras por completar. Sin la función en la base, hace lo de siempre.
+        const probe = runRecords.length ? await syncProbe(base, headers, conn.user_id, 'coros', 'corosId', runRecords.map(getCorosRecordId)) : null;
+        if (runRecords.length && (probeHasNew(probe) || probeMayBackfill(probe))) {
           const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${conn.user_id}&select=data`, { headers });
           const stateRows = await stateRes.json();
           if (stateRows && stateRows.length) {

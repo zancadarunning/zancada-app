@@ -6,6 +6,7 @@
 
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { rotateForFairness } = require('./_lib/cron-rotation');
+const { syncProbe, probeHasNew, probeMayBackfill } = require('./_lib/sync-probe');
 const { workoutToRun, mergeWahooRuns, isRunningWorkoutType, refreshWahooToken, fetchFitSplits } = require('./_lib/wahoo-activity-helpers');
 const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { withSentry, reportError } = require('./_lib/sentry');
@@ -156,7 +157,10 @@ module.exports = withSentry(async (req, res) => {
         }
         const runWorkouts = workouts.filter(w => isRunningWorkoutType(w.workout_type_id));
 
-        if (runWorkouts.length) {
+        // Sonda liviana (sql/sync_probe.sql): evita bajar el estado completo de la cuenta en cada corrida cuando no hay nada nuevo
+        // ni carreras por completar. Sin la función en la base, hace lo de siempre.
+        const probe = await syncProbe(base, headers, conn.user_id, 'wahoo', 'wahooId', runWorkouts.map(w => w.id));
+        if (runWorkouts.length && probeHasNew(probe)) {
           const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${conn.user_id}&select=data`, { headers });
           const stateRows = await stateRes.json();
           if (stateRows && stateRows.length) {
@@ -172,7 +176,7 @@ module.exports = withSentry(async (req, res) => {
           }
         }
 
-        backfilled += await backfillWahooSplits(base, headers, conn, accessToken);
+        if (probeMayBackfill(probe)) backfilled += await backfillWahooSplits(base, headers, conn, accessToken);
         synced++;
       } catch (e) {
         errors++;
