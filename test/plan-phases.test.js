@@ -3189,7 +3189,7 @@ test('I2: una sesión con ritmo de carrera no muestra además el rango del test 
 
 // Barrido de corredores con fases (cronograma creado el 2026-10-14) para I5/I6: llama a fn(app, p, ws, info, plan, label)
 // en cada semana activa (ancla .. carrera + 5 semanas) con varios weekNumber.
-const FW_DAYS = { 2: ['wed', 'sun'], 3: ['tue', 'thu', 'sun'], 4: ['tue', 'wed', 'fri', 'sun'], 5: ['mon', 'tue', 'thu', 'fri', 'sun'], 6: ['mon', 'tue', 'wed', 'thu', 'fri', 'sun'] };
+const FW_DAYS = { 2: ['wed', 'sun'], 3: ['tue', 'thu', 'sun'], 4: ['tue', 'wed', 'fri', 'sun'], 5: ['mon', 'tue', 'thu', 'fri', 'sun'], 6: ['mon', 'tue', 'wed', 'thu', 'fri', 'sun'], 7: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] };
 function sweepPhaseWeeks({ goals, bases, days, Ws, offs, trainBy }, fn) {
   const app = fwApp(null);
   goals.forEach(goal => bases.forEach(base => days.forEach(nd => Ws.forEach(W => {
@@ -3590,7 +3590,7 @@ test('W4: carrera corta elegida en la recuperación: el rollover a una semana de
     assert.equal(app.phaseForWeek(p, anchorB, app.state.phaseSchedule).active, false, 'T es v4');
     assert.equal(app.state.curveWeekOffset, off);
     const got = sumDist(app.state.plan);
-    assert.ok(got <= want + 1.5 && got >= want * 0.85, `${base}: semana en T ${got} km vs ${want}`);
+    assert.ok(got <= want + 1.5 && got >= want * 0.92, `${base}: semana en T ${got} km vs ${want}`);
   });
 });
 
@@ -3947,7 +3947,8 @@ test('W5-L2: por tiempo (mejor esfuerzo): 20-50 km con 4-6 días salto <= 1,11 (
   assert.ok(a.n > 200 && a.max <= 1.11, `A máx ${a.max.toFixed(3)} (${a.worst})`);
   // 2-3 días con 35 km o más: <= 1,17 desde que el tope de la tirada en minutos es solo para 4+ sesiones (W6;
   // con ese tope llegaba a 1,27). Semanas chicas o de 7 días: <= 1,28 (redondeo a 5 min y mínimos de 20 min).
-  const big = jumpsFor({ goals: ALL_GOALS, bases: [35, 65], days: [2, 3], Ws: [9, 18], offs: [0, 1], trainBy: 'time' });
+  // (también 7 días con 35-65 km: miden como mucho 1,161)
+  const big = jumpsFor({ goals: ALL_GOALS, bases: [35, 65], days: [2, 3, 7], Ws: [9, 18], offs: [0, 1], trainBy: 'time' });
   assert.ok(big.n > 100 && big.max <= 1.17, `2-3 días máx ${big.max.toFixed(3)} (${big.worst})`);
   const b = jumpsFor({ goals: ALL_GOALS, bases: [8, 15], days: [2, 3, 7], Ws: [9, 18], offs: [0, 1], trainBy: 'time' });
   assert.ok(b.n > 100 && b.max <= 1.28, `resto máx ${b.max.toFixed(3)} (${b.worst})`);
@@ -4007,7 +4008,8 @@ test('W6: cambiar de meta en la semana de la carrera empalma v4 después de la r
     assert.ok(cont < old.peakKm, `${label}: la continuación (${cont}) es la del mantenimiento`);
     assert.ok(v >= cont / growth - 1e-9 && v <= cont * growth + 1e-9, `${label}: v4 en T ${v} vs continuación ${cont} (pico ${old.peakKm})`);
     // y después de T v4 nunca pasa el pico de la carrera vieja (sin otra carrera por fases)
-    if (edit === 'general') for (let w = 0; w < 12; w++) {
+    // (las 8 semanas que dura el techo, ver W7: después vence)
+    if (edit === 'general') for (let w = 0; w < 8; w++) {
       const ws = app.addDaysToIsoLocal(T, 7 * w);
       const c = app.legacyCurveCapKm(app.state.curveCap, ws, app.trainingCaution(p));
       assert.ok(c !== null && c <= old.peakKm + 1e-9, `${label}: techo ${c} en ${ws}`);
@@ -4094,7 +4096,11 @@ test('W6: semana de la carrera un miércoles o un sábado: el día anterior y lo
   const { app } = phasedApp(p, { anchor: '2026-11-02', raceDate: '2027-03-14', goal: '21k' });
   const plan = plain(app.generatePlan(p, 19, '2027-03-08'));
   assert.equal(plan[6].raceDay, true);
-  assert.ok(['tempo', 'progression', 'intervals', 'easy'].includes(plan[4].typeKey), 'el viernes (no es el día anterior) no cambia por esta regla');
+  // el viernes (no es el día anterior) conserva su sesión de calidad del taper (progresivo de 7 km) y el
+  // sábado (el día anterior) ya era descanso: nada que suavizar
+  assert.equal(plan[4].typeKey, 'progression');
+  assert.equal(plan[4].dist, 7);
+  assert.equal(plan[5].typeKey, 'rest');
 });
 
 test('plan-examples (fix wave 6): carrera un miércoles y cambio de meta en la semana de la carrera', () => {
@@ -4106,4 +4112,141 @@ test('plan-examples (fix wave 6): carrera un miércoles y cambio de meta en la s
   const after = r18.rows.filter(r => r.weekStart > r18.rows.find(x => x.phase === 'post' && x.weeksAfter === 2).weekStart);
   assert.ok(after.length >= 6);
   after.forEach(r => assert.ok(r.plan.km <= peak * 1.03, `semana ${r.weekNumber}: ${r.plan.km} km`));
+});
+
+// ---- Fix wave 7 ----
+
+// 21k con 50 km/sem: en la semana de la carrera (miércoles) elige "general" -> techo de v4 (curveCap).
+function capApp() {
+  const { app, p, wk } = midPlanApp('21k', 50, 12, 12);
+  app.renderPerfil = () => {}; app.flashSaved = () => {};
+  app.applyProfileChange({ objetivo: 'general' });
+  return { app, p, wk };
+}
+
+test('W7: el techo de v4 después de salir vence a las 8 semanas (con empalme suave) y se borra al cambiar km, meta semanal u objetivo', () => {
+  const { app, p, wk } = capApp();
+  const cap = app.state.curveCap;
+  assert.ok(cap && cap.until, 'el techo trae su vencimiento');
+  assert.equal(cap.until, app.addDaysToIsoLocal(cap.from, 56));
+  const caution = app.trainingCaution(p);
+  assert.ok(app.legacyCurveCapKm(cap, app.addDaysToIsoLocal(cap.until, -7), caution) !== null);
+  assert.equal(app.legacyCurveCapKm(cap, cap.until, caution), null, 'vencido el lunes de "until"');
+  // techo guardado sin vencimiento (estado viejo): vence 8 semanas después de "from"
+  const old = Object.assign({}, cap); delete old.until;
+  assert.equal(app.legacyCurveCapKm(old, app.addDaysToIsoLocal(cap.from, 56), caution), null);
+  assert.ok(app.legacyCurveCapKm(old, app.addDaysToIsoLocal(cap.from, 49), caution) !== null);
+  // los cambios del corredor lo borran: km actuales (coach)
+  const a = capApp();
+  const r = a.app.applyProfileChange({ km_actuales: 80 });
+  assert.ok(/actualizado/.test(r), r);
+  assert.equal(a.app.state.curveCap, null);
+  // objetivo (coach)
+  const b = capApp();
+  b.app.applyProfileChange({ objetivo: 'general' }); // sin cambio real de techo nuevo: sigue igual
+  b.app.state.profile.goal = 'start';
+  b.app.applyProfileChange({ objetivo: '10k', fecha_carrera: b.app.addDaysToIsoLocal(b.wk, 20 * 7 + 6) });
+  assert.equal(b.app.state.curveCap, null, 'objetivo nuevo con rampa: sin techo');
+  // Datos personales (km actuales) y meta semanal desde Perfil
+  const c = capApp();
+  c.app.openPlanChangeTimingModal('personal', { goal: c.p.goal, raceDate: c.p.raceDate, currentWeeklyKm: c.p.currentWeeklyKm, weeklyKm: c.p.weeklyKm });
+  c.p.currentWeeklyKm = 70; c.p.weeklyKm = 70;
+  c.app.resolvePlanChangeTiming('now');
+  assert.equal(c.app.state.curveCap, null, 'Datos personales con km nuevos');
+  const d = capApp();
+  d.app.openPlanChangeTimingModal('goals', { weeklyGoalKm: d.p.weeklyGoalKm });
+  d.p.weeklyGoalKm = 60;
+  d.app.resolvePlanChangeTiming('now');
+  assert.equal(d.app.state.curveCap, null, 'meta semanal nueva');
+  // y guardar Datos personales sin tocar km ni objetivo no lo borra
+  const e = capApp();
+  e.app.openPlanChangeTimingModal('personal', { goal: e.p.goal, raceDate: e.p.raceDate, currentWeeklyKm: e.p.currentWeeklyKm, weeklyKm: e.p.weeklyKm, terrain: 'asfalto' });
+  e.app.resolvePlanChangeTiming('now');
+  assert.ok(e.app.state.curveCap, 'sin cambios de km/objetivo el techo sigue');
+});
+
+test('W7: al vencer el techo, el rollover vuelve a empalmar la curva de v4 con el último techo (sin salto)', () => {
+  const { app, p, wk } = capApp();
+  const cap = app.state.curveCap;
+  const caution = app.trainingCaution(p);
+  const growth = app.growthParams(caution).growth;
+  // rollovers semana a semana hasta pasar el vencimiento
+  let prev = null, ws = wk, maxStep = 0;
+  for (let k = 1; k <= 14; k++) {
+    ws = app.addDaysToIsoLocal(wk, 7 * k);
+    app.Date = makeFrozenDate(ws + 'T08:00:00');
+    app.state.runs = [{ id: 'r' + k, date: app.addDaysToIsoLocal(ws, -1) + 'T08:00:00', distanceKm: 8, durationSec: 2700 }];
+    app.checkWeekRollover();
+    if (ws < cap.from) continue;
+    const full = Math.max(9, app.phaseEffectiveWeeklyKm(p, false)) * app.weekMultiplier(app.legacyCurveWeek(app.state.weekNumber, p), caution, true);
+    const c = app.legacyCurveCapKm(app.state.curveCap, ws, caution);
+    const v = Math.min(full, c === null ? Infinity : c);
+    if (prev !== null) maxStep = Math.max(maxStep, v / prev);
+    prev = v;
+  }
+  assert.equal(app.state.curveCap, null, 'vencido y borrado');
+  assert.ok(maxStep <= growth + 1e-9, `paso máximo ${maxStep}`);
+});
+
+test('W7: con el techo puesto v4 conserva sus semanas de descarga (x0,75 sobre el techo, no se pierden)', () => {
+  const { app, p } = capApp();
+  const cap = app.state.curveCap;
+  let cuts = 0;
+  for (let w = 0; w < 8; w++) {
+    const ws = app.addDaysToIsoLocal(cap.from, 7 * w);
+    const n = app.state.weekNumber + Math.round((new Date(ws + 'T00:00:00') - new Date(app.state.weekStart + 'T00:00:00')) / 6048e5);
+    const curve = app.legacyCurveWeek(n, p);
+    if (!app.isCutbackWeek(curve)) continue;
+    cuts++;
+    const plan = plain(app.generatePlan(p, n, ws));
+    const capKm = app.legacyCurveCapKm(cap, ws, app.trainingCaution(p));
+    const full = Math.min(Math.max(9, app.phaseEffectiveWeeklyKm(p, false)) * app.weekMultiplier(curve, app.trainingCaution(p), true), capKm);
+    assert.ok(sumDist(plan) <= full * 0.75 * 1.1 + 1, `${ws}: ${sumDist(plan)} vs ${full * 0.75}`);
+  }
+  assert.ok(cuts >= 1, 'hay al menos una descarga de v4 en esas 8 semanas');
+});
+
+test('W7: modificar_sesion y cancelar_sesion no tocan el día de la carrera (esta semana y la que viene)', () => {
+  const p = racingProfile();
+  const { app } = phasedApp(p, { anchor: '2026-11-02', raceDate: '2027-03-14', goal: '21k' }, '2027-03-09T08:00:00');
+  app.renderAll = () => {}; app.renderZones = () => {}; app.renderPlan = () => {}; app.renderHome = () => {};
+  app.state.weekStart = '2027-03-08';
+  app.state.weekNumber = 19;
+  app.state.plan = plain(app.generatePlan(p, 19, '2027-03-08'));
+  app.state.chat = [];
+  app.state.nextWeekOverrides = {};
+  const before = plain(app.state.plan);
+  const m = app.applyPlanChange({ dia: 'sun', tipo: 'Rodaje', tipo_categoria: 'easy', descripcion: 'suave', distancia_km: 10 });
+  assert.ok(!/^OK/.test(m) && /carrera/i.test(m), m);
+  const c = app.applyCancelSession({ dia: 'sun' });
+  assert.ok(!/^OK/.test(c) && /carrera/i.test(c), c);
+  assert.deepEqual(plain(app.state.plan), before);
+  // la semana que viene con la carrera adentro
+  const q = phasedApp(racingProfile(), { anchor: '2026-11-02', raceDate: '2027-03-14', goal: '21k' }, '2027-03-03T08:00:00').app;
+  q.renderAll = () => {}; q.renderZones = () => {}; q.renderPlan = () => {};
+  q.state.weekStart = '2027-03-01'; q.state.weekNumber = 18; q.state.chat = []; q.state.nextWeekOverrides = {};
+  q.state.plan = plain(q.generatePlan(q.state.profile, 18, '2027-03-01'));
+  const mn = q.applyPlanChange({ dia: 'sun', semana: 'siguiente', tipo: 'Rodaje', tipo_categoria: 'easy', descripcion: 'suave', distancia_km: 10 });
+  assert.ok(!/^OK/.test(mn) && /carrera/i.test(mn), mn);
+  const cn = q.applyCancelSession({ dia: 'sun', semana: 'siguiente' });
+  assert.ok(!/^OK/.test(cn) && /carrera/i.test(cn), cn);
+  assert.deepEqual(plain(q.state.nextWeekOverrides), {});
+});
+
+test('W7: carrera un lunes: el domingo anterior (semana de antes) pasa a rodaje suave corto; sin fases no cambia', () => {
+  ['42k', '10k'].forEach(goal => ['distance', 'time'].forEach(trainBy => {
+    const p = racingProfile({ goal, raceDate: '2027-03-15', trainBy, weeklyKm: 40, currentWeeklyKm: 40 });
+    const { app } = phasedApp(p, { anchor: '2026-11-02', raceDate: '2027-03-15', goal });
+    const plan = plain(app.generatePlan(p, 19, '2027-03-08'));
+    const sun = plan[6];
+    const label = `${goal} ${trainBy}`;
+    assert.equal(sun.typeKey, 'easy', label);
+    const pace = app.estimateBasePaceMinPerKm(p);
+    if (trainBy === 'time') assert.ok(sun.durMin <= Math.max(20, Math.round(5 * pace / 5) * 5), `${label}: ${sun.durMin}`);
+    else assert.ok(sun.dist <= 5, `${label}: ${sun.dist}`);
+    assert.ok(!plan.some(d => d.raceDay), label + ': la carrera es la semana que viene');
+    // sin fases: el domingo sigue siendo la tirada
+    const v4 = phasedApp(Object.assign({}, p), null).app;
+    assert.equal(plain(v4.generatePlan(p, 19, '2027-03-08'))[6].typeKey, 'long', label + ' v4');
+  }));
 });

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-19T03:07:28Z';
+const APP_VERSION = '2026-10-19T14:00:17Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3256,8 +3256,14 @@ function cancelPlanChangeTiming(){
 function resolvePlanChangeTiming(choice){
   document.getElementById('plan-change-timing-modal').style.display = 'none';
   const ctx = pendingPlanChangeContext;
+  const backup = pendingPlanChangeBackup;
   pendingPlanChangeContext = null;
   pendingPlanChangeBackup = null;
+  // Si cambiaron los km actuales, el objetivo o la meta semanal, el techo de v4 de una salida del plan
+  // por fases deja de valer (ver clearLegacyCurveCapOnEdit). backup = los valores de antes del guardado.
+  const p = state.profile || {};
+  if(backup && ((('goal' in backup) && backup.goal !== p.goal) || (('currentWeeklyKm' in backup) && backup.currentWeeklyKm !== p.currentWeeklyKm)
+    || (('weeklyKm' in backup) && backup.weeklyKm !== p.weeklyKm) || (('weeklyGoalKm' in backup) && (backup.weeklyGoalKm || 0) !== (p.weeklyGoalKm || 0)))) clearLegacyCurveCapOnEdit();
   if(ctx === 'personal'){
     refreshPhaseSchedule(); // meta/fecha de carrera ya confirmadas (cancelPlanChangeTiming las restaura y no llega acá)
     if(choice === 'now') applyPersonalDataChangeNow(); else applyPersonalDataChangeNextWeek();
@@ -3819,6 +3825,7 @@ async function finishOnboard(){
   state.onboarded = true;
   // Cronograma del plan por fases para la carrera elegida (null si no califica), con su pico
   // ya calculado. Directo, sin refreshPhaseSchedule(): el persist() de más abajo ya lo guarda y evita una escritura doble.
+  state.curveCap = null; // cuenta (re)armada desde el onboarding: sin techo de una salida anterior
   state.phaseSchedule = newPhaseSchedule(state.profile, new Date(), state.phaseSchedule, legacyCurveWeek(state.weekNumber, state.profile));
   refreshPhaseNow();
   state.lang = lang;
@@ -5037,11 +5044,16 @@ function bridgePhaseExitCurve(outgoing, next){
   // 1,21 x) y, si la base declarada ya superaba la continuación, arrancaba en la base (+11-44% de golpe
   // después de la recuperación). Con otra rampa por fases más adelante, sin techo.
   state.curveCap = (!next || !Number.isFinite(next.peakKm))
-    ? { from: T, fromCurve: n, startKm: cont, peakKm: Number.isFinite(outgoing.peakKm) && outgoing.peakKm > 0 ? outgoing.peakKm : null } : null;
+    ? { from: T, fromCurve: n, startKm: cont, peakKm: Number.isFinite(outgoing.peakKm) && outgoing.peakKm > 0 ? outgoing.peakKm : null,
+        until: addDaysToIsoLocal(T, 56) } : null;
 }
-// Techo de v4 después de salir del plan por fases sin otra carrera (ver bridgePhaseExitCurve), en km para
-// la semana que arranca `weekStartDate`, o null sin techo. PURA salvo por recibir el techo guardado.
-function legacyCurveCapKm(cap, weekStartDate, caution){
+// Lunes en que vence el techo de v4 (8 semanas después de T). Un techo guardado antes de que existiera
+// el vencimiento (sin `until`) vence igual a las 8 semanas de su `from`: es determinista y nunca dura más.
+function legacyCurveCapUntil(cap){
+  return cap && (cap.until || (cap.from ? addDaysToIsoLocal(cap.from, 56) : null));
+}
+// Techo SIN el pico, solo el crecimiento desde la continuación (base de legacyCurveCapKm y del techo suave).
+function legacyCurveCapGrowthKm(cap, weekStartDate, caution){
   if(!cap || !(cap.startKm > 0) || !cap.from || !weekStartDate) return null;
   const from = parsePhaseIso(cap.from), ws = parsePhaseIso(weekStartDate);
   if(!from || !ws) return null;
@@ -5050,9 +5062,53 @@ function legacyCurveCapKm(cap, weekStartDate, caution){
   const w = phaseWeeksBetween(from, ws);
   const steps = m => m - Math.floor(m / 4) - 1;
   const n0 = cap.fromCurve > 0 ? cap.fromCurve : 1;
-  const km = cap.startKm * Math.pow(growthParams(caution).growth, steps(Math.max(1, n0 + w)) - steps(n0));
+  return cap.startKm * Math.pow(growthParams(caution).growth, steps(Math.max(1, n0 + w)) - steps(n0));
+}
+// Techo de v4 después de salir del plan por fases sin otra carrera (ver bridgePhaseExitCurve), en km para
+// la semana que arranca `weekStartDate`, o null sin techo. PURA salvo por recibir el techo guardado.
+// null también desde su vencimiento (legacyCurveCapUntil).
+function legacyCurveCapKm(cap, weekStartDate, caution){
+  const until = legacyCurveCapUntil(cap);
+  if(!until || !weekStartDate || weekStartDate >= until) return null;
+  const km = legacyCurveCapGrowthKm(cap, weekStartDate, caution);
+  if(km === null) return null;
   return cap.peakKm > 0 ? Math.min(km, cap.peakKm) : km;
 }
+// Techo "suave" desde el vencimiento: el último techo (con el pico) de la semana anterior a `until`, y
+// desde ahí solo el crecimiento de a un paso de v4 por semana (sin el pico). Lo usan generatePlan hasta que
+// el rollover lo pasa al corrimiento, y ese mismo rollover (expireLegacyCurveCap).
+function legacyCurveCapSoftKm(cap, weekStartDate, caution){
+  const until = legacyCurveCapUntil(cap);
+  if(!until || !weekStartDate) return null;
+  const last = addDaysToIsoLocal(until, -7);
+  const lastKm = legacyCurveCapKm(cap, last, caution);
+  const gLast = legacyCurveCapGrowthKm(cap, last, caution), gNow = legacyCurveCapGrowthKm(cap, weekStartDate, caution);
+  if(lastKm === null || !(gLast > 0) || gNow === null) return null;
+  return lastKm * gNow / gLast;
+}
+// Al vencer el techo (rollover a una semana desde `until`): se convierte en el corrimiento de la curva de
+// v4 -- la semana actual queda en la semana de la curva más alta que no pasa el techo sin pico de ese lunes
+// (sin descarga) -- y se borra. Así v4 sigue subiendo a su ritmo desde ahí, sin salto.
+function expireLegacyCurveCap(mondayIso, weekNumber){
+  const cap = state.curveCap, p = state.profile;
+  if(!cap || !p || !mondayIso) return;
+  const until = legacyCurveCapUntil(cap);
+  if(!until || mondayIso < until) return;
+  const caution = trainingCaution(p);
+  const soft = legacyCurveCapSoftKm(cap, mondayIso, caution);
+  state.curveCap = null;
+  if(soft === null || isBeginnerProfile(p)) return;
+  const ref = Math.max(9, phaseEffectiveWeeklyKm(p, false));
+  const { cap: maxMult } = growthParams(caution);
+  let n = 1;
+  while(n < 200 && ref * weekMultiplier(n + 1, caution, true) <= soft + 1e-9 && weekMultiplier(n, caution, true) < maxMult) n++;
+  if(n % 4 === 0) n -= 1; // misma altura que n-1 y no es descarga
+  state.curveWeekOffset = n - (weekNumber || 1);
+}
+// Borra el techo de v4 cuando el corredor cambia lo que define su volumen (km actuales, meta semanal u
+// objetivo): el techo era para seguir desde la carrera que dejó, no para pisar un cambio pedido. No se
+// rehace ningún empalme (el corrimiento de la curva queda como estaba).
+function clearLegacyCurveCapOnEdit(){ if(typeof state !== 'undefined' && state) state.curveCap = null; }
 // Cronograma nuevo (makePhaseSchedule) con el pico semanal y `limited` ya calculados A PARTIR
 // DEL PERFIL, una sola vez al crearlo/reemplazarlo: así no dependen de qué vista (semana actual,
 // vista previa de la próxima con otro weeklyKm) haya llamado a generatePlan último. Los cambios
@@ -5778,6 +5834,8 @@ function checkWeekRollover(){
     let adjustNote = null, recapMsg = null, goalUpsellMsg = null, breakMsg = null, breakReset = false;
     let promotedPlan = null, promotedWeekNumber = (state.weekNumber||1) + diffWeeks, promotedWeekStart = currentMonday;
     const breakAdj = (state.breakAdjLastRunMs && state.breakAdjLastRunMs === lastRunTimeMs()) ? null : computeReturnFromBreakAdjustment(detectTrainingGapWeeks(state.weekStart));
+    // techo de v4 vencido: pasa al corrimiento de la curva antes de armar la semana nueva (ver expireLegacyCurveCap)
+    expireLegacyCurveCap(currentMonday, (state.weekNumber || 1) + diffWeeks);
     if(state.weekStart && state.plan && state.plan.length){
       state.planHistory.push({weekNumber: state.weekNumber||1, weekStart: state.weekStart, plan: state.plan});
       recapMsg = buildWeeklyRecapMessage(state.plan, state.weekStart, diffWeeks);
@@ -6316,8 +6374,19 @@ function generatePlan(p, weekNumber, weekStartDate){
     weekFactor = weekMultiplier(legacyCurveWeek(weekNumber, p), caution, skipPeriodicCutback);
     // Después de salir del plan por fases sin otra carrera, v4 sube desde la continuación sin pasar el pico
     // de la carrera anterior (ver bridgePhaseExitCurve). Sin ese techo (todos los demás usuarios) nada cambia.
-    const legacyCap = !beginner && typeof state !== 'undefined' && state ? legacyCurveCapKm(state.curveCap, weekStartDate, caution) : null;
-    if(legacyCap !== null) weekFactor = Math.min(weekFactor, legacyCap / Math.max(9, effectiveWeeklyKm));
+    // Después del vencimiento (y hasta que el rollover lo pase al corrimiento) sigue solo el crecimiento.
+    // El techo va sobre la semana COMPLETA y la descarga de v4 (x0,75) se aplica encima: si no, al pasar la
+    // curva 1,33 x el techo las semanas de descarga desaparecían.
+    let legacyCap = null;
+    if(!beginner && typeof state !== 'undefined' && state && state.curveCap){
+      legacyCap = legacyCurveCapKm(state.curveCap, weekStartDate, caution);
+      if(legacyCap === null) legacyCap = legacyCurveCapSoftKm(state.curveCap, weekStartDate, caution);
+    }
+    if(legacyCap !== null){
+      const curveWeek = legacyCurveWeek(weekNumber, p);
+      const cut = !skipPeriodicCutback && isCutbackWeek(curveWeek);
+      weekFactor = Math.min(weekMultiplier(curveWeek, caution, true), legacyCap / Math.max(9, effectiveWeeklyKm)) * (cut ? 0.75 : 1);
+    }
   }
   // generatePlan NO escribe state.phaseSchedule ni state.phaseNow: también arma semanas de vista
   // previa (con otro weeklyKm), así que no puede ser la fuente de eso -- ver refreshPhaseNow.
@@ -6597,9 +6666,10 @@ function applyGoalRaceDay(days, p, weekStartDate, phaseInfo){
   const race = parsePhaseIso(p.raceDate), start = parsePhaseIso(weekStartDate);
   if(!race || !start) return days;
   const idx = Math.round((race - start) / 86400000);
-  if(idx < 0 || idx > 6 || !days[idx]) return days;
+  // carrera el lunes de la semana que viene: el "día anterior" es el domingo de ESTA semana
+  if(idx !== 7 && (idx < 0 || idx > 6 || !days[idx])) return days;
   const out = days.slice();
-  out[idx] = { day: days[idx].day, typeKey: 'rest', dist: 0, terrain: null, zone: null, beginner: !!days[idx].beginner,
+  if(idx <= 6) out[idx] = { day: days[idx].day, typeKey: 'rest', dist: 0, terrain: null, zone: null, beginner: !!days[idx].beginner,
     raceDay: true, raceEventName: t('plan_goal_race_name', { dist: String(p.goal || '').toUpperCase() }) };
   const pace = estimateBasePaceMinPerKm(p);
   const shortEasy = d => {
@@ -16713,6 +16783,8 @@ function applyPlanChange(input){
   // y ese texto sin escapar terminaba en un mensaje de chat de rol 'system', que renderChat()
   // inserta con innerHTML sin escapar -- una inyección de HTML real, no solo teórica.
   if(!DAY_KEYS.includes(input.dia)) return 'Día no encontrado.';
+  const raceRefusal = raceDayRefusal(input.dia, input.semana);
+  if(raceRefusal) return raceRefusal;
   // El snapshot de undo se toma DESPUÉS de validar (día encontrado, no bloqueado) -- si
   // se toma antes, un pedido inválido (día ya pasado, por ejemplo) igual pisa el snapshot
   // del cambio real anterior con el estado actual sin cambios, y "deshacer" ya no puede
@@ -16903,12 +16975,23 @@ function applyMoveSession(input){
   state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+input.dia_origen)+' → '+t('day_'+input.dia_destino)), ts:Date.now()});
   return `OK, moví la sesión de ${input.dia_origen} a ${input.dia_destino}.`;
 }
+// El día de la carrera objetivo (plan por fases, ver applyGoalRaceDay) no se modifica ni se cancela por el
+// coach: escribir una sesión ahí la dejaba escondida detrás del cartel "Carrera" y sumando en el total.
+// Devuelve el motivo para que el coach se lo explique al corredor, o null si el día no es la carrera.
+function raceDayRefusal(dia, semana){
+  const plan = semana === 'siguiente' ? getNextWeekPlan().plan : (state.plan || []);
+  const d = plan.find(x => x && x.day === dia);
+  if(!d || !d.raceDay) return null;
+  return `No puedo cambiar ${dia}${semana === 'siguiente' ? ' de la semana que viene' : ''}: ese día es la carrera objetivo del corredor, no una sesión de entrenamiento. Si quiere cambiar la fecha de la carrera, eso se hace con modificar_perfil (fecha_carrera).`;
+}
 function applyCancelSession(input){
   // Mismo motivo que el chequeo equivalente en applyPlanChange: la rama 'siguiente' usaba
   // input.dia crudo (sin validar contra DAY_KEYS) tanto para la clave de nextWeekOverrides
   // como para t('day_'+input.dia) en el mensaje de chat -- un valor inesperado del modelo
   // terminaba sin escapar en un mensaje de rol 'system'.
   if(!DAY_KEYS.includes(input.dia)) return 'Día no encontrado.';
+  const raceRefusal = raceDayRefusal(input.dia, input.semana);
+  if(raceRefusal) return raceRefusal;
   // Antes, cuando el corredor cancelaba una sesión por chat, el modelo terminaba
   // llamando a modificar_sesion igual (es la única herramienta de "un día puntual"
   // que conocía) y como esa herramienta exige tipo/descripción, improvisaba algo
@@ -17049,7 +17132,7 @@ function applyProfileChange(input){
   // interrumpir el resto.
   const rejectedNotes = [];
   let recalc = false;
-  if(input.objetivo){ state.profile.goal = input.objetivo; changes.push('objetivo'); recalc = true; }
+  if(input.objetivo){ state.profile.goal = input.objetivo; changes.push('objetivo'); recalc = true; clearLegacyCurveCapOnEdit(); }
   if(input.fecha_carrera){ state.profile.raceDate = input.fecha_carrera; changes.push('fecha de carrera'); recalc = true; }
   if(input.terreno){ state.profile.terrain = input.terreno; changes.push('terreno'); }
   // Mismo motivo que MAX_SESSION_KM/resolveZone en modificar_sesion: el input_schema de la
@@ -17073,7 +17156,7 @@ function applyProfileChange(input){
     if(input.km_actuales < 0 || input.km_actuales > 300){
       rejectedNotes.push(`el kilometraje semanal "${input.km_actuales}" no parece un valor real -- no se aplicó`);
     } else {
-      state.profile.currentWeeklyKm = input.km_actuales; state.profile.runnerType = 'active'; changes.push('km actuales'); recalc = true;
+      state.profile.currentWeeklyKm = input.km_actuales; state.profile.runnerType = 'active'; changes.push('km actuales'); recalc = true; clearLegacyCurveCapOnEdit();
     }
   }
   if(validDays.length){
