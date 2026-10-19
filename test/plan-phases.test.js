@@ -3946,3 +3946,20 @@ test('W5-L2: por tiempo (mejor esfuerzo): 20-50 km con 4-6 días salto <= 1,11 (
   const b = jumpsFor({ goals: ALL_GOALS, bases: [8, 15, 35, 65], days: [2, 3, 7], Ws: [9, 18], offs: [0, 1], trainBy: 'time' });
   assert.ok(b.n > 200 && b.max <= 1.30, `resto máx ${b.max.toFixed(3)} (${b.worst})`);
 });
+
+test('W5-L10: terminología de fases coherente en pt/fr/it/de (pico = nota del pico, taper = el de Inicio) y mismos marcadores en todas', () => {
+  const vm = require('node:vm');
+  const L = {};
+  ['es', 'en', 'pt', 'fr', 'it', 'de'].forEach(loc => {
+    const sandbox = {}; sandbox.window = sandbox; vm.createContext(sandbox);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'locales', loc + '.js'), 'utf8'), sandbox);
+    L[loc] = sandbox.I18N[loc];
+  });
+  assert.ok(L.de.plan_peak_limited_note.includes(L.de.plan_phase_peak), 'de: el pico se llama igual en la fase y en la nota');
+  ['pt', 'fr', 'de'].forEach(loc => assert.equal(L[loc].plan_phase_taper, L[loc].home_race_phase_taper, loc + ': taper igual que en la tarjeta de Inicio'));
+  assert.equal(L.de.plan_phase_build, L.de.home_race_phase_build, 'de: Aufbauphase');
+  const keys = ['plan_phase_line', 'plan_phase_line_one', 'plan_phase_line_race', 'plan_phase_line_nogoal', 'plan_peak_limited_note',
+    'desc_racepace_suffix', 'desc_racepace_long_suffix', 'plan_post_race_banner', 'plan_post_race_cta', 'plan_goal_race_name'];
+  const marks = s => (String(s).match(/\{\w+\}/g) || []).sort().join('');
+  keys.forEach(k => ['en', 'pt', 'fr', 'it', 'de'].forEach(loc => assert.equal(marks(L[loc][k]), marks(L.es[k]), `${loc}.${k}`)));
+});
