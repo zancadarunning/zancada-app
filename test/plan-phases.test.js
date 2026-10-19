@@ -3885,3 +3885,64 @@ test('W5-L4: locales: las seis definen plan_goal_race_name con {dist}', () => {
     assert.ok(typeof v === 'string' && v.includes('{dist}') && v.length > 8, loc);
   });
 });
+
+// W5-L2: cota de salto semana a semana (semanas completas de rampa/pico consecutivas, km impresos) por
+// clase de corredor, la que el barrido demuestra alcanzable. La clase de 20-50 km con 4-6 días ya tiene
+// su prueba (<= 1,10 y +-10%, ver I5).
+function jumpsFor(opts) {
+  const prev = {};
+  let max = 1, n = 0, worst = '';
+  sweepPhaseWeeks(opts, (app, p, ws, info, plan, label) => {
+    const key = label.replace(/ idx\d+ \w+ /, ' ');
+    if (!['base', 'build', 'specific', 'peak'].includes(info.phase) || plan.some(d => d.raceDay)) { delete prev[key]; return; }
+    if (app.phaseIsCutbackWeek(info)) return;
+    const v = opts.trainBy === 'time' ? plan.reduce((a, d) => a + (d.durMin || 0), 0) : sumDist(plan);
+    if (prev[key] !== undefined) { n++; if (v / prev[key] > max) { max = v / prev[key]; worst = `${label}: ${prev[key]} -> ${v}`; } }
+    prev[key] = v;
+  });
+  return { max, n, worst };
+}
+
+test('W5-L2: semanas chicas (<= 15 km en 5-7 días): salto <= 1,17 y +-10% del objetivo salvo donde el mínimo de las sesiones ya lo pasa', () => {
+  // Antes: 373 de 3060 pares > 1,10, máximo 1,54 (redondeo a km enteros con sesiones de 1-2 km y el
+  // fartlek con su mínimo de 4 repeticiones de 3-6 min). Con pasos de 0,5 km y el fartlek corto: máx 1,16.
+  const r = jumpsFor({ goals: ALL_GOALS, bases: [8, 12, 15], days: [5, 6], Ws: [9, 18], offs: [0, 1, 2, 3] });
+  assert.ok(r.n > 300 && r.max <= 1.17, `máx ${r.max.toFixed(3)} (${r.worst})`);
+  sweepPhaseWeeks({ goals: ALL_GOALS, bases: [8, 12, 15], days: [5, 6], Ws: [9], offs: [0, 1] }, (app, p, ws, info, plan, label) => {
+    if (plan.some(d => d.raceDay)) return;
+    const target = app.phasedWeeklyKm(p, app.trainingCaution(p), info, app.phaseEffectiveWeeklyKm(p, false)).km * app.taperMultiplier(p, ws);
+    const got = sumDist(plan);
+    // piso físico: cada sesión es al menos 1 km (las de estructura, un poco más): con menos de ~1,6 km
+    // por sesión de objetivo el total no puede bajar hasta el +10%
+    const sessions = plan.filter(d => d.typeKey !== 'rest').length;
+    if (target < 1.6 * sessions) { assert.ok(got <= 2.5 * sessions, `${label}: ${got}`); return; }
+    assert.ok(Math.abs(got - target) <= target * 0.10 + 0.5, `${label}: ${got} km vs ${target.toFixed(1)}`);
+  });
+});
+
+test('W5-L2: 2-3 días por semana: salto <= 1,33 (antes hasta 1,76); lo que queda es imposible con sus reglas', () => {
+  // Con 2-3 sesiones la tirada tiene tope y las otras van por debajo de ella; series y cuestas además no
+  // pasan del 30% de la semana (HIGH_IMPACT_SHARE_CAP). Cuestas / fartlek que entregaban la mitad de su
+  // parte ahora se cambian por el progresivo / tempo de la fase (swapShortQualityInShortWeeks); lo que
+  // queda (máx ~1,32) es una semana con series (tope de impacto) seguida de una con tempo.
+  const r = jumpsFor({ goals: ALL_GOALS, bases: [15, 25, 35, 50, 80], days: [2, 3], Ws: [9, 18], offs: [0, 1, 2, 3] });
+  assert.ok(r.n > 500 && r.max <= 1.33, `máx ${r.max.toFixed(3)} (${r.worst})`);
+});
+
+test('W5-L2: mucho volumen con 4-7 días (65-80 km): salto <= 1,34; con la tirada y los rodajes topeados no hay dónde poner el resto', () => {
+  // 5k a 80 km con 4 días: tirada <= 18, rodajes <= 17; si la sesión de calidad es de estructura la semana
+  // queda en ~50 km y con un tempo en ~66. El objetivo (85 km) es inalcanzable con esas reglas.
+  const r = jumpsFor({ goals: ALL_GOALS, bases: [65, 80], days: [4, 5, 6], Ws: [9, 18], offs: [0, 1, 2, 3] });
+  assert.ok(r.n > 300 && r.max <= 1.34, `máx ${r.max.toFixed(3)} (${r.worst})`);
+});
+
+test('W5-L2: por tiempo (mejor esfuerzo): 20-50 km con 4-6 días salto <= 1,11 (redondeo a 5 min); el resto <= 1,30', () => {
+  // Por tiempo cada tipo de sesión tiene su techo de minutos (tempo 35, series 40, cuestas 30, fartlek 40,
+  // progresivo 60) y la tirada su tope de fases: con 2-3 días o mucho volumen la semana depende del tipo
+  // de la sesión de calidad. No hay piso por debajo de 20 min por sesión, así que las semanas chicas de
+  // 5-7 días quedan por encima del objetivo (eso no es un salto: queda plano).
+  const a = jumpsFor({ goals: ALL_GOALS, bases: [20, 35, 50], days: [4, 5, 6], Ws: [9, 18], offs: [0, 1], trainBy: 'time' });
+  assert.ok(a.n > 200 && a.max <= 1.11, `A máx ${a.max.toFixed(3)} (${a.worst})`);
+  const b = jumpsFor({ goals: ALL_GOALS, bases: [8, 15, 35, 65], days: [2, 3, 7], Ws: [9, 18], offs: [0, 1], trainBy: 'time' });
+  assert.ok(b.n > 200 && b.max <= 1.30, `resto máx ${b.max.toFixed(3)} (${b.worst})`);
+});

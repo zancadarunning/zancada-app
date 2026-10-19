@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-19T02:21:01Z';
+const APP_VERSION = '2026-10-19T02:30:43Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4814,25 +4814,65 @@ function applyPhaseLongRun(distMap, usedTypes, targetTotal, phaseInfo, goal, isC
 // Al revés también: si la semana se pasa (volúmenes chicos, donde el mínimo de 4 repeticiones de una
 // estructura ya es más que su parte), se saca de a 1 km del rodaje más largo, sin dejarlo en menos de
 // 2 km (por debajo de eso no es una sesión).
-function spreadPhaseShortfall(days, targetKm, longCapKm, easyCapKm){
-  let left = Math.round(targetKm - days.reduce((a, d) => a + (d.dist || 0), 0));
+function spreadPhaseShortfall(days, targetKm, longCapKm, easyCapKm, profile){
+  // Paso del reparto: 1 km, o 0,5 km en semanas chicas (menos de 4 km por sesión), donde redondear cada
+  // sesión a km enteros ya mueve el total semana a semana un 20-50%; en esas semanas el rodaje más corto
+  // admitido al recortar es 1 km (si no, 2 km).
+  const sessions = days.filter(d => d.typeKey !== 'rest').length;
+  const step = sessions && targetKm / sessions < 4 ? 0.5 : 1;
+  const minEasy = step < 1 ? 1 : 2;
+  const r1 = x => Math.round(x * 10) / 10;
+  let left = Math.round((targetKm - days.reduce((a, d) => a + (d.dist || 0), 0)) / step);
   const easy = days.filter(d => d.typeKey === 'easy');
   const longs = days.filter(d => d.typeKey === 'long');
   while(left < 0){
-    const cand = easy.filter(d => d.dist - 1 >= 2 - 1e-9).sort((a, b) => b.dist - a.dist)[0];
-    if(!cand) break;
-    cand.dist = Math.round((cand.dist - 1) * 10) / 10;
-    left++;
+    const cand = easy.filter(d => d.dist - step >= minEasy - 1e-9).sort((a, b) => b.dist - a.dist)[0];
+    if(cand){ cand.dist = r1(cand.dist - step); left++; continue; }
+    // Rodajes ya en su mínimo y la semana todavía se pasa: es el fartlek, que con su mínimo de 4
+    // repeticiones de 3-6 minutos puede triplicar su parte en semanas de pocos km. Se pasa a su variante
+    // más corta (4 x 2 min + 1 min) y se vuelve a medir.
+    const fl = profile ? days.find(d => d.typeKey === 'fartlek' && d.interval && d.interval.workMin > 2) : null;
+    if(!fl) break;
+    fl.interval = { reps: 4, workMin: 2, restMin: 1 };
+    fl.dist = fartlekActualKm(fl.interval, profile);
+    left = Math.round((targetKm - days.reduce((a, d) => a + (d.dist || 0), 0)) / step);
   }
   while(left > 0){
     const longKm = longs.length ? Math.min(...longs.map(d => d.dist)) : Infinity;
-    const limit = longs.length ? Math.min(longKm - 1, easyCapKm) : Math.min(longCapKm, easyCapKm);
-    const cand = easy.filter(d => d.dist + 1 <= limit + 1e-9).sort((a, b) => a.dist - b.dist)[0];
-    if(cand){ cand.dist = Math.round((cand.dist + 1) * 10) / 10; left--; continue; }
+    const limit = longs.length ? Math.min(longKm - step, easyCapKm) : Math.min(longCapKm, easyCapKm);
+    const cand = easy.filter(d => d.dist + step <= limit + 1e-9).sort((a, b) => a.dist - b.dist)[0];
+    if(cand){ cand.dist = r1(cand.dist + step); left--; continue; }
     const lg = longs.length ? longs.reduce((m, d) => d.dist < m.dist ? d : m) : null;
-    if(lg && lg.dist + 1 <= longCapKm + 1e-9){ lg.dist = Math.round((lg.dist + 1) * 10) / 10; left--; continue; }
+    if(lg && lg.dist + step <= longCapKm + 1e-9){ lg.dist = r1(lg.dist + step); left--; continue; }
     break;
   }
+}
+// Semanas de 2-3 sesiones del plan por fases: la sesión de calidad es un tercio o la mitad de la semana y
+// no hay rodajes (o hay uno) para compensar si queda corta. Las de estructura tienen un techo de
+// repeticiones (cuestas 10 x 400 m, fartlek 10 repeticiones) y con mucho volumen entregan la mitad de su
+// parte: la semana siguiente, con un tempo, saltaba +40-75%. Si series o cuestas entregan menos del 75%
+// de lo que les tocaba (o un fartlek menos de 2/3), se cambia por la sesión continua de la fase (progresivo en base, tempo
+// en las demás) con su parte entera (ya acotada por debajo de la tirada). Antes de cambiar un fartlek se
+// prueba su variante más larga (repeticiones de 4 + 2 min): si con esa llega a 2/3, queda el fartlek.
+// Modifica `days` en el lugar.
+function swapShortQualityInShortWeeks(days, distMap, phaseInfo, zoneMap, profile){
+  const terrain = profile && profile.terrain;
+  if(!phaseInfo || !phaseInfo.active || isPostRacePhase(phaseInfo.phase)) return;
+  if(days.filter(d => d.typeKey !== 'rest').length > 3) return;
+  const alt = phaseInfo.phase === 'base' ? 'progression' : 'tempo';
+  days.forEach(d => {
+    if(!['hills', 'fartlek', 'intervals'].includes(d.typeKey) || !(distMap[d.typeKey] > 0)) return;
+    const keepFrac = d.typeKey === 'fartlek' ? 2 / 3 : 0.75;
+    if(d.dist >= keepFrac * distMap[d.typeKey]) return;
+    if(d.typeKey === 'fartlek' && profile){
+      const pace = estimateBasePaceMinPerKm(profile);
+      const st = { reps: Math.max(4, Math.min(10, Math.round(distMap.fartlek * pace / 6))), workMin: 4, restMin: 2 };
+      const km = fartlekActualKm(st, profile);
+      if(km >= 2 / 3 * distMap.fartlek && km > d.dist){ d.interval = st; d.dist = km; return; }
+    }
+    d.dist = distMap[d.typeKey];
+    d.typeKey = alt; d.zone = zoneMap[alt]; d.terrain = terrain; delete d.interval;
+  });
 }
 // Semana de descarga del plan por fases: ninguna sesión puede ser tan larga como la tirada (ver
 // clampPhaseLongRun). Las de estructura (series, cuestas, fartlek) se recalculan por repeticiones y pueden
@@ -6414,8 +6454,9 @@ function generatePlan(p, weekNumber, weekStartDate){
   if(!beginner && phaseInfo.active && weekTargetKm !== null){
     // Descarga del plan por fases: la estructura de series / cuestas / fartlek (mínimo 4 repeticiones)
     // puede quedar igual o más larga que la tirada aunque su parte ya se recortó; se rearma más chica.
+    if(!easyOnly) swapShortQualityInShortWeeks(kmDays, distMap, phaseInfo, zoneMap, p);
     if(phaseIsCutbackWeek(phaseInfo) && !easyOnly) shrinkCutbackQuality(kmDays, caution, weekNumber, p);
-    spreadPhaseShortfall(kmDays, weekTargetKm, phaseInfo.longCapKm || LONG_CAP_KM[p.goal] || Infinity, sessionCapKm);
+    spreadPhaseShortfall(kmDays, weekTargetKm, phaseInfo.longCapKm || LONG_CAP_KM[p.goal] || Infinity, sessionCapKm, p);
   }
   applyPhaseRacePace(kmDays, phaseInfo, p.goal, easyOnly, true);
   return applyLevelTestDay(applyGoalRaceDay(kmDays, p, weekStartDate, phaseInfo), p, weekStartDate, beginner);
