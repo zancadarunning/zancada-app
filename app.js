@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-19T14:57:45Z';
+const APP_VERSION = '2026-10-19T15:10:07Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3370,7 +3370,7 @@ function applyGoalsChangeNow(){
   }
   state.plan = merged;
   if(state.profile.weeklyGoalKm > 0){
-    state.chat.push({role:'coach', text: t('coach_weekly_goal_updated', {km: fmtDist(state.profile.weeklyGoalKm,1), unit: distUnit()}), ts:Date.now()});
+    state.chat.push({role:'coach', text: t('coach_weekly_goal_updated', weeklyGoalAmount()), ts:Date.now()});
     renderChat();
   }
 }
@@ -3379,7 +3379,7 @@ function applyGoalsChangeNextWeek(){
   // Igual que en datos personales: no tocamos el plan de esta semana, la que viene ya
   // se calcula sola con el perfil actualizado.
   if(state.profile.weeklyGoalKm > 0){
-    state.chat.push({role:'coach', text: t('coach_weekly_goal_updated_next_week', {km: fmtDist(state.profile.weeklyGoalKm,1), unit: distUnit()}), ts:Date.now()});
+    state.chat.push({role:'coach', text: t('coach_weekly_goal_updated_next_week', weeklyGoalAmount()), ts:Date.now()});
     renderChat();
   }
 }
@@ -7182,6 +7182,13 @@ function repMetersFromMin(min, profile){
   // Reportado por un usuario viendo el fartlek en modo distancia.
   return Math.max(50, Math.round(raw/50)*50);
 }
+// Meta semanal para los mensajes del coach ({km} y {unit} de los textos). La meta se carga en km; a quien entrena por tiempo se le muestra en
+// minutos, con el mismo ritmo base y el mismo redondeo a 5 que usa planDurationMin.
+function weeklyGoalAmount(){
+  const g = state.profile.weeklyGoalKm || 0;
+  if(isTimeMode()) return {km: Math.max(5, Math.round((g * estimateBasePaceMinPerKm()) / 5) * 5), unit: t('time_unit_min')};
+  return {km: fmtDist(g, 1), unit: distUnit()};
+}
 function planAmountText(d){
   if(!(d.dist>0)) return '';
   if(d.typeKey==='test') return `12 ${t('time_unit_min')}`;
@@ -8328,7 +8335,7 @@ function renderHome(){
       // sola nunca manda nada al chat (la usan tres lugares distintos, cada uno con su propio
       // mensaje si le hace falta), así que antes esto solo se veía en el toast, nunca quedaba
       // registrado en la conversación con el coach.
-      state.chat.push({role:'coach', text: t('coach_goal_reached_msg', {km: fmtDist(state.profile.weeklyGoalKm,1), unit: distUnit()}), ts:Date.now()});
+      state.chat.push({role:'coach', text: t('coach_goal_reached_msg', weeklyGoalAmount()), ts:Date.now()});
       renderChat();
       persist();
     }
@@ -16500,7 +16507,7 @@ function buildContext(){
   // Fase del plan por fases (solo si está activa, ver refreshPhaseNow): le damos la fase y cuánto falta,
   // no el pico semanal -- el volumen real ya está en los bloques del plan de más abajo.
   ctx += phaseCtxSentence(state.phaseNow);
-  if(p.weeklyGoalKm > 0) ctx += ` Meta de km que el corredor se puso para esta semana: ${p.weeklyGoalKm}km (esto ya se usó para ajustar el volumen del plan actual, dentro de márgenes seguros).`;
+  if(p.weeklyGoalKm > 0) ctx += ` Meta ${isTimeMode() ? 'de tiempo' : 'de km'} que el corredor se puso para esta semana: ${isTimeMode() ? weeklyGoalAmount().km + ' minutos' : p.weeklyGoalKm + 'km'} (esto ya se usó para ajustar el volumen del plan actual, dentro de márgenes seguros).`;
   if(p.goalNote) ctx += ` Objetivo personal, en sus propias palabras: "${p.goalNote}".`;
   const aiRuns = aiVisibleRuns();   // sin las carreras de Strava (ver aiVisibleRuns)
   const hasStravaRuns = (state.runs||[]).some(r => r.source === 'strava');

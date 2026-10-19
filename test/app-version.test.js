@@ -16,6 +16,6 @@ const path = require('node:path');
 
 test('APP_VERSION es la primera línea de app.js (necesario para que el Range chico de checkForAppUpdate la alcance a leer)', () => {
   const appJs = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
-  const firstLine = appJs.split('\n')[0];
+  const firstLine = appJs.split(/\r?\n/)[0];   // el repo guarda LF, pero un clon en Windows puede traer CRLF
   assert.match(firstLine, /^const APP_VERSION = '[^']+';$/);
 });

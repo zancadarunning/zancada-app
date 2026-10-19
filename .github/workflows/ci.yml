@@ -1,0 +1,31 @@
+# Integración continua: en cada push y en cada pull request corre las pruebas.
+# El despliegue (CD) lo hace Vercel solo, al subir a main; esto avisa si el cambio rompe algo.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      # --ignore-scripts: no hace falta bajar el binario de ffmpeg para las pruebas
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Sintaxis de app.js
+        run: node --check app.js
+      - name: Pruebas
+        run: npm test
