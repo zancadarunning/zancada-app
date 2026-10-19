@@ -2838,7 +2838,9 @@ const v4Km = (app, p, n) => Math.max(9, app.phaseEffectiveWeeklyKm(p, false)) * 
 function assertBridge(app, p, n, cont, growth, msg) {
   const v = v4Km(app, p, n);
   const curve = app.legacyCurveWeek(n, p);
-  assert.ok(v >= cont - 1e-9, `${msg}: ${v} < ${cont}`);
+  // (ruling 38: si la semana actual de v4 iba a caer en una descarga, T queda un paso debajo de la
+  // continuación: entre continuación / growth y continuación x growth)
+  assert.ok(v >= cont / growth - 1e-9, `${msg}: ${v} < ${cont} / ${growth}`);
   if (curve > 1) assert.ok(v <= cont * growth + 1e-9, `${msg}: ${v} > ${cont} x ${growth}`);
   assert.ok(curve % 4 !== 0, `${msg}: semana ${curve} de la curva es descarga`);
 }
@@ -3685,4 +3687,38 @@ test('W5-L6: la tarjeta de carrera de Inicio usa la misma fase que el plan cuand
   app.state.phaseNow = { phase: 'build', weeksToRace: 8, limited: false, peakKm: 45 };
   assert.deepEqual(plain(app.homeRacePhaseLabel(5, false, true)), { text: app.t('home_race_phase_taper_final'), noteKey: 'home_race_phase_taper_final_note' });
   assert.deepEqual(plain(app.homeRacePhaseLabel(40, false, false)), { text: app.t('home_race_phase_build'), noteKey: null });
+});
+
+test('W5-L1: después de cambiar meta o carrera la semana actual de v4 nunca cae en una descarga de v4 (curcut)', () => {
+  let legacy = 0;
+  ['5k', '10k', '21k', '42k'].forEach(goal => [15, 25, 35, 50, 70].forEach(base => [2, 5, 8, 11, 14, 19, 21, 25].forEach(k => ['+1w', '+4w', '-3w', 'general', 'newrace3w'].forEach(edit => {
+    const { app, p, wk } = midPlanApp(goal, base, 16, k);
+    const old = app.state.phaseSchedule;
+    const growth = app.growthParams(app.trainingCaution(p)).growth;
+    if (edit === '+1w') p.raceDate = app.addDaysToIsoLocal(p.raceDate, 7);
+    if (edit === '+4w') p.raceDate = app.addDaysToIsoLocal(p.raceDate, 28);
+    if (edit === '-3w') p.raceDate = app.addDaysToIsoLocal(p.raceDate, -21);
+    if (edit === 'general') p.goal = 'general';
+    if (edit === 'newrace3w') p.raceDate = app.addDaysToIsoLocal(wk, 3 * 7 + 6);
+    if (p.goal !== 'general' && p.raceDate <= app.addDaysToIsoLocal(wk, 6)) return;
+    app.refreshPhaseSchedule();
+    const s = app.state.phaseSchedule;
+    const covered = ws => !!s && app.phaseForWeek(p, ws, s).active;
+    const label = `${goal} ${base} idx ${k} ${edit}`;
+    if (!covered(wk)) {
+      legacy++;
+      assert.ok(!app.isCutbackWeek(app.legacyCurveWeek(app.state.weekNumber, p)) || app.taperMultiplier(p, wk) < 1, `${label}: semana actual en descarga de v4`);
+    }
+    // primer lunes sin cubrir desde el que viene: semana completa de v4 dentro de [cont / growth, cont x growth]
+    let j = 1, T = app.addDaysToIsoLocal(wk, 7);
+    while (j < 60 && covered(T)) { j++; T = app.addDaysToIsoLocal(wk, 7 * j); }
+    if (j >= 60) return;
+    const cont = contAt(app, p, old, T);
+    if (cont === null) return;
+    const n = app.state.weekNumber + j;
+    const v = v4Km(app, p, n);
+    assert.ok(!app.isCutbackWeek(app.legacyCurveWeek(n, p)), `${label}: T en descarga`);
+    if (app.legacyCurveWeek(n, p) > 1) assert.ok(v >= cont / growth - 1e-9 && v <= cont * growth + 1e-9, `${label}: T ${v} vs ${cont}`);
+  }))));
+  assert.ok(legacy > 300, String(legacy));
 });

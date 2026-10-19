@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-16T00:21:25Z';
+const APP_VERSION = '2026-10-19T02:10:39Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4966,6 +4966,11 @@ function bridgePhaseExitCurve(outgoing, next){
   const { cap } = growthParams(caution);
   let n = 1;
   while(n < 200 && ref * weekMultiplier(n, caution, true) < cont - 1e-9 && weekMultiplier(n, caution, true) < cap) n++;
+  // Con T = el lunes que viene, la semana actual queda en la curva n-1: si eso es una descarga de v4
+  // (múltiplo de 4), regenerarla "a partir de ahora" la bajaría 25-31%. Ahí T va un paso más abajo, a
+  // n-2 (no es descarga y vale lo mismo que la semana completa n-1: entre continuación / growth y la
+  // continuación), y la actual queda en n-3, que tampoco es descarga (ruling 38).
+  if(k === 1 && n >= 5 && (n - 1) % 4 === 0) n -= 2;
   state.curveWeekOffset = n - ((state.weekNumber || 1) + k);
 }
 // Cronograma nuevo (makePhaseSchedule) con el pico semanal y `limited` ya calculados A PARTIR
