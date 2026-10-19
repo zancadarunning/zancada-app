@@ -2522,10 +2522,10 @@ function examples() {
 function allRuns() { return examples().flatMap(g => g.runs); }
 const RAMP_PHASES = ['base', 'build', 'specific', 'peak'];
 
-test('plan-examples: devuelve los 12 grupos de ejemplos (6 originales + 6 de transiciones) con semanas y cronograma', () => {
+test('plan-examples: devuelve los 16 grupos de ejemplos (6 originales + 6 de transiciones + 4 de limitaciones) con semanas y cronograma', () => {
   const groups = examples();
-  assert.deepEqual(groups.map(g => g.id), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-  assert.deepEqual(groups.map(g => g.runs.length), [1, 1, 2, 1, 1, 1, 1, 3, 1, 2, 1, 1]);
+  assert.deepEqual(groups.map(g => g.id), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+  assert.deepEqual(groups.map(g => g.runs.length), [1, 1, 2, 1, 1, 1, 1, 3, 1, 2, 1, 1, 1, 1, 1, 1]);
   allRuns().forEach(run => {
     assert.ok(run.rows.length >= 7, run.label);
     assert.ok(Number.isFinite(run.peakKm), run.label);
@@ -2559,7 +2559,8 @@ test('plan-examples: las semanas impresas no pasan el pico en mas de 7% ni la ti
   allRuns().forEach(run => {
     run.rows.forEach(row => {
       assert.ok(row.plan.km <= run.peakKm * 1.07, `${run.label} semana ${row.weekNumber}: ${row.plan.km} km con pico ${run.peakKm}`);
-      if (row.phase !== 'v4') {
+      // (por tiempo la tirada se topea en minutos -- W5-L7 --; sus km son una estimación redondeada a 5 min)
+      if (row.phase !== 'v4' && run.trainBy !== 'time') {
         assert.ok(row.plan.longKm <= run.longCapKm, `${run.label} semana ${row.weekNumber}: tirada ${row.plan.longKm} km, tope ${run.longCapKm}`);
       }
     });
@@ -3531,7 +3532,7 @@ test('W2-35: 42k con fases: la tirada no pasa su tope y los rodajes quedan por d
 });
 
 test('plan-examples: carrera nueva corta elegida en el mantenimiento: la semana después del mantenimiento no salta', () => {
-  const run = examples()[11].runs[0];
+  const run = examples().find(g => g.id === 12).runs[0];
   const i = run.rows.findIndex((r, k) => k > 0 && r.phase === 'v4' && run.rows[k - 1].phase === 'maintenance');
   assert.ok(i > 0, 'hay una semana v4 justo después del mantenimiento');
   const before = run.rows[i - 1], after = run.rows[i];
@@ -3962,4 +3963,15 @@ test('W5-L10: terminología de fases coherente en pt/fr/it/de (pico = nota del p
     'desc_racepace_suffix', 'desc_racepace_long_suffix', 'plan_post_race_banner', 'plan_post_race_cta', 'plan_goal_race_name'];
   const marks = s => (String(s).match(/\{\w+\}/g) || []).sort().join('');
   keys.forEach(k => ['en', 'pt', 'fr', 'it', 'de'].forEach(loc => assert.equal(marks(L[loc][k]), marks(L.es[k]), `${loc}.${k}`)));
+});
+
+test('plan-examples (fix wave 5): día de carrera marcado, calidad debajo de la tirada en descarga, tirada por tiempo con tope', () => {
+  const g = id => examples().find(x => x.id === id).runs[0];
+  const r13 = g(13);
+  const raceWeek = r13.rows[r13.rows.length - 1];
+  assert.equal(raceWeek.plan.raceDay, 'sun', 'la semana de la carrera marca el domingo');
+  r13.rows.filter(r => r.cutback).forEach(r => assert.ok(r.plan.maxOtherKm < r.plan.longKm, `semana ${r.weekNumber}: ${r.plan.maxOtherKm} vs ${r.plan.longKm}`));
+  const r16 = g(16);
+  assert.equal(r16.trainBy, 'time');
+  r16.rows.filter(r => r.phase !== 'v4' && r.plan.longMin > 0).forEach(r => assert.ok(r.plan.longMin <= 110, `semana ${r.weekNumber}: ${r.plan.longMin} min`));
 });

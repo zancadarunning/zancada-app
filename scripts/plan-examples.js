@@ -83,6 +83,19 @@ function exampleDefs() {
     { id: 11, title: 'weekNumber distinto de la semana del plan (21k, 35 km/sem, el plan arranca en la semana 3 de v4)',
       runs: [{ label: '21k en 16 semanas, weekNumber = semana + 2', profile: prof('21k', 35, d4, 21.0975, 115 * 60), weeksToRace: 16, wn0: 2,
         note: 'Las descargas (cut) siguen al plan por fases, no a weekNumber (columna v4 desc.).' }] },
+    // Fix wave 5 (limitaciones): un ejemplo por arreglo visible.
+    { id: 13, title: 'Semanas de descarga con mucho volumen: 21k a 50 km/sem, 4 dias (la sesion de calidad queda por debajo de la tirada)',
+      runs: [{ label: '21k en 14 semanas, 50 km/sem', profile: prof('21k', 50, d4, 21.0975, 100 * 60), weeksToRace: 14,
+        note: 'Columna "Otra max": la sesion que no es la tirada mas larga; en las semanas cut queda por debajo de la tirada (L5). La semana de la carrera marca el dia de la carrera (columna Carrera, L4).' }] },
+    { id: 14, title: 'Pocos dias: 10k con 3 dias y 35 km/sem',
+      runs: [{ label: '10k en 12 semanas, 3 dias, 35 km/sem', profile: prof('10k', 35, ['tue', 'thu', 'sun'], 10, 50 * 60), weeksToRace: 12,
+        note: 'Cuestas / series que no llegan a su parte se cambian por el progresivo / tempo de la fase (L2).' }] },
+    { id: 15, title: 'Poco volumen repartido: 5k con 12 km/sem en 6 dias',
+      runs: [{ label: '5k en 10 semanas, 12 km/sem, 6 dias', profile: prof('5k', 12, ['mon', 'tue', 'wed', 'thu', 'fri', 'sun'], 5, 30 * 60), weeksToRace: 10,
+        note: 'Reparto en pasos de 0,5 km y fartlek corto cuando sobra: las semanas siguen al objetivo sin saltos de km enteros (L2).' }] },
+    { id: 16, title: 'Por tiempo: 5k con 50 km/sem, 4 dias (tope de la tirada en minutos)',
+      runs: [{ label: '5k en 12 semanas por tiempo, 50 km/sem', profile: Object.assign(prof('5k', 50, d4, 5, 21 * 60), { trainBy: 'time' }), weeksToRace: 12,
+        note: 'Columnas min y Larga min: la tirada no pasa el tope de la distancia en minutos (L7; antes llegaba a 150 min).' }] },
     { id: 12, title: 'Carrera nueva corta elegida en el mantenimiento: 21k (35 km/sem) que un mes despues elige un 10k en 4 semanas',
       runs: [{ label: '21k corrido, en mantenimiento elige un 10k en 4 semanas', profile: prof('21k', 35, d4, 21.0975, 115 * 60), weeksToRace: 16,
         firstIdx: 14, lastIdx: 25, edit: { atIdx: 20, goal: '10k', raceInWeeks: 4 },
@@ -138,17 +151,20 @@ function runExample(def) {
 
   const summarize = (days) => {
     const hard = {};
-    let km = 0, longKm = 0, maxEasyKm = 0, racePace = false, racePaceBlock = false;
+    let km = 0, longKm = 0, maxEasyKm = 0, maxOtherKm = 0, min = 0, longMin = 0, raceDay = '', racePace = false, racePaceBlock = false;
     days.forEach(d => {
       km += d.dist || 0;
-      if (d.typeKey === 'long') longKm = Math.max(longKm, d.dist || 0);
+      min += d.durMin || 0;
+      if (d.raceDay) raceDay = d.day;
+      if (d.typeKey === 'long') { longKm = Math.max(longKm, d.dist || 0); longMin = Math.max(longMin, d.durMin || 0); }
+      else if (d.typeKey !== 'rest') maxOtherKm = Math.max(maxOtherKm, d.dist || 0);
       if (d.typeKey === 'easy') maxEasyKm = Math.max(maxEasyKm, d.dist || 0);
       if (HARD_TYPES.includes(d.typeKey)) hard[d.typeKey] = (hard[d.typeKey] || 0) + 1;
       if (d.racePaceSec) racePace = true;
       if (d.racePaceBlockKm) racePaceBlock = true;
     });
     const hardList = Object.keys(hard).sort().map(k => hard[k] > 1 ? k + 'x' + hard[k] : k);
-    return { km: r1(km), longKm: r1(longKm), maxEasyKm: r1(maxEasyKm), hard: hardList, racePace, racePaceBlock };
+    return { km: r1(km), longKm: r1(longKm), maxEasyKm: r1(maxEasyKm), maxOtherKm: r1(maxOtherKm), min, longMin, raceDay, hard: hardList, racePace, racePaceBlock };
   };
 
   const rows = [];
@@ -174,7 +190,7 @@ function runExample(def) {
     }
     // Parate: semanas sin correr (no hay plan que mostrar) y la vuelta por el rollover de verdad.
     if (def.brk && idx > def.brk.lastIdx && idx < def.brk.backIdx) {
-      const zero = { km: 0, longKm: 0, maxEasyKm: 0, hard: [], racePace: false, racePaceBlock: false, targetKm: null };
+      const zero = { km: 0, longKm: 0, maxEasyKm: 0, maxOtherKm: 0, min: 0, longMin: 0, raceDay: '', hard: [], racePace: false, racePaceBlock: false, targetKm: null };
       rows.push({ weekNumber: wnBase + idx, weekStart, phase: 'parate', weeksToRace: null, weeksAfter: 0, cutback: false, plan: zero, v4: Object.assign({ cutback: false }, zero) });
       continue;
     }
@@ -220,7 +236,7 @@ function runExample(def) {
     note: def.note || null, events,
     peakAfterKm: finalSched && Number.isFinite(finalSched.peakKm) && r1(finalSched.peakKm) !== r1(schedule.peakKm) ? r1(finalSched.peakKm) : null,
     label: def.label, goal: profile.goal, raceDate: profile.raceDate, anchor,
-    weeklyKm: startKm, trainingDays: profile.trainingDays.join('/'),
+    weeklyKm: startKm, trainingDays: profile.trainingDays.join('/'), trainBy: profile.trainBy,
     refRace: profile.refRace.distanceKm + ' km en ' + app.fmtDurationShort(profile.refRace.durationSec),
     racePace: pace ? app.fmtPace(pace / 60) + ' /km' : null,
     peakKm: Number.isFinite(schedule.peakKm) ? r1(schedule.peakKm) : null,
@@ -233,7 +249,7 @@ function runExample(def) {
 
 // Devuelve los grupos de ejemplos (los 6 originales + 6 de transiciones y casos borde): [{id, title, runs: [{label, rows, ...}]}].
 function buildExamples() {
-  return exampleDefs().map(g => ({ id: g.id, title: g.title, runs: g.runs.map(runExample) }));
+  return exampleDefs().sort((a, b) => a.id - b.id).map(g => ({ id: g.id, title: g.title, runs: g.runs.map(runExample) }));
 }
 
 function tagsOf(row) {
@@ -249,14 +265,16 @@ function weekLabel(row) {
 }
 
 function renderRun(run, md) {
-  const head = ['#', 'Semana', 'Fase', 'A carrera', 'km', 'Obj.', 'Larga', 'Fuertes', 'Ritmo carr.', 'Desc.', '', 'v4 km', 'v4 larga', 'v4 fuertes', 'v4 desc.'];
+  const time = run.trainBy === 'time';
+  const head = ['#', 'Semana', 'Fase', 'A carrera', 'km'].concat(time ? ['min', 'Larga min'] : []).concat(['Obj.', 'Larga', 'Otra max', 'Fuertes', 'Ritmo carr.', 'Desc.', 'Carrera', '', 'v4 km', 'v4 larga', 'v4 fuertes', 'v4 desc.']);
   const body = run.rows.map(row => [
     String(row.weekNumber), row.weekStart, row.phase, weekLabel(row),
-    row.plan.km.toFixed(1), row.plan.targetKm === null ? '-' : row.plan.targetKm.toFixed(1), row.plan.longKm.toFixed(1), row.plan.hard.join(',') || '-',
-    row.plan.racePace ? (row.plan.racePaceBlock ? 'RP+L' : 'RP') : '', row.cutback ? 'cut' : '',
+    row.plan.km.toFixed(1)].concat(time ? [String(row.plan.min), String(row.plan.longMin)] : []).concat([
+    row.plan.targetKm === null ? '-' : row.plan.targetKm.toFixed(1), row.plan.longKm.toFixed(1), row.plan.maxOtherKm.toFixed(1), row.plan.hard.join(',') || '-',
+    row.plan.racePace ? (row.plan.racePaceBlock ? 'RP+L' : 'RP') : '', row.cutback ? 'cut' : '', row.plan.raceDay ? row.plan.raceDay : '',
     '|',
     row.v4.km.toFixed(1), row.v4.longKm.toFixed(1), row.v4.hard.join(',') || '-', row.v4.cutback ? 'cut' : '',
-  ]);
+  ]));
   const lines = [];
   const info = [
     'Carrera: ' + run.raceDate + ' (' + run.goal + ')   Ancla (semana 1): ' + run.anchor,
