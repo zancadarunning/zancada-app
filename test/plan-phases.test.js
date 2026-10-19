@@ -2523,10 +2523,10 @@ function examples() {
 function allRuns() { return examples().flatMap(g => g.runs); }
 const RAMP_PHASES = ['base', 'build', 'specific', 'peak'];
 
-test('plan-examples: devuelve los 16 grupos de ejemplos (6 originales + 6 de transiciones + 4 de limitaciones) con semanas y cronograma', () => {
+test('plan-examples: devuelve los 18 grupos de ejemplos (6 originales + 6 de transiciones + 6 de limitaciones) con semanas y cronograma', () => {
   const groups = examples();
-  assert.deepEqual(groups.map(g => g.id), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
-  assert.deepEqual(groups.map(g => g.runs.length), [1, 1, 2, 1, 1, 1, 1, 3, 1, 2, 1, 1, 1, 1, 1, 1]);
+  assert.deepEqual(groups.map(g => g.id), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
+  assert.deepEqual(groups.map(g => g.runs.length), [1, 1, 2, 1, 1, 1, 1, 3, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1]);
   allRuns().forEach(run => {
     assert.ok(run.rows.length >= 7, run.label);
     assert.ok(Number.isFinite(run.peakKm), run.label);
@@ -4095,4 +4095,15 @@ test('W6: semana de la carrera un miércoles o un sábado: el día anterior y lo
   const plan = plain(app.generatePlan(p, 19, '2027-03-08'));
   assert.equal(plan[6].raceDay, true);
   assert.ok(['tempo', 'progression', 'intervals', 'easy'].includes(plan[4].typeKey), 'el viernes (no es el día anterior) no cambia por esta regla');
+});
+
+test('plan-examples (fix wave 6): carrera un miércoles y cambio de meta en la semana de la carrera', () => {
+  const g = id => examples().find(x => x.id === id).runs[0];
+  const wed = g(17).rows.find(r => r.plan.raceDay);
+  assert.equal(wed.plan.raceDay, 'wed');
+  const r18 = g(18);
+  const peak = 55;
+  const after = r18.rows.filter(r => r.weekStart > r18.rows.find(x => x.phase === 'post' && x.weeksAfter === 2).weekStart);
+  assert.ok(after.length >= 6);
+  after.forEach(r => assert.ok(r.plan.km <= peak * 1.03, `semana ${r.weekNumber}: ${r.plan.km} km`));
 });
