@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-19T02:10:39Z';
+const APP_VERSION = '2026-10-19T02:13:55Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4995,6 +4995,8 @@ function newPhaseSchedule(p, today, outgoing, weekNumber){
   const sched = makePhaseSchedule(p, today);
   if(!sched) return null;
   if(phaseSameRaceWeek(outgoing, sched, today)) return Object.assign(JSON.parse(JSON.stringify(outgoing)), { raceDate: sched.raceDate });
+  const kept = phaseKeepAnchor(outgoing, sched, p, today);
+  if(kept) return kept;
   const prev = phaseRacePrev(outgoing, today);
   if(prev){
     sched.prev = prev;
@@ -5060,6 +5062,38 @@ function phaseContinuationKm(schedule, mondayIso, baseKmNow, caution){
   if(!info.active) return null;
   const km = phasedWeeklyKm({ goal: schedule.goal }, caution, info, baseKmNow).km;
   return phaseIsCutbackWeek(info) ? km / 0.75 : km;
+}
+// Carrera movida hasta 7 días (antes o después) con la misma meta y el plan en curso: se conserva el
+// ancla y el arranque de la rampa del saliente, y solo se rehace el reparto de fases (R) y el pico. Así no
+// se reinicia el ritmo de descargas ni se vuelve a 'base' a mitad de camino (rearmar con ancla el lunes
+// que viene sí lo hacía). Solo si el volumen sigue continuo: la semana actual y la que viene, con el
+// cronograma así ajustado, quedan a +- un paso de crecimiento de lo que daba el saliente (garantía de
+// la continuación, ver phaseContinuationKm); si no, null y se rearma como siempre. PURA salvo por leer
+// el perfil que recibe.
+function phaseKeepAnchor(outgoing, sched, p, today){
+  if(!outgoing || outgoing.goal !== sched.goal || !Number.isFinite(outgoing.peakKm) || !(outgoing.rampStartKm > 0) || !(outgoing.baseKm > 0)) return null;
+  const a = parsePhaseIso(outgoing.raceDate), b = parsePhaseIso(sched.raceDate);
+  if(!a || !b || Math.abs(Math.round((b - a) / 86400000)) > 7) return null;
+  const todayMonday = getMondayISO(today);
+  if(getMondayISO(a) < todayMonday || getMondayISO(b) <= todayMonday) return null; // la carrera ya pasó o es esta semana
+  const kept = Object.assign(JSON.parse(JSON.stringify(outgoing)), { raceDate: sched.raceDate });
+  if(kept.prev && !(todayMonday < kept.anchor)) delete kept.prev; // el plan ya arrancó: el prev no sobrevive (ruling 25)
+  const R = phaseScheduleR(kept);
+  if(R === null || !phaseSplit(R)) return null;
+  const caution = trainingCaution(p);
+  const pk = phasePeakFromStart(kept.goal, kept.baseKm, kept.rampStartKm, caution, phaseRampSteps(R));
+  kept.peakKm = pk.peakKm;
+  kept.limited = pk.limited;
+  const { growth } = growthParams(caution);
+  const base = phaseEffectiveWeeklyKm(p, false);
+  const nextMonday = addDaysToIsoLocal(todayMonday, 7);
+  for(const ws of [todayMonday, nextMonday]){
+    const before = phaseContinuationKm(outgoing, ws, base, caution);
+    if(before === null){ if(ws === nextMonday) return null; continue; }
+    const after = phaseContinuationKm(kept, ws, base, caution);
+    if(after === null || after < before / growth - 1e-9 || after > before * growth + 1e-9) return null;
+  }
+  return kept;
 }
 // ¿El cronograma nuevo `sched` es el mismo que `outgoing` salvo el día de la carrera? Misma meta,
 // la carrera sigue en la misma semana (lunes a domingo) y esa semana todavía no terminó. Así el ancla

@@ -2430,18 +2430,18 @@ test('ya en el plan de B, mover su fecha no revive el mantenimiento de A en la s
   const buildKm = sumDist(plain(app.generatePlan(app.state.profile, 16, '2027-06-14')));
   // la semana de B es descarga: su continuación (semana completa) es buildKm / 0,75 aprox.
   const contB = app.phaseContinuationKm(app.state.phaseSchedule, '2027-06-14', app.phaseEffectiveWeeklyKm(app.state.profile, false), app.trainingCaution(app.state.profile));
-  // se corre la carrera una semana
-  app.state.profile.raceDate = '2027-10-17';
+  // se corre la carrera dos semanas (con 7 días o menos se conservaría el ancla, ver W5-L9)
+  app.state.profile.raceDate = '2027-10-24';
   app.refreshPhaseSchedule();
   const s = app.state.phaseSchedule;
-  assert.equal(s.raceDate, '2027-10-17');
+  assert.equal(s.raceDate, '2027-10-24');
   assert.equal(s.prev, undefined, 'sin prev: el plan de B ya había arrancado');
   assert.equal(s.anchor, '2027-06-21');
   // la semana actual queda fuera de fases (como cualquier cambio de plazo "desde la semana que
   // viene"), nunca en el mantenimiento de A con su pico
   assert.equal(app.state.phaseNow, null);
   assert.deepEqual(plain(app.phaseForWeek(app.state.profile, '2027-06-14', s)), { active: false });
-  const ref = postApp({ raceDate: '2027-10-17' }, null, '2027-06-16T12:00:00').app;
+  const ref = postApp({ raceDate: '2027-10-24' }, null, '2027-06-16T12:00:00').app;
   // v4 con la misma curva corrida por el empalme (ruling 34: la semana actual sale del cronograma)
   ref.state.curveWeekOffset = app.state.curveWeekOffset;
   const now = plain(app.generatePlan(app.state.profile, 16, '2027-06-14'));
@@ -2525,7 +2525,7 @@ const RAMP_PHASES = ['base', 'build', 'specific', 'peak'];
 test('plan-examples: devuelve los 12 grupos de ejemplos (6 originales + 6 de transiciones) con semanas y cronograma', () => {
   const groups = examples();
   assert.deepEqual(groups.map(g => g.id), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-  assert.deepEqual(groups.map(g => g.runs.length), [1, 1, 2, 1, 1, 1, 1, 2, 1, 2, 1, 1]);
+  assert.deepEqual(groups.map(g => g.runs.length), [1, 1, 2, 1, 1, 1, 1, 3, 1, 2, 1, 1]);
   allRuns().forEach(run => {
     assert.ok(run.rows.length >= 7, run.label);
     assert.ok(Number.isFinite(run.peakKm), run.label);
@@ -2657,7 +2657,7 @@ test('C2: mover la carrera a mitad del plan no baja el volumen (la rampa nueva a
     const info = app.phaseForWeek(p, nextWs, app.state.phaseSchedule);
     const before = engineKm(app, p, nextWs) / (app.phaseIsCutbackWeek(info) ? 0.75 : 1); // semana completa
     const current = engineKm(app, p, wk);
-    p.raceDate = app.addDaysToIsoLocal(p.raceDate, 7); // una semana más tarde
+    p.raceDate = app.addDaysToIsoLocal(p.raceDate, 14); // dos semanas más tarde (con 7 días o menos se conserva el ancla, ver W5-L9)
     app.refreshPhaseSchedule();
     assert.equal(app.state.phaseSchedule.anchor, nextWs, `idx ${k}`);
     const after = engineKm(app, p, nextWs);
@@ -3444,10 +3444,14 @@ test('plan-examples: transiciones sin saltos (entrada desde v4, cambio de fecha,
   const [entry] = examples()[6].runs;
   assert.equal(entry.rows[0].phase, 'v4');
   assert.ok(entry.rows[1].plan.targetKm >= entry.rows[0].v4.km * 0.75, 'la primera semana por fases no cae');
-  const [edit, sameWeek] = examples()[7].runs;
+  const [edit, sameWeek, week7] = examples()[7].runs;
   const i = edit.rows.findIndex(r => r.weekStart === '2026-12-07');
   assert.ok(edit.rows[i].plan.targetKm >= edit.rows[i - 1].plan.targetKm - 0.1, 'después del cambio de fecha sigue desde donde venía');
   assert.equal(sameWeek.anchor, edit.anchor);
+  // carrera 7 días más tarde: el cronograma conserva el ancla y no vuelve a 'base' (W5-L9)
+  assert.ok(week7.events[0].includes('ancla ' + week7.anchor), week7.events[0]);
+  const after7 = week7.rows.filter(r => r.weekStart > '2026-11-30').map(r => r.phase);
+  assert.ok(!after7.includes('base'), after7.join(','));
   const brk = examples()[8].runs[0];
   const back = brk.rows.find((r, k) => k > 0 && brk.rows[k - 1].phase === 'parate' && r.phase !== 'parate');
   assert.ok(back.plan.km <= back.v4.km * 1.06 + 1, `vuelta del parate: ${back.plan.km} vs v4 ${back.v4.km}`);
@@ -3721,4 +3725,44 @@ test('W5-L1: después de cambiar meta o carrera la semana actual de v4 nunca cae
     if (app.legacyCurveWeek(n, p) > 1) assert.ok(v >= cont / growth - 1e-9 && v <= cont * growth + 1e-9, `${label}: T ${v} vs ${cont}`);
   }))));
   assert.ok(legacy > 300, String(legacy));
+});
+
+test('W5-L9: mover la carrera hasta 7 días (misma meta) a mitad del plan conserva el ancla, el ritmo de descargas y la fase', () => {
+  [['21k', 35, 16, 6, 7], ['21k', 35, 16, 6, -7], ['10k', 30, 12, 5, 7], ['42k', 40, 20, 9, -5], ['5k', 25, 10, 3, 6]].forEach(([goal, base, W, idx, shift]) => {
+    const { app, p, wk, next } = midPlanApp(goal, base, W, idx);
+    const old = plain(app.state.phaseSchedule);
+    const label = `${goal} ${base} idx ${idx} ${shift > 0 ? '+' : ''}${shift} días`;
+    const growth = app.growthParams(app.trainingCaution(p)).growth;
+    const curBefore = app.phaseContinuationKm(app.state.phaseSchedule, wk, app.phaseEffectiveWeeklyKm(p, false), app.trainingCaution(p));
+    const contNext = contAt(app, p, app.state.phaseSchedule, next);
+    const phaseBefore = app.phaseForWeek(p, wk, app.state.phaseSchedule).phase;
+    p.raceDate = app.addDaysToIsoLocal(p.raceDate, shift);
+    app.refreshPhaseSchedule();
+    const s = app.state.phaseSchedule;
+    assert.equal(s.anchor, old.anchor, label + ': mismo ancla');
+    assert.equal(s.rampStartKm, old.rampStartKm, label);
+    assert.equal(s.raceDate, p.raceDate, label);
+    const cur = app.phaseForWeek(p, wk, s);
+    assert.ok(cur.active, label + ': la semana actual sigue en el plan por fases');
+    // el ritmo de descargas sigue el mismo ancla (weekIdx % 4 === 3 en la rampa)
+    assert.equal(cur.weekIdx, idx, label);
+    // la fase no vuelve atrás a 'base' si ya estaba más adelante
+    const order = ['base', 'build', 'specific', 'peak', 'taper'];
+    assert.ok(order.indexOf(cur.phase) >= order.indexOf(phaseBefore) - 1, `${label}: ${phaseBefore} -> ${cur.phase}`);
+    // continuidad del volumen (garantía de C2): semana actual y la siguiente a +- un paso de lo que venía
+    const nowFull = contAt(app, p, s, wk), nextFull = contAt(app, p, s, next);
+    assert.ok(nowFull >= curBefore / growth - 1e-9 && nowFull <= curBefore * growth + 1e-9, `${label}: actual ${curBefore} -> ${nowFull}`);
+    assert.ok(nextFull >= contNext / growth - 1e-9 && nextFull <= contNext * growth + 1e-9, `${label}: siguiente ${contNext} -> ${nextFull}`);
+    assert.ok(!app.state.curveWeekOffset, label);
+  });
+});
+
+test('W5-L9: con más de 7 días de diferencia, otra meta o la carrera ya pasada, el cronograma se rearma como antes (ancla el lunes que viene)', () => {
+  const a = midPlanApp('21k', 35, 16, 6);
+  a.p.raceDate = a.app.addDaysToIsoLocal(a.p.raceDate, 8);
+  a.app.refreshPhaseSchedule();
+  assert.equal(a.app.state.phaseSchedule.anchor, a.next);
+  const b = midPlanApp('21k', 35, 16, 6);
+  b.app.applyProfileChange({ objetivo: '10k' });
+  assert.equal(b.app.state.phaseSchedule.anchor, b.next);
 });
