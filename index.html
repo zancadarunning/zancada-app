@@ -4522,8 +4522,7 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
 <!-- supabase-js 2.117.3 servido desde el propio dominio (vendor/): antes venía de jsDelivr con versión flotante (@2) y sin integridad, en la página que tiene la sesión de todos -->
 <script defer src="/vendor/supabase-js.js"></script>
-<!-- Captcha (Cloudflare Turnstile): se renderiza a pedido desde app.js (getCaptchaToken). Si no carga, la app sigue y se intenta sin token. -->
-<script defer src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"></script>
+<!-- Captcha (Cloudflare Turnstile): app.js carga el script solo si CAPTCHA_ENABLED es true (hoy apagado). -->
 <!-- Diccionarios de traducción: antes se cargaban los 6 siempre (~75KB comprimidos
      tirados a la basura en cada carga para el 100% de la gente que usa un solo idioma),
      nada más para que el selector de idioma en Perfil pudiera cambiar sin pedir nada a
