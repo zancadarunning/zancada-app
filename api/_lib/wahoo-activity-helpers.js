@@ -13,6 +13,7 @@
 // Ver fetchFitSplits() más abajo y el comentario grande de
 // api/_lib/fit-activity-helpers.js para cómo se decodifica.
 
+const { safeId } = require('./safe-id');
 const { sanitizeActivityNumbers } = require('./activity-sanity.js');
 const { fetchWithTimeout } = require('./fetch-with-timeout');
 
@@ -87,7 +88,7 @@ async function workoutToRun(workout, accessToken){
   const startDate = new Date(localDate + 'T00:00:00Z');
   const num = (v) => (v != null ? parseFloat(v) : null);
   return sanitizeActivityNumbers({
-    id: 'wahoo_' + workout.id,
+    id: 'wahoo_' + safeId(workout.id),
     wahooId: workout.id,
     date: workout.starts,
     name: workout.name || null,

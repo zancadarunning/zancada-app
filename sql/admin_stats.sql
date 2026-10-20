@@ -16,7 +16,8 @@ CREATE OR REPLACE FUNCTION public.safe_date(p text)
 RETURNS date
 LANGUAGE plpgsql
 IMMUTABLE
-AS $$
+SET search_path = public
+AS $
 BEGIN
   IF p IS NULL OR p !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN RETURN NULL; END IF;
   RETURN p::date;
@@ -32,7 +33,8 @@ CREATE OR REPLACE FUNCTION public.safe_array_len(j jsonb)
 RETURNS integer
 LANGUAGE sql
 IMMUTABLE
-AS $$ SELECT CASE WHEN jsonb_typeof(j) = 'array' THEN jsonb_array_length(j) ELSE 0 END $$;
+SET search_path = public
+AS $ SELECT CASE WHEN jsonb_typeof(j) = 'array' THEN jsonb_array_length(j) ELSE 0 END $$;
 REVOKE ALL ON FUNCTION public.safe_array_len(jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.safe_array_len(jsonb) TO service_role;
 

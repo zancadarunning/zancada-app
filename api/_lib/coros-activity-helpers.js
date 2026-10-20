@@ -35,6 +35,7 @@
 // Vercel de una cuenta conectada (mismo camino que ya se usó para confirmar el formato
 // de querySportRecords).
 
+const { safeId } = require('./safe-id');
 const { sanitizeActivityNumbers } = require('./activity-sanity.js');
 const { fetchWithTimeout } = require('./fetch-with-timeout');
 const { decodeFitRecords, buildSplitsAndSeriesFromFitRecords, buildPointsFromFitRecords } = require('./fit-activity-helpers');
@@ -351,7 +352,7 @@ function activityToRun(record, detail) {
   if (record && record.dateStr) {
     const startDate = new Date(record.dateStr + 'T00:00:00Z');
     return sanitizeActivityNumbers({
-      id: 'coros_' + record.labelId,
+      id: 'coros_' + safeId(record.labelId),
       corosId: record.labelId,
       date: new Date(record.startTimestamp * 1000).toISOString(),
       name: record.title || null,
@@ -392,7 +393,7 @@ function activityToRun(record, detail) {
   const durationSec = record.duration ?? record.totalDuration ?? record.movingDuration ?? d.duration ?? d.totalDuration ?? 0;
   const id = getCorosRecordId(record);
   return sanitizeActivityNumbers({
-    id: 'coros_' + id,
+    id: 'coros_' + safeId(id),
     corosId: id,
     date: startTime,
     name: record.name || record.workoutName || null,

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-20T14:50:44Z';
+const APP_VERSION = '2026-10-20T15:29:28Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -170,7 +170,7 @@ function applyStaticTranslations(){
   document.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-ph]').forEach(el=>{ el.placeholder = t(el.dataset.i18nPh); });
   document.querySelectorAll('[data-i18n-aria]').forEach(el=>{ el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
-  renderPasswordChecklist('signup-password'); renderPasswordChecklist('recovery-new-pw');
+  renderPasswordChecklist('signup-password'); renderPasswordChecklist('recovery-new-pw'); renderPasswordChecklist('cp-new');
   document.querySelectorAll('a[href^="/privacy.html"]').forEach(el=>{ el.href = apiUrl('/privacy.html?lang=' + lang); });
   document.querySelectorAll('a[href^="/terms.html"]').forEach(el=>{ el.href = apiUrl('/terms.html?lang=' + lang); });
   [...document.getElementById('perfil-lang-choice').children].forEach(c=>c.classList.toggle('active', c.dataset.v===lang));
@@ -837,6 +837,7 @@ function showToast(message, type){
     setTimeout(()=>{ if(wrap) wrap.innerHTML = ''; }, 250);
   }, 3200);
 }
+// opts.passwordField: pide también la contraseña (acciones que no se pueden deshacer). En ese modo resuelve con { password, captchaToken } o false.
 function showConfirm(message, opts){
   opts = opts || {};
   return new Promise(resolve=>{
@@ -849,7 +850,9 @@ function showConfirm(message, opts){
     const confirmText = opts.confirmText || t('confirm_yes');
     const cancelText = opts.cancelText || t('cancel_word');
     const danger = !!opts.danger;
-    backdrop.innerHTML = `<div class="confirm-card"><p>${message}</p><div class="confirm-actions">
+    const pwField = !!opts.passwordField;
+    const pwHtml = pwField ? `<div class="field" style="margin:14px 0 16px;"><label for="confirm-pw">${escapeHtml(t('reauth_password_label'))}</label><input type="password" id="confirm-pw" autocomplete="current-password" maxlength="200"></div><div class="captcha-box" id="captcha-reauth"></div>` : '';
+    backdrop.innerHTML = `<div class="confirm-card"><p>${message}</p>${pwHtml}<div class="confirm-actions">
       <button class="btn btn-outline" id="confirm-cancel-btn">${cancelText}</button>
       <button class="btn ${danger?'btn-danger':'btn-primary'}" id="confirm-ok-btn">${confirmText}</button>
     </div></div>`;
@@ -857,11 +860,30 @@ function showConfirm(message, opts){
     haptic(15);
     const cleanup = (result)=>{
       backdrop.classList.remove('show');
+      disposeCaptcha('captcha-reauth');
       setTimeout(()=>{ if(backdrop) backdrop.innerHTML = ''; }, 180);
       resolve(result);
     };
+    const okBtn = document.getElementById('confirm-ok-btn');
     document.getElementById('confirm-cancel-btn').onclick = ()=>cleanup(false);
-    document.getElementById('confirm-ok-btn').onclick = ()=>{ haptic(20); cleanup(true); };
+    if(pwField){
+      const pwInput = document.getElementById('confirm-pw');
+      okBtn.disabled = true;
+      pwInput.addEventListener('input', ()=>{ okBtn.disabled = !pwInput.value; });
+      pwInput.addEventListener('focus', ()=>prefetchCaptcha('captcha-reauth'));
+      pwInput.addEventListener('keydown', e=>{ if(e.key === 'Enter' && pwInput.value) okBtn.click(); });
+      setTimeout(()=>{ try{ pwInput.focus(); }catch(e){} }, 60);
+      okBtn.onclick = async ()=>{
+        if(!pwInput.value || okBtn.disabled) return;
+        haptic(20);
+        okBtn.disabled = true; okBtn.style.opacity = '.65';
+        // el token se pide antes de cerrar la tarjeta: el contenedor del captcha vive adentro de ella
+        const captchaToken = await getCaptchaToken('captcha-reauth');
+        cleanup({ password: pwInput.value, captchaToken });
+      };
+    } else {
+      okBtn.onclick = ()=>{ haptic(20); cleanup(true); };
+    }
     backdrop.onclick = (e)=>{ if(e.target===backdrop) cleanup(false); };
   });
 }
@@ -1599,9 +1621,15 @@ async function getCaptchaToken(containerId, timeoutMs){
   return token;
 }
 // Apenas la persona toca un campo del formulario de ingreso o de registro se empieza a pedir el token
-const CAPTCHA_FORM_FIELDS = { 'login-email': 'captcha-login', 'login-password': 'captcha-login', 'signup-email': 'captcha-signup', 'signup-password': 'captcha-signup' };
+const CAPTCHA_FORM_FIELDS = { 'login-email': 'captcha-login', 'login-password': 'captcha-login', 'signup-email': 'captcha-signup', 'signup-password': 'captcha-signup', 'cp-current': 'captcha-changepw', 'cp-new': 'captcha-changepw' };
 if(typeof document !== 'undefined' && typeof document.addEventListener === 'function'){
   document.addEventListener('focusin', e => { const box = e && e.target && CAPTCHA_FORM_FIELDS[e.target.id]; if(box) prefetchCaptcha(box); });
+}
+// Saca el widget de un contenedor que se va a borrar del DOM (la tarjeta de confirmación): el próximo uso crea uno nuevo
+function disposeCaptcha(containerId){
+  const id = captchaWidgets[containerId];
+  if(id !== undefined){ try{ if(window.turnstile && window.turnstile.remove) window.turnstile.remove(id); }catch(e){} delete captchaWidgets[containerId]; }
+  delete captchaReady[containerId]; delete captchaPending[containerId]; delete captchaResolvers[containerId]; delete captchaArmers[containerId];
 }
 // Opciones de Supabase Auth con el token (si lo hay), mezcladas con otras opciones
 function withCaptcha(token, extra){
@@ -4066,6 +4094,7 @@ function enterApp(){
   if(relinkTodayRun()) persist();
   [...document.getElementById('voice-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === voiceChoice()));
   [...document.getElementById('units-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.profile.units==='imperial'?'imperial':'metric')));
+  renderSecurityRows();
   [...document.getElementById('perfil-trainby-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.profile.trainBy==='time'?'time':'distance')));
   [...document.getElementById('theme-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v===currentThemePref()));
   renderPerfilDays();
@@ -4261,7 +4290,7 @@ function wipeLocalUserData(uid){
   }catch(e){}
   try{ clearLastKnownPosition(); }catch(e){}
 }
-async function logout(){
+async function logout(allDevices){
   await waitForPendingPersist();
   await clearNativeCalendarQuietly();
   // Ver el comentario de runProgressKey(): sin esto, una carrera sin terminar quedaba
@@ -4274,21 +4303,46 @@ async function logout(){
   clearLastKnownPosition();
   // Si hay cambios que todavía no se subieron, el respaldo local se conserva (para no perderlos); si ya está todo sincronizado, no queda copia.
   try{ if(!hasPendingBackup()) wipeLocalUserData(currentUserId); }catch(e){}
-  await supabaseClient.auth.signOut();
+  // scope 'global': cierra la sesión en TODOS los dispositivos (si falla, al menos se cierra la de este)
+  if(allDevices === true){ try{ await supabaseClient.auth.signOut({ scope: 'global' }); }catch(e){ await supabaseClient.auth.signOut(); } }
+  else await supabaseClient.auth.signOut();
   location.reload();
 }
+async function logoutEverywhere(){
+  if(!(await showConfirm(t('security_signout_all_confirm'), {confirmText:t('security_signout_all_btn')}))) return;
+  await logout(true);
+}
+// Antes de una acción que no se puede deshacer: quien tiene cuenta con contraseña la escribe de nuevo (así una sesión robada no alcanza) y se
+// inicia sesión otra vez para que el servidor vea un ingreso reciente. Las cuentas de Google/Apple solo confirman (las protege su proveedor).
+// Devuelve el token de sesión para llamar al servidor, o null si se canceló o la contraseña no sirvió (ya se avisó).
+async function confirmDestructiveWithPassword(message, confirmOpts){
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if(!session) return null;
+  const provider = session.user && session.user.app_metadata && session.user.app_metadata.provider;
+  if(provider && provider !== 'email'){
+    return (await showConfirm(message, confirmOpts)) ? session.access_token : null;
+  }
+  const answer = await showConfirm(message, Object.assign({}, confirmOpts, { passwordField: true }));
+  if(!answer) return null;
+  const email = session.user && session.user.email;
+  const { data, error } = await supabaseClient.auth.signInWithPassword(Object.assign({ email, password: answer.password }, answer.captchaToken ? { options: { captchaToken: answer.captchaToken } } : {}));
+  if(error || !data || !data.session){
+    showToast(/captcha/i.test((error && error.message) || '') ? t('captcha_failed') : t('reauth_wrong_password'), 'error');
+    return null;
+  }
+  return data.session.access_token;
+}
 async function resetApp(){
-  if(!(await showConfirm(t('reset_confirm_text'), {danger:true, confirmText:t('delete_word')}))) return;
+  const accessToken = await confirmDestructiveWithPassword(t('reset_confirm_text'), {danger:true, confirmText:t('delete_word')});
+  if(!accessToken) return;
   await waitForPendingPersist();
   await clearNativeCalendarQuietly();
   // El servidor borra TODO (conexiones y tokens de relojes con su revocación, notificaciones, contadores, lo social y el estado) y confirma
   // cada borrado. Antes solo se borraba app_state y se ignoraba el error: el usuario creía que se había borrado todo y no era así.
   try{
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if(!session) throw new Error('sin sesión');
     const res = await fetch(apiUrl('/api/delete-account'), {
       method:'POST',
-      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${accessToken}`},
       body: JSON.stringify({mode:'data'})
     });
     if(!res.ok) throw new Error('delete data failed');
@@ -4302,15 +4356,14 @@ async function resetApp(){
   location.reload();
 }
 async function deleteAccount(){
-  if(!(await showConfirm(t('delete_account_confirm_text'), {danger:true, confirmText:t('delete_account_confirm_btn')}))) return;
+  const accessToken = await confirmDestructiveWithPassword(t('delete_account_confirm_text'), {danger:true, confirmText:t('delete_account_confirm_btn')});
+  if(!accessToken) return;
   try{
     await waitForPendingPersist();
     await clearNativeCalendarQuietly();
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if(!session){ showToast(t('delete_account_error'),'error'); return; }
     const res = await fetch(apiUrl('/api/delete-account'), {
       method:'POST',
-      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${accessToken}`}
     });
     if(!res.ok) throw new Error('delete-account failed');
     wipeLocalUserData(currentUserId);
@@ -9738,6 +9791,53 @@ function openPreferencesOverlay(){ renderTextSizeSetting(); renderStreakPauseCar
 function closePreferencesOverlay(){ document.getElementById('preferences-overlay').classList.remove('overlay-open'); }
 function openLangOverlay(){ openOverlaySheetEl(document.getElementById('lang-overlay')); }
 function closeLangOverlay(){ document.getElementById('lang-overlay').classList.remove('overlay-open'); }
+/* ---- Seguridad de la cuenta: cambiar la contraseña desde la app ---- */
+// Solo las cuentas con contraseña (las de Google/Apple la manejan en su proveedor)
+async function renderSecurityRows(){
+  const row = document.getElementById('security-pw-row');
+  if(!row) return;
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const provider = session && session.user && session.user.app_metadata && session.user.app_metadata.provider;
+    row.style.display = (!provider || provider === 'email') ? '' : 'none';
+  }catch(e){ row.style.display = 'none'; }
+}
+function openChangePassword(){
+  ['cp-current', 'cp-new'].forEach(id => { const e = document.getElementById(id); if(e) e.value = ''; });
+  const err = document.getElementById('cp-err'); if(err){ err.style.display = 'none'; err.textContent = ''; }
+  renderPasswordChecklist('cp-new');
+  openOverlaySheetEl(document.getElementById('change-password-overlay'));
+}
+function closeChangePassword(){ document.getElementById('change-password-overlay').classList.remove('overlay-open'); }
+async function submitChangePassword(){
+  const btn = document.getElementById('cp-save-btn');
+  if(btn && btn.disabled) return;
+  const current = document.getElementById('cp-current').value;
+  const next = document.getElementById('cp-new').value;
+  const err = document.getElementById('cp-err');
+  const fail = msg => { err.textContent = msg; err.style.display = 'block'; };
+  err.style.display = 'none';
+  if(!current){ fail(t('reauth_wrong_password')); return; }
+  if(!isPasswordStrong(next)){ fail(t('login_err_password_weak')); return; }
+  if(next === current){ fail(t('cp_same')); return; }
+  setBtnBusy('cp-save-btn', true, t('login_loading'));
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const email = session && session.user && session.user.email;
+    if(!email){ fail(t('generic_error')); return; }
+    // se confirma la contraseña actual iniciando sesión de nuevo (con captcha); así también el servidor ve un ingreso reciente
+    const captchaToken = await getCaptchaToken('captcha-changepw');
+    const signIn = await supabaseClient.auth.signInWithPassword(Object.assign({ email, password: current }, captchaToken ? { options: { captchaToken } } : {}));
+    if(signIn.error){ fail(/captcha/i.test(signIn.error.message || '') ? t('captcha_failed') : t('reauth_wrong_password')); return; }
+    const { error } = await supabaseClient.auth.updateUser({ password: next });
+    if(error){ fail(translateAuthError(error)); return; }
+    // tras cambiar la contraseña se cierran las sesiones de los demás dispositivos (quien tuviera la anterior queda afuera)
+    try{ await supabaseClient.auth.signOut({ scope: 'others' }); }catch(e){}
+    ['cp-current', 'cp-new'].forEach(id => { const e = document.getElementById(id); if(e) e.value = ''; });
+    closeChangePassword();
+    showToast(t('cp_saved'), 'success');
+  }finally{ setBtnBusy('cp-save-btn', false); }
+}
 function openDaysOverlay(){ openOverlaySheetEl(document.getElementById('days-overlay')); }
 function closeDaysOverlay(){ document.getElementById('days-overlay').classList.remove('overlay-open'); }
 /* ================= PANEL DE ADMINISTRACIÓN ================= */

@@ -29,6 +29,8 @@ module.exports = withSentry(async (req, res) => {
   const auth = await verifyUser(req);
   if (!auth.ok) { res.status(auth.status).json({ error: auth.error }); return; }
   const userId = auth.userId;
+  // Acción sin vuelta atrás: quien tiene cuenta con contraseña tiene que haberla escrito hace poco (la app la vuelve a pedir); una sesión robada no alcanza.
+  if (!verifyUser.isRecentLogin(auth, 600)) { res.status(403).json({ error: 'recent_login_required' }); return; }
   // mode 'data' = "Borrar mis datos" (Perfil): borra TODO lo de la persona pero conserva la cuenta de acceso. Sin mode = borrar la cuenta entera.
   const wipeDataOnly = !!(req.body && req.body.mode === 'data');
 

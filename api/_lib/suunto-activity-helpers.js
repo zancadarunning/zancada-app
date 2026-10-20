@@ -11,6 +11,7 @@
 //     que manda el webhook de entrenos nuevos para identificar a la persona.
 //   - Los tokens duran 24 hs (expires_in 86400) y vienen con refresh_token.
 
+const { safeId } = require('./safe-id');
 const { fetchWithTimeout } = require('./fetch-with-timeout');
 const { sanitizeActivityNumbers } = require('./activity-sanity.js');
 const { decodeFitRecords, buildSplitsAndSeriesFromFitRecords, buildPointsFromFitRecords, emptyFitResult } = require('./fit-activity-helpers');
@@ -122,7 +123,7 @@ function workoutToRun(workout, fit) {
   const hr = workout.hrdata || {};
   const key = String(workout.workoutKey || workout.key || '');
   return sanitizeActivityNumbers({
-    id: 'suunto_' + key,
+    id: 'suunto_' + safeId(key),
     suuntoId: key,
     date: new Date(startMs).toISOString(),
     name: workout.workoutName || null,
