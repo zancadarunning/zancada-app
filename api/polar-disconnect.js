@@ -64,6 +64,6 @@ module.exports = withSentry(async (req, res) => {
   } catch (err) {
     console.error('polar-disconnect error', err);
     await reportError(err, { endpoint: 'polar-disconnect' });
-    res.status(500).json({ error: 'Error: ' + err.message });
+    res.status(500).json({ error: 'Internal error' });
   }
 });

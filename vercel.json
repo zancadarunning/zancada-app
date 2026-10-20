@@ -2,6 +2,12 @@
   "rewrites": [
     { "source": "/conectar", "destination": "/index.html" }
   ],
+  "redirects": [
+    { "source": "/:dir(sql|docs|test|scripts|loadtest|mobile|email-templates|\\.github|\\.impeccable|\\.superpowers|\\.claude)/:path*", "destination": "/", "permanent": false },
+    { "source": "/:file(DESIGN|PRODUCT)\\.md", "destination": "/", "permanent": false },
+    { "source": "/:file((?:dark|light|v[0-9])_[a-z_]+)\\.png", "destination": "/", "permanent": false },
+    { "source": "/CLAUDE-SECURITY-:rest*", "destination": "/", "permanent": false }
+  ],
   "crons": [
     { "path": "/api/send-reminders", "schedule": "*/30 * * * *" },
     { "path": "/api/sync-strava", "schedule": "*/15 * * * *" },

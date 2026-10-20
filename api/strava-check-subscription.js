@@ -19,6 +19,6 @@ module.exports = withSentry(async (req, res) => {
   } catch (err) {
     console.error('strava-check-subscription error', err);
     await reportError(err, { endpoint: 'strava-check-subscription' });
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal error' });
   }
 });

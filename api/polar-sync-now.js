@@ -51,7 +51,9 @@ module.exports = withSentry(async (req, res) => {
     // esto se leía como "0 ejercicios" silenciosamente, sin ninguna pista de
     // que en realidad la llamada había fallado.
     if (!exsRes.ok) {
-      return res.status(200).json({ synced: false, reason: 'no_new_activity', debug: { httpStatus: exsRes.status, body: exsData } });
+      // el detalle de la respuesta de Polar queda en el registro del servidor, no se le devuelve al cliente
+      console.error('polar-sync-now: exercises fetch failed', exsRes.status, JSON.stringify(exsData).slice(0, 500));
+      return res.status(200).json({ synced: false, reason: 'no_new_activity' });
     }
     const exercises = (exsData && exsData.exercises) || [];
     const runExercises = exercises.filter(ex => String(ex.sport || '').toUpperCase().includes('RUN'));
@@ -86,6 +88,6 @@ module.exports = withSentry(async (req, res) => {
   } catch (err) {
     console.error('polar-sync-now error', err);
     await reportError(err, { endpoint: 'polar-sync-now' });
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal error' });
   }
 });

@@ -79,6 +79,6 @@ module.exports = withSentry(async (req, res) => {
   } catch (err) {
     console.error('wahoo-sync-plan error', err);
     await reportError(err, { endpoint: 'wahoo-sync-plan' });
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal error' });
   }
 });

@@ -46,6 +46,6 @@ module.exports = withSentry(async (req, res) => {
   } catch (err) {
     console.error('strava-init error', err);
     await reportError(err, { endpoint: 'strava-init' });
-    res.status(500).json({ error: 'Error: ' + err.message });
+    res.status(500).json({ error: 'Internal error' });
   }
 });
