@@ -1,0 +1,6 @@
+# Cómo avisar de un problema de seguridad en Zancada / How to report a security issue
+# Escribinos a este correo con los detalles (qué viste, cómo reproducirlo). Respondemos lo antes posible.
+Contact: mailto:info@zancada.org
+Expires: 2027-10-19T00:00:00.000Z
+Preferred-Languages: es, en
+Canonical: https://www.zancada.org/.well-known/security.txt

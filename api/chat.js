@@ -63,7 +63,10 @@ const LIMIT_MSG = {
   de: 'Du hast das heutige Limit an Nachrichten an den Coach erreicht. Versuch es morgen noch mal.'
 };
 
-const { withSentry, reportError } = require('./_lib/sentry');
+const { withSentry, reportError, reportSecurityEvent } = require('./_lib/sentry');
+// Aviso a Sentry cuando se agota el tope global del día: puede ser un abuso (muchas cuentas) o simplemente que la app creció y hay que subir
+// CHAT_GLOBAL_DAILY_LIMIT en Vercel. Como mucho uno cada 30 minutos por instancia, para no inundar.
+let lastGlobalCapAlertAt = 0;
 
 module.exports = withSentry(async (req, res) => {
   applyCors(req, res);
@@ -129,6 +132,10 @@ module.exports = withSentry(async (req, res) => {
       });
       if (gRes.ok && (await gRes.json()) === false) {
         console.error('chat: tope global diario superado (' + CHAT_GLOBAL_DAILY_LIMIT + ')');
+        if (Date.now() - lastGlobalCapAlertAt > 30 * 60 * 1000) {
+          lastGlobalCapAlertAt = Date.now();
+          await reportSecurityEvent('Chat: se alcanzó el tope global diario de mensajes (abuso o crecimiento: revisar CHAT_GLOBAL_DAILY_LIMIT)', { limit: CHAT_GLOBAL_DAILY_LIMIT }).catch(() => {});
+        }
         res.status(200).json({ error: { message: pick(BUSY_MSG, lang, 'es') } });
         return;
       }
