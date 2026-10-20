@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-20T14:24:15Z';
+const APP_VERSION = '2026-10-20T14:34:55Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1519,22 +1519,29 @@ function updateSignupButtonState(){
 const TURNSTILE_SITE_KEY = '0x4AAAAAAFdy3f1GMeGJWAqt';
 const captchaWidgets = {};     // id del contenedor -> id del widget
 const captchaResolvers = {};   // id del contenedor -> función que recibe el token
+const captchaArmers = {};      // id del contenedor -> función que reinicia el tiempo de espera
+const captchaReady = {};       // id del contenedor -> { token, at } pedido por adelantado
+const captchaPending = {};     // id del contenedor -> promesa del pedido en curso
+const CAPTCHA_TOKEN_TTL_MS = 240000;
 function captchaAvailable(){
   return !!(TURNSTILE_SITE_KEY && typeof window !== 'undefined' && window.turnstile && typeof window.turnstile.render === 'function');
 }
-function getCaptchaToken(containerId, timeoutMs){
+// Pide un token nuevo al widget (un solo uso). Devuelve el token o null (sin script, sin red, error o tiempo agotado).
+function requestCaptchaToken(containerId, timeoutMs){
   return new Promise(resolve => {
     const el = typeof document !== 'undefined' ? document.getElementById(containerId) : null;
     if(!el || !captchaAvailable()){ resolve(null); return; }
     let done = false, timer = null;
     const finish = token => {
       if(done) return;
-      done = true; clearTimeout(timer); delete captchaResolvers[containerId];
+      done = true; clearTimeout(timer);
+      delete captchaResolvers[containerId]; delete captchaArmers[containerId];
       resolve(token || null);
     };
     const arm = ms => { clearTimeout(timer); timer = setTimeout(() => finish(null), ms); };
     arm(timeoutMs || 8000);
     captchaResolvers[containerId] = finish;
+    captchaArmers[containerId] = arm;
     try{
       let id = captchaWidgets[containerId];
       if(id === undefined){
@@ -1547,7 +1554,7 @@ function getCaptchaToken(containerId, timeoutMs){
           'error-callback': () => { const f = captchaResolvers[containerId]; if(f) f(null); },
           'timeout-callback': () => { const f = captchaResolvers[containerId]; if(f) f(null); },
           // si hace falta que la persona toque la casilla, se le da tiempo
-          'before-interactive-callback': () => arm(90000)
+          'before-interactive-callback': () => { const f = captchaArmers[containerId]; if(f) f(90000); }
         });
         captchaWidgets[containerId] = id;
       } else {
@@ -1556,6 +1563,45 @@ function getCaptchaToken(containerId, timeoutMs){
       window.turnstile.execute(id);
     }catch(e){ finish(null); }
   });
+}
+// Token ya pedido y todavía vigente (Cloudflare los acepta unos 5 minutos): se usa una sola vez.
+function takeReadyCaptchaToken(containerId){
+  const ready = captchaReady[containerId];
+  delete captchaReady[containerId];
+  return ready && Date.now() - ready.at < CAPTCHA_TOKEN_TTL_MS ? ready.token : null;
+}
+// Lo pide por adelantado, apenas la persona llega al formulario, para que al apretar el botón ya esté listo (sin esperar los ~5 segundos
+// de Cloudflare). Solo si el formulario se ve: con el contenedor oculto Turnstile no corre. Si ya hay un pedido en curso o un token vigente, no
+// hace nada. Nunca lanza.
+function prefetchCaptcha(containerId, timeoutMs){
+  if(captchaPending[containerId]) return captchaPending[containerId];
+  if(!captchaAvailable()) return Promise.resolve();
+  const el = typeof document !== 'undefined' ? document.getElementById(containerId) : null;
+  if(!el || el.offsetParent === null) return Promise.resolve();
+  const ready = captchaReady[containerId];
+  if(ready && Date.now() - ready.at < CAPTCHA_TOKEN_TTL_MS) return Promise.resolve();
+  const p = requestCaptchaToken(containerId, timeoutMs).then(token => {
+    if(token) captchaReady[containerId] = { token, at: Date.now() };
+  }).catch(() => {}).then(() => { delete captchaPending[containerId]; });
+  captchaPending[containerId] = p;
+  return p;
+}
+// Token para un pedido a Supabase Auth: usa el que ya estaba listo (al instante) o espera al que está en camino, o pide uno. null si no se pudo.
+async function getCaptchaToken(containerId, timeoutMs){
+  let token = takeReadyCaptchaToken(containerId);
+  if(!token){
+    if(!captchaPending[containerId]) prefetchCaptcha(containerId, timeoutMs);
+    if(captchaPending[containerId]) await captchaPending[containerId];
+    token = takeReadyCaptchaToken(containerId);
+  }
+  // el token se gasta en este pedido: se deja listo el siguiente (por ejemplo, para reintentar tras una contraseña equivocada)
+  if(token && typeof setTimeout === 'function') setTimeout(() => prefetchCaptcha(containerId), 400);
+  return token;
+}
+// Apenas la persona toca un campo del formulario de ingreso o de registro se empieza a pedir el token
+const CAPTCHA_FORM_FIELDS = { 'login-email': 'captcha-login', 'login-password': 'captcha-login', 'signup-email': 'captcha-signup', 'signup-password': 'captcha-signup' };
+if(typeof document !== 'undefined' && typeof document.addEventListener === 'function'){
+  document.addEventListener('focusin', e => { const box = e && e.target && CAPTCHA_FORM_FIELDS[e.target.id]; if(box) prefetchCaptcha(box); });
 }
 // Opciones de Supabase Auth con el token (si lo hay), mezcladas con otras opciones
 function withCaptcha(token, extra){
@@ -1604,9 +1650,9 @@ function setBtnBusy(btnId, busy, loadingLabel){
 }
 
 /* ================= LOGIN / ONBOARD ================= */
-function goLogin(){ document.getElementById('splash').style.display='none'; document.getElementById('login').style.display='block'; }
-function goSignup(){ document.getElementById('login').style.display='none'; document.getElementById('signup').style.display='block'; }
-function goBackToLogin(){ document.getElementById('signup').style.display='none'; document.getElementById('login').style.display='block'; }
+function goLogin(){ document.getElementById('splash').style.display='none'; document.getElementById('login').style.display='block'; prefetchCaptcha('captcha-login'); }
+function goSignup(){ document.getElementById('login').style.display='none'; document.getElementById('signup').style.display='block'; prefetchCaptcha('captcha-signup'); }
+function goBackToLogin(){ document.getElementById('signup').style.display='none'; document.getElementById('login').style.display='block'; prefetchCaptcha('captcha-login'); }
 function goToLoginFromSignup(){
   // Le pasamos el email ya tipeado a la pantalla de login para que no tenga que
   // volver a escribirlo -- viene del cartel de "ya existe una cuenta con ese email".
