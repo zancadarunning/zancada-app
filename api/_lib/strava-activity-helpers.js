@@ -26,6 +26,7 @@
 // nunca se enteraba de que una sincronización de Strava había tocado los
 // datos.
 
+const { safeId } = require('./safe-id');
 const { sanitizeActivityNumbers } = require('./activity-sanity.js');
 const { fetchWithTimeout } = require('./fetch-with-timeout');
 
@@ -192,7 +193,7 @@ async function activityToRun(act, accessToken) {
   // sin necesidad de saber el huso horario real).
   const startDate = new Date(act.start_date_local || act.start_date);
   return sanitizeActivityNumbers({
-    id: 'strava_' + act.id,
+    id: 'strava_' + safeId(act.id),
     stravaId: act.id,
     date: act.start_date,
     name: act.name || null,

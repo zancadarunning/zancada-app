@@ -22,7 +22,23 @@
 //     ...
 //   };
 
-module.exports = async function verifyUser(req) {
+// El token de Supabase trae en "amr" cuándo y cómo se autenticó la persona por última vez (el dato se conserva al renovar el token cada hora).
+// Devuelve ese momento en segundos, o 0 si no se puede leer.
+function lastAuthAtFromToken(token) {
+  try {
+    const payload = JSON.parse(Buffer.from(String(token).split('.')[1], 'base64url').toString('utf8'));
+    return (Array.isArray(payload.amr) ? payload.amr : []).reduce((max, a) => Math.max(max, Number(a && a.timestamp) || 0), 0);
+  } catch (e) { return 0; }
+}
+// ¿Se autenticó hace poco? Solo se exige a las cuentas con contraseña (provider "email"): una sesión robada no alcanza para borrar o cambiar
+// lo que no tiene vuelta atrás, hace falta volver a escribir la contraseña. Las cuentas de Google/Apple las protege su proveedor.
+function isRecentLogin(auth, maxAgeSec) {
+  if (!auth || auth.provider !== 'email') return true;
+  const age = Date.now() / 1000 - (auth.lastAuthAt || 0);
+  return auth.lastAuthAt > 0 && age >= -60 && age <= (maxAgeSec || 600);
+}
+
+async function verifyUser(req) {
   const authHeader = req.headers['authorization'] || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
   if (!token) return { ok: false, status: 401, error: 'Missing token' };
@@ -42,9 +58,14 @@ module.exports = async function verifyUser(req) {
     // confiar en un email que mande el cliente suelto) -- los demás endpoints que ya
     // usaban este helper solo leían userId, así que esto es puramente aditivo.
     // emailConfirmed: lo usa admin-stats.js (un mail sin confirmar no alcanza para ser admin)
-    return { ok: true, userId: user.id, email: user.email, emailConfirmed: !!user.email_confirmed_at, token };
+    // provider y lastAuthAt: para exigir un inicio de sesión reciente antes de acciones que no se pueden deshacer (ver isRecentLogin)
+    return { ok: true, userId: user.id, email: user.email, emailConfirmed: !!user.email_confirmed_at, token, provider: (user.app_metadata && user.app_metadata.provider) || null, lastAuthAt: lastAuthAtFromToken(token) };
   } catch (e) {
     console.error('verify-user: token verification failed', e);
     return { ok: false, status: 401, error: 'Invalid session' };
   }
-};
+}
+
+module.exports = verifyUser;
+module.exports.isRecentLogin = isRecentLogin;
+module.exports.lastAuthAtFromToken = lastAuthAtFromToken;

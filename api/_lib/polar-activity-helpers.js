@@ -11,6 +11,7 @@
 // y el comentario grande de api/_lib/fit-activity-helpers.js para el detalle de cómo se
 // decodifica ese archivo.
 
+const { safeId } = require('./safe-id');
 const { sanitizeActivityNumbers } = require('./activity-sanity.js');
 const { fetchWithTimeout } = require('./fetch-with-timeout');
 
@@ -89,7 +90,7 @@ async function exerciseToRun(exercise, accessToken) {
   const localDate = localDatePartFromIso(exercise.start_time);
   const startDate = new Date(localDate + 'T00:00:00Z');
   return sanitizeActivityNumbers({
-    id: 'polar_' + exercise.id,
+    id: 'polar_' + safeId(exercise.id),
     polarId: exercise.id,
     date: exercise.start_time,
     name: null,

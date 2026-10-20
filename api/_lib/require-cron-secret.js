@@ -29,12 +29,19 @@
 // alerta), nadie legítimo llega a este chequeo sin el CRON_SECRET correcto.
 // Se reporta a Sentry (ver reportSecurityEvent) además del console.error de
 // siempre, para enterarnos sin tener que ir a revisar Vercel Logs a mano.
+const crypto = require('crypto');
 const { reportSecurityEvent } = require('./sentry');
+
+// Comparación de tiempo constante: con === el tiempo de respuesta delata cuántos caracteres iniciales del secreto coinciden.
+function secretMatches(auth, secret) {
+  const a = Buffer.from(String(auth)), b = Buffer.from('Bearer ' + secret);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 
 module.exports = async function requireCronSecret(req) {
   const auth = req.headers['authorization'] || '';
   const secret = process.env.CRON_SECRET;
-  const ok = Boolean(secret) && auth === `Bearer ${secret}`;
+  const ok = Boolean(secret) && secretMatches(auth, secret);
   if (!ok) {
     console.error('require-cron-secret: intento con secret ausente o incorrecto —', req.url);
     await reportSecurityEvent('Intento de acceso a endpoint protegido con CRON_SECRET incorrecto', { url: req.url, method: req.method }).catch(() => {});
