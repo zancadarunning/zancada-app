@@ -75,6 +75,6 @@ module.exports = withSentry(async (req, res) => {
   } catch (err) {
     console.error('coros-sync-now error', err);
     await reportError(err, { endpoint: 'coros-sync-now' });
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal error' });
   }
 });

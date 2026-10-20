@@ -44,6 +44,6 @@ module.exports = withSentry(async (req, res) => {
   } catch (err) {
     console.error('suunto-init error', err);
     await reportError(err, { endpoint: 'suunto-init' });
-    res.status(500).json({ error: 'Error: ' + err.message });
+    res.status(500).json({ error: 'Internal error' });
   }
 });

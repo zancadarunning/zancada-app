@@ -88,6 +88,6 @@ module.exports = withSentry(async (req, res) => {
   } catch (err) {
     console.error('suunto-guides-cron error', err);
     await reportError(err, { endpoint: 'suunto-guides-cron' });
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal error' });
   }
 });

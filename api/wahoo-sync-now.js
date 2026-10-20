@@ -50,7 +50,9 @@ module.exports = withSentry(async (req, res) => {
     });
     if (!wRes.ok) {
       const body = await wRes.text().catch(() => '');
-      return res.status(200).json({ synced: false, reason: 'no_new_activity', debug: { httpStatus: wRes.status, body } });
+      // el detalle de la respuesta de Wahoo queda en el registro del servidor, no se le devuelve al cliente
+      console.error('wahoo-sync-now: workouts fetch failed', wRes.status, String(body).slice(0, 500));
+      return res.status(200).json({ synced: false, reason: 'no_new_activity' });
     }
     const wData = await wRes.json();
     const workouts = (wData && wData.workouts) || [];
@@ -83,6 +85,6 @@ module.exports = withSentry(async (req, res) => {
   } catch (err) {
     console.error('wahoo-sync-now error', err);
     await reportError(err, { endpoint: 'wahoo-sync-now' });
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal error' });
   }
 });

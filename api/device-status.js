@@ -32,6 +32,6 @@ module.exports = withSentry(async (req, res) => {
   } catch (err) {
     console.error('device-status error', err);
     await reportError(err, { endpoint: 'device-status' });
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal error' });
   }
 });

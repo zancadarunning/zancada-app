@@ -98,6 +98,6 @@ module.exports = withSentry(async (req, res) => {
     console.error('strava-sync-now error', err);
     await reportError(err, { endpoint: 'strava-sync-now' });
     await setStravaSyncStatus(base, headers, userId, { ok: false, error: err.message });
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal error' });
   }
 });

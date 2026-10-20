@@ -286,6 +286,6 @@ module.exports = withSentry(async (req, res) => {
   } catch (err) {
     console.error('send-reminders error', err);
     await reportError(err, { endpoint: 'send-reminders' });
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal error' });
   }
 });
