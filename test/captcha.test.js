@@ -9,11 +9,13 @@ const { loadApp } = require('./support/load-app');
 
 test('getCaptchaToken: sin el script de Turnstile devuelve null enseguida (no bloquea el inicio de sesión)', async () => {
   const app = loadApp();
+  app.window.CAPTCHA_ENABLED = true;
   assert.equal(await app.getCaptchaToken('captcha-login'), null);
 });
 
 test('getCaptchaToken: con Turnstile pide el token a pedido y lo devuelve; el siguiente pedido reinicia el widget', async () => {
   const app = loadApp();
+  app.window.CAPTCHA_ENABLED = true;
   const calls = [];
   let callback;
   app.window.turnstile = {
@@ -32,6 +34,7 @@ test('getCaptchaToken: con Turnstile pide el token a pedido y lo devuelve; el si
 
 test('getCaptchaToken: si Turnstile falla o tarda de más devuelve null', async () => {
   const app = loadApp();
+  app.window.CAPTCHA_ENABLED = true;
   app.window.turnstile = {
     render: (el, opts) => { setTimeout(() => opts['error-callback'](), 0); return 'w9'; },
     execute() {}, reset() {}
@@ -45,6 +48,7 @@ test('getCaptchaToken: si Turnstile falla o tarda de más devuelve null', async 
 
 test('withCaptcha agrega el token solo si existe; translateAuthError traduce el rechazo del captcha', () => {
   const app = loadApp();
+  app.window.CAPTCHA_ENABLED = true;
   assert.equal(JSON.stringify(app.withCaptcha('abc', { data: { lang: 'es' } })), JSON.stringify({ data: { lang: 'es' }, captchaToken: 'abc' }));
   assert.equal(JSON.stringify(app.withCaptcha(null, { redirectTo: 'x' })), JSON.stringify({ redirectTo: 'x' }));
   assert.equal(app.translateAuthError({ message: 'captcha protection: request disallowed (invalid-input-response)' }), app.t('captcha_failed'));
@@ -53,6 +57,7 @@ test('withCaptcha agrega el token solo si existe; translateAuthError traduce el 
 
 test('prefetchCaptcha: el token se pide por adelantado y getCaptchaToken lo entrega al instante, sin pedir otro', async () => {
   const app = loadApp();
+  app.window.CAPTCHA_ENABLED = true;
   const calls = [];
   let callback;
   app.window.turnstile = {
@@ -70,6 +75,7 @@ test('prefetchCaptcha: el token se pide por adelantado y getCaptchaToken lo entr
 
 test('prefetchCaptcha: un token se usa una sola vez y dos pedidos juntos comparten el mismo pedido a Cloudflare', async () => {
   const app = loadApp();
+  app.window.CAPTCHA_ENABLED = true;
   let executes = 0, callback, n = 0;
   app.window.turnstile = {
     render: (el, opts) => { callback = opts.callback; return 'w2'; },
@@ -86,6 +92,19 @@ test('prefetchCaptcha: un token se usa una sola vez y dos pedidos juntos compart
 
 test('prefetchCaptcha: sin Turnstile no hace nada y no falla', async () => {
   const app = loadApp();
+  app.window.CAPTCHA_ENABLED = true;
   assert.equal(await app.prefetchCaptcha('captcha-login'), undefined);
   assert.equal(await app.getCaptchaToken('captcha-login'), null);
+});
+
+test('interruptor apagado (el valor actual): no se pide token, no se espera nada y no se toca Cloudflare', async () => {
+  const app = loadApp();
+  assert.equal(app.window.CAPTCHA_ENABLED, false, 'apagado por defecto');
+  const calls = [];
+  app.window.turnstile = { render: () => { calls.push('render'); return 'w'; }, execute: () => calls.push('execute'), reset() {} };
+  const t0 = Date.now();
+  assert.equal(await app.getCaptchaToken('captcha-login'), null);
+  assert.equal(await app.prefetchCaptcha('captcha-login'), undefined);
+  assert.ok(Date.now() - t0 < 50, 'sin esperas');
+  assert.deepEqual(calls, []);
 });

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-20T15:29:28Z';
+const APP_VERSION = '2026-10-20T23:44:25Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1502,7 +1502,17 @@ const PASSWORD_RULES = [
   {key: 'pw_req_lower', ok: pw => /[a-z]/.test(pw)},
   {key: 'pw_req_num', ok: pw => /[0-9]/.test(pw)}
 ];
+// El botón de guardar de cada pantalla de contraseña nueva queda gris y sin poder tocarse hasta que se cumplen los 4 requisitos
+const PASSWORD_SUBMIT_BUTTONS = { 'recovery-new-pw': 'recovery-submit-btn', 'cp-new': 'cp-save-btn' };
+function syncPasswordSubmitButton(inputId){
+  const btnId = PASSWORD_SUBMIT_BUTTONS[inputId];
+  if(!btnId) return;
+  const btn = document.getElementById(btnId), input = document.getElementById(inputId);
+  if(!btn || !input || (btn.dataset && btn.dataset.originalHtml)) return;   // mientras está "cargando" lo maneja setBtnBusy
+  btn.disabled = !isPasswordStrong(input.value || '');
+}
 function renderPasswordChecklist(inputId){
+  syncPasswordSubmitButton(inputId);
   const input = document.getElementById(inputId);
   const list = document.querySelector('[data-pw-list="' + inputId + '"]');
   if(!input || !list) return;
@@ -1538,6 +1548,10 @@ function updateSignupButtonState(){
    sospechoso le aparece una casilla en el contenedor. Si el script no cargó (sin red, bloqueado) o se agota el tiempo, devuelve null y
    se intenta igual sin token: mientras el captcha no esté activado en Supabase anda igual, y si está activado el servidor lo rechaza
    y se muestra el aviso (translateAuthError). */
+// INTERRUPTOR: apagado, el captcha no se carga ni se pide (ni se espera nada al iniciar sesión). Para volver a usarlo hay que ponerlo en true
+// ACÁ y activar el captcha en Supabase (Authentication > Attack Protection); si Supabase lo exige y esto está apagado, nadie puede iniciar sesión.
+// Es var (no const) para poder cambiarlo en las pruebas.
+var CAPTCHA_ENABLED = false;
 const TURNSTILE_SITE_KEY = '0x4AAAAAAFdy3f1GMeGJWAqt';
 const captchaWidgets = {};     // id del contenedor -> id del widget
 const captchaResolvers = {};   // id del contenedor -> función que recibe el token
@@ -1546,8 +1560,17 @@ const captchaReady = {};       // id del contenedor -> { token, at } pedido por 
 const captchaPending = {};     // id del contenedor -> promesa del pedido en curso
 const CAPTCHA_TOKEN_TTL_MS = 240000;
 function captchaAvailable(){
-  return !!(TURNSTILE_SITE_KEY && typeof window !== 'undefined' && window.turnstile && typeof window.turnstile.render === 'function');
+  return !!(CAPTCHA_ENABLED && TURNSTILE_SITE_KEY && typeof window !== 'undefined' && window.turnstile && typeof window.turnstile.render === 'function');
 }
+// El script de Cloudflare solo se descarga si el captcha está prendido (apagado, la app no le habla a ningún tercero para iniciar sesión)
+function loadTurnstileScript(){
+  if(!CAPTCHA_ENABLED || typeof document === 'undefined' || !document.head || document.getElementById('turnstile-script')) return;
+  const s = document.createElement('script');
+  s.id = 'turnstile-script'; s.async = true; s.defer = true;
+  s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+  document.head.appendChild(s);
+}
+loadTurnstileScript();
 // Pide un token nuevo al widget (un solo uso). Devuelve el token o null (sin script, sin red, error o tiempo agotado).
 function requestCaptchaToken(containerId, timeoutMs){
   return new Promise(resolve => {
@@ -1561,7 +1584,7 @@ function requestCaptchaToken(containerId, timeoutMs){
       resolve(token || null);
     };
     const arm = ms => { clearTimeout(timer); timer = setTimeout(() => finish(null), ms); };
-    arm(timeoutMs || 8000);
+    arm(timeoutMs || 25000);   // un teléfono lento puede tardar 12 s o más en resolver el desafío: mejor esperar que intentar sin token
     captchaResolvers[containerId] = finish;
     captchaArmers[containerId] = arm;
     try{
@@ -1674,6 +1697,8 @@ function setBtnBusy(btnId, busy, loadingLabel){
     btn.disabled = false;
     btn.style.opacity = '';
     if(btn.dataset.originalHtml){ btn.innerHTML = btn.dataset.originalHtml; delete btn.dataset.originalHtml; }
+    // al terminar de cargar, los botones de contraseña nueva vuelven a depender de los requisitos (no siempre habilitados)
+    for(const inputId in PASSWORD_SUBMIT_BUTTONS){ if(PASSWORD_SUBMIT_BUTTONS[inputId] === btnId) syncPasswordSubmitButton(inputId); }
   }
 }
 
@@ -2844,7 +2869,7 @@ function startConfirmEmailPolling(){
   // Con el captcha cada intento necesita su propio token (de un solo uso), así que se sondea más espaciado: cada 12 s, hasta 10 minutos
   // (antes cada 4 s). Además se intenta enseguida cuando la persona vuelve a la app después de confirmar desde el correo.
   let attempts = 0, polling = false;
-  const MAX_ATTEMPTS = 50;
+  const MAX_ATTEMPTS = CAPTCHA_ENABLED ? 50 : 150;
   const pollOnce = async ()=>{
     if(polling || document.visibilityState !== 'visible') return;
     if(++attempts > MAX_ATTEMPTS){ stopConfirmEmailPolling(); return; }
@@ -2862,7 +2887,7 @@ function startConfirmEmailPolling(){
     }catch(e){ /* todavía no confirmó, seguimos esperando */ }
     finally{ polling = false; }
   };
-  confirmEmailPollTimer = setInterval(pollOnce, 12000);
+  confirmEmailPollTimer = setInterval(pollOnce, CAPTCHA_ENABLED ? 12000 : 4000);
   confirmEmailVisibilityHandler = () => { if(document.visibilityState === 'visible') pollOnce(); };
   document.addEventListener('visibilitychange', confirmEmailVisibilityHandler);
 }
