@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-20T15:29:28Z';
+const APP_VERSION = '2026-10-20T23:24:11Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1561,7 +1561,7 @@ function requestCaptchaToken(containerId, timeoutMs){
       resolve(token || null);
     };
     const arm = ms => { clearTimeout(timer); timer = setTimeout(() => finish(null), ms); };
-    arm(timeoutMs || 8000);
+    arm(timeoutMs || 25000);   // un teléfono lento puede tardar 12 s o más en resolver el desafío: mejor esperar que intentar sin token
     captchaResolvers[containerId] = finish;
     captchaArmers[containerId] = arm;
     try{
