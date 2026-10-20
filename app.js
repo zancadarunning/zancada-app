@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-20T14:49:30Z';
+const APP_VERSION = '2026-10-20T14:50:44Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3013,11 +3013,6 @@ document.getElementById('voice-toggle').addEventListener('click', e=>{
   if(c.dataset.v !== 'off') state.voiceMode = c.dataset.v === 'key' ? 'key' : (c.dataset.v === 'vibe' ? 'vibe' : 'all');
   persist();
 });
-document.getElementById('privacy-trim-toggle').addEventListener('click', e=>{
-  const c=e.target.closest('.choice'); if(!c) return;
-  state.profile.privacyTrimM = Number(c.dataset.v);
-  renderPrivacyTrimToggle(); persist();
-});
 document.getElementById('units-toggle').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('units-toggle').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
@@ -4071,7 +4066,6 @@ function enterApp(){
   if(relinkTodayRun()) persist();
   [...document.getElementById('voice-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === voiceChoice()));
   [...document.getElementById('units-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.profile.units==='imperial'?'imperial':'metric')));
-  renderPrivacyTrimToggle();
   [...document.getElementById('perfil-trainby-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.profile.trainBy==='time'?'time':'distance')));
   [...document.getElementById('theme-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v===currentThemePref()));
   renderPerfilDays();
@@ -15296,7 +15290,7 @@ function buildShareImageBlob(r){
       });
 
       if(r.points && r.points.length>1){
-        drawRouteSilhouette(ctx, trimRouteForSharing(r.points), 140, 1360, W-280, 420);
+        drawRouteSilhouette(ctx, r.points, 140, 1360, W-280, 420);
       }
 
       canvas.toBlob((blob)=>resolve(blob||null), 'image/png');
@@ -15358,7 +15352,7 @@ function buildWeeklyShareImageBlob(){
         const boxW = (contentW - gap*(traceRuns.length-1)) / traceRuns.length;
         traceRuns.forEach((r,i)=>{
           const boxX = marginX + i*(boxW+gap);
-          drawRouteSilhouette(ctx, trimRouteForSharing(r.points), boxX, rowY, boxW, rowH, 5, 6);
+          drawRouteSilhouette(ctx, r.points, boxX, rowY, boxW, rowH, 5, 6);
         });
       }
 
@@ -15404,44 +15398,6 @@ function drawBrandWord(ctx, x, y, size){
   ctx.shadowOffsetY = 0;
   ctx.fillText('ZANCADA', x, y);
   ctx.restore();
-}
-// ---- Privacidad al compartir ----
-// Al compartir una carrera (imagen o video) se oculta el tramo del inicio y del final de la ruta: casi siempre es la casa. Es solo lo que sale
-// hacia afuera: dentro de la app, el Historial y las estadísticas usan la ruta completa. El corredor elige cuánto ocultar en Preferencias.
-const PRIVACY_TRIM_OPTIONS = [0, 200, 500, 1000];   // metros; 0 = no ocultar
-const PRIVACY_TRIM_DEFAULT = 200;
-function privacyTrimMeters(){
-  const v = state.profile && state.profile.privacyTrimM;
-  return PRIVACY_TRIM_OPTIONS.includes(v) ? v : PRIVACY_TRIM_DEFAULT;
-}
-// Recorta metros del inicio y del final. En un recorrido corto, como mucho el 20 % de cada punta (nunca queda un mapa vacío). Se queda solo con
-// los puntos con coordenadas válidas; nunca devuelve el inicio o el final por un fallo (si no queda nada que mostrar, devuelve menos de 2 puntos).
-function trimRouteForSharing(points, trimM){
-  if(trimM === undefined) trimM = privacyTrimMeters();
-  const valid = (Array.isArray(points) ? points : []).filter(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lon));
-  if(!(trimM > 0) || valid.length < 3) return valid;
-  const cum = [0];
-  for(let i = 1; i < valid.length; i++) cum.push(cum[i-1] + haversine(valid[i-1].lat, valid[i-1].lon, valid[i].lat, valid[i].lon) * 1000);   // haversine devuelve km
-  const total = cum[cum.length - 1];
-  if(!(total > 0)) return valid;
-  const eff = Math.min(trimM, total * 0.2);
-  const kept = valid.filter((p, i) => cum[i] >= eff && cum[i] <= total - eff);
-  return kept;   // con puntos muy espaciados puede quedar menos de 2: no se dibuja nada antes que mostrar el inicio o el final
-}
-// La misma carrera con la ruta recortada, para dibujarla en lo que se comparte
-function runForSharing(r){
-  return Object.assign({}, r, { points: trimRouteForSharing(r && r.points) });
-}
-function privacyTrimLabel(m){
-  if(!(m > 0)) return t('perfil_privacy_off');
-  if(isImperial()) return m >= 1000 ? '0.6 mi' : Math.round(m * 1.0936 / 10) * 10 + ' yd';
-  return m >= 1000 ? (m / 1000) + ' km' : m + ' m';
-}
-function renderPrivacyTrimToggle(){
-  const box = document.getElementById('privacy-trim-toggle');
-  if(!box) return;
-  const cur = privacyTrimMeters();
-  [...box.children].forEach(c => { const m = Number(c.dataset.v); c.textContent = privacyTrimLabel(m); c.classList.toggle('active', m === cur); });
 }
 function drawRouteSilhouette(ctx, points, x, y, w, h, lineWidth, dotRadius){
   lineWidth = lineWidth || 11;
@@ -15760,8 +15716,7 @@ async function startDynamicVideo(runId){
   if(videoDpr !== 1) ctx.scale(videoDpr, videoDpr);
 
   // El mapa ocupa TODO el cuadro (pantalla completa, como el video de Strava): el recuadro de la cámara es el canvas entero.
-  // la ruta del video sale recortada (privacidad): sin los tramos del inicio y del final
-  const routeData = computeVideoRouteData(runForSharing(r), 0, 0, W, H, 0);
+  const routeData = computeVideoRouteData(r, 0, 0, W, H, 0);
   if(!routeData || routeData.totalDist<=0){ showToast(t('rd_video_error'), 'error'); return; }
 
   // Mapa real: intentamos cargar el mosaico de tiles que necesita la cámara
