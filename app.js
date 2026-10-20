@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-20T23:31:12Z';
+const APP_VERSION = '2026-10-20T23:44:25Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1502,7 +1502,17 @@ const PASSWORD_RULES = [
   {key: 'pw_req_lower', ok: pw => /[a-z]/.test(pw)},
   {key: 'pw_req_num', ok: pw => /[0-9]/.test(pw)}
 ];
+// El botón de guardar de cada pantalla de contraseña nueva queda gris y sin poder tocarse hasta que se cumplen los 4 requisitos
+const PASSWORD_SUBMIT_BUTTONS = { 'recovery-new-pw': 'recovery-submit-btn', 'cp-new': 'cp-save-btn' };
+function syncPasswordSubmitButton(inputId){
+  const btnId = PASSWORD_SUBMIT_BUTTONS[inputId];
+  if(!btnId) return;
+  const btn = document.getElementById(btnId), input = document.getElementById(inputId);
+  if(!btn || !input || (btn.dataset && btn.dataset.originalHtml)) return;   // mientras está "cargando" lo maneja setBtnBusy
+  btn.disabled = !isPasswordStrong(input.value || '');
+}
 function renderPasswordChecklist(inputId){
+  syncPasswordSubmitButton(inputId);
   const input = document.getElementById(inputId);
   const list = document.querySelector('[data-pw-list="' + inputId + '"]');
   if(!input || !list) return;
@@ -1687,6 +1697,8 @@ function setBtnBusy(btnId, busy, loadingLabel){
     btn.disabled = false;
     btn.style.opacity = '';
     if(btn.dataset.originalHtml){ btn.innerHTML = btn.dataset.originalHtml; delete btn.dataset.originalHtml; }
+    // al terminar de cargar, los botones de contraseña nueva vuelven a depender de los requisitos (no siempre habilitados)
+    for(const inputId in PASSWORD_SUBMIT_BUTTONS){ if(PASSWORD_SUBMIT_BUTTONS[inputId] === btnId) syncPasswordSubmitButton(inputId); }
   }
 }
 
