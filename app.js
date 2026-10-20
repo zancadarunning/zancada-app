@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-19T16:57:13Z';
+const APP_VERSION = '2026-10-20T14:24:15Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -874,6 +874,7 @@ let currentUserId = null;
 let confirmEmailAddr = '';
 let confirmEmailPw = '';
 let confirmEmailPollTimer = null;
+let confirmEmailVisibilityHandler = null;
 let confirmEmailResendCooldown = false;
 const DAY_KEYS = ['mon','tue','wed','thu','fri','sat','sun'];
 // Orden aproximado de más jugado a nivel mundial a menos -- no hace falta precisión de
@@ -1508,6 +1509,60 @@ function updateSignupButtonState(){
     why.textContent = !started || !btn.disabled ? '' : (!email.includes('@') ? t('why_email') : (!isPasswordStrong(password) ? t('why_password') : t('why_legal')));
   }
 }
+/* ===== CAPTCHA (Cloudflare Turnstile) =====
+   Protege el registro, el inicio de sesión, "olvidé mi contraseña" y el reenvío del correo de confirmación contra bots que prueban
+   contraseñas. La clave de acá es la PÚBLICA (site key); la secreta vive solo en Supabase (Authentication > Attack Protection).
+   Funciona "a pedido": cada vez que hace falta se pide un token nuevo (de un solo uso) y casi nadie ve nada; solo a un visitante
+   sospechoso le aparece una casilla en el contenedor. Si el script no cargó (sin red, bloqueado) o se agota el tiempo, devuelve null y
+   se intenta igual sin token: mientras el captcha no esté activado en Supabase anda igual, y si está activado el servidor lo rechaza
+   y se muestra el aviso (translateAuthError). */
+const TURNSTILE_SITE_KEY = '0x4AAAAAAFdy3f1GMeGJWAqt';
+const captchaWidgets = {};     // id del contenedor -> id del widget
+const captchaResolvers = {};   // id del contenedor -> función que recibe el token
+function captchaAvailable(){
+  return !!(TURNSTILE_SITE_KEY && typeof window !== 'undefined' && window.turnstile && typeof window.turnstile.render === 'function');
+}
+function getCaptchaToken(containerId, timeoutMs){
+  return new Promise(resolve => {
+    const el = typeof document !== 'undefined' ? document.getElementById(containerId) : null;
+    if(!el || !captchaAvailable()){ resolve(null); return; }
+    let done = false, timer = null;
+    const finish = token => {
+      if(done) return;
+      done = true; clearTimeout(timer); delete captchaResolvers[containerId];
+      resolve(token || null);
+    };
+    const arm = ms => { clearTimeout(timer); timer = setTimeout(() => finish(null), ms); };
+    arm(timeoutMs || 8000);
+    captchaResolvers[containerId] = finish;
+    try{
+      let id = captchaWidgets[containerId];
+      if(id === undefined){
+        id = window.turnstile.render(el, {
+          sitekey: TURNSTILE_SITE_KEY,
+          execution: 'execute',
+          appearance: 'interaction-only',
+          theme: document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark',
+          callback: token => { const f = captchaResolvers[containerId]; if(f) f(token); },
+          'error-callback': () => { const f = captchaResolvers[containerId]; if(f) f(null); },
+          'timeout-callback': () => { const f = captchaResolvers[containerId]; if(f) f(null); },
+          // si hace falta que la persona toque la casilla, se le da tiempo
+          'before-interactive-callback': () => arm(90000)
+        });
+        captchaWidgets[containerId] = id;
+      } else {
+        window.turnstile.reset(id);
+      }
+      window.turnstile.execute(id);
+    }catch(e){ finish(null); }
+  });
+}
+// Opciones de Supabase Auth con el token (si lo hay), mezcladas con otras opciones
+function withCaptcha(token, extra){
+  const opts = Object.assign({}, extra || {});
+  if(token) opts.captchaToken = token;
+  return opts;
+}
 function translateAuthError(error){
   const msg = (error && error.message) || '';
   if(msg.includes('Invalid login')) return t('login_err_wrong_password');
@@ -1521,6 +1576,7 @@ function translateAuthError(error){
   // pantalla de "confirmá tu cuenta"), y cualquier otro caso no reconocido cae a
   // generic_error en vez de mostrar el string de Supabase tal cual.
   if(msg.includes('Email not confirmed')) return t('login_check_email');
+  if(/captcha/i.test(msg)) return t('captcha_failed');
   return msg ? t('generic_error') : t('login_err');
 }
 function togglePasswordVisibility(inputId, btn){
@@ -2591,7 +2647,8 @@ async function handleSignIn(){
   setRememberMe(document.getElementById('login-remember-me')?.checked !== false);
   setBtnBusy('login-submit-btn', true, t('login_loading'));
   try{
-    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    const captchaToken = await getCaptchaToken('captcha-login');
+    const { data, error } = await supabaseClient.auth.signInWithPassword(Object.assign({ email, password }, captchaToken ? { options: { captchaToken } } : {}));
     if(error){ err.textContent = translateAuthError(error); err.style.display='block'; return; }
     await loadUserAndEnter(data.user);
   }finally{ setBtnBusy('login-submit-btn', false); }
@@ -2657,7 +2714,8 @@ async function handleSignUp(){
     // confirmLegalForNewAccount() en loadUserAndEnter() no le vuelva a preguntar apenas
     // confirme el mail -- ese dato viaja con la cuenta en el servidor, no depende de que
     // sea la misma pestaña/dispositivo el que confirme.
-    const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: { lang, legalAccepted: true } } });
+    const captchaToken = await getCaptchaToken('captcha-signup');
+    const { data, error } = await supabaseClient.auth.signUp({ email, password, options: withCaptcha(captchaToken, { data: { lang, legalAccepted: true } }) });
     if(error){ err.textContent = translateAuthError(error); err.style.display='block'; return; }
     // Supabase, por diseño, no devuelve un error cuando el email ya tiene una cuenta
     // confirmada -- para no dejar que cualquiera use el formulario de registro para
@@ -2695,6 +2753,7 @@ function showConfirmEmailScreen(email, password){
 }
 function stopConfirmEmailPolling(){
   if(confirmEmailPollTimer){ clearInterval(confirmEmailPollTimer); confirmEmailPollTimer = null; }
+  if(confirmEmailVisibilityHandler){ document.removeEventListener('visibilitychange', confirmEmailVisibilityHandler); confirmEmailVisibilityHandler = null; }
 }
 function startConfirmEmailPolling(){
   stopConfirmEmailPolling();
@@ -2708,13 +2767,17 @@ function startConfirmEmailPolling(){
   // real de login contra Supabase Auth cada 4 segundos para siempre, sin límite. Pasado el
   // tope simplemente dejamos de sondear -- el botón "Reenviar email" y volver a entrar siguen
   // andando igual, así que no se pierde ninguna funcionalidad real.
-  let attempts = 0;
-  const MAX_ATTEMPTS = 150;
-  confirmEmailPollTimer = setInterval(async ()=>{
-    if(document.visibilityState !== 'visible') return;
+  // Con el captcha cada intento necesita su propio token (de un solo uso), así que se sondea más espaciado: cada 12 s, hasta 10 minutos
+  // (antes cada 4 s). Además se intenta enseguida cuando la persona vuelve a la app después de confirmar desde el correo.
+  let attempts = 0, polling = false;
+  const MAX_ATTEMPTS = 50;
+  const pollOnce = async ()=>{
+    if(polling || document.visibilityState !== 'visible') return;
     if(++attempts > MAX_ATTEMPTS){ stopConfirmEmailPolling(); return; }
+    polling = true;
     try{
-      const { data, error } = await supabaseClient.auth.signInWithPassword({ email: confirmEmailAddr, password: confirmEmailPw });
+      const captchaToken = await getCaptchaToken('captcha-confirm', 15000);
+      const { data, error } = await supabaseClient.auth.signInWithPassword(Object.assign({ email: confirmEmailAddr, password: confirmEmailPw }, captchaToken ? { options: { captchaToken } } : {}));
       if(!error && data.session){
         stopConfirmEmailPolling();
         const user = data.user;
@@ -2723,7 +2786,11 @@ function startConfirmEmailPolling(){
         await loadUserAndEnter(user);
       }
     }catch(e){ /* todavía no confirmó, seguimos esperando */ }
-  }, 4000);
+    finally{ polling = false; }
+  };
+  confirmEmailPollTimer = setInterval(pollOnce, 12000);
+  confirmEmailVisibilityHandler = () => { if(document.visibilityState === 'visible') pollOnce(); };
+  document.addEventListener('visibilitychange', confirmEmailVisibilityHandler);
 }
 function goBackFromConfirmEmail(){
   stopConfirmEmailPolling();
@@ -2736,7 +2803,8 @@ async function handleResendConfirmation(){
   confirmEmailResendCooldown = true;
   setBtnBusy('confirm-email-resend-btn', true, t('signup_loading'));
   try{
-    const { error } = await supabaseClient.auth.resend({ type:'signup', email: confirmEmailAddr });
+    const captchaToken = await getCaptchaToken('captcha-confirm');
+    const { error } = await supabaseClient.auth.resend(Object.assign({ type:'signup', email: confirmEmailAddr }, captchaToken ? { options: { captchaToken } } : {}));
     if(error){ showToast(translateAuthError(error), 'error'); return; }
     showToast(t('confirm_email_resent_toast'), 'success');
   } finally {
@@ -2752,7 +2820,8 @@ async function handleForgotPassword(){
   if(!email || !email.includes('@')){ err.textContent = t('login_err'); err.style.display='block'; return; }
   setBtnBusy('login-forgot-btn', true, t('forgot_loading'));
   try{
-    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: window.location.href.split('#')[0] });
+    const captchaToken = await getCaptchaToken('captcha-login');
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, withCaptcha(captchaToken, { redirectTo: window.location.href.split('#')[0] }));
     if(error){ err.textContent = translateAuthError(error); err.style.display='block'; return; }
     err.style.color = 'var(--hivis-text)';
     err.textContent = t('login_recovery_sent'); err.style.display='block';

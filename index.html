@@ -1470,6 +1470,9 @@
   .pw-checklist li.ok{color:var(--chalk);}
   .pw-checklist li.ok .pw-dot{background:var(--zone2); box-shadow:none;}
   :root[data-theme="light"] .pw-checklist li.ok .pw-dot svg{color:#fff;}
+  /* Captcha: invisible salvo que Cloudflare pida que la persona toque una casilla */
+  .captcha-box{display:flex; justify-content:center;}
+  .captcha-box iframe{margin-top:10px;}
   .sr-only{position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;}
   .pw-wrap{position:relative;}
   .pw-wrap input{padding-right:44px !important;}
@@ -2799,6 +2802,7 @@
       <span style="font-size:13.5px; color:var(--chalk);" data-i18n="login_remember_me"></span>
     </label>
     <div class="field"><button class="btn btn-primary" id="login-submit-btn" data-i18n="login_continue" onclick="handleSignIn()"></button></div>
+    <div class="captcha-box" id="captcha-login"></div>
     <button class="small-link" id="login-forgot-btn" style="display:block; text-align:center; width:100%; margin-top:14px;" onclick="handleForgotPassword()" data-i18n="login_forgot"></button>
     <div class="divider-or"><span data-i18n="login_or"></span></div>
     <button class="btn btn-outline" id="login-google-btn" onclick="handleGoogleSignIn('login-google-btn')"><span data-i18n="login_google"></span></button>
@@ -2839,6 +2843,7 @@
       </span>
     </label>
     <div class="field"><button class="btn btn-primary" id="signup-submit-btn" data-i18n="login_create_account" onclick="handleSignUp()" disabled></button><p class="btn-reason" id="signup-reason" role="status"></p></div>
+    <div class="captcha-box" id="captcha-signup"></div>
     <div class="divider-or"><span data-i18n="login_or"></span></div>
     <button class="btn btn-outline" id="signup-google-btn" onclick="handleGoogleSignIn('signup-google-btn')"><span data-i18n="login_google"></span></button>
     <button class="btn btn-outline" id="signup-apple-btn" style="display:none; margin-top:10px;" onclick="handleAppleSignIn('signup-apple-btn')"><span data-i18n="login_apple"></span></button>
@@ -2855,6 +2860,7 @@
       <span class="icon-sq spin-icon" style="width:14px; height:14px; color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2a10 10 0 1 0 10 10"/></svg></span>
       <span data-i18n="confirm_email_waiting"></span>
     </div>
+    <div class="captcha-box" id="captcha-confirm"></div>
     <div class="field" style="margin-top:26px;"><button class="btn btn-outline" id="confirm-email-resend-btn" data-i18n="confirm_email_resend_btn" onclick="handleResendConfirmation()"></button></div>
     <button class="small-link" style="display:block; text-align:center; width:100%; margin-top:14px;" onclick="goBackFromConfirmEmail()" data-i18n="confirm_email_back"></button>
   </div>
@@ -4502,6 +4508,8 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
 <!-- supabase-js 2.117.3 servido desde el propio dominio (vendor/): antes venía de jsDelivr con versión flotante (@2) y sin integridad, en la página que tiene la sesión de todos -->
 <script defer src="/vendor/supabase-js.js"></script>
+<!-- Captcha (Cloudflare Turnstile): se renderiza a pedido desde app.js (getCaptchaToken). Si no carga, la app sigue y se intenta sin token. -->
+<script defer src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"></script>
 <!-- Diccionarios de traducción: antes se cargaban los 6 siempre (~75KB comprimidos
      tirados a la basura en cada carga para el 100% de la gente que usa un solo idioma),
      nada más para que el selector de idioma en Perfil pudiera cambiar sin pedir nada a
