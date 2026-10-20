@@ -50,3 +50,42 @@ test('withCaptcha agrega el token solo si existe; translateAuthError traduce el 
   assert.equal(app.translateAuthError({ message: 'captcha protection: request disallowed (invalid-input-response)' }), app.t('captcha_failed'));
   assert.notEqual(app.translateAuthError({ message: 'captcha protection: request disallowed' }), app.t('generic_error'));
 });
+
+test('prefetchCaptcha: el token se pide por adelantado y getCaptchaToken lo entrega al instante, sin pedir otro', async () => {
+  const app = loadApp();
+  const calls = [];
+  let callback;
+  app.window.turnstile = {
+    render: (el, opts) => { calls.push('render'); callback = opts.callback; return 'w1'; },
+    execute: () => { calls.push('execute'); setTimeout(() => callback('tok-pre'), 0); },
+    reset: () => { calls.push('reset'); }
+  };
+  await app.prefetchCaptcha('captcha-login');
+  assert.deepEqual(calls, ['render', 'execute']);
+  const t0 = Date.now();
+  assert.equal(await app.getCaptchaToken('captcha-login'), 'tok-pre');
+  assert.ok(Date.now() - t0 < 100, 'sin esperar a Cloudflare');
+  assert.deepEqual(calls, ['render', 'execute'], 'no se pidió un segundo token para este envío');
+});
+
+test('prefetchCaptcha: un token se usa una sola vez y dos pedidos juntos comparten el mismo pedido a Cloudflare', async () => {
+  const app = loadApp();
+  let executes = 0, callback, n = 0;
+  app.window.turnstile = {
+    render: (el, opts) => { callback = opts.callback; return 'w2'; },
+    execute: () => { executes++; setTimeout(() => callback('tok-' + (++n)), 0); },
+    reset() {}
+  };
+  const [a, b] = await Promise.all([app.getCaptchaToken('captcha-signup'), app.prefetchCaptcha('captcha-signup')]);
+  assert.equal(a, 'tok-1');
+  assert.equal(executes, 1, 'un solo pedido en curso');
+  // el token ya se gastó: el siguiente envío no puede reutilizarlo
+  const again = await app.getCaptchaToken('captcha-signup');
+  assert.equal(again, 'tok-2');
+});
+
+test('prefetchCaptcha: sin Turnstile no hace nada y no falla', async () => {
+  const app = loadApp();
+  assert.equal(await app.prefetchCaptcha('captcha-login'), undefined);
+  assert.equal(await app.getCaptchaToken('captcha-login'), null);
+});
