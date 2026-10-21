@@ -50,7 +50,7 @@ Estado a 2026-10-21. Público: sin claves. Este archivo resume; el detalle está
 | Traducciones del consentimiento | Revisión de pt, fr, it, de por hablantes nativos | Externo |
 | Plan de pago el día del lanzamiento | Supabase Pro (contraseñas filtradas, tope de sesión, más límites), Resend pago, subir el tope de correos por hora | Dueño |
 | Seguridad sobre el celular | Play Integrity en Android una vez publicada; revisión equivalente en iPhone cuando exista | Yo + dueño |
-| Prueba de intrusión externa | Contratar a alguien que ataque la app antes del lanzamiento | Externo |
+| Prueba de intrusión externa | Contratar a alguien que ataque la app antes del lanzamiento. El alcance, los endpoints, lo ya conocido y las reglas están en `docs/pentest-alcance.md` | Externo |
 | Higiene periódica | Cambiar `CRON_SECRET` y claves cada seis meses; simulacro de restauración de un respaldo cada tres; renovar `security.txt` cada año; pasar DMARC a "quarantine" | Dueño |
 
 ## Qué no se hizo a propósito
