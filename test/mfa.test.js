@@ -136,3 +136,43 @@ test('los textos del segundo paso existen en los 6 idiomas', () => {
     assert.ok(s.includes('info@zancada.org'), l + ' dice cómo recuperar la cuenta');
   }
 });
+
+// ---------- borrar datos / cuenta con 2FA ----------
+// Volver a escribir la contraseña deja una sesión de nivel 1 y el servidor (verifyUser) la rechaza en cuentas con 2FA: la app tiene que pedir el
+// código y mandar el token ya elevado a nivel 2, o quien activó el 2FA no podría borrar sus datos ni su cuenta.
+function reauthSetup(mfaAal) {
+  let stage = 'before';
+  const { app, client, el } = setup({
+    getAuthenticatorAssuranceLevel: async () => ({ data: mfaAal, error: null }),
+    listFactors: async () => ({ data: { totp: [{ id: 'f1', status: 'verified' }] }, error: null }),
+    challengeAndVerify: async o => { if (o.code === '123456') { stage = 'aal2'; return { error: null }; } return { error: { message: 'invalid' } }; }
+  });
+  client.auth.getSession = async () => ({ data: { session: stage === 'aal2' ? { access_token: 'token-aal2', user: { app_metadata: { provider: 'email' }, email: 'a@b.com' } } : { access_token: 'token-viejo', user: { app_metadata: { provider: 'email' }, email: 'a@b.com' } } } });
+  client.auth.signInWithPassword = async () => ({ data: { session: { access_token: 'token-aal1' } }, error: null });
+  app.showConfirm = async () => ({ password: 'Clave1234' });
+  return { app, el };
+}
+
+test('borrar con 2FA: después de la contraseña pide el código y usa el token de nivel 2', async () => {
+  const { app, el } = reauthSetup({ currentLevel: 'aal1', nextLevel: 'aal2' });
+  const p = app.confirmDestructiveWithPassword('seguro?', {});
+  await new Promise(r => setTimeout(r, 20));
+  assert.equal(el('mfa-challenge-modal').style.display, 'block', 'tiene que pedir el código');
+  el('mfa-challenge-code').value = '123456'; await app.submitMfaChallenge();
+  assert.equal(await p, 'token-aal2', 'el servidor solo acepta el token elevado');
+});
+
+test('borrar con 2FA: si cancela el código no se borra nada (devuelve null)', async () => {
+  const { app } = reauthSetup({ currentLevel: 'aal1', nextLevel: 'aal2' });
+  const p = app.confirmDestructiveWithPassword('seguro?', {});
+  await new Promise(r => setTimeout(r, 20));
+  app.cancelMfaChallenge();
+  assert.equal(await p, null);
+});
+
+test('borrar sin 2FA: no se pide ningún código y se usa el token de la contraseña', async () => {
+  const { app, el } = reauthSetup({ currentLevel: 'aal1', nextLevel: 'aal1' });
+  const tok = await app.confirmDestructiveWithPassword('seguro?', {});
+  assert.notEqual(el('mfa-challenge-modal').style.display, 'block');
+  assert.equal(tok, 'token-viejo');   // el getSession simulado devuelve la sesión vigente
+});

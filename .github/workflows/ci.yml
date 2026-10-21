@@ -46,6 +46,20 @@ jobs:
           node-version: 24
       - run: npm audit --omit=dev --audit-level=high
 
+  # Secretos: recorre TODO el historial de git (no solo lo actual) buscando claves, tokens y llaves privadas. El repositorio es público: lo que se sube
+  # una vez ya está filtrado. Corre en cada subida, en cada pull request y una vez por semana. Las reglas están en scripts/scan-secrets.js.
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020   # v4.4.0
+        with:
+          node-version: 24
+      - run: node scripts/scan-secrets.js --history
+
   # Revisa las dependencias que agrega o cambia un pull request: avisa si traen vulnerabilidades graves conocidas.
   dependency-review:
     if: github.event_name == 'pull_request'

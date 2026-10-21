@@ -74,12 +74,15 @@ const MSGS = {
   de: { types:{easy:'Lockerer Lauf',intervals:'Intervalle',tempo:'Tempolauf',long:'Langer Lauf',test:'Leistungstest'}, body:(type,km)=>`Heute: ${type} · ${km}km` }
 };
 
-const { withSentry, reportError } = require('./_lib/sentry');
+const { withSentry, reportError, reportSecurityEvent } = require('./_lib/sentry');
+const { alertIfMisconfigured } = require('./_lib/config-check');
 
 module.exports = withSentry(async (req, res) => {
   if (!(await requireCronSecret(req))) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
+  // Avisa (a Sentry, que te llega por mail) si falta o está mal alguna variable de seguridad en Vercel; nunca frena el envío.
+  await alertIfMisconfigured(reportSecurityEvent).catch(() => {});
 
   webpush.setVapidDetails(
     'mailto:info@zancada.org',

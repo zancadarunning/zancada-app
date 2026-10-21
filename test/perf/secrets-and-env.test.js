@@ -27,7 +27,12 @@ test('.gitignore ignora .env y .env.* (pero no .env.example)', () => {
 test('todas las variables de entorno que usa el servidor están documentadas en .env.example', () => {
   const documented = new Set([...read('.env.example').matchAll(/^([A-Z][A-Z0-9_]+)=/gm)].map(m => m[1]));
   const used = new Set();
-  for (const f of apiFiles()) for (const m of read(f).matchAll(/process\.env\.([A-Z][A-Z0-9_]+)/g)) used.add(m[1]);
+  for (const f of apiFiles()) {
+    const src = read(f);
+    for (const m of src.matchAll(/process\.env\.([A-Z][A-Z0-9_]+)/g)) used.add(m[1]);
+    // lectura dinámica (process.env[nombre]): el nombre aparece escrito entre comillas en el mismo archivo (ej. keyFromEnv('TOKEN_ENCRYPTION_KEY'))
+    if (/process\.env\[/.test(src)) for (const m of src.matchAll(/['"]([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)['"]/g)) used.add(m[1]);
+  }
   const missing = [...used].filter(v => !documented.has(v));
   assert.deepEqual(missing, [], 'agregá estas variables a .env.example (solo el nombre, sin valor)');
 });
