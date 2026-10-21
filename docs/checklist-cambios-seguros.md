@@ -18,6 +18,7 @@ La idea: **no volver a revisar todo de nuevo**. Lo que se pudo convertir en una 
 | Nada de lo que escribe una persona se dibuja sin escapar | `test/xss-render.test.js` |
 | Segundo paso (2FA): la API rechaza sesiones de nivel 1, la app lo pide al entrar y al borrar datos/cuenta | `test/mfa.test.js` |
 | Tokens de relojes cifrados, nunca leídos ni guardados sin pasar por `token-crypto` | `test/token-crypto.test.js` |
+| Variables de seguridad de Vercel presentes (clave de cifrado de tokens válida, secretos de cron/Strava, base): si falta una, Sentry avisa por mail como máximo cada 12 h | `api/_lib/config-check.js` (lo llama el cron de recordatorios), `test/config-check.test.js` |
 | Dependencias sin vulnerabilidades graves | trabajo `audit` del CI, Dependabot, `dependency-review` |
 | Análisis de código (inyecciones, rutas, etc.) | CodeQL (`.github/workflows/codeql.yml`) |
 
