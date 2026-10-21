@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-21T13:06:13Z';
+const APP_VERSION = '2026-10-21T14:52:57Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -753,7 +753,7 @@ function initMascotEyes(){
   }, 600);
 }
 // Escapa texto libre (nombres, mensajes de chat, etc.) antes de insertarlo
-// en el HTML. Sin esto, alguien podía poner algo como <img onerror=...> como
+// en el HTML. Sin esto, alguien podía poner algo como <img data-on-error=...> como
 // nombre de perfil, de evento, o incluso como nombre de una actividad de
 // Strava, y ese código se ejecutaba cada vez que se mostraba en la app.
 function escapeHtml(str){
@@ -2824,7 +2824,7 @@ async function handleSignUp(){
     // (cuenta ya existente Y ya confirmada); para una cuenta recién creada, o una
     // todavía sin confirmar, identities trae al menos un elemento.
     if(data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0){
-      err.innerHTML = `${t('login_err_exists')} <button type="button" class="small-link" style="padding:0; font-size:inherit; vertical-align:baseline;" onclick="goToLoginFromSignup()">${t('login_go_signin_short')}</button>`;
+      err.innerHTML = `${t('login_err_exists')} <button type="button" class="small-link" style="padding:0; font-size:inherit; vertical-align:baseline;" data-on-click="goToLoginFromSignup()">${t('login_go_signin_short')}</button>`;
       err.style.display='block'; return;
     }
     if(!data.session){ showConfirmEmailScreen(email, password); return; }
@@ -3002,14 +3002,14 @@ document.getElementById('ob-runnertype').addEventListener('click', e=>{
 // no tenian equivalente de teclado en ningun lado de la app (a diferencia de
 // swipe-action-delete, que si tiene role="button"/tabindex) -- un usuario que navega solo
 // con teclado o lector de pantalla no podia completar el onboarding, tocar el check-in de
-// "como te sentis", ni abrir ningun panel de ayuda/tips. Selector generico ([onclick] que
+// "como te sentis", ni abrir ningun panel de ayuda/tips. Selector generico ([data-on-click] que
 // no sea ya un elemento nativamente focuseable) en vez de listar clase por clase, para que
 // cubra tambien los que se agreguen a futuro sin repetir este tratamiento cada vez.
 function makeClickablesFocusable(root){
-  (root||document).querySelectorAll('[onclick]:not(button):not(a):not(input):not(select):not(textarea)').forEach(el=>{
+  (root||document).querySelectorAll('[data-on-click]:not(button):not(a):not(input):not(select):not(textarea)').forEach(el=>{
     if(!el.hasAttribute('tabindex')) el.setAttribute('tabindex','0');
     // Si la tarjeta contiene otros botones/enlaces (ej. Compartir dentro de una carrera), role="link" y no "button": un botón con botones adentro es un anidado interactivo (lo marca axe como grave) y los lectores de pantalla no llegan al botón interno.
-    if(!el.hasAttribute('role')) el.setAttribute('role', el.querySelector('button, a, input, select, textarea, [onclick]') ? 'link' : 'button');
+    if(!el.hasAttribute('role')) el.setAttribute('role', el.querySelector('button, a, input, select, textarea, [data-on-click]') ? 'link' : 'button');
   });
 }
 makeClickablesFocusable();
@@ -3177,9 +3177,9 @@ function renderSportChips(ctx){
   if(row){
     row.style.display = sports.length ? 'flex' : 'none';
     row.innerHTML = sports.map(s=>
-      `<div class="choice active sport-chip" data-v="${s}">${t('sport_'+s)}<span class="sport-chip-x" onclick="event.stopPropagation(); removeSelectedSport('${ctx}','${s}')">&times;</span></div>`).join('');
+      `<div class="choice active sport-chip" data-v="${s}">${t('sport_'+s)}<span class="sport-chip-x" data-on-click="event.stopPropagation(); removeSelectedSport('${ctx}','${s}')">&times;</span></div>`).join('');
     // Reportado en una auditoría: makeClickablesFocusable() (ver su definición) solo corría
-    // una vez, al cargar la página -- cualquier [onclick] agregado después por un render
+    // una vez, al cargar la página -- cualquier [data-on-click] agregado después por un render
     // dinámico (como este) quedaba sin tabindex/role, inalcanzable por teclado. Se re-corre
     // acotada a este contenedor cada vez que se re-renderiza. Mismo criterio en
     // renderSportPickerList/renderPlan/renderHistory/renderCalendar* más abajo.
@@ -3229,7 +3229,7 @@ function renderSportPickerList(){
   const q = (document.getElementById('sport-picker-search')?.value || '').trim().toLowerCase();
   const filtered = SPORTS_LIST.filter(s => !q || t('sport_'+s).toLowerCase().includes(q));
   list.innerHTML = filtered.length ? filtered.map(s => `
-    <div class="sport-row${sportPickerTemp.has(s)?' active':''}" onclick="toggleSportPickerRow('${s}')">
+    <div class="sport-row${sportPickerTemp.has(s)?' active':''}" data-on-click="toggleSportPickerRow('${s}')">
       <span>${t('sport_'+s)}</span>
       <span class="check-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
     </div>`).join('') : `<p class="muted" style="text-align:center; padding:20px 0;">${t('sport_picker_empty')}</p>`;
@@ -3752,7 +3752,7 @@ function renderCalMonths(){
     const label = new Date(y,m,1).toLocaleDateString(LOCALE_MAP[lang], {month:'short'});
     const isCurrent = today.getFullYear()===y && today.getMonth()===m;
     const isSelected = selMonth===m;
-    return `<div class="cal-cell ${isCurrent?'current':''} ${isSelected?'selected':''}" onclick="calSelectMonth(${m})">${label}</div>`;
+    return `<div class="cal-cell ${isCurrent?'current':''} ${isSelected?'selected':''}" data-on-click="calSelectMonth(${m})">${label}</div>`;
   }).join('');
   makeClickablesFocusable(document.getElementById('cal-months-grid'));
 }
@@ -3769,7 +3769,7 @@ function renderCalYears(){
     const yr = calYearsRangeStart + i;
     const isCurrent = yr===curYear;
     const isSelected = yr===selYear;
-    return `<div class="cal-cell ${isCurrent?'current':''} ${isSelected?'selected':''}" onclick="calShowMonths(${yr})">${yr}</div>`;
+    return `<div class="cal-cell ${isCurrent?'current':''} ${isSelected?'selected':''}" data-on-click="calShowMonths(${yr})">${yr}</div>`;
   }).join('');
   makeClickablesFocusable(document.getElementById('cal-years-grid'));
 }
@@ -7270,7 +7270,7 @@ function openLevelTestSchedule(){
     const dd = new Date(o.iso + 'T12:00:00');
     const wd = dd.toLocaleDateString(LOCALE_MAP[lang], {weekday:'short'}).replace('.', '');
     const tail = o.isTest ? ICONS.check : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>';
-    return `<button class="lt-opt${o.isTest ? ' current' : ''}${o.today ? ' today' : ''}" ${o.locked ? 'disabled' : ''} onclick="scheduleLevelTestOn('${o.week}', ${o.idx})">
+    return `<button class="lt-opt${o.isTest ? ' current' : ''}${o.today ? ' today' : ''}" ${o.locked ? 'disabled' : ''} data-on-click="scheduleLevelTestOn('${o.week}', ${o.idx})">
       <span class="lt-badge"><b>${dd.getDate()}</b><i>${wd}</i></span>
       <span class="lt-info"><strong>${fmt(o.iso)}${o.today ? ' · ' + t('ltest_day_today') : ''}</strong><small>${sub}</small></span>
       <span class="lt-tail">${tail}</span></button>`;
@@ -7843,8 +7843,8 @@ function renderHomeRecap(){
     '<div class="recap-stats"><div class="recap-stat"><b>' + fmtDist(w.km, 1) + '</b><span>' + distUnit() + '</span></div>' +
     '<div class="recap-stat"><b>' + n + '</b><span>' + t('hist_total_runs') + '</span></div>' +
     '<div class="recap-stat"><b>' + (w.pace ? fmtPace(w.pace) : '--') + '</b><span>' + t('recap_pace') + '</span></div></div>' + delta +
-    '<div class="recap-actions"><button class="btn btn-primary" onclick="shareWeeklyRecapImage()">' + t('hist_share') + '</button>' +
-    '<button class="small-link" onclick="dismissHomeRecap(this.dataset.iso)" data-iso="' + w.iso + '">' + t('recap_done') + '</button></div>';
+    '<div class="recap-actions"><button class="btn btn-primary" data-on-click="shareWeeklyRecapImage()">' + t('hist_share') + '</button>' +
+    '<button class="small-link" data-on-click="dismissHomeRecap(this.dataset.iso)" data-iso="' + w.iso + '">' + t('recap_done') + '</button></div>';
   el.style.display = 'block';
 }
 function dismissHomeRecap(iso){
@@ -8048,7 +8048,7 @@ function racePlanScenarioSec(sec, info){
 }
 function raceRangeHtml(sec, info){
   const r = raceRange(sec, info);
-  const cell = (key, v, id) => '<button type="button" class="rp-range-cell' + (racePlanScenario === id ? ' on' : '') + '" aria-pressed="' + (racePlanScenario === id) + '" onclick="setRacePlanScenario(&quot;' + id + '&quot;)"><span>' + t(key) + '</span><b>' + fmtRaceTime(Math.round(v)) + '</b></button>';
+  const cell = (key, v, id) => '<button type="button" class="rp-range-cell' + (racePlanScenario === id ? ' on' : '') + '" aria-pressed="' + (racePlanScenario === id) + '" data-on-click="setRacePlanScenario(&quot;' + id + '&quot;)"><span>' + t(key) + '</span><b>' + fmtRaceTime(Math.round(v)) + '</b></button>';
   return '<div class="rp-range" role="group" aria-label="' + escapeHtml(t('rp_range_title')) + '"><div class="rp-lbl" style="margin-bottom:8px;">' + t('rp_range_title') + '</div><div class="rp-range-row">'
     + cell('rp_range_bold', r.ambitious, 'bold') + cell('rp_range_likely', r.likely, 'likely') + cell('rp_range_safe', r.prudent, 'safe') + '</div><p class="rp-note" style="margin-top:8px;">' + t('rp_range_note') + '</p></div>';
 }
@@ -8150,7 +8150,7 @@ function openRacePlan(keepScenario){
         const label = fin ? fmtDist(km, km % 1 ? 1 : 0) + ' ' + unit : (unit + ' ' + s.n);
         return '<div class="rp-row' + (fin ? ' fin' : '') + '"><b>' + label + '</b><span class="m">' + fmtMinSec(s.paceMin) + '</span><span class="c">' + fmtRaceTime(Math.round(s.cumSec)) + '</span></div>';
       }).join('') + '</div>' +
-      '<button class="btn btn-primary" onclick="shareRacePlan()">' + t('rp_share') + '</button>';
+      '<button class="btn btn-primary" data-on-click="shareRacePlan()">' + t('rp_share') + '</button>';
   }
   const ov = document.getElementById('race-plan-overlay');
   const scrollEl = ov && (ov.scrollHeight > ov.clientHeight ? ov : box.parentElement);
@@ -8832,11 +8832,11 @@ function buildDayListHtml(wd){
         // sin esto, el click también le llegaba al toggle del día entero y lo volvía a
         // cerrar de golpe en vez de abrir el detalle de la carrera.
         const pMin = run.distanceKm>0.02 ? (run.durationSec/60)/run.distanceKm : 0;
-        doneText += `: <button class="small-link" onclick="event.stopPropagation(); openRunDetail('${run.id}')">${fmtDist(run.distanceKm)}${distUnit()} · ${fmtPace(pMin)}/${distUnit()}</button>`;
+        doneText += `: <button class="small-link" data-on-click="event.stopPropagation(); openRunDetail('${run.id}')">${fmtDist(run.distanceKm)}${distUnit()} · ${fmtPace(pMin)}/${distUnit()}</button>`;
       }
-      statusBlock = canEdit ? `<p style="color:var(--hivis-text); font-weight:700; margin-top:12px;">${doneText} · <button class="small-link" onclick="markSession(${i},null)">${t('plan_undo')}</button></p>` : `<p style="color:var(--hivis-text); font-weight:700; margin-top:12px;">${doneText}${isPastDay?' · '+t('plan_locked'):''}</p>`;
+      statusBlock = canEdit ? `<p style="color:var(--hivis-text); font-weight:700; margin-top:12px;">${doneText} · <button class="small-link" data-on-click="markSession(${i},null)">${t('plan_undo')}</button></p>` : `<p style="color:var(--hivis-text); font-weight:700; margin-top:12px;">${doneText}${isPastDay?' · '+t('plan_locked'):''}</p>`;
     }
-    else if(d.status==='skipped') statusBlock = canEdit ? `<p style="color:var(--danger); font-weight:700; margin-top:12px;">${t('plan_status_skipped')} · <button class="small-link" onclick="markSession(${i},null)">${t('plan_undo')}</button></p>` : `<p style="color:var(--danger); font-weight:700; margin-top:12px;">${t('plan_status_skipped')}${isPastDay?' · '+t('plan_locked'):''}</p>`;
+    else if(d.status==='skipped') statusBlock = canEdit ? `<p style="color:var(--danger); font-weight:700; margin-top:12px;">${t('plan_status_skipped')} · <button class="small-link" data-on-click="markSession(${i},null)">${t('plan_undo')}</button></p>` : `<p style="color:var(--danger); font-weight:700; margin-top:12px;">${t('plan_status_skipped')}${isPastDay?' · '+t('plan_locked'):''}</p>`;
     else if(d.dist>0 && canEdit){
       // El botón "Sincronizar" solo tiene sentido si hay al menos una fuente conectada
       // (Strava/Polar/Wahoo/Health Connect) -- mostrarlo siempre, aunque no haya nada
@@ -8845,13 +8845,13 @@ function buildDayListHtml(wd){
       // recibe datos). Ver deviceConnections / refreshDeviceConnections() más arriba.
       const anyDeviceConnected = deviceConnections.strava || deviceConnections.polar || deviceConnections.wahoo || deviceConnections.coros || deviceConnections.suunto || !!state.healthConnectConnected;
       const showSyncBtn = isToday && anyDeviceConnected;
-      const planBtns = `${showSyncBtn?`<button class="btn btn-outline btn-sm" id="sync-today-btn" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}`;
+      const planBtns = `${showSyncBtn?`<button class="btn btn-outline btn-sm" id="sync-today-btn" data-on-click="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}`;
       if(planBtns) statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">${planBtns}</div>`;
     }
-    if(d.typeKey==='test' && !d.testRead && d.status!=='skipped') statusBlock += `<div style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openLevelTest()">${t('ltest_load_btn')}</button></div>`;
+    if(d.typeKey==='test' && !d.testRead && d.status!=='skipped') statusBlock += `<div style="margin-top:12px;"><button class="btn btn-primary btn-sm" data-on-click="event.stopPropagation(); openLevelTest()">${t('ltest_load_btn')}</button></div>`;
     const kmHtml = isEventDay ? (eventAmountText ? `<span class="day-km-inline">${eventAmountText}</span>` : '') : (d.dist>0 ? `<span class="day-km-inline">${planAmountText(d)}</span>` : (extraRunAmountText ? `<span class="day-km-inline">${extraRunAmountText}</span>` : ''));
     return `<div>
-      <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" data-idx="${i}"${(wd.mode==='current' && canEdit && !isEventDay && !d.status && !d.raceDay) ? (d.dist>0 ? ' data-src="1" data-drop="1"' : ' data-drop="1"') : ''} data-zone="${(d.dist>0 && d.zone && !isEventDay)?d.zone:''}" onclick="toggleDay(${i})">
+      <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" data-idx="${i}"${(wd.mode==='current' && canEdit && !isEventDay && !d.status && !d.raceDay) ? (d.dist>0 ? ' data-src="1" data-drop="1"' : ' data-drop="1"') : ''} data-zone="${(d.dist>0 && d.zone && !isEventDay)?d.zone:''}" data-on-click="toggleDay(${i})">
         <div class="day-badge"><div class="d">${t('day_'+d.day).slice(0,3)}</div>${dateLbl?`<div class="mono muted" style="font-size:10px; margin-top:2px;">${dateLbl}</div>`:''}</div>
         <div class="day-info">
           <div class="day-info-title-row"><span class="t">${lblType}</span></div>
@@ -9045,11 +9045,11 @@ function renderPastWeeks(){
     const doneCount = w.plan.filter(d=>d.dist>0 && d.status==='done').length;
     const totalSessions = w.plan.filter(d=>d.dist>0).length;
     const plannedAmount = isTimeMode() ? `${w.plan.reduce((a,d)=>a+planDurationMin(d),0)} ${t('time_unit_min')}` : `${fmtDist(w.plan.reduce((a,d)=>a+d.dist,0),1)}${distUnit()}`;
-    // Antes esto hacía onclick="viewingWeekOffset=${offset}; renderPlan();", que pisaba la
+    // Antes esto hacía un manejador inline con "viewingWeekOffset = offset; renderPlan();", que pisaba la
     // semana que el usuario tenía abierta en la pestaña Plan -- pedido explícito del usuario:
     // tocar una semana pasada debe abrir una pantalla aparte (ver openWeekDetail), sin tocar
     // el navegador de semana de arriba.
-    return `<div style="padding:10px 0; border-bottom:1px solid var(--asphalt-3); cursor:pointer;" onclick="openWeekDetail(${w.weekNumber})">
+    return `<div style="padding:10px 0; border-bottom:1px solid var(--asphalt-3); cursor:pointer;" data-on-click="openWeekDetail(${w.weekNumber})">
       <div style="display:flex; justify-content:space-between;"><span style="font-weight:700;">${t('plan_week_label',{n:w.weekNumber})}</span><span class="muted mono" style="font-size:11.5px;">${w.weekStart}</span></div>
       <p class="muted" style="margin-top:4px; font-size:12.5px;">${doneCount}/${totalSessions} ${t('home_sessions').toLowerCase()} · ${plannedAmount} ${t('home_km_planned').toLowerCase()}</p>
     </div>`;
@@ -9080,7 +9080,7 @@ function buildWeekDoneListHtml(wd){
     const run = d.linkedRunId ? state.runs.find(r=>r.id===d.linkedRunId) : null;
     const pMin = run && run.distanceKm>0.02 ? (run.durationSec/60)/run.distanceKm : 0;
     const summary = run ? `${fmtDist(run.distanceKm)}${distUnit()} · ${fmtPace(pMin)}/${distUnit()}` : t('plan_status_done');
-    return `<div style="padding:12px 0; border-bottom:1px solid var(--asphalt-3);${run?' cursor:pointer;':''}"${run?` onclick="openRunDetail('${run.id}')"`:''}>
+    return `<div style="padding:12px 0; border-bottom:1px solid var(--asphalt-3);${run?' cursor:pointer;':''}"${run?` data-on-click="openRunDetail('${run.id}')"`:''}>
       <div style="display:flex; justify-content:space-between; align-items:baseline;"><span style="font-weight:700;">${lblType}</span><span class="muted mono" style="font-size:11.5px;">${t('day_'+d.day).slice(0,3)} ${dateLbl}</span></div>
       <p class="muted mono" style="margin-top:4px; font-size:13px;">${summary}</p>
     </div>`;
@@ -9498,8 +9498,8 @@ function renderPainLog(){
         ${painEvolutionHtml(p)}
       </div>
       <div style="display:flex; align-items:center; gap:14px; flex:1 1 100%;">
-        ${p.active ? `<button class="small-link" onclick="openPainUpdate(${p.id})" style="font-size:11.5px; padding:4px 2px;">${t('pain_update_btn')}</button><button class="small-link" onclick="resolvePainLog(${p.id})" style="font-size:11.5px; padding:4px 2px;">${t('pain_resolve_btn')}</button>` : ''}
-        <button onclick="deletePainLog(${p.id})" aria-label="${t('aria_delete')}" style="margin-left:auto; background:none; border:none; color:var(--mist-dim); cursor:pointer; padding:4px; display:flex;"><span class="icon-sq" style="width:16px; height:16px;">${ICONS.trash}</span></button>
+        ${p.active ? `<button class="small-link" data-on-click="openPainUpdate(${p.id})" style="font-size:11.5px; padding:4px 2px;">${t('pain_update_btn')}</button><button class="small-link" data-on-click="resolvePainLog(${p.id})" style="font-size:11.5px; padding:4px 2px;">${t('pain_resolve_btn')}</button>` : ''}
+        <button data-on-click="deletePainLog(${p.id})" aria-label="${t('aria_delete')}" style="margin-left:auto; background:none; border:none; color:var(--mist-dim); cursor:pointer; padding:4px; display:flex;"><span class="icon-sq" style="width:16px; height:16px;">${ICONS.trash}</span></button>
       </div>
     </div>`;
   }).join('');
@@ -9666,8 +9666,8 @@ function renderPerfil(){
             <option value="mixto" ${s.terrain==='mixto'?'selected':''}>${t('ob_terrain_mixto')}</option>
           </select>
           <div style="display:flex; gap:6px;">
-            <button class="btn btn-primary btn-sm" onclick="saveEditShoe(${s.id})">${t('save_word')}</button>
-            <button class="btn btn-outline btn-sm" onclick="cancelEditShoe()">${t('cancel_word')}</button>
+            <button class="btn btn-primary btn-sm" data-on-click="saveEditShoe(${s.id})">${t('save_word')}</button>
+            <button class="btn btn-outline btn-sm" data-on-click="cancelEditShoe()">${t('cancel_word')}</button>
           </div>
         </div>
       </div>`;
@@ -9677,12 +9677,12 @@ function renderPerfil(){
     return `<div class="shoe-row">
       <div class="shoe-icon">${ICONS.shoe}</div>
       <div class="swipe-item">
-        <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" onclick="deleteShoe(${s.id})"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
+        <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" data-on-click="deleteShoe(${s.id})"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
         <div class="swipe-content"><div class="shoe-info">
           <div class="n">${escapeHtml(s.name)} <span class="tag tag-${s.terrain}" style="margin-left:4px;">${t('ob_terrain_'+s.terrain)}</span></div>
           <div class="muted mono" style="font-size:11.5px; margin-top:2px;">${fmtDist(s.km,0)} / ${fmtDist(threshold,0)} ${distUnit()}</div>
           <div class="wearbar ${pct>80?'warn':''}"><div style="width:${pct}%;"></div></div></div>
-          <button class="small-link" style="display:inline-flex;" aria-label="${t('aria_edit')}" onclick="startEditShoe(${s.id})"><span class="icon-sq" style="width:15px; height:15px;">${ICONS.edit}</span></button>
+          <button class="small-link" style="display:inline-flex;" aria-label="${t('aria_edit')}" data-on-click="startEditShoe(${s.id})"><span class="icon-sq" style="width:15px; height:15px;">${ICONS.edit}</span></button>
         </div>
       </div>
     </div>`;
@@ -9706,10 +9706,10 @@ function renderPerfil(){
     evBox.innerHTML = `<p style="font-size:14.5px; font-weight:700;">${escapeHtml(state.event.name)} <span class="tag tag-${state.event.type==='ruta'?'asfalto':state.event.type==='trail'?'trail':'mixto'}">${t('ev_type_'+state.event.type)}</span></p>
       <p class="display" style="font-size:34px; color:var(--hivis-text); margin-top:4px;">${Math.max(0,days)} <span style="font-size:13px; font-family:Inter; color:var(--mist);">${t('perfil_event_days')}</span></p>
       <div style="display:flex; align-items:center; gap:14px; margin-top:6px; flex-wrap:wrap;">
-        <button class="small-link" style="display:flex; align-items:center; gap:5px;" onclick="downloadEventIcs()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.calendar}</span>${t('add_to_calendar')}</button>
+        <button class="small-link" style="display:flex; align-items:center; gap:5px;" data-on-click="downloadEventIcs()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.calendar}</span>${t('add_to_calendar')}</button>
       </div>
       ${paceBlock}
-      <button class="btn btn-danger event-delete-btn" onclick="deleteEvent()">${t('delete_event')}</button>`;
+      <button class="btn btn-danger event-delete-btn" data-on-click="deleteEvent()">${t('delete_event')}</button>`;
     document.getElementById('ev-name').value = state.event.name;
     document.getElementById('ev-distance').value = state.event.distanceKm>0 ? fmtDist(state.event.distanceKm,2) : '';
     document.getElementById('ev-date').value = state.event.date;
@@ -9910,7 +9910,7 @@ const ADMIN_HELP = {
 function admCard(id, title, bodyHtml){
   const help = (ADMIN_HELP[id] || []).map(([k, v]) => '<dt>' + escapeHtml(k) + '</dt><dd>' + escapeHtml(v) + '</dd>').join('');
   return '<div class="card"><div class="adm-head"><h3>' + escapeHtml(title) + '</h3>'
-    + '<button type="button" class="adm-info" onclick="toggleAdminHelp(this)" aria-expanded="false" aria-label="Qué significa ' + escapeHtml(title) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.6" r=".6" fill="currentColor"/></svg></button></div>'
+    + '<button type="button" class="adm-info" data-on-click="toggleAdminHelp(this)" aria-expanded="false" aria-label="Qué significa ' + escapeHtml(title) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.6" r=".6" fill="currentColor"/></svg></button></div>'
     + '<dl class="adm-help" hidden>' + help + '</dl>' + bodyHtml + '</div>';
 }
 function toggleAdminHelp(btn){
@@ -12902,7 +12902,7 @@ function showRunSummaryUI(){
     const hasMap = !!(tracker.points && tracker.points.length > 1);
     mapEl.style.display = hasMap ? 'block' : 'none';
     mapEl.innerHTML = hasMap
-      ? routeSketchSvg(tracker.points) + '<img class="hist-map-img" src="' + buildHistMapStaticUrl({points: tracker.points}, histMapCssWidth(), 150) + '" alt="" decoding="async" onload="this.classList.add(\'loaded\')" onerror="this.style.display=\'none\'">' + (pr ? '<span class="sum-pr-badge">' + t('sum_pr_badge', {label: pr.label}) + '</span>' : '')
+      ? routeSketchSvg(tracker.points) + '<img class="hist-map-img" src="' + buildHistMapStaticUrl({points: tracker.points}, histMapCssWidth(), 150) + '" alt="" decoding="async" data-on-load="this.classList.add(\'loaded\')" data-on-error="this.style.display=\'none\'">' + (pr ? '<span class="sum-pr-badge">' + t('sum_pr_badge', {label: pr.label}) + '</span>' : '')
       : '';
   }
   const hlCard = document.getElementById('sum-highlight');
@@ -13491,7 +13491,7 @@ function renderRacePredictionsCard(){
     }
     return '<div class="pred-row"><span class="pred-label">' + t('pr_label_' + p.key) + '</span><span class="pred-need">' + t('pred_need', {km: fmtDist(p.needKm, 0) + ' ' + distUnit()}) + '</span></div>';
   }).join('');
-  return '<div class="card pred-card"><button class="pred-head" aria-expanded="false" onclick="togglePredictions(this)"><h3>' + t('pred_title') + '</h3><span class="pred-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></button><div class="pred-body" hidden>' + rows + '<p class="muted pred-note">' + t('pred_note') + '</p></div></div>';
+  return '<div class="card pred-card"><button class="pred-head" aria-expanded="false" data-on-click="togglePredictions(this)"><h3>' + t('pred_title') + '</h3><span class="pred-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></button><div class="pred-body" hidden>' + rows + '<p class="muted pred-note">' + t('pred_note') + '</p></div></div>';
 }
 
 // ---- Importar historial de relojes y apps (Strava, Polar, Wahoo, Suunto, COROS, Health Connect) ----
@@ -13565,7 +13565,7 @@ function renderPersonalRecordsCard(){
       const pace = fmtPace((rec.durationSec / 60) / rec.distanceKm) + '/' + distUnit();
       return '<div class="pr-row achieved"><span class="pr-cup">' + CUP_SVG + '</span><div class="pr-info"><b>' + t('pr_label_' + b.key) + '</b><small>' + when + ' · ' + pace + '</small></div>' +
         '<span class="pr-time">' + fmtTime(rec.durationSec) + '</span>' +
-        '<button class="pr-share" onclick="event.stopPropagation(); sharePRImage(\'' + b.key + '\')" aria-label="' + t('aria_share_pr') + '">' + ICONS.share + '</button></div>';
+        '<button class="pr-share" data-on-click="event.stopPropagation(); sharePRImage(\'' + b.key + '\')" aria-label="' + t('aria_share_pr') + '">' + ICONS.share + '</button></div>';
     }
     return '<div class="pr-row"><span class="pr-cup">' + CUP_SVG + '</span><div class="pr-info"><b>' + t('pr_label_' + b.key) + '</b><small>' + t('pr_medal_locked') + '</small></div></div>';
   }).join('') + '</div></div>';
@@ -14115,7 +14115,7 @@ function buildStravaSyncBanner(){
       <div style="min-width:0; flex:1;">
         <p style="margin:0; font-size:13.5px; font-weight:700; color:${color};">${issue.title}</p>
         ${detailHtml}
-        <button class="btn btn-outline btn-sm" style="margin-top:${issue.detail?'0':'10px'};" onclick="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>
+        <button class="btn btn-outline btn-sm" style="margin-top:${issue.detail?'0':'10px'};" data-on-click="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>
       </div>
     </div>
   </div>`;
@@ -14410,7 +14410,7 @@ function renderHistory(){
   const trendsCard = `<div class="card">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
       <h3 style="margin:0;" data-i18n="hist_trends">${t('hist_trends')}</h3>
-      <button class="tap-pad" onclick="shareWeeklyRecapImage()" style="background:none; border:1.5px solid var(--asphalt-4); color:var(--hivis-text); font-size:12px; cursor:pointer; padding:5px 9px; border-radius:6px; display:flex; align-items:center; gap:5px; font-weight:700; flex-shrink:0;">${t('hist_share')}</button>
+      <button class="tap-pad" data-on-click="shareWeeklyRecapImage()" style="background:none; border:1.5px solid var(--asphalt-4); color:var(--hivis-text); font-size:12px; cursor:pointer; padding:5px 9px; border-radius:6px; display:flex; align-items:center; gap:5px; font-weight:700; flex-shrink:0;">${t('hist_share')}</button>
     </div>
     <div class="stat-row-divided">
       <div class="stat-cell"><div class="n">${fmtDist(tr.totalKm,0)}</div><div class="l">${t('hist_total_km')} (${distUnit()})</div></div>
@@ -14419,7 +14419,7 @@ function renderHistory(){
     <div class="trend-bars" id="hist-trend-bars" style="margin-top:46px;">${daily.map((x,i)=>{
       const h = x.km>0 ? Math.max(6, Math.round((x.km/maxKmDay)*70)) : (x.planned ? 4 : 2);
       const cls = (x.km>0 ? '' : (x.planned ? 'trend-planned' : 'trend-rest')) + (i===daily.length-1 ? ' trend-today' : '');
-      return `<div class="trend-col" data-km="${x.km}" data-date="${x.date}" onclick="showTrendTip(this)"><div class="trend-stroke ${cls}" data-h="${h}" style="height:0px; transition-delay:${i*30}ms;"></div><div class="trend-lbl">${x.day}</div></div>`;
+      return `<div class="trend-col" data-km="${x.km}" data-date="${x.date}" data-on-click="showTrendTip(this)"><div class="trend-stroke ${cls}" data-h="${h}" style="height:0px; transition-delay:${i*30}ms;"></div><div class="trend-lbl">${x.day}</div></div>`;
     }).join('')}</div>
   </div>`;
   // Los récords personales se muestran ahora en Logros (Perfil), junto con el resto de
@@ -14428,7 +14428,7 @@ function renderHistory(){
   // reemplaza por el mismo perfil de elevacion que ya es la firma visual de la app
   // (hoy usado como separador en Perfil), agrandado como pieza central acá: "todavia
   // no recorriste este camino" en vez de un ícono de reloj cualquiera.
-  if(!state.runs || state.runs.length===0){ el.innerHTML = stravaSyncCard + trendsCard + `<div class="card empty-card"><div class="empty-track" aria-hidden="true"></div><h3 class="empty-title">${t('hist_empty_title')}</h3><p class="muted" style="margin:0 0 16px;">${t('hist_empty')}</p><button class="btn btn-primary" onclick="showView('correr')">${t('hist_empty_cta')}</button></div>`; animateHistTrendBars(); return; }
+  if(!state.runs || state.runs.length===0){ el.innerHTML = stravaSyncCard + trendsCard + `<div class="card empty-card"><div class="empty-track" aria-hidden="true"></div><h3 class="empty-title">${t('hist_empty_title')}</h3><p class="muted" style="margin:0 0 16px;">${t('hist_empty')}</p><button class="btn btn-primary" data-on-click="showView('correr')">${t('hist_empty_cta')}</button></div>`; animateHistTrendBars(); return; }
   // Buscador simple + encabezados de mes -- con varios meses de historial cargado, una
   // lista plana se vuelve incómoda de recorrer. El buscador filtra por lo que se ve en
   // cada tarjeta (fecha, zapatilla, "manual"/Strava); los encabezados de mes se insertan
@@ -14462,10 +14462,10 @@ function renderHistory(){
       lastMonthKey = monthKey;
     }
     return `${monthHeader}<div class="swipe-item" data-swipe-id="${r.id}">
-      <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" onclick="deleteRun('${r.id}')"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
-      <div class="card hist-card swipe-content" onclick="openRunDetail('${r.id}')" style="cursor:pointer;">
+      <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" data-on-click="deleteRun('${r.id}')"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
+      <div class="card hist-card swipe-content" data-on-click="openRunDetail('${r.id}')" style="cursor:pointer;">
         <div class="hist-top"><span style="font-weight:700;">${dateStr}</span>${hasMap ? '' : `<span class="hist-date">${r.manual? `<span class="tag tag-asfalto" style="margin-right:6px;">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, true)}${fmtTime(r.durationSec)}</span>`}</div>
-        ${hasMap ? `<div class="hist-map" data-run-id="${r.id}">${routeSketchSvg(r.points)}<img class="hist-map-img" src="${buildHistMapStaticUrl(r, histMapCssWidth(), 108)}" loading="lazy" alt="" decoding="async" onload="this.classList.add('loaded')" onerror="this.style.display='none'"><div class="hist-map-badge">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false)}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
+        ${hasMap ? `<div class="hist-map" data-run-id="${r.id}">${routeSketchSvg(r.points)}<img class="hist-map-img" src="${buildHistMapStaticUrl(r, histMapCssWidth(), 108)}" loading="lazy" alt="" decoding="async" data-on-load="this.classList.add('loaded')" data-on-error="this.style.display='none'"><div class="hist-map-badge">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false)}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
         <div class="stat-row-divided">
           <div class="stat-cell"><div class="n">${fmtDist(r.distanceKm)}</div><div class="l">${distUnit()}</div></div>
           <div class="stat-cell"><div class="n">${fmtPace(paceMin)}</div><div class="l">${t('run_pace_word')}</div></div>
@@ -14474,7 +14474,7 @@ function renderHistory(){
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; gap:8px;">
           ${shoe ? `<p class="muted" style="margin:0; font-size:12.5px;">${t('hist_shoe')}: ${escapeHtml(shoe.name)}</p>` : '<span></span>'}
-          <button onclick="event.stopPropagation(); shareRunImage('${r.id}')" style="background:none; border:1px solid var(--asphalt-4); color:var(--mist); font-size:12.5px; cursor:pointer; min-height:var(--tap); padding:0 14px; border-radius:var(--radius-sm); display:flex; align-items:center; gap:5px; font-weight:700; flex-shrink:0;">${t('hist_share')}</button>
+          <button data-on-click="event.stopPropagation(); shareRunImage('${r.id}')" style="background:none; border:1px solid var(--asphalt-4); color:var(--mist); font-size:12.5px; cursor:pointer; min-height:var(--tap); padding:0 14px; border-radius:var(--radius-sm); display:flex; align-items:center; gap:5px; font-weight:700; flex-shrink:0;">${t('hist_share')}</button>
         </div>
       </div>
     </div>`;
@@ -14594,10 +14594,10 @@ function openRunDetail(runId){
   document.getElementById('run-detail-content').innerHTML = `
     <h2 class="subtitle" style="font-size:22px; margin-bottom:2px;">${escapeHtml(r.name) || dateStr}</h2>
     ${r.name ? `<p class="muted" style="margin-bottom:10px;">${dateStr}</p>` : '<div style="margin-bottom:10px;"></div>'}
-    <div class="rd-tabs">${tabs.map(tb=>`<button class="rd-tab-btn" id="rd-tabbtn-${tb}" onclick="switchRDTab('${tb}')">${tabLabels[tb]}</button>`).join('')}</div>
+    <div class="rd-tabs">${tabs.map(tb=>`<button class="rd-tab-btn" id="rd-tabbtn-${tb}" data-on-click="switchRDTab('${tb}')">${tabLabels[tb]}</button>`).join('')}</div>
     ${tabs.map(tb=>`<div class="rd-panel" id="rd-panel-${tb}"></div>`).join('')}
-    <button class="btn btn-outline" style="width:100%; margin-top:24px;" onclick="openEditRun('${r.id}')">${t('edit_run_btn')}</button>
-    <button class="btn btn-danger" style="width:100%; margin-top:12px;" onclick="deleteRun('${r.id}')">${t('hist_delete_run')}</button>
+    <button class="btn btn-outline" style="width:100%; margin-top:24px;" data-on-click="openEditRun('${r.id}')">${t('edit_run_btn')}</button>
+    <button class="btn btn-danger" style="width:100%; margin-top:12px;" data-on-click="deleteRun('${r.id}')">${t('hist_delete_run')}</button>
   `;
   document.getElementById('run-detail-modal').style.display='block';
   switchRDTab(tabs[0]);
@@ -14742,11 +14742,11 @@ function renderRDRuta(panel){
   const fastest = paces.length ? Math.min(...paces) : paceMin;
   panel.innerHTML = `
     <div class="rd-map-full" id="rd-map-full">
-      <div class="rd-map-ph" id="rd-map-ph">${routeSketchSvg(r.points)}<img class="rd-map-ph-img" src="${buildHistMapStaticUrl(r, Math.min(640, window.innerWidth || 400), 340)}" alt="" decoding="async" onload="this.classList.add('loaded')" onerror="this.remove()"></div>
+      <div class="rd-map-ph" id="rd-map-ph">${routeSketchSvg(r.points)}<img class="rd-map-ph-img" src="${buildHistMapStaticUrl(r, Math.min(640, window.innerWidth || 400), 340)}" alt="" decoding="async" data-on-load="this.classList.add('loaded')" data-on-error="this.remove()"></div>
       <div id="rd-route-map" style="height:100%; width:100%;"></div>
       <div class="rd-map-fade"></div>
-      <div class="rd-map-controls"><button onclick="rdRecenterMap()" data-i18n-aria="aria_recenter">${ICONS.locate}</button></div>
-      <div class="rd-map-handle" id="rd-map-handle" onclick="toggleRDMapExpanded()"></div>
+      <div class="rd-map-controls"><button data-on-click="rdRecenterMap()" data-i18n-aria="aria_recenter">${ICONS.locate}</button></div>
+      <div class="rd-map-handle" id="rd-map-handle" data-on-click="toggleRDMapExpanded()"></div>
     </div>
     <div class="rd-ruta-below" id="rd-ruta-below">
       <div class="rd-big-dist">${fmtDist(r.distanceKm)} <span style="font-size:19px; font-weight:700; color:var(--mist);">${distUnit()}</span></div>
@@ -14760,7 +14760,7 @@ function renderRDRuta(panel){
            queda intacto, sin usarse, listo para volver a engancharse acá con solo
            reponer este botón. Se repone ACÁ, en la app de Android y también en la web (en la web el video se comparte con el
            panel del navegador o se descarga; en iPhone pasa antes por api/remux-video para que Fotos/WhatsApp lo acepten). -->
-      ${(r.points && r.points.length > 1) ? `<button class="btn btn-outline btn-sm rd-video-btn" onclick="startDynamicVideo('${r.id}')">${t('rd_video_btn')}</button>` : ''}
+      ${(r.points && r.points.length > 1) ? `<button class="btn btn-outline btn-sm rd-video-btn" data-on-click="startDynamicVideo('${r.id}')">${t('rd_video_btn')}</button>` : ''}
       ${paces.length>1 ? `
         <div class="rd-legend-bar"></div>
         <div class="rd-legend-labels"><span>${t('rd_slowest')} ${fmtPace(slowest)}/${distUnit()}</span><span>${t('rd_fastest')} ${fmtPace(fastest)}/${distUnit()}</span></div>
@@ -15154,7 +15154,7 @@ function renderRDDetalles(panel){
   if(r.elevationGain!=null) tiles.push([t('rd_ascent'), isImperial() ? Math.round(r.elevationGain*3.28084)+' ft' : Math.round(r.elevationGain)+' m']);
   if(r.elevationLoss!=null) tiles.push([t('rd_descent'), isImperial() ? Math.round(r.elevationLoss*3.28084)+' ft' : Math.round(r.elevationLoss)+' m']);
 
-  const shoeSelect = `<select onchange="changeRunShoe('${r.id}', this.value)" style="background:var(--asphalt-3); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:6px 8px; border-radius:6px; font-family:inherit; font-size:13px; max-width:60%;">
+  const shoeSelect = `<select data-on-change="changeRunShoe('${r.id}', this.value)" style="background:var(--asphalt-3); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:6px 8px; border-radius:6px; font-family:inherit; font-size:13px; max-width:60%;">
     <option value="">${t('hist_no_shoe')}</option>
     ${state.shoes.map(s=>`<option value="${s.id}" ${String(s.id)===String(r.shoeId)?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}
   </select>`;
@@ -15212,9 +15212,9 @@ const foldState = {};
 const FOLD_CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
 function foldHead(key, title, infoFn, infoLabel){
   const o = !!foldState[key];
-  const info = infoFn ? '<button class="info-btn" onclick="' + infoFn + '()" aria-label="' + infoLabel + '"><span class="icon-sq" style="width:19px; height:19px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span></button>' : '';
-  return '<div class="fold-head"><button class="pred-head" aria-expanded="' + o + '" onclick="toggleFold(this,\'' + key + '\')"><h3>' + title + '</h3></button>' + info +
-    '<button class="pred-chev" aria-label="' + title + '" aria-expanded="' + o + '" onclick="toggleFold(this,\'' + key + '\')">' + FOLD_CHEV + '</button></div>';
+  const info = infoFn ? '<button class="info-btn" data-on-click="' + infoFn + '()" aria-label="' + infoLabel + '"><span class="icon-sq" style="width:19px; height:19px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span></button>' : '';
+  return '<div class="fold-head"><button class="pred-head" aria-expanded="' + o + '" data-on-click="toggleFold(this,\'' + key + '\')"><h3>' + title + '</h3></button>' + info +
+    '<button class="pred-chev" aria-label="' + title + '" aria-expanded="' + o + '" data-on-click="toggleFold(this,\'' + key + '\')">' + FOLD_CHEV + '</button></div>';
 }
 function foldBodyOpen(key){ return '<div class="pred-body"' + (foldState[key] ? '' : ' hidden') + '>'; }
 function toggleFold(el, key){
@@ -16490,7 +16490,7 @@ function renderChat(){
   const allMsgs = state.chat;
   const msgs = allMsgs.length > chatShown ? allMsgs.slice(-chatShown) : allMsgs;
   let html = '';
-  if(allMsgs.length > msgs.length) html += `<div class="chat-more"><button type="button" onclick="showMoreChat()">${escapeHtml(t('chat_show_older'))}</button></div>`;
+  if(allMsgs.length > msgs.length) html += `<div class="chat-more"><button type="button" data-on-click="showMoreChat()">${escapeHtml(t('chat_show_older'))}</button></div>`;
   let lastDayKey = null;
   for(let i=0;i<msgs.length;i++){
     const m = msgs[i];
@@ -16583,9 +16583,9 @@ function renderChatChips(){
   // Si el ultimo mensaje es de Zonda y termina en pregunta, se ofrecen "Si, dale" / "No, gracias" primero.
   const lastMsg = (state.chat || [])[(state.chat || []).length - 1];
   const askedQuestion = !!(lastMsg && lastMsg.role === 'coach' && typeof lastMsg.text === 'string' && /\?[\s\u{1F300}-\u{1FAFF}\u2600-\u27BF]*$/u.test(lastMsg.text.trim()));
-  const replyChips = askedQuestion ? `<button class="chat-chip chat-chip-yes" onclick="sendChatChip('chat_reply_yes')">${escapeHtml(t('chat_reply_yes'))}</button><button class="chat-chip" onclick="sendChatChip('chat_reply_no')">${escapeHtml(t('chat_reply_no'))}</button>` : '';
+  const replyChips = askedQuestion ? `<button class="chat-chip chat-chip-yes" data-on-click="sendChatChip('chat_reply_yes')">${escapeHtml(t('chat_reply_yes'))}</button><button class="chat-chip" data-on-click="sendChatChip('chat_reply_no')">${escapeHtml(t('chat_reply_no'))}</button>` : '';
   const firstChat = (state.chat || []).length <= 1;
-  const chipsHtml = `<div class="chat-chips${firstChat ? ' big' : ''}">${replyChips}${CHAT_CHIP_KEYS.map(k=>`<button class="chat-chip" onclick="sendChatChip('${k}')">${escapeHtml(t(k))}</button>`).join('')}</div>`;
+  const chipsHtml = `<div class="chat-chips${firstChat ? ' big' : ''}">${replyChips}${CHAT_CHIP_KEYS.map(k=>`<button class="chat-chip" data-on-click="sendChatChip('${k}')">${escapeHtml(t(k))}</button>`).join('')}</div>`;
   log.insertAdjacentHTML('beforeend', chipsHtml);
 }
 function sendChatChip(key){

@@ -40,14 +40,7 @@
      tema equivocado apenas abre la app cada vez que el elegido no coincide con el que
      prefiere el sistema. "system"/sin guardar nada no toca el atributo -- lo resuelve
      solo el CSS con prefers-color-scheme (ver applyTheme() en app.js para el resto). -->
-<script>(function(){
-  try{
-    var pref = localStorage.getItem('zancada_theme');
-    if(pref === 'light' || pref === 'dark') document.documentElement.setAttribute('data-theme', pref);
-    var isLight = pref === 'light' || (pref !== 'dark' && window.matchMedia('(prefers-color-scheme: light)').matches);
-    document.getElementById('theme-color-meta').setAttribute('content', isLight ? '#F2F4EC' : '#0A0A0A');
-  }catch(e){}
-})();</script>
+<script src="/js/boot-theme.js"></script>
 <!-- Mismo motivo que el bloque de arriba (tema), pero para #splash/#login: ninguno de los
      dos tiene display:none por default en el CSS -- se ocultan recién cuando loadUserAndEnter()
      (en app.js, mucho más abajo en el body) confirma que hay sesión Y terminó de traer los
@@ -61,20 +54,7 @@
      vuelta (ver el comentario en init()). dualAuthStorage guarda bajo localStorage O
      sessionStorage según "Recordarme" del login (ver supabaseClient más abajo) -- por eso acá
      se revisan los dos storages, no solo localStorage. -->
-<script>(function(){
-  try{
-    var hasSession = false;
-    for(var i=0; i<localStorage.length && !hasSession; i++){
-      var k = localStorage.key(i);
-      if(k && k.indexOf('sb-') === 0 && k.indexOf('-auth-token') !== -1) hasSession = true;
-    }
-    for(var j=0; j<sessionStorage.length && !hasSession; j++){
-      var k2 = sessionStorage.key(j);
-      if(k2 && k2.indexOf('sb-') === 0 && k2.indexOf('-auth-token') !== -1) hasSession = true;
-    }
-    if(hasSession) document.documentElement.classList.add('zc-maybe-session');
-  }catch(e){}
-})();</script>
+<script src="/js/boot-session.js"></script>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -88,10 +68,11 @@
      haberse solapado desde el principio. crossorigin es obligatorio acá porque las
      fuentes se piden con CORS. -->
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" media="print" data-async-css>
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"></noscript>
-<link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha384-c6Rcwz4e4CITMbu/NBmnNS8yN2sC3cUElMEMfP3vqqKFp7GOYaaBBCqmaWBjmkjb" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha384-c6Rcwz4e4CITMbu/NBmnNS8yN2sC3cUElMEMfP3vqqKFp7GOYaaBBCqmaWBjmkjb" crossorigin="anonymous" media="print" data-async-css>
 <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha384-c6Rcwz4e4CITMbu/NBmnNS8yN2sC3cUElMEMfP3vqqKFp7GOYaaBBCqmaWBjmkjb" crossorigin="anonymous"></noscript>
+<script src="/js/boot-styles.js"></script>
 <style>
   /* ---- Tema oscuro (default) + tema claro ----
      Hubo un modo claro antes, se sacó entero a pedido del usuario, y ahora vuelve a
@@ -2715,28 +2696,7 @@
     <div class="bs-tabbar"><i class="sk"></i><i class="sk"></i><i class="sk bs-run"></i><i class="sk"></i><i class="sk"></i></div>
   </div>
 </div>
-<script>
-/* zcBootDone(): retira la pantalla de arranque. Lo llama app.js cuando ya hay algo real para mostrar (la app, el
-   login o el onboarding). Espera a las tipografias (maximo 500 ms) para que el texto no "salte" al destaparse, y a un
-   minimo de 350 ms para que no parpadee si la carga fue instantanea. Red de seguridad: a los 12 s se retira igual. */
-(function(){
-  var t0 = Date.now(), done = false;
-  // Si la carga tarda más de ~0,9 s, la marca da paso a un esqueleto de Inicio (más tranquilizador que una barrita).
-  setTimeout(function(){ if(done) return; var b = document.getElementById('boot'); if(b) b.classList.add('zc-boot-skel'); }, 900);
-  function remove(){
-    var b = document.getElementById('boot'); if(!b) return;
-    b.classList.add('zc-boot-out');
-    setTimeout(function(){ if(b.parentNode) b.parentNode.removeChild(b); }, 420);
-  }
-  window.zcBootDone = function(){
-    if(done) return; done = true;
-    var wait = Math.max(0, 350 - (Date.now() - t0));
-    var fonts = (document.fonts && document.fonts.ready) ? Promise.race([document.fonts.ready, new Promise(function(r){ setTimeout(r, 500); })]) : Promise.resolve();
-    fonts.then(function(){ setTimeout(remove, wait); }, function(){ setTimeout(remove, wait); });
-  };
-  setTimeout(function(){ window.zcBootDone(); }, 12000);
-})();
-</script>
+<script src="/js/boot-splash.js"></script>
 <div id="app">
   <div class="app-grain" aria-hidden="true"></div>
 
@@ -2771,7 +2731,7 @@
     </div>
 
     <div style="width:100%; max-width:280px; flex-shrink:0; margin-bottom:48px;">
-      <button class="btn btn-primary" data-i18n="start" onclick="goLogin()"></button>
+      <button class="btn btn-primary" data-i18n="start" data-on-click="goLogin()"></button>
     </div>
   </div>
 
@@ -2787,13 +2747,13 @@
     <p class="lead" data-i18n="login_lead_signin"></p>
     <div class="field">
       <label for="login-email" data-i18n="login_email_label"></label>
-      <input type="email" id="login-email" autocomplete="email" data-i18n-ph="login_email_ph" onkeydown="if(event.key==='Enter') handleSignIn();">
+      <input type="email" id="login-email" autocomplete="email" data-i18n-ph="login_email_ph" data-on-keydown="if(event.key==='Enter') handleSignIn();">
     </div>
     <div class="field">
       <label for="login-password" data-i18n="login_password_label"></label>
       <div class="pw-wrap">
-        <input type="password" id="login-password" autocomplete="current-password" data-i18n-ph="login_password_ph" onkeydown="if(event.key==='Enter') handleSignIn();">
-        <button type="button" class="pw-toggle" onclick="togglePasswordVisibility('login-password', this)" data-i18n-aria="aria_show_password"><span class="icon-sq" style="width:18px; height:18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span></button>
+        <input type="password" id="login-password" autocomplete="current-password" data-i18n-ph="login_password_ph" data-on-keydown="if(event.key==='Enter') handleSignIn();">
+        <button type="button" class="pw-toggle" data-on-click="togglePasswordVisibility('login-password', this)" data-i18n-aria="aria_show_password"><span class="icon-sq" style="width:18px; height:18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span></button>
       </div>
       <p class="err-text" id="login-err"></p>
     </div>
@@ -2801,13 +2761,13 @@
       <input type="checkbox" id="login-remember-me" checked>
       <span style="font-size:13.5px; color:var(--chalk);" data-i18n="login_remember_me"></span>
     </label>
-    <div class="field"><button class="btn btn-primary" id="login-submit-btn" data-i18n="login_continue" onclick="handleSignIn()"></button></div>
+    <div class="field"><button class="btn btn-primary" id="login-submit-btn" data-i18n="login_continue" data-on-click="handleSignIn()"></button></div>
     <div class="captcha-box" id="captcha-login"></div>
-    <button class="small-link" id="login-forgot-btn" style="display:block; text-align:center; width:100%; margin-top:14px;" onclick="handleForgotPassword()" data-i18n="login_forgot"></button>
+    <button class="small-link" id="login-forgot-btn" style="display:block; text-align:center; width:100%; margin-top:14px;" data-on-click="handleForgotPassword()" data-i18n="login_forgot"></button>
     <div class="divider-or"><span data-i18n="login_or"></span></div>
-    <button class="btn btn-outline" id="login-google-btn" onclick="handleGoogleSignIn('login-google-btn')"><span data-i18n="login_google"></span></button>
-    <button class="btn btn-outline" id="login-apple-btn" style="display:none; margin-top:10px;" onclick="handleAppleSignIn('login-apple-btn')"><span data-i18n="login_apple"></span></button>
-    <button class="small-link" style="display:block; text-align:center; width:100%; margin-top:18px;" onclick="goSignup()" data-i18n="login_go_signup"></button>
+    <button class="btn btn-outline" id="login-google-btn" data-on-click="handleGoogleSignIn('login-google-btn')"><span data-i18n="login_google"></span></button>
+    <button class="btn btn-outline" id="login-apple-btn" style="display:none; margin-top:10px;" data-on-click="handleAppleSignIn('login-apple-btn')"><span data-i18n="login_apple"></span></button>
+    <button class="small-link" style="display:block; text-align:center; width:100%; margin-top:18px;" data-on-click="goSignup()" data-i18n="login_go_signup"></button>
   </div>
 
   <div class="overlay" id="signup" style="display:none;">
@@ -2822,19 +2782,19 @@
     <p class="lead" data-i18n="signup_lead"></p>
     <div class="field">
       <label for="signup-email" data-i18n="login_email_label"></label>
-      <input type="email" id="signup-email" autocomplete="email" data-i18n-ph="login_email_ph" oninput="updateSignupButtonState()" onkeydown="if(event.key==='Enter') handleSignUp();">
+      <input type="email" id="signup-email" autocomplete="email" data-i18n-ph="login_email_ph" data-on-input="updateSignupButtonState()" data-on-keydown="if(event.key==='Enter') handleSignUp();">
     </div>
     <div class="field">
       <label for="signup-password" data-i18n="login_password_label"></label>
       <div class="pw-wrap">
-        <input type="password" id="signup-password" autocomplete="new-password" minlength="8" data-i18n-ph="login_password_ph" oninput="updateSignupButtonState()" onkeydown="if(event.key==='Enter') handleSignUp();">
-        <button type="button" class="pw-toggle" onclick="togglePasswordVisibility('signup-password', this)" data-i18n-aria="aria_show_password"><span class="icon-sq" style="width:18px; height:18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span></button>
+        <input type="password" id="signup-password" autocomplete="new-password" minlength="8" data-i18n-ph="login_password_ph" data-on-input="updateSignupButtonState()" data-on-keydown="if(event.key==='Enter') handleSignUp();">
+        <button type="button" class="pw-toggle" data-on-click="togglePasswordVisibility('signup-password', this)" data-i18n-aria="aria_show_password"><span class="icon-sq" style="width:18px; height:18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span></button>
       </div>
       <ul class="pw-checklist" data-pw-list="signup-password" data-i18n-aria="password_requirements_hint"></ul>
       <p class="err-text" id="signup-err"></p>
     </div>
     <label class="legal-checkbox-row" for="signup-legal-check">
-      <input type="checkbox" id="signup-legal-check" onchange="updateSignupButtonState()">
+      <input type="checkbox" id="signup-legal-check" data-on-change="updateSignupButtonState()">
       <span>
         <span data-i18n="signup_legal_pre"></span>
         <a href="/terms.html" target="_blank" rel="noopener" style="color:var(--mist); text-decoration:underline;" data-i18n="legal_terms_link"></a>
@@ -2842,12 +2802,12 @@
         <a href="/privacy.html" target="_blank" rel="noopener" style="color:var(--mist); text-decoration:underline;" data-i18n="legal_privacy_link"></a>.
       </span>
     </label>
-    <div class="field"><button class="btn btn-primary" id="signup-submit-btn" data-i18n="login_create_account" onclick="handleSignUp()" disabled></button><p class="btn-reason" id="signup-reason" role="status"></p></div>
+    <div class="field"><button class="btn btn-primary" id="signup-submit-btn" data-i18n="login_create_account" data-on-click="handleSignUp()" disabled></button><p class="btn-reason" id="signup-reason" role="status"></p></div>
     <div class="captcha-box" id="captcha-signup"></div>
     <div class="divider-or"><span data-i18n="login_or"></span></div>
-    <button class="btn btn-outline" id="signup-google-btn" onclick="handleGoogleSignIn('signup-google-btn')"><span data-i18n="login_google"></span></button>
-    <button class="btn btn-outline" id="signup-apple-btn" style="display:none; margin-top:10px;" onclick="handleAppleSignIn('signup-apple-btn')"><span data-i18n="login_apple"></span></button>
-    <button class="small-link" style="display:block; text-align:center; width:100%; margin-top:14px;" onclick="goBackToLogin()" data-i18n="signup_go_login"></button>
+    <button class="btn btn-outline" id="signup-google-btn" data-on-click="handleGoogleSignIn('signup-google-btn')"><span data-i18n="login_google"></span></button>
+    <button class="btn btn-outline" id="signup-apple-btn" style="display:none; margin-top:10px;" data-on-click="handleAppleSignIn('signup-apple-btn')"><span data-i18n="login_apple"></span></button>
+    <button class="small-link" style="display:block; text-align:center; width:100%; margin-top:14px;" data-on-click="goBackToLogin()" data-i18n="signup_go_login"></button>
   </div>
 
   <div class="overlay" id="confirm-email" style="display:none;">
@@ -2861,8 +2821,8 @@
       <span data-i18n="confirm_email_waiting"></span>
     </div>
     <div class="captcha-box" id="captcha-confirm"></div>
-    <div class="field" style="margin-top:26px;"><button class="btn btn-outline" id="confirm-email-resend-btn" data-i18n="confirm_email_resend_btn" onclick="handleResendConfirmation()"></button></div>
-    <button class="small-link" style="display:block; text-align:center; width:100%; margin-top:14px;" onclick="goBackFromConfirmEmail()" data-i18n="confirm_email_back"></button>
+    <div class="field" style="margin-top:26px;"><button class="btn btn-outline" id="confirm-email-resend-btn" data-i18n="confirm_email_resend_btn" data-on-click="handleResendConfirmation()"></button></div>
+    <button class="small-link" style="display:block; text-align:center; width:100%; margin-top:14px;" data-on-click="goBackFromConfirmEmail()" data-i18n="confirm_email_back"></button>
   </div>
 
   <div class="overlay" id="recovery-set-password" style="display:none;">
@@ -2871,38 +2831,38 @@
     <div class="field">
       <label for="recovery-new-pw" data-i18n="login_new_password_label"></label>
       <div class="pw-wrap">
-        <input type="password" id="recovery-new-pw" autocomplete="new-password" minlength="8" data-i18n-ph="login_password_ph" oninput="renderPasswordChecklist('recovery-new-pw')" onkeydown="if(event.key==='Enter') submitNewPassword();">
-        <button type="button" class="pw-toggle" onclick="togglePasswordVisibility('recovery-new-pw', this)" data-i18n-aria="aria_show_password"><span class="icon-sq" style="width:18px; height:18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span></button>
+        <input type="password" id="recovery-new-pw" autocomplete="new-password" minlength="8" data-i18n-ph="login_password_ph" data-on-input="renderPasswordChecklist('recovery-new-pw')" data-on-keydown="if(event.key==='Enter') submitNewPassword();">
+        <button type="button" class="pw-toggle" data-on-click="togglePasswordVisibility('recovery-new-pw', this)" data-i18n-aria="aria_show_password"><span class="icon-sq" style="width:18px; height:18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span></button>
       </div>
       <ul class="pw-checklist" data-pw-list="recovery-new-pw" data-i18n-aria="password_requirements_hint"></ul>
       <p class="err-text" id="recovery-new-pw-err"></p>
     </div>
-    <div class="field"><button class="btn btn-primary" id="recovery-submit-btn" data-i18n="login_recovery_submit" onclick="submitNewPassword()"></button></div>
+    <div class="field"><button class="btn btn-primary" id="recovery-submit-btn" data-i18n="login_recovery_submit" data-on-click="submitNewPassword()"></button></div>
   </div>
 
   <div class="overlay" id="onboard">
     <div class="ob-progress-wrap">
-      <button class="week-nav-btn" id="ob-back-btn" data-i18n-aria="aria_back" onclick="obPrevStep()" style="display:none;"><span class="icon-sq" style="width:15px; height:15px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+      <button class="week-nav-btn" id="ob-back-btn" data-i18n-aria="aria_back" data-on-click="obPrevStep()" style="display:none;"><span class="icon-sq" style="width:15px; height:15px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
       <div class="ob-progress"><div class="ob-progress-fill" id="ob-progress-fill"></div></div>
       <span class="ob-step-count" id="ob-step-count" aria-hidden="true"></span>
-      <button class="small-link" style="flex-shrink:0; white-space:nowrap;" onclick="confirmLogout()" data-i18n="perfil_logout"></button>
+      <button class="small-link" style="flex-shrink:0; white-space:nowrap;" data-on-click="confirmLogout()" data-i18n="perfil_logout"></button>
     </div>
 
     <div class="ob-step active" data-step="1">
       <h2 class="display" data-i18n="ob_title"></h2>
       <p class="lead" data-i18n="ob_lead"></p>
       <div class="field"><label for="ob-name" data-i18n="ob_name_label"></label><input type="text" id="ob-name" data-i18n-ph="ob_name_ph"></div>
-      <div class="field"><button class="btn btn-primary" data-i18n="login_continue" onclick="obNextStep()"></button></div>
+      <div class="field"><button class="btn btn-primary" data-i18n="login_continue" data-on-click="obNextStep()"></button></div>
     </div>
 
     <div class="ob-step" data-step="2">
       <h2 class="display" data-i18n="ob_step2_title"></h2>
       <div class="two-col">
-        <div class="field"><label for="ob-weight" data-i18n="ob_weight_label"></label><input type="number" id="ob-weight" value="70" min="30" max="200" oninput="updateObStep2ButtonState()"></div>
-        <div class="field"><label for="ob-height" data-i18n="ob_height_label"></label><input type="number" id="ob-height" value="170" min="120" max="230" oninput="updateObStep2ButtonState()"></div>
+        <div class="field"><label for="ob-weight" data-i18n="ob_weight_label"></label><input type="number" id="ob-weight" value="70" min="30" max="200" data-on-input="updateObStep2ButtonState()"></div>
+        <div class="field"><label for="ob-height" data-i18n="ob_height_label"></label><input type="number" id="ob-height" value="170" min="120" max="230" data-on-input="updateObStep2ButtonState()"></div>
       </div>
       <div class="field"><label data-i18n="ob_birth_label"></label>
-        <div class="date-box" role="button" tabindex="0" data-i18n-aria="ob_birth_label" onclick="openCalendar('ob-birth','ob-birth-text')"><span class="date-box-text" id="ob-birth-text"></span></div>
+        <div class="date-box" role="button" tabindex="0" data-i18n-aria="ob_birth_label" data-on-click="openCalendar('ob-birth','ob-birth-text')"><span class="date-box-text" id="ob-birth-text"></span></div>
         <input type="hidden" id="ob-birth">
         <p class="muted" style="margin:6px 0 0; font-size:12px; line-height:1.4;" data-i18n="ob_birth_hint"></p>
       </div>
@@ -2926,7 +2886,7 @@
         <textarea id="ob-healthnotes" rows="2" data-i18n-ph="ob_healthnotes_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
       </div>
       <p class="muted" style="margin-top:10px; font-size:12px;" data-i18n="ob_step2_hint"></p>
-      <div class="field"><button class="btn btn-primary" id="ob-step2-continue-btn" data-i18n="login_continue" onclick="obNextStep()" disabled></button><p class="btn-reason" id="ob-step2-reason" role="status"></p></div>
+      <div class="field"><button class="btn btn-primary" id="ob-step2-continue-btn" data-i18n="login_continue" data-on-click="obNextStep()" disabled></button><p class="btn-reason" id="ob-step2-reason" role="status"></p></div>
     </div>
 
     <div class="ob-step" data-step="3">
@@ -2973,7 +2933,7 @@
         <label id="ob-crosstraining-label" data-i18n="ob_crosstraining_label"></label>
         <p class="muted" style="font-size:12px; margin:2px 0 8px;" data-i18n="ob_crosstraining_hint"></p>
         <div class="choice-row" id="ob-sports-selected" role="group" aria-labelledby="ob-crosstraining-label" style="flex-wrap:wrap; display:none;"></div>
-        <button type="button" class="btn btn-outline btn-sm" id="ob-sports-select-btn" style="margin-top:8px; width:100%;" onclick="openSportPicker('ob')" data-i18n="sport_select_btn"></button>
+        <button type="button" class="btn btn-outline btn-sm" id="ob-sports-select-btn" style="margin-top:8px; width:100%;" data-on-click="openSportPicker('ob')" data-i18n="sport_select_btn"></button>
         <div id="ob-sport-days-wrap" style="margin-top:14px; display:none;">
           <label id="ob-sport-days-label" data-i18n="ob_sport_days_label"></label>
           <div class="day-picker" id="ob-sport-days">
@@ -3003,7 +2963,7 @@
         </div>
         <p class="muted" style="margin-top:8px; font-size:12.5px; line-height:1.5;" data-i18n="trainby_tip"></p>
       </div>
-      <div class="field"><button class="btn btn-primary" data-i18n="login_continue" onclick="obNextStep()"></button></div>
+      <div class="field"><button class="btn btn-primary" data-i18n="login_continue" data-on-click="obNextStep()"></button></div>
     </div>
 
     <div class="ob-step" data-step="4">
@@ -3024,7 +2984,7 @@
         <label for="ob-availmin" data-i18n="ob_availmin_label"></label>
         <input type="number" id="ob-availmin" placeholder="45" min="10" max="240">
       </div>
-      <div class="field"><button class="btn btn-primary" data-i18n="login_continue" onclick="obNextStep()"></button></div>
+      <div class="field"><button class="btn btn-primary" data-i18n="login_continue" data-on-click="obNextStep()"></button></div>
     </div>
 
     <div class="ob-step" data-step="5">
@@ -3042,19 +3002,19 @@
           <option value="lifestyle" data-i18n="ob_goal_lifestyle"></option>
         </select>
         <label style="margin-top:14px;" data-i18n="ob_racedate_label"></label>
-        <div class="date-box" role="button" tabindex="0" data-i18n-aria="ob_racedate_label" onclick="openCalendar('ob-racedate','ob-racedate-text')"><span class="date-box-text placeholder" id="ob-racedate-text"></span></div>
+        <div class="date-box" role="button" tabindex="0" data-i18n-aria="ob_racedate_label" data-on-click="openCalendar('ob-racedate','ob-racedate-text')"><span class="date-box-text placeholder" id="ob-racedate-text"></span></div>
         <input type="hidden" id="ob-racedate">
         <p class="muted" style="margin-top:6px;" data-i18n="ob_racedate_hint"></p>
       </div>
       <p class="ob-callout" style="margin:4px 0 14px;" data-i18n="ob_test_note"></p>
-      <div class="field"><button class="btn btn-primary" data-i18n="ob_submit" onclick="finishOnboard()"></button></div>
+      <div class="field"><button class="btn btn-primary" data-i18n="ob_submit" data-on-click="finishOnboard()"></button></div>
     </div>
   </div>
 
   <header class="top" id="mainHeader" style="display:none;">
     <div class="brand"><div class="dot"></div><span>ZANCADA</span></div>
     <div style="display:flex; align-items:center; gap:8px;">
-      <span id="sync-pending-badge" class="tag tag-soon" role="button" tabindex="0" data-i18n-aria="sync_pending_title" style="display:none; align-items:center; gap:4px; cursor:pointer;" onclick="showToast(t('sync_pending_title'),'info')"><span class="icon-sq" style="width:11px; height:11px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span></span>
+      <span id="sync-pending-badge" class="tag tag-soon" role="button" tabindex="0" data-i18n-aria="sync_pending_title" style="display:none; align-items:center; gap:4px; cursor:pointer;" data-on-click="showToast(t('sync_pending_title'),'info')"><span class="icon-sq" style="width:11px; height:11px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span></span>
       <div class="header-view-title" id="header-view-title" aria-hidden="true"></div>
       <div class="muted mono" id="headerDate" style="font-size:12px;"></div>
     </div>
@@ -3067,45 +3027,45 @@
   <section class="view" id="view-inicio">
     <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:14px 0 4px;">
       <p class="greeting" style="margin:0;"><span id="home-hi"></span> <span id="home-name" style="font-weight:800;">—</span> 👋</p>
-      <div class="streak-badge" id="home-streak-badge" style="display:none; cursor:pointer;" onclick="openPreferencesOverlay()"></div>
+      <div class="streak-badge" id="home-streak-badge" style="display:none; cursor:pointer;" data-on-click="openPreferencesOverlay()"></div>
       <div class="wx-chip" id="home-wx" style="display:none;"></div>
     </div>
 
     <div class="card" id="history-calib-card" style="display:none;">
       <h3 data-i18n="calib_title"></h3>
       <p class="muted" id="history-calib-text" style="margin:2px 0 14px;"></p>
-      <button class="btn btn-primary" onclick="applyHistoryCalibration()" data-i18n="calib_apply"></button>
-      <button class="small-link" style="display:block; margin:12px auto 0;" onclick="dismissHistoryCalibration()" data-i18n="hist_import_skip"></button>
+      <button class="btn btn-primary" data-on-click="applyHistoryCalibration()" data-i18n="calib_apply"></button>
+      <button class="small-link" style="display:block; margin:12px auto 0;" data-on-click="dismissHistoryCalibration()" data-i18n="hist_import_skip"></button>
     </div>
 
     <div class="card" id="home-test-banner" style="display:none; border-color:var(--hivis);">
       <h3 style="margin:0 0 6px;" data-i18n="ltest_banner_title"></h3>
       <p class="muted" style="margin:0 0 12px; font-size:13px; line-height:1.5;" data-i18n="ltest_banner_desc"></p>
-      <button class="btn btn-primary" style="width:100%;" onclick="openLevelTest()" data-i18n="ltest_banner_btn"></button>
+      <button class="btn btn-primary" style="width:100%;" data-on-click="openLevelTest()" data-i18n="ltest_banner_btn"></button>
     </div>
 
     <div class="card" id="home-test-missed" style="display:none; border-color:var(--hivis);">
       <h3 style="margin:0 0 6px;" data-i18n="ltest_missed_title"></h3>
       <p class="muted" id="home-test-missed-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
-      <button class="btn btn-primary" style="width:100%;" onclick="openLevelTestSchedule()" data-i18n="ltest_missed_btn"></button>
+      <button class="btn btn-primary" style="width:100%;" data-on-click="openLevelTestSchedule()" data-i18n="ltest_missed_btn"></button>
     </div>
 
     <div class="card" id="home-adjust-card" style="display:none;">
       <h3 style="margin:0 0 6px;" data-i18n="adjust_title"></h3>
       <p class="muted" id="home-adjust-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
-      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-primary" onclick="askZondaAdjustWeek()" data-i18n="adjust_btn"></button><button class="small-link" onclick="dismissAdjustWeek()" data-i18n="adjust_later"></button></div>
+      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-primary" data-on-click="askZondaAdjustWeek()" data-i18n="adjust_btn"></button><button class="small-link" data-on-click="dismissAdjustWeek()" data-i18n="adjust_later"></button></div>
     </div>
 
     <div class="card" id="home-load-card" style="display:none; border-color:var(--hivis);">
       <h3 style="margin:0 0 6px;" data-i18n="load_title"></h3>
       <p class="muted" id="home-load-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
-      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-primary" onclick="askZondaLowerLoad()" data-i18n="load_btn"></button><button class="small-link" onclick="dismissLoadCard()" data-i18n="load_ok"></button></div>
+      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-primary" data-on-click="askZondaLowerLoad()" data-i18n="load_btn"></button><button class="small-link" data-on-click="dismissLoadCard()" data-i18n="load_ok"></button></div>
     </div>
 
     <div class="card" id="home-return-card" style="display:none; border-color:var(--hivis);">
       <h3 style="margin:0 0 6px;" id="home-return-title"></h3>
       <p class="muted" id="home-return-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
-      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-primary" onclick="applyReturnPlan()" data-i18n="return_btn"></button><button class="small-link" onclick="dismissReturnCard()" data-i18n="return_later"></button></div>
+      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-primary" data-on-click="applyReturnPlan()" data-i18n="return_btn"></button><button class="small-link" data-on-click="dismissReturnCard()" data-i18n="return_later"></button></div>
     </div>
 
     <div class="card" id="home-pain-card" style="display:none; border-color:var(--hivis);">
@@ -3115,13 +3075,13 @@
         <div class="choice" data-v="same" data-i18n="pain_trend_same"></div>
         <div class="choice" data-v="worse" data-i18n="pain_trend_worse"></div>
       </div>
-      <div class="recap-actions" style="margin-top:10px;"><button class="small-link" onclick="dismissHomePain()" data-i18n="pain_home_later"></button></div>
+      <div class="recap-actions" style="margin-top:10px;"><button class="small-link" data-on-click="dismissHomePain()" data-i18n="pain_home_later"></button></div>
     </div>
 
     <div class="card" id="home-recal-card" style="display:none; border-color:var(--hivis);">
       <h3 style="margin:0 0 6px;" id="home-recal-title"></h3>
       <p class="muted" id="home-recal-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
-      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-primary" onclick="startRecalibration()" data-i18n="recal_btn"></button><button class="small-link" onclick="dismissRecal()" data-i18n="recal_later"></button></div>
+      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-primary" data-on-click="startRecalibration()" data-i18n="recal_btn"></button><button class="small-link" data-on-click="dismissRecal()" data-i18n="recal_later"></button></div>
     </div>
 
     <div class="card recap-card" id="home-recap-card" style="display:none;"></div>
@@ -3129,8 +3089,8 @@
     <div class="card" id="install-banner" style="display:none; align-items:center; gap:12px;">
       <span class="icon-sq" style="width:22px; height:22px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
       <p id="install-banner-text" style="flex:1; min-width:0; margin:0; font-size:13px; line-height:1.4; color:var(--mist);"></p>
-      <button class="btn btn-primary btn-sm" id="install-banner-btn" style="flex-shrink:0; display:none;" onclick="triggerInstallPrompt()"></button>
-      <button class="info-btn" onclick="dismissInstallBanner()" style="flex-shrink:0;" data-i18n-aria="aria_close"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span></button>
+      <button class="btn btn-primary btn-sm" id="install-banner-btn" style="flex-shrink:0; display:none;" data-on-click="triggerInstallPrompt()"></button>
+      <button class="info-btn" data-on-click="dismissInstallBanner()" style="flex-shrink:0;" data-i18n-aria="aria_close"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span></button>
     </div>
 
     <div class="home-section-label" data-i18n="home_section_today"></div>
@@ -3138,7 +3098,7 @@
     <div class="card-shell card-shell-hivis" id="home-next-card-shell">
     <div class="card card-highlight" id="home-next-card">
       <h3 id="home-next-card-title" data-i18n="home_next"></h3>
-      <div class="next-session" id="home-next-session" role="button" tabindex="0" onclick="toggleHomeNextDetail()" aria-expanded="false" aria-controls="home-next-detail">
+      <div class="next-session" id="home-next-session" role="button" tabindex="0" data-on-click="toggleHomeNextDetail()" aria-expanded="false" aria-controls="home-next-detail">
         <div style="min-width:0;"><div class="big display" id="home-next-title">—</div></div>
         <div style="text-align:right; flex-shrink:0;"><div class="day-dist" id="home-next-dist"></div><div id="home-next-zone" style="margin-top:6px;"></div></div>
       </div>
@@ -3147,7 +3107,7 @@
           <div class="next-session-bullets" id="home-next-desc"></div>
         </div>
       </div>
-      <div class="next-session-hint" id="home-next-hint" role="button" tabindex="0" onclick="toggleHomeNextDetail()" aria-expanded="false" aria-controls="home-next-detail">
+      <div class="next-session-hint" id="home-next-hint" role="button" tabindex="0" data-on-click="toggleHomeNextDetail()" aria-expanded="false" aria-controls="home-next-detail">
         <span id="home-next-hint-label" data-i18n="home_next_see_detail"></span>
         <span class="icon-sq" id="home-next-hint-chevron" style="width:13px; height:13px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
       </div>
@@ -3205,7 +3165,7 @@
       <p class="muted" id="home-race-phase-note" style="font-size:12.5px; margin:10px 0 0; display:none; line-height:1.4;"></p>
     </div>
 
-    <div class="card rp-entry" id="home-raceplan-entry" role="button" tabindex="0" onclick="openRacePlan()" style="display:none;">
+    <div class="card rp-entry" id="home-raceplan-entry" role="button" tabindex="0" data-on-click="openRacePlan()" style="display:none;">
       <span class="rp-entry-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg></span>
       <div class="rp-entry-txt"><b data-i18n="rp_entry_title"></b><span id="home-raceplan-sub"></span></div>
       <span class="rp-entry-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span>
@@ -3254,7 +3214,7 @@
     </div>
 
     <div class="card card-quiet" id="home-race-tips-card">
-      <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" onclick="openRaceTipsInfo()">
+      <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" data-on-click="openRaceTipsInfo()">
         <h3 style="margin:0;" data-i18n="home_race_tips_title"></h3>
         <span class="icon-sq" style="width:16px; height:16px; color:var(--mist); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span>
       </div>
@@ -3265,7 +3225,7 @@
     </div>
 
     <div class="card card-quiet" id="install-help-card">
-      <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleInstallHelp(event)" aria-expanded="false" aria-controls="install-help-body">
+      <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" data-on-click="toggleInstallHelp(event)" aria-expanded="false" aria-controls="install-help-body">
         <h3 style="margin:0;" data-i18n="home_install_help_title"></h3>
         <span class="icon-sq" id="install-help-chevron" style="width:16px; height:16px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
       </div>
@@ -3281,9 +3241,9 @@
   <section class="view" id="view-plan">
     <h2 class="display" style="font-size:25px; margin-bottom:4px;" data-i18n="plan_title"></h2>
     <div class="week-nav">
-      <button class="week-nav-btn" id="plan-prev-btn" onclick="navigateWeek(-1)" data-i18n-aria="aria_week_prev"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+      <button class="week-nav-btn" id="plan-prev-btn" data-on-click="navigateWeek(-1)" data-i18n-aria="aria_week_prev"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
       <p class="week-nav-label" id="plan-week-info"></p>
-      <button class="week-nav-btn" id="plan-next-btn" onclick="navigateWeek(1)" data-i18n-aria="aria_week_next"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span></button>
+      <button class="week-nav-btn" id="plan-next-btn" data-on-click="navigateWeek(1)" data-i18n-aria="aria_week_next"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span></button>
     </div>
     <!-- Antes la etiqueta de estado (Descarga/Estimado, puede ajustarse/Semana pasada/etc.)
          iba pegada DENTRO de #plan-week-info, en la misma línea sin wrap que "Semana N" --
@@ -3300,7 +3260,7 @@
          meta nueva. El botón abre Datos personales, que es donde se eligen objetivo y fecha de carrera. -->
     <div id="plan-post-race" style="display:none; margin-bottom:14px;">
       <p class="muted" style="margin-bottom:10px;" data-i18n="plan_post_race_banner"></p>
-      <button class="btn btn-outline btn-sm" data-i18n="plan_post_race_cta" onclick="openPersonalDataOverlay()"></button>
+      <button class="btn btn-outline btn-sm" data-i18n="plan_post_race_cta" data-on-click="openPersonalDataOverlay()"></button>
     </div>
     <p class="muted" id="plan-taper-note" style="display:none; color:var(--hivis-text); margin-bottom:14px;"></p>
     <p class="muted" id="plan-event-week-note" style="display:none; color:var(--hivis-text); margin-bottom:14px;"></p>
@@ -3308,16 +3268,16 @@
     <p class="muted" id="plan-recovery-note" style="display:none; color:var(--hivis-text); margin-bottom:14px;"></p>
     <div class="card" id="plan-list"></div>
     <div class="plan-secondary-actions">
-      <button class="plan-secondary-btn" onclick="goCoachWithPrompt('')"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v11H8l-4 4v-4H4z"/></svg></span><span data-i18n="plan_adjust"></span></button>
+      <button class="plan-secondary-btn" data-on-click="goCoachWithPrompt('')"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v11H8l-4 4v-4H4z"/></svg></span><span data-i18n="plan_adjust"></span></button>
     </div>
     <div class="card" id="perfil-ltest-card" style="margin-top:6px;">
       <h3 data-i18n="ltest_perfil_title"></h3>
       <p class="muted" id="perfil-ltest-text" style="margin-top:8px; font-size:13px; line-height:1.5;"></p>
       <p id="perfil-ltest-sched" style="display:none; margin-top:8px; font-size:13px; font-weight:700; color:var(--hivis-text);"></p>
-      <button class="btn btn-primary" style="width:100%; margin-top:12px;" onclick="openLevelTestSchedule()" data-i18n="ltest_perfil_btn"></button>
+      <button class="btn btn-primary" style="width:100%; margin-top:12px;" data-on-click="openLevelTestSchedule()" data-i18n="ltest_perfil_btn"></button>
     </div>
     <div id="past-weeks-card" style="display:none; margin-top:14px;">
-      <button type="button" class="btn btn-gray" id="past-weeks-toggle" aria-expanded="false" aria-controls="past-weeks-list-wrap" onclick="togglePastWeeks()" style="justify-content:space-between;">
+      <button type="button" class="btn btn-gray" id="past-weeks-toggle" aria-expanded="false" aria-controls="past-weeks-list-wrap" data-on-click="togglePastWeeks()" style="justify-content:space-between;">
         <span data-i18n="plan_past_weeks"></span>
         <span class="icon-sq" id="past-weeks-chevron" style="width:16px; height:16px; transition:transform .2s var(--ease-out);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
       </button>
@@ -3332,7 +3292,7 @@
     <p id="geo-warning" role="alert" style="display:none;"></p>
     <!-- Cuenta regresiva de 3 segundos antes de arrancar a correr -- ver el comentario largo
          junto a #runCountdown en el CSS y startRunWithCountdown() en app.js. -->
-    <div id="runCountdown" onclick="cancelRunCountdown()"><div class="countdown-num display" id="countdown-num">3</div><p class="countdown-hint" data-i18n="run_countdown_cancel"></p></div>
+    <div id="runCountdown" data-on-click="cancelRunCountdown()"><div class="countdown-num display" id="countdown-num">3</div><p class="countdown-hint" data-i18n="run_countdown_cancel"></p></div>
     <div id="runIdle">
       <div class="card" id="run-done-today-card" style="display:none; text-align:left; margin-top:10px;">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
@@ -3368,12 +3328,12 @@
            de "ahora", no algo que tenga sentido recordar entre sesiones) que startRun() lee
            para decidir si arma la guía/voz del entrenamiento o no. -->
       <div class="run-mode-choice" id="run-mode-choice" style="display:none;">
-        <button class="run-mode-card" id="run-mode-scheduled" onclick="selectRunMode('scheduled')">
+        <button class="run-mode-card" id="run-mode-scheduled" data-on-click="selectRunMode('scheduled')">
           <span class="tag tag-asfalto" data-i18n="run_mode_scheduled_tag"></span>
           <strong id="run-mode-scheduled-type"></strong>
           <span class="muted" id="run-mode-scheduled-desc"></span>
         </button>
-        <button class="run-mode-card" id="run-mode-free" onclick="selectRunMode('free')">
+        <button class="run-mode-card" id="run-mode-free" data-on-click="selectRunMode('free')">
           <strong data-i18n="run_mode_free_title"></strong>
           <span class="muted" data-i18n="run_mode_free_desc"></span>
         </button>
@@ -3389,7 +3349,7 @@
           <line class="rbr-finish" x1="90" y1="262" x2="145" y2="262"/>
           <line class="rbr-finish rbr-finish-dim" x1="90" y1="254" x2="145" y2="254"/>
         </svg></div>
-        <button class="go-circle" onclick="startRun()"><span class="display" data-i18n="run_start"></span><span style="font-size:12.5px; opacity:.7; margin-top:2px;" data-i18n="run_start_hint"></span></button>
+        <button class="go-circle" data-on-click="startRun()"><span class="display" data-i18n="run_start"></span><span style="font-size:12.5px; opacity:.7; margin-top:2px;" data-i18n="run_start_hint"></span></button>
       </div>
     </div>
 
@@ -3407,7 +3367,7 @@
            también actualiza Perfil, y viceversa. innerHTML del ícono lo pone JS
            (updateRunMuteBtn(), llamado al arrancar la carrera) porque el estado real
            (silenciado o no) puede venir de una sesión anterior. -->
-      <p class="run-rec-row"><span class="rec-dot" id="run-rec-dot"></span><span class="muted" id="run-recording-label" style="text-transform:uppercase; font-size:11px; letter-spacing:.07em;" data-i18n="run_recording"></span><button class="run-mute-btn" id="run-mute-btn" onclick="toggleRunVoice()"></button></p>
+      <p class="run-rec-row"><span class="rec-dot" id="run-rec-dot"></span><span class="muted" id="run-recording-label" style="text-transform:uppercase; font-size:11px; letter-spacing:.07em;" data-i18n="run_recording"></span><button class="run-mute-btn" id="run-mute-btn" data-on-click="toggleRunVoice()"></button></p>
 
       <div class="track-active-group">
         <div class="track-topstats">
@@ -3442,7 +3402,7 @@
           </div>
           <div id="workout-guide-pending">
             <p class="muted" id="workout-guide-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
-            <button class="btn btn-primary btn-sm" id="workout-guide-start-btn" onclick="beginWorkoutReps()"></button>
+            <button class="btn btn-primary btn-sm" id="workout-guide-start-btn" data-on-click="beginWorkoutReps()"></button>
           </div>
           <!-- target/remaining en números, no solo la barra de progreso -- pedido del
                usuario: "que se vea en la pantalla que hay que hacer, cuantos metros o
@@ -3468,11 +3428,11 @@
           <p class="live-pace" id="workout-guide-pace" style="display:none;"></p>
         </div>
 
-        <button class="track-pause-circle" onclick="togglePause()" data-i18n-aria="run_pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4.5" height="14" rx="1.5"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.5"/></svg></button>
+        <button class="track-pause-circle" data-on-click="togglePause()" data-i18n-aria="run_pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4.5" height="14" rx="1.5"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.5"/></svg></button>
       </div>
 
       <div class="track-paused-group">
-        <div class="map-wrap"><div id="liveMap"></div><button class="map-recenter-btn" onclick="recenterMap()" data-i18n-aria="aria_recenter"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></button></div>
+        <div class="map-wrap"><div id="liveMap"></div><button class="map-recenter-btn" data-on-click="recenterMap()" data-i18n-aria="aria_recenter"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></button></div>
 
         <div class="stat-row track-paused-stats">
           <div class="stat-box"><div class="n mono" id="track-pdist">0.00</div><div class="l" id="track-pdist-label" data-i18n="run_km"></div></div>
@@ -3482,14 +3442,14 @@
         </div>
 
         <div class="track-paused-actions">
-          <button class="track-stop-circle" onclick="stopRun()" data-i18n-aria="run_finish"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg></button>
+          <button class="track-stop-circle" data-on-click="stopRun()" data-i18n-aria="run_finish"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg></button>
           <!-- Triángulo recentrado a mano (x inicial 5.75, no el 8 de ICONS.play): ese path
                original deja el triángulo ~2.3 unidades corrido a la derecha del centro real del
                viewBox -- un truco óptico clásico para un botón de play solo, pero acá al lado
                de un cuadrado de stop perfectamente centrado se notaba, el usuario lo marcó como
                "descentrado". No se tocó ICONS.play (el ícono compartido) para no afectar otros
                usos -- este es un path aparte, solo para este botón. -->
-          <button class="track-pause-circle" onclick="togglePause()" data-i18n-aria="run_resume"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.75 5.2v13.6a1 1 0 0 0 1.52.85l11-6.8a1 1 0 0 0 0-1.7l-11-6.8A1 1 0 0 0 5.75 5.2z"/></svg></button>
+          <button class="track-pause-circle" data-on-click="togglePause()" data-i18n-aria="run_resume"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.75 5.2v13.6a1 1 0 0 0 1.52.85l11-6.8a1 1 0 0 0 0-1.7l-11-6.8A1 1 0 0 0 5.75 5.2z"/></svg></button>
         </div>
       </div>
     </div>
@@ -3509,8 +3469,8 @@
       <div class="card hl-card" id="sum-highlight" style="display:none;"><span class="hl-kicker" data-i18n="nav_coach"></span><p id="sum-highlight-text"></p></div>
       <div class="card sum-pr" id="sum-pr" style="display:none;"><span class="sum-pr-medal" id="sum-pr-medal"></span><div><b id="sum-pr-title"></b><span id="sum-pr-sub"></span></div></div>
       <div class="card"><h3 id="sum-shoe-label" data-i18n="run_summary_shoe_q"></h3><div class="field" style="margin-top:12px;"><select id="sum-shoe" aria-labelledby="sum-shoe-label"></select></div></div>
-      <button class="btn btn-primary" data-i18n="hist_share" onclick="shareSummaryRun()"></button>
-      <button class="btn btn-gray" style="margin-top:10px;" data-i18n="run_summary_done" onclick="closeSummary()"></button>
+      <button class="btn btn-primary" data-i18n="hist_share" data-on-click="shareSummaryRun()"></button>
+      <button class="btn btn-gray" style="margin-top:10px;" data-i18n="run_summary_done" data-on-click="closeSummary()"></button>
     </div>
   </section>
 
@@ -3518,17 +3478,17 @@
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:10px;">
       <div style="display:flex; align-items:center; gap:8px; min-width:0;">
         <h2 class="display" style="font-size:25px; margin:0;" data-i18n="hist_title"></h2>
-        <button class="info-btn" onclick="openHistInfo()" data-i18n-aria="hist_info_title"><span class="icon-sq" style="width:19px; height:19px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span></button>
+        <button class="info-btn" data-on-click="openHistInfo()" data-i18n-aria="hist_info_title"><span class="icon-sq" style="width:19px; height:19px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span></button>
       </div>
       <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
-        <button class="hist-add-btn" id="hist-heat-btn" style="display:none;" onclick="openHeatmap()" data-i18n-aria="heat_title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5l6-2.5 6 2.5 6-2.5v13.5l-6 2.5-6-2.5-6 2.5z"/><path d="M9 4v13.5M15 6.5V20"/></svg></button>
-        <button class="hist-add-btn" onclick="toggleManualForm()" data-i18n-aria="hist_manual_add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+        <button class="hist-add-btn" id="hist-heat-btn" style="display:none;" data-on-click="openHeatmap()" data-i18n-aria="heat_title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5l6-2.5 6 2.5 6-2.5v13.5l-6 2.5-6-2.5-6 2.5z"/><path d="M9 4v13.5M15 6.5V20"/></svg></button>
+        <button class="hist-add-btn" data-on-click="toggleManualForm()" data-i18n-aria="hist_manual_add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
       </div>
     </div>
     <div class="card" id="manual-run-card" style="display:none;">
       <h3 data-i18n="hist_manual_title"></h3>
       <div class="field"><label data-i18n="hist_manual_date"></label>
-        <div class="date-box" role="button" tabindex="0" data-i18n-aria="hist_manual_date" onclick="openCalendar('man-date','man-date-text')"><span class="date-box-text" id="man-date-text"></span></div>
+        <div class="date-box" role="button" tabindex="0" data-i18n-aria="hist_manual_date" data-on-click="openCalendar('man-date','man-date-text')"><span class="date-box-text" id="man-date-text"></span></div>
         <input type="hidden" id="man-date">
       </div>
       <div class="two-col">
@@ -3537,7 +3497,7 @@
       </div>
       <div class="field"><label for="man-hr" data-i18n="hist_manual_hr"></label><input type="number" id="man-hr"></div>
       <div class="field"><label for="man-shoe" data-i18n="run_summary_shoe_q"></label><select id="man-shoe"></select></div>
-      <button class="btn btn-primary btn-sm" id="man-save-btn" style="width:100%; margin-top:6px;" data-i18n="hist_manual_save" onclick="saveManualRun()"></button>
+      <button class="btn btn-primary btn-sm" id="man-save-btn" style="width:100%; margin-top:6px;" data-i18n="hist_manual_save" data-on-click="saveManualRun()"></button>
     </div>
     <!-- Encontrado en una auditoría: este buscador tenía su propio border/padding/font-size
          de un pixelado distinto al resto de los inputs del sistema, incluyendo un font-size
@@ -3545,7 +3505,7 @@
          los inputs evita a propósito con 16px (ver el comentario grande de .field input).
          Mantiene la forma píldora (999px, un token válido) pero ahora respeta el mismo
          borde/padding/tamaño de fuente que cualquier otro campo de texto de la app. -->
-    <input type="text" id="hist-search" data-i18n-ph="hist_search_ph" data-i18n-aria="hist_search_ph" oninput="renderHistory()" style="width:100%; margin-bottom:14px; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px 16px; border-radius:999px; font-size:16px; font-family:inherit;">
+    <input type="text" id="hist-search" data-i18n-ph="hist_search_ph" data-i18n-aria="hist_search_ph" data-on-input="renderHistory()" style="width:100%; margin-bottom:14px; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px 16px; border-radius:999px; font-size:16px; font-family:inherit;">
     <div id="history-list"></div>
   </section>
 
@@ -3556,7 +3516,7 @@
        encima (mismo z-index:50 que esta -- en un empate, gana el que está después en el
        DOM), y Historial tiene que quedar arriba, no tapado por esta pantalla. -->
   <div class="overlay overlay-sheet" id="week-detail-modal">
-    <button class="week-nav-btn" onclick="closeWeekDetail()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closeWeekDetail()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" id="week-detail-title"></h2>
     <div class="card" id="week-detail-list" style="margin-top:16px;"></div>
   </div>
@@ -3567,7 +3527,7 @@
        de escritura sobre el calendario del usuario). Esta URL es la misma siempre -- el
        propio Calendario del usuario la vuelve a pedir solo. -->
   <div class="overlay overlay-sheet" id="calendar-sub-modal">
-    <button class="week-nav-btn" onclick="closeCalendarSubscribe()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closeCalendarSubscribe()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="cal_sub_title"></h2>
     <p class="muted" style="margin-top:10px;" data-i18n="cal_sub_desc"></p>
     <div class="card mono" id="cal-sub-link" style="margin-top:16px; font-size:12.5px; word-break:break-all; color:var(--mist);"></div>
@@ -3578,34 +3538,34 @@
     <!-- App nativa de Android: escribe directo en el calendario del teléfono (permiso de
          Calendario) como Huawei Health y otras -- un toque, sin archivos ni enlaces. Los otros
          botones de abajo son para iPhone (webcal://) y para Android sin la app. -->
-    <button class="btn btn-primary" id="cal-sub-btn-native" style="width:100%; margin-top:20px;" onclick="enableNativeCalendar()" data-i18n="cal_native_add"></button>
-    <button class="btn btn-outline" id="cal-sub-btn-native-remove" style="width:100%; margin-top:12px;" onclick="disableNativeCalendar()" data-i18n="cal_native_remove"></button>
+    <button class="btn btn-primary" id="cal-sub-btn-native" style="width:100%; margin-top:20px;" data-on-click="enableNativeCalendar()" data-i18n="cal_native_add"></button>
+    <button class="btn btn-outline" id="cal-sub-btn-native-remove" style="width:100%; margin-top:12px;" data-on-click="disableNativeCalendar()" data-i18n="cal_native_remove"></button>
     <p id="cal-sub-native-note" style="margin-top:16px; font-size:13.5px; line-height:1.5; color:var(--chalk);" data-i18n="cal_native_note"></p>
-    <button class="btn btn-primary" id="cal-sub-btn-ios"style="width:100%; margin-top:20px;" onclick="subscribeToCalendarIOS()" data-i18n="cal_sub_btn_ios"></button>
-    <button class="btn btn-primary" id="cal-sub-btn-android" style="width:100%; margin-top:20px;" onclick="addCalendarFileAndroid()" data-i18n="cal_sub_btn_android"></button>
-    <button class="btn btn-outline" id="cal-sub-btn-ios-file" style="width:100%; margin-top:12px;" onclick="addCalendarFileIOS()" data-i18n="cal_sub_btn_ios_file"></button>
-    <button class="btn btn-outline" id="cal-sub-btn-share" style="width:100%; margin-top:12px;" onclick="shareCalendarLink()" data-i18n="cal_sub_btn_share"></button>
+    <button class="btn btn-primary" id="cal-sub-btn-ios"style="width:100%; margin-top:20px;" data-on-click="subscribeToCalendarIOS()" data-i18n="cal_sub_btn_ios"></button>
+    <button class="btn btn-primary" id="cal-sub-btn-android" style="width:100%; margin-top:20px;" data-on-click="addCalendarFileAndroid()" data-i18n="cal_sub_btn_android"></button>
+    <button class="btn btn-outline" id="cal-sub-btn-ios-file" style="width:100%; margin-top:12px;" data-on-click="addCalendarFileIOS()" data-i18n="cal_sub_btn_ios_file"></button>
+    <button class="btn btn-outline" id="cal-sub-btn-share" style="width:100%; margin-top:12px;" data-on-click="shareCalendarLink()" data-i18n="cal_sub_btn_share"></button>
     <p id="cal-sub-ios-note" style="margin-top:16px; font-size:13.5px; line-height:1.5; color:var(--chalk);" data-i18n="cal_sub_ios_note"></p>
     <p id="cal-sub-android-hint" style="margin-top:16px; font-size:13.5px; line-height:1.5; color:var(--chalk);" data-i18n="cal_sub_android_hint"></p>
   </div>
 
   <div class="overlay" id="run-detail-modal" style="display:none;">
-    <button class="week-nav-btn" onclick="closeRunDetail()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closeRunDetail()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <div id="run-detail-content"></div>
   </div>
 
   <div class="overlay overlay-sheet" id="race-plan-overlay">
-    <button class="week-nav-btn" onclick="closeRacePlan()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closeRacePlan()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <div id="race-plan-content"></div>
   </div>
 
   <div class="overlay overlay-sheet" id="achievements-modal">
-    <button class="week-nav-btn" onclick="closeAchievements()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closeAchievements()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <div id="achievements-content"></div>
   </div>
 
   <div class="overlay overlay-sheet" id="personal-data-overlay">
-    <button class="week-nav-btn" onclick="closePersonalDataOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closePersonalDataOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_personal_title"></h2>
     <div class="card" id="perfil-personal-card" style="margin-top:16px;">
       <div class="metric-input-row">
@@ -3646,17 +3606,17 @@
           <option value="lifestyle" data-i18n="ob_goal_lifestyle"></option>
         </select>
         <label style="margin-top:14px;" data-i18n="ob_racedate_label"></label>
-        <div class="date-box" role="button" tabindex="0" data-i18n-aria="ob_racedate_label" onclick="openCalendar('perfil-racedate','perfil-racedate-text')"><span class="date-box-text placeholder" id="perfil-racedate-text"></span></div>
+        <div class="date-box" role="button" tabindex="0" data-i18n-aria="ob_racedate_label" data-on-click="openCalendar('perfil-racedate','perfil-racedate-text')"><span class="date-box-text placeholder" id="perfil-racedate-text"></span></div>
         <input type="hidden" id="perfil-racedate">
         <p class="muted" style="margin-top:6px;" data-i18n="ob_racedate_hint"></p>
       </div>
       <p class="muted" style="margin-top:10px; font-size:12.5px;" data-i18n="perfil_weeklykm_auto_note"></p>
-      <button class="btn btn-primary btn-sm perfil-save-btn" id="save-personal-btn" style="margin-top:16px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('personal')"></button>
+      <button class="btn btn-primary btn-sm perfil-save-btn" id="save-personal-btn" style="margin-top:16px; width:100%;" data-i18n="save_word" data-on-click="confirmAndSave('personal')"></button>
     </div>
   </div>
 
   <div class="overlay overlay-sheet" id="goals-overlay">
-    <button class="week-nav-btn" onclick="closeGoalsOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closeGoalsOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_goals_title"></h2>
     <div class="card" id="perfil-goals-card" style="margin-top:16px;">
       <p class="muted" style="margin-bottom:10px;" data-i18n="perfil_goals_desc"></p>
@@ -3672,12 +3632,12 @@
         <label for="perfil-goal-note" data-i18n="perfil_goal_note_label"></label>
         <textarea id="perfil-goal-note" rows="3" data-i18n-ph="perfil_goal_note_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
       </div>
-      <button class="btn btn-primary btn-sm perfil-save-btn" id="save-goals-btn" style="margin-top:10px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('goals')"></button>
+      <button class="btn btn-primary btn-sm perfil-save-btn" id="save-goals-btn" style="margin-top:10px; width:100%;" data-i18n="save_word" data-on-click="confirmAndSave('goals')"></button>
     </div>
   </div>
 
   <div class="overlay overlay-sheet" id="shoes-overlay">
-    <button class="week-nav-btn" onclick="closeShoesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closeShoesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_gear"></h2>
     <div class="card" style="margin-top:16px;">
       <div id="shoe-list"></div>
@@ -3689,7 +3649,7 @@
           <option value="mixto" data-i18n="ob_terrain_mixto"></option>
         </select>
       </div>
-      <button class="btn btn-outline btn-sm" style="margin-top:10px; width:100%;" data-i18n="perfil_add_shoe" onclick="addShoe()"></button>
+      <button class="btn btn-outline btn-sm" style="margin-top:10px; width:100%;" data-i18n="perfil_add_shoe" data-on-click="addShoe()"></button>
     </div>
   </div>
 
@@ -3705,17 +3665,17 @@
   <div class="overlay overlay-sheet" id="history-import-overlay">
     <h2 class="display" style="font-size:32px; margin:10px 0 8px;" data-i18n="hist_import_title"></h2>
     <p class="muted" style="margin:0 0 20px;" data-i18n="hist_import_lead"></p>
-    <button class="hi-row" onclick="closeHistoryImport(); connectStrava()"><span class="brand-logo-chip"><img src="img/brand-logos/strava.svg" alt="Strava"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
-    <button class="hi-row" onclick="closeHistoryImport(); connectPolar()"><span class="brand-logo-chip"><img src="img/brand-logos/polar.svg" alt="Polar"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
-    <button class="hi-row" onclick="closeHistoryImport(); connectWahoo()"><span class="brand-logo-chip"><img src="img/brand-logos/wahoo.svg" alt="Wahoo"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
-    <button class="hi-row" onclick="closeHistoryImport(); connectSuunto()"><span class="brand-logo-chip brand-logo-plate"><img class="brand-logo-color" src="img/brand-logos/suunto.png" alt="Suunto" width="600" height="213"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
-    <button class="hi-row" onclick="closeHistoryImport(); connectCoros()"><span class="brand-logo-chip"><img src="img/brand-logos/coros.png" alt="COROS"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
-    <button class="hi-row" id="hi-hc" style="display:none;" onclick="closeHistoryImport(); connectHealthConnect()"><span class="brand-logo-chip" style="gap:10px;"><img class="brand-logo-color" src="img/brand-logos/healthconnect.png" alt="" style="height:26px; max-width:26px; border-radius:7px;"><span style="font-size:14.5px; font-weight:700;">Health Connect</span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
-    <button class="small-link" style="display:block; margin:20px auto 0;" onclick="closeHistoryImport()" data-i18n="hist_import_skip"></button>
+    <button class="hi-row" data-on-click="closeHistoryImport(); connectStrava()"><span class="brand-logo-chip"><img src="img/brand-logos/strava.svg" alt="Strava"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
+    <button class="hi-row" data-on-click="closeHistoryImport(); connectPolar()"><span class="brand-logo-chip"><img src="img/brand-logos/polar.svg" alt="Polar"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
+    <button class="hi-row" data-on-click="closeHistoryImport(); connectWahoo()"><span class="brand-logo-chip"><img src="img/brand-logos/wahoo.svg" alt="Wahoo"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
+    <button class="hi-row" data-on-click="closeHistoryImport(); connectSuunto()"><span class="brand-logo-chip brand-logo-plate"><img class="brand-logo-color" src="img/brand-logos/suunto.png" alt="Suunto" width="600" height="213"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
+    <button class="hi-row" data-on-click="closeHistoryImport(); connectCoros()"><span class="brand-logo-chip"><img src="img/brand-logos/coros.png" alt="COROS"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
+    <button class="hi-row" id="hi-hc" style="display:none;" data-on-click="closeHistoryImport(); connectHealthConnect()"><span class="brand-logo-chip" style="gap:10px;"><img class="brand-logo-color" src="img/brand-logos/healthconnect.png" alt="" style="height:26px; max-width:26px; border-radius:7px;"><span style="font-size:14.5px; font-weight:700;">Health Connect</span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
+    <button class="small-link" style="display:block; margin:20px auto 0;" data-on-click="closeHistoryImport()" data-i18n="hist_import_skip"></button>
   </div>
 
   <div class="overlay overlay-sheet" id="devices-overlay">
-    <button class="week-nav-btn" onclick="closeDevicesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closeDevicesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_devices_title"></h2>
     <div class="card-shell card-shell-clay" style="margin-top:16px;">
     <div class="card">
@@ -3725,16 +3685,16 @@
       </div>
 
       <div class="conn-row conn-row-featured">
-        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" onclick="toggleConnRow(this)">
+        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" data-on-click="toggleConnRow(this)">
           <span class="brand-logo-chip"><img src="img/brand-logos/strava.svg" alt="Strava"></span>
           <span id="strava-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
         <span class="icon-sq conn-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></div>
         <div class="conn-body">
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_connectivity_desc"></p>
         <p id="strava-sync-note" class="muted" style="margin:8px 0 0; font-size:12px; display:none;"></p>
-        <button class="btn btn-outline btn-sm" id="strava-connect-btn" style="margin-top:10px; width:100%;" onclick="connectStrava()"></button>
+        <button class="btn btn-outline btn-sm" id="strava-connect-btn" style="margin-top:10px; width:100%;" data-on-click="connectStrava()"></button>
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
-          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleRememberList(event,'strava')" aria-expanded="false" aria-controls="strava-remember-list">
+          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" data-on-click="toggleRememberList(event,'strava')" aria-expanded="false" aria-controls="strava-remember-list">
             <span data-i18n="perfil_remember_title"></span>
             <span class="icon-sq" id="strava-remember-chevron" style="width:13px; height:13px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
           </button>
@@ -3752,15 +3712,15 @@
       </div>
 
       <div class="conn-row">
-        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" onclick="toggleConnRow(this)">
+        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" data-on-click="toggleConnRow(this)">
           <span class="brand-logo-chip"><img src="img/brand-logos/coros.png" alt="COROS"></span>
           <span id="coros-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
         <span class="icon-sq conn-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></div>
         <div class="conn-body">
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_coros_desc"></p>
-        <button class="btn btn-outline btn-sm" id="coros-connect-btn" style="margin-top:10px; width:100%;" onclick="connectCoros()"></button>
+        <button class="btn btn-outline btn-sm" id="coros-connect-btn" style="margin-top:10px; width:100%;" data-on-click="connectCoros()"></button>
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
-          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleRememberList(event,'coros')" aria-expanded="false" aria-controls="coros-remember-list">
+          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" data-on-click="toggleRememberList(event,'coros')" aria-expanded="false" aria-controls="coros-remember-list">
             <span data-i18n="perfil_remember_title"></span>
             <span class="icon-sq" id="coros-remember-chevron" style="width:13px; height:13px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
           </button>
@@ -3774,15 +3734,15 @@
       </div>
 
       <div class="conn-row">
-        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" onclick="toggleConnRow(this)">
+        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" data-on-click="toggleConnRow(this)">
           <span class="brand-logo-chip"><img src="img/brand-logos/polar.svg" alt="Polar"></span>
           <span id="polar-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
         <span class="icon-sq conn-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></div>
         <div class="conn-body">
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_polar_desc"></p>
-        <button class="btn btn-outline btn-sm" id="polar-connect-btn" style="margin-top:10px; width:100%;" onclick="connectPolar()"></button>
+        <button class="btn btn-outline btn-sm" id="polar-connect-btn" style="margin-top:10px; width:100%;" data-on-click="connectPolar()"></button>
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
-          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleRememberList(event,'polar')" aria-expanded="false" aria-controls="polar-remember-list">
+          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" data-on-click="toggleRememberList(event,'polar')" aria-expanded="false" aria-controls="polar-remember-list">
             <span data-i18n="perfil_remember_title"></span>
             <span class="icon-sq" id="polar-remember-chevron" style="width:13px; height:13px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
           </button>
@@ -3798,15 +3758,15 @@
       <!-- Wahoo, a diferencia de Strava/Polar, también puede mandar la sesión de hoy AL
            reloj (ver syncPlanToWahoo()). -->
       <div class="conn-row">
-        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" onclick="toggleConnRow(this)">
+        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" data-on-click="toggleConnRow(this)">
           <span class="brand-logo-chip"><img src="img/brand-logos/wahoo.svg" alt="Wahoo"></span>
           <span id="wahoo-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
         <span class="icon-sq conn-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></div>
         <div class="conn-body">
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_wahoo_desc"></p>
-        <button class="btn btn-outline btn-sm" id="wahoo-connect-btn" style="margin-top:10px; width:100%;" onclick="connectWahoo()"></button>
+        <button class="btn btn-outline btn-sm" id="wahoo-connect-btn" style="margin-top:10px; width:100%;" data-on-click="connectWahoo()"></button>
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
-          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleRememberList(event,'wahoo')" aria-expanded="false" aria-controls="wahoo-remember-list">
+          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" data-on-click="toggleRememberList(event,'wahoo')" aria-expanded="false" aria-controls="wahoo-remember-list">
             <span data-i18n="perfil_remember_title"></span>
             <span class="icon-sq" id="wahoo-remember-chevron" style="width:13px; height:13px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
           </button>
@@ -3823,15 +3783,15 @@
            AL reloj como guías SuuntoPlus (ver syncPlanToSuunto() y el botón "Enviar a mi Suunto" en Plan).
            Logo oficial de media.suunto.com (img/brand-logos/suunto.png), sin modificar colores. -->
       <div class="conn-row" id="suunto-card">
-        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" onclick="toggleConnRow(this)">
+        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" data-on-click="toggleConnRow(this)">
           <span class="brand-logo-chip brand-logo-plate" style="flex:none;"><img class="brand-logo-color" src="img/brand-logos/suunto.png" alt="Suunto" width="600" height="213"></span><span style="flex:1;"></span>
           <span id="suunto-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
         <span class="icon-sq conn-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></div>
         <div class="conn-body">
         <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_suunto_desc"></p>
-        <button class="btn btn-outline btn-sm" id="suunto-connect-btn" style="margin-top:10px; width:100%;" onclick="connectSuunto()"></button>
+        <button class="btn btn-outline btn-sm" id="suunto-connect-btn" style="margin-top:10px; width:100%;" data-on-click="connectSuunto()"></button>
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--asphalt-3);">
-          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" onclick="toggleRememberList(event,'suunto')" aria-expanded="false" aria-controls="suunto-remember-list">
+          <button type="button" class="small-link" style="display:flex; align-items:center; gap:6px; font-weight:700; color:var(--chalk);" data-on-click="toggleRememberList(event,'suunto')" aria-expanded="false" aria-controls="suunto-remember-list">
             <span data-i18n="perfil_remember_title"></span>
             <span class="icon-sq" id="suunto-remember-chevron" style="width:13px; height:13px; flex-shrink:0; transition:transform .2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
           </button>
@@ -3850,13 +3810,13 @@
            cualquier reloj que escriba en Health Connect (Huawei, Samsung, etc.) sin
            necesitar una conexión propia por marca. -->
       <div class="conn-row" id="healthconnect-card" style="display:none;">
-        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" onclick="toggleConnRow(this)">
+        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" data-on-click="toggleConnRow(this)">
           <span class="brand-logo-chip" style="gap:8px; flex:1;"><img class="brand-logo-color" src="img/brand-logos/healthconnect.png" alt="" style="height:26px; max-width:26px; border-radius:7px;"><span class="n" style="font-size:14.5px; font-weight:700;" data-i18n="healthconnect_title"></span></span>
           <span id="healthconnect-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
         <span class="icon-sq conn-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></div>
         <div class="conn-body">
         <p class="muted" style="margin-bottom:8px;" data-i18n="healthconnect_desc"></p>
-        <button class="btn btn-outline btn-sm" id="healthconnect-connect-btn" style="margin-top:10px; width:100%;" onclick="connectHealthConnect()"></button>
+        <button class="btn btn-outline btn-sm" id="healthconnect-connect-btn" style="margin-top:10px; width:100%;" data-on-click="connectHealthConnect()"></button>
       
         </div>
       </div>
@@ -3865,15 +3825,15 @@
   </div>
 
   <div class="overlay overlay-sheet" id="event-overlay">
-    <button class="week-nav-btn" onclick="closeEventOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closeEventOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_event"></h2>
     <div class="card" style="margin-top:16px;">
       <div id="event-box"></div>
-      <button class="small-link" style="margin-top:10px; display:flex; align-items:center; gap:5px;" onclick="openPaceCalcModal()"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v2"/></svg></span><span data-i18n="pace_calc_open_btn"></span></button>
+      <button class="small-link" style="margin-top:10px; display:flex; align-items:center; gap:5px;" data-on-click="openPaceCalcModal()"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v2"/></svg></span><span data-i18n="pace_calc_open_btn"></span></button>
       <div class="field" style="margin-top:14px;"><label for="ev-name" data-i18n="perfil_ev_name_ph"></label><input type="text" id="ev-name" data-i18n-aria="perfil_ev_name_ph"></div>
       <div class="field"><label for="ev-distance" data-i18n="perfil_ev_dist_ph"></label><input type="number" id="ev-distance" step="0.1" min="0" inputmode="decimal" data-i18n-aria="perfil_ev_dist_ph"></div>
       <div class="add-row" style="margin-top:8px; flex-direction:column;">
-        <div class="date-box" style="flex:1;" role="button" tabindex="0" data-i18n-aria="hist_manual_date" onclick="openCalendar('ev-date','ev-date-text')"><span class="date-box-text" id="ev-date-text"></span></div>
+        <div class="date-box" style="flex:1;" role="button" tabindex="0" data-i18n-aria="hist_manual_date" data-on-click="openCalendar('ev-date','ev-date-text')"><span class="date-box-text" id="ev-date-text"></span></div>
         <input type="hidden" id="ev-date">
         <select id="ev-type" data-i18n-aria="aria_event_type">
           <option value="ruta" data-i18n="ev_type_ruta"></option>
@@ -3881,7 +3841,7 @@
           <option value="obstaculos" data-i18n="ev_type_obstaculos"></option>
         </select>
       </div>
-      <button class="btn btn-primary btn-sm" id="save-event-btn" style="margin-top:10px; width:100%;" data-i18n="perfil_ev_save" onclick="setEvent()"></button>
+      <button class="btn btn-primary btn-sm" id="save-event-btn" style="margin-top:10px; width:100%;" data-i18n="perfil_ev_save" data-on-click="setEvent()"></button>
     </div>
   </div>
 
@@ -3891,7 +3851,7 @@
        siempre (theme-toggle/units-toggle/perfil-trainby-toggle/voice-toggle), solo cambió
        el contenedor que los muestra. -->
   <div class="overlay overlay-sheet" id="preferences-overlay">
-    <button class="week-nav-btn" onclick="closePreferencesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closePreferencesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_preferences"></h2>
     <div class="card" style="margin-top:16px;">
       <h3 data-i18n="perfil_theme_title"></h3>
@@ -3918,7 +3878,7 @@
     <div class="card" id="streak-pause-card" style="display:none;">
       <h3 data-i18n="streak_pause_title"></h3>
       <p class="muted" style="margin:0 0 12px; font-size:12.5px; line-height:1.5;" data-i18n="streak_pause_hint"></p>
-      <button class="btn btn-outline btn-sm" id="streak-pause-btn" style="width:100%;" onclick="toggleStreakPause()"></button>
+      <button class="btn btn-outline btn-sm" id="streak-pause-btn" style="width:100%;" data-on-click="toggleStreakPause()"></button>
       <p class="muted" id="streak-pause-status" style="margin:10px 0 0; font-size:12.5px; line-height:1.5; display:none;"></p>
     </div>
     <div class="card" id="text-size-card" style="display:none;">
@@ -3945,7 +3905,7 @@
   </div>
 
   <div class="overlay overlay-sheet" id="lang-overlay">
-    <button class="week-nav-btn" onclick="closeLangOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closeLangOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_lang"></h2>
     <div class="card" style="margin-top:16px;">
       <div class="choice-row" id="perfil-lang-choice" style="flex-wrap:wrap;">
@@ -3963,15 +3923,15 @@
        (mismo z-index:50): tienen que ir DESPUÉS en el DOM, si no quedan tapados por Preferencias y recién
        aparecen al volver atrás. -->
   <div class="overlay overlay-sheet" id="level-test-day-modal">
-    <button class="week-nav-btn" onclick="closeLevelTestSchedule()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closeLevelTestSchedule()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="ltest_day_title"></h2>
     <p class="muted" style="margin-top:10px; line-height:1.5;" data-i18n="ltest_day_desc"></p>
     <div id="ltest-day-list" style="margin-top:8px;"></div>
-    <button class="btn btn-outline" style="width:100%; margin-top:18px;" onclick="closeLevelTestSchedule(); openLevelTest()" data-i18n="ltest_day_manual"></button>
+    <button class="btn btn-outline" style="width:100%; margin-top:18px;" data-on-click="closeLevelTestSchedule(); openLevelTest()" data-i18n="ltest_day_manual"></button>
   </div>
 
   <div class="overlay overlay-sheet" id="level-test-modal">
-    <button class="week-nav-btn" onclick="closeLevelTest()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closeLevelTest()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="ltest_title"></h2>
     <p class="muted" style="margin-top:10px; line-height:1.5;" data-i18n="ltest_intro"></p>
     <div class="card" style="margin-top:16px;">
@@ -3992,79 +3952,79 @@
       <label for="ltest-hr" data-i18n="ltest_hr_label"></label>
       <input type="number" id="ltest-hr" step="1" min="0" inputmode="numeric" placeholder="185">
     </div>
-    <button class="btn btn-primary" style="width:100%; margin-top:8px;" onclick="submitLevelTest()" data-i18n="ltest_save"></button>
+    <button class="btn btn-primary" style="width:100%; margin-top:8px;" data-on-click="submitLevelTest()" data-i18n="ltest_save"></button>
   </div>
 
   <div class="overlay overlay-sheet" id="days-overlay">
-    <button class="week-nav-btn" onclick="closeDaysOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closeDaysOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_days_title"></h2>
     <div class="card" id="perfil-days-card" style="margin-top:16px;">
       <div class="day-picker" id="perfil-days"></div>
-      <button class="btn btn-primary btn-sm perfil-save-btn" id="save-days-btn" style="margin-top:12px; width:100%;" data-i18n="perfil_days_save" onclick="confirmAndSave('days')"></button>
+      <button class="btn btn-primary btn-sm perfil-save-btn" id="save-days-btn" style="margin-top:12px; width:100%;" data-i18n="perfil_days_save" data-on-click="confirmAndSave('days')"></button>
     </div>
   </div>
 
   <div class="overlay overlay-sheet" id="crosstraining-overlay">
-    <button class="week-nav-btn" onclick="closeCrossTrainingOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closeCrossTrainingOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_crosstraining_title"></h2>
     <div class="card" id="perfil-crosstraining-card" style="margin-top:16px;">
       <label id="perfil-sports-label" data-i18n="ob_crosstraining_label"></label>
       <p class="muted" style="font-size:12px; margin:2px 0 8px;" data-i18n="ob_crosstraining_hint"></p>
       <div class="choice-row" id="perfil-sports-selected" role="group" aria-labelledby="perfil-sports-label" style="flex-wrap:wrap; display:none;"></div>
-      <button type="button" class="btn btn-outline btn-sm" id="perfil-sports-select-btn" style="margin-top:8px; width:100%;" onclick="openSportPicker('perfil')" data-i18n="sport_select_btn"></button>
+      <button type="button" class="btn btn-outline btn-sm" id="perfil-sports-select-btn" style="margin-top:8px; width:100%;" data-on-click="openSportPicker('perfil')" data-i18n="sport_select_btn"></button>
       <div id="perfil-sport-days-wrap" style="margin-top:14px; display:none;">
         <label id="perfil-sport-days-label" data-i18n="ob_sport_days_label"></label>
         <div class="day-picker" id="perfil-sport-days"></div>
       </div>
-      <button class="btn btn-primary btn-sm perfil-save-btn" id="save-crosstraining-btn" style="margin-top:12px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('crosstraining')"></button>
+      <button class="btn btn-primary btn-sm perfil-save-btn" id="save-crosstraining-btn" style="margin-top:12px; width:100%;" data-i18n="save_word" data-on-click="confirmAndSave('crosstraining')"></button>
     </div>
   </div>
 
   <div class="overlay overlay-sheet" id="sport-picker-overlay">
-    <button class="week-nav-btn" onclick="closeSportPicker()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closeSportPicker()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="sport_picker_title"></h2>
     <div class="field" style="margin-top:14px;">
-      <input type="text" id="sport-picker-search" oninput="filterSportPicker()" data-i18n-ph="sport_picker_search_ph" data-i18n-aria="sport_picker_search_ph" autocomplete="off">
+      <input type="text" id="sport-picker-search" data-on-input="filterSportPicker()" data-i18n-ph="sport_picker_search_ph" data-i18n-aria="sport_picker_search_ph" autocomplete="off">
     </div>
     <div id="sport-picker-list" style="margin-top:10px; display:flex; flex-direction:column; gap:8px; max-height:52vh; overflow-y:auto;"></div>
-    <button class="btn btn-primary" style="margin-top:16px;" onclick="closeSportPicker()" data-i18n="sport_picker_done"></button>
+    <button class="btn btn-primary" style="margin-top:16px;" data-on-click="closeSportPicker()" data-i18n="sport_picker_done"></button>
   </div>
 
 
   <!-- Panel de administración: solo se muestra el acceso si api/admin-stats.js confirma que sos admin (ADMIN_EMAILS). Texto fijo en español a propósito: lo usa solo el dueño. -->
   <div class="overlay overlay-sheet" id="admin-overlay">
-    <button class="week-nav-btn" onclick="closeAdminOverlay()" style="margin-bottom:14px;" aria-label="Volver"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closeAdminOverlay()" style="margin-bottom:14px;" aria-label="Volver"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></span></button>
     <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
       <h2 class="subtitle" style="font-size:22px;">Panel de administración</h2>
-      <button class="btn btn-outline btn-sm" id="admin-refresh" onclick="loadAdminStats()">Actualizar</button>
+      <button class="btn btn-outline btn-sm" id="admin-refresh" data-on-click="loadAdminStats()">Actualizar</button>
     </div>
     <p class="muted" id="admin-updated" style="margin:6px 0 0; font-size:12.5px;"></p>
     <div id="admin-body" style="margin-top:14px;"></div>
   </div>
 
   <div class="overlay overlay-sheet" id="zones-overlay">
-    <button class="week-nav-btn" onclick="closeZonesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closeZonesOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
       <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_zones_title"></h2>
-      <button class="info-btn" onclick="openZonesInfo()" data-i18n-aria="aria_zones_info"><span class="icon-sq" style="width:19px; height:19px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span></button>
+      <button class="info-btn" data-on-click="openZonesInfo()" data-i18n-aria="aria_zones_info"><span class="icon-sq" style="width:19px; height:19px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span></button>
     </div>
     <div class="card" id="perfil-zones-card" style="margin-top:16px;">
       <p class="muted" id="zones-status" data-i18n="perfil_zones_manual_note"></p>
       <div id="zones-list" style="margin-top:8px;"></div>
-      <button class="btn btn-primary btn-sm perfil-save-btn" id="save-zones-btn" style="margin-top:12px; width:100%;" data-i18n="save_word" onclick="confirmAndSave('zones')"></button>
+      <button class="btn btn-primary btn-sm perfil-save-btn" id="save-zones-btn" style="margin-top:12px; width:100%;" data-i18n="save_word" data-on-click="confirmAndSave('zones')"></button>
     </div>
   </div>
 
   <div class="overlay overlay-sheet" id="pain-overlay">
-    <button class="week-nav-btn" onclick="closePainOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <button class="week-nav-btn" data-on-click="closePainOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <div style="display:flex; align-items:center; gap:8px;">
       <h2 class="subtitle" style="font-size:22px; margin:0;" data-i18n="pain_list_title"></h2>
-      <button class="info-btn" onclick="openPainInfo()" data-i18n-aria="pain_info_title"><span class="icon-sq" style="width:19px; height:19px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span></button>
+      <button class="info-btn" data-on-click="openPainInfo()" data-i18n-aria="pain_info_title"><span class="icon-sq" style="width:19px; height:19px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span></button>
     </div>
     <div class="card" style="margin-top:16px;">
       <div id="pain-log-list"></div>
-      <button class="btn btn-outline btn-sm" style="margin-top:12px; width:100%;" data-i18n="pain_add_btn" onclick="openPainModal()"></button>
-      <button class="small-link" id="pain-share-btn" style="display:block; margin:14px auto 0;" data-i18n="pain_share_btn" onclick="sharePainSummary()"></button>
+      <button class="btn btn-outline btn-sm" style="margin-top:12px; width:100%;" data-i18n="pain_add_btn" data-on-click="openPainModal()"></button>
+      <button class="small-link" id="pain-share-btn" style="display:block; margin:14px auto 0;" data-i18n="pain_share_btn" data-on-click="sharePainSummary()"></button>
     </div>
   </div>
 
@@ -4074,13 +4034,13 @@
       <h2 class="display" data-i18n="heat_title"></h2>
       <p data-i18n="heat_sub"></p>
     </div>
-    <button class="heat-close" onclick="closeHeatmap()" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span></button>
+    <button class="heat-close" data-on-click="closeHeatmap()" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span></button>
     <div class="heat-empty" id="heatmap-empty" style="display:none;" data-i18n="heat_empty"></div>
     <div class="heat-bottom">
       <div class="heat-chips" id="heatmap-chips">
-        <button class="heat-chip on" data-r="all" onclick="setHeatRange('all')" data-i18n="heat_range_all"></button>
-        <button class="heat-chip" data-r="year" onclick="setHeatRange('year')" data-i18n="heat_range_year"></button>
-        <button class="heat-chip" data-r="90" onclick="setHeatRange('90')" data-i18n="heat_range_90"></button>
+        <button class="heat-chip on" data-r="all" data-on-click="setHeatRange('all')" data-i18n="heat_range_all"></button>
+        <button class="heat-chip" data-r="year" data-on-click="setHeatRange('year')" data-i18n="heat_range_year"></button>
+        <button class="heat-chip" data-r="90" data-on-click="setHeatRange('90')" data-i18n="heat_range_90"></button>
       </div>
       <div class="heat-stats" id="heatmap-stats"></div>
       <div class="heat-legend"><span data-i18n="heat_less"></span><i></i><span data-i18n="heat_more"></span></div>
@@ -4088,13 +4048,13 @@
   </div>
 
   <div class="rd-video-overlay" id="rd-video-overlay">
-    <button onclick="closeDynamicVideo()" data-i18n-aria="aria_back" style="position:absolute; top:calc(16px + var(--safe-top)); right:20px; width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.12); border:none; color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:2;"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span></button>
+    <button data-on-click="closeDynamicVideo()" data-i18n-aria="aria_back" style="position:absolute; top:calc(16px + var(--safe-top)); right:20px; width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.12); border:none; color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:2;"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span></button>
     <canvas id="rd-video-canvas" width="720" height="1280" style="display:none;"></canvas>
     <video id="rd-video-preview" playsinline controls style="display:none; max-width:100%; max-height:70vh; border-radius:14px;"></video>
     <div class="rd-video-progress" id="rd-video-progress"></div>
     <div class="rd-video-actions" id="rd-video-actions" style="display:none;">
-      <button class="btn btn-outline" id="rd-video-save" style="width:auto; flex:1;" onclick="saveDynamicVideo()" data-i18n="rd_video_save"></button>
-      <button class="btn btn-primary" id="rd-video-share" style="width:auto; flex:1;" onclick="downloadDynamicVideo()" data-i18n="rd_video_download"></button>
+      <button class="btn btn-outline" id="rd-video-save" style="width:auto; flex:1;" data-on-click="saveDynamicVideo()" data-i18n="rd_video_save"></button>
+      <button class="btn btn-primary" id="rd-video-share" style="width:auto; flex:1;" data-on-click="downloadDynamicVideo()" data-i18n="rd_video_download"></button>
     </div>
   </div>
 
@@ -4106,7 +4066,7 @@
          de la app (ej. el nombre de zapatilla). -->
     <div class="field"><label for="edit-run-name" data-i18n="edit_run_name_label"></label><input type="text" id="edit-run-name" maxlength="60" data-i18n-ph="edit_run_name_ph"></div>
     <div class="field"><label data-i18n="hist_manual_date"></label>
-      <div class="date-box" role="button" tabindex="0" data-i18n-aria="hist_manual_date" onclick="openCalendar('edit-run-date')"><span class="date-box-text" id="edit-run-date-text"></span></div>
+      <div class="date-box" role="button" tabindex="0" data-i18n-aria="hist_manual_date" data-on-click="openCalendar('edit-run-date')"><span class="date-box-text" id="edit-run-date-text"></span></div>
       <input type="hidden" id="edit-run-date">
     </div>
     <div class="two-col">
@@ -4116,8 +4076,8 @@
     <div class="field"><label for="edit-run-hr" data-i18n="hist_manual_hr"></label><input type="number" id="edit-run-hr"></div>
     <div class="field"><label for="edit-run-shoe" data-i18n="run_summary_shoe_q"></label><select id="edit-run-shoe"></select></div>
     <div style="display:flex; gap:10px; margin-top:20px;">
-      <button class="btn btn-outline" style="flex:1;" onclick="closeEditRun()" data-i18n="cancel_word"></button>
-      <button class="btn btn-primary" style="flex:1;" onclick="saveEditRun()" data-i18n="save_word"></button>
+      <button class="btn btn-outline" style="flex:1;" data-on-click="closeEditRun()" data-i18n="cancel_word"></button>
+      <button class="btn btn-primary" style="flex:1;" data-on-click="saveEditRun()" data-i18n="save_word"></button>
     </div>
   </div>
 
@@ -4125,7 +4085,7 @@
     <div class="icon-sq" style="width:38px; height:38px; margin:0 auto 8px; color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></div>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="hist_info_title"></h2>
     <p class="lead" data-i18n="hist_info_text"></p>
-    <button class="btn btn-primary" style="width:100%; margin-top:28px;" onclick="closeHistInfo()" data-i18n="hist_info_ok"></button>
+    <button class="btn btn-primary" style="width:100%; margin-top:28px;" data-on-click="closeHistInfo()" data-i18n="hist_info_ok"></button>
   </div>
 
   <div class="overlay" id="fit-info-modal" style="display:none; z-index:59;">
@@ -4137,32 +4097,32 @@
       <p class="muted" style="margin:0; font-size:14px; line-height:1.55;" data-i18n="fit_info_read"></p>
       <p class="muted" style="margin:0; font-size:13px; line-height:1.5;" data-i18n="fit_info_note"></p>
     </div>
-    <button class="btn btn-primary" style="width:100%; margin-top:24px;" onclick="closeFitInfo()" data-i18n="hist_info_ok"></button>
+    <button class="btn btn-primary" style="width:100%; margin-top:24px;" data-on-click="closeFitInfo()" data-i18n="hist_info_ok"></button>
   </div>
 
   <div class="overlay" id="zones-info-modal" style="display:none; z-index:59;">
     <div class="icon-sq" style="width:38px; height:38px; margin:0 auto 8px; color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></div>
     <h2 class="subtitle" style="font-size:22px; text-align:center;" data-i18n="perfil_zones_title"></h2>
     <div id="zones-info-body" style="margin-top:18px; display:flex; flex-direction:column; gap:14px;"></div>
-    <button class="btn btn-primary" style="width:100%; margin-top:24px;" onclick="closeZonesInfo()" data-i18n="hist_info_ok"></button>
+    <button class="btn btn-primary" style="width:100%; margin-top:24px;" data-on-click="closeZonesInfo()" data-i18n="hist_info_ok"></button>
   </div>
 
   <div class="overlay" id="race-tips-info-modal" style="display:none; z-index:59;">
     <div class="icon-sq" style="width:38px; height:38px; margin:0 auto 8px; color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4.5s2-1.3 4.5-1.3 3.5 1.5 6 1.5 3.5-1 3.5-1v9s-1.5 1-3.5 1-3.5-1.5-6-1.5-4.5 1.3-4.5 1.3z"/></svg></div>
     <h2 class="subtitle" style="font-size:22px; text-align:center;" data-i18n="home_race_tips_title"></h2>
     <div id="race-tips-info-body" style="margin-top:18px; display:flex; flex-direction:column; gap:16px;"></div>
-    <button class="btn btn-primary" style="width:100%; margin-top:24px;" onclick="closeRaceTipsInfo()" data-i18n="hist_info_ok"></button>
+    <button class="btn btn-primary" style="width:100%; margin-top:24px;" data-on-click="closeRaceTipsInfo()" data-i18n="hist_info_ok"></button>
   </div>
 
   <div class="overlay" id="rating-modal" style="display:none; z-index:58;">
     <h2 class="subtitle" style="font-size:22px;" data-i18n="rating_title"></h2>
     <p class="lead" id="rating-session-desc"></p>
     <div style="display:flex; flex-direction:column; gap:12px; margin-top:28px;">
-      <button class="btn btn-outline" style="padding:18px; font-size:16px; display:flex; align-items:center; gap:10px; justify-content:center;" onclick="submitRating('mal')"><span class="icon-sq" style="width:22px; height:22px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M8.5 15.5c1-1.3 2.2-2 3.5-2s2.5.7 3.5 2"/><circle cx="9" cy="9.5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="9.5" r="1" fill="currentColor" stroke="none"/></svg></span> <span data-i18n="rating_bad"></span></button>
-      <button class="btn btn-outline" style="padding:18px; font-size:16px; display:flex; align-items:center; gap:10px; justify-content:center;" onclick="submitRating('bien')"><span class="icon-sq" style="width:22px; height:22px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M8 14c1.2 1.3 2.6 2 4 2s2.8-.7 4-2"/><circle cx="9" cy="9.5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="9.5" r="1" fill="currentColor" stroke="none"/></svg></span> <span data-i18n="rating_good"></span></button>
-      <button class="btn btn-outline" style="padding:18px; font-size:16px; display:flex; align-items:center; gap:10px; justify-content:center;" onclick="submitRating('excelente')"><span class="icon-sq" style="width:22px; height:22px; color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M7.5 13.5c1.4 2 2.9 3 4.5 3s3.1-1 4.5-3"/><path d="M7.7 9.2a2 2 0 0 1 2.6 0M13.7 9.2a2 2 0 0 1 2.6 0"/></svg></span> <span data-i18n="rating_excellent"></span></button>
+      <button class="btn btn-outline" style="padding:18px; font-size:16px; display:flex; align-items:center; gap:10px; justify-content:center;" data-on-click="submitRating('mal')"><span class="icon-sq" style="width:22px; height:22px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M8.5 15.5c1-1.3 2.2-2 3.5-2s2.5.7 3.5 2"/><circle cx="9" cy="9.5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="9.5" r="1" fill="currentColor" stroke="none"/></svg></span> <span data-i18n="rating_bad"></span></button>
+      <button class="btn btn-outline" style="padding:18px; font-size:16px; display:flex; align-items:center; gap:10px; justify-content:center;" data-on-click="submitRating('bien')"><span class="icon-sq" style="width:22px; height:22px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M8 14c1.2 1.3 2.6 2 4 2s2.8-.7 4-2"/><circle cx="9" cy="9.5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="9.5" r="1" fill="currentColor" stroke="none"/></svg></span> <span data-i18n="rating_good"></span></button>
+      <button class="btn btn-outline" style="padding:18px; font-size:16px; display:flex; align-items:center; gap:10px; justify-content:center;" data-on-click="submitRating('excelente')"><span class="icon-sq" style="width:22px; height:22px; color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M7.5 13.5c1.4 2 2.9 3 4.5 3s3.1-1 4.5-3"/><path d="M7.7 9.2a2 2 0 0 1 2.6 0M13.7 9.2a2 2 0 0 1 2.6 0"/></svg></span> <span data-i18n="rating_excellent"></span></button>
     </div>
-    <button type="button" class="small-link" style="display:block; margin:18px auto 0; text-align:center;" onclick="dismissRating()" data-i18n="rating_dismiss"></button>
+    <button type="button" class="small-link" style="display:block; margin:18px auto 0; text-align:center;" data-on-click="dismissRating()" data-i18n="rating_dismiss"></button>
   </div>
 
   <div class="overlay" id="pain-modal" style="display:none; z-index:58;">
@@ -4181,8 +4141,8 @@
     </div>
     <textarea id="pain-note" rows="2" data-i18n-ph="pain_note_ph" data-i18n-aria="pain_note_ph" style="width:100%; margin-top:14px; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
     <div style="display:flex; gap:10px; margin-top:20px;">
-      <button class="btn btn-outline" style="flex:1;" onclick="closePainModal()" data-i18n="cancel_word"></button>
-      <button class="btn btn-primary" style="flex:1;" onclick="savePainLog()" data-i18n="pain_save"></button>
+      <button class="btn btn-outline" style="flex:1;" data-on-click="closePainModal()" data-i18n="cancel_word"></button>
+      <button class="btn btn-primary" style="flex:1;" data-on-click="savePainLog()" data-i18n="pain_save"></button>
     </div>
   </div>
 
@@ -4195,22 +4155,22 @@
     </div>
     <textarea id="pain-update-note" rows="2" data-i18n-ph="pain_update_note_ph" data-i18n-aria="pain_update_note_ph" style="width:100%; margin-top:14px; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
     <div style="display:flex; gap:10px; margin-top:20px;">
-      <button class="btn btn-outline" style="flex:1;" onclick="closePainUpdate()" data-i18n="cancel_word"></button>
-      <button class="btn btn-primary" id="pain-update-save" style="flex:1;" onclick="savePainUpdate()" data-i18n="save_word"></button>
+      <button class="btn btn-outline" style="flex:1;" data-on-click="closePainUpdate()" data-i18n="cancel_word"></button>
+      <button class="btn btn-primary" id="pain-update-save" style="flex:1;" data-on-click="savePainUpdate()" data-i18n="save_word"></button>
     </div>
-    <button class="small-link" style="display:block; margin:16px auto 0;" onclick="resolveFromUpdate()" data-i18n="pain_update_resolved_btn"></button>
+    <button class="small-link" style="display:block; margin:16px auto 0;" data-on-click="resolveFromUpdate()" data-i18n="pain_update_resolved_btn"></button>
   </div>
 
   <div class="overlay" id="pain-info-modal" style="display:none; z-index:59;">
     <h2 class="subtitle" style="font-size:22px;" data-i18n="pain_info_title"></h2>
     <p class="lead" data-i18n="pain_info_text"></p>
-    <button class="btn btn-primary" style="width:100%; margin-top:28px;" onclick="closePainInfo()" data-i18n="hist_info_ok"></button>
+    <button class="btn btn-primary" style="width:100%; margin-top:28px;" data-on-click="closePainInfo()" data-i18n="hist_info_ok"></button>
   </div>
 
   <div class="overlay" id="whats-new-modal" style="display:none; z-index:60;">
     <h2 class="subtitle" style="font-size:22px;" data-i18n="whats_new_title"></h2>
     <ul id="whats-new-list" style="margin-top:18px; padding-left:20px; display:flex; flex-direction:column; gap:12px; font-size:14.5px; line-height:1.5; color:var(--chalk);"></ul>
-    <button class="btn btn-primary" style="width:100%; margin-top:24px;" onclick="closeWhatsNew()" data-i18n="whats_new_close"></button>
+    <button class="btn btn-primary" style="width:100%; margin-top:24px;" data-on-click="closeWhatsNew()" data-i18n="whats_new_close"></button>
   </div>
 
   <div class="overlay" id="pace-calc-modal" style="display:none; z-index:58;">
@@ -4218,7 +4178,7 @@
     <p class="lead" data-i18n="pace_calc_subtitle"></p>
     <div class="field" style="margin-top:20px;">
       <label for="pc-distance" data-i18n="pace_calc_distance_label"></label>
-      <select id="pc-distance" onchange="onPaceCalcDistanceChange()">
+      <select id="pc-distance" data-on-change="onPaceCalcDistanceChange()">
         <option value="5">5 km</option>
         <option value="10">10 km</option>
         <option value="15">15 km</option>
@@ -4229,50 +4189,50 @@
     </div>
     <div class="field" id="pc-custom-km-field" style="display:none;">
       <label id="pc-custom-km-label" for="pc-custom-km" data-i18n="pace_calc_custom_km_label"></label>
-      <input type="number" id="pc-custom-km" step="0.1" min="0.1" inputmode="decimal" oninput="renderPaceCalcResults()">
+      <input type="number" id="pc-custom-km" step="0.1" min="0.1" inputmode="decimal" data-on-input="renderPaceCalcResults()">
     </div>
     <div class="field">
       <label id="pc-time-label" data-i18n="pace_calc_time_label"></label>
       <div class="time-picker-row" role="group" aria-labelledby="pc-time-label">
-        <div class="tp-col"><select id="pc-time-h" data-i18n-aria="time_unit_h" onchange="renderPaceCalcResults()"></select><span class="tp-unit" data-i18n="time_unit_h"></span></div>
+        <div class="tp-col"><select id="pc-time-h" data-i18n-aria="time_unit_h" data-on-change="renderPaceCalcResults()"></select><span class="tp-unit" data-i18n="time_unit_h"></span></div>
         <span class="tp-colon">:</span>
-        <div class="tp-col"><select id="pc-time-m" data-i18n-aria="time_unit_min" onchange="renderPaceCalcResults()"></select><span class="tp-unit" data-i18n="time_unit_min"></span></div>
+        <div class="tp-col"><select id="pc-time-m" data-i18n-aria="time_unit_min" data-on-change="renderPaceCalcResults()"></select><span class="tp-unit" data-i18n="time_unit_min"></span></div>
         <span class="tp-colon">:</span>
-        <div class="tp-col"><select id="pc-time-s" data-i18n-aria="time_unit_sec" onchange="renderPaceCalcResults()"></select><span class="tp-unit" data-i18n="time_unit_sec"></span></div>
+        <div class="tp-col"><select id="pc-time-s" data-i18n-aria="time_unit_sec" data-on-change="renderPaceCalcResults()"></select><span class="tp-unit" data-i18n="time_unit_sec"></span></div>
       </div>
     </div>
     <div class="field">
       <label for="pc-strategy" data-i18n="pace_calc_strategy_label"></label>
-      <select id="pc-strategy" onchange="renderPaceCalcResults()">
+      <select id="pc-strategy" data-on-change="renderPaceCalcResults()">
         <option value="even" data-i18n="pace_calc_strategy_even"></option>
         <option value="negative" data-i18n="pace_calc_strategy_negative"></option>
       </select>
     </div>
     <div id="pc-results"></div>
-    <button class="btn btn-outline" style="width:100%; margin-top:16px;" onclick="closePaceCalcModal()" data-i18n="hist_info_ok"></button>
+    <button class="btn btn-outline" style="width:100%; margin-top:16px;" data-on-click="closePaceCalcModal()" data-i18n="hist_info_ok"></button>
   </div>
 
   <div class="overlay" id="plan-change-timing-modal" style="display:none; z-index:58;">
     <h2 class="subtitle" style="font-size:22px;" data-i18n="plan_timing_title"></h2>
     <p class="lead" data-i18n="plan_timing_subtitle"></p>
     <div style="display:flex; flex-direction:column; gap:12px; margin-top:28px;">
-      <button class="btn btn-primary" style="padding:18px; font-size:16px;" onclick="resolvePlanChangeTiming('now')" data-i18n="plan_timing_now"></button>
-      <button class="btn btn-outline" style="padding:18px; font-size:16px;" onclick="resolvePlanChangeTiming('nextWeek')" data-i18n="plan_timing_next_week"></button>
+      <button class="btn btn-primary" style="padding:18px; font-size:16px;" data-on-click="resolvePlanChangeTiming('now')" data-i18n="plan_timing_now"></button>
+      <button class="btn btn-outline" style="padding:18px; font-size:16px;" data-on-click="resolvePlanChangeTiming('nextWeek')" data-i18n="plan_timing_next_week"></button>
     </div>
-    <button type="button" class="small-link" style="display:block; margin:18px auto 0; text-align:center;" onclick="cancelPlanChangeTiming()" data-i18n="cancel_word"></button>
+    <button type="button" class="small-link" style="display:block; margin:18px auto 0; text-align:center;" data-on-click="cancelPlanChangeTiming()" data-i18n="cancel_word"></button>
   </div>
 
   <div class="overlay" id="calendar-modal" style="display:none; z-index:60;">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
-      <button id="cal-prev-btn" class="week-nav-btn" onclick="calNavigate(-1)" data-i18n-aria="aria_week_prev"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
-      <button id="cal-month-label" onclick="calShowYears()" style="font-weight:800; font-size:18px;"></button>
-      <button id="cal-next-btn" class="week-nav-btn" onclick="calNavigate(1)" data-i18n-aria="aria_week_next"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span></button>
+      <button id="cal-prev-btn" class="week-nav-btn" data-on-click="calNavigate(-1)" data-i18n-aria="aria_week_prev"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+      <button id="cal-month-label" data-on-click="calShowYears()" style="font-weight:800; font-size:18px;"></button>
+      <button id="cal-next-btn" class="week-nav-btn" data-on-click="calNavigate(1)" data-i18n-aria="aria_week_next"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span></button>
     </div>
     <div class="cal-weekdays" id="cal-weekdays"></div>
     <div class="cal-grid" id="cal-grid"></div>
     <div class="cal-months-grid" id="cal-months-grid" style="display:none;"></div>
     <div class="cal-years-grid" id="cal-years-grid" style="display:none;"></div>
-    <button class="btn btn-gray" style="width:100%; margin-top:24px;" onclick="closeCalendar()" data-i18n="cancel_word"></button>
+    <button class="btn btn-gray" style="width:100%; margin-top:24px;" data-on-click="closeCalendar()" data-i18n="cancel_word"></button>
   </div>
 
   <section class="view" id="view-coach">
@@ -4292,7 +4252,7 @@
       </div>
       <div id="chatLog"></div>
       <div class="chat-scroll-btn-wrap" id="chatScrollBtnWrap">
-        <button class="chat-scroll-btn" id="chat-scroll-bottom-btn" style="display:none;" onclick="scrollChatToBottom()" data-i18n-aria="aria_scroll_bottom"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></button>
+        <button class="chat-scroll-btn" id="chat-scroll-bottom-btn" style="display:none;" data-on-click="scrollChatToBottom()" data-i18n-aria="aria_scroll_bottom"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></button>
       </div>
       <div class="chat-input-bar" id="chatBar">
         <!-- autocomplete/autocorrect/autocapitalize/spellcheck en "off": esto es lo que
@@ -4304,22 +4264,22 @@
              se limpian bien al cerrar el teclado en layouts con position:fixed como este
              (ver el comentario largo en app.js, cerca de forceFixedLayoutReflow). Sacando
              la barra de sugerencias de raíz, no queda nada que pueda dejar ese resto. -->
-        <input type="text" id="chatInput" data-i18n-ph="coach_ph" data-i18n-aria="coach_ph" onkeydown="if(event.key==='Enter') handleChatSendClick();" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-        <button class="chat-send" id="chat-send-btn" onclick="handleChatSendClick()" data-i18n-aria="aria_send"><span class="icon-sq" style="width:18px; height:18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></span></button>
+        <input type="text" id="chatInput" data-i18n-ph="coach_ph" data-i18n-aria="coach_ph" data-on-keydown="if(event.key==='Enter') handleChatSendClick();" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <button class="chat-send" id="chat-send-btn" data-on-click="handleChatSendClick()" data-i18n-aria="aria_send"><span class="icon-sq" style="width:18px; height:18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></span></button>
       </div>
     </div>
   </section>
 
   <section class="view" id="view-perfil">
     <div class="profile-head">
-      <div class="avatar-big-wrap" id="perfil-avatar" role="button" tabindex="0" data-i18n-aria="perfil_change_photo" onclick="onAvatarTap()">
+      <div class="avatar-big-wrap" id="perfil-avatar" role="button" tabindex="0" data-i18n-aria="perfil_change_photo" data-on-click="onAvatarTap()">
         <div class="avatar-big">
           <span id="perfil-initial">?</span>
           <img id="perfil-avatar-img" alt="" style="display:none;">
         </div>
         <div class="avatar-edit-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
       </div>
-      <input type="file" id="perfil-photo-input" accept="image/*" style="display:none;" onchange="handleAvatarPhotoChange(event)">
+      <input type="file" id="perfil-photo-input" accept="image/*" style="display:none;" data-on-change="handleAvatarPhotoChange(event)">
       <div>
         <input type="text" id="perfil-name" class="display" data-i18n-aria="ob_name_label" style="background:none; border:none; color:var(--chalk); font-size:21px; padding:0; outline:none; width:100%;">
         <p class="muted" id="perfil-sub">—</p>
@@ -4333,42 +4293,42 @@
          ids de siempre) -- lo único que cambió es cómo se acomodan. -->
     <div class="home-section-label" data-i18n="perfil_grid_title"></div>
     <div class="settings-grid">
-      <div class="card settile" role="button" tabindex="0" onclick="openDevicesOverlay()">
+      <div class="card settile" role="button" tabindex="0" data-on-click="openDevicesOverlay()">
         <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.3 1.6M9 3h6M9.5 5.5h5"/></svg></span>
         <h3 data-i18n="perfil_devices_title"></h3>
         <p class="muted" id="perfil-devices-summary"></p>
       </div>
-      <div class="card settile" role="button" tabindex="0" onclick="openAchievements()">
+      <div class="card settile" role="button" tabindex="0" data-on-click="openAchievements()">
         <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 2.5 10.5 8M15.5 2.5 13.5 8"/><circle cx="12" cy="14.5" r="6.5"/><path d="M12 11.2l1.1 2.2 2.4.35-1.75 1.7.4 2.4-2.15-1.15-2.15 1.15.4-2.4-1.75-1.7 2.4-.35z" fill="currentColor" stroke="none"/></svg></span>
         <h3 data-i18n="ach_open_title"></h3>
         <p class="muted" id="perfil-ach-summary"></p>
       </div>
-      <div class="card settile" role="button" tabindex="0" onclick="openPersonalDataOverlay()">
+      <div class="card settile" role="button" tabindex="0" data-on-click="openPersonalDataOverlay()">
         <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg></span>
         <h3 data-i18n="perfil_personal_title"></h3>
         <p class="muted" data-i18n="perfil_personal_desc"></p>
       </div>
-      <div class="card settile" role="button" tabindex="0" onclick="openGoalsOverlay()">
+      <div class="card settile" role="button" tabindex="0" data-on-click="openGoalsOverlay()">
         <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg></span>
         <h3 data-i18n="perfil_goals_title"></h3>
         <p class="muted" data-i18n="perfil_goals_desc"></p>
       </div>
-      <div class="card settile" role="button" tabindex="0" onclick="openDaysOverlay()">
+      <div class="card settile" role="button" tabindex="0" data-on-click="openDaysOverlay()">
         <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/></svg></span>
         <h3 data-i18n="perfil_days_title"></h3>
         <p class="muted" id="perfil-days-summary"></p>
       </div>
-      <div class="card settile" role="button" tabindex="0" onclick="openCrossTrainingOverlay()">
+      <div class="card settile" role="button" tabindex="0" data-on-click="openCrossTrainingOverlay()">
         <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 19 8.5 9.5 11.5 14 14.5 7.5 21.5 19Z"/></svg></span>
         <h3 data-i18n="perfil_crosstraining_title"></h3>
         <p class="muted" id="perfil-crosstraining-summary"></p>
       </div>
-      <div class="card settile" role="button" tabindex="0" onclick="openZonesOverlay()">
+      <div class="card settile" role="button" tabindex="0" data-on-click="openZonesOverlay()">
         <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg></span>
         <h3 data-i18n="perfil_zones_title"></h3>
         <p class="muted" id="perfil-zones-summary"></p>
       </div>
-      <div class="card settile" role="button" tabindex="0" onclick="openPainOverlay()">
+      <div class="card settile" role="button" tabindex="0" data-on-click="openPainOverlay()">
         <!-- Corazón + pulso a mano, redibujado (2026-09-30): la versión anterior no era
              simétrica (el lado derecho usaba curvas distintas al izquierdo, nunca reflejadas
              a propósito) y se veía chueco/desprolijo incluso a los 16px reales que mide acá
@@ -4380,24 +4340,24 @@
         <h3 data-i18n="pain_list_title"></h3>
         <p class="muted" id="perfil-pain-summary"></p>
       </div>
-      <div class="card settile" role="button" tabindex="0" onclick="openShoesOverlay()">
+      <div class="card settile" role="button" tabindex="0" data-on-click="openShoesOverlay()">
         <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M3.3 15.2 C2.6 13 2.8 10.5 3.6 9.3 C4 9 4.2 8.8 4.6 9 C5.2 9.3 5.8 9.8 6.2 10.4 C6.9 9.9 7.7 9.2 8.6 9 C11 9.6 15 11 18.5 13.6 C19.6 14.3 20.4 15 20.8 16 L21 16 Q22.3 16 22.3 17.2 L22.3 18 Q22.3 19.3 21 19.3 L2.8 19.3 Q1.6 19.3 1.6 18 L1.6 16.4 Q1.6 15.2 2.8 15.2 Z"/></svg></span>
         <h3 data-i18n="perfil_gear"></h3>
         <p class="muted" id="perfil-shoes-summary"></p>
       </div>
-      <div class="card settile" role="button" tabindex="0" onclick="openEventOverlay()">
+      <div class="card settile" role="button" tabindex="0" data-on-click="openEventOverlay()">
         <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4.5s2-1.3 4.5-1.3 3.5 1.5 6 1.5 3.5-1 3.5-1v9s-1.5 1-3.5 1-3.5-1.5-6-1.5-4.5 1.3-4.5 1.3z"/></svg></span>
         <h3 data-i18n="perfil_event"></h3>
         <p class="muted" id="perfil-event-summary"></p>
       </div>
-      <div class="card settile" role="button" tabindex="0" onclick="openLangOverlay()">
+      <div class="card settile" role="button" tabindex="0" data-on-click="openLangOverlay()">
         <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M2.5 12h19M12 2.5c2.5 2.6 4 6 4 9.5s-1.5 6.9-4 9.5c-2.5-2.6-4-6-4-9.5s1.5-6.9 4-9.5z"/></svg></span>
         <h3 data-i18n="perfil_lang"></h3>
         <p class="muted" id="perfil-lang-summary"></p>
       </div>
       <!-- Tema/Unidades/Entrenar por/Avisos de voz -- ver el comentario junto a
            preferences-overlay más abajo. -->
-      <div class="card settile" role="button" tabindex="0" onclick="openPreferencesOverlay()">
+      <div class="card settile" role="button" tabindex="0" data-on-click="openPreferencesOverlay()">
         <span class="icon-sq" style="color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="3.5" y1="7" x2="20.5" y2="7"/><circle cx="9" cy="7" r="2" fill="currentColor" stroke="none"/><line x1="3.5" y1="12.5" x2="20.5" y2="12.5"/><circle cx="16" cy="12.5" r="2" fill="currentColor" stroke="none"/><line x1="3.5" y1="18" x2="20.5" y2="18"/><circle cx="12" cy="18" r="2" fill="currentColor" stroke="none"/></svg></span>
         <h3 data-i18n="perfil_preferences"></h3>
         <p class="muted" data-i18n="perfil_preferences_desc"></p>
@@ -4414,13 +4374,13 @@
           <p class="muted" id="push-status" style="font-size:12.5px;" data-i18n="push_disabled"></p>
         </div>
         <label class="switch">
-          <input type="checkbox" id="push-toggle" aria-labelledby="push-title" onchange="handlePushToggle(this.checked)">
+          <input type="checkbox" id="push-toggle" aria-labelledby="push-title" data-on-change="handlePushToggle(this.checked)">
           <span class="switch-slider"></span>
         </label>
       </div>
       <div class="reminder-row">
         <label for="reminder-hour" data-i18n="push_hour_label"></label>
-        <select id="reminder-hour" onchange="setReminderHour(this.value)"></select>
+        <select id="reminder-hour" data-on-change="setReminderHour(this.value)"></select>
       </div>
     </div>
 
@@ -4449,7 +4409,7 @@
       <h3 data-i18n="perfil_feedback_title"></h3>
       <p class="muted" style="font-size:12px; margin:2px 0 10px;" data-i18n="perfil_feedback_hint"></p>
       <textarea id="feedback-message" rows="3" maxlength="4000" data-i18n-ph="perfil_feedback_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
-      <button class="btn btn-gray btn-sm" id="feedback-send-btn" style="margin-top:12px; width:100%;" data-i18n="perfil_feedback_send" onclick="sendFeedback()"></button>
+      <button class="btn btn-gray btn-sm" id="feedback-send-btn" style="margin-top:12px; width:100%;" data-i18n="perfil_feedback_send" data-on-click="sendFeedback()"></button>
     </div>
 
     <div class="card">
@@ -4461,12 +4421,12 @@
         <a class="set-row" href="/privacy.html" target="_blank" rel="noopener"><span data-i18n="legal_privacy_link"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></a>
         <a class="set-row" href="/terms.html" target="_blank" rel="noopener"><span data-i18n="legal_terms_link"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></a>
         <a class="set-row" href="mailto:info@zancada.org"><span data-i18n="perfil_support_link"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></a>
-        <button type="button" class="set-row" onclick="startTour()"><span data-i18n="tour_replay"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>
-        <button type="button" class="set-row" onclick="resetApp()"><span data-i18n="perfil_reset"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>
+        <button type="button" class="set-row" data-on-click="startTour()"><span data-i18n="tour_replay"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>
+        <button type="button" class="set-row" data-on-click="resetApp()"><span data-i18n="perfil_reset"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>
       </div>
-      <button type="button" class="set-row" id="admin-row" style="display:none;" onclick="openAdminOverlay()"><span>Panel de administración</span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>
-      <button class="btn btn-gray" style="margin-top:18px;" onclick="confirmLogout()" data-i18n="perfil_logout"></button>
-      <button class="btn btn-danger" style="margin-top:12px;" onclick="deleteAccount()" data-i18n="perfil_delete_account"></button>
+      <button type="button" class="set-row" id="admin-row" style="display:none;" data-on-click="openAdminOverlay()"><span>Panel de administración</span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>
+      <button class="btn btn-gray" style="margin-top:18px;" data-on-click="confirmLogout()" data-i18n="perfil_logout"></button>
+      <button class="btn btn-danger" style="margin-top:12px;" data-on-click="deleteAccount()" data-i18n="perfil_delete_account"></button>
     </div>
   </section>
 
@@ -4475,22 +4435,22 @@
     <div id="tour-tip">
       <p id="tour-text"></p>
       <div class="tour-actions">
-        <button type="button" class="small-link" onclick="endTour()" data-i18n="tour_skip"></button>
+        <button type="button" class="small-link" data-on-click="endTour()" data-i18n="tour_skip"></button>
         <span class="mono" id="tour-count"></span>
-        <button type="button" class="btn btn-primary btn-sm" id="tour-next" onclick="nextTour()"></button>
+        <button type="button" class="btn btn-primary btn-sm" id="tour-next" data-on-click="nextTour()"></button>
       </div>
     </div>
   </div>
   <nav class="tabbar" id="tabbar" aria-label="Zancada" style="display:none;">
-    <button class="nav-btn active" data-view="inicio" onclick="showView('inicio')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path class="fl" d="M4.2 10.6 12 4l7.8 6.6V19a1.5 1.5 0 0 1-1.5 1.5h-3V15a1.2 1.2 0 0 0-1.2-1.2h-4.2A1.2 1.2 0 0 0 8.7 15v5.5h-3A1.5 1.5 0 0 1 4.2 19z"/></svg><span data-i18n="nav_home"></span></button>
-    <button class="nav-btn" data-view="plan" onclick="showView('plan')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect class="fl" x="3.5" y="4.8" width="17" height="15.7" rx="3.5"/><path d="M3.5 9.6h17M8 3v3.4M16 3v3.4"/></svg><span data-i18n="nav_plan"></span></button>
-    <button class="nav-btn nav-btn-primary" data-view="correr" onclick="showView('correr')" data-i18n-aria="nav_run"><span class="nav-primary-circle"><svg viewBox="77 6 233 535" fill="currentColor" fill-rule="evenodd"><path d="M118,484 L121,495 L144,515 L175,526 L216,524 L247,499 L211,476 L179,484 L156,471 Z M216,456 L217,468 L253,487 L261,469 L258,465 L223,455 Z M203,454 L193,462 L193,467 L192,468 L192,473 L193,474 L197,473 L200,470 L202,461 L204,458 Z M169,452 L167,455 L168,461 L172,468 L175,471 L177,471 L178,469 L177,457 L171,452 Z M113,469 L158,458 L157,447 L115,446 Z M208,430 L203,430 L197,433 L195,436 L195,442 L196,443 L199,443 L206,440 L208,438 Z M221,424 L220,442 L254,451 L263,450 L266,433 Z M171,424 L168,430 L170,436 L176,440 L181,441 L182,439 L181,431 L175,424 Z M113,431 L114,433 L157,433 L160,429 L160,418 L136,413 L118,413 Z M212,395 L207,399 L203,399 L199,401 L198,413 L200,416 L204,416 L213,411 Z M176,390 L172,395 L172,405 L174,409 L179,413 L185,414 L186,399 Z M225,386 L224,412 L267,418 L269,390 Z M128,370 L119,395 L120,400 L162,402 L165,383 L163,375 Z M242,270 L237,295 L279,316 L286,282 Z M159,266 L116,286 L129,314 L170,290 Z M192,252 L189,252 L172,263 L172,267 L180,282 L194,270 Z M205,249 L204,269 L227,286 L231,267 Z M295,232 L290,229 L249,230 L247,251 L251,255 L290,259 Z M146,230 L101,236 L108,267 L153,253 Z M189,209 L161,232 L166,251 L190,231 L191,212 Z M203,207 L202,228 L224,243 L236,246 L237,225 Z M93,188 L95,220 L141,215 L138,189 Z M293,189 L285,186 L250,194 L249,214 L292,214 Z M186,169 L152,197 L155,215 L187,192 Z M198,166 L200,185 L235,208 L236,183 L202,165 Z M286,144 L277,143 L245,155 L247,178 L287,171 L290,163 Z M98,140 L92,166 L95,170 L122,174 L138,172 L140,149 Z M183,126 L153,150 L153,176 L184,149 Z M196,124 L197,147 L232,164 L231,150 L224,136 Z M267,96 L231,115 L240,139 L277,123 Z M109,93 L101,122 L143,131 L149,108 Z M179,92 L171,96 L164,106 L159,121 L160,125 L173,111 L182,105 L182,98 Z M194,90 L193,103 L218,118 L213,106 L207,98 L199,91 Z M114,74 L154,95 L172,79 L196,77 L224,101 L261,79 L239,47 L190,21 L172,21 L139,40 Z"/></svg></span></button>
-    <button class="nav-btn" data-view="history" onclick="showView('history')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle class="fl" cx="12" cy="12" r="8.6"/><path d="M12 7.2V12l3.2 2"/></svg><span data-i18n="nav_history"></span></button>
-    <button class="nav-btn" data-view="perfil" onclick="showView('perfil')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle class="fl" cx="12" cy="8" r="3.7"/><path class="fl" d="M4.8 20.2c.9-3.9 3.8-6 7.2-6s6.3 2.1 7.2 6z"/></svg><span data-i18n="nav_profile"></span></button>
+    <button class="nav-btn active" data-view="inicio" data-on-click="showView('inicio')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path class="fl" d="M4.2 10.6 12 4l7.8 6.6V19a1.5 1.5 0 0 1-1.5 1.5h-3V15a1.2 1.2 0 0 0-1.2-1.2h-4.2A1.2 1.2 0 0 0 8.7 15v5.5h-3A1.5 1.5 0 0 1 4.2 19z"/></svg><span data-i18n="nav_home"></span></button>
+    <button class="nav-btn" data-view="plan" data-on-click="showView('plan')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect class="fl" x="3.5" y="4.8" width="17" height="15.7" rx="3.5"/><path d="M3.5 9.6h17M8 3v3.4M16 3v3.4"/></svg><span data-i18n="nav_plan"></span></button>
+    <button class="nav-btn nav-btn-primary" data-view="correr" data-on-click="showView('correr')" data-i18n-aria="nav_run"><span class="nav-primary-circle"><svg viewBox="77 6 233 535" fill="currentColor" fill-rule="evenodd"><path d="M118,484 L121,495 L144,515 L175,526 L216,524 L247,499 L211,476 L179,484 L156,471 Z M216,456 L217,468 L253,487 L261,469 L258,465 L223,455 Z M203,454 L193,462 L193,467 L192,468 L192,473 L193,474 L197,473 L200,470 L202,461 L204,458 Z M169,452 L167,455 L168,461 L172,468 L175,471 L177,471 L178,469 L177,457 L171,452 Z M113,469 L158,458 L157,447 L115,446 Z M208,430 L203,430 L197,433 L195,436 L195,442 L196,443 L199,443 L206,440 L208,438 Z M221,424 L220,442 L254,451 L263,450 L266,433 Z M171,424 L168,430 L170,436 L176,440 L181,441 L182,439 L181,431 L175,424 Z M113,431 L114,433 L157,433 L160,429 L160,418 L136,413 L118,413 Z M212,395 L207,399 L203,399 L199,401 L198,413 L200,416 L204,416 L213,411 Z M176,390 L172,395 L172,405 L174,409 L179,413 L185,414 L186,399 Z M225,386 L224,412 L267,418 L269,390 Z M128,370 L119,395 L120,400 L162,402 L165,383 L163,375 Z M242,270 L237,295 L279,316 L286,282 Z M159,266 L116,286 L129,314 L170,290 Z M192,252 L189,252 L172,263 L172,267 L180,282 L194,270 Z M205,249 L204,269 L227,286 L231,267 Z M295,232 L290,229 L249,230 L247,251 L251,255 L290,259 Z M146,230 L101,236 L108,267 L153,253 Z M189,209 L161,232 L166,251 L190,231 L191,212 Z M203,207 L202,228 L224,243 L236,246 L237,225 Z M93,188 L95,220 L141,215 L138,189 Z M293,189 L285,186 L250,194 L249,214 L292,214 Z M186,169 L152,197 L155,215 L187,192 Z M198,166 L200,185 L235,208 L236,183 L202,165 Z M286,144 L277,143 L245,155 L247,178 L287,171 L290,163 Z M98,140 L92,166 L95,170 L122,174 L138,172 L140,149 Z M183,126 L153,150 L153,176 L184,149 Z M196,124 L197,147 L232,164 L231,150 L224,136 Z M267,96 L231,115 L240,139 L277,123 Z M109,93 L101,122 L143,131 L149,108 Z M179,92 L171,96 L164,106 L159,121 L160,125 L173,111 L182,105 L182,98 Z M194,90 L193,103 L218,118 L213,106 L207,98 L199,91 Z M114,74 L154,95 L172,79 L196,77 L224,101 L261,79 L239,47 L190,21 L172,21 L139,40 Z"/></svg></span></button>
+    <button class="nav-btn" data-view="history" data-on-click="showView('history')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle class="fl" cx="12" cy="12" r="8.6"/><path d="M12 7.2V12l3.2 2"/></svg><span data-i18n="nav_history"></span></button>
+    <button class="nav-btn" data-view="perfil" data-on-click="showView('perfil')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle class="fl" cx="12" cy="8" r="3.7"/><path class="fl" d="M4.8 20.2c.9-3.9 3.8-6 7.2-6s6.3 2.1 7.2 6z"/></svg><span data-i18n="nav_profile"></span></button>
   </nav>
   <div class="coach-fab-wrap" id="coach-fab-wrap" style="display:none;">
     <div class="coach-fab-thinking" id="coach-fab-thinking" aria-hidden="true"><div class="coach-fab-thinking-bubble"><span></span><span></span><span></span></div></div>
-    <button class="coach-fab" onclick="openCoachWithWink()" data-i18n-aria="nav_coach"><svg viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="mascotSheen" cx="36%" cy="28%" r="60%"><stop offset="0%" stop-color="#fff" stop-opacity=".5"/><stop offset="55%" stop-color="#fff" stop-opacity=".1"/><stop offset="100%" stop-color="#fff" stop-opacity="0"/></radialGradient><radialGradient id="mascotShade" cx="50%" cy="82%" r="55%"><stop offset="0%" stop-color="#000" stop-opacity=".2"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs><circle id="mascot-body" class="mascot-body" cx="32" cy="32" r="28" fill="var(--hivis)"/><circle class="mascot-shade" cx="32" cy="32" r="28" fill="url(#mascotShade)"/><circle class="mascot-sheen" cx="32" cy="32" r="28" fill="url(#mascotSheen)"/><g id="mascot-eyes" class="mascot-eyes"><path id="mascot-eye-l" class="mascot-eye" d="M21.5 25.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z"/><path id="mascot-eye-r" class="mascot-eye" d="M37.5 25.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z"/></g></svg></button>
+    <button class="coach-fab" data-on-click="openCoachWithWink()" data-i18n-aria="nav_coach"><svg viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="mascotSheen" cx="36%" cy="28%" r="60%"><stop offset="0%" stop-color="#fff" stop-opacity=".5"/><stop offset="55%" stop-color="#fff" stop-opacity=".1"/><stop offset="100%" stop-color="#fff" stop-opacity="0"/></radialGradient><radialGradient id="mascotShade" cx="50%" cy="82%" r="55%"><stop offset="0%" stop-color="#000" stop-opacity=".2"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs><circle id="mascot-body" class="mascot-body" cx="32" cy="32" r="28" fill="var(--hivis)"/><circle class="mascot-shade" cx="32" cy="32" r="28" fill="url(#mascotShade)"/><circle class="mascot-sheen" cx="32" cy="32" r="28" fill="url(#mascotSheen)"/><g id="mascot-eyes" class="mascot-eyes"><path id="mascot-eye-l" class="mascot-eye" d="M21.5 25.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z"/><path id="mascot-eye-r" class="mascot-eye" d="M37.5 25.5 a2.5 2.5 0 0 1 5 0 v9 a2.5 2.5 0 0 1 -5 0 z"/></g></svg></button>
   </div>
 </div>
 <!-- Spacer invisible que garantiza SIEMPRE unos pocos px de overflow real en el
@@ -4518,15 +4478,8 @@
      app.js: window.I18N tiene que estar armado cuando ese script arranca). Los otros 5
      se traen recién si hacen falta de verdad: ver ensureLocaleLoaded() en app.js, usado
      al restaurar una cuenta con otro idioma guardado, o si alguien abre el selector. -->
-<script>
-(function(){
-  var supported = ['es','en','pt','fr','it','de'];
-  var nav = ((navigator.language || navigator.userLanguage || 'es')+'').slice(0,2).toLowerCase();
-  var initial = supported.indexOf(nav) >= 0 ? nav : 'es';
-  window.__ZANCADA_INITIAL_LANG__ = initial;
-  document.write('<script src="/locales/' + initial + '.js"><\/script>');
-})();
-</script>
+<script src="/js/boot-locale.js"></script>
+<script src="/js/ui-events.js"></script>
 <script defer src="/app.js"></script>
 </body>
 </html>
