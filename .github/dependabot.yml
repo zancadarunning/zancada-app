@@ -1,0 +1,25 @@
+# Actualizaciones automáticas de dependencias: GitHub abre un pull request por semana con lo que hay para subir.
+# Las actualizaciones de seguridad (avisos de vulnerabilidades) llegan aparte, apenas aparecen.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-y-parches:
+        update-types: [minor, patch]
+  - package-ecosystem: npm
+    directory: /mobile
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      minor-y-parches:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
