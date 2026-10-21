@@ -69,4 +69,9 @@ function decToken(stored) {
   throw new Error('token-crypto: no se pudo descifrar un token (falta TOKEN_ENCRYPTION_KEY o cambió sin conservar la anterior en TOKEN_ENCRYPTION_KEY_PREVIOUS)');
 }
 
-module.exports = { encToken, decToken, isEncrypted, PREFIX };
+// ¿La clave actual existe y mide 32 bytes? (sin esto, encToken guarda en texto plano)
+function keyIsValid() {
+  return !!keyFromEnv('TOKEN_ENCRYPTION_KEY');
+}
+
+module.exports = { encToken, decToken, isEncrypted, keyIsValid, PREFIX };

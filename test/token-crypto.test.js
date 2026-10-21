@@ -138,3 +138,11 @@ test('cron de Strava con el token vencido: renueva con el refresh en claro y gua
   assert.equal(decToken(seen.patchBody.refresh_token), 'NUEVO-REFRESH');
   assert.equal(seen.activitiesAuth, 'Bearer NUEVO-ACCESS');
 });
+
+test('keyIsValid: solo una clave de 32 bytes en base64 sirve (el script de migración se niega a seguir con otra)', () => {
+  const { keyIsValid } = require('../api/_lib/token-crypto');
+  setKeys(KEY_A); assert.equal(keyIsValid(), true);
+  setKeys('clave-corta'); assert.equal(keyIsValid(), false);
+  setKeys(null); assert.equal(keyIsValid(), false);
+  setKeys(KEY_A);
+});

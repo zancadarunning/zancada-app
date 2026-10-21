@@ -11,7 +11,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { encToken, decToken, isEncrypted } = require('../api/_lib/token-crypto');
+const { encToken, decToken, isEncrypted, keyIsValid } = require('../api/_lib/token-crypto');
 
 const TABLES = ['strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'suunto_connections'];
 const COLUMNS = ['access_token', 'refresh_token'];
@@ -33,6 +33,7 @@ async function main() {
   const key = process.env.SUPABASE_SERVICE_KEY;
   if (!base || !key) { console.error('Faltan SUPABASE_URL y/o SUPABASE_SERVICE_KEY (en el entorno o en .env).'); process.exit(1); }
   if (!process.env.TOKEN_ENCRYPTION_KEY) { console.error('Falta TOKEN_ENCRYPTION_KEY (la misma que está en Vercel).'); process.exit(1); }
+  if (!keyIsValid()) { console.error('La clave de cifrado no es válida: tiene que ser de 32 bytes en base64 (unos 44 caracteres, termina casi siempre en =). Revisá que la hayas pegado completa, sin espacios.'); process.exit(1); }
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
   let total = 0, changed = 0, failed = 0;
