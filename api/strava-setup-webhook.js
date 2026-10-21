@@ -9,6 +9,10 @@ const requireCronSecret = require('./_lib/require-cron-secret');
 // endpoints de administración.
 const { withSentry, reportError } = require('./_lib/sentry');
 
+// Strava comprueba la dirección con un GET antes de aceptarla y NO sigue redirecciones. zancada.org (sin www) redirige a www.zancada.org, así que la
+// dirección tiene que ser directamente la final. (SITE_URL puede seguir apuntando al dominio sin www para el resto de la app.)
+const WEBHOOK_BASE = process.env.STRAVA_WEBHOOK_BASE_URL || 'https://www.zancada.org';
+
 module.exports = withSentry(async (req, res) => {
   if (!(await requireCronSecret(req))) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -20,7 +24,7 @@ module.exports = withSentry(async (req, res) => {
       body: JSON.stringify({
         client_id: process.env.STRAVA_CLIENT_ID,
         client_secret: process.env.STRAVA_CLIENT_SECRET,
-        callback_url: `${process.env.SITE_URL}/api/strava-webhook${process.env.STRAVA_WEBHOOK_SECRET ? '?k=' + encodeURIComponent(process.env.STRAVA_WEBHOOK_SECRET) : ''}`,
+        callback_url: `${WEBHOOK_BASE}/api/strava-webhook${process.env.STRAVA_WEBHOOK_SECRET ? '?k=' + encodeURIComponent(process.env.STRAVA_WEBHOOK_SECRET) : ''}`,
         verify_token: process.env.STRAVA_VERIFY_TOKEN
       })
     });
