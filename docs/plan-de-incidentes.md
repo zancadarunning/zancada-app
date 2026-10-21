@@ -39,7 +39,7 @@ Después de rotar: probar el login, una sincronización de reloj y el chat.
 
 ## 4. Escenarios
 
-**Cuenta comprometida (un usuario).** Pedirle que use "Cerrar sesión en todos los dispositivos" y cambie la contraseña. Si no puede, desde Supabase → Authentication → Users se puede cerrar sus sesiones y forzar el cambio.
+**Cuenta comprometida (un usuario).** Pedirle que use "Olvidé mi contraseña" en la pantalla de ingreso (eso crea una contraseña nueva). Desde Supabase → Authentication → Users se pueden cerrar sus sesiones en todos los dispositivos y forzar el cambio. La app ya no tiene botones de "cerrar sesión en todos los dispositivos" ni de cambiar contraseña desde el perfil (decisión del dueño, 2026-10-21).
 
 **Ataque de bots al registro o al login.** Verificar que el captcha esté activo (Supabase → Authentication → Attack Protection). Bajar temporalmente los límites de Rate Limits. Revisar el uso de correos de Resend.
 

@@ -41,7 +41,7 @@ Falta, para cada uno: firmar o aceptar el **contrato de tratamiento de datos (DP
 
 | Derecho | Estado |
 |---|---|
-| Acceso y portabilidad | **Hecho**: Perfil → "Descargar mis datos" (JSON con todo, sin secretos) |
+| Acceso y portabilidad | **Por correo** a `info@zancada.org` (se exporta a mano desde la base). El botón "Descargar mis datos" se sacó de la app el 2026-10-21 por decisión del dueño; la ley (RGPD, LGPD) exige poder atender el pedido, así que hace falta definir un plazo de respuesta (por ejemplo 30 días) y quién lo ejecuta |
 | Borrado | **Hecho**: Perfil → "Borrar mis datos" y "Borrar cuenta" (borra todo, revoca las conexiones con relojes y exige confirmar la contraseña) |
 | Rectificación | **Hecho**: el perfil, el plan y las carreras se editan en la app |
 | Limitación y oposición | Por correo a `info@zancada.org`; sin automatizar |

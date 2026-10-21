@@ -22,7 +22,7 @@ function setup(inputId, btnId) {
   return { app, input, btn, type };
 }
 
-for (const [inputId, btnId] of [['recovery-new-pw', 'recovery-submit-btn'], ['cp-new', 'cp-save-btn']]) {
+for (const [inputId, btnId] of [['recovery-new-pw', 'recovery-submit-btn']]) {
   test(`${btnId}: gris hasta que se cumplen los 4 requisitos, y se habilita al cumplirlos`, () => {
     const { btn, type } = setup(inputId, btnId);
     type('');            assert.equal(btn.disabled, true, 'vacío');
