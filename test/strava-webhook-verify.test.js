@@ -47,3 +47,13 @@ test('GET con token equivocado, sin token o en otro modo: 403', async () => {
     assert.equal(res.code, 403, q);
   }
 });
+
+test('el secreto cargado en Vercel con un salto de línea al final igual coincide con el de la URL', async () => {
+  const keep = process.env.STRAVA_WEBHOOK_SECRET;
+  process.env.STRAVA_WEBHOOK_SECRET = 'secreto-largo\n';
+  try {
+    const res = mkRes();
+    await handler({ method: 'GET', url: '/api/strava-webhook?k=secreto-largo&hub.challenge=xyz&hub.mode=subscribe', query: { k: 'secreto-largo', 'hub.challenge': 'xyz', 'hub.mode': 'subscribe' }, headers: {} }, res);
+    assert.equal(res.code, 200);
+  } finally { process.env.STRAVA_WEBHOOK_SECRET = keep; }
+});

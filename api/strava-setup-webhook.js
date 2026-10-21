@@ -12,6 +12,8 @@ const { withSentry, reportError } = require('./_lib/sentry');
 // Strava comprueba la dirección con un GET antes de aceptarla y NO sigue redirecciones. zancada.org (sin www) redirige a www.zancada.org, así que la
 // dirección tiene que ser directamente la final. (SITE_URL puede seguir apuntando al dominio sin www para el resto de la app.)
 const WEBHOOK_BASE = process.env.STRAVA_WEBHOOK_BASE_URL || 'https://www.zancada.org';
+// El valor pegado en Vercel puede traer un espacio o un salto de línea al final; Strava no lo respeta en la dirección: se recorta.
+const WEBHOOK_SECRET = String(process.env.STRAVA_WEBHOOK_SECRET || '').trim();
 
 module.exports = withSentry(async (req, res) => {
   if (!(await requireCronSecret(req))) {
@@ -25,7 +27,7 @@ module.exports = withSentry(async (req, res) => {
       body: new URLSearchParams({
         client_id: String(process.env.STRAVA_CLIENT_ID || ''),
         client_secret: String(process.env.STRAVA_CLIENT_SECRET || ''),
-        callback_url: `${WEBHOOK_BASE}/api/strava-webhook${process.env.STRAVA_WEBHOOK_SECRET ? '?k=' + encodeURIComponent(process.env.STRAVA_WEBHOOK_SECRET) : ''}`,
+        callback_url: `${WEBHOOK_BASE}/api/strava-webhook${WEBHOOK_SECRET ? '?k=' + encodeURIComponent(WEBHOOK_SECRET) : ''}`,
         verify_token: String(process.env.STRAVA_VERIFY_TOKEN || '')
       }).toString()
     });
