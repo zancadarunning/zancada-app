@@ -59,6 +59,9 @@ function readRawBody(req){
 function runFfmpeg(args){
   return new Promise((resolve, reject)=>{
     const proc = spawn(ffmpegPath, args);
+    // un archivo armado a propósito no puede dejar el proceso girando: se corta a los 25 segundos
+    const killer = setTimeout(() => { try { proc.kill('SIGKILL'); } catch (e) { /* ya terminó */ } }, 25000);
+    proc.on('close', () => clearTimeout(killer));
     let stderr = '';
     proc.stderr.on('data', d => { stderr += d.toString(); });
     proc.on('error', reject);
@@ -111,7 +114,8 @@ module.exports = withSentry(async (req, res) => {
     // ffmpeg siga auto-detectando sobre bytes que ya sabemos son ftyp (defensa en profundidad
     // -- sin esto, ffmpeg podía elegir un demuxer distinto si el contenido después del ftyp
     // engañaba al auto-probing).
-    await runFfmpeg(['-y', '-f', 'mp4', '-i', inPath, '-c', 'copy', '-movflags', '+faststart', '-f', 'mp4', outPath]);
+    // -protocol_whitelist file: aunque el MP4 traiga referencias a datos externos (dref/URL), ffmpeg solo puede leer archivos locales
+    await runFfmpeg(['-y', '-protocol_whitelist', 'file', '-f', 'mp4', '-i', inPath, '-c', 'copy', '-movflags', '+faststart', '-f', 'mp4', outPath]);
 
     const output = fs.readFileSync(outPath);
     res.setHeader('Content-Type', 'video/mp4');
