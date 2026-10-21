@@ -122,4 +122,4 @@ function buildWeeklySummary({ runs, plan, weekStart, streak, tz, lang, imperial,
   return { title: T.title, body: parts.join(' ') };
 }
 
-module.exports = { buildWeeklySummary, WEEKLY_SLOTS, NORMAL_SLOTS, LATE_FIRST_SLOT, LATE_SLOTS, weeklySlotOf, currentWeeklySlot, isWeeklySlot, isWeeklyDue, hasSundaySession, sundayPending, mondayKeyFor, localDateKey };
+module.exports = { buildWeeklySummary, WEEKLY_SLOTS, NORMAL_SLOTS, LATE_FIRST_SLOT, LATE_SLOTS, weeklySlotOf, currentWeeklySlot, isWeeklySlot, isWeeklyDue, hasSundaySession, sundayPending, mondayKeyFor, localDateKey, dayNum };

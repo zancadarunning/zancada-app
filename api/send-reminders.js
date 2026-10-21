@@ -4,6 +4,7 @@ const { sendFcmPush } = require('./_lib/fcm');
 const { isTrustedPushEndpoint } = require('./_lib/push-endpoint');
 const { buildWeeklySummary, isWeeklySlot, isWeeklyDue, sundayPending, currentWeeklySlot, mondayKeyFor } = require('./_lib/weekly-summary');
 const sentRegistry = require('./_lib/sent-registry');
+const nudge = require('./_lib/missing-run-nudge');
 const { pick, ownKey } = require('./_lib/own');
 
 // ANTES este cron corría UNA vez por día a una hora fija en UTC (11:00 UTC, ver
@@ -116,7 +117,7 @@ module.exports = withSentry(async (req, res) => {
     const states = [];
     for (let i = 0; i < subUserIds.length; i += STATE_BATCH) {
       const ids = subUserIds.slice(i, i + STATE_BATCH).map(encodeURIComponent).join(',');
-      const statesRes = await fetch(`${base}/rest/v1/app_state?user_id=in.(${ids})&select=user_id,plan:data->plan,weekStart:data->>weekStart,tz:data->profile->>tz,rh:data->profile->>reminderHour,lang:data->>lang,streak:data->>streakWeeks,units:data->profile->>units`, { headers });
+      const statesRes = await fetch(`${base}/rest/v1/app_state?user_id=in.(${ids})&select=user_id,plan:data->plan,weekStart:data->>weekStart,tz:data->profile->>tz,rh:data->profile->>reminderHour,lang:data->>lang,streak:data->>streakWeeks,units:data->profile->>units,trainBy:data->profile->>trainBy`, { headers });
       if (!statesRes.ok) {
         const body = await statesRes.text().catch(() => '');
         throw new Error(`app_state fetch failed: ${statesRes.status} ${body}`);
@@ -134,6 +135,7 @@ module.exports = withSentry(async (req, res) => {
 
     let sent = 0, skipped = 0, failed = 0;
     const due = [];
+    const nudges = [];   // a quién le toca el aviso de la noche "hoy tenías salida y todavía no aparece cargada" (20:00 hora local)
     const weekly = [];   // a quién le toca el resumen semanal (domingo, en el turno fijo de cada uno entre las 19:00 y las 23:30, hora local; con sesión planeada el domingo, al final de la noche)
     for (const row of (states || [])) {
      try {
@@ -147,6 +149,11 @@ module.exports = withSentry(async (req, res) => {
         // candidato = ya le corresponde (su turno o uno posterior: reintento); más abajo se descartan los que ya recibieron y, si no hay
         // registro de enviados, se vuelve a "solo en su turno exacto"
         if (isWeeklyDue(row.user_id, slot, pending)) weekly.push({ row, subRow, period: mondayKeyFor(wNow, wtz), exact: isWeeklySlot(row.user_id, wClock.hour, wClock.minute, pending) });
+      }
+      if (nudge.isNudgeTime(wClock.hour, wClock.minute)) {
+        const ntz = row.tz || DEFAULT_TZ;
+        const nSession = nudge.sessionDueToday(row.plan, row.weekStart, nudge.mondayOf(Date.now(), ntz, wClock.dayIdx), wClock.dayIdx);
+        if (nSession) nudges.push({ row, subRow, tz: ntz, session: nSession });
       }
       const plan = row.plan;
       if (!plan || !plan.length) { skipped++; continue; }
@@ -282,7 +289,36 @@ module.exports = withSentry(async (req, res) => {
     const weeklyPending = Math.max(0, toSend.length - nextWeekly);
     if (weeklyPending) console.warn('send-reminders: resumen semanal sin enviar por falta de tiempo (se reintenta en la próxima corrida):', weeklyPending);
 
-    res.status(200).json({ sent, skipped, failed, weeklySent, weeklyRetried, weeklyPending, weeklyRegistry: registryOk });
+    // Aviso de la noche: solo a quien no tiene ninguna carrera hoy. La pregunta va a la base (has_run_between, sql/has_run_between.sql); si esa función
+    // no existe o falla, no se manda nada. Un aviso por persona por día (registro de enviados); tope de tiempo como el resumen semanal.
+    let nudgeSent = 0;
+    async function sendNudge({ row, subRow, tz, session }) {
+      const now = Date.now();
+      const win = nudge.localDayWindow(tz, now);
+      const ran = await nudge.hasRunToday(base, headers, row.user_id, win);
+      if (ran !== false) return;                  // ya corrió hoy, o no se pudo saber: no molestamos
+      let claimed = false;
+      if (registryOk) {
+        const c = await sentRegistry.claim(base, headers, row.user_id, 'missing_run', win.dayKey);
+        if (c === false) return;                  // ya se le mandó hoy
+        claimed = c === true;
+      }
+      const lang = ownKey(MSGS, row.lang, 'es');
+      const typeLabel = session.custom ? String(session.type) : (pick(MSGS[lang].types, session.typeKey, '__none__') || String(session.typeKey));
+      const msg = nudge.buildNudge(lang, nudge.describeSession(session, typeLabel, row.units === 'imperial', row.trainBy === 'time'));
+      const r = await sendOne({ row, subRow, body: msg.body, title: msg.title });
+      if (r === 'sent') nudgeSent++;
+      else if (r === 'failed' && claimed) await sentRegistry.release(base, headers, row.user_id, 'missing_run', win.dayKey);
+    }
+    const nudgeStart = Date.now();
+    let nextNudge = 0;
+    await Promise.all(Array.from({ length: Math.min(8, nudges.length) }, async () => {
+      while (nextNudge < nudges.length && Date.now() - nudgeStart < 5000) {
+        try { await sendNudge(nudges[nextNudge++]); } catch (e) { failed++; console.error('send-reminders: aviso de la noche', e && e.message); }
+      }
+    }));
+
+    res.status(200).json({ sent, skipped, failed, nudgeSent, weeklySent, weeklyRetried, weeklyPending, weeklyRegistry: registryOk });
   } catch (err) {
     console.error('send-reminders error', err);
     await reportError(err, { endpoint: 'send-reminders' });
