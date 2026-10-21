@@ -198,8 +198,6 @@ module.exports = withSentry(async (req, res) => {
     const tokenOk = !!tokenEnv && token !== undefined && safeEqual(squash(token), tokenEnv);
     if (mode === 'subscribe' && (tokenOk || kOk)) {
       res.status(200).json({ 'hub.challenge': challenge });
-      // TEMPORAL (mientras se registra la suscripción nueva): deja constancia de que la verificación llegó y se aceptó. Se responde ANTES de avisar.
-      await reportSecurityEvent('Verificación GET del webhook de Strava ACEPTADA', { urlShape: rawUrl.replace(/=[^&?#]*/g, '=*').slice(0, 160) }).catch(() => {});
       return;
     }
     // Sin valores: solo qué parámetros llegaron y si coincidían (para entender un rechazo del registro de la suscripción)
