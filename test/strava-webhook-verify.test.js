@@ -57,3 +57,13 @@ test('el secreto cargado en Vercel con un salto de línea al final igual coincid
     assert.equal(res.code, 200);
   } finally { process.env.STRAVA_WEBHOOK_SECRET = keep; }
 });
+
+test('espacios o saltos de línea en el medio del secreto cargado en Vercel tampoco rompen la verificación', async () => {
+  const keep = process.env.STRAVA_WEBHOOK_SECRET;
+  process.env.STRAVA_WEBHOOK_SECRET = 'secreto' + String.fromCharCode(13, 10) + 'largo ';
+  try {
+    const res = mkRes();
+    await handler({ method: 'GET', url: '/api/strava-webhook?k=secretolargo&hub.challenge=xyz&hub.mode=subscribe', query: { k: 'secretolargo', 'hub.challenge': 'xyz', 'hub.mode': 'subscribe' }, headers: {} }, res);
+    assert.equal(res.code, 200);
+  } finally { process.env.STRAVA_WEBHOOK_SECRET = keep; }
+});
