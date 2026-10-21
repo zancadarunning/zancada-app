@@ -8,7 +8,7 @@ Respuestas redactadas a partir de `docs/privacidad-inventario-de-datos.md` y del
 |---|---|
 | Política de privacidad pública (URL) | `https://www.zancada.org/privacy.html`. **Pendiente**: completar entidad legal y jurisdicción (marcadores de posición) |
 | Forma de borrar la cuenta **dentro de la app** | Hecho: Perfil → "Borrar cuenta" (pide la contraseña) |
-| URL web para pedir el borrado (Google Play lo exige) | **Pendiente**: una página o un correo claro. Propuesta: sección en la política de privacidad con `info@zancada.org` y un plazo de respuesta (ej. 30 días) |
+| URL web para pedir el borrado (Google Play lo exige) | **Hecho**: `https://www.zancada.org/eliminar-cuenta.html` (6 idiomas; por correo a `info@zancada.org`, respuesta en 30 días). Falta que esté publicada (mergeada) y cargarla en Play Console |
 | Declaración de permisos sensibles (ubicación, Health Connect) | Ver más abajo, justificaciones listas |
 | Edad / público objetivo | La app exige 16+ al entrar (pantalla de consentimiento). Declarar "no dirigida a menores de 16" |
 | Funciones de IA | Zonda envía contexto a un proveedor de IA: está dicho en el consentimiento y en la política |
@@ -36,10 +36,11 @@ Respuestas redactadas a partir de `docs/privacidad-inventario-de-datos.md` y del
 | Identificadores de dispositivo | Token de notificaciones (Firebase / Web Push) | Sí | No | Sí | Funcionamiento (avisos) |
 
 Notas:
-1. Anthropic recibe nombre, edad, peso, altura, objetivo, plan, resumen de carreras recientes, molestias, notas y la charla. **No** recibe las carreras de Strava ni la ruta GPS. Verificar su contrato de tratamiento de datos y su política de retención antes de declarar "no se usa para otros fines".
-2. Mapbox recibe hasta 200 puntos de la ruta en la dirección de la imagen del mapa. Open-Meteo recibe las coordenadas aproximadas para el clima.
-3. **No** se declara: fotos/videos (el video del recorrido se arma y se guarda en el teléfono, no se sube), contactos, archivos, calendario (los entrenamientos se agregan al calendario del teléfono pero los datos no salen del dispositivo), SMS, historial de navegación, información financiera, datos de compra.
-4. **No** hay publicidad ni venta de datos ni SDK de anuncios. No hay "seguimiento" entre apps.
+1. **Anthropic** (verificado el 2026-10-21 en sus términos comerciales y su centro de privacidad): recibe nombre, edad aproximada, peso, altura, objetivo, plan, resumen de carreras recientes, molestias, notas, nombres de zapatillas, zona horaria y la charla. **No** recibe correo, id de cuenta, coordenadas, ruta GPS ni las carreras de Strava. Sus Términos Comerciales (sección B) dicen que no entrena modelos con el contenido de los clientes de la API, y (sección C) incorporan su contrato de tratamiento de datos; la retención estándar de la API es de hasta 30 días (hasta 2 años si el contenido es marcado por violar su política de uso, y lo que la ley exija). Existe retención cero bajo pedido (contactar a ventas). Aun así, Google no cuenta como "compartir" a un proveedor que trata los datos por tu cuenta: se declara "Sí" de forma conservadora por tratarse de datos de salud con consentimiento explícito; confirmar el criterio con asesoría.
+2. **Mapbox** recibe la ruta (hasta 200 puntos) en la dirección de la imagen del mapa y, además, las coordenadas de los cuadros de mapa (tiles) que se ven en el mapa en vivo, en el detalle de cada carrera y en el video: eso revela la zona por donde corre la persona, junto con su IP. **Open-Meteo** recibe las coordenadas **redondeadas a 2 decimales** (aprox. 1 km) para el clima.
+3. **Terceros de recursos:** desde el 2026-10-21 las tipografías y el mapa (Leaflet) se sirven desde `/vendor` (copias propias): la app ya **no** le manda la IP de cada visita a Google Fonts ni a cdnjs.
+4. **No** se declara: fotos/videos (el video del recorrido se arma y se guarda en el teléfono, no se sube), contactos, archivos, calendario (los entrenamientos se agregan al calendario del teléfono pero los datos no salen del dispositivo), SMS, historial de navegación, información financiera, datos de compra.
+5. **No** hay publicidad ni venta de datos ni SDK de anuncios. No hay "seguimiento" entre apps.
 
 **Permisos sensibles: justificaciones para la declaración**
 - *Ubicación (precisa y aproximada)*: calcular distancia, ritmo y ruta de las carreras mientras el usuario las registra, y mostrar el clima local. Solo en primer plano; **no** se usa ubicación en segundo plano.
@@ -68,9 +69,9 @@ Notas:
 ## Antes de enviar a revisión: lista corta
 
 - [ ] Completar entidad legal y jurisdicción en `privacy.html` y `terms.html`.
-- [ ] Publicar la URL de pedido de borrado de cuenta (Google Play).
+- [ ] Cargar la URL de borrado (`https://www.zancada.org/eliminar-cuenta.html`) en Play Console.
 - [ ] Aceptar los DPA de los proveedores (ver `docs/dpa-proveedores.md`).
-- [ ] Verificar la política de retención y el uso de datos de Anthropic antes de marcar "no se usan para entrenar".
+- [x] Anthropic verificado el 2026-10-21 (no entrena con datos de la API, retención estándar de hasta 30 días, contrato de tratamiento incorporado). Volver a mirar si cambian sus términos; evaluar retención cero por tratarse de datos de salud.
 - [ ] Decidir sobre Strava (sus reglas prohíben datos con IA y piden borrarlos a los 7 días).
 - [ ] Revisión de las traducciones del consentimiento (pt, fr, it, de) por hablantes nativos.
 - [ ] Probar el flujo completo en un dispositivo limpio: registro → consentimiento → onboarding → borrar cuenta.
