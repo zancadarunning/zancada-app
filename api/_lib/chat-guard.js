@@ -13,6 +13,14 @@ const ALLOWED_TOOLS = new Set([
   'modificar_perfil', 'guardar_nota_coach', 'deshacer_cambio'
 ]);
 
+// El texto de sistema que manda la app tiene que EMPEZAR con uno de estos dos arranques (los de app.js: el coach Zonda y el traductor de textos de
+// sesiones). Así el cliente puede seguir agregando su contexto (perfil, plan, notas), pero no reemplazar quién es el asistente ni para qué sirve el
+// endpoint: usarlo como un chat libre con Claude queda descartado. test/chat-guard.test.js comprueba que app.js sigue empezando así.
+const SYSTEM_PREFIXES = {
+  coach: 'Sos "Zonda", el entrenador virtual dentro de la app Zancada',
+  translate: 'You translate short running-workout texts for a running app.'
+};
+
 const LIMITS = {
   system: 60000,        // el prompt real del coach (perfil + plan + notas) ronda 10-20k caracteres
   toolDescription: 6000,
@@ -29,10 +37,11 @@ const reject = reason => ({ ok: false, reason });
 const jsonLen = v => { try { return JSON.stringify(v).length; } catch (e) { return Infinity; } };
 
 function sanitizeSystem(system) {
-  if (system === undefined || system === null) return { ok: true, value: undefined };
-  if (typeof system !== 'string') return reject('system no es texto');
+  if (typeof system !== 'string') return reject('system ausente o no es texto');
   if (system.length > LIMITS.system) return reject('system demasiado largo');
-  return { ok: true, value: system };
+  const kind = Object.keys(SYSTEM_PREFIXES).find(k => system.startsWith(SYSTEM_PREFIXES[k]));
+  if (!kind) return reject('system no es el de la app');
+  return { ok: true, value: system, kind };
 }
 
 function sanitizeTools(tools) {
@@ -106,10 +115,11 @@ function sanitizeChatRequest(body) {
   const b = isPlainObject(body) ? body : {};
   const s = sanitizeSystem(b.system); if (!s.ok) return s;
   const t = sanitizeTools(b.tools); if (!t.ok) return t;
+  if (s.kind === 'translate' && t.value) return reject('el traductor no usa herramientas');
   const m = sanitizeMessages(b.messages); if (!m.ok) return m;
   const value = { system: s.value, tools: t.value, messages: m.value };
   if (jsonLen(value) > LIMITS.total) return reject('pedido demasiado grande');
   return { ok: true, value };
 }
 
-module.exports = { sanitizeChatRequest, ALLOWED_TOOLS, LIMITS };
+module.exports = { sanitizeChatRequest, ALLOWED_TOOLS, LIMITS, SYSTEM_PREFIXES };

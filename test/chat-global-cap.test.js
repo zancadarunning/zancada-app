@@ -30,7 +30,7 @@ test('tope global agotado: contesta "ocupado", no llama a Claude y avisa a Sentr
     if (u.includes('api.anthropic.com')) { anthropicCalls++; return ok({ content: [{ type: 'text', text: 'hola' }] }); }
     return ok({});
   };
-  const call = async () => { const res = mkRes(); await handler({ method: 'POST', headers: { authorization: 'Bearer t', origin: 'https://zancada.org' }, body: { lang: 'es', system: 'x', messages: [{ role: 'user', content: 'hola' }] } }, res); return res; };
+  const call = async () => { const res = mkRes(); await handler({ method: 'POST', headers: { authorization: 'Bearer t', origin: 'https://zancada.org' }, body: { lang: 'es', system: 'Sos "Zonda", el entrenador virtual dentro de la app Zancada. x', messages: [{ role: 'user', content: 'hola' }] } }, res); return res; };
 
   const r1 = await call();
   assert.equal(r1.code, 200);
