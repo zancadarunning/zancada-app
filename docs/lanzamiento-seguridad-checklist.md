@@ -32,6 +32,7 @@ Estado a 2026-10-21. Público: sin claves. Este archivo resume; el detalle está
 - Revisión de código automática (CodeQL) en cada cambio; integración continua obligatoria antes de mezclar.
 - Alertas de Sentry (problemas nuevos y avisos de seguridad), monitoreo del servidor con UptimeRobot, aviso de estado de Supabase.
 - Respaldo semanal de la base a tu computadora (domingo 22:00) con registro; guía de qué revisar cada semana.
+- Sin pedidos a terceros para recursos de la página: tipografías y mapa servidos desde `/vendor` (no se manda la IP a Google Fonts ni a cdnjs).
 - Plan de incidentes escrito (`docs/plan-de-incidentes.md`).
 - Inventario de datos y proveedores (`docs/privacidad-inventario-de-datos.md`), borrador de formularios de las tiendas y tabla de contratos con proveedores.
 
@@ -45,7 +46,7 @@ Estado a 2026-10-21. Público: sin claves. Este archivo resume; el detalle está
 | Contratos con proveedores (DPA) | Aceptarlos y archivarlos (`docs/dpa-proveedores.md`) | Dueño |
 | Región de los datos | Decidir si se mueve Supabase a Europa o Brasil | Dueño |
 | Strava | Decidir si se mantiene (prohíbe IA y exige borrar a los 7 días) | Dueño |
-| Formularios de las tiendas | Completarlos con `docs/tiendas-formularios-privacidad.md` y publicar la URL de borrado | Dueño |
+| Formularios de las tiendas | Completarlos con `docs/tiendas-formularios-privacidad.md` y cargar la URL de borrado (`/eliminar-cuenta.html`, ya creada) | Dueño |
 | Traducciones del consentimiento | Revisión de pt, fr, it, de por hablantes nativos | Externo |
 | Plan de pago el día del lanzamiento | Supabase Pro (contraseñas filtradas, tope de sesión, más límites), Resend pago, subir el tope de correos por hora | Dueño |
 | Seguridad sobre el celular | Play Integrity en Android una vez publicada; revisión equivalente en iPhone cuando exista | Yo + dueño |

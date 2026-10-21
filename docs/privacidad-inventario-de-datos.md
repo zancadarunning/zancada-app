@@ -29,8 +29,8 @@ Lo que **no** se guarda: contraseñas en claro, datos de tarjetas, documentos de
 | **Resend** | Correos de confirmación y restablecer contraseña | Dirección de correo y el contenido del mensaje | EE. UU. |
 | **Sentry** | Errores | Metadatos técnicos, sin datos personales | EE. UU. |
 | **Cloudflare** | DNS, reenvío de correo (`info@`) | Direcciones y contenido de lo que se reenvía | Global |
-| **Mapbox** | Mapas de las rutas | **La ruta** (hasta 200 puntos de coordenadas) de cada carrera cuyo mapa se dibuja, en la dirección de la imagen que se pide | EE. UU. |
-| **Open-Meteo** | Clima en la pantalla de inicio | Las coordenadas del lugar donde está la persona | Europa |
+| **Mapbox** | Mapas de las rutas | **La ruta** (hasta 200 puntos) de cada carrera cuyo mapa se dibuja, y las coordenadas de los cuadros de mapa que se ven (zona donde corre la persona) | EE. UU. |
+| **Open-Meteo** | Clima en la pantalla de inicio | Las coordenadas **redondeadas a 2 decimales** (aprox. 1 km) | Europa |
 | **Google (Firebase)** | Notificaciones en Android; ingreso con Google | Token de dispositivo; datos de la cuenta si elige Google | EE. UU. |
 | **Apple** | Ingreso con Apple (cuando exista la app de iPhone) | Datos de la cuenta si elige Apple | EE. UU. |
 | **Strava, Suunto, Wahoo, Polar, COROS** | Importar carreras y enviar el plan al reloj | Tokens de acceso; carreras; plan semanal (a Suunto y Wahoo) | Según cada marca; **Strava prohíbe usar sus datos con IA y exige borrarlos a los 7 días**: ver `docs/` y la memoria del proyecto |
@@ -42,7 +42,7 @@ Falta, para cada uno: firmar o aceptar el **contrato de tratamiento de datos (DP
 | Derecho | Estado |
 |---|---|
 | Acceso y portabilidad | **Por correo** a `info@zancada.org` (se exporta a mano desde la base). El botón "Descargar mis datos" se sacó de la app el 2026-10-21 por decisión del dueño; la ley (RGPD, LGPD) exige poder atender el pedido, así que hace falta definir un plazo de respuesta (por ejemplo 30 días) y quién lo ejecuta |
-| Borrado | **Hecho**: Perfil → "Borrar mis datos" y "Borrar cuenta" (borra todo, revoca las conexiones con relojes y exige confirmar la contraseña) |
+| Borrado | **Hecho**: Perfil → "Borrar mis datos" y "Borrar cuenta" (borra todo, revoca las conexiones con relojes donde la marca lo permite (Strava, Polar, Wahoo, COROS) y exige confirmar la contraseña) |
 | Rectificación | **Hecho**: el perfil, el plan y las carreras se editan en la app |
 | Limitación y oposición | Por correo a `info@zancada.org`; sin automatizar |
 | Retirar el consentimiento | Desconectar cada reloj; borrar los datos |
