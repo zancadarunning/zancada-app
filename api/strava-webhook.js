@@ -171,13 +171,28 @@ const { mergeAndNotify } = require('./_lib/notify-new-run');
 
 module.exports = withSentry(async (req, res) => {
   if (req.method === 'GET') {
-    const mode = req.query['hub.mode'];
-    const token = req.query['hub.verify_token'];
-    const challenge = req.query['hub.challenge'];
-    if (mode === 'subscribe' && token === process.env.STRAVA_VERIFY_TOKEN) {
+    // Strava arma esta consulta agregando hub.mode / hub.verify_token / hub.challenge a la dirección del callback. Si la dirección ya tiene un
+    // "?" propio (el secreto ?k=...), algunos clientes pegan los parámetros con otro "?" en vez de "&", y req.query deja de verlos: por eso
+    // se leen también directo de la URL cruda.
+    const rawUrl = String(req.url || '');
+    const param = name => {
+      if (req.query && req.query[name] !== undefined) return req.query[name];
+      const m = rawUrl.match(new RegExp('[?&]' + name.replace('.', '\.') + '=([^&?#]*)'));
+      return m ? decodeURIComponent(m[1]) : undefined;
+    };
+    const mode = param('hub.mode');
+    const token = param('hub.verify_token');
+    const challenge = param('hub.challenge');
+    if (mode === 'subscribe' && process.env.STRAVA_VERIFY_TOKEN && safeEqual(String(token || ''), process.env.STRAVA_VERIFY_TOKEN)) {
       res.status(200).json({ 'hub.challenge': challenge });
       return;
     }
+    // Sin valores: solo qué parámetros llegaron y si coincidían (para entender un rechazo del registro de la suscripción)
+    await reportSecurityEvent('Verificación GET del webhook de Strava rechazada', {
+      mode: mode === undefined ? null : String(mode).slice(0, 20), hasToken: token !== undefined, hasChallenge: challenge !== undefined,
+      verifyTokenConfigured: !!process.env.STRAVA_VERIFY_TOKEN, hasQueryKeys: Object.keys(req.query || {}).slice(0, 8),
+      urlShape: rawUrl.replace(/=[^&?#]*/g, '=*').slice(0, 160)
+    }).catch(() => {});
     res.status(403).send('Forbidden');
     return;
   }
