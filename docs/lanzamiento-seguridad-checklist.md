@@ -32,7 +32,7 @@ Estado a 2026-10-21. Público: sin claves. Este archivo resume; el detalle está
 **Operación**
 - Revisión de código automática (CodeQL) en cada cambio; integración continua obligatoria antes de mezclar.
 - Alertas de Sentry (problemas nuevos y avisos de seguridad), monitoreo del servidor con UptimeRobot, aviso de estado de Supabase.
-- Respaldo semanal de la base a tu computadora (domingo 22:00) con registro; guía de qué revisar cada semana.
+- Respaldo semanal de la base a tu computadora (domingo 22:00), **cifrado con clave pública** (la clave privada y su frase viven fuera de la PC), con registro; guía de qué revisar cada semana.
 - Sin pedidos a terceros para recursos de la página: tipografías y mapa servidos desde `/vendor` (no se manda la IP a Google Fonts ni a cdnjs).
 - Plan de incidentes escrito (`docs/plan-de-incidentes.md`).
 - Inventario de datos y proveedores (`docs/privacidad-inventario-de-datos.md`), borrador de formularios de las tiendas y tabla de contratos con proveedores.
