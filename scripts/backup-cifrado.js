@@ -36,9 +36,11 @@ function generateKeyPair(passphrase, bits) {
 
 // Junta archivos (de una carpeta plana o un solo archivo) en un contenedor y lo comprime.
 function pack(source) {
-  const st = fs.statSync(source);
-  const entries = st.isDirectory()
-    ? fs.readdirSync(source, { withFileTypes: true }).filter(e => e.isFile()).map(e => ({ name: e.name, buf: fs.readFileSync(path.join(source, e.name)) }))
+  // Sin "mirar y después leer" (statSync + readFileSync deja una ventana en la que el archivo puede cambiar): se intenta listar como carpeta y, si no lo es, se lee como archivo.
+  let dirents = null;
+  try { dirents = fs.readdirSync(source, { withFileTypes: true }); } catch (e) { if (e.code !== 'ENOTDIR') throw e; }
+  const entries = dirents
+    ? dirents.filter(e => e.isFile()).map(e => ({ name: e.name, buf: fs.readFileSync(path.join(source, e.name)) }))
     : [{ name: path.basename(source), buf: fs.readFileSync(source) }];
   const header = Buffer.from(JSON.stringify({ v: 1, files: entries.map(e => ({ name: e.name, size: e.buf.length })) }), 'utf8');
   const len = Buffer.alloc(4); len.writeUInt32BE(header.length);
