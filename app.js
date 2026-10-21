@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-21T00:38:05Z';
+const APP_VERSION = '2026-10-21T00:43:47Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -17084,6 +17084,15 @@ function resolveCustomInterval(input){
 // repeticiones/esfuerzo_min, applyPlanChange rechaza el cambio en vez de dejarlo pasar con
 // texto libre sin estructura (ver el comentario grande más abajo, en el chequeo).
 const REP_BASED_TYPES = ['intervals','hills','fartlek'];
+// Valores que el coach (la IA) puede usar en sus herramientas. El input_schema de cada herramienta los declara como enum, pero eso es solo una guía
+// para el modelo: la API no lo hace cumplir. Un valor inventado se rechaza acá, antes de guardarlo (se usan como claves de traducción t('type_'+x)
+// y terminan en textos de la pantalla, así que no pueden ser cualquier cadena).
+const COACH_TYPE_KEYS = ['easy', 'intervals', 'tempo', 'long', 'fartlek', 'hills', 'progression'];
+const COACH_TERRAINS = ['asfalto', 'trail', 'mixto'];
+const COACH_GOALS = ['start', 'general', '5k', '10k', '15k', '21k', '42k', 'ultra', 'lifestyle'];
+function badCoachEnum(field, value, allowed){
+  return `El valor de "${field}" (${String(value).slice(0, 30)}) no es válido -- usá uno de: ${allowed.join(', ')}.`;
+}
 function applyPlanChange(input){
   // El input_schema de la herramienta declara dia como enum:DAY_KEYS, pero eso es solo una
   // guía para el modelo -- la API de tool use no lo hace cumplir de verdad (mismo motivo que
@@ -17097,6 +17106,8 @@ function applyPlanChange(input){
   // y ese texto sin escapar terminaba en un mensaje de chat de rol 'system', que renderChat()
   // inserta con innerHTML sin escapar -- una inyección de HTML real, no solo teórica.
   if(!DAY_KEYS.includes(input.dia)) return 'Día no encontrado.';
+  if(!COACH_TYPE_KEYS.includes(input.tipo_categoria)) return badCoachEnum('tipo_categoria', input.tipo_categoria, COACH_TYPE_KEYS);
+  if(input.terreno && !COACH_TERRAINS.includes(input.terreno)) return badCoachEnum('terreno', input.terreno, COACH_TERRAINS);
   const raceRefusal = raceDayRefusal(input.dia, input.semana);
   if(raceRefusal) return raceRefusal;
   // El snapshot de undo se toma DESPUÉS de validar (día encontrado, no bloqueado) -- si
@@ -17446,9 +17457,11 @@ function applyProfileChange(input){
   // interrumpir el resto.
   const rejectedNotes = [];
   let recalc = false;
-  if(input.objetivo){ state.profile.goal = input.objetivo; changes.push('objetivo'); recalc = true; clearLegacyCurveCapOnEdit(); }
+  if(input.objetivo && !COACH_GOALS.includes(input.objetivo)) rejectedNotes.push(badCoachEnum('objetivo', input.objetivo, COACH_GOALS) + ' -- no se aplicó');
+  else if(input.objetivo){ state.profile.goal = input.objetivo; changes.push('objetivo'); recalc = true; clearLegacyCurveCapOnEdit(); }
   if(input.fecha_carrera){ state.profile.raceDate = input.fecha_carrera; changes.push('fecha de carrera'); recalc = true; }
-  if(input.terreno){ state.profile.terrain = input.terreno; changes.push('terreno'); }
+  if(input.terreno && !COACH_TERRAINS.includes(input.terreno)) rejectedNotes.push(badCoachEnum('terreno', input.terreno, COACH_TERRAINS) + ' -- no se aplicó');
+  else if(input.terreno){ state.profile.terrain = input.terreno; changes.push('terreno'); }
   // Mismo motivo que MAX_SESSION_KM/resolveZone en modificar_sesion: el input_schema de la
   // herramienta es solo una guía, la API de tool use no hace cumplir ningún rango de verdad.
   // Sin este chequeo, una FC máxima alucinada o mal transcripta (ej. "900" en vez de "190")
@@ -17513,7 +17526,7 @@ function applyCoachNote(input){
   // resuelta desde Perfil, en vez de agregar un flag nuevo que se queda pegado para siempre
   // (el mismo tipo de bug que isBeginnerProfile/returningFromBreak tenían antes de esta sesión).
   let plan_updated = false;
-  if(input.zona_cuerpo){
+  if(input.zona_cuerpo && PAIN_BODY_PARTS.includes(input.zona_cuerpo)){
     // Encontrado en una auditoría: savePainLog() (el formulario de Perfil > Molestias) manda
     // el chat SIN esperarlo ("Me duele: rodilla.") y de forma independiente le muestra al
     // corredor su propio cartel de "¿bajo la intensidad?" que, si acepta, llama a
