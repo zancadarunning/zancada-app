@@ -90,3 +90,34 @@ test('los formularios de ingreso y registro son <form> con los autocomplete que 
   assert.match(html, /id="signup-password" name="password" autocomplete="new-password"/);
   assert.match(html, /<button type="submit" class="btn btn-primary" id="login-submit-btn"/);
 });
+
+test('offerSavePassword en la app de Android usa savePassword del plugin (hoja del sistema); sin él, cae a commit()', async () => {
+  const app = loadApp();
+  const calls = [];
+  app.Capacitor = { Plugins: { ZancadaAutofill: { savePassword: async o => { calls.push(['savePassword', o.id]); return { saved: true }; }, commit: async () => { calls.push(['commit']); } } } };
+  await app.offerSavePassword('ana@correo.com', 'Clave-Secreta-123');
+  assert.deepEqual(calls, [['savePassword', 'ana@correo.com']]);
+  const app2 = loadApp(); const calls2 = [];
+  app2.Capacitor = { Plugins: { ZancadaAutofill: { commit: async () => { calls2.push('commit'); } } } };
+  await app2.offerSavePassword('ana@correo.com', 'x');
+  assert.deepEqual(calls2, ['commit']);
+});
+
+test('offerSavedLogin: completa correo y contraseña con lo que elige la persona en la hoja del sistema, una sola vez, sin enviar el formulario', async () => {
+  const app = loadApp();
+  const el = withEmailField(app);
+  let pedidos = 0;
+  app.Capacitor = { Plugins: { ZancadaAutofill: { getPassword: async () => { pedidos++; return { id: 'ana@correo.com', password: 'Clave-Secreta-123' }; } } } };
+  await app.offerSavedLogin();
+  assert.equal(el('login-email').value, 'ana@correo.com');
+  assert.equal(el('login-password').value, 'Clave-Secreta-123');
+  await app.offerSavedLogin();
+  assert.equal(pedidos, 1, 'no vuelve a abrir la hoja en la misma apertura');
+  // cancelar la hoja (sin credencial) no rompe nada ni completa campos
+  const app2 = loadApp(); const el2 = withEmailField(app2);
+  app2.Capacitor = { Plugins: { ZancadaAutofill: { getPassword: async () => ({}) } } };
+  await app2.offerSavedLogin();
+  assert.equal(el2('login-email').value, '');
+  // en el navegador (sin plugin) no hace nada
+  const app3 = loadApp(); await app3.offerSavedLogin();
+});

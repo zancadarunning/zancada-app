@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-21T19:59:17Z';
+const APP_VERSION = '2026-10-21T20:28:46Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1016,8 +1016,28 @@ async function offerSavePassword(email, password){
     }
   }catch(e){}
   try{
-    const plugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ZancadaAutofill;
-    if(plugin && plugin.commit) await plugin.commit();
+    const plugin = nativeAutofillPlugin();
+    if(plugin && plugin.savePassword) await plugin.savePassword({ id: email, password: password });   // Android: hoja del sistema "¿Guardar contraseña?"
+    else if(plugin && plugin.commit) await plugin.commit();
+  }catch(e){}
+}
+function nativeAutofillPlugin(){
+  return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ZancadaAutofill) || null;
+}
+// En la app de Android, al abrir la pantalla de ingreso se ofrece la contraseña guardada en el gestor del sistema (una hoja con las cuentas guardadas;
+// si la persona elige una, se completan correo y contraseña, sin enviar nada). Una sola vez por apertura de la app.
+let savedLoginOffered = false;
+async function offerSavedLogin(){
+  if(savedLoginOffered) return;
+  const plugin = nativeAutofillPlugin();
+  if(!plugin || !plugin.getPassword) return;
+  savedLoginOffered = true;
+  try{
+    const cred = await plugin.getPassword();
+    if(!cred || !cred.id || !cred.password) return;
+    const email = document.getElementById('login-email'), pw = document.getElementById('login-password');
+    if(email) email.value = cred.id;
+    if(pw) pw.value = cred.password;
   }catch(e){}
 }
 prefillLoginEmail();
@@ -1787,7 +1807,7 @@ function setBtnBusy(btnId, busy, loadingLabel){
 }
 
 /* ================= LOGIN / ONBOARD ================= */
-function goLogin(){ document.getElementById('splash').style.display='none'; document.getElementById('login').style.display='block'; prefillLoginEmail(); prefetchCaptcha('captcha-login'); }
+function goLogin(){ document.getElementById('splash').style.display='none'; document.getElementById('login').style.display='block'; prefillLoginEmail(); offerSavedLogin(); prefetchCaptcha('captcha-login'); }
 function goSignup(){ document.getElementById('login').style.display='none'; document.getElementById('signup').style.display='block'; prefetchCaptcha('captcha-signup'); }
 function goBackToLogin(){ document.getElementById('signup').style.display='none'; document.getElementById('login').style.display='block'; prefillLoginEmail(); prefetchCaptcha('captcha-login'); }
 function goToLoginFromSignup(){
