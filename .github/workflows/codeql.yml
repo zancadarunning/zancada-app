@@ -1,0 +1,35 @@
+# Análisis de seguridad del código (CodeQL de GitHub): busca fallos conocidos (XSS, inyecciones, rutas inseguras, secretos en el código...).
+# Corre en cada pull request, en cada cambio a main y una vez por semana. Los resultados quedan en la pestaña "Security" del repositorio.
+name: CodeQL
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '30 11 * * 2'   # martes 11:30 UTC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
+      - uses: github/codeql-action/init@ce5e7eeac396d720fe2d802714996c8ce561e311   # v3.39.0
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+      - uses: github/codeql-action/analyze@ce5e7eeac396d720fe2d802714996c8ce561e311   # v3.39.0
+        with:
+          category: /language:javascript-typescript
