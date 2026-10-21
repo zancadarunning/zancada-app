@@ -14,7 +14,7 @@
 (function (root) {
   'use strict';
 
-  var EVENT_TYPES = ['click', 'input', 'change', 'keydown', 'keyup', 'error', 'load'];
+  var EVENT_TYPES = ['click', 'input', 'change', 'submit', 'keydown', 'keyup', 'error', 'load'];
   // Únicos métodos nativos que se pueden llamar, con su camino completo (nada de this.remove(), this.innerHTML..., etc.)
   var NATIVE_METHODS = { 'event.stopPropagation': 1, 'event.preventDefault': 1, 'this.classList.add': 1, 'this.classList.remove': 1, 'this.classList.toggle': 1, 'this.focus': 1, 'this.blur': 1, 'this.select': 1, 'this.scrollIntoView': 1, 'this.click': 1, 'this.closest': 1 };
   var BLOCKED_PROPS = { constructor: 1, __proto__: 1, prototype: 1, __defineGetter__: 1, __defineSetter__: 1, __lookupGetter__: 1, __lookupSetter__: 1 };

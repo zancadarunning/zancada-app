@@ -2737,14 +2737,15 @@
     </div>
     <h2 class="display" data-i18n="login_title"></h2>
     <p class="lead" data-i18n="login_lead_signin"></p>
+    <form id="login-form" novalidate data-on-submit="event.preventDefault(); handleSignIn()">
     <div class="field">
       <label for="login-email" data-i18n="login_email_label"></label>
-      <input type="email" id="login-email" autocomplete="email" data-i18n-ph="login_email_ph" data-on-keydown="if(event.key==='Enter') handleSignIn();">
+      <input type="email" id="login-email" name="username" autocomplete="username" data-i18n-ph="login_email_ph">
     </div>
     <div class="field">
       <label for="login-password" data-i18n="login_password_label"></label>
       <div class="pw-wrap">
-        <input type="password" id="login-password" autocomplete="current-password" data-i18n-ph="login_password_ph" data-on-keydown="if(event.key==='Enter') handleSignIn();">
+        <input type="password" id="login-password" name="password" autocomplete="current-password" data-i18n-ph="login_password_ph">
         <button type="button" class="pw-toggle" data-on-click="togglePasswordVisibility('login-password', this)" data-i18n-aria="aria_show_password"><span class="icon-sq" style="width:18px; height:18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span></button>
       </div>
       <p class="err-text" id="login-err"></p>
@@ -2753,7 +2754,8 @@
       <input type="checkbox" id="login-remember-me" checked>
       <span style="font-size:13.5px; color:var(--chalk);" data-i18n="login_remember_me"></span>
     </label>
-    <div class="field"><button class="btn btn-primary" id="login-submit-btn" data-i18n="login_continue" data-on-click="handleSignIn()"></button></div>
+    <div class="field"><button type="submit" class="btn btn-primary" id="login-submit-btn" data-i18n="login_continue"></button></div>
+    </form>
     <div class="captcha-box" id="captcha-login"></div>
     <button class="small-link" id="login-forgot-btn" style="display:block; text-align:center; width:100%; margin-top:14px;" data-on-click="handleForgotPassword()" data-i18n="login_forgot"></button>
     <div class="divider-or"><span data-i18n="login_or"></span></div>
@@ -2772,14 +2774,15 @@
     </div>
     <h2 class="display" data-i18n="signup_title"></h2>
     <p class="lead" data-i18n="signup_lead"></p>
+    <form id="signup-form" novalidate data-on-submit="event.preventDefault(); handleSignUp()">
     <div class="field">
       <label for="signup-email" data-i18n="login_email_label"></label>
-      <input type="email" id="signup-email" autocomplete="email" data-i18n-ph="login_email_ph" data-on-input="updateSignupButtonState()" data-on-keydown="if(event.key==='Enter') handleSignUp();">
+      <input type="email" id="signup-email" name="username" autocomplete="username" data-i18n-ph="login_email_ph" data-on-input="updateSignupButtonState()">
     </div>
     <div class="field">
       <label for="signup-password" data-i18n="login_password_label"></label>
       <div class="pw-wrap">
-        <input type="password" id="signup-password" autocomplete="new-password" minlength="8" data-i18n-ph="login_password_ph" data-on-input="updateSignupButtonState()" data-on-keydown="if(event.key==='Enter') handleSignUp();">
+        <input type="password" id="signup-password" name="password" autocomplete="new-password" minlength="8" data-i18n-ph="login_password_ph" data-on-input="updateSignupButtonState()">
         <button type="button" class="pw-toggle" data-on-click="togglePasswordVisibility('signup-password', this)" data-i18n-aria="aria_show_password"><span class="icon-sq" style="width:18px; height:18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span></button>
       </div>
       <ul class="pw-checklist" data-pw-list="signup-password" data-i18n-aria="password_requirements_hint"></ul>
@@ -2794,7 +2797,8 @@
         <a href="/privacy.html" target="_blank" rel="noopener" style="color:var(--mist); text-decoration:underline;" data-i18n="legal_privacy_link"></a>.
       </span>
     </label>
-    <div class="field"><button class="btn btn-primary" id="signup-submit-btn" data-i18n="login_create_account" data-on-click="handleSignUp()" disabled></button><p class="btn-reason" id="signup-reason" role="status"></p></div>
+    <div class="field"><button type="submit" class="btn btn-primary" id="signup-submit-btn" data-i18n="login_create_account" disabled></button><p class="btn-reason" id="signup-reason" role="status"></p></div>
+    </form>
     <div class="captcha-box" id="captcha-signup"></div>
     <div class="divider-or"><span data-i18n="login_or"></span></div>
     <button class="btn btn-outline" id="signup-google-btn" data-on-click="handleGoogleSignIn('signup-google-btn')"><span data-i18n="login_google"></span></button>

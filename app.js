@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-21T19:18:31Z';
+const APP_VERSION = '2026-10-21T19:59:17Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -989,6 +989,38 @@ function getRememberMe(){
 function setRememberMe(remember){
   try{ localStorage.setItem(REMEMBER_ME_KEY, remember ? 'true' : 'false'); }catch(e){}
 }
+/* ---- Correo recordado y gestor de contraseñas ----
+   El ÚLTIMO CORREO usado se guarda en el teléfono (solo si "Recordar mi sesión" está tildado) y vuelve escrito en la pantalla de ingreso. La CONTRASEÑA
+   NUNCA se guarda en la app: se la ofrecemos al gestor de contraseñas del sistema (el de Google en Android, Llavero de iCloud en iPhone), que la
+   cifra y la protege con la huella o el PIN. Lo logra un formulario de verdad (<form> con autocomplete username / current-password) más un aviso al
+   sistema cuando el ingreso salió bien (offerSavePassword). */
+const LAST_EMAIL_KEY = 'zancada_last_email';
+function rememberLastEmail(email){
+  try{ if(getRememberMe() && email) localStorage.setItem(LAST_EMAIL_KEY, String(email).slice(0, 200)); else localStorage.removeItem(LAST_EMAIL_KEY); }catch(e){}
+}
+function clearLastEmail(){ try{ localStorage.removeItem(LAST_EMAIL_KEY); }catch(e){} }
+function prefillLoginEmail(){
+  try{
+    const el = document.getElementById('login-email');
+    const saved = localStorage.getItem(LAST_EMAIL_KEY);
+    if(el && saved && !el.value && getRememberMe()) el.value = saved;
+  }catch(e){}
+}
+// Avisa al sistema que el formulario de ingreso o de registro se envió bien para que ofrezca "¿Guardar contraseña?". En navegadores con la Credential
+// Management API se le entrega la credencial; en la app de Android se llama a AutofillManager.commit() (plugin ZancadaAutofill). La contraseña
+// pasa por esta función solo para eso: no se escribe en ningún almacenamiento ni en ningún registro.
+async function offerSavePassword(email, password){
+  try{
+    if(window.PasswordCredential && navigator.credentials && navigator.credentials.store){
+      await navigator.credentials.store(new window.PasswordCredential({ id: email, password: password, name: email }));
+    }
+  }catch(e){}
+  try{
+    const plugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ZancadaAutofill;
+    if(plugin && plugin.commit) await plugin.commit();
+  }catch(e){}
+}
+prefillLoginEmail();
 // Storage "dual" que Supabase usa para leer/guardar la sesión: mira getRememberMe() en cada
 // llamada (no solo una vez al crear el cliente), así que cambiar el checkbox y volver a
 // iniciar sesión alcanza para que la próxima sesión quede en el storage correcto, sin
@@ -1755,9 +1787,9 @@ function setBtnBusy(btnId, busy, loadingLabel){
 }
 
 /* ================= LOGIN / ONBOARD ================= */
-function goLogin(){ document.getElementById('splash').style.display='none'; document.getElementById('login').style.display='block'; prefetchCaptcha('captcha-login'); }
+function goLogin(){ document.getElementById('splash').style.display='none'; document.getElementById('login').style.display='block'; prefillLoginEmail(); prefetchCaptcha('captcha-login'); }
 function goSignup(){ document.getElementById('login').style.display='none'; document.getElementById('signup').style.display='block'; prefetchCaptcha('captcha-signup'); }
-function goBackToLogin(){ document.getElementById('signup').style.display='none'; document.getElementById('login').style.display='block'; prefetchCaptcha('captcha-login'); }
+function goBackToLogin(){ document.getElementById('signup').style.display='none'; document.getElementById('login').style.display='block'; prefillLoginEmail(); prefetchCaptcha('captcha-login'); }
 function goToLoginFromSignup(){
   // Le pasamos el email ya tipeado a la pantalla de login para que no tenga que
   // volver a escribirlo -- viene del cartel de "ya existe una cuenta con ese email".
@@ -2801,6 +2833,8 @@ async function handleSignIn(){
     const captchaToken = await getCaptchaToken('captcha-login');
     const { data, error } = await supabaseClient.auth.signInWithPassword(Object.assign({ email, password }, captchaToken ? { options: { captchaToken } } : {}));
     if(error){ err.textContent = translateAuthError(error); err.style.display='block'; return; }
+    rememberLastEmail(email);
+    await offerSavePassword(email, password);   // antes de cambiar de pantalla: el sistema mira el formulario todavía visible
     await loadUserAndEnter(data.user);
   }finally{ setBtnBusy('login-submit-btn', false); }
 }
@@ -2879,6 +2913,8 @@ async function handleSignUp(){
       err.innerHTML = `${t('login_err_exists')} <button type="button" class="small-link" style="padding:0; font-size:inherit; vertical-align:baseline;" data-on-click="goToLoginFromSignup()">${t('login_go_signin_short')}</button>`;
       err.style.display='block'; return;
     }
+    rememberLastEmail(email);
+    await offerSavePassword(email, password);
     if(!data.session){ showConfirmEmailScreen(email, password); return; }
     pendingEmail = email;
     currentUserId = data.user.id;
