@@ -146,3 +146,16 @@ test('keyIsValid: solo una clave de 32 bytes en base64 sirve (el script de migra
   setKeys(null); assert.equal(keyIsValid(), false);
   setKeys(KEY_A);
 });
+
+test('el script de migración pide solo las columnas de tokens que existen en cada tabla (Polar no tiene refresh_token)', () => {
+  const script = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'encrypt-existing-tokens.js'), 'utf8');
+  for (const brand of ['strava', 'polar', 'wahoo', 'coros', 'suunto']) {
+    const sqlFile = path.join(__dirname, '..', 'sql', `create_${brand}_connections.sql`);
+    const sql = fs.existsSync(sqlFile) ? fs.readFileSync(sqlFile, 'utf8') : null;
+    const m = script.match(new RegExp(`${brand}_connections: \[([^\]]*)\]`));
+    assert.ok(m, `${brand}: falta en el script`);
+    const cols = m[1].match(/'(\w+)'/g).map(c => c.replace(/'/g, ''));
+    assert.ok(cols.includes('access_token'));
+    if (sql) assert.equal(cols.includes('refresh_token'), /refresh_token\s+text/i.test(sql), `${brand}: refresh_token`);
+  }
+});

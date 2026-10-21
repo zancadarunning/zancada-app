@@ -13,8 +13,14 @@ const fs = require('fs');
 const path = require('path');
 const { encToken, decToken, isEncrypted, keyIsValid } = require('../api/_lib/token-crypto');
 
-const TABLES = ['strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'suunto_connections'];
-const COLUMNS = ['access_token', 'refresh_token'];
+// Columnas con tokens de cada tabla (Polar no tiene refresh_token: sus tokens no vencen)
+const TABLES = {
+  strava_connections: ['access_token', 'refresh_token'],
+  polar_connections: ['access_token'],
+  wahoo_connections: ['access_token', 'refresh_token'],
+  coros_connections: ['access_token', 'refresh_token'],
+  suunto_connections: ['access_token', 'refresh_token']
+};
 
 function loadDotEnv() {
   const f = path.join(__dirname, '..', '.env');
@@ -37,7 +43,7 @@ async function main() {
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
   let total = 0, changed = 0, failed = 0;
-  for (const table of TABLES) {
+  for (const [table, COLUMNS] of Object.entries(TABLES)) {
     const res = await fetch(`${base}/rest/v1/${table}?select=user_id,${COLUMNS.join(',')}`, { headers });
     if (!res.ok) { console.error(`${table}: no se pudo leer (HTTP ${res.status})`); failed++; continue; }
     const rows = await res.json();
