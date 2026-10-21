@@ -14,18 +14,20 @@
 const { sendFcmPush } = require('./fcm');
 const { isTrustedPushEndpoint } = require('./push-endpoint');
 const { pick } = require('./own');
+const { localDateKey, dayNum } = require('./weekly-summary');
 
 const BRANDS = { suunto: 'Suunto', wahoo: 'Wahoo', coros: 'COROS', polar: 'Polar', strava: 'Strava' };
 const MAX_AGE_MS = 36 * 3600 * 1000;   // solo entrenos recientes: un reenvío o un relleno de historial viejo no avisa
 const MI_PER_KM = 0.621371;
+const DEFAULT_TZ = 'America/Argentina/Buenos_Aires';   // mismo respaldo que send-reminders.js para cuentas sin profile.tz
 
 const TEXTS = {
-  es: { title: 'Entrenamiento cargado', one: (b, d, t, p) => `Cargamos tu carrera de ${b}: ${d} · ${t} · ${p}. Ya está en tu Historial.`, many: (n, b, d) => `Cargamos ${n} entrenamientos de ${b} (${d} en total). Ya están en tu Historial.` },
-  en: { title: 'Workout loaded', one: (b, d, t, p) => `We loaded your ${b} run: ${d} · ${t} · ${p}. It's in your History.`, many: (n, b, d) => `We loaded ${n} workouts from ${b} (${d} in total). They're in your History.` },
-  pt: { title: 'Treino carregado', one: (b, d, t, p) => `Carregamos sua corrida do ${b}: ${d} · ${t} · ${p}. Já está no seu Histórico.`, many: (n, b, d) => `Carregamos ${n} treinos do ${b} (${d} no total). Já estão no seu Histórico.` },
-  fr: { title: 'Séance chargée', one: (b, d, t, p) => `Nous avons chargé ta course ${b} : ${d} · ${t} · ${p}. Elle est dans ton Historique.`, many: (n, b, d) => `Nous avons chargé ${n} séances ${b} (${d} au total). Elles sont dans ton Historique.` },
-  it: { title: 'Allenamento caricato', one: (b, d, t, p) => `Abbiamo caricato la tua corsa da ${b}: ${d} · ${t} · ${p}. È nel tuo Storico.`, many: (n, b, d) => `Abbiamo caricato ${n} allenamenti da ${b} (${d} in totale). Sono nel tuo Storico.` },
-  de: { title: 'Training geladen', one: (b, d, t, p) => `Wir haben deinen Lauf von ${b} geladen: ${d} · ${t} · ${p}. Er ist in deinem Verlauf.`, many: (n, b, d) => `Wir haben ${n} Trainings von ${b} geladen (${d} insgesamt). Sie sind in deinem Verlauf.` }
+  es: { plan: (p, pct) => `Plan del día: ${p} (hiciste el ${pct}%).`, title: 'Entrenamiento cargado', one: (b, d, t, p) => `Cargamos tu carrera de ${b}: ${d} · ${t} · ${p}. Ya está en tu Historial.`, many: (n, b, d) => `Cargamos ${n} entrenamientos de ${b} (${d} en total). Ya están en tu Historial.` },
+  en: { plan: (p, pct) => `Today's plan: ${p} (you did ${pct}%).`, title: 'Workout loaded', one: (b, d, t, p) => `We loaded your ${b} run: ${d} · ${t} · ${p}. It's in your History.`, many: (n, b, d) => `We loaded ${n} workouts from ${b} (${d} in total). They're in your History.` },
+  pt: { plan: (p, pct) => `Plano do dia: ${p} (você fez ${pct}%).`, title: 'Treino carregado', one: (b, d, t, p) => `Carregamos sua corrida do ${b}: ${d} · ${t} · ${p}. Já está no seu Histórico.`, many: (n, b, d) => `Carregamos ${n} treinos do ${b} (${d} no total). Já estão no seu Histórico.` },
+  fr: { plan: (p, pct) => `Plan du jour : ${p} (tu as fait ${pct} %).`, title: 'Séance chargée', one: (b, d, t, p) => `Nous avons chargé ta course ${b} : ${d} · ${t} · ${p}. Elle est dans ton Historique.`, many: (n, b, d) => `Nous avons chargé ${n} séances ${b} (${d} au total). Elles sont dans ton Historique.` },
+  it: { plan: (p, pct) => `Piano del giorno: ${p} (hai fatto il ${pct}%).`, title: 'Allenamento caricato', one: (b, d, t, p) => `Abbiamo caricato la tua corsa da ${b}: ${d} · ${t} · ${p}. È nel tuo Storico.`, many: (n, b, d) => `Abbiamo caricato ${n} allenamenti da ${b} (${d} in totale). Sono nel tuo Storico.` },
+  de: { plan: (p, pct) => `Plan für heute: ${p} (du hast ${pct} % geschafft).`, title: 'Training geladen', one: (b, d, t, p) => `Wir haben deinen Lauf von ${b} geladen: ${d} · ${t} · ${p}. Er ist in deinem Verlauf.`, many: (n, b, d) => `Wir haben ${n} Trainings von ${b} geladen (${d} insgesamt). Sie sind in deinem Verlauf.` }
 };
 
 function fmtDist(km, imperial) {
@@ -48,15 +50,41 @@ function fmtPace(durationSec, km, imperial) {
 }
 
 // Arma título y cuerpo para una o varias carreras nuevas. Función pura (se prueba aparte).
-function buildMessage(runs, source, lang, imperial) {
+// planInfo (opcional, solo para una carrera): lo que el plan decía para ESE día, de planFor(). Se agrega como segunda frase.
+function buildMessage(runs, source, lang, imperial, planInfo) {
   const T = pick(TEXTS, lang, 'es');
   const brand = BRANDS[source] || 'tu reloj';
   if (runs.length === 1) {
     const r = runs[0];
-    return { title: T.title, body: T.one(brand, fmtDist(r.distanceKm || 0, imperial), fmtTime(r.durationSec || 0), fmtPace(r.durationSec, r.distanceKm, imperial)) };
+    let body = T.one(brand, fmtDist(r.distanceKm || 0, imperial), fmtTime(r.durationSec || 0), fmtPace(r.durationSec, r.distanceKm, imperial));
+    if (planInfo && planInfo.planned > 0) {
+      const planned = planInfo.timeMode ? Math.round(planInfo.planned) + ' min' : fmtDist(planInfo.planned, imperial);
+      const pct = Math.min(999, Math.max(0, Math.round(planInfo.actual / planInfo.planned * 100)));
+      body += ' ' + T.plan(planned, pct);
+    }
+    return { title: T.title, body };
   }
   const total = runs.reduce((a, r) => a + (r.distanceKm || 0), 0);
   return { title: T.title, body: T.many(runs.length, brand, fmtDist(total, imperial)) };
+}
+
+// Qué decía el plan para el día (en su huso horario) en que se hizo la carrera. Solo se compara si ese día cae en la semana del plan guardado
+// (weekStart = lunes) y tenía sesión planeada; un día de descanso o un plan viejo no se comenta. Los números salen del estado de la
+// persona (lo escribe ella): se leen como número y solo eso llega al texto.
+function planFor(run, plan, weekStart, tz, timeMode) {
+  if (!Array.isArray(plan) || !/^\d{4}-\d{2}-\d{2}$/.test(String(weekStart || ''))) return null;
+  const runMs = new Date(run && run.date).getTime();
+  if (!Number.isFinite(runMs)) return null;
+  const idx = dayNum(localDateKey(runMs, tz || DEFAULT_TZ)) - dayNum(String(weekStart));
+  if (!(idx >= 0 && idx <= 6)) return null;
+  const d = plan[idx];
+  if (!d || typeof d !== 'object') return null;
+  if (timeMode) {
+    const planned = Number(d.durMin), actual = (Number(run.durationSec) || 0) / 60;
+    return planned > 0 && planned < 1000 ? { timeMode: true, planned, actual } : null;
+  }
+  const planned = Number(d.dist), actual = Number(run.distanceKm) || 0;
+  return planned > 0 && planned < 1000 ? { timeMode: false, planned, actual } : null;
 }
 
 async function runExists(base, headers, userId, runId) {
@@ -110,10 +138,11 @@ async function mergeAndNotify(mergeFn, base, headers, userId, runs, mode, source
     const added = [];
     for (const r of fresh) { if (await runExists(base, headers, userId, r.id)) added.push(r); }
     if (!added.length) return;
-    const stRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${encodeURIComponent(userId)}&select=lang:data->>lang,units:data->profile->>units`, { headers });
+    const stRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${encodeURIComponent(userId)}&select=lang:data->>lang,units:data->profile->>units,tz:data->profile->>tz,trainBy:data->profile->>trainBy,weekStart:data->>weekStart,plan:data->plan`, { headers });
     const st = stRes.ok ? await stRes.json() : [];
     const lang = st && st[0] && st[0].lang, imperial = !!(st && st[0] && st[0].units === 'imperial');
-    const msg = buildMessage(added, source, lang, imperial);
+    const planInfo = added.length === 1 && st && st[0] ? planFor(added[0], st[0].plan, st[0].weekStart, st[0].tz, st[0].trainBy === 'time') : null;
+    const msg = buildMessage(added, source, lang, imperial, planInfo);
     // misma "etiqueta" para todo entreno nuevo del usuario: si llega por dos marcas a la vez (Suunto y Strava), la segunda reemplaza
     // a la primera en vez de apilarse
     await pushToUser(base, headers, userId, msg, 'zancada-run-import');
@@ -122,4 +151,4 @@ async function mergeAndNotify(mergeFn, base, headers, userId, runs, mode, source
   return result;
 }
 
-module.exports = { mergeAndNotify, buildMessage, fmtPace, fmtTime, fmtDist };
+module.exports = { mergeAndNotify, buildMessage, planFor, fmtPace, fmtTime, fmtDist };
