@@ -175,18 +175,25 @@ module.exports = withSentry(async (req, res) => {
     // "?" propio (el secreto ?k=...), algunos clientes pegan los parámetros con otro "?" en vez de "&", y req.query deja de verlos: por eso
     // se leen también directo de la URL cruda.
     const rawUrl = String(req.url || '');
+    // Strava pega hub.* a la dirección del callback con un "?" más, y lo que llega es k="<secreto>?hub.verify_token=<token>" (los otros dos sí llegan sueltos).
+    // Se separa: lo que va antes del "?" es el secreto, lo de después son parámetros escondidos dentro de k.
+    const kFull = String((req.query && req.query.k) || '');
+    const qi = kFull.indexOf('?');
+    const kClean = qi >= 0 ? kFull.slice(0, qi) : kFull;
+    const hidden = qi >= 0 ? new URLSearchParams(kFull.slice(qi + 1)) : new URLSearchParams('');
     const param = name => {
       if (req.query && req.query[name] !== undefined) return req.query[name];
-      const m = rawUrl.match(new RegExp('[?&]' + name.replace('.', '\.') + '=([^&?#]*)'));
+      if (hidden.has(name)) return hidden.get(name);
+      const m = rawUrl.match(new RegExp('[?&]' + name + '=([^&?#]*)'));
       return m ? decodeURIComponent(m[1]) : undefined;
     };
     const mode = param('hub.mode');
     const token = param('hub.verify_token');
     const challenge = param('hub.challenge');
-    // Strava puede omitir hub.verify_token en la verificación: se acepta igual si la dirección trae el secreto largo (?k=...) que solo conoce quien registró la suscripción.
+    // El token se acepta si coincide; si Strava no lo manda, se acepta igual con el secreto largo de la dirección (solo lo conoce quien registró la suscripción).
     const squash = v => Array.from(String(v || '')).filter(c => c.trim() !== '').join('');   // el valor cargado en Vercel puede traer espacios o saltos de línea; se quitan de los dos lados
     const secretEnv = squash(process.env.STRAVA_WEBHOOK_SECRET);
-    const kOk = !!secretEnv && token === undefined && safeEqual(squash(param('k')), secretEnv);
+    const kOk = !!secretEnv && safeEqual(squash(kClean), secretEnv);
     const tokenEnv = squash(process.env.STRAVA_VERIFY_TOKEN);
     const tokenOk = !!tokenEnv && token !== undefined && safeEqual(squash(token), tokenEnv);
     if (mode === 'subscribe' && (tokenOk || kOk)) {
@@ -198,7 +205,7 @@ module.exports = withSentry(async (req, res) => {
     // Sin valores: solo qué parámetros llegaron y si coincidían (para entender un rechazo del registro de la suscripción)
     await reportSecurityEvent('Verificación GET del webhook de Strava rechazada', {
       mode: mode === undefined ? null : String(mode).slice(0, 20), hasToken: token !== undefined, hasChallenge: challenge !== undefined,
-      verifyTokenConfigured: !!process.env.STRAVA_VERIFY_TOKEN, cfgOk: !!secretEnv, cfgLen: secretEnv.length, rawLen: String(process.env.STRAVA_WEBHOOK_SECRET || '').length, kLen: String(param('k') || '').length, kSquashLen: squash(param('k')).length, kMatches: kOk, hasQueryKeys: Object.keys(req.query || {}).slice(0, 8),
+      verifyTokenConfigured: !!process.env.STRAVA_VERIFY_TOKEN, cfgOk: !!secretEnv, cfgLen: secretEnv.length, rawLen: String(process.env.STRAVA_WEBHOOK_SECRET || '').length, kLen: kFull.length, kCleanLen: kClean.length, kMatches: kOk, tokenMatches: tokenOk, hasQueryKeys: Object.keys(req.query || {}).slice(0, 8),
       urlShape: rawUrl.replace(/=[^&?#]*/g, '=*').slice(0, 160)
     }).catch(() => {});
     res.status(403).send('Forbidden');
@@ -222,7 +229,7 @@ module.exports = withSentry(async (req, res) => {
       // Segunda barrera: un secreto largo en la URL del callback (se registra en strava-setup-webhook.js). Si STRAVA_WEBHOOK_SECRET
       // está configurado, un POST sin el secreto correcto se ignora. Sin la variable queda el comportamiento anterior.
       const webhookSecret = Array.from(String(process.env.STRAVA_WEBHOOK_SECRET || '')).filter(c => c.trim() !== '').join('');
-      if (webhookSecret && !safeEqual(Array.from(String((req.query && req.query.k) || '')).filter(c => c.trim() !== '').join(''), webhookSecret)) {
+      if (webhookSecret && !safeEqual(Array.from(String((req.query && req.query.k) || '').split('?')[0]).filter(c => c.trim() !== '').join(''), webhookSecret)) {
         console.error('strava-webhook: falta o no coincide el secreto del callback, se ignora el evento');
         await reportSecurityEvent('Webhook de Strava sin el secreto correcto', {}).catch(() => {});
         return;

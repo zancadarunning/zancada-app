@@ -67,3 +67,16 @@ test('espacios o saltos de línea en el medio del secreto cargado en Vercel tamp
     assert.equal(res.code, 200);
   } finally { process.env.STRAVA_WEBHOOK_SECRET = keep; }
 });
+
+test('lo que manda Strava en producción: hub.verify_token escondido dentro de k ("secreto?hub.verify_token=...")', async () => {
+  const res = mkRes();
+  const k = 'secreto-largo?hub.verify_token=vtoken-123';
+  await handler({ method: 'GET', url: '/api/strava-webhook?k=' + encodeURIComponent(k) + '&hub.challenge=xyz&hub.mode=subscribe', query: { k, 'hub.challenge': 'xyz', 'hub.mode': 'subscribe' }, headers: {} }, res);
+  assert.equal(res.code, 200);
+  assert.deepEqual(res.body, { 'hub.challenge': 'xyz' });
+  // con un token falso escondido y el secreto equivocado: no
+  const bad = mkRes();
+  const k2 = 'otro-secreto?hub.verify_token=falso';
+  await handler({ method: 'GET', url: '/api/strava-webhook?k=x', query: { k: k2, 'hub.challenge': 'xyz', 'hub.mode': 'subscribe' }, headers: {} }, bad);
+  assert.equal(bad.code, 403);
+});
