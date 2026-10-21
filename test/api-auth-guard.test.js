@@ -19,7 +19,8 @@ const PUBLIC = {
   'coros-auth.js': /verifyState/,
   'calendar-feed.js': /\[a-z0-9-\]\{10,80\}/i,   // suscripción de calendario: token aleatorio largo y validado
   'strava-webhook.js': /STRAVA_WEBHOOK_SECRET/,  // avisos de Strava: secreto en la URL + subscription_id
-  'suunto-webhook.js': /signatureMatches/         // avisos de Suunto: firma HMAC del cuerpo
+  'suunto-webhook.js': /signatureMatches/,        // avisos de Suunto: firma HMAC del cuerpo
+  'health.js': /status: 'ok'/                      // chequeo de vida para el monitoreo: sin datos y sin tocar la base
 };
 const SESSION = /verifyUser\(/;
 const CRON = /requireCronSecret\(/;

@@ -22,13 +22,15 @@ Ya existe la regla "Zancada: problemas nuevos". Falta una para los avisos de seg
 
 Los avisos de seguridad salen con el mensaje "Intento de acceso…", "Webhook de … forjado", "Chat: se alcanzó el tope global…", "Verificación GET del webhook de Strava rechazada".
 
-## 3. Aviso si el sitio se cae
+## 3. Aviso si el servidor se cae
 
-Un chequeo externo gratuito (UptimeRobot u otro) cada 5 minutos a:
-- `https://www.zancada.org/` (debe responder 200).
-- `https://www.zancada.org/api/chat` con el método POST sin sesión (debe responder 401: si responde 5xx, el servidor falla).
+Las apps de Android e iPhone (y la web mientras exista) usan el mismo servidor: si no responde, el chat con Zonda, las notificaciones y la conexión con los relojes dejan de funcionar. Un chequeo externo gratuito (UptimeRobot u otro; tiene app para el celular) avisa por correo o por el celular:
 
-Que avise por correo (y por la app del celular si querés).
+1. Crear cuenta en UptimeRobot → **Add New Monitor**.
+2. Tipo **HTTP(s)**, nombre "Zancada servidor", URL `https://www.zancada.org/api/health` (responde 200 `{"status":"ok"}`), cada 5 minutos.
+3. Segundo monitor, "Zancada página", URL `https://www.zancada.org/` (la landing cuando la web se cierre).
+4. Contacto de alerta: tu correo y la app del celular.
+5. Supabase (las cuentas y los datos) tiene su propio estado público: https://status.supabase.com — suscribirse a los avisos por correo.
 
 ## 4. Qué mirar una vez por semana (5 minutos)
 
