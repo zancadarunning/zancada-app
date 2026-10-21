@@ -4,11 +4,15 @@ Público: sin claves. Qué mirar para enterarse rápido si algo se rompe o algui
 
 ## 1. Respaldo semanal de la base (el plan gratis de Supabase no trae copias)
 
-- **Instalar (una sola vez):** correr `scripts/instalar-respaldo-semanal.ps1` (clic derecho → "Ejecutar con PowerShell"). Pide la clave de servicio de Supabase, la guarda cifrada con tu usuario de Windows y programa un respaldo todos los domingos a las 22:00 (si la PC estaba apagada, corre al encenderse).
-- **Dónde quedan:** `C:\Users\<vos>\Backups\zancada\supabase-AAAA-MM-DD` (fuera de OneDrive y del repo). Se conservan los últimos 12. El registro está en `respaldo.log` de la misma carpeta.
-- **Contienen datos personales** (salud, GPS, correos): tratarlos como un secreto, no subirlos a ningún lado sin cifrar.
-- **No incluyen** los tokens de relojes (cada persona vuelve a conectar su reloj si hay que restaurar) ni las contraseñas.
-- **Simulacro de restauración (cada 3 meses):** abrir un respaldo, revisar que `app_state.json` tiene las cuentas y las carreras que se esperan, y anotar la fecha acá.
+- **Instalar (una sola vez):** `scripts/instalar-respaldo-semanal.ps1` pide la clave de servicio de Supabase, la guarda cifrada con tu usuario de Windows y programa un respaldo todos los domingos a las 22:00 (si la PC estaba apagada, corre al encenderse).
+- **Activar el cifrado (una sola vez, después de instalar):** `scripts/activar-respaldo-cifrado.ps1`. Crea un par de claves, cifra los respaldos que ya tengas y deja el respaldo semanal cifrando solo.
+  - **Clave para cifrar (pública):** queda en esta PC (`~.zancada-backupackup-public.pem`). Sola no sirve para leer nada.
+  - **Clave para descifrar (privada) + su frase:** el asistente deja el archivo `ZANCADA-CLAVE-PRIVADA-RESPALDOS.pem` en el escritorio. **Guardalo fuera de la PC** (pendrive o nube personal) y guardá la **frase** en tu gestor de contraseñas. **Sin el archivo y la frase, los respaldos no se pueden recuperar.** Quien robe esta PC no puede leerlos.
+  - Si falta la clave pública, el respaldo **no deja nada sin cifrar** (se borra y se registra el error).
+- **Dónde quedan:** `C:Users<vos>Backupszancadasupabase-AAAA-MM-DD.zbk` (y una copia en el segundo disco si está configurado). Se conservan los últimos 12. El registro está en `respaldo.log`.
+- **Leer o restaurar un respaldo:** `scripts/restaurar-respaldo.ps1` (pide el archivo, la clave privada y la frase y descifra a una carpeta). Esa carpeta tiene datos personales: borrala al terminar.
+- **Contienen datos personales** (salud, GPS, correos). **No incluyen** los tokens de relojes (cada persona vuelve a conectar su reloj si hay que restaurar) ni las contraseñas.
+- **Simulacro de restauración (cada 3 meses):** descifrar el último respaldo con la clave guardada fuera de la PC, revisar que `app_state.json` tiene las cuentas y las carreras que se esperan, y anotar la fecha acá. Es la única forma de saber que la clave guardada sirve.
 - Con el plan Pro de Supabase hay copias diarias y recuperación a un punto en el tiempo: ahí este respaldo pasa a ser un extra.
 
 ## 2. Alertas de Sentry (te llega un correo)
