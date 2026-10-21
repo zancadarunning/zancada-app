@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-21T00:43:47Z';
+const APP_VERSION = '2026-10-21T03:00:34Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -170,7 +170,7 @@ function applyStaticTranslations(){
   document.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-ph]').forEach(el=>{ el.placeholder = t(el.dataset.i18nPh); });
   document.querySelectorAll('[data-i18n-aria]').forEach(el=>{ el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
-  renderPasswordChecklist('signup-password'); renderPasswordChecklist('recovery-new-pw'); renderPasswordChecklist('cp-new');
+  renderPasswordChecklist('signup-password'); renderPasswordChecklist('recovery-new-pw');
   document.querySelectorAll('a[href^="/privacy.html"]').forEach(el=>{ el.href = apiUrl('/privacy.html?lang=' + lang); });
   document.querySelectorAll('a[href^="/terms.html"]').forEach(el=>{ el.href = apiUrl('/terms.html?lang=' + lang); });
   [...document.getElementById('perfil-lang-choice').children].forEach(c=>c.classList.toggle('active', c.dataset.v===lang));
@@ -1503,7 +1503,7 @@ const PASSWORD_RULES = [
   {key: 'pw_req_num', ok: pw => /[0-9]/.test(pw)}
 ];
 // El botón de guardar de cada pantalla de contraseña nueva queda gris y sin poder tocarse hasta que se cumplen los 4 requisitos
-const PASSWORD_SUBMIT_BUTTONS = { 'recovery-new-pw': 'recovery-submit-btn', 'cp-new': 'cp-save-btn' };
+const PASSWORD_SUBMIT_BUTTONS = { 'recovery-new-pw': 'recovery-submit-btn' };
 function syncPasswordSubmitButton(inputId){
   const btnId = PASSWORD_SUBMIT_BUTTONS[inputId];
   if(!btnId) return;
@@ -1644,7 +1644,7 @@ async function getCaptchaToken(containerId, timeoutMs){
   return token;
 }
 // Apenas la persona toca un campo del formulario de ingreso o de registro se empieza a pedir el token
-const CAPTCHA_FORM_FIELDS = { 'login-email': 'captcha-login', 'login-password': 'captcha-login', 'signup-email': 'captcha-signup', 'signup-password': 'captcha-signup', 'cp-current': 'captcha-changepw', 'cp-new': 'captcha-changepw' };
+const CAPTCHA_FORM_FIELDS = { 'login-email': 'captcha-login', 'login-password': 'captcha-login', 'signup-email': 'captcha-signup', 'signup-password': 'captcha-signup' };
 if(typeof document !== 'undefined' && typeof document.addEventListener === 'function'){
   document.addEventListener('focusin', e => { const box = e && e.target && CAPTCHA_FORM_FIELDS[e.target.id]; if(box) prefetchCaptcha(box); });
 }
@@ -4119,7 +4119,6 @@ function enterApp(){
   if(relinkTodayRun()) persist();
   [...document.getElementById('voice-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === voiceChoice()));
   [...document.getElementById('units-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.profile.units==='imperial'?'imperial':'metric')));
-  renderSecurityRows();
   [...document.getElementById('perfil-trainby-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.profile.trainBy==='time'?'time':'distance')));
   [...document.getElementById('theme-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v===currentThemePref()));
   renderPerfilDays();
@@ -4315,7 +4314,7 @@ function wipeLocalUserData(uid){
   }catch(e){}
   try{ clearLastKnownPosition(); }catch(e){}
 }
-async function logout(allDevices){
+async function logout(){
   await waitForPendingPersist();
   await clearNativeCalendarQuietly();
   // Ver el comentario de runProgressKey(): sin esto, una carrera sin terminar quedaba
@@ -4328,14 +4327,8 @@ async function logout(allDevices){
   clearLastKnownPosition();
   // Si hay cambios que todavía no se subieron, el respaldo local se conserva (para no perderlos); si ya está todo sincronizado, no queda copia.
   try{ if(!hasPendingBackup()) wipeLocalUserData(currentUserId); }catch(e){}
-  // scope 'global': cierra la sesión en TODOS los dispositivos (si falla, al menos se cierra la de este)
-  if(allDevices === true){ try{ await supabaseClient.auth.signOut({ scope: 'global' }); }catch(e){ await supabaseClient.auth.signOut(); } }
-  else await supabaseClient.auth.signOut();
+  await supabaseClient.auth.signOut();
   location.reload();
-}
-async function logoutEverywhere(){
-  if(!(await showConfirm(t('security_signout_all_confirm'), {confirmText:t('security_signout_all_btn')}))) return;
-  await logout(true);
 }
 // Antes de una acción que no se puede deshacer: quien tiene cuenta con contraseña la escribe de nuevo (así una sesión robada no alcanza) y se
 // inicia sesión otra vez para que el servidor vea un ingreso reciente. Las cuentas de Google/Apple solo confirman (las protege su proveedor).
@@ -9816,53 +9809,6 @@ function openPreferencesOverlay(){ renderTextSizeSetting(); renderStreakPauseCar
 function closePreferencesOverlay(){ document.getElementById('preferences-overlay').classList.remove('overlay-open'); }
 function openLangOverlay(){ openOverlaySheetEl(document.getElementById('lang-overlay')); }
 function closeLangOverlay(){ document.getElementById('lang-overlay').classList.remove('overlay-open'); }
-/* ---- Seguridad de la cuenta: cambiar la contraseña desde la app ---- */
-// Solo las cuentas con contraseña (las de Google/Apple la manejan en su proveedor)
-async function renderSecurityRows(){
-  const row = document.getElementById('security-pw-row');
-  if(!row) return;
-  try{
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    const provider = session && session.user && session.user.app_metadata && session.user.app_metadata.provider;
-    row.style.display = (!provider || provider === 'email') ? '' : 'none';
-  }catch(e){ row.style.display = 'none'; }
-}
-function openChangePassword(){
-  ['cp-current', 'cp-new'].forEach(id => { const e = document.getElementById(id); if(e) e.value = ''; });
-  const err = document.getElementById('cp-err'); if(err){ err.style.display = 'none'; err.textContent = ''; }
-  renderPasswordChecklist('cp-new');
-  openOverlaySheetEl(document.getElementById('change-password-overlay'));
-}
-function closeChangePassword(){ document.getElementById('change-password-overlay').classList.remove('overlay-open'); }
-async function submitChangePassword(){
-  const btn = document.getElementById('cp-save-btn');
-  if(btn && btn.disabled) return;
-  const current = document.getElementById('cp-current').value;
-  const next = document.getElementById('cp-new').value;
-  const err = document.getElementById('cp-err');
-  const fail = msg => { err.textContent = msg; err.style.display = 'block'; };
-  err.style.display = 'none';
-  if(!current){ fail(t('reauth_wrong_password')); return; }
-  if(!isPasswordStrong(next)){ fail(t('login_err_password_weak')); return; }
-  if(next === current){ fail(t('cp_same')); return; }
-  setBtnBusy('cp-save-btn', true, t('login_loading'));
-  try{
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    const email = session && session.user && session.user.email;
-    if(!email){ fail(t('generic_error')); return; }
-    // se confirma la contraseña actual iniciando sesión de nuevo (con captcha); así también el servidor ve un ingreso reciente
-    const captchaToken = await getCaptchaToken('captcha-changepw');
-    const signIn = await supabaseClient.auth.signInWithPassword(Object.assign({ email, password: current }, captchaToken ? { options: { captchaToken } } : {}));
-    if(signIn.error){ fail(/captcha/i.test(signIn.error.message || '') ? t('captcha_failed') : t('reauth_wrong_password')); return; }
-    const { error } = await supabaseClient.auth.updateUser({ password: next });
-    if(error){ fail(translateAuthError(error)); return; }
-    // tras cambiar la contraseña se cierran las sesiones de los demás dispositivos (quien tuviera la anterior queda afuera)
-    try{ await supabaseClient.auth.signOut({ scope: 'others' }); }catch(e){}
-    ['cp-current', 'cp-new'].forEach(id => { const e = document.getElementById(id); if(e) e.value = ''; });
-    closeChangePassword();
-    showToast(t('cp_saved'), 'success');
-  }finally{ setBtnBusy('cp-save-btn', false); }
-}
 function openDaysOverlay(){ openOverlaySheetEl(document.getElementById('days-overlay')); }
 function closeDaysOverlay(){ document.getElementById('days-overlay').classList.remove('overlay-open'); }
 /* ================= PANEL DE ADMINISTRACIÓN ================= */
@@ -13658,27 +13604,6 @@ async function shareImageBlobFile(blob, filename, mime){
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(()=>URL.revokeObjectURL(url), 5000);
   }
-}
-/* ---- Exportar mis datos (portabilidad de datos personales) ---- */
-// Un archivo JSON con todo lo que la app guarda de la persona: perfil, plan, carreras (con la ruta), zapatillas, charla con Zonda, dolores y
-// chequeos, eventos. No incluye secretos: ni el link privado del calendario, ni los tokens de las marcas de relojes (viven solo en el servidor).
-async function buildPersonalDataExport(){
-  const data = JSON.parse(JSON.stringify(state || {}));
-  delete data.calendarToken;
-  let account = null;
-  try{
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    const u = session && session.user;
-    if(u) account = { id: u.id, email: u.email || null, createdAt: u.created_at || null, signInMethod: (u.app_metadata && u.app_metadata.provider) || null };
-  }catch(e){}
-  return { app: 'Zancada', appVersion: typeof APP_VERSION !== 'undefined' ? APP_VERSION : null, exportedAt: new Date().toISOString(), account, data };
-}
-async function exportMyData(){
-  try{
-    const payload = await buildPersonalDataExport();
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
-    await shareImageBlobFile(blob, 'zancada-mis-datos-' + new Date().toISOString().slice(0, 10) + '.json', 'application/json');
-  }catch(e){ showToast(t('generic_error'), 'error'); }
 }
 async function sharePRImage(bucketKey){
   const rec = getPersonalRecords()[bucketKey];

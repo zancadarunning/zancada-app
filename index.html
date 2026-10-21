@@ -3944,18 +3944,6 @@
     </div>
   </div>
 
-  <div class="overlay overlay-sheet" id="change-password-overlay">
-    <button class="week-nav-btn" onclick="closeChangePassword()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
-    <h2 class="subtitle" style="font-size:22px;" data-i18n="cp_title"></h2>
-    <div class="card" style="margin-top:16px;">
-      <div class="field"><label for="cp-current" data-i18n="cp_current"></label><input type="password" id="cp-current" autocomplete="current-password" maxlength="200"></div>
-      <div class="field"><label for="cp-new" data-i18n="cp_new"></label><input type="password" id="cp-new" autocomplete="new-password" maxlength="200" oninput="renderPasswordChecklist('cp-new')" onkeydown="if(event.key==='Enter') submitChangePassword();"><ul class="pw-checklist" data-pw-list="cp-new" data-i18n-aria="password_requirements_hint"></ul></div>
-      <div class="captcha-box" id="captcha-changepw"></div>
-      <p class="err-text" id="cp-err"></p>
-      <button class="btn btn-primary" id="cp-save-btn" style="margin-top:14px;" onclick="submitChangePassword()" data-i18n="cp_save"></button>
-    </div>
-  </div>
-
   <div class="overlay overlay-sheet" id="lang-overlay">
     <button class="week-nav-btn" onclick="closeLangOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_lang"></h2>
@@ -4474,9 +4462,6 @@
         <a class="set-row" href="/terms.html" target="_blank" rel="noopener"><span data-i18n="legal_terms_link"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></a>
         <a class="set-row" href="mailto:info@zancada.org"><span data-i18n="perfil_support_link"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></a>
         <button type="button" class="set-row" onclick="startTour()"><span data-i18n="tour_replay"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>
-        <button type="button" class="set-row" id="security-pw-row" style="display:none;" onclick="openChangePassword()"><span data-i18n="security_change_password"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>
-        <button type="button" class="set-row" onclick="logoutEverywhere()"><span data-i18n="security_signout_all_btn"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>
-        <button type="button" class="set-row" onclick="exportMyData()"><span data-i18n="perfil_export_data"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>
         <button type="button" class="set-row" onclick="resetApp()"><span data-i18n="perfil_reset"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>
       </div>
       <button type="button" class="set-row" id="admin-row" style="display:none;" onclick="openAdminOverlay()"><span>Panel de administración</span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>
