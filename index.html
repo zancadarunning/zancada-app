@@ -4167,6 +4167,16 @@
     <button class="btn btn-primary" style="width:100%; margin-top:28px;" data-on-click="closePainInfo()" data-i18n="hist_info_ok"></button>
   </div>
 
+  <div class="overlay" id="consent-modal" style="display:none; z-index:70; overflow-y:auto;" role="dialog" aria-modal="true" aria-labelledby="consent-title">
+    <h2 class="subtitle" id="consent-title" style="font-size:24px;"></h2>
+    <p class="lead" id="consent-body" style="margin-top:12px;"></p>
+    <p class="lead" style="margin-top:8px;"><a id="consent-privacy-link" href="/privacy.html" target="_blank" rel="noopener" style="color:var(--hivis-text); text-decoration:underline;"></a></p>
+    <label class="legal-checkbox-row"><input type="checkbox" id="consent-age" data-on-change="updateConsentButton()"><span id="consent-age-label" style="font-size:13.5px;"></span></label>
+    <label class="legal-checkbox-row"><input type="checkbox" id="consent-health" data-on-change="updateConsentButton()"><span id="consent-health-label" style="font-size:13.5px;"></span></label>
+    <button class="btn btn-primary" id="consent-accept-btn" style="width:100%; margin-top:22px;" disabled data-on-click="acceptConsent()"></button>
+    <button class="btn btn-gray" id="consent-decline-btn" style="width:100%; margin-top:10px;" data-on-click="declineConsent()"></button>
+  </div>
+
   <div class="overlay" id="whats-new-modal" style="display:none; z-index:60;">
     <h2 class="subtitle" style="font-size:22px;" data-i18n="whats_new_title"></h2>
     <ul id="whats-new-list" style="margin-top:18px; padding-left:20px; display:flex; flex-direction:column; gap:12px; font-size:14.5px; line-height:1.5; color:var(--chalk);"></ul>

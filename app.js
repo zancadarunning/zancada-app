@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-21T14:52:57Z';
+const APP_VERSION = '2026-10-21T16:26:16Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1385,6 +1385,53 @@ if(typeof window !== 'undefined'){
   window.addEventListener('offline', updateOfflineBanner);
   document.addEventListener('DOMContentLoaded', updateOfflineBanner);
 }
+/* ---- Edad mínima y consentimiento para datos de salud ----
+   Antes de usar la app (cuenta nueva o ya existente, con correo o Google) hay que confirmar tener 16 años o más y consentir de forma explícita el
+   tratamiento de datos de salud y actividad. Se guarda en el estado de la cuenta (state.consent) con la versión del texto y la fecha: si el texto cambia
+   y se sube CONSENT_VERSION, se vuelve a pedir. Rechazar cierra la sesión. */
+const CONSENT_VERSION = 1;
+function hasConsent(){
+  const c = state && state.consent;
+  return !!(c && c.v >= CONSENT_VERSION && c.age16 === true && c.health === true);
+}
+let consentResolve = null;
+function showConsentScreen(){
+  return new Promise(resolve => {
+    consentResolve = resolve;
+    const set = (id, text) => { const e = document.getElementById(id); if(e) e.textContent = text; };
+    set('consent-title', t('consent_title')); set('consent-body', t('consent_body'));
+    set('consent-age-label', t('consent_age')); set('consent-health-label', t('consent_health'));
+    set('consent-accept-btn', t('consent_accept')); set('consent-decline-btn', t('consent_decline'));
+    set('consent-privacy-link', t('legal_privacy_link'));
+    const link = document.getElementById('consent-privacy-link'); if(link) link.href = apiUrl('/privacy.html?lang=' + lang);
+    ['consent-age', 'consent-health'].forEach(id => { const e = document.getElementById(id); if(e) e.checked = false; });
+    const btn = document.getElementById('consent-accept-btn'); if(btn) btn.disabled = true;
+    ['splash', 'login', 'onboard'].forEach(id => { const e = document.getElementById(id); if(e) e.style.display = 'none'; });
+    document.getElementById('consent-modal').style.display = 'block';
+    if(window.zcBootDone) window.zcBootDone();
+  });
+}
+function updateConsentButton(){
+  const age = document.getElementById('consent-age'), health = document.getElementById('consent-health'), btn = document.getElementById('consent-accept-btn');
+  if(btn) btn.disabled = !(age && age.checked && health && health.checked);
+}
+function acceptConsent(){
+  const age = document.getElementById('consent-age'), health = document.getElementById('consent-health');
+  if(!(age && age.checked && health && health.checked)) return;   // el botón gris ya no deja, pero por las dudas
+  state.consent = { v: CONSENT_VERSION, at: new Date().toISOString(), age16: true, health: true };
+  document.getElementById('consent-modal').style.display = 'none';
+  const done = consentResolve; consentResolve = null;
+  if(done) done(true);
+}
+function declineConsent(){
+  document.getElementById('consent-modal').style.display = 'none';
+  const done = consentResolve; consentResolve = null;
+  if(done) done(false);
+}
+async function ensureConsent(){
+  if(hasConsent()) return true;
+  return await showConsentScreen();
+}
 async function loadUserAndEnter(user, isRetry){
   currentUserId = user.id;
   try{
@@ -1454,6 +1501,10 @@ async function loadUserAndEnter(user, isRetry){
       if(user.user_metadata && user.user_metadata.lang !== lang){
         try{ supabaseClient.auth.updateUser({ data: { lang } }); }catch(e){}
       }
+      if(!hasConsent()){
+        if(!(await ensureConsent())){ await supabaseClient.auth.signOut(); location.reload(); return; }
+        persist();   // queda guardado en la cuenta (versión y fecha)
+      }
       if(!state.chat || !state.chat.length) seedCoachGreeting(); else renderChat();
       enterApp();
       return;
@@ -1468,6 +1519,7 @@ async function loadUserAndEnter(user, isRetry){
       location.reload();
       return;
     }
+    if(!(await ensureConsent())){ await supabaseClient.auth.signOut(); location.reload(); return; }   // el consentimiento viaja en state y se guarda con el onboarding
     pendingEmail = user.email;
     document.getElementById('splash').style.display='none';
     document.getElementById('login').style.display='none';
