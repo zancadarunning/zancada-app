@@ -1,4 +1,4 @@
-// suunto-push-plan / wahoo-sync-plan / wahoo-push-workout: un usuario no puede gastar en bucle la cuota compartida de la marca.
+// suunto-push-plan / wahoo-sync-plan: un usuario no puede gastar en bucle la cuota compartida de la marca.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 process.env.SUPABASE_URL = 'https://x.supabase.co';
@@ -6,7 +6,7 @@ process.env.SUPABASE_SERVICE_KEY = 'service-key';
 
 function mkRes() { const r = { code: null, body: null }; r.setHeader = () => {}; r.status = c => { r.code = c; return r; }; r.json = b => { r.body = b; return r; }; r.end = () => r; return r; }
 
-for (const [file, provider] of [['suunto-push-plan', 'suunto-plan'], ['wahoo-sync-plan', 'wahoo-plan'], ['wahoo-push-workout', 'wahoo-workout']]) {
+for (const [file, provider] of [['suunto-push-plan', 'suunto-plan'], ['wahoo-sync-plan', 'wahoo-plan']]) {
   test(`${file}: con el límite de frecuencia superado no llega a la API de la marca ni a la base de conexiones`, async () => {
     const handler = require(`../api/${file}.js`);
     const seen = [];

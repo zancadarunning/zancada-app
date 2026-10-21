@@ -50,3 +50,33 @@ test('sin mode: se borra la cuenta entera (usuario de acceso incluido)', async (
   assert.equal(r.code, 200);
   assert.equal(log.authDeleted, true);
 });
+
+// En producción push_subscriptions y strava_connections apuntan a auth.users SIN "ON DELETE CASCADE": mientras tengan filas la base no deja borrar el
+// usuario. El endpoint tiene que vaciarlas ANTES de pedir el borrado del usuario.
+test('sin mode: vacía push_subscriptions y strava_connections ANTES de borrar el usuario (la base no tiene cascada ahí)', async () => {
+  const order = [];
+  const base = global.fetch;
+  setup();
+  const inner = global.fetch;
+  global.fetch = async (url, opts) => {
+    const u = String(url), method = (opts && opts.method) || 'GET';
+    if (method === 'DELETE' && u.includes('/rest/v1/')) order.push('rest:' + u.split('/rest/v1/')[1].split('?')[0]);
+    if (method === 'DELETE' && u.includes('/auth/v1/admin/users/')) order.push('auth-user');
+    return inner(url, opts);
+  };
+  const r = await call({});
+  assert.equal(r.code, 200);
+  const authAt = order.indexOf('auth-user');
+  for (const t of ['push_subscriptions', 'strava_connections']) {
+    const at = order.indexOf('rest:' + t);
+    assert.ok(at >= 0 && at < authAt, `${t} tiene que borrarse antes que el usuario (orden: ${order.join(' > ')})`);
+  }
+  global.fetch = base;
+});
+
+test('sin mode: si no se pueden vaciar esas tablas responde 500 y NO toca el usuario', async () => {
+  const log = setup({ failTable: 'push_subscriptions' });
+  const r = await call({});
+  assert.equal(r.code, 500);
+  assert.equal(log.authDeleted, false);
+});

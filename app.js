@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-21T21:54:59Z';
+const APP_VERSION = '2026-10-21T22:42:55Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4585,7 +4585,11 @@ async function confirmDestructiveWithPassword(message, confirmOpts){
     showToast(/captcha/i.test((error && error.message) || '') ? t('captcha_failed') : t('reauth_wrong_password'), 'error');
     return null;
   }
-  return data.session.access_token;
+  // Volver a escribir la contraseña deja una sesión de nivel 1: en una cuenta con verificación en dos pasos el servidor la rechaza ("MFA required"),
+  // así que se pide también el código y se usa el token ya elevado a nivel 2. Sin esto, quien activó el 2FA no podría borrar sus datos ni su cuenta.
+  if(!(await ensureMfa())) return null;
+  const { data: { session: fresh } } = await supabaseClient.auth.getSession();
+  return ((fresh && fresh.access_token) || data.session.access_token);
 }
 async function resetApp(){
   const accessToken = await confirmDestructiveWithPassword(t('reset_confirm_text'), {danger:true, confirmText:t('delete_word')});

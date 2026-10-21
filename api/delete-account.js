@@ -169,6 +169,18 @@ module.exports = withSentry(async (req, res) => {
     // solas. app_state/push_subscriptions/strava_connections se crearon a mano (no
     // versionadas) y también tienen cascade, pero se vuelven a borrar explícito más
     // abajo por las dudas.
+    // push_subscriptions y strava_connections tienen su user_id apuntando a auth.users SIN "ON DELETE CASCADE" (ver sql/cascade_user_foreign_keys.sql):
+    // mientras tengan una fila, la base NO deja borrar el usuario y el borrado de la cuenta fallaba con 500 para casi todo el mundo (notificaciones
+    // activadas o Strava conectado). Se vacían ANTES; no se pierde nada que importe, el permiso de Strava ya se revocó arriba y las notificaciones se
+    // vuelven a activar. Si esto falla se corta acá, sin tocar la cuenta.
+    for (const table of ['push_subscriptions', 'strava_connections']) {
+      const pre = await fetch(`${base}/rest/v1/${table}?user_id=eq.${userId}`, { method: 'DELETE', headers });
+      if (!pre.ok && pre.status !== 404) {
+        console.error(`delete-account: no se pudo vaciar ${table} antes de borrar el usuario`, pre.status);
+        res.status(500).json({ error: 'Could not delete account' });
+        return;
+      }
+    }
     const deleteRes = await fetch(`${base}/auth/v1/admin/users/${userId}`, {
       method: 'DELETE',
       headers: { apikey: key, Authorization: `Bearer ${key}` }
