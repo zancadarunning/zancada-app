@@ -35,3 +35,58 @@ test('cambiar la preferencia mueve la próxima sesión; cerrar sesión limpia lo
   assert.equal(app.localStorage.getItem('k'), null); assert.equal(app.sessionStorage.getItem('k'), null);
   assert.equal(app.getRememberMe() === false, true, 'la preferencia en sí se conserva');
 });
+
+// ---- correo recordado y gestor de contraseñas ----
+function withEmailField(app) {
+  const reg = new Map();
+  const realGet = app.document.getElementById;
+  app.document.getElementById = id => { if (!reg.has(id)) reg.set(id, realGet(id)); return reg.get(id); };
+  return id => app.document.getElementById(id);
+}
+
+test('el último correo se guarda solo con "recordar" tildado y vuelve escrito; no pisa lo que ya se tipeó', () => {
+  const app = loadApp();
+  const el = withEmailField(app);
+  app.setRememberMe(true);
+  app.rememberLastEmail('ana@correo.com');
+  assert.equal(app.localStorage.getItem('zancada_last_email'), 'ana@correo.com');
+  el('login-email').value = '';
+  app.prefillLoginEmail();
+  assert.equal(el('login-email').value, 'ana@correo.com');
+  el('login-email').value = 'otra@correo.com';
+  app.prefillLoginEmail();
+  assert.equal(el('login-email').value, 'otra@correo.com', 'no se pisa lo que escribió la persona');
+  // destildado (teléfono compartido): se borra y no se completa nada
+  app.setRememberMe(false);
+  app.rememberLastEmail('ana@correo.com');
+  assert.equal(app.localStorage.getItem('zancada_last_email'), null);
+  el('login-email').value = '';
+  app.prefillLoginEmail();
+  assert.equal(el('login-email').value, '');
+});
+
+test('offerSavePassword: entrega la credencial al gestor del sistema y avisa al plugin nativo, y NUNCA escribe la contraseña en ningún almacenamiento', async () => {
+  const app = loadApp();
+  const calls = [];
+  app.PasswordCredential = class { constructor(o) { this.o = o; } };
+  app.navigator.credentials = { store: async c => { calls.push(['store', c.o.id]); } };
+  app.Capacitor = { Plugins: { ZancadaAutofill: { commit: async () => { calls.push(['commit']); } } } };
+  await app.offerSavePassword('ana@correo.com', 'Clave-Secreta-123');
+  assert.deepEqual(calls, [['store', 'ana@correo.com'], ['commit']]);
+  for (const st of [app.localStorage, app.sessionStorage]) {
+    for (const k of ['zancada_last_email', 'zancada_remember_me']) { const v = st.getItem(k); assert.ok(v === null || !String(v).includes('Clave-Secreta-123')); }
+  }
+  // sin esas APIs (navegador viejo, sin plugin) no falla
+  const app2 = loadApp();
+  await app2.offerSavePassword('ana@correo.com', 'x');
+});
+
+test('los formularios de ingreso y registro son <form> con los autocomplete que reconocen los gestores de contraseñas', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /<form id="login-form"[^>]*data-on-submit="event\.preventDefault\(\); handleSignIn\(\)"/);
+  assert.match(html, /<form id="signup-form"[^>]*data-on-submit="event\.preventDefault\(\); handleSignUp\(\)"/);
+  assert.match(html, /id="login-email" name="username" autocomplete="username"/);
+  assert.match(html, /id="login-password" name="password" autocomplete="current-password"/);
+  assert.match(html, /id="signup-password" name="password" autocomplete="new-password"/);
+  assert.match(html, /<button type="submit" class="btn btn-primary" id="login-submit-btn"/);
+});

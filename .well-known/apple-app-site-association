@@ -1,4 +1,7 @@
 {
+  "webcredentials": {
+    "apps": ["TEAMID.org.zancada.app"]
+  },
   "applinks": {
     "apps": [],
     "details": [
