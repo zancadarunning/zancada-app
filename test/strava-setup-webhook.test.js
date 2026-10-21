@@ -8,7 +8,7 @@ test('strava-setup-webhook: el callback va directo a www, con el secreto, aunque
   delete process.env.STRAVA_WEBHOOK_BASE_URL;
   let sent = null;
   const realFetch = global.fetch;
-  global.fetch = async (url, opts) => { sent = { url: String(url), body: JSON.parse(opts.body) }; return { json: async () => ({ id: 42 }) }; };
+  global.fetch = async (url, opts) => { sent = { url: String(url), type: opts.headers['Content-Type'], body: Object.fromEntries(new URLSearchParams(opts.body)) }; return { json: async () => ({ id: 42 }) }; };
   try {
     delete require.cache[require.resolve('../api/strava-setup-webhook')];
     const handler = require('../api/strava-setup-webhook');
@@ -17,5 +17,6 @@ test('strava-setup-webhook: el callback va directo a www, con el secreto, aunque
     assert.equal(res.code, 200);
     assert.equal(sent.body.callback_url, 'https://www.zancada.org/api/strava-webhook?k=abc123');
     assert.equal(sent.body.verify_token, 'vt');
+    assert.equal(sent.type, 'application/x-www-form-urlencoded', 'formulario clásico, para que Strava incluya el verify_token');
   } finally { global.fetch = realFetch; }
 });

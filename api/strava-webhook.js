@@ -183,7 +183,10 @@ module.exports = withSentry(async (req, res) => {
     const mode = param('hub.mode');
     const token = param('hub.verify_token');
     const challenge = param('hub.challenge');
-    if (mode === 'subscribe' && process.env.STRAVA_VERIFY_TOKEN && safeEqual(String(token || ''), process.env.STRAVA_VERIFY_TOKEN)) {
+    // Strava puede omitir hub.verify_token en la verificación: se acepta igual si la dirección trae el secreto largo (?k=...) que solo conoce quien registró la suscripción.
+    const tokenOk = !!process.env.STRAVA_VERIFY_TOKEN && token !== undefined && safeEqual(String(token), process.env.STRAVA_VERIFY_TOKEN);
+    const kOk = !!process.env.STRAVA_WEBHOOK_SECRET && token === undefined && safeEqual(String(param('k') || ''), process.env.STRAVA_WEBHOOK_SECRET);
+    if (mode === 'subscribe' && (tokenOk || kOk)) {
       res.status(200).json({ 'hub.challenge': challenge });
       // TEMPORAL (mientras se registra la suscripción nueva): deja constancia de que la verificación llegó y se aceptó. Se responde ANTES de avisar.
       await reportSecurityEvent('Verificación GET del webhook de Strava ACEPTADA', { urlShape: rawUrl.replace(/=[^&?#]*/g, '=*').slice(0, 160) }).catch(() => {});

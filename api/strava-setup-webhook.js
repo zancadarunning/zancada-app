@@ -20,13 +20,14 @@ module.exports = withSentry(async (req, res) => {
   try {
     const response = await fetch('https://www.strava.com/api/v3/push_subscriptions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_id: process.env.STRAVA_CLIENT_ID,
-        client_secret: process.env.STRAVA_CLIENT_SECRET,
+      // Formulario clásico (application/x-www-form-urlencoded), como documenta Strava: con JSON, Strava no le pasaba el verify_token a la verificación.
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: String(process.env.STRAVA_CLIENT_ID || ''),
+        client_secret: String(process.env.STRAVA_CLIENT_SECRET || ''),
         callback_url: `${WEBHOOK_BASE}/api/strava-webhook${process.env.STRAVA_WEBHOOK_SECRET ? '?k=' + encodeURIComponent(process.env.STRAVA_WEBHOOK_SECRET) : ''}`,
-        verify_token: process.env.STRAVA_VERIFY_TOKEN
-      })
+        verify_token: String(process.env.STRAVA_VERIFY_TOKEN || '')
+      }).toString()
     });
     const data = await response.json();
     res.status(200).json(data);

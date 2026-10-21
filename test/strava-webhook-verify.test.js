@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 process.env.STRAVA_VERIFY_TOKEN = 'vtoken-123';
+process.env.STRAVA_WEBHOOK_SECRET = 'secreto-largo';
 const handler = require('../api/strava-webhook');
 const mkRes = () => ({ code: 0, body: null, status(c) { this.code = c; return this; }, json(b) { this.code = this.code || 200; this.body = b; return this; }, send(b) { this.body = b; return this; }, setHeader() {} });
 
@@ -20,6 +21,22 @@ test('GET con los parámetros pegados con un segundo "?": se leen de la URL crud
   await handler({ method: 'GET', url, query: { k: 'abc?hub.verify_token=vtoken-123', 'hub.challenge': 'xyz', 'hub.mode': 'subscribe' }, headers: {} }, res);
   assert.equal(res.code, 200);
   assert.deepEqual(res.body, { 'hub.challenge': 'xyz' });
+});
+
+test('GET sin hub.verify_token pero con el secreto de la URL: responde el challenge (lo que manda Strava hoy)', async () => {
+  const res = mkRes();
+  await handler({ method: 'GET', url: '/api/strava-webhook?k=secreto-largo&hub.challenge=xyz&hub.mode=subscribe', query: { k: 'secreto-largo', 'hub.challenge': 'xyz', 'hub.mode': 'subscribe' }, headers: {} }, res);
+  assert.equal(res.code, 200);
+  assert.deepEqual(res.body, { 'hub.challenge': 'xyz' });
+});
+
+test('GET sin hub.verify_token y con el secreto equivocado o sin secreto: 403', async () => {
+  for (const k of ['otro', undefined]) {
+    const res = mkRes();
+    const query = { 'hub.challenge': 'xyz', 'hub.mode': 'subscribe' }; if (k) query.k = k;
+    await handler({ method: 'GET', url: '/api/strava-webhook?' + new URLSearchParams(query), query, headers: {} }, res);
+    assert.equal(res.code, 403, String(k));
+  }
 });
 
 test('GET con token equivocado, sin token o en otro modo: 403', async () => {
