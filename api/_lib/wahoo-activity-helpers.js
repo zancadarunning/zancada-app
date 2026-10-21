@@ -13,6 +13,7 @@
 // Ver fetchFitSplits() más abajo y el comentario grande de
 // api/_lib/fit-activity-helpers.js para cómo se decodifica.
 
+const { encToken } = require('./token-crypto');
 const { safeId } = require('./safe-id');
 const { sanitizeActivityNumbers } = require('./activity-sanity.js');
 const { fetchWithTimeout } = require('./fetch-with-timeout');
@@ -193,7 +194,7 @@ async function refreshWahooToken(base, headers, userId, refreshToken){
   const expiresAt = Math.floor(Date.now() / 1000) + (tokenData.expires_in || 7200);
   await fetch(`${base}/rest/v1/wahoo_connections?user_id=eq.${userId}`, {
     method: 'PATCH', headers,
-    body: JSON.stringify({ access_token: tokenData.access_token, refresh_token: tokenData.refresh_token, expires_at: expiresAt })
+    body: JSON.stringify({ access_token: encToken(tokenData.access_token), refresh_token: encToken(tokenData.refresh_token), expires_at: expiresAt })
   });
   return { accessToken: tokenData.access_token, expiresAt };
 }

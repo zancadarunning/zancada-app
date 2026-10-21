@@ -15,6 +15,7 @@
 // que a diferencia de strava_connections no hace falta guardar expires_at
 // ni una rutina de renovación periódica.
 
+const { encToken } = require('./_lib/token-crypto');
 const crypto = require('crypto');
 const { exerciseToRun, mergePolarRuns } = require('./_lib/polar-activity-helpers');
 
@@ -91,7 +92,7 @@ const linkAccount = async (req, res) => {
     await fetch(`${base}/rest/v1/polar_connections`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ user_id: userId, polar_user_id: String(polarUserId), member_id: userId, access_token: accessToken })
+      body: JSON.stringify({ user_id: userId, polar_user_id: String(polarUserId), member_id: userId, access_token: encToken(accessToken) })
     });
 
     // Traer ejercicios de los últimos 30 días como punto de partida (es lo

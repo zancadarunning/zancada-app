@@ -10,6 +10,7 @@
 //   SUPABASE_URL
 //   SUPABASE_SERVICE_KEY
 
+const { decToken } = require('./_lib/token-crypto');
 const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { purgePolarRunsForUser } = require('./_lib/polar-activity-helpers');
@@ -35,10 +36,10 @@ module.exports = withSentry(async (req, res) => {
       const connRes = await fetch(`${base}/rest/v1/polar_connections?user_id=eq.${userId}&select=access_token,polar_user_id`, { headers });
       const connRows = await connRes.json();
       const conn = connRows && connRows[0];
-      if (conn && conn.access_token) {
+      if (conn && decToken(conn.access_token)) {
         await fetch(`https://www.polaraccesslink.com/v3/users/${conn.polar_user_id}`, {
           method: 'DELETE',
-          headers: { Authorization: `Bearer ${conn.access_token}` }
+          headers: { Authorization: `Bearer ${decToken(conn.access_token)}` }
         });
       }
     } catch (e) {

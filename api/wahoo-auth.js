@@ -5,6 +5,7 @@
 // client_id/client_secret en el body (no Basic auth como Polar, no JSON como
 // Strava) -- ver la documentación de cloud-api.wahooligan.com.
 
+const { encToken } = require('./_lib/token-crypto');
 const crypto = require('crypto');
 const { workoutToRun, mergeWahooRuns, isRunningWorkoutType } = require('./_lib/wahoo-activity-helpers');
 
@@ -70,8 +71,8 @@ const linkAccount = async (req, res) => {
       headers,
       body: JSON.stringify({
         user_id: userId,
-        access_token: tokenData.access_token,
-        refresh_token: tokenData.refresh_token,
+        access_token: encToken(tokenData.access_token),
+        refresh_token: encToken(tokenData.refresh_token),
         expires_at: expiresAt
       })
     });

@@ -1,3 +1,4 @@
+const { decToken, encToken } = require('./_lib/token-crypto');
 const verifyUser = require('./_lib/verify-user');
 const { activityToRun, mergeStravaRuns, setStravaSyncStatus } = require('./_lib/strava-activity-helpers');
 const { applyCors, isPreflight } = require('./_lib/cors');
@@ -37,21 +38,21 @@ module.exports = withSentry(async (req, res) => {
     if (conn.expires_at < Math.floor(Date.now() / 1000)) {
       const refreshRes = await fetch('https://www.strava.com/oauth/token', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: process.env.STRAVA_CLIENT_ID, client_secret: process.env.STRAVA_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: conn.refresh_token })
+        body: JSON.stringify({ client_id: process.env.STRAVA_CLIENT_ID, client_secret: process.env.STRAVA_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: decToken(conn.refresh_token) })
       });
       const refreshed = await refreshRes.json();
       if (refreshed.access_token) {
         conn.access_token = refreshed.access_token;
         await fetch(`${base}/rest/v1/strava_connections?user_id=eq.${userId}`, {
           method: 'PATCH', headers,
-          body: JSON.stringify({ access_token: refreshed.access_token, refresh_token: refreshed.refresh_token, expires_at: refreshed.expires_at })
+          body: JSON.stringify({ access_token: encToken(refreshed.access_token), refresh_token: encToken(refreshed.refresh_token), expires_at: refreshed.expires_at })
         });
       }
     }
 
     const after = Math.floor(Date.now() / 1000) - 24 * 3600;
     const actsRes = await fetch(`https://www.strava.com/api/v3/athlete/activities?after=${after}&per_page=10`, {
-      headers: { Authorization: `Bearer ${conn.access_token}` }
+      headers: { Authorization: `Bearer ${decToken(conn.access_token)}` }
     });
     // Mismo bug que ya se había arreglado en polar-sync-now.js/wahoo-sync-now.js: sin
     // chequear actsRes.ok, un 401/429/lo que sea de Strava devuelve un objeto de error en

@@ -7,6 +7,7 @@
 // cada 15'. Reportado como bug ("aparece conectado pero no aparecen las carreras") por un
 // usuario que nunca tocó ese botón -- no hay forma de que alguien nuevo sepa que existe.
 
+const { decToken } = require('./_lib/token-crypto');
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { rotateForFairness } = require('./_lib/cron-rotation');
 const { syncProbe, probeHasNew, probeMayBackfill } = require('./_lib/sync-probe');
@@ -40,9 +41,9 @@ module.exports = withSentry(async (req, res) => {
         break;
       }
       try {
-        let accessToken = conn.access_token;
+        let accessToken = decToken(conn.access_token);
         if (conn.expires_at < Math.floor(Date.now() / 1000)) {
-          const refreshed = await refreshCorosToken(base, headers, conn.user_id, conn.refresh_token);
+          const refreshed = await refreshCorosToken(base, headers, conn.user_id, decToken(conn.refresh_token));
           if (!refreshed) { errors++; continue; }
           accessToken = refreshed.accessToken;
         }

@@ -1,3 +1,4 @@
+const { decToken } = require('./_lib/token-crypto');
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { decodePolyline, fetchStreams, mergeStravaRuns } = require('./_lib/strava-activity-helpers');
 
@@ -23,11 +24,11 @@ module.exports = withSentry(async (req, res) => {
     let usersUpdated = 0, runsUpdated = 0, errors = 0;
     for (const conn of (Array.isArray(conns) ? conns : [])) {
       try {
-        let accessToken = conn.access_token;
+        let accessToken = decToken(conn.access_token);
         if (conn.expires_at < Math.floor(Date.now() / 1000)) {
           const refreshRes = await fetch('https://www.strava.com/oauth/token', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ client_id: process.env.STRAVA_CLIENT_ID, client_secret: process.env.STRAVA_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: conn.refresh_token })
+            body: JSON.stringify({ client_id: process.env.STRAVA_CLIENT_ID, client_secret: process.env.STRAVA_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: decToken(conn.refresh_token) })
           });
           const refreshed = await refreshRes.json();
           if (refreshed.access_token) accessToken = refreshed.access_token;

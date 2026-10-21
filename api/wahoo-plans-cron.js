@@ -12,6 +12,7 @@
 // No borra lo de la semana pasada (ahorra cuota): la app lo limpia la próxima vez que se abre.
 // Sin la columna plans_week no hace nada (si no, repetiría el trabajo TODAS las horas).
 
+const { decToken } = require('./_lib/token-crypto');
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { rotateForFairness } = require('./_lib/cron-rotation');
 const { refreshWahooToken } = require('./_lib/wahoo-activity-helpers');
@@ -49,9 +50,9 @@ async function processConnection(base, headers, conn, nowMs) {
     .map(cleanDay).filter(d => d && d.date >= weekStart && d.date <= weekEnd && d.date >= localDate)
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  let accessToken = conn.access_token;
+  let accessToken = decToken(conn.access_token);
   if (conn.expires_at < Math.floor(nowMs / 1000)) {
-    const refreshed = await refreshWahooToken(base, headers, conn.user_id, conn.refresh_token);
+    const refreshed = await refreshWahooToken(base, headers, conn.user_id, decToken(conn.refresh_token));
     if (!refreshed) return 'token';
     accessToken = refreshed.accessToken;
   }

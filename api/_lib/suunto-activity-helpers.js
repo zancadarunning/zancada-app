@@ -11,6 +11,7 @@
 //     que manda el webhook de entrenos nuevos para identificar a la persona.
 //   - Los tokens duran 24 hs (expires_in 86400) y vienen con refresh_token.
 
+const { decToken, encToken } = require('./token-crypto');
 const { safeId } = require('./safe-id');
 const { fetchWithTimeout } = require('./fetch-with-timeout');
 const { sanitizeActivityNumbers } = require('./activity-sanity.js');
@@ -89,8 +90,8 @@ async function fetchSuuntoFit(workoutKey, accessToken) {
 // Si el access_token venció, lo renueva (y lo guarda). Devuelve el token vigente o null si
 // la renovación falló (el usuario revocó el acceso, por ejemplo).
 async function ensureFreshSuuntoToken(base, headers, conn) {
-  if (conn.expires_at > Math.floor(Date.now() / 1000) + 60) return conn.access_token;
-  const refreshed = await refreshSuuntoToken(base, headers, conn.user_id, conn.refresh_token);
+  if (conn.expires_at > Math.floor(Date.now() / 1000) + 60) return decToken(conn.access_token);
+  const refreshed = await refreshSuuntoToken(base, headers, conn.user_id, decToken(conn.refresh_token));
   return refreshed ? refreshed.accessToken : null;
 }
 
@@ -199,10 +200,10 @@ async function refreshSuuntoToken(base, headers, userId, refreshToken) {
   await fetch(`${base}/rest/v1/suunto_connections?user_id=eq.${userId}`, {
     method: 'PATCH', headers,
     body: JSON.stringify({
-      access_token: tokenData.access_token,
+      access_token: encToken(tokenData.access_token),
       // Algunos proveedores no rotan el refresh_token en cada renovación: si no viene uno
       // nuevo, conservamos el que ya teníamos en vez de pisarlo con undefined.
-      refresh_token: tokenData.refresh_token || refreshToken,
+      refresh_token: encToken(tokenData.refresh_token || refreshToken),
       expires_at: expiresAt
     })
   });
