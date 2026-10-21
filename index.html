@@ -4173,6 +4173,41 @@
     <button class="btn btn-gray" id="consent-decline-btn" style="width:100%; margin-top:10px;" data-on-click="declineConsent()"></button>
   </div>
 
+  <div class="overlay" id="mfa-challenge-modal" style="display:none; z-index:75; overflow-y:auto;" role="dialog" aria-modal="true" aria-labelledby="mfa-challenge-title">
+    <h2 class="subtitle" id="mfa-challenge-title" style="font-size:24px;"></h2>
+    <p class="lead" id="mfa-challenge-text" style="margin-top:12px;"></p>
+    <form id="mfa-challenge-form" novalidate data-on-submit="event.preventDefault(); submitMfaChallenge()">
+      <div class="field" style="margin-top:18px;">
+        <label for="mfa-challenge-code" id="mfa-challenge-code-label"></label>
+        <input type="text" id="mfa-challenge-code" name="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="123456">
+        <p class="err-text" id="mfa-challenge-err"></p>
+      </div>
+      <button type="submit" class="btn btn-primary" id="mfa-challenge-btn" style="width:100%; margin-top:10px;"></button>
+    </form>
+    <button type="button" class="btn btn-gray" id="mfa-challenge-cancel" style="width:100%; margin-top:10px;" data-on-click="cancelMfaChallenge()"></button>
+    <p class="lead" id="mfa-challenge-lost" style="margin-top:18px; font-size:13px;"></p>
+  </div>
+
+  <div class="overlay" id="mfa-setup-modal" style="display:none; z-index:75; overflow-y:auto;" role="dialog" aria-modal="true" aria-labelledby="mfa-setup-title">
+    <h2 class="subtitle" id="mfa-setup-title" style="font-size:24px;"></h2>
+    <p class="lead" id="mfa-setup-intro" style="margin-top:12px;"></p>
+    <p class="lead" id="mfa-setup-step1" style="margin-top:14px;"></p>
+    <div style="background:#fff; padding:12px; border-radius:12px; width:200px; height:200px; margin:10px auto 0; display:flex; align-items:center; justify-content:center;"><img id="mfa-setup-qr" alt="" width="176" height="176"></div>
+    <p class="lead" id="mfa-setup-secret-label" style="margin-top:12px; font-size:13px;"></p>
+    <p class="mono" id="mfa-setup-secret" style="word-break:break-all; user-select:all; font-size:13px; margin:4px 0 0;"></p>
+    <p class="lead" id="mfa-setup-step2" style="margin-top:14px;"></p>
+    <form id="mfa-setup-form" novalidate data-on-submit="event.preventDefault(); confirmMfaSetup()">
+      <div class="field">
+        <label for="mfa-setup-code" id="mfa-setup-code-label"></label>
+        <input type="text" id="mfa-setup-code" name="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="123456">
+        <p class="err-text" id="mfa-setup-err"></p>
+      </div>
+      <button type="submit" class="btn btn-primary" id="mfa-setup-btn" style="width:100%; margin-top:10px;"></button>
+    </form>
+    <button type="button" class="btn btn-gray" id="mfa-setup-cancel" style="width:100%; margin-top:10px;" data-on-click="cancelMfaSetup()"></button>
+    <p class="lead" id="mfa-setup-warn" style="margin-top:18px; font-size:13px;"></p>
+  </div>
+
   <div class="overlay" id="whats-new-modal" style="display:none; z-index:60;">
     <h2 class="subtitle" style="font-size:22px;" data-i18n="whats_new_title"></h2>
     <ul id="whats-new-list" style="margin-top:18px; padding-left:20px; display:flex; flex-direction:column; gap:12px; font-size:14.5px; line-height:1.5; color:var(--chalk);"></ul>
@@ -4427,6 +4462,7 @@
         <a class="set-row" href="/privacy.html" target="_blank" rel="noopener"><span data-i18n="legal_privacy_link"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></a>
         <a class="set-row" href="/terms.html" target="_blank" rel="noopener"><span data-i18n="legal_terms_link"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></a>
         <a class="set-row" href="mailto:info@zancada.org"><span data-i18n="perfil_support_link"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></a>
+        <button type="button" class="set-row" id="mfa-row" style="display:none;" data-on-click="toggleMfa()"><span data-i18n="mfa_row_title"></span><span style="display:flex; align-items:center; gap:8px;"><span id="mfa-row-status" style="font-size:12.5px; color:var(--mist);"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></span></button>
         <button type="button" class="set-row" data-on-click="startTour()"><span data-i18n="tour_replay"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>
         <button type="button" class="set-row" data-on-click="resetApp()"><span data-i18n="perfil_reset"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>
       </div>
