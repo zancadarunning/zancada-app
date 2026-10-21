@@ -88,7 +88,7 @@ module.exports = withSentry(async (req, res) => {
   const allowed = await checkSyncCooldown(base, cooldownHeaders, auth.userId, 'remux', REMUX_COOLDOWN_MS, { failClosed: true });
   if(!allowed){ res.status(429).json({error:'Too many requests, try again shortly'}); return; }
 
-  let inPath, outPath;
+  let inPath, outPath, workDir;
   try{
     const input = await readRawBody(req);
     if(!input || !input.length){ res.status(400).json({error:'Empty body'}); return; }
@@ -105,10 +105,11 @@ module.exports = withSentry(async (req, res) => {
       res.status(400).json({error:'Not a valid MP4 file'}); return;
     }
 
-    const id = crypto.randomBytes(8).toString('hex');
-    inPath = path.join(os.tmpdir(), `zancada-in-${id}.mp4`);
-    outPath = path.join(os.tmpdir(), `zancada-out-${id}.mp4`);
-    fs.writeFileSync(inPath, input);
+    // carpeta propia con permisos solo para este proceso (mkdtemp la crea con nombre al azar y modo 0700); los archivos van adentro
+    workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zancada-remux-'));
+    inPath = path.join(workDir, 'in.mp4');
+    outPath = path.join(workDir, 'out.mp4');
+    fs.writeFileSync(inPath, input, { mode: 0o600, flag: 'wx' });
 
     // -f mp4 antes de -i: fuerza el demuxer de entrada a mp4/mov/isom en vez de dejar que
     // ffmpeg siga auto-detectando sobre bytes que ya sabemos son ftyp (defensa en profundidad
@@ -126,7 +127,6 @@ module.exports = withSentry(async (req, res) => {
     await reportError(err, { endpoint: 'remux-video' });
     res.status(500).json({error:'Remux failed'});
   }finally{
-    try{ if(inPath && fs.existsSync(inPath)) fs.unlinkSync(inPath); }catch(e){}
-    try{ if(outPath && fs.existsSync(outPath)) fs.unlinkSync(outPath); }catch(e){}
+    try{ if(workDir) fs.rmSync(workDir, { recursive: true, force: true }); }catch(e){}
   }
 });

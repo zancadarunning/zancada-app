@@ -64,7 +64,7 @@ async function main() {
 
   const stamp = new Date().toISOString().slice(0, 10);
   const dir = dirArg || path.join(os.homedir(), 'Backups', 'zancada', `supabase-${stamp}`);
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });   // el respaldo tiene datos personales: solo para el dueño
   const headers = { apikey: key, Authorization: `Bearer ${key}` };
 
   const summary = {};
@@ -73,13 +73,13 @@ async function main() {
     try {
       const rows = await fetchAll(base, headers, table);
       if (rows === null) { summary[table] = 'no existe'; continue; }
-      fs.writeFileSync(path.join(dir, `${table}.json`), JSON.stringify(rows));
+      fs.writeFileSync(path.join(dir, `${table}.json`), JSON.stringify(rows), { mode: 0o600 });
       summary[table] = rows.length;
     } catch (e) { failed.push(table); summary[table] = 'ERROR'; console.error(e.message); }
   }
   try {
     const users = await fetchUsers(base, headers);
-    fs.writeFileSync(path.join(dir, 'auth_users.json'), JSON.stringify(users));
+    fs.writeFileSync(path.join(dir, 'auth_users.json'), JSON.stringify(users), { mode: 0o600 });
     summary.auth_users = users.length;
   } catch (e) { failed.push('auth_users'); summary.auth_users = 'ERROR'; console.error(e.message); }
 

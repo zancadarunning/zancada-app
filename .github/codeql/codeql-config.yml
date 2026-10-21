@@ -1,0 +1,7 @@
+# Qué revisa CodeQL. Se deja afuera el código que no corre en producción: los tests (usan texto armado a propósito para probar filtros),
+# las pruebas de carga y las librerías de terceros copiadas en vendor/ (se actualizan reemplazando el archivo, no editándolo).
+# Todo lo demás (api/, app.js, scripts/) se sigue revisando.
+paths-ignore:
+  - test
+  - loadtest
+  - vendor

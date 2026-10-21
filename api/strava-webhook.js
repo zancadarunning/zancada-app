@@ -37,12 +37,15 @@ const REVOKED_MSGS = {
   de: n => `Ich habe gesehen, dass du den Zugriff auf Strava über deren eigene Website oder App widerrufen hast. Wegen deren Richtlinien musste ich ${n} Lauf${n===1?'':' läufe'}, die von dort kamen, aus deinem Verlauf entfernen — nicht von Strava, nur von hier. Falls das aus Versehen war, kannst du es unter Profil → Uhren wieder verbinden.`
 };
 
+// Un valor que viene del evento (lo controla quien llama) se escribe en los registros recortado y sin saltos de línea: así no puede falsificar líneas.
+const logSafe = v => Array.from(String(typeof v === 'object' ? JSON.stringify(v) : v), ch => (ch.charCodeAt(0) < 32 || ch.charCodeAt(0) === 0x2028 || ch.charCodeAt(0) === 0x2029) ? ' ' : ch).join('').slice(0, 80);
+
 async function syncActivity(athleteId, activityId) {
   const base = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_KEY;
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
-  if (!Number.isInteger(athleteId)) return; // se interpola en un filtro PostgREST: solo enteros (segunda capa, ver el chequeo de owner_id/object_id abajo)
+  if (!Number.isInteger(athleteId) || !Number.isInteger(activityId)) return; // se interpolan en un filtro PostgREST y en la URL de Strava: solo enteros (segunda capa, ver el chequeo de owner_id/object_id abajo)
   const connRes = await fetch(`${base}/rest/v1/strava_connections?athlete_id=eq.${athleteId}&select=*`, { headers });
   const conns = await connRes.json();
   if (!conns || !conns.length) return;
@@ -203,7 +206,7 @@ module.exports = withSentry(async (req, res) => {
       }
       const expectedSubId = process.env.STRAVA_SUBSCRIPTION_ID;
       if (!expectedSubId || String(event && event.subscription_id) !== String(expectedSubId)) {
-        console.error('strava-webhook: subscription_id no coincide, se ignora el evento', event && event.subscription_id);
+        console.error('strava-webhook: subscription_id no coincide, se ignora el evento', logSafe(event && event.subscription_id));
         await reportSecurityEvent('Posible webhook de Strava forjado: subscription_id no coincide', { received: event && event.subscription_id }).catch(() => {});
         return;
       }
@@ -216,12 +219,12 @@ module.exports = withSentry(async (req, res) => {
       // barata, no confiar en enteros que en teoría "ya vienen bien" de Strava.
       if (event) {
         if (event.owner_id !== undefined && !Number.isInteger(event.owner_id)) {
-          console.error('strava-webhook: owner_id no numérico, se ignora', event.owner_id);
+          console.error('strava-webhook: owner_id no numérico, se ignora', logSafe(event.owner_id));
           await reportSecurityEvent('Posible intento de inyección en webhook de Strava: owner_id no numérico', { owner_id: event.owner_id, event }).catch(() => {});
           return;
         }
         if (event.object_id !== undefined && !Number.isInteger(event.object_id)) {
-          console.error('strava-webhook: object_id no numérico, se ignora', event.object_id);
+          console.error('strava-webhook: object_id no numérico, se ignora', logSafe(event.object_id));
           await reportSecurityEvent('Posible intento de inyección en webhook de Strava: object_id no numérico', { object_id: event.object_id, event }).catch(() => {});
           return;
         }
