@@ -90,3 +90,59 @@ test('los formularios de ingreso y registro son <form> con los autocomplete que 
   assert.match(html, /id="signup-password" name="password" autocomplete="new-password"/);
   assert.match(html, /<button type="submit" class="btn btn-primary" id="login-submit-btn"/);
 });
+
+test('offerSavePassword en la app de Android usa savePassword del plugin (hoja del sistema); sin él, cae a commit()', async () => {
+  const app = loadApp();
+  const calls = [];
+  app.Capacitor = { Plugins: { ZancadaAutofill: { savePassword: async o => { calls.push(['savePassword', o.id]); return { saved: true }; }, commit: async () => { calls.push(['commit']); } } } };
+  await app.offerSavePassword('ana@correo.com', 'Clave-Secreta-123');
+  assert.deepEqual(calls, [['savePassword', 'ana@correo.com']]);
+  const app2 = loadApp(); const calls2 = [];
+  app2.Capacitor = { Plugins: { ZancadaAutofill: { commit: async () => { calls2.push('commit'); } } } };
+  await app2.offerSavePassword('ana@correo.com', 'x');
+  assert.deepEqual(calls2, ['commit']);
+});
+
+test('offerSavedLogin: completa correo y contraseña con lo que elige la persona en la hoja del sistema, una sola vez, sin enviar el formulario', async () => {
+  const app = loadApp();
+  const el = withEmailField(app);
+  let pedidos = 0;
+  app.Capacitor = { Plugins: { ZancadaAutofill: { getPassword: async () => { pedidos++; return { id: 'ana@correo.com', password: 'Clave-Secreta-123' }; } } } };
+  await app.offerSavedLogin();
+  assert.equal(el('login-email').value, 'ana@correo.com');
+  assert.equal(el('login-password').value, 'Clave-Secreta-123');
+  await app.offerSavedLogin();
+  assert.equal(pedidos, 1, 'no vuelve a abrir la hoja en la misma apertura');
+  // cancelar la hoja (sin credencial) no rompe nada ni completa campos
+  const app2 = loadApp(); const el2 = withEmailField(app2);
+  app2.Capacitor = { Plugins: { ZancadaAutofill: { getPassword: async () => ({}) } } };
+  await app2.offerSavedLogin();
+  assert.equal(el2('login-email').value, '');
+  // en el navegador (sin plugin) no hace nada
+  const app3 = loadApp(); await app3.offerSavedLogin();
+});
+
+test('si entró con la credencial elegida del gestor y no la cambió, NO se vuelve a ofrecer guardarla; si la cambió, sí', async () => {
+  const app = loadApp();
+  withEmailField(app);
+  const calls = [];
+  app.Capacitor = { Plugins: { ZancadaAutofill: {
+    getPassword: async () => ({ id: 'ana@correo.com', password: 'Clave-Secreta-123' }),
+    savePassword: async o => { calls.push(['save', o.id, o.password]); return { saved: true }; }
+  } } };
+  await app.offerSavedLogin();
+  await app.offerSavePassword('ana@correo.com', 'Clave-Secreta-123');
+  assert.deepEqual(calls, [], 'misma credencial: no pregunta de nuevo');
+  // otro ingreso después, ya sin credencial elegida: vuelve a ofrecer
+  await app.offerSavePassword('ana@correo.com', 'Clave-Secreta-123');
+  assert.equal(calls.length, 1);
+  // eligió una y después cambió la contraseña a mano: se ofrece guardar la nueva
+  const app2 = loadApp(); withEmailField(app2); const calls2 = [];
+  app2.Capacitor = { Plugins: { ZancadaAutofill: {
+    getPassword: async () => ({ id: 'ana@correo.com', password: 'Vieja-1' }),
+    savePassword: async o => { calls2.push(o.password); return { saved: true }; }
+  } } };
+  await app2.offerSavedLogin();
+  await app2.offerSavePassword('ana@correo.com', 'Nueva-2');
+  assert.deepEqual(calls2, ['Nueva-2']);
+});
