@@ -26,6 +26,7 @@ Todas las claves viven como variables de entorno en Vercel (Settings → Environ
 |---|---|
 | Clave de servicio de Supabase | Supabase → Project Settings → API |
 | `CRON_SECRET` | Vercel (inventar uno largo nuevo) |
+| `TOKEN_ENCRYPTION_KEY` (cifrado de tokens de relojes) | Ver `docs/cifrado-de-tokens.md`: se rota con la anterior en `TOKEN_ENCRYPTION_KEY_PREVIOUS`; **perderla** obliga a que cada persona reconecte su reloj |
 | Clave de Anthropic | Consola de Anthropic (crear nueva, borrar la vieja) |
 | Clave de Resend | Resend → API Keys (y la contraseña SMTP que usa Supabase para los correos de login) |
 | Claves VAPID (notificaciones web) | Generar un par nuevo y actualizar Vercel y `app.js`; las suscripciones viejas dejan de servir |

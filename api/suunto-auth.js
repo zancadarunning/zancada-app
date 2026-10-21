@@ -9,6 +9,7 @@
 // "Sincronizar ahora" y el cron (suunto-sync*.js), para que este redirect -- que el
 // navegador está esperando -- responda rápido siempre.
 
+const { encToken } = require('./_lib/token-crypto');
 const crypto = require('crypto');
 const { SUUNTO_OAUTH_BASE, basicAuthHeader, suuntoUsernameFromToken } = require('./_lib/suunto-activity-helpers');
 const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
@@ -89,8 +90,8 @@ const linkAccount = async (req, res) => {
       body: JSON.stringify({
         user_id: userId,
         suunto_username: suuntoUsernameFromToken(tokenData.access_token),
-        access_token: tokenData.access_token,
-        refresh_token: tokenData.refresh_token,
+        access_token: encToken(tokenData.access_token),
+        refresh_token: encToken(tokenData.refresh_token),
         expires_at: expiresAt
       })
     });

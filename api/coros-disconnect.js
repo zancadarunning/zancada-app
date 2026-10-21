@@ -4,6 +4,7 @@
 // revoca el token del lado de COROS, borra la fila de coros_connections y
 // purga las carreras importadas de app_state.data.runs.
 
+const { decToken } = require('./_lib/token-crypto');
 const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { purgeCorosRunsForUser } = require('./_lib/coros-activity-helpers');
@@ -30,7 +31,7 @@ module.exports = withSentry(async (req, res) => {
     try {
       const connRes = await fetch(`${base}/rest/v1/coros_connections?user_id=eq.${userId}&select=access_token`, { headers });
       const connRows = await connRes.json();
-      const accessToken = connRows && connRows[0] && connRows[0].access_token;
+      const accessToken = connRows && connRows[0] && decToken(connRows[0].access_token);
       if (accessToken) {
         await fetch(`https://${REGION_HOST}/oauth2/revoke`, {
           method: 'POST',

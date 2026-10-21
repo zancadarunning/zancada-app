@@ -1,3 +1,4 @@
+const { encToken } = require('./_lib/token-crypto');
 const crypto = require('crypto');
 const { activityToRun, mergeStravaRuns } = require('./_lib/strava-activity-helpers');
 
@@ -70,8 +71,8 @@ const linkAccount = async (req, res) => {
       body: JSON.stringify({
         user_id: userId,
         athlete_id: tokenData.athlete.id,
-        access_token: tokenData.access_token,
-        refresh_token: tokenData.refresh_token,
+        access_token: encToken(tokenData.access_token),
+        refresh_token: encToken(tokenData.refresh_token),
         expires_at: tokenData.expires_at
       })
     });

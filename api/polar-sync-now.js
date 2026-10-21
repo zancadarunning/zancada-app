@@ -5,6 +5,7 @@
 // access_token que tiene la versión de Strava -- los tokens de Polar no
 // vencen. Ver la nota importante sobre timing en el comentario de abajo.
 
+const { decToken } = require('./_lib/token-crypto');
 const verifyUser = require('./_lib/verify-user');
 const { exerciseToRun, mergePolarRuns } = require('./_lib/polar-activity-helpers');
 const { applyCors, isPreflight } = require('./_lib/cors');
@@ -35,7 +36,7 @@ module.exports = withSentry(async (req, res) => {
     if (!conns || !conns.length) {
       return res.status(200).json({ synced: false, reason: 'not_connected' });
     }
-    const accessToken = conns[0].access_token;
+    const accessToken = decToken(conns[0].access_token);
 
     // OJO -- restricción propia de la API de Polar (no un bug nuestro): este
     // endpoint solo devuelve ejercicios subidos a Flow DESPUÉS de que el

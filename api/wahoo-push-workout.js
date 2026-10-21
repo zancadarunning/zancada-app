@@ -17,6 +17,7 @@
 // planAmountText()) -- este endpoint no duplica esa lógica, solo la relaya a
 // Wahoo con el token guardado.
 
+const { decToken } = require('./_lib/token-crypto');
 const verifyUser = require('./_lib/verify-user');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 const { refreshWahooToken } = require('./_lib/wahoo-activity-helpers');
@@ -54,7 +55,7 @@ module.exports = withSentry(async (req, res) => {
     let conn = conns[0];
 
     if (conn.expires_at < Math.floor(Date.now() / 1000)) {
-      const refreshed = await refreshWahooToken(base, headers, userId, conn.refresh_token);
+      const refreshed = await refreshWahooToken(base, headers, userId, decToken(conn.refresh_token));
       if (!refreshed) { res.status(200).json({ pushed: false, reason: 'token_expired' }); return; }
       conn.access_token = refreshed.accessToken;
     }
@@ -70,7 +71,7 @@ module.exports = withSentry(async (req, res) => {
     // que "no duplicar" es más seguro que adivinar uno).
     const workoutToken = `zancada_${userId}_${startsISO.slice(0, 10)}`;
     const existingRes = await fetch('https://api.wahooligan.com/v1/workouts?page=1&per_page=10', {
-      headers: { Authorization: `Bearer ${conn.access_token}` }
+      headers: { Authorization: `Bearer ${decToken(conn.access_token)}` }
     });
     if (existingRes.ok) {
       const existingData = await existingRes.json().catch(() => null);
@@ -86,7 +87,7 @@ module.exports = withSentry(async (req, res) => {
     });
     const pushRes = await fetch('https://api.wahooligan.com/v1/workouts', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${conn.access_token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { Authorization: `Bearer ${decToken(conn.access_token)}`, 'Content-Type': 'application/x-www-form-urlencoded' },
       body
     });
     if (!pushRes.ok) {

@@ -5,6 +5,7 @@
 // tokens de COROS vencen, así que renovamos con refreshCorosToken() si hace
 // falta, igual que Wahoo.
 
+const { decToken } = require('./_lib/token-crypto');
 const verifyUser = require('./_lib/verify-user');
 const { enrichCorosRecord, activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool, corosDateRangeArgs, getCorosRunRecords, getCorosRecordId } = require('./_lib/coros-activity-helpers');
 const { applyCors, isPreflight } = require('./_lib/cors');
@@ -38,14 +39,14 @@ module.exports = withSentry(async (req, res) => {
     let conn = conns[0];
 
     if (conn.expires_at < Math.floor(Date.now() / 1000)) {
-      const refreshed = await refreshCorosToken(base, headers, userId, conn.refresh_token);
+      const refreshed = await refreshCorosToken(base, headers, userId, decToken(conn.refresh_token));
       if (!refreshed) {
         return res.status(200).json({ synced: false, reason: 'token_expired' });
       }
       conn.access_token = refreshed.accessToken;
     }
 
-    const records = await callCorosMcpTool(conn.access_token, 'querySportRecords', corosDateRangeArgs(30));
+    const records = await callCorosMcpTool(decToken(conn.access_token), 'querySportRecords', corosDateRangeArgs(30));
     // querySportRecords devuelve un reporte de texto (no JSON) cuando hay actividades --
     // confirmado en producción, ver el comentario grande junto a parseCorosSportRecordsText
     // en coros-activity-helpers.js. getCorosRunRecords ya sabe parsearlo y filtrar running.
@@ -64,7 +65,7 @@ module.exports = withSentry(async (req, res) => {
 
     // El reporte de querySportRecords ya trae todo lo necesario (distancia, duración, FC
     // promedio, calorías) -- no hace falta getActivityDetail para armar un run decente.
-    for (const rec of newRecords.slice(0, 5)) await enrichCorosRecord(conn.access_token, rec);
+    for (const rec of newRecords.slice(0, 5)) await enrichCorosRecord(decToken(conn.access_token), rec);
     const newRuns = newRecords.map(record => activityToRun(record));
 
     if (newRuns.length) {

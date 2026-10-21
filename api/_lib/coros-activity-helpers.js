@@ -35,6 +35,7 @@
 // Vercel de una cuenta conectada (mismo camino que ya se usó para confirmar el formato
 // de querySportRecords).
 
+const { encToken } = require('./token-crypto');
 const { safeId } = require('./safe-id');
 const { sanitizeActivityNumbers } = require('./activity-sanity.js');
 const { fetchWithTimeout } = require('./fetch-with-timeout');
@@ -472,8 +473,8 @@ async function refreshCorosToken(base, headers, userId, refreshToken) {
   await fetch(`${base}/rest/v1/coros_connections?user_id=eq.${userId}`, {
     method: 'PATCH', headers,
     body: JSON.stringify({
-      access_token: tokenData.access_token,
-      refresh_token: tokenData.refresh_token || refreshToken,
+      access_token: encToken(tokenData.access_token),
+      refresh_token: encToken(tokenData.refresh_token || refreshToken),
       expires_at: expiresAt
     })
   });

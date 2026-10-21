@@ -10,6 +10,7 @@
 //   SUPABASE_URL
 //   SUPABASE_SERVICE_KEY
 
+const { decToken } = require('./_lib/token-crypto');
 const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { ensureFreshSuuntoToken, suuntoApiHeaders, SUUNTO_API_BASE } = require('./_lib/suunto-activity-helpers');
@@ -63,29 +64,29 @@ module.exports = withSentry(async (req, res) => {
 
     try {
       const conn = await readConnection('strava_connections', 'access_token');
-      if (conn && conn.access_token) {
-        await fetch(`https://www.strava.com/oauth/deauthorize?access_token=${encodeURIComponent(conn.access_token)}`, { method: 'POST' });
+      if (conn && decToken(conn.access_token)) {
+        await fetch(`https://www.strava.com/oauth/deauthorize?access_token=${encodeURIComponent(decToken(conn.access_token))}`, { method: 'POST' });
       }
     } catch (e) { console.error('delete-account: strava revoke failed', e); }
 
     try {
       const conn = await readConnection('polar_connections', 'access_token,polar_user_id');
-      if (conn && conn.access_token) {
+      if (conn && decToken(conn.access_token)) {
         await fetch(`https://www.polaraccesslink.com/v3/users/${conn.polar_user_id}`, {
           method: 'DELETE',
-          headers: { Authorization: `Bearer ${conn.access_token}` }
+          headers: { Authorization: `Bearer ${decToken(conn.access_token)}` }
         });
       }
     } catch (e) { console.error('delete-account: polar revoke failed', e); }
 
     try {
       const conn = await readConnection('wahoo_connections', 'access_token');
-      if (conn && conn.access_token) {
+      if (conn && decToken(conn.access_token)) {
         // primero los entrenamientos que Zancada subió a su cuenta de Wahoo (igual que wahoo-disconnect.js)
-        try { await removeAllZancada(conn.access_token, userId); } catch (e) { console.error('delete-account: wahoo plans cleanup failed', e && e.message); }
+        try { await removeAllZancada(decToken(conn.access_token), userId); } catch (e) { console.error('delete-account: wahoo plans cleanup failed', e && e.message); }
         await fetch('https://api.wahooligan.com/v1/permissions', {
           method: 'DELETE',
-          headers: { Authorization: `Bearer ${conn.access_token}` }
+          headers: { Authorization: `Bearer ${decToken(conn.access_token)}` }
         });
       }
     } catch (e) { console.error('delete-account: wahoo revoke failed', e); }
@@ -115,11 +116,11 @@ module.exports = withSentry(async (req, res) => {
     // apareciendo activo del lado de la cuenta de COROS del usuario para siempre.
     try {
       const conn = await readConnection('coros_connections', 'access_token');
-      if (conn && conn.access_token) {
+      if (conn && decToken(conn.access_token)) {
         await fetch('https://mcpus.coros.com/oauth2/revoke', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ token: conn.access_token, client_id: process.env.COROS_CLIENT_ID })
+          body: new URLSearchParams({ token: decToken(conn.access_token), client_id: process.env.COROS_CLIENT_ID })
         });
       }
     } catch (e) { console.error('delete-account: coros revoke failed', e); }

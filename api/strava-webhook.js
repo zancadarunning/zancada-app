@@ -1,3 +1,4 @@
+const { decToken, encToken } = require('./_lib/token-crypto');
 const crypto = require('crypto');
 const { activityToRun, mergeStravaRuns, purgeStravaRunsForUser, deleteStravaRun } = require('./_lib/strava-activity-helpers');
 
@@ -16,7 +17,7 @@ function safeEqual(a, b) {
 async function stravaRefresh(conn) {
   const r = await fetch('https://www.strava.com/oauth/token', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ client_id: process.env.STRAVA_CLIENT_ID, client_secret: process.env.STRAVA_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: conn.refresh_token })
+    body: JSON.stringify({ client_id: process.env.STRAVA_CLIENT_ID, client_secret: process.env.STRAVA_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: decToken(conn.refresh_token) })
   });
   let data = null;
   try { data = await r.json(); } catch (e) { data = null; }
@@ -50,20 +51,20 @@ async function syncActivity(athleteId, activityId) {
   if (conn.expires_at < Math.floor(Date.now() / 1000)) {
     const refreshRes = await fetch('https://www.strava.com/oauth/token', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: process.env.STRAVA_CLIENT_ID, client_secret: process.env.STRAVA_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: conn.refresh_token })
+      body: JSON.stringify({ client_id: process.env.STRAVA_CLIENT_ID, client_secret: process.env.STRAVA_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: decToken(conn.refresh_token) })
     });
     const refreshed = await refreshRes.json();
     if (refreshed.access_token) {
       conn.access_token = refreshed.access_token;
       await fetch(`${base}/rest/v1/strava_connections?user_id=eq.${conn.user_id}`, {
         method: 'PATCH', headers,
-        body: JSON.stringify({ access_token: refreshed.access_token, refresh_token: refreshed.refresh_token, expires_at: refreshed.expires_at })
+        body: JSON.stringify({ access_token: encToken(refreshed.access_token), refresh_token: encToken(refreshed.refresh_token), expires_at: refreshed.expires_at })
       });
     }
   }
 
   const actRes = await fetch(`https://www.strava.com/api/v3/activities/${activityId}`, {
-    headers: { Authorization: `Bearer ${conn.access_token}` }
+    headers: { Authorization: `Bearer ${decToken(conn.access_token)}` }
   });
   const act = await actRes.json();
   // act.errors (o directamente !act): la request a Strava falló -- token todavía
@@ -88,7 +89,7 @@ async function syncActivity(athleteId, activityId) {
     return;
   }
 
-  const newRun = await activityToRun(act, conn.access_token);
+  const newRun = await activityToRun(act, decToken(conn.access_token));
   // 'upsert': Strava manda este mismo evento tanto para actividades nuevas
   // como para ediciones de una actividad ya sincronizada (aspect_type
   // 'create' o 'update'), así que si ya la teníamos hay que reemplazarla
@@ -117,7 +118,7 @@ async function deleteActivity(athleteId, activityId) {
   const conn = conns[0];
 
   // Confirmar con Strava que la actividad de verdad ya no existe (404). Si el token venció, se renueva primero.
-  let token = conn.access_token;
+  let token = decToken(conn.access_token);
   if (conn.expires_at < Math.floor(Date.now() / 1000)) {
     const rf = await stravaRefresh(conn);
     if (!rf.ok) return;
@@ -152,7 +153,7 @@ async function deauthorizeAthlete(athleteId) {
   // Confirmar la revocación: si Strava todavía deja refrescar el token, el acceso sigue vigente y el evento era falso.
   const rf = await stravaRefresh(conns[0]);
   if (rf.ok) {
-    await fetch(`${base}/rest/v1/strava_connections?user_id=eq.${userId}`, { method: 'PATCH', headers, body: JSON.stringify({ access_token: rf.data.access_token, refresh_token: rf.data.refresh_token, expires_at: rf.data.expires_at }) }).catch(() => {});
+    await fetch(`${base}/rest/v1/strava_connections?user_id=eq.${userId}`, { method: 'PATCH', headers, body: JSON.stringify({ access_token: encToken(rf.data.access_token), refresh_token: encToken(rf.data.refresh_token), expires_at: rf.data.expires_at }) }).catch(() => {});
     console.error('strava-webhook: evento de revocación ignorado, el acceso sigue vigente (posible evento falso)');
     return;
   }

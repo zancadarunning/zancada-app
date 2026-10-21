@@ -9,6 +9,7 @@
 // ids que ya conoce (`known`: { fecha: { workoutId, planId } }); el servidor devuelve los ids
 // nuevos (`pushedMap`) para que la app los recuerde. Ver api/_lib/wahoo-plans-sync.js.
 
+const { decToken } = require('./_lib/token-crypto');
 const verifyUser = require('./_lib/verify-user');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 const { applyCors, isPreflight } = require('./_lib/cors');
@@ -53,9 +54,9 @@ module.exports = withSentry(async (req, res) => {
     const conns = await connRes.json();
     if (!conns || !conns.length) { res.status(200).json({ pushed: 0, reason: 'not_connected' }); return; }
     const conn = conns[0];
-    let accessToken = conn.access_token;
+    let accessToken = decToken(conn.access_token);
     if (conn.expires_at < Math.floor(Date.now() / 1000)) {
-      const refreshed = await refreshWahooToken(base, headers, userId, conn.refresh_token);
+      const refreshed = await refreshWahooToken(base, headers, userId, decToken(conn.refresh_token));
       if (!refreshed) { res.status(200).json({ pushed: 0, reason: 'token_expired' }); return; }
       accessToken = refreshed.accessToken;
     }

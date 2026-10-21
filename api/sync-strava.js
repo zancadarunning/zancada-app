@@ -1,3 +1,4 @@
+const { decToken, encToken } = require('./_lib/token-crypto');
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { rotateForFairness } = require('./_lib/cron-rotation');
 const { activityToRun, mergeStravaRuns, setStravaSyncStatus, fetchStreams } = require('./_lib/strava-activity-helpers');
@@ -81,18 +82,18 @@ module.exports = withSentry(async (req, res) => {
         break;
       }
       try {
-        let accessToken = conn.access_token;
+        let accessToken = decToken(conn.access_token);
         if (conn.expires_at < Math.floor(Date.now() / 1000)) {
           const refreshRes = await fetchWithTimeout('https://www.strava.com/oauth/token', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ client_id: process.env.STRAVA_CLIENT_ID, client_secret: process.env.STRAVA_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: conn.refresh_token })
+            body: JSON.stringify({ client_id: process.env.STRAVA_CLIENT_ID, client_secret: process.env.STRAVA_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: decToken(conn.refresh_token) })
           });
           const refreshed = await refreshRes.json();
           if (refreshed.access_token) {
             accessToken = refreshed.access_token;
             await fetch(`${base}/rest/v1/strava_connections?user_id=eq.${conn.user_id}`, {
               method: 'PATCH', headers,
-              body: JSON.stringify({ access_token: refreshed.access_token, refresh_token: refreshed.refresh_token, expires_at: refreshed.expires_at })
+              body: JSON.stringify({ access_token: encToken(refreshed.access_token), refresh_token: encToken(refreshed.refresh_token), expires_at: refreshed.expires_at })
             });
           }
         }

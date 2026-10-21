@@ -5,6 +5,7 @@
 // sincronizaba con el botón "Sincronizar" manual de polar-sync-now.js. Los tokens de Polar
 // no vencen (ver polar-sync-now.js), así que acá no hace falta ningún paso de refresh.
 
+const { decToken } = require('./_lib/token-crypto');
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { rotateForFairness } = require('./_lib/cron-rotation');
 const { syncProbe, probeHasNew, probeMayBackfill } = require('./_lib/sync-probe');
@@ -39,7 +40,7 @@ async function backfillPolarSplits(base, headers, conn) {
   if (!pending.length) return 0;
 
   for (const run of pending) {
-    const fit = await fetchFitSplits(run.polarId, conn.access_token);
+    const fit = await fetchFitSplits(run.polarId, decToken(conn.access_token));
     run.splits = fit.splits;
     run.series = fit.series;
     if (fit.elevationGain != null) run.elevationGain = fit.elevationGain;
@@ -93,7 +94,7 @@ module.exports = withSentry(async (req, res) => {
       }
       try {
         const exsRes = await fetchWithTimeout('https://www.polaraccesslink.com/v3/exercises', {
-          headers: { Authorization: `Bearer ${conn.access_token}` }
+          headers: { Authorization: `Bearer ${decToken(conn.access_token)}` }
         });
         const exsData = await exsRes.json().catch(() => null);
         if (!exsRes.ok) {
@@ -117,7 +118,7 @@ module.exports = withSentry(async (req, res) => {
             // apuro por responder rápido a un usuario esperando en pantalla.
             const newRuns = [];
             for (const ex of runExercises.filter(ex => !knownIds.has(ex.id))) {
-              newRuns.push(await exerciseToRun(ex, conn.access_token));
+              newRuns.push(await exerciseToRun(ex, decToken(conn.access_token)));
             }
             if (newRuns.length) await mergeAndNotify(mergePolarRuns, base, headers, conn.user_id, newRuns, 'skip', 'polar');
           }

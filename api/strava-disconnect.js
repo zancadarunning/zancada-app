@@ -22,6 +22,7 @@
 //   SUPABASE_URL
 //   SUPABASE_SERVICE_KEY
 
+const { decToken } = require('./_lib/token-crypto');
 const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { purgeStravaRunsForUser } = require('./_lib/strava-activity-helpers');
@@ -46,7 +47,7 @@ module.exports = withSentry(async (req, res) => {
     try {
       const connRes = await fetch(`${base}/rest/v1/strava_connections?user_id=eq.${userId}&select=access_token`, { headers });
       const connRows = await connRes.json();
-      const accessToken = connRows && connRows[0] && connRows[0].access_token;
+      const accessToken = connRows && connRows[0] && decToken(connRows[0].access_token);
       if (accessToken) {
         await fetch(`https://www.strava.com/oauth/deauthorize?access_token=${encodeURIComponent(accessToken)}`, { method: 'POST' });
       }

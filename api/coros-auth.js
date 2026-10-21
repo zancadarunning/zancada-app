@@ -13,6 +13,7 @@
 // nuevo contra el servidor de esa región y armar la misma lógica de acá pero
 // eligiendo el host según de dónde sea el usuario (no hay forma de saberlo
 // de antemano, antes de que intente conectar).
+const { encToken } = require('./_lib/token-crypto');
 const crypto = require('crypto');
 const { enrichCorosRecord, activityToRun, mergeCorosRuns, callCorosMcpTool, corosDateRangeArgs, getCorosRunRecords, getCorosRecordId } = require('./_lib/coros-activity-helpers');
 
@@ -80,8 +81,8 @@ const linkAccount = async (req, res) => {
       headers,
       body: JSON.stringify({
         user_id: userId,
-        access_token: tokenData.access_token,
-        refresh_token: tokenData.refresh_token,
+        access_token: encToken(tokenData.access_token),
+        refresh_token: encToken(tokenData.refresh_token),
         expires_at: expiresAt
       })
     });

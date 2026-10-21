@@ -4,6 +4,7 @@
 // wahoo_connections, revoca el permiso del lado de Wahoo (DELETE
 // /v1/permissions) y purga las carreras importadas.
 
+const { decToken } = require('./_lib/token-crypto');
 const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { purgeWahooRunsForUser } = require('./_lib/wahoo-activity-helpers');
@@ -29,7 +30,7 @@ module.exports = withSentry(async (req, res) => {
     try {
       const connRes = await fetch(`${base}/rest/v1/wahoo_connections?user_id=eq.${userId}&select=access_token`, { headers });
       const connRows = await connRes.json();
-      const accessToken = connRows && connRows[0] && connRows[0].access_token;
+      const accessToken = connRows && connRows[0] && decToken(connRows[0].access_token);
       if (accessToken) {
         // Antes de revocar el permiso, se borran los entrenamientos que Zancada había subido (best-effort).
         try { await removeAllZancada(accessToken, userId); } catch (e) { console.error('wahoo-disconnect: no se pudieron borrar los entrenamientos', e && e.message); }

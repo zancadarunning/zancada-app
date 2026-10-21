@@ -5,6 +5,7 @@
 // sí hace falta renovar el access_token si venció -- ver refreshWahooToken()
 // en _lib/wahoo-activity-helpers.js.
 
+const { decToken } = require('./_lib/token-crypto');
 const verifyUser = require('./_lib/verify-user');
 const { workoutToRun, mergeWahooRuns, isRunningWorkoutType, refreshWahooToken } = require('./_lib/wahoo-activity-helpers');
 const { applyCors, isPreflight } = require('./_lib/cors');
@@ -38,7 +39,7 @@ module.exports = withSentry(async (req, res) => {
     let conn = conns[0];
 
     if (conn.expires_at < Math.floor(Date.now() / 1000)) {
-      const refreshed = await refreshWahooToken(base, headers, userId, conn.refresh_token);
+      const refreshed = await refreshWahooToken(base, headers, userId, decToken(conn.refresh_token));
       if (!refreshed) {
         return res.status(200).json({ synced: false, reason: 'token_expired' });
       }
@@ -46,7 +47,7 @@ module.exports = withSentry(async (req, res) => {
     }
 
     const wRes = await fetch('https://api.wahooligan.com/v1/workouts?page=1&per_page=10', {
-      headers: { Authorization: `Bearer ${conn.access_token}` }
+      headers: { Authorization: `Bearer ${decToken(conn.access_token)}` }
     });
     if (!wRes.ok) {
       const body = await wRes.text().catch(() => '');
