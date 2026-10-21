@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-21T20:28:46Z';
+const APP_VERSION = '2026-10-21T20:46:49Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1010,6 +1010,9 @@ function prefillLoginEmail(){
 // Management API se le entrega la credencial; en la app de Android se llama a AutofillManager.commit() (plugin ZancadaAutofill). La contraseña
 // pasa por esta función solo para eso: no se escribe en ningún almacenamiento ni en ningún registro.
 async function offerSavePassword(email, password){
+  // Si la persona entró con la credencial que ELIGIÓ del gestor (offerSavedLogin) y no la cambió, ya está guardada: no se pregunta de nuevo.
+  const picked = pickedSavedLogin; pickedSavedLogin = null;
+  if(picked && picked.id === email && picked.password === password) return;
   try{
     if(window.PasswordCredential && navigator.credentials && navigator.credentials.store){
       await navigator.credentials.store(new window.PasswordCredential({ id: email, password: password, name: email }));
@@ -1027,6 +1030,7 @@ function nativeAutofillPlugin(){
 // En la app de Android, al abrir la pantalla de ingreso se ofrece la contraseña guardada en el gestor del sistema (una hoja con las cuentas guardadas;
 // si la persona elige una, se completan correo y contraseña, sin enviar nada). Una sola vez por apertura de la app.
 let savedLoginOffered = false;
+let pickedSavedLogin = null;   // la credencial que la persona eligió en la hoja del sistema (solo en memoria, hasta el ingreso)
 async function offerSavedLogin(){
   if(savedLoginOffered) return;
   const plugin = nativeAutofillPlugin();
@@ -1038,6 +1042,7 @@ async function offerSavedLogin(){
     const email = document.getElementById('login-email'), pw = document.getElementById('login-password');
     if(email) email.value = cred.id;
     if(pw) pw.value = cred.password;
+    pickedSavedLogin = { id: cred.id, password: cred.password };
   }catch(e){}
 }
 prefillLoginEmail();
