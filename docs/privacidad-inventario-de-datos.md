@@ -51,8 +51,8 @@ Falta, para cada uno: firmar o aceptar el **contrato de tratamiento de datos (DP
 ## 4. Decisiones que tiene que tomar el dueño (y un abogado)
 
 1. **Entidad legal y jurisdicción** que figuran en la política de privacidad y los términos (hoy son marcadores de posición).
-2. **Edad mínima**: lo habitual para una app con datos de salud es 16 años en Europa (13 en EE. UU. con consentimiento de los padres). Hoy el registro no la exige.
-3. **Base legal del tratamiento de datos de salud**: consentimiento explícito. Conviene un aviso claro antes de que la persona cargue molestias, embarazo o notas médicas, y que Zonda no es consejo médico.
+2. **Edad mínima**: **hecho el 2026-10-21 con 16 años** (el valor habitual en Europa; en EE. UU. el mínimo legal es 13 con permiso de los padres, así que 16 cubre ambos). Antes de usar la app, cuenta nueva o existente, hay que tildar "Tengo 16 años o más"; no hay verificación de edad real (es una declaración). Un abogado tiene que confirmar si el mínimo es 16 en todos los países donde se lance.
+3. **Base legal del tratamiento de datos de salud**: **hecho el 2026-10-21**: pantalla de consentimiento explícito (con aviso de que Zonda no es consejo médico y de que los datos se envían a un proveedor de IA), guardado en `state.consent` con versión y fecha (`CONSENT_VERSION` en `app.js`; subirla vuelve a pedirlo). Rechazar cierra la sesión. Revisar el texto con un abogado.
 4. **Región de los datos**: si la mayoría de los usuarios estarán en la UE o Latinoamérica, evaluar mover Supabase a Frankfurt o São Paulo (no es urgente, pero es más fácil hacerlo antes de tener muchos datos).
 5. **Representante en la UE** si se ofrece el servicio allí (RGPD, art. 27), según el tamaño y la actividad.
 6. **Formularios de las tiendas**: "Seguridad de los datos" de Google Play y "Etiquetas de privacidad" de Apple (salen de las tablas de arriba).
