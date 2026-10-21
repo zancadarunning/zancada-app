@@ -43,7 +43,7 @@ Notas:
 5. **No** hay publicidad ni venta de datos ni SDK de anuncios. No hay "seguimiento" entre apps.
 
 **Permisos sensibles: justificaciones para la declaración**
-- *Ubicación (precisa y aproximada)*: calcular distancia, ritmo y ruta de las carreras mientras el usuario las registra, y mostrar el clima local. Solo en primer plano; **no** se usa ubicación en segundo plano.
+- *Ubicación (precisa y aproximada)*: calcular distancia, ritmo y ruta de las carreras mientras el usuario las registra, y mostrar el clima local. Durante una carrera la app sigue la ubicación con un **servicio en primer plano de tipo ubicación** (con una notificación visible, para que siga funcionando con la pantalla apagada); la app **no** declara el permiso de ubicación en segundo plano (`ACCESS_BACKGROUND_LOCATION`) y no sigue la ubicación fuera de una carrera ni del clima.
 - *Health Connect (leer ejercicio, distancia, frecuencia cardíaca, elevación, calorías, pasos)*: traer al historial las carreras registradas por el reloj o por otras apps, solo con permiso explícito del usuario.
 - *Calendario (leer/escribir)*: agregar los entrenamientos del plan a un calendario propio "Zancada" y quitarlos al borrar el plan.
 - *Notificaciones*: recordatorios del día, aviso de carrera cargada y resumen semanal.
@@ -72,6 +72,7 @@ Notas:
 - [ ] Cargar la URL de borrado (`https://www.zancada.org/eliminar-cuenta.html`) en Play Console.
 - [ ] Aceptar los DPA de los proveedores (ver `docs/dpa-proveedores.md`).
 - [x] Anthropic verificado el 2026-10-21 (no entrena con datos de la API, retención estándar de hasta 30 días, contrato de tratamiento incorporado). Volver a mirar si cambian sus términos; evaluar retención cero por tratarse de datos de salud.
+- [ ] Google Play: completar la declaración de **permisos de servicios en primer plano** (`FOREGROUND_SERVICE_LOCATION`) con su descripción y, si lo piden, un video corto que muestre la notificación durante una carrera.
 - [ ] Decidir sobre Strava (sus reglas prohíben datos con IA y piden borrarlos a los 7 días).
 - [ ] Revisión de las traducciones del consentimiento (pt, fr, it, de) por hablantes nativos.
 - [ ] Probar el flujo completo en un dispositivo limpio: registro → consentimiento → onboarding → borrar cuenta.
