@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-21T03:00:34Z';
+const APP_VERSION = '2026-10-21T13:06:13Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -11197,7 +11197,7 @@ function buildEventIcs(ev){
   const descParts = [typeLabel];
   if(ev.distanceKm>0) descParts.push(fmtDist(ev.distanceKm,1)+' '+distUnit());
   descParts.push('Zancada');
-  const uid = 'evt-'+dtStart+'-'+Math.random().toString(36).slice(2,10)+'@zancada.org';
+  const uid = 'evt-'+dtStart+'-'+randomHex(8)+'@zancada.org';
   // CRLF (\r\n): el RFC 5545 pide ese fin de línea puntual, no alcanza con \n solo --
   // algunos lectores de calendario más estrictos (Outlook) lo rechazan sin esto.
   return [
@@ -12418,6 +12418,11 @@ async function refreshHomeWeather(){
     paintHomeWeather(w);
   }catch(e){ /* sin conexión o sin respuesta: queda lo que ya había */ }
   finally{ wxInFlight = false; }
+}
+// Texto hexadecimal al azar con el generador criptográfico del navegador (sirve para ids; no para secretos propios)
+function randomHex(n){
+  try{ const a = new Uint8Array(Math.ceil(n/2)); crypto.getRandomValues(a); return Array.from(a, b => b.toString(16).padStart(2,'0')).join('').slice(0, n); }
+  catch(e){ return Math.random().toString(16).slice(2, 2+n).padEnd(n, '0'); }
 }
 function saveLastKnownPosition(lat, lng){
   try{ localStorage.setItem(LAST_POS_KEY, JSON.stringify({lat, lng, ts: Date.now()})); }catch(e){}

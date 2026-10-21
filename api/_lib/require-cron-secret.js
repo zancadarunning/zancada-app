@@ -43,7 +43,7 @@ module.exports = async function requireCronSecret(req) {
   const secret = process.env.CRON_SECRET;
   const ok = Boolean(secret) && secretMatches(auth, secret);
   if (!ok) {
-    console.error('require-cron-secret: intento con secret ausente o incorrecto —', req.url);
+    console.error('require-cron-secret: intento con secret ausente o incorrecto —', Array.from(String(req.url), ch => ch.charCodeAt(0) < 32 ? ' ' : ch).join('').slice(0, 120));
     await reportSecurityEvent('Intento de acceso a endpoint protegido con CRON_SECRET incorrecto', { url: req.url, method: req.method }).catch(() => {});
   }
   return ok;
