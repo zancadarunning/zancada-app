@@ -2351,13 +2351,13 @@ test('index.html: #plan-post-race con el texto, y el botón abre el editor de me
   assert.match(m[1], /data-i18n="plan_post_race_banner"/);
   const btn = m[1].match(/<button[^>]*data-i18n="plan_post_race_cta"[^>]*>/);
   assert.ok(btn, 'botón con plan_post_race_cta');
-  const onclick = btn[0].match(/onclick="([^"]+)"/)[1];
+  const onclick = btn[0].match(/data-on-click="([^"]+)"/)[1];
   assert.ok(fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8').includes("getElementById('plan-post-race')"));
   // el handler llama a la función que abre el panel donde se eligen meta y fecha de carrera
   const app = loadApp();
   let opened = 0;
   app.openPersonalDataOverlay = () => { opened++; };
-  require('node:vm').runInContext(onclick, app);
+  require('../js/ui-events.js').run(onclick, {}, {}, app, { stopped: false });   // el mismo intérprete que usa la página (sin eval)
   assert.equal(opened, 1);
   // y ese panel es el que tiene los campos de meta y fecha de carrera
   const overlay = html.slice(html.indexOf('id="personal-data-overlay"'));
