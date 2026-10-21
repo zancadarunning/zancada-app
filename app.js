@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-20T23:44:25Z';
+const APP_VERSION = '2026-10-21T00:38:05Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -13631,7 +13631,7 @@ function renderPersonalRecordsCard(){
 // corresponde acá es compartir, no descargar). Resultado: tocar "compartir" no hacía
 // nada, sin ningún error visible para el usuario. En la web (navegador de escritorio o
 // PWA) sigue exactamente el comportamiento de antes.
-async function shareImageBlobFile(blob, filename){
+async function shareImageBlobFile(blob, filename, mime){
   const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   const Share = isNative && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
   const Filesystem = isNative && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
@@ -13648,7 +13648,7 @@ async function shareImageBlobFile(blob, filename){
     }catch(e){ /* usuario canceló el panel de compartir nativo, o algo falló -- no rompemos la UI por esto */ }
     return;
   }
-  const file = new File([blob], filename, {type:'image/png'});
+  const file = new File([blob], filename, {type: mime || 'image/png'});
   if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
     try{ await navigator.share({files:[file], title:'Zancada'}); }catch(e){ /* usuario canceló */ }
   } else {
@@ -13658,6 +13658,27 @@ async function shareImageBlobFile(blob, filename){
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(()=>URL.revokeObjectURL(url), 5000);
   }
+}
+/* ---- Exportar mis datos (portabilidad de datos personales) ---- */
+// Un archivo JSON con todo lo que la app guarda de la persona: perfil, plan, carreras (con la ruta), zapatillas, charla con Zonda, dolores y
+// chequeos, eventos. No incluye secretos: ni el link privado del calendario, ni los tokens de las marcas de relojes (viven solo en el servidor).
+async function buildPersonalDataExport(){
+  const data = JSON.parse(JSON.stringify(state || {}));
+  delete data.calendarToken;
+  let account = null;
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const u = session && session.user;
+    if(u) account = { id: u.id, email: u.email || null, createdAt: u.created_at || null, signInMethod: (u.app_metadata && u.app_metadata.provider) || null };
+  }catch(e){}
+  return { app: 'Zancada', appVersion: typeof APP_VERSION !== 'undefined' ? APP_VERSION : null, exportedAt: new Date().toISOString(), account, data };
+}
+async function exportMyData(){
+  try{
+    const payload = await buildPersonalDataExport();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
+    await shareImageBlobFile(blob, 'zancada-mis-datos-' + new Date().toISOString().slice(0, 10) + '.json', 'application/json');
+  }catch(e){ showToast(t('generic_error'), 'error'); }
 }
 async function sharePRImage(bucketKey){
   const rec = getPersonalRecords()[bucketKey];
