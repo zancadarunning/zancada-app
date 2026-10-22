@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22T00:05:21Z';
+const APP_VERSION = '2026-10-22T01:42:25Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4356,8 +4356,37 @@ window.addEventListener('resize', syncAppMinHeight);
 // recalculado el chrome disponible sin que haya un resize real que avisarnos.
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) syncAppMinHeight(); });
 window.addEventListener('pageshow', syncAppMinHeight);
+// ---- Aviso de "inicio de sesión desde un dispositivo nuevo" (ver api/login-alert.js) ----
+// Cada instalación genera al azar un identificador la primera vez y lo conserva en este dispositivo. El servidor guarda solo su hash y, si la cuenta ya
+// tenía otros dispositivos, manda un mail. No es un secreto (no da acceso a nada): si se borra el almacenamiento, el dispositivo se ve como nuevo.
+const DEVICE_ID_KEY = 'zancada_device_id';
+function getDeviceId(){
+  try{
+    let id = localStorage.getItem(DEVICE_ID_KEY);
+    if(!/^[a-f0-9]{32}$/.test(id || '')){ id = randomHex(32); localStorage.setItem(DEVICE_ID_KEY, id); }
+    return id;
+  }catch(e){ return ''; }
+}
+let loginDeviceSent = false;
+async function registerLoginDevice(){
+  if(loginDeviceSent) return;
+  const id = getDeviceId();
+  if(!id) return;
+  loginDeviceSent = true;
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session) { loginDeviceSent = false; return; }
+    let tz = ''; try{ tz = (state.profile && state.profile.tz) || Intl.DateTimeFormat().resolvedOptions().timeZone || ''; }catch(e){}
+    await fetch(apiUrl('/api/login-alert'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ deviceId: id, lang, tz })
+    });
+  }catch(e){ /* sin conexión o sin respuesta: se reintenta la próxima vez que se abra la app */ loginDeviceSent = false; }
+}
 function enterApp(){
   setTimeout(()=>{ try{ refreshNativePushRegistration(); }catch(e){} }, 1500);
+  setTimeout(()=>{ try{ registerLoginDevice(); }catch(e){} }, 4000);   // aviso por mail si es un dispositivo nuevo (no frena la entrada)
   document.getElementById('splash').style.display='none';
   document.getElementById('login').style.display='none';
   document.getElementById('onboard').style.display='none';

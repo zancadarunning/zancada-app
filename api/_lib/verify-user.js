@@ -68,7 +68,7 @@ async function verifyUser(req) {
     // usaban este helper solo leían userId, así que esto es puramente aditivo.
     // emailConfirmed: lo usa admin-stats.js (un mail sin confirmar no alcanza para ser admin)
     // provider y lastAuthAt: para exigir un inicio de sesión reciente antes de acciones que no se pueden deshacer (ver isRecentLogin)
-    return { ok: true, userId: user.id, email: user.email, emailConfirmed: !!user.email_confirmed_at, token, provider: (user.app_metadata && user.app_metadata.provider) || null, lastAuthAt: lastAuthAtFromToken(token) };
+    return { ok: true, userId: user.id, createdAt: user.created_at || null, email: user.email, emailConfirmed: !!user.email_confirmed_at, token, provider: (user.app_metadata && user.app_metadata.provider) || null, lastAuthAt: lastAuthAtFromToken(token) };
   } catch (e) {
     console.error('verify-user: token verification failed', e);
     return { ok: false, status: 401, error: 'Invalid session' };

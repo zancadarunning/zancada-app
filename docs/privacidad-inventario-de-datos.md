@@ -15,6 +15,7 @@ Base para los textos legales y para el cumplimiento de privacidad en un lanzamie
 | Notificaciones | suscripción push (web) o token de Firebase (Android) | No | `push_subscriptions` |
 | Social (opcional) | nombre de usuario público, a quién sigue, carreras compartidas (solo distancia, duración y fecha) | No | `usernames`, `follows`, `run_feed`, `run_likes` |
 | Técnicos | límites de uso del chat, avisos enviados | No | `chat_usage`, `sent_notifications`, `sync_cooldowns` |
+| Dispositivos conocidos | hash de un identificador al azar de cada instalación, tipo de dispositivo ("Android · app"), **país aproximado** (sin IP) y fechas; sirve solo para avisar por correo de un inicio de sesión desde un dispositivo nuevo. Máximo 20 por cuenta; se borra con la cuenta | No | `known_devices` (`sql/known_devices.sql`) |
 | Registros de errores | errores del servidor, con datos personales eliminados antes de enviarse (`scrubEvent`) | Mínimo | Sentry |
 
 Lo que **no** se guarda: contraseñas en claro, datos de tarjetas, documentos de identidad.
