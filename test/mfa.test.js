@@ -132,7 +132,7 @@ test('loadUserAndEnter exige el segundo paso ANTES de leer cualquier dato de la 
 test('los textos del segundo paso existen en los 6 idiomas', () => {
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
     const s = fs.readFileSync(path.join(__dirname, '..', 'locales', l + '.js'), 'utf8');
-    for (const k of ['mfa_row_title', 'mfa_row_on', 'mfa_row_off', 'mfa_setup_title', 'mfa_setup_intro', 'mfa_setup_step1', 'mfa_setup_secret', 'mfa_setup_step2', 'mfa_setup_warn', 'mfa_code_label', 'mfa_verify_btn', 'mfa_cancel_btn', 'mfa_enabled_toast', 'mfa_disabled_toast', 'mfa_disable_confirm', 'mfa_disable_btn', 'mfa_challenge_title', 'mfa_challenge_text', 'mfa_code_invalid', 'mfa_error', 'mfa_lost']) assert.ok(s.includes(k + ':'), l + ' sin ' + k);
+    for (const k of ['mfa_row_title', 'mfa_row_on', 'mfa_row_off', 'mfa_setup_title', 'mfa_setup_intro', 'mfa_setup_step1', 'mfa_setup_secret', 'mfa_setup_step2', 'mfa_setup_warn', 'mfa_code_label', 'mfa_verify_btn', 'mfa_cancel_btn', 'mfa_enabled_toast', 'mfa_disabled_toast', 'mfa_disable_confirm', 'mfa_disable_btn', 'mfa_challenge_title', 'mfa_challenge_text', 'mfa_code_invalid', 'mfa_error', 'mfa_lost', 'mfa_open_app', 'mfa_copy_key', 'mfa_key_copied', 'mfa_open_app_none']) assert.ok(s.includes(k + ':'), l + ' sin ' + k);
     assert.ok(s.includes('info@zancada.org'), l + ' dice cómo recuperar la cuenta');
   }
 });
@@ -175,4 +175,56 @@ test('borrar sin 2FA: no se pide ningún código y se usa el token de la contras
   const tok = await app.confirmDestructiveWithPassword('seguro?', {});
   assert.notEqual(el('mfa-challenge-modal').style.display, 'block');
   assert.equal(tok, 'token-viejo');   // el getSession simulado devuelve la sesión vigente
+});
+
+// ---------- configurar el 2FA desde el mismo celular ----------
+// Nadie puede escanear el QR con el celular donde lo ve: el modal ofrece abrir la app de autenticación con el enlace otpauth:// y copiar la clave.
+const enrollMock = uri => ({
+  listFactors: async () => ({ data: { totp: [] }, error: null }),
+  enroll: async () => ({ data: { id: 'nuevo', totp: { qr_code: 'data:image/svg+xml;utf-8,<svg/>', secret: 'ABCDEF234567', uri } }, error: null })
+});
+
+test('configurar 2FA en el celular: el botón "Abrir en mi app" aparece en teléfonos y abre solo un enlace otpauth://totp/', async () => {
+  const uri = 'otpauth://totp/Zancada:a%40b.com?secret=ABCDEF234567&issuer=Zancada';
+  const { app, el } = setup(enrollMock(uri));
+  app.navigator.userAgent = 'Mozilla/5.0 (Linux; Android 14; Moto) Chrome/120 Mobile';
+  await app.toggleMfa();
+  assert.equal(el('mfa-open-app').style.display, '', 'visible en el celular');
+  assert.equal(el('mfa-open-app').textContent, app.t('mfa_open_app'));
+  assert.equal(el('mfa-copy-key').textContent, app.t('mfa_copy_key'));
+  app.openMfaApp();
+  assert.equal(app.location.href, uri);
+});
+
+test('configurar 2FA en la computadora: el botón de abrir app no se muestra (queda el QR y copiar la clave)', async () => {
+  const { app, el } = setup(enrollMock('otpauth://totp/Zancada:a?secret=ABCDEF234567'));
+  app.navigator.userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120';
+  await app.toggleMfa();
+  assert.equal(el('mfa-open-app').style.display, 'none');
+});
+
+test('openMfaApp no navega a nada que no sea otpauth://totp/ (ni javascript:, ni http)', async () => {
+  for (const bad of ['javascript:alert(1)', 'https://evil.example/x', 'otpauth://hotp/x?secret=A', '']) {
+    const { app } = setup(enrollMock(bad));
+    app.navigator.userAgent = 'Android';
+    await app.toggleMfa();
+    const before = app.location.href;
+    app.openMfaApp();
+    assert.equal(app.location.href, before, 'no debe navegar a: ' + bad);
+  }
+});
+
+test('copiar la clave: copia el secreto al portapapeles', async () => {
+  const { app } = setup(enrollMock('otpauth://totp/Zancada:a?secret=ABCDEF234567'));
+  let copied = null;
+  app.navigator.clipboard = { writeText: async t => { copied = t; } };
+  await app.toggleMfa();
+  await app.copyMfaKey();
+  assert.equal(copied, 'ABCDEF234567');
+});
+
+test('el modal de 2FA tiene los dos botones nuevos y usan data-on-click (la CSP no permite onclick)', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /id="mfa-open-app"[^>]*data-on-click="openMfaApp\(\)"/);
+  assert.match(html, /id="mfa-copy-key"[^>]*data-on-click="copyMfaKey\(\)"/);
 });

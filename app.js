@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-21T22:42:55Z';
+const APP_VERSION = '2026-10-22T00:05:21Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1561,6 +1561,32 @@ async function refreshMfaRow(){
   }catch(e){ row.style.display = 'none'; }
 }
 let mfaSetupFactorId = null;
+let mfaSetupUri = '', mfaSetupSecret = '';
+// Nadie puede escanear con el mismo celular donde ve el código: en el teléfono se abre la app de autenticación con el enlace otpauth:// (ella
+// misma agrega la cuenta), o se copia la clave. El QR queda para cuando se configura desde otro dispositivo (computadora).
+function isPhoneLike(){
+  return !!((window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || ''));
+}
+function openMfaApp(){
+  // Solo un enlace de este formato: nunca se navega a otra cosa que pueda venir en la respuesta.
+  if(!/^otpauth:\/\/totp\/[^\s]+$/.test(mfaSetupUri)){ showToast(t('mfa_error'), 'error'); return; }
+  let left = false;
+  const onHide = () => { if(document.visibilityState === 'hidden') left = true; };
+  document.addEventListener('visibilitychange', onHide);
+  window.location.href = mfaSetupUri;
+  setTimeout(() => {
+    document.removeEventListener('visibilitychange', onHide);
+    if(!left) showToast(t('mfa_open_app_none'), 'error');   // ninguna app lo abrió: que instale una o copie la clave
+  }, 1800);
+}
+async function copyMfaKey(){
+  if(!mfaSetupSecret) return;
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){ await navigator.clipboard.writeText(mfaSetupSecret); }
+    else { const ta = document.createElement('textarea'); ta.value = mfaSetupSecret; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+    showToast(t('mfa_key_copied'), 'success');
+  }catch(e){ showToast(t('mfa_error'), 'error'); }
+}
 async function toggleMfa(){
   const factor = await mfaVerifiedFactor();
   if(factor){
@@ -1582,6 +1608,9 @@ async function toggleMfa(){
     set('mfa-setup-secret-label', t('mfa_setup_secret')); set('mfa-setup-step2', t('mfa_setup_step2')); set('mfa-setup-warn', t('mfa_setup_warn'));
     set('mfa-setup-code-label', t('mfa_code_label')); set('mfa-setup-btn', t('mfa_verify_btn')); set('mfa-setup-cancel', t('mfa_cancel_btn'));
     set('mfa-setup-secret', data.totp.secret || '');
+    mfaSetupUri = String(data.totp.uri || ''); mfaSetupSecret = String(data.totp.secret || '');
+    set('mfa-open-app', t('mfa_open_app')); set('mfa-copy-key', t('mfa_copy_key'));
+    const openBtn = document.getElementById('mfa-open-app'); if(openBtn) openBtn.style.display = isPhoneLike() ? '' : 'none';
     const qr = document.getElementById('mfa-setup-qr'); if(qr) qr.src = data.totp.qr_code || '';
     const code = document.getElementById('mfa-setup-code'); if(code) code.value = '';
     const err = document.getElementById('mfa-setup-err'); if(err){ err.textContent = ''; err.style.display = 'none'; }
@@ -1598,7 +1627,7 @@ async function confirmMfaSetup(){
   try{
     const { error } = await supabaseClient.auth.mfa.challengeAndVerify({ factorId: mfaSetupFactorId, code });
     if(error){ fail(t('mfa_code_invalid')); return; }
-    mfaSetupFactorId = null;
+    mfaSetupFactorId = null; mfaSetupUri = ''; mfaSetupSecret = '';
     document.getElementById('mfa-setup-modal').style.display = 'none';
     showToast(t('mfa_enabled_toast'), 'success');
     refreshMfaRow();
@@ -1606,7 +1635,7 @@ async function confirmMfaSetup(){
   finally{ setBtnBusy('mfa-setup-btn', false); }
 }
 async function cancelMfaSetup(){
-  const id = mfaSetupFactorId; mfaSetupFactorId = null;
+  const id = mfaSetupFactorId; mfaSetupFactorId = null; mfaSetupUri = ''; mfaSetupSecret = '';
   document.getElementById('mfa-setup-modal').style.display = 'none';
   if(id){ try{ await supabaseClient.auth.mfa.unenroll({ factorId: id }); }catch(e){} }   // no deja un factor a medias
 }

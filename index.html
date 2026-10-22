@@ -4193,6 +4193,10 @@
     <p class="lead" id="mfa-setup-intro" style="margin-top:12px;"></p>
     <p class="lead" id="mfa-setup-step1" style="margin-top:14px;"></p>
     <div style="background:#fff; padding:12px; border-radius:12px; width:200px; height:200px; margin:10px auto 0; display:flex; align-items:center; justify-content:center;"><img id="mfa-setup-qr" alt="" width="176" height="176"></div>
+    <div id="mfa-setup-actions" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;">
+      <button type="button" class="btn btn-primary" id="mfa-open-app" style="flex:1 1 100%; display:none;" data-on-click="openMfaApp()"></button>
+      <button type="button" class="btn btn-gray" id="mfa-copy-key" style="flex:1 1 100%;" data-on-click="copyMfaKey()"></button>
+    </div>
     <p class="lead" id="mfa-setup-secret-label" style="margin-top:12px; font-size:13px;"></p>
     <p class="mono" id="mfa-setup-secret" style="word-break:break-all; user-select:all; font-size:13px; margin:4px 0 0;"></p>
     <p class="lead" id="mfa-setup-step2" style="margin-top:14px;"></p>
