@@ -30,8 +30,10 @@ async function backfillStravaSplits(base, headers, conn, accessToken) {
   const pending = runs.filter(r => r.source === 'strava' && r.stravaId && r.splitsV !== 3).slice(0, BACKFILL_BATCH);
   if (!pending.length) return 0;
 
+  const updated = [];
   for (const run of pending) {
     const streams = await fetchStreams(run.stravaId, accessToken);
+    if (streams._failed) continue; // falla pasajera: se reintenta en el próximo ciclo, no se marca completa
     run.splits = streams.splits;
     run.series = streams.series;
     if (streams.elevationGain != null) run.elevationGain = streams.elevationGain;
@@ -40,14 +42,15 @@ async function backfillStravaSplits(base, headers, conn, accessToken) {
     // backfillPolarSplits/backfillWahooSplits) -- si Strava de verdad no tiene streams
     // para esa actividad, reintentarlo cada 15min para siempre no cambiaría el resultado.
     run.splitsV = 3;
+    updated.push(run);
   }
   // mergeStravaRuns en modo 'upsert' hace el reemplazo adentro de una transacción con la
   // fila bloqueada (ver merge_strava_runs.sql), preservando el shoeId que el usuario haya
   // asignado a mano -- reemplaza al viejo PATCH directo de acá, que mandaba de vuelta TODO
   // app_state.data tal como se había leído al principio de esta función, minutos antes:
   // si el usuario guardaba algo (chat, plan, perfil) en el medio, ese guardado se perdía.
-  await mergeStravaRuns(base, headers, conn.user_id, pending, 'upsert');
-  return pending.length;
+  if (updated.length) await mergeStravaRuns(base, headers, conn.user_id, updated, 'upsert');
+  return updated.length;
 }
 
 module.exports = withSentry(async (req, res) => {

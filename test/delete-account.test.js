@@ -31,9 +31,11 @@ test('mode "data": borra todo lo de la persona (conexiones, push, chat, estado) 
   assert.equal(r.code, 200);
   assert.equal(log.authDeleted, false);
   const tables = log.deleted.map(d => d.split('?')[0]);
-  for (const t of ['app_state', 'strava_connections', 'suunto_connections', 'wahoo_connections', 'polar_connections', 'coros_connections', 'push_subscriptions', 'chat_usage', 'sent_notifications']) {
+  for (const t of ['app_state', 'strava_connections', 'suunto_connections', 'wahoo_connections', 'polar_connections', 'coros_connections', 'push_subscriptions', 'sent_notifications']) {
     assert.ok(tables.includes(t), 'debería borrar ' + t);
   }
+  // contadores de uso (tope diario del coach, enfriamiento de sincronización): borrarlos permitía reiniciar los límites con "Borrar mis datos"
+  for (const t of ['chat_usage', 'sync_cooldowns']) assert.ok(!tables.includes(t), 'NO debería borrar ' + t);
   assert.ok(log.deleted.every(d => d.includes('u1')), 'cada borrado está acotado al usuario');
 });
 

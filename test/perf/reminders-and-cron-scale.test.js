@@ -37,7 +37,12 @@ test('send-reminders con 20.000 usuarios y 3.000 suscripciones: consultas dirigi
   const realFetch = global.fetch;
   global.fetch = async (url) => {
     url = String(url);
-    if (url.includes('/rest/v1/push_subscriptions')) { calls.subscriptions++; return { ok: true, status: 200, json: async () => subs, text: async () => '' }; }
+    if (url.includes('/rest/v1/push_subscriptions')) {
+      calls.subscriptions++;
+      // PostgREST pagina: el endpoint pide de a 1000 con limit/offset
+      const lim = Number((url.match(/limit=(\d+)/) || [])[1]) || subs.length, off = Number((url.match(/offset=(\d+)/) || [])[1]) || 0;
+      return { ok: true, status: 200, json: async () => subs.slice(off, off + lim), text: async () => '' };
+    }
     if (url.includes('/rest/v1/app_state')) {
       const m = url.match(/user_id=in\.\(([^)]*)\)/);
       // consulta puntual de un usuario (el resumen semanal pide solo SUS carreras): no es "pedir la tabla entera"

@@ -39,8 +39,10 @@ async function backfillPolarSplits(base, headers, conn) {
   const pending = runs.filter(r => r.source === 'polar' && r.polarId && (r.splitsV !== 3 || (!(r.points && r.points.length > 1) && !r.noGps))).slice(0, BACKFILL_BATCH);
   if (!pending.length) return 0;
 
+  const updated = [];
   for (const run of pending) {
     const fit = await fetchFitSplits(run.polarId, decToken(conn.access_token));
+    if (fit._failed) continue; // falla pasajera: se reintenta en el próximo ciclo
     run.splits = fit.splits;
     run.series = fit.series;
     if (fit.elevationGain != null) run.elevationGain = fit.elevationGain;
@@ -55,14 +57,15 @@ async function backfillPolarSplits(base, headers, conn) {
     // strava-resync.js) -- si Polar de verdad no tiene el archivo para ese ejercicio,
     // reintentarlo cada 15min para siempre no cambiaría el resultado.
     run.splitsV = 3;
+    updated.push(run);
   }
   // mergePolarRuns en modo 'upsert' hace el reemplazo adentro de una transacción con la
   // fila bloqueada (ver merge_polar_runs.sql), preservando el shoeId que el usuario haya
   // asignado a mano -- reemplaza al viejo PATCH directo de acá, que mandaba de vuelta TODO
   // app_state.data tal como se había leído al principio de esta función, minutos antes:
   // si el usuario guardaba algo (chat, plan, perfil) en el medio, ese guardado se perdía.
-  await mergePolarRuns(base, headers, conn.user_id, pending, 'upsert');
-  return pending.length;
+  if (updated.length) await mergePolarRuns(base, headers, conn.user_id, updated, 'upsert');
+  return updated.length;
 }
 
 module.exports = withSentry(async (req, res) => {

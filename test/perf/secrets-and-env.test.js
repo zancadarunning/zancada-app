@@ -68,6 +68,7 @@ test('las interpolaciones dentro de URLs de la base (PostgREST) son de una forma
   // (athleteId, Number.isInteger) y todo lo que pase por encodeURIComponent.
   const SAFE = [
     /^userId$/, /^conn\.user_id$/, /^row\.user_id$/, /^auth\.userId$/, /^uid$/, /^athleteId$/, /^ids$/,
+    /^SUBS_PAGE$/, /^off$/,   // enteros del paginado de send-reminders (constante y contador del for)
     /^encodeURIComponent\(.+\)$/
   ];
   const offenders = [];

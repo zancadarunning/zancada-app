@@ -89,6 +89,7 @@ async function backfillWahooSplits(base, headers, conn, accessToken) {
       const workout = await wRes.json();
       const fitUrl = workout && workout.workout_summary && workout.workout_summary.file && workout.workout_summary.file.url;
       const fit = await fetchFitSplits(fitUrl, accessToken);
+      if (fit._failed) continue; // falla pasajera: se reintenta en el próximo ciclo
       run.splits = fit.splits;
       run.series = fit.series;
       if (fit.elevationGain != null) run.elevationGain = fit.elevationGain;

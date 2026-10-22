@@ -135,8 +135,10 @@ module.exports = withSentry(async (req, res) => {
           if (!r.ok && r.status !== 404) failed.push(table);   // 404 = la tabla no existe en esta base
         } catch (e) { failed.push(table); }
       };
+      // chat_usage y sync_cooldowns NO se borran acá: son solo contadores de uso (cuántos mensajes al coach hoy, cuándo fue la última sincronización) y existen para frenar el abuso;
+      // borrarlos permitía reiniciar el tope diario del coach y el enfriamiento de la sincronización con "Borrar mis datos". Se borran igual al eliminar la cuenta entera (más abajo).
       for (const t of ['strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'suunto_connections', 'push_subscriptions',
-        'chat_usage', 'sent_notifications', 'sync_cooldowns', 'known_devices']) {
+        'sent_notifications', 'known_devices']) {
         await wipe(t, `user_id=eq.${userId}`);
       }
       await wipe('app_state', `user_id=eq.${userId}`);

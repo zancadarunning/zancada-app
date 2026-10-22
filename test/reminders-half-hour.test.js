@@ -49,7 +49,7 @@ async function runAt(isoUtc, users) {
     }
     if (url.includes('/rest/v1/push_subscriptions')) return ok(users.map(u => ({ user_id: u.id, platform: 'android', subscription: { token: 'tok-' + u.id } })));
     if (url.includes('select=runs:')) { const id = url.match(/user_id=eq\.([^&]+)/)[1]; return ok([{ runs: users.find(u => u.id === id).runs }]); }
-    if (url.includes('/rest/v1/app_state')) return ok(users.map(u => ({ user_id: u.id, plan: u.plan, weekStart: u.weekStart, tz: 'UTC', rh: '8', lang: u.lang || 'es', streak: '0', units: u.units || null, trainBy: u.trainBy || null })));
+    if (url.includes('/rest/v1/app_state')) return ok(users.map(u => ({ user_id: u.id, plan: u.plan, weekStart: u.weekStart, tz: 'UTC', rh: u.rh || '8', lang: u.lang || 'es', streak: '0', units: u.units || null, trainBy: u.trainBy || null })));
     return ok([]);
   };
   process.env.CRON_SECRET = 'test-secret'; process.env.SUPABASE_URL = 'https://x.test'; process.env.SUPABASE_SERVICE_KEY = 'k';
@@ -163,4 +163,17 @@ test('sin la tabla sent_notifications (todavía no creada): sigue funcionando so
   assert.equal(weekly(r).length, 1);
   assert.equal(r.res.body.weeklyRegistry, false);
   assert.equal(weekly(await runAt('2026-10-11T21:00:10Z', users)).length, 0);
+});
+
+test('recordatorio diario: con el plan guardado de la semana PASADA no avisa (antes mandaba la sesión del mismo día de la semana anterior)', async () => {
+  const users = [{ id: 'u1', plan, weekStart: '2026-10-05', runs: [] }];   // lunes de la semana anterior al martes 13/10
+  const a = await runAt('2026-10-13T08:00:10Z', users);
+  assert.equal(a.sent.length, 0);
+});
+
+test('si eligió las 20:00 para el recordatorio diario, no recibe además el aviso de "no apareció tu salida" a la misma hora', async () => {
+  const users = [{ id: 'u1', plan, weekStart: '2026-10-12', runs: [], rh: '20' }];
+  const a = await runAt('2026-10-13T20:00:10Z', users);
+  assert.equal(a.sent.length, 1, JSON.stringify(a.sent));
+  assert.match(a.sent[0].body, /Hoy toca/);
 });

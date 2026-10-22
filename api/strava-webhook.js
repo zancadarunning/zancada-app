@@ -211,7 +211,10 @@ module.exports = withSentry(async (req, res) => {
   }
 
   if (req.method === 'POST') {
-    res.status(200).send('EVENT_RECEIVED');
+    // Antes se respondía 200 ANTES de procesar: en una función serverless, al responder el runtime puede congelar la ejecución y el evento (una carrera nueva, un borrado,
+    // una revocación de acceso) se perdía a mitad de camino. Ahora se procesa primero, con tope de 1,5 s para respetar los 2 s que Strava exige para el 200;
+    // si el trabajo es más lento se responde igual y se sigue esperándolo (los eventos repetidos son inocuos: merge_strava_runs hace upsert).
+    const work = (async () => {
     try {
       const event = req.body;
       // Strava, a diferencia de Stripe/GitHub, NO firma sus webhooks -- no hay ningún
@@ -265,6 +268,10 @@ module.exports = withSentry(async (req, res) => {
         await deauthorizeAthlete(event.object_id);
       }
     } catch (e) { console.error(e); await reportError(e, { endpoint: 'strava-webhook' }); }
+    })();
+    await Promise.race([work, new Promise(resolve => setTimeout(resolve, 1500))]);
+    res.status(200).send('EVENT_RECEIVED');
+    await work;
     return;
   }
 

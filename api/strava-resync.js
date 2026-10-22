@@ -71,6 +71,7 @@ module.exports = withSentry(async (req, res) => {
           }
           if (!hasCurrentSplits) {
             const streams = await fetchStreams(run.stravaId, accessToken);
+            if (streams._failed) continue; // falla pasajera: no se marca como completa
             run.splits = streams.splits;
             run.series = streams.series;
             if (streams.elevationGain != null) run.elevationGain = streams.elevationGain;

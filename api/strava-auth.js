@@ -61,11 +61,12 @@ const linkAccount = async (req, res) => {
     });
     const tokenData = await tokenRes.json();
     if (!tokenData.access_token) { failGracefully(res, 'token exchange failed', tokenData); return; }
-    if (!tokenData.athlete || !tokenData.athlete.id) { failGracefully(res, 'respuesta sin athlete.id', tokenData); return; }
+    // sin athlete.id: se loguea solo el mensaje, nunca la respuesta entera (trae access_token/refresh_token)
+    if (!tokenData.athlete || !tokenData.athlete.id) { failGracefully(res, 'respuesta sin athlete.id', { message: tokenData.message, errors: tokenData.errors }); return; }
     const base = process.env.SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_KEY;
     const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' };
-    await fetch(`${base}/rest/v1/strava_connections`, {
+    const saveRes = await fetch(`${base}/rest/v1/strava_connections`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -76,6 +77,7 @@ const linkAccount = async (req, res) => {
         expires_at: tokenData.expires_at
       })
     });
+    if (!saveRes.ok) { failGracefully(res, 'no se pudo guardar la conexión', 'status ' + saveRes.status + ' ' + await saveRes.text().catch(() => '')); return; }  // antes no se miraba el resultado: la app decía "conectado" sin conexión guardada
     // Traer carreras de los últimos 30 días como punto de partida
     const after = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
     const actsRes = await fetch(`https://www.strava.com/api/v3/athlete/activities?after=${after}&per_page=30`, {
