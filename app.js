@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22T17:53:56Z';
+const APP_VERSION = '2026-10-22T17:58:01Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8928,9 +8928,13 @@ function getWeekData(offset){
   const wn = (state.weekNumber||1) + offset;
   if(offset === 0) return { plan: state.plan, weekNumber: wn, editable: true, exists: true, mode:'current', weekStart: state.weekStart };
   if(offset < 0){
-    const found = (state.planHistory||[]).find(w => w.weekNumber === wn);
+    // Se identifica por la FECHA de inicio de la semana: el número de semana se reinicia (cambio de objetivo, plan regenerado) y puede repetirse en el historial,
+    // con lo que "la semana pasada" mostraba el plan de otra época. El número solo se usa para entradas viejas que no guardaron weekStart.
+    const targetStart = state.weekStart ? addDaysToIsoLocal(state.weekStart, offset*7) : null;
+    const hist = state.planHistory || [];
+    const found = (targetStart && hist.find(w => w.weekStart === targetStart)) || hist.find(w => !w.weekStart && w.weekNumber === wn);
     if(found) return { plan: found.plan, weekNumber: wn, editable: false, exists: true, mode:'past', weekStart: found.weekStart };
-    return { plan: [], weekNumber: wn, editable: false, exists: false, mode:'past', weekStart: null };
+    return { plan: [], weekNumber: wn, editable: false, exists: false, mode:'past', weekStart: targetStart };
   }
   if(offset === 1){
     // la semana que sigue ya no es "una estimación más" como el resto de las semanas futuras:
@@ -13559,6 +13563,8 @@ const PR_DISTANCES = [
 function nearestPRBucket(km){
   let best = null, bestDiff = Infinity;
   PR_DISTANCES.forEach(b=>{
+    // una carrera MÁS CORTA que la distancia no puede ser su marca (4,7 km no es un 5K): solo se tolera 1,5% por error del GPS; hacia arriba, hasta 6%
+    if(km < b.km * 0.985) return;
     const diff = Math.abs(km-b.km)/b.km;
     if(diff < bestDiff){ bestDiff = diff; best = b; }
   });
@@ -13761,7 +13767,7 @@ function computeRacePredictions(){
       const sec = r.durationSec * Math.pow(tg.km / r.distanceKm, 1.06);
       if(!best || sec < best) best = sec;
     });
-    return {key: tg.key, km: tg.km, sec: best, needKm: Math.ceil(tg.km / 4.2)};
+    return {key: tg.key, km: tg.km, sec: best, needKm: Math.max(3, Math.ceil(tg.km / 4.2))};
   });
 }
 function togglePredictions(btn){
@@ -14545,8 +14551,8 @@ function renderProgressCard(){
     const path = pts.map((p, j) => (j ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join('');
     const dots = pts.map((p, j) => '<circle class="pg-dot' + (j === pts.length - 1 ? ' cur' : '') + '" cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="' + (j === pts.length - 1 ? 4.5 : 3) + '"/>').join('');
     const first = withPace[0].p, last = withPace[withPace.length - 1].p, diff = first - last;
-    const dMin = Math.floor(Math.abs(diff)), dSec = Math.round((Math.abs(diff) - dMin) * 60);
-    const dTxt = dMin + ':' + String(dSec).padStart(2, '0');
+    // fmtPace convierte a millas y redondea a segundos totales (antes la diferencia salía siempre en min/km aunque se mostrara "/mi", y podía dar "0:60")
+    const dTxt = fmtPace(Math.abs(diff));
     const delta = Math.abs(diff) < 0.03 ? '' : '<p class="pg-delta ' + (diff > 0 ? 'good' : 'bad') + '">' + t(diff > 0 ? 'prog_pace_better' : 'prog_pace_worse', {d: dTxt, unit: distUnit()}) + '</p>';
     paceBlock = '<h4 class="pg-h">' + t('prog_pace') + '</h4><svg class="pg-svg" viewBox="0 0 ' + W + ' ' + pH + '" role="img" aria-label="' + t('prog_pace') + '"><path class="pg-line" d="' + path + '"/>' + dots +
       '<text class="pg-val" x="' + pts[0].x + '" y="' + (pts[0].y + (pts[1].y < pts[0].y ? 17 : -9)) + '" text-anchor="middle">' + fmtPace(first) + '</text>' +
@@ -14811,7 +14817,12 @@ function animateHistTrendBars(){
 }
 
 let detailMap = null;
+// Parciales COMPLETOS y con ritmo creíble: el último tramo suelto (0,4 km) y un parcial con GPS roto (ritmo de 40 min/km) distorsionan el ritmo máximo/mínimo y el veredicto de la segunda mitad.
+function fullSplitsOnly(splits){
+  return (splits || []).filter(s => s && s.paceMin > 0 && s.paceMin < 20 && (isNaN(parseFloat(s.km)) || Number.isInteger(parseFloat(s.km))));
+}
 function analyzeSplitPacing(splits){
+  splits = fullSplitsOnly(splits);
   // Compara el ritmo promedio de la primera mitad de la carrera contra la segunda para
   // detectar si se corrió parejo, acelerando (negative split, buena señal) o
   // desacelerando (positive split -- salir muy rápido y pagarlo después). Solo tiene
@@ -15023,7 +15034,7 @@ function renderRDRuta(panel){
   const {r, paceMin, cal} = rdCurrent;
   const dateStr = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
   const timeStr = new Date(r.date).toLocaleTimeString(LOCALE_MAP[lang], {hour:'numeric', minute:'2-digit'});
-  const paces = getDisplaySplits(r).map(s=>s.paceMin).filter(p=>p>0);
+  const paces = fullSplitsOnly(getDisplaySplits(r)).map(s=>s.paceMin);
   const slowest = paces.length ? Math.max(...paces) : paceMin;
   const fastest = paces.length ? Math.min(...paces) : paceMin;
   panel.innerHTML = `
@@ -15229,7 +15240,8 @@ function renderRDRitmo(panel){
   // izquierda tiene que reflejar eso, no asumir ciegamente distUnit().
   const unitLabel = displaySplitsAreMiles(r, splits) ? 'mi' : 'km';
   const splitPaces = splits.map(s=>s.paceMin).filter(p=>p>0);
-  const fastest = splitPaces.length ? Math.min(...splitPaces) : paceMin;
+  const fullPaces = fullSplitsOnly(splits).map(s=>s.paceMin);
+  const fastest = fullPaces.length ? Math.min(...fullPaces) : paceMin;
   const maxPaceForBar = Math.max(...splitPaces, paceMin) * 1.02 || 1;
   const pacingAnalysis = analyzeSplitPacing(splits);
   panel.innerHTML = `
@@ -16672,8 +16684,9 @@ async function saveEditRun(){
   const date = document.getElementById('edit-run-date').value;
   const dist = parseDistInput(document.getElementById('edit-run-dist').value);
   const durMin = parseFloat(document.getElementById('edit-run-dur').value);
-  if(!date || !(dist>0) || !(durMin>0)){ showToast(t('edit_run_invalid'),'error'); return; }
   const hr = parseInt(document.getElementById('edit-run-hr').value);
+  // topes razonables: una distancia de 5000 km, 30 días de duración, una fecha futura o 900 bpm rompían récords, logros y la racha
+  if(!date || !(dist>0) || !(durMin>0) || dist > 500 || durMin > 2880 || date > localDateISO(new Date()) || (!isNaN(hr) && hr !== 0 && (hr < 30 || hr > 250))){ showToast(t('edit_run_invalid'),'error'); return; }
   const newShoeId = document.getElementById('edit-run-shoe').value || null;
   const newName = document.getElementById('edit-run-name').value.trim().slice(0,60);
   // checkNewPR(), unas líneas más abajo, recalcula el récord EXCLUYENDO esta misma carrera --
