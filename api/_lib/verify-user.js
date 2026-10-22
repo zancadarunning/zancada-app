@@ -38,11 +38,6 @@ function isRecentLogin(auth, maxAgeSec) {
   return auth.lastAuthAt > 0 && age >= -60 && age <= (maxAgeSec || 600);
 }
 
-// Nivel de autenticación del token ("aal1" = solo contraseña, "aal2" = también el segundo paso).
-function aalFromToken(token) {
-  try { return JSON.parse(Buffer.from(String(token).split('.')[1], 'base64url').toString('utf8')).aal || 'aal1'; } catch (e) { return 'aal1'; }
-}
-
 async function verifyUser(req) {
   const authHeader = req.headers['authorization'] || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -59,10 +54,6 @@ async function verifyUser(req) {
     if (!userRes.ok || !user || !user.id) {
       return { ok: false, status: 401, error: 'Invalid session' };
     }
-    // Cuenta con verificación en dos pasos activada: una sesión que solo pasó la contraseña (aal1) no alcanza, aunque el token sea válido.
-    // (Un ladrón de contraseñas no puede usar la API sin el código.)
-    const hasMfa = Array.isArray(user.factors) && user.factors.some(f => f && f.status === 'verified');
-    if (hasMfa && aalFromToken(token) !== 'aal2') return { ok: false, status: 401, error: 'MFA required' };
     // email: agregado para send-feedback.js (necesita saber a quién responderle sin
     // confiar en un email que mande el cliente suelto) -- los demás endpoints que ya
     // usaban este helper solo leían userId, así que esto es puramente aditivo.
@@ -78,4 +69,3 @@ async function verifyUser(req) {
 module.exports = verifyUser;
 module.exports.isRecentLogin = isRecentLogin;
 module.exports.lastAuthAtFromToken = lastAuthAtFromToken;
-module.exports.aalFromToken = aalFromToken;

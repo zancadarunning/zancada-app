@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22T02:12:14Z';
+const APP_VERSION = '2026-10-22T02:15:03Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1489,160 +1489,8 @@ async function ensureConsent(){
   if(hasConsent()) return true;
   return await showConsentScreen();
 }
-/* ---- Verificación en dos pasos (opcional, TOTP de Supabase) ----
-   Quien la activa en Perfil necesita, además de la contraseña, el código de 6 dígitos de su app de autenticación. Se pide en loadUserAndEnter (cualquier
-   camino de ingreso: correo, Google, sesión guardada). Lo que de verdad protege es el servidor: la base (RLS) y la API rechazan una sesión sin el
-   segundo paso cuando la cuenta lo tiene activado; esta pantalla solo la pide y la completa. */
-async function mfaNeedsChallenge(){
-  try{
-    const { data, error } = await supabaseClient.auth.mfa.getAuthenticatorAssuranceLevel();
-    if(error || !data) return false;
-    return data.nextLevel === 'aal2' && data.currentLevel !== 'aal2';
-  }catch(e){ return false; }
-}
-async function mfaVerifiedFactor(){
-  try{
-    const { data, error } = await supabaseClient.auth.mfa.listFactors();
-    if(error || !data) return null;
-    return (data.totp || []).find(f => f.status === 'verified') || null;
-  }catch(e){ return null; }
-}
-let mfaChallengeState = null;
-async function ensureMfa(){
-  if(!(await mfaNeedsChallenge())) return true;
-  const factor = await mfaVerifiedFactor();
-  if(!factor) return true;
-  return await new Promise(resolve => {
-    mfaChallengeState = { factorId: factor.id, resolve };
-    const set = (id, text) => { const e = document.getElementById(id); if(e) e.textContent = text; };
-    set('mfa-challenge-title', t('mfa_challenge_title')); set('mfa-challenge-text', t('mfa_challenge_text'));
-    set('mfa-challenge-code-label', t('mfa_code_label')); set('mfa-challenge-btn', t('mfa_verify_btn'));
-    set('mfa-challenge-cancel', t('mfa_cancel_btn')); set('mfa-challenge-lost', t('mfa_lost'));
-    const code = document.getElementById('mfa-challenge-code'); if(code) code.value = '';
-    const err = document.getElementById('mfa-challenge-err'); if(err){ err.textContent = ''; err.style.display = 'none'; }
-    ['splash', 'login', 'signup', 'onboard'].forEach(id => { const e = document.getElementById(id); if(e) e.style.display = 'none'; });
-    document.getElementById('mfa-challenge-modal').style.display = 'block';
-    if(window.zcBootDone) window.zcBootDone();
-    if(code && code.focus) code.focus();
-  });
-}
-async function submitMfaChallenge(){
-  const st = mfaChallengeState; if(!st) return;
-  const code = String((document.getElementById('mfa-challenge-code') || {}).value || '').replace(/\s/g, '');
-  const err = document.getElementById('mfa-challenge-err');
-  const fail = msg => { if(err){ err.textContent = msg; err.style.display = 'block'; } };
-  if(!/^[0-9]{6}$/.test(code)){ fail(t('mfa_code_invalid')); return; }
-  setBtnBusy('mfa-challenge-btn', true, t('login_loading'));
-  try{
-    const { error } = await supabaseClient.auth.mfa.challengeAndVerify({ factorId: st.factorId, code });
-    if(error){ fail(t('mfa_code_invalid')); return; }
-    document.getElementById('mfa-challenge-modal').style.display = 'none';
-    mfaChallengeState = null;
-    st.resolve(true);
-  }catch(e){ fail(t('mfa_error')); }
-  finally{ setBtnBusy('mfa-challenge-btn', false); }
-}
-function cancelMfaChallenge(){
-  const st = mfaChallengeState; mfaChallengeState = null;
-  document.getElementById('mfa-challenge-modal').style.display = 'none';
-  if(st) st.resolve(false);
-}
-// Perfil: la fila solo aparece en cuentas con contraseña (Google y Apple tienen su propia verificación) y muestra si está activada
-async function refreshMfaRow(){
-  const row = document.getElementById('mfa-row'); if(!row) return;
-  try{
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    const provider = session && session.user && session.user.app_metadata && session.user.app_metadata.provider;
-    if(provider && provider !== 'email'){ row.style.display = 'none'; return; }
-    const factor = await mfaVerifiedFactor();
-    const status = document.getElementById('mfa-row-status');
-    if(status) status.textContent = factor ? t('mfa_row_on') : t('mfa_row_off');
-    row.style.display = '';
-  }catch(e){ row.style.display = 'none'; }
-}
-let mfaSetupFactorId = null;
-let mfaSetupUri = '', mfaSetupSecret = '';
-// Nadie puede escanear con el mismo celular donde ve el código: en el teléfono se abre la app de autenticación con el enlace otpauth:// (ella
-// misma agrega la cuenta), o se copia la clave. El QR queda para cuando se configura desde otro dispositivo (computadora).
-function isPhoneLike(){
-  return !!((window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || ''));
-}
-function openMfaApp(){
-  // Solo un enlace de este formato: nunca se navega a otra cosa que pueda venir en la respuesta.
-  if(!/^otpauth:\/\/totp\/[^\s]+$/.test(mfaSetupUri)){ showToast(t('mfa_error'), 'error'); return; }
-  let left = false;
-  const onHide = () => { if(document.visibilityState === 'hidden') left = true; };
-  document.addEventListener('visibilitychange', onHide);
-  window.location.href = mfaSetupUri;
-  setTimeout(() => {
-    document.removeEventListener('visibilitychange', onHide);
-    if(!left) showToast(t('mfa_open_app_none'), 'error');   // ninguna app lo abrió: que instale una o copie la clave
-  }, 1800);
-}
-async function copyMfaKey(){
-  if(!mfaSetupSecret) return;
-  try{
-    if(navigator.clipboard && navigator.clipboard.writeText){ await navigator.clipboard.writeText(mfaSetupSecret); }
-    else { const ta = document.createElement('textarea'); ta.value = mfaSetupSecret; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
-    showToast(t('mfa_key_copied'), 'success');
-  }catch(e){ showToast(t('mfa_error'), 'error'); }
-}
-async function toggleMfa(){
-  const factor = await mfaVerifiedFactor();
-  if(factor){
-    if(!(await showConfirm(t('mfa_disable_confirm'), {danger: true, confirmText: t('mfa_disable_btn')}))) return;
-    try{
-      const { error } = await supabaseClient.auth.mfa.unenroll({ factorId: factor.id });
-      if(error){ showToast(t('mfa_error'), 'error'); return; }
-      showToast(t('mfa_disabled_toast'), 'success');
-    }catch(e){ showToast(t('mfa_error'), 'error'); }
-    refreshMfaRow();
-    return;
-  }
-  try{
-    const { data, error } = await supabaseClient.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Zancada ' + Date.now() });
-    if(error || !data || !data.totp){ showToast(t('mfa_error'), 'error'); return; }
-    mfaSetupFactorId = data.id;
-    const set = (id, text) => { const e = document.getElementById(id); if(e) e.textContent = text; };
-    set('mfa-setup-title', t('mfa_setup_title')); set('mfa-setup-intro', t('mfa_setup_intro')); set('mfa-setup-step1', t('mfa_setup_step1'));
-    set('mfa-setup-secret-label', t('mfa_setup_secret')); set('mfa-setup-step2', t('mfa_setup_step2')); set('mfa-setup-warn', t('mfa_setup_warn'));
-    set('mfa-setup-code-label', t('mfa_code_label')); set('mfa-setup-btn', t('mfa_verify_btn')); set('mfa-setup-cancel', t('mfa_cancel_btn'));
-    set('mfa-setup-secret', data.totp.secret || '');
-    mfaSetupUri = String(data.totp.uri || ''); mfaSetupSecret = String(data.totp.secret || '');
-    set('mfa-open-app', t('mfa_open_app')); set('mfa-copy-key', t('mfa_copy_key'));
-    const openBtn = document.getElementById('mfa-open-app'); if(openBtn) openBtn.style.display = isPhoneLike() ? '' : 'none';
-    const qr = document.getElementById('mfa-setup-qr'); if(qr) qr.src = data.totp.qr_code || '';
-    const code = document.getElementById('mfa-setup-code'); if(code) code.value = '';
-    const err = document.getElementById('mfa-setup-err'); if(err){ err.textContent = ''; err.style.display = 'none'; }
-    document.getElementById('mfa-setup-modal').style.display = 'block';
-  }catch(e){ showToast(t('mfa_error'), 'error'); }
-}
-async function confirmMfaSetup(){
-  if(!mfaSetupFactorId) return;
-  const code = String((document.getElementById('mfa-setup-code') || {}).value || '').replace(/\s/g, '');
-  const err = document.getElementById('mfa-setup-err');
-  const fail = msg => { if(err){ err.textContent = msg; err.style.display = 'block'; } };
-  if(!/^[0-9]{6}$/.test(code)){ fail(t('mfa_code_invalid')); return; }
-  setBtnBusy('mfa-setup-btn', true, t('login_loading'));
-  try{
-    const { error } = await supabaseClient.auth.mfa.challengeAndVerify({ factorId: mfaSetupFactorId, code });
-    if(error){ fail(t('mfa_code_invalid')); return; }
-    mfaSetupFactorId = null; mfaSetupUri = ''; mfaSetupSecret = '';
-    document.getElementById('mfa-setup-modal').style.display = 'none';
-    showToast(t('mfa_enabled_toast'), 'success');
-    refreshMfaRow();
-  }catch(e){ fail(t('mfa_error')); }
-  finally{ setBtnBusy('mfa-setup-btn', false); }
-}
-async function cancelMfaSetup(){
-  const id = mfaSetupFactorId; mfaSetupFactorId = null; mfaSetupUri = ''; mfaSetupSecret = '';
-  document.getElementById('mfa-setup-modal').style.display = 'none';
-  if(id){ try{ await supabaseClient.auth.mfa.unenroll({ factorId: id }); }catch(e){} }   // no deja un factor a medias
-}
 async function loadUserAndEnter(user, isRetry){
   currentUserId = user.id;
-  // Si la cuenta tiene la verificación en dos pasos activada y esta sesión todavía no la completó, se pide ANTES de leer ningún dato
-  if(!(await ensureMfa())){ await supabaseClient.auth.signOut(); location.reload(); return; }
   try{
     const { data, error } = await supabaseClient.from('app_state').select('data, updated_at').eq('user_id', user.id).maybeSingle();
     if(error) throw error;
@@ -4411,7 +4259,6 @@ function enterApp(){
   checkHrMaxFromRuns();
   updateChatBadge(); // por si algún mensaje del coach se agregó recién arriba (ajuste automático, aviso proactivo) sin pasar por renderChat
   if(relinkTodayRun()) persist();
-  refreshMfaRow();
   [...document.getElementById('voice-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === voiceChoice()));
   [...document.getElementById('units-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.profile.units==='imperial'?'imperial':'metric')));
   [...document.getElementById('perfil-trainby-toggle').children].forEach(c=>c.classList.toggle('active', c.dataset.v === (state.profile.trainBy==='time'?'time':'distance')));
@@ -4643,11 +4490,7 @@ async function confirmDestructiveWithPassword(message, confirmOpts){
     showToast(/captcha/i.test((error && error.message) || '') ? t('captcha_failed') : t('reauth_wrong_password'), 'error');
     return null;
   }
-  // Volver a escribir la contraseña deja una sesión de nivel 1: en una cuenta con verificación en dos pasos el servidor la rechaza ("MFA required"),
-  // así que se pide también el código y se usa el token ya elevado a nivel 2. Sin esto, quien activó el 2FA no podría borrar sus datos ni su cuenta.
-  if(!(await ensureMfa())) return null;
-  const { data: { session: fresh } } = await supabaseClient.auth.getSession();
-  return ((fresh && fresh.access_token) || data.session.access_token);
+  return data.session.access_token;
 }
 async function resetApp(){
   const accessToken = await confirmDestructiveWithPassword(t('reset_confirm_text'), {danger:true, confirmText:t('delete_word')});
