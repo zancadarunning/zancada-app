@@ -80,7 +80,7 @@ const linkAccount = async (req, res) => {
     if (!saveRes.ok) { failGracefully(res, 'no se pudo guardar la conexión', 'status ' + saveRes.status + ' ' + await saveRes.text().catch(() => '')); return; }  // antes no se miraba el resultado: la app decía "conectado" sin conexión guardada
     // Traer carreras de los últimos 30 días como punto de partida
     const after = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
-    const actsRes = await fetch(`https://www.strava.com/api/v3/athlete/activities?after=${after}&per_page=30`, {
+    const actsRes = await fetch(`https://www.strava.com/api/v3/athlete/activities?after=${after}&per_page=100`, {
       headers: { Authorization: `Bearer ${tokenData.access_token}` }
     });
     const acts = await actsRes.json();

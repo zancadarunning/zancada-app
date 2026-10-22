@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22T17:58:01Z';
+const APP_VERSION = '2026-10-22T18:10:17Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7780,6 +7780,10 @@ function nativeCalendarPlugin(){
   if(!(cap && cap.isNativePlatform && cap.isNativePlatform() && cap.getPlatform && cap.getPlatform() === 'android')) return null;
   return (cap.Plugins && cap.Plugins.ZancadaCalendar) || null;
 }
+// planLabel() devuelve texto pensado para innerHTML (el nombre de una carrera sale escapado): el calendario del teléfono es texto plano, así que "Rock & Run" aparecía como "Rock &amp; Run".
+function htmlEntitiesToText(str){
+  return String(str == null ? '' : str).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+}
 function buildNativeCalendarEvents(){
   const out = [];
   const addWeek = (plan, weekStart) => {
@@ -7789,8 +7793,8 @@ function buildNativeCalendarEvents(){
       const lbl = planLabel(d);
       out.push({
         date: addDaysToIsoLocal(weekStart, i),
-        title: `${d.status === 'done' ? '✓ ' : ''}${lbl.type} · ${planAmountText(d)}`,
-        description: ['Zancada', d.zone ? `${t('zone_word')} ${d.zone}` : '', lbl.desc].filter(Boolean).join('\n')
+        title: htmlEntitiesToText(`${d.status === 'done' ? '✓ ' : ''}${lbl.type} · ${planAmountText(d)}`),
+        description: htmlEntitiesToText(['Zancada', d.zone ? `${t('zone_word')} ${d.zone}` : '', lbl.desc].filter(Boolean).join('\n'))
       });
     });
   };
@@ -8377,7 +8381,9 @@ function buildRacePlanImageBlob(){
       const targetSec = racePlanScenarioSec(est.sec, {source: est.source, endurance: est.endurance, calib: est.calib, basis: est.basis, km: km});
       const splits = buildRaceSplits(km, targetSec);
       const long = splits.length > 12;
-      const rows = splits.filter((s, i) => !long || (s.n % 5 === 0) || i === splits.length - 1).slice(0, 12);
+      const allRows = splits.filter((s, i) => !long || (s.n % 5 === 0) || i === splits.length - 1);
+      // en una ultra los múltiplos de 5 pasan de 12: se recorta el medio, nunca la fila de la llegada
+      const rows = allRows.length > 12 ? allRows.slice(0, 11).concat(allRows[allRows.length - 1]) : allRows;
       const gap = rows.length > 9 ? 60 : 74;
       const W = 1080, H = 1920, canvas = document.createElement('canvas');
       canvas.width = W; canvas.height = H;
@@ -15776,11 +15782,16 @@ function drawBrandWord(ctx, x, y, size){
 function drawRouteSilhouette(ctx, points, x, y, w, h, lineWidth, dotRadius){
   lineWidth = lineWidth || 11;
   dotRadius = dotRadius || 13;
+  // puntos sin coordenadas válidas (NaN/null) rompían Math.min/max y el trazo salía vacío
+  points = points.filter(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lon));
+  if(!points.length) return;
   const lats = points.map(p=>p.lat), lons = points.map(p=>p.lon);
   const minLat = Math.min(...lats), maxLat = Math.max(...lats);
   const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+  // un grado de longitud mide cos(latitud) veces lo que uno de latitud: sin esa corrección el recorrido salía ensanchado (en Buenos Aires ~20%)
+  const cosLat = Math.max(0.2, Math.cos(((minLat + maxLat) / 2) * Math.PI / 180));
   const latRange = (maxLat-minLat) || 0.001;
-  const lonRange = (maxLon-minLon) || 0.001;
+  const lonRange = ((maxLon-minLon) * cosLat) || 0.001;
   const scale = Math.min(w/lonRange, h/latRange) * 0.85;
   const drawW = lonRange*scale, drawH = latRange*scale;
   const offsetX = x + (w-drawW)/2;
@@ -15788,7 +15799,7 @@ function drawRouteSilhouette(ctx, points, x, y, w, h, lineWidth, dotRadius){
 
   ctx.beginPath();
   points.forEach((p,i)=>{
-    const px = offsetX + (p.lon-minLon)*scale;
+    const px = offsetX + (p.lon-minLon)*cosLat*scale;
     const py = offsetY + (maxLat-p.lat)*scale;
     if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
   });
@@ -15803,7 +15814,7 @@ function drawRouteSilhouette(ctx, points, x, y, w, h, lineWidth, dotRadius){
   ctx.stroke();
   ctx.restore();
 
-  const startPx = offsetX + (points[0].lon-minLon)*scale;
+  const startPx = offsetX + (points[0].lon-minLon)*cosLat*scale;
   const startPy = offsetY + (maxLat-points[0].lat)*scale;
   ctx.beginPath();
   ctx.arc(startPx, startPy, dotRadius, 0, Math.PI*2);

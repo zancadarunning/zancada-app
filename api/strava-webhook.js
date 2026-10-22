@@ -151,19 +151,24 @@ async function deauthorizeAthlete(athleteId) {
   const connRes = await fetch(`${base}/rest/v1/strava_connections?athlete_id=eq.${athleteId}&select=user_id,refresh_token`, { headers });
   const conns = await connRes.json();
   if (!Array.isArray(conns) || !conns.length) return;
-  const userId = conns[0].user_id;
+  // Puede haber más de una cuenta de Zancada con el mismo atleta de Strava: se procesan todas, cada una por su user_id.
+  for (const conn of conns) {
+    const userId = conn.user_id;
 
-  // Confirmar la revocación: si Strava todavía deja refrescar el token, el acceso sigue vigente y el evento era falso.
-  const rf = await stravaRefresh(conns[0]);
-  if (rf.ok) {
-    await fetch(`${base}/rest/v1/strava_connections?user_id=eq.${userId}`, { method: 'PATCH', headers, body: JSON.stringify({ access_token: encToken(rf.data.access_token), refresh_token: encToken(rf.data.refresh_token), expires_at: rf.data.expires_at }) }).catch(() => {});
-    console.error('strava-webhook: evento de revocación ignorado, el acceso sigue vigente (posible evento falso)');
-    return;
+    // Confirmar la revocación: si Strava todavía deja refrescar el token, el acceso sigue vigente y el evento era falso.
+    const rf = await stravaRefresh(conn);
+    if (rf.ok) {
+      await fetch(`${base}/rest/v1/strava_connections?user_id=eq.${userId}`, { method: 'PATCH', headers, body: JSON.stringify({ access_token: encToken(rf.data.access_token), refresh_token: encToken(rf.data.refresh_token), expires_at: rf.data.expires_at }) }).catch(() => {});
+      console.error('strava-webhook: evento de revocación ignorado, el acceso sigue vigente (posible evento falso)');
+      continue;
+    }
+    if (rf.status !== 400 && rf.status !== 401) continue;   // error de red / 5xx / rate limit: no se borra nada
+
+    // Primero se purgan las carreras y RECIÉN después se borra la conexión: si la purga falla (lanza), la conexión sigue ahí y el evento se puede reintentar;
+    // al revés, la conexión borrada dejaba carreras de Strava sin forma de volver a purgarlas (y el acuerdo de Strava exige borrarlas).
+    await purgeStravaRunsForUser(base, headers, userId, (count, lang) => (REVOKED_MSGS[lang] || REVOKED_MSGS.es)(count));
+    await fetch(`${base}/rest/v1/strava_connections?user_id=eq.${userId}`, { method: 'DELETE', headers });
   }
-  if (rf.status !== 400 && rf.status !== 401) return;   // error de red / 5xx / rate limit: no se borra nada
-
-  await fetch(`${base}/rest/v1/strava_connections?athlete_id=eq.${athleteId}`, { method: 'DELETE', headers });
-  await purgeStravaRunsForUser(base, headers, userId, (count, lang) => (REVOKED_MSGS[lang] || REVOKED_MSGS.es)(count));
 }
 
 const { withSentry, reportError, reportSecurityEvent } = require('./_lib/sentry');

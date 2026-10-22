@@ -51,3 +51,9 @@ test('getWeekData: la semana pasada se busca por fecha de inicio, no por número
   assert.equal(w.plan[0].dist, 7, 'toma la de la semana pasada real, no la primera con el mismo número');
   assert.equal(app.getWeekData(-2).exists, false, 'una semana sin entrada no inventa otra');
 });
+
+test('htmlEntitiesToText: el calendario del teléfono recibe texto plano ("Rock & Run", no "Rock &amp; Run")', () => {
+  const app = loadApp();
+  assert.equal(app.htmlEntitiesToText('Rock &amp; Run &lt;10K&gt; &quot;hoy&quot; l&#39;ora'), 'Rock & Run <10K> "hoy" l\'ora');
+  assert.equal(app.htmlEntitiesToText(null), '');
+});
