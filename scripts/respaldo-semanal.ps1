@@ -13,6 +13,16 @@ $extraFile = Join-Path $confDir 'destino-extra.txt'
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 $log = Join-Path $dest 'respaldo.log'
 function Log($m) { Add-Content -Path $log -Value ("{0:yyyy-MM-dd HH:mm:ss}  {1}" -f (Get-Date), $m) }
+# La política de privacidad promete que lo borrado desaparece de las copias en un máximo de 90 días: además de conservar solo las 12 más nuevas, se borra
+# todo lo que tenga más de 90 días (por la fecha del nombre, supabase-AAAA-MM-DD.zbk), dejando siempre las 2 más nuevas por si la PC estuvo apagada mucho tiempo.
+function Remove-OldBackups($dir) {
+    $limite = (Get-Date).AddDays(-90)
+    Get-ChildItem $dir -File -Filter 'supabase-*.zbk' | Sort-Object Name -Descending | Select-Object -Skip 2 | ForEach-Object {
+        $fecha = $_.LastWriteTime
+        try { $fecha = [datetime]::ParseExact($_.BaseName.Substring(9, 10), 'yyyy-MM-dd', $null) } catch { }
+        if ($fecha -lt $limite) { Remove-Item $_.FullName -Force -Confirm:$false; Log "borrado por antigüedad (más de 90 días): $($_.Name)" }
+    }
+}
 
 $carpeta = $null
 try {
@@ -42,6 +52,7 @@ try {
             New-Item -ItemType Directory -Force -Path $extra | Out-Null
             Copy-Item $enc (Join-Path $extra (Split-Path $enc -Leaf)) -Force
             Get-ChildItem $extra -File -Filter 'supabase-*.zbk' | Sort-Object Name -Descending | Select-Object -Skip 12 | ForEach-Object { Remove-Item $_.FullName -Force -Confirm:$false }
+            Remove-OldBackups $extra
             Log "copia en $extra"
         }
     }
@@ -51,6 +62,7 @@ try {
         Remove-Item $_.FullName -Force -Confirm:$false
         Log "borrado el respaldo viejo $($_.Name)"
     }
+    Remove-OldBackups $dest
 } catch {
     Log "ERROR: $($_.Exception.Message)"
     exit 1

@@ -33,7 +33,8 @@ Respuestas redactadas a partir de `docs/privacidad-inventario-de-datos.md` y del
 | Mensajes | Otros mensajes en la app (charla con Zonda) | Sí | **Sí** (proveedor de IA) | Sí | Funcionamiento de la app |
 | Actividad en apps | Interacciones / otro contenido (plan, notas del coach, respuestas) | Sí | No | Sí | Funcionamiento, personalización |
 | Info y rendimiento de la app | Registros de fallos y diagnósticos | Sí | No (Sentry actúa por nuestra cuenta, con datos personales eliminados antes de enviar) | No | Análisis, estabilidad |
-| Identificadores de dispositivo | Token de notificaciones (Firebase / Web Push) | Sí | No | Sí | Funcionamiento (avisos) |
+| Identificadores de dispositivo | Token de notificaciones (Firebase) y un identificador aleatorio de la instalación (se guarda solo su resumen irreversible) para avisar por correo de inicios de sesión desde un dispositivo nuevo | Sí | No | El token sí (opcional); el identificador de la instalación no | Funcionamiento (avisos), seguridad de la cuenta |
+| Ubicación | Ubicación aproximada (solo el país desde el que se inicia sesión, sin guardar la IP; para el aviso de dispositivo nuevo) | Sí | No | No | Seguridad de la cuenta |
 
 Notas:
 1. **Anthropic** (verificado el 2026-10-21 en sus términos comerciales y su centro de privacidad): recibe nombre, edad aproximada, peso, altura, objetivo, plan, resumen de carreras recientes, molestias, notas, nombres de zapatillas, zona horaria y la charla. **No** recibe correo, id de cuenta, coordenadas, ruta GPS ni las carreras de Strava. Sus Términos Comerciales (sección B) dicen que no entrena modelos con el contenido de los clientes de la API, y (sección C) incorporan su contrato de tratamiento de datos; la retención estándar de la API es de hasta 30 días (hasta 2 años si el contenido es marcado por violar su política de uso, y lo que la ley exija). Existe retención cero bajo pedido (contactar a ventas). Aun así, Google no cuenta como "compartir" a un proveedor que trata los datos por tu cuenta: se declara "Sí" de forma conservadora por tratarse de datos de salud con consentimiento explícito; confirmar el criterio con asesoría.
@@ -62,6 +63,8 @@ Notas:
 | Ubicación: ubicación precisa | Sí | Sí | No | Funcionalidad de la app |
 | Contenido del usuario: otro contenido (charla con Zonda, notas) | Sí | Sí | No | Funcionalidad de la app |
 | Identificadores: ID de usuario | Sí | Sí | No | Funcionalidad de la app |
+| Identificadores: ID de dispositivo (identificador aleatorio de la instalación, solo su resumen irreversible; y token de notificaciones) | Sí | Sí | No | Funcionalidad de la app, seguridad de la cuenta |
+| Ubicación: ubicación aproximada (país desde el que se inicia sesión, sin guardar la IP) | Sí | Sí | No | Funcionalidad de la app (seguridad de la cuenta) |
 | Diagnósticos: datos de fallos | Sí | No (se eliminan datos personales antes de enviarlos) | No | Análisis |
 
 **Cuando exista la app de iPhone:** si se lee Apple Salud (HealthKit), hay que agregar el uso de HealthKit con su texto de propósito y **no** se pueden usar esos datos para publicidad ni para fines de IA no declarados. Inicio de sesión con Apple: ya soportado en el código (nunca probado en un dispositivo iPhone).
