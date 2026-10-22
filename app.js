@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22T17:47:37Z';
+const APP_VERSION = '2026-10-22T17:53:56Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -836,12 +836,16 @@ function showToast(message, type){
   clearTimeout(toastHideTimer);
   toastHideTimer = setTimeout(()=>{
     el.classList.remove('show');
-    setTimeout(()=>{ if(wrap) wrap.innerHTML = ''; }, 250);
+    // solo vacía si el aviso que sigue ahí es ESTE: un aviso nuevo que llegó en esos 250 ms no se tiene que borrar
+    setTimeout(()=>{ if(wrap && wrap.firstElementChild === el) wrap.innerHTML = ''; }, 250);
   }, 3200);
 }
 // opts.passwordField: pide también la contraseña (acciones que no se pueden deshacer). En ese modo resuelve con { password, captchaToken } o false.
+let confirmDismissPrev = null;
 function showConfirm(message, opts){
   opts = opts || {};
+  // si ya había una confirmación abierta, se resuelve como "no": antes quedaba colgada para siempre (su promesa nunca se resolvía) y el flujo que la esperaba no seguía ni cortaba
+  if(confirmDismissPrev){ const prev = confirmDismissPrev; confirmDismissPrev = null; prev(); }
   return new Promise(resolve=>{
     let backdrop = document.getElementById('confirm-backdrop');
     if(!backdrop){
@@ -860,7 +864,9 @@ function showConfirm(message, opts){
     </div></div>`;
     backdrop.classList.add('show');
     haptic(15);
+    confirmDismissPrev = ()=>{ disposeCaptcha('captcha-reauth'); resolve(false); };
     const cleanup = (result)=>{
+      confirmDismissPrev = null;
       backdrop.classList.remove('show');
       disposeCaptcha('captcha-reauth');
       setTimeout(()=>{ if(backdrop) backdrop.innerHTML = ''; }, 180);
@@ -1913,6 +1919,10 @@ async function confirmKeepDataBeforeDisconnect(brand, sourceKey, idField){
   if(!keep) return false;
   matching.forEach(r=>{ delete r.source; delete r[idField]; });
   await persist();
+  // persist() devuelve enseguida si ya había un guardado en vuelo (queda encolado): esperamos a que termine TODO, y si no llegó al servidor no desconectamos
+  // (el backend borraría las carreras todavía marcadas como de esa marca).
+  await waitForPendingPersist();
+  if(hasPendingBackup()){ showToast(t('save_failed_retry'), 'error'); return false; }
   return true;
 }
 async function connectStrava(){
@@ -1959,6 +1969,7 @@ let deviceConnectionsLoaded = false;
 let deviceConnections = { strava:false, polar:false, wahoo:false, coros:false, suunto:false };
 async function refreshDeviceConnections(){
   if(!currentUserId) return;
+  invalidateServerConnections(); // se llama justo después de conectar/desconectar: tiene que ver el estado nuevo, no el cacheado
   try{
     const [s, p, w, c, su] = await Promise.all([
       supabaseClient.from('strava_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
@@ -2192,6 +2203,7 @@ async function disconnectWahoo(){
     }
     renderHistory(); renderHome(); renderPerfil(); persist();
   }
+  invalidateServerConnections(); // si no, la consulta de estado de los próximos 5 s devolvía el "conectado" de antes
   await updateWahooStatusDisplay();
 }
 /* ---- Suunto -----
@@ -2311,6 +2323,7 @@ async function finishPendingProviderLink(){
 // pudo saber, usar la consulta directa) o null si el servidor no respondió. Cache de unos segundos
 // para no repetir el pedido cuando varias pantallas lo piden juntas.
 let serverConnCache = { at: 0, promise: null };
+function invalidateServerConnections(){ serverConnCache = { at: 0, promise: null }; }
 function fetchServerConnections(){
   if(serverConnCache.promise && Date.now() - serverConnCache.at < 5000) return serverConnCache.promise;
   serverConnCache.at = Date.now();
@@ -2399,6 +2412,7 @@ async function disconnectSuunto(){
     }
     renderHistory(); renderHome(); renderPerfil(); persist();
   }
+  invalidateServerConnections();
   await updateSuuntoStatusDisplay();
 }
 /* ---- plan -> relojes (Suunto y Wahoo), automático -----
@@ -3154,7 +3168,10 @@ document.querySelectorAll('.choice, .day-pill').forEach(el=>{
 document.addEventListener('keydown', e=>{
   if(e.key!=='Enter' && e.key!==' ') return;
   const el = e.target;
-  if(!el.hasAttribute || (!el.hasAttribute('onclick') && !(el.classList && (el.classList.contains('choice') || el.classList.contains('day-pill'))))) return;
+  // data-on-click: con la CSP estricta los handlers viven en data-on-click (ya no hay handlers inline), así que Enter/Espacio sobre una tarjeta o chip enfocado no hacía nada con teclado.
+  // Los elementos nativos (button, a, input...) ya reaccionan solos: no se duplica el click.
+  const isNativeControl = el.matches && el.matches('button, a, input, select, textarea, summary');
+  if(!el.hasAttribute || isNativeControl || (!el.hasAttribute('onclick') && !el.hasAttribute('data-on-click') && !(el.classList && (el.classList.contains('choice') || el.classList.contains('day-pill'))))) return;
   e.preventDefault();
   el.click();
 });
@@ -3633,6 +3650,11 @@ function savePersonalData(){
     ? state.profile.weight : parseWeightInput(weightInput.value);
   const height = (state.profile.height && heightInput.value === String(fmtHeight(state.profile.height)))
     ? state.profile.height : parseHeightInput(heightInput.value);
+  // un valor escrito que no es razonable (peso 5, altura 900...) se rechaza con aviso: antes se descartaba en silencio y el corredor creía que se había guardado
+  if((weightInput.value.trim() !== '' && !(weight > 0)) || (heightInput.value.trim() !== '' && !(height > 0))){
+    showToast(t('personal_invalid_error'), 'error');
+    return;
+  }
   const terrainChoice = document.querySelector('#perfil-terrain-choice .choice.active');
   const genderChoice = document.querySelector('#perfil-gender-choice .choice.active');
   const goal = document.getElementById('perfil-goal').value;
@@ -3682,12 +3704,20 @@ function applyGoalsChangeNow(){
     const weekRuns = (state.runs||[]).filter(r => getMondayISO(new Date(r.date)) === state.weekStart);
     const doneKm = weekRuns.reduce((s,r)=>s+(r.distanceKm||0), 0);
     const freshTotal = fresh.reduce((s,d)=>s+(d.dist||0), 0);
-    const remaining = Math.max(0, freshTotal - doneKm);
+    // los días futuros que el corredor personalizó o canceló a mano se conservan con su distancia: también ocupan parte de la meta
+    const keptFutureKm = merged.reduce((sum,d,i)=> sum + ((d!==fresh[i] && d.status!=='done' && d.status!=='skipped' && !d.cancelled) ? (d.dist||0) : 0), 0);
+    const remaining = Math.max(0, freshTotal - doneKm - keptFutureKm);
     const freshDays = merged.filter((d,i)=> d===fresh[i] && d.dist>0);
     const freshSum = freshDays.reduce((s,d)=>s+d.dist, 0);
     if(freshDays.length && freshSum>0){
-      const factor = remaining / freshSum;
-      freshDays.forEach(d=>{ d.dist = Math.max(0.1, Math.round(d.dist*factor*10)/10); });
+      if(remaining <= 0){
+        // ya se corrió igual o más que la meta nueva: los días que faltan son descanso (antes quedaban como sesiones fantasma de 0.1 km)
+        freshDays.forEach(d=>{ const i = merged.indexOf(d); merged[i] = {day:d.day, typeKey:'rest', dist:0, terrain:null, zone:null, beginner:d.beginner}; });
+      } else {
+        const factor = remaining / freshSum;
+        // scaleDayAmount: además de la distancia reescala repeticiones y minutos (plan por tiempo) para que la sesión no contradiga su propia descripción
+        freshDays.forEach(d=>{ scaleDayAmount(d, factor, true); });
+      }
     }
   }
   state.plan = merged;
