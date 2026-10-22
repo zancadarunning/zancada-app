@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22T17:45:36Z';
+const APP_VERSION = '2026-10-22T17:47:37Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5931,7 +5931,8 @@ async function syncTodayNow(){
 // proceso aparte disparado justo ese día, alcanza con recalcularlo cada vez que se renderiza
 // Perfil. Las semanas sin ninguna carrera suman 0 al promedio, no se excluyen -- así alguien
 // que viene de una pausa ve un promedio bajo de verdad, no uno inflado con carreras viejas.
-function computeActualWeeklyKmAvg(weeks){
+// requireFull: devuelve null si la cuenta todavía no tiene `weeks` semanas cerradas (para decisiones como graduar a un principiante: con una sola semana parcial se "graduaba" de golpe).
+function computeActualWeeklyKmAvg(weeks, requireFull){
   weeks = weeks || 3;
   const currentMonday = state.weekStart || getMondayISO(new Date());
   const byWeek = {};
@@ -5960,6 +5961,7 @@ function computeActualWeeklyKmAvg(weeks){
     sum += byWeek[wk] || 0;
     count++;
   }
+  if(requireFull && count < weeks) return null;
   return count>0 ? sum/count : null;
 }
 function computeWeekAdjustment(plan){
@@ -6200,6 +6202,9 @@ function checkWeekRollover(){
   // Cronograma al día ANTES de armar la semana nueva (más abajo): así generatePlan ya lo ve.
   refreshPhaseSchedule();
   const currentMonday = getMondayISO(new Date());
+  // weekStart en el FUTURO (reloj del teléfono atrasado, cambio de huso hacia el oeste, otro dispositivo adelantado): no hay semana que cerrar. Sin este corte cada
+  // llamada (una por cada vuelta a primer plano) avanzaba el plan una semana más.
+  if(state.weekStart && state.weekStart > currentMonday) return;
   if(state.weekStart !== currentMonday){
     if(!state.planHistory) state.planHistory = [];
     const prevMonday = new Date(state.weekStart || currentMonday);
@@ -6225,6 +6230,8 @@ function checkWeekRollover(){
         state.profile.weeklyKm = Math.max(5, Math.round(state.profile.weeklyKm * breakAdj.kmFactor));
         if(breakAdj.weekNumberReset){ promotedWeekNumber = breakAdj.weekNumberReset; breakReset = true; state.curveWeekOffset = 0; state.curveCap = null; }
         breakMsg = t('coach_return_from_break', {weeks: breakAdj.gapWeeks});
+        // Una pausa se descuenta UNA vez: sin recordar de qué última carrera salió, cada lunes siguiente sin correr volvía a aplicar el factor (30 -> 24 -> 19 -> ... -> 5 km).
+        state.breakAdjLastRunMs = lastRunTimeMs();
         // checkWeekRollover() solo corre una vez por transición real de semana (no en cada
         // render), así que esto es un "che, tanto tiempo" genuino, no algo que se repita cada
         // vez que se abre la app -- reusa la expresión "happy" (contento, sin la intensidad
@@ -6665,8 +6672,11 @@ function checkBeginnerGraduation(){
   if(!state.onboarded || !state.profile) return;
   const p = state.profile;
   if(!isBeginnerProfile(p)) return; // ya no está en modo principiante, nada que graduar
+  // goal 'start' ("empezar a correr desde cero") mantiene isBeginnerProfile en true siempre: la graduación no puede surtir efecto, y sin este corte se repetía el
+  // mensaje del coach y la regeneración del plan en cada apertura de la app.
+  if(p.goal === 'start') return;
   const graduationWeeks = hasCrossTrainingBase(p) ? BEGINNER_GRADUATION_WEEKS_WITH_BASE : BEGINNER_GRADUATION_WEEKS;
-  const avgKm = computeActualWeeklyKmAvg(graduationWeeks);
+  const avgKm = computeActualWeeklyKmAvg(graduationWeeks, true);
   if(avgKm === null || avgKm < BEGINNER_GRADUATION_MIN_KM) return;
   p.runnerType = 'active';
   p.currentWeeklyKm = Math.round(avgKm);
@@ -6695,7 +6705,7 @@ function checkReturningBreakGraduation(){
   // el *0.6 de returningFromBreak solo pesa en la rama de corredor activo con km actual>0),
   // así que el flag no le afecta el volumen igual, no hay apuro en sacarlo.
   if(!p.returningFromBreak || !(p.currentWeeklyKm > 0)) return;
-  const avgKm = computeActualWeeklyKmAvg(RETURNING_BREAK_GRADUATION_WEEKS);
+  const avgKm = computeActualWeeklyKmAvg(RETURNING_BREAK_GRADUATION_WEEKS, true);
   // El piso es lo que la persona declaró que corría ANTES de parar, no un número fijo --
   // alguien que volvía a 15km/semana no debería esperar lo mismo que alguien que volvía a
   // 60km/semana.
