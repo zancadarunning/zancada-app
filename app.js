@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22T13:29:20Z';
+const APP_VERSION = '2026-10-22T17:43:44Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -11471,7 +11471,7 @@ function pushRunNotification(force){
   p.update({
     title: t('run_bg_notif_title'),
     dist: fmtDist(tracker.distanceKm),
-    distLabel: t('run_km'),
+    distLabel: distUnit().toUpperCase(),   // t('run_km') decia "Km" aunque el valor estuviera en millas
     distShort: distUnit(),
     paceShort: '/' + distUnit(),
     timeLabel: t('run_time'),
@@ -11593,9 +11593,17 @@ let liveMapFollowing = true;
 let liveMapProgrammaticMoveAt = 0;
 let wakeLockSentinel = null;
 
-async function requestWakeLock(){ try{ if('wakeLock' in navigator) wakeLockSentinel = await navigator.wakeLock.request('screen'); }catch(e){} }
+async function requestWakeLock(){
+  try{
+    if(!('wakeLock' in navigator)) return;
+    const sentinel = await navigator.wakeLock.request('screen');
+    wakeLockSentinel = sentinel;
+    // El navegador libera el lock solo al pasar a segundo plano: sin este aviso la variable seguía apuntando al sentinel liberado y nunca se volvía a pedir.
+    sentinel.addEventListener('release', ()=>{ if(wakeLockSentinel === sentinel) wakeLockSentinel = null; });
+  }catch(e){}
+}
 async function releaseWakeLock(){ try{ if(wakeLockSentinel){ await wakeLockSentinel.release(); wakeLockSentinel=null; } }catch(e){} }
-document.addEventListener('visibilitychange', async ()=>{ if(document.visibilityState==='visible' && tracker.running && !wakeLockSentinel) await requestWakeLock(); });
+document.addEventListener('visibilitychange', async ()=>{ if(document.visibilityState==='visible' && tracker && tracker.running && tracker.watchId!==null && tracker.watchId!==undefined && !wakeLockSentinel) await requestWakeLock(); });
 
 /* ---- guardado automático de la carrera en curso ----
    Si el navegador se cierra solo (poca batería, la app se va a segundo plano
@@ -11735,7 +11743,8 @@ function speak(text, isKey){
   if(nativeTTS){
     const targetLang = LOCALE_MAP[lang];
     getBestVoiceIndex(targetLang).then(voiceIdx => {
-      const opts = {text, lang: targetLang, rate: 0.95};
+      // queueStrategy 1 = QUEUE_ADD: el default del plugin (0) corta el aviso anterior, y en un mismo fix pueden salir "Kilómetro 5" y "Mitad de camino".
+      const opts = {text, lang: targetLang, rate: 0.95, queueStrategy: 1};
       if(voiceIdx!=null) opts.voice = voiceIdx;
       nativeTTS.speak(opts).catch(()=>{});
     });
@@ -12149,10 +12158,8 @@ function computeSplitsFromPoints(points){
     const segKm = cum[toIdx] - cum[fromIdx];
     const segTime = (points[toIdx].t||0) - fromTime;
     const paceMin = segKm>0 ? (segTime/60)/segKm : 0;
-    let elevGain = 0;
-    for(let j=fromIdx+1;j<=toIdx;j++){
-      if(points[j].alt!=null && points[j-1].alt!=null){ const d=points[j].alt-points[j-1].alt; if(d>0) elevGain+=d; }
-    }
+    const eg = elevationGainLoss(points.slice(fromIdx, toIdx+1).map(p => p.alt));
+    const elevGain = eg ? eg.gain : 0;
     return {km:label, paceMin: Math.round(paceMin*100)/100, elevGain: Math.round(elevGain), avgHr:null, avgCadence:null};
   }
   const splits = [];
@@ -12176,17 +12183,24 @@ function computeSplitsFromPoints(points){
 // puntos) -- devolvemos null/null cuando no hay ningún dato real de altitud
 // en vez de inventar un número, para que la pantalla de detalle simplemente
 // no muestre esa fila en esos casos.
+// Ascenso/descenso de una lista de altitudes: media móvil de 5 puntos y umbral de 3 m (histéresis). La altitud del GPS del celular oscila unos metros entre fixes
+// a 1 Hz; sumar cada diferencia positiva daba cientos de metros de "ascenso" en un 10K plano.
+function elevationGainLoss(alts){
+  const a = alts.filter(v => typeof v === 'number' && !isNaN(v));
+  if(a.length < 2) return null;
+  const sm = a.map((_, i) => { let sum = 0, n = 0; for(let j = Math.max(0, i-2); j <= Math.min(a.length-1, i+2); j++){ sum += a[j]; n++; } return sum / n; });
+  let anchor = sm[0], gain = 0, loss = 0;
+  for(let i = 1; i < sm.length; i++){
+    const d = sm[i] - anchor;
+    if(d >= 3){ gain += d; anchor = sm[i]; }
+    else if(d <= -3){ loss += -d; anchor = sm[i]; }
+  }
+  return {gain, loss};
+}
 function computeElevationFromPoints(points){
   if(!points || points.length<2) return {gain:null, loss:null};
-  let gain=0, loss=0, any=false;
-  for(let i=1;i<points.length;i++){
-    if(points[i].alt!=null && points[i-1].alt!=null){
-      any = true;
-      const d = points[i].alt - points[i-1].alt;
-      if(d>0) gain+=d; else loss+=-d;
-    }
-  }
-  return any ? {gain:Math.round(gain), loss:Math.round(loss)} : {gain:null, loss:null};
+  const r = elevationGainLoss(points.map(p => p.alt));
+  return r ? {gain:Math.round(r.gain), loss:Math.round(r.loss)} : {gain:null, loss:null};
 }
 // Curva de ritmo en el tiempo para el gráfico de la pestaña "Gráficos" en
 // carreras trackeadas en vivo (sin FC -- eso necesitaría un sensor externo
@@ -12800,7 +12814,7 @@ function startRun(){
   startRunWithCountdown();
 }
 function restoreTrackerFromSaved(saved){
-  tracker = {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:saved.elapsedSec||0, running:false, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt, autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null};
+  tracker = {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:saved.elapsedSec||0, running:false, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt, autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null, cadSum:saved.cadSum||0, cadN:saved.cadN||0};
 }
 // Cuenta regresiva de 3 segundos antes de arrancar a correr (pedido del usuario: "crea una
 // cinemática de 3 segundos cuando comenzamos a correr") -- ver #runCountdown en el CSS/HTML.
@@ -12924,15 +12938,18 @@ function actuallyStartRun(saved){
 function onPosition(pos){
   const {latitude:lat, longitude:lon, accuracy, altitude} = pos.coords;
   const nowMs = pos.timestamp || Date.now();
+  // Pone al día el cronómetro con el reloj de pared ANTES de grabar el punto: con la pantalla apagada el setInterval casi no dispara, pero el GPS sí sigue
+  // entregando fixes, y cada punto quedaba con el mismo `t` viejo (splits y gráfico de ritmo distorsionados).
+  if(tracker.lastTickAt) tickRunTimer();
   if(accuracy && accuracy>50){
-    // Igual actualizamos la referencia de tiempo del último fix aceptado -- si no, el
-    // próximo fix bueno calcula la velocidad sobre TODO el hueco de fixes filtrados
-    // (túnel, arboleda, edificios altos) en vez de solo su propio intervalo, y eso puede
-    // disparar una auto-pausa falsa por "quietud" que en realidad nunca existió.
-    tracker.lastFixMs = nowMs;
+    // Un fix impreciso se descarta SIN tocar lastFixMs/lastRawPoint: la velocidad del próximo fix bueno se calcula como distancia desde el último punto
+    // aceptado dividida por el tiempo desde ESE mismo punto. Antes lastFixMs sí avanzaba acá, y tras 4 fixes malos seguidos el siguiente bueno daba
+    // metros de 30 s sobre 1 s ("100 m/s"), se rechazaba por velocidad imposible y esos metros se perdían para siempre.
     return;
   }
-  const last = tracker.lastRawPoint || tracker.points[tracker.points.length-1];
+  // Sin lastRawPoint (arranque, o carrera recuperada tras un cierre) el primer fix es solo la referencia: medirlo contra el último punto guardado sumaba en línea
+  // recta todo lo que el corredor se movió con la app cerrada.
+  const last = tracker.lastRawPoint;
   const stepKm = last ? haversine(last.lat,last.lon,lat,lon) : 0;
 
   // Auto-pausa: la velocidad instantánea sale del propio timestamp del fix del GPS
@@ -12958,6 +12975,7 @@ function onPosition(pos){
   // stepKm se mediría contra el último punto grabado ANTES de pausar, sumando de golpe
   // a distanceKm todo lo caminado/manejado durante la pausa.
   tracker.lastRawPoint = {lat, lon};
+  { const w = document.getElementById('geo-warning'); if(w && w.style.display === 'block') w.style.display = 'none'; }   // llegó un fix bueno: el aviso de ubicación ya no aplica
   if(active && !isImplausibleRunSpeed(speedMps)){
     // Antes cualquier paso menor a 2m se descartaba directo -- a paso de caminata o
     // entrada en calor (~1 m/s) los fixes seguidos suelen quedar por debajo de esos 2m,
@@ -12989,7 +13007,15 @@ function onPosition(pos){
   // de arriba (setInterval, línea ~4642) ya guarda cada 15s, y pausar/reanudar guarda al
   // toque -- de sobra para no perder progreso real ante un cierre inesperado.
 }
-function onPosError(){ try{ showToast(t('geo_err_permission'), 'error'); }catch(e){} document.getElementById('geo-warning').style.display='block'; document.getElementById('geo-warning').textContent=t('geo_err_permission'); }
+// Solo el permiso denegado (code 1 / NOT_AUTHORIZED) merece el aviso de "activá la ubicación": un timeout o una señal perdida (túnel, arranque en frío) son pasajeros
+// y se repiten cada 15 s -- antes mostraban el mismo cartel de permiso una y otra vez aunque el permiso estuviera concedido, y el cartel nunca se ocultaba.
+function onPosError(err){
+  const denied = !err || err.code === 1 || err.code === 'NOT_AUTHORIZED' || err.code === 'PERMISSION_DENIED';
+  if(!denied) return;
+  try{ showToast(t('geo_err_permission'), 'error'); }catch(e){}
+  const w = document.getElementById('geo-warning');
+  if(w){ w.style.display='block'; w.textContent=t('geo_err_permission'); }
+}
 function updateRunUnitLabels(){
   const distLbl = distUnit().toUpperCase();
   const paceLbl = `${t('run_pace_word')} /${distUnit()}`;
@@ -13019,6 +13045,7 @@ function togglePause(){
     // pasen los AUTO_PAUSE_HOLD_MS aunque el corredor ya haya arrancado a correr otra vez.
     tracker.autoPaused = false;
     tracker.lastMoveMs = Date.now();
+    requestWakeLock();   // la pausa manual no lo soltaba, pero el sistema pudo haberlo liberado mientras tanto
   }
   updateRecordingLabel();
   // Guardamos el progreso justo al pausar/reanudar a mano -- si la app se cierra
@@ -13035,6 +13062,7 @@ function stopRun(){
   // return;) lo hubiera confundido con una carrera todavía activa, bloqueando arrancar la
   // PRÓXIMA carrera para siempre.
   tracker.watchId = null;
+  tracker.running = false;   // terminada: si seguía en true, al volver a primer plano se pedía de nuevo el wake lock y nadie lo soltaba
   clearRunNotification();
   stopCadence();
   releaseWakeLock();
@@ -13301,6 +13329,17 @@ function lowerRemainingIntensity(pct){
   renderPlan(); renderHome(); persist();
 }
 async function closeSummary(){
+  // Arrancar y frenar sin querer (menos de 50 m y menos de 2 minutos) no es una carrera: guardarla sumaba una carrera fantasma a los logros y al Historial
+  // y hacía que Correr creyera que ya se había corrido hoy. Una cinta (0 km pero con tiempo real) sí se guarda.
+  if(tracker.distanceKm < 0.05 && tracker.elapsedSec < 120){
+    clearRunProgress();
+    document.getElementById('runSummary').style.display='none';
+    document.getElementById('runIdle').style.display='block';
+    renderAll(); renderRunTodayCard();
+    showView('inicio');
+    showToast(t('run_discarded_toast'), 'info');
+    return;
+  }
   const shoeId = parseInt(document.getElementById('sum-shoe').value);
   const shoe = state.shoes.find(s=>s.id===shoeId);
   if(shoe) shoe.km += tracker.distanceKm;

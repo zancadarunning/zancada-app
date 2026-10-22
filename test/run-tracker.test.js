@@ -393,3 +393,35 @@ test('isImplausibleRunSpeed: descarta un salto de posición que implicaría corr
   assert.equal(app.isImplausibleRunSpeed(11.9), false, 'justo por debajo del techo tiene que aceptarse (no cortar sprints reales)');
   assert.equal(app.isImplausibleRunSpeed(null), false, 'sin referencia de velocidad (primer fix) no hay forma de juzgar -- no se rechaza');
 });
+
+// ---- GPS: fixes imprecisos, recuperación y desnivel (auditoría 2026-10-22) ----
+const fix = (lat, lon, accuracy, ms) => ({ coords: { latitude: lat, longitude: lon, accuracy, altitude: null }, timestamp: ms });
+const M = 0.000009;   // ~1 m de latitud en grados
+
+test('GPS: tras varios fixes imprecisos el siguiente bueno NO se rechaza por "velocidad imposible" y no pierde los metros', () => {
+  const app = loadApp();
+  const t0 = 1_700_000_000_000;
+  app.setTracker({ startedAt: t0, points: [], distanceKm: 0, hrLog: [], lastAnnouncedKm: 0, elapsedSec: 0, running: true, autoPaused: false, lastMoveMs: t0, lastFixMs: null, lastTickAt: Date.now() });
+  app.onPosition(fix(0, 0, 5, t0));
+  for (let i = 1; i <= 4; i++) app.onPosition(fix(i * 3.3 * M, 0, 80, t0 + i * 1000));   // 4 fixes con accuracy 80: descartados
+  app.onPosition(fix(5 * 3.3 * M, 0, 5, t0 + 5000));                                        // llegó el bueno, ~16 m desde el último aceptado, 5 s después
+  assert.ok(app.getTracker().distanceKm > 0.012, 'los ~16 m del tramo se suman: ' + app.getTracker().distanceKm);
+});
+
+test('GPS: al recuperar una carrera interrumpida el primer fix es solo la referencia (no suma todo lo que se movió con la app cerrada)', () => {
+  const app = loadApp();
+  const t0 = 1_700_000_000_000;
+  app.setTracker({ startedAt: t0, points: [{ lat: 0, lon: 0, t: 100, alt: null }], distanceKm: 1, hrLog: [], lastAnnouncedKm: 1, elapsedSec: 300, running: true, autoPaused: false, lastMoveMs: t0, lastFixMs: null, lastTickAt: Date.now() });
+  app.onPosition(fix(0.05, 0, 5, t0 + 1_200_000));    // ~5,5 km más lejos, 20 minutos después
+  assert.equal(app.getTracker().distanceKm, 1, 'la distancia sigue en lo guardado');
+});
+
+test('desnivel: el ruido de altitud del GPS (+-2 m) no se acumula; una subida real sí', () => {
+  const app = loadApp();
+  const noisy = Array.from({ length: 400 }, (_, i) => ({ alt: 20 + (i % 2 ? 2 : -2) }));
+  const flat = app.computeElevationFromPoints(noisy);
+  assert.ok(flat.gain < 10, 'plano con ruido: ' + flat.gain);
+  const climb = app.computeElevationFromPoints(Array.from({ length: 200 }, (_, i) => ({ alt: 20 + i * 0.5 + (i % 2 ? 1.5 : -1.5) })));
+  assert.ok(climb.gain > 80 && climb.gain < 110, 'subida real de ~100 m: ' + climb.gain);
+  assert.equal(app.computeElevationFromPoints([{ alt: null }, { alt: null }]).gain, null);
+});
