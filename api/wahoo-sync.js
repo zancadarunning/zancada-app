@@ -8,7 +8,7 @@ const { decToken } = require('./_lib/token-crypto');
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { rotateForFairness } = require('./_lib/cron-rotation');
 const { syncProbe, probeHasNew, probeMayBackfill } = require('./_lib/sync-probe');
-const { workoutToRun, mergeWahooRuns, isRunningWorkoutType, refreshWahooToken, fetchFitSplits } = require('./_lib/wahoo-activity-helpers');
+const { workoutToRun, mergeWahooRuns, isImportableWorkout, refreshWahooToken, fetchFitSplits } = require('./_lib/wahoo-activity-helpers');
 const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { withSentry, reportError } = require('./_lib/sentry');
 const { mergeAndNotify } = require('./_lib/notify-new-run');
@@ -89,6 +89,7 @@ async function backfillWahooSplits(base, headers, conn, accessToken) {
       const workout = await wRes.json();
       const fitUrl = workout && workout.workout_summary && workout.workout_summary.file && workout.workout_summary.file.url;
       const fit = await fetchFitSplits(fitUrl, accessToken);
+      if (fit._failed) continue; // falla pasajera: se reintenta en el próximo ciclo
       run.splits = fit.splits;
       run.series = fit.series;
       if (fit.elevationGain != null) run.elevationGain = fit.elevationGain;
@@ -156,7 +157,7 @@ module.exports = withSentry(async (req, res) => {
           console.error('wahoo-sync (cron): workouts fetch failed', conn.user_id, fetchErr && fetchErr.message);
           continue;
         }
-        const runWorkouts = workouts.filter(w => isRunningWorkoutType(w.workout_type_id));
+        const runWorkouts = workouts.filter(isImportableWorkout);
 
         // Sonda liviana (sql/sync_probe.sql): evita bajar el estado completo de la cuenta en cada corrida cuando no hay nada nuevo
         // ni carreras por completar. Sin la función en la base, hace lo de siempre.

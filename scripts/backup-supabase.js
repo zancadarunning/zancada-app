@@ -18,6 +18,8 @@ const TABLES = [
 ];
 const TOKEN_TABLES = ['strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'suunto_connections'];
 const PAGE = 1000;
+// Tablas sin las cuales el respaldo no sirve: si no existen (404) es un error de configuración, no "tabla opcional" -- antes se anotaba "no existe" y el respaldo salía "exitoso" sin los datos de los corredores.
+const ESSENTIAL_TABLES = ['app_state'];
 
 function loadDotEnv() {
   const f = path.join(__dirname, '..', '.env');
@@ -31,8 +33,8 @@ function loadDotEnv() {
 async function fetchAll(base, headers, table) {
   const rows = [];
   for (let from = 0; ; from += PAGE) {
-    const res = await fetch(`${base}/rest/v1/${table}?select=*`, { headers: { ...headers, Range: `${from}-${from + PAGE - 1}`, 'Range-Unit': 'items' } });
-    if (res.status === 404) return null;   // la tabla no existe en esta base
+    const res = await fetch(`${base}/rest/v1/${table}?select=*&order=user_id`, { headers: { ...headers, Range: `${from}-${from + PAGE - 1}`, 'Range-Unit': 'items' } });
+    if (res.status === 404 && !ESSENTIAL_TABLES.includes(table)) return null;   // la tabla no existe en esta base (solo se tolera en las opcionales)
     if (!res.ok) throw new Error(`${table}: HTTP ${res.status}`);
     const page = await res.json();
     rows.push(...page);

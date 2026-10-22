@@ -60,6 +60,9 @@ async function fetchStreams(activityId, accessToken) {
     const res = await fetchWithTimeout(`https://www.strava.com/api/v3/activities/${activityId}/streams?keys=time,distance,altitude,heartrate,cadence,velocity_smooth&key_by_type=true`, {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
+    // _failed: el pedido falló por algo pasajero (límite de uso, Strava caído, token): el llamador NO tiene que dar la actividad por "ya completa" (splitsV) y se reintenta después.
+    // Antes cualquier falla quedaba marcada como "sin parciales para siempre".
+    if (res.status === 429 || res.status === 401 || res.status >= 500) return { splits: [], series: null, elevationGain: null, elevationLoss: null, _failed: true };
     const streams = await res.json();
     if (!streams || !streams.distance || !streams.time) return { splits: [], series: null, elevationGain: null, elevationLoss: null };
     const distArr = streams.distance.data, timeArr = streams.time.data;
@@ -162,7 +165,7 @@ async function fetchStreams(activityId, accessToken) {
     }
 
     return { splits, series, elevationGain, elevationLoss };
-  } catch (e) { return { splits: [], series: null, elevationGain: null, elevationLoss: null }; }
+  } catch (e) { return { splits: [], series: null, elevationGain: null, elevationLoss: null, _failed: true }; }
 }
 
 function getMondayISO(d) {
@@ -220,7 +223,7 @@ async function activityToRun(act, accessToken) {
     // accessToken más arriba) quedaba marcada como "ya completa" para siempre y el cron
     // periódico -- que solo mira actividades nuevas, nunca las ya guardadas -- jamás
     // volvía a completarla. Ahora solo se marca cuando de verdad se intentó pedir streams.
-    splitsV: accessToken ? 3 : undefined,
+    splitsV: (accessToken && !streams._failed) ? 3 : undefined,
     series: streams.series,
     shoeId: null,
     source: 'strava',

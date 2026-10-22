@@ -76,7 +76,7 @@ const linkAccount = async (req, res) => {
     const key = process.env.SUPABASE_SERVICE_KEY;
     const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' };
     const expiresAt = Math.floor(Date.now() / 1000) + (tokenData.expires_in || 3600);
-    await fetch(`${base}/rest/v1/coros_connections`, {
+    const saveRes = await fetch(`${base}/rest/v1/coros_connections`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -86,6 +86,7 @@ const linkAccount = async (req, res) => {
         expires_at: expiresAt
       })
     });
+    if (!saveRes.ok) { failGracefully(res, 'no se pudo guardar la conexión', 'status ' + saveRes.status + ' ' + await saveRes.text().catch(() => '')); return; }  // antes no se miraba el resultado: la app decía "conectado" sin conexión guardada
 
     // Traer las carreras recientes como punto de partida, igual que al conectar
     // Strava/Polar/Wahoo. querySportRecords devuelve un reporte de texto (no JSON) cuando

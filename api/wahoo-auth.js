@@ -7,7 +7,7 @@
 
 const { encToken } = require('./_lib/token-crypto');
 const crypto = require('crypto');
-const { workoutToRun, mergeWahooRuns, isRunningWorkoutType } = require('./_lib/wahoo-activity-helpers');
+const { workoutToRun, mergeWahooRuns, isImportableWorkout } = require('./_lib/wahoo-activity-helpers');
 
 const REDIRECT_URI = 'https://zancada.org/api/wahoo-auth';
 
@@ -66,7 +66,7 @@ const linkAccount = async (req, res) => {
     const key = process.env.SUPABASE_SERVICE_KEY;
     const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' };
     const expiresAt = Math.floor(Date.now() / 1000) + (tokenData.expires_in || 7200);
-    await fetch(`${base}/rest/v1/wahoo_connections`, {
+    const saveRes = await fetch(`${base}/rest/v1/wahoo_connections`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -76,6 +76,7 @@ const linkAccount = async (req, res) => {
         expires_at: expiresAt
       })
     });
+    if (!saveRes.ok) { failGracefully(res, 'no se pudo guardar la conexión', 'status ' + saveRes.status + ' ' + await saveRes.text().catch(() => '')); return; }  // antes no se miraba el resultado: la app decía "conectado" sin conexión guardada
 
     // Traer los workouts recientes como punto de partida (paginado -- pedimos
     // los últimos 30, alcanza para "los últimos 30 días" como en Strava/Polar
@@ -85,7 +86,7 @@ const linkAccount = async (req, res) => {
     });
     const wData = await wRes.json();
     const workouts = (wData && wData.workouts) || [];
-    const runWorkouts = workouts.filter(w => isRunningWorkoutType(w.workout_type_id));
+    const runWorkouts = workouts.filter(isImportableWorkout);
     if (runWorkouts.length) {
       const plainHeaders = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
       const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${userId}&select=data`, { headers: plainHeaders });

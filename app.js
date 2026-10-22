@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22T12:48:23Z';
+const APP_VERSION = '2026-10-22T18:10:17Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -836,12 +836,16 @@ function showToast(message, type){
   clearTimeout(toastHideTimer);
   toastHideTimer = setTimeout(()=>{
     el.classList.remove('show');
-    setTimeout(()=>{ if(wrap) wrap.innerHTML = ''; }, 250);
+    // solo vacía si el aviso que sigue ahí es ESTE: un aviso nuevo que llegó en esos 250 ms no se tiene que borrar
+    setTimeout(()=>{ if(wrap && wrap.firstElementChild === el) wrap.innerHTML = ''; }, 250);
   }, 3200);
 }
 // opts.passwordField: pide también la contraseña (acciones que no se pueden deshacer). En ese modo resuelve con { password, captchaToken } o false.
+let confirmDismissPrev = null;
 function showConfirm(message, opts){
   opts = opts || {};
+  // si ya había una confirmación abierta, se resuelve como "no": antes quedaba colgada para siempre (su promesa nunca se resolvía) y el flujo que la esperaba no seguía ni cortaba
+  if(confirmDismissPrev){ const prev = confirmDismissPrev; confirmDismissPrev = null; prev(); }
   return new Promise(resolve=>{
     let backdrop = document.getElementById('confirm-backdrop');
     if(!backdrop){
@@ -860,7 +864,9 @@ function showConfirm(message, opts){
     </div></div>`;
     backdrop.classList.add('show');
     haptic(15);
+    confirmDismissPrev = ()=>{ disposeCaptcha('captcha-reauth'); resolve(false); };
     const cleanup = (result)=>{
+      confirmDismissPrev = null;
       backdrop.classList.remove('show');
       disposeCaptcha('captcha-reauth');
       setTimeout(()=>{ if(backdrop) backdrop.innerHTML = ''; }, 180);
@@ -894,6 +900,10 @@ function showConfirm(message, opts){
 let state = {onboarded:false, profile:{}, plan:[], runs:[], shoes:[], event:null, chat:[], lang:lang, painLog:[], readinessLog:[]};
 let pendingEmail = '';
 let currentUserId = null;
+// Id de la cuenta cuyo `state` ya se CARGÓ de verdad desde el servidor (o que se confirmó vacía/nueva). persist() no escribe nada antes de eso: si la carga falla
+// (mala conexión), `state` sigue siendo el objeto vacío por defecto y un guardado -- por ejemplo el reintento automático del respaldo pendiente -- pisaba en la base
+// los datos reales con la cuenta en blanco y borraba el único respaldo local.
+let stateLoadedFor = null;
 /* ---- pantalla de "confirmá tu mail", con reintento automático de login mientras se espera ---- */
 let confirmEmailAddr = '';
 let confirmEmailPw = '';
@@ -971,7 +981,9 @@ function updateProfileUnitLabels(){
 function fmtPace(minPerKm){
   if(!minPerKm || minPerKm<=0) return '—';
   const val = isImperial() ? minPerKm * KM_PER_MI : minPerKm;
-  return `${Math.floor(val)}:${String(Math.round((val%1)*60)).padStart(2,'0')}`;
+  // Se redondea a segundos TOTALES antes de partir en minutos y segundos: redondear solo la fracción daba "5:60" para ritmos como 5.996 min/km.
+  const tot = Math.round(val * 60);
+  return `${Math.floor(tot / 60)}:${String(tot % 60).padStart(2,'0')}`;
 }
 
 /* ---- Supabase: cuentas y datos reales, sincronizados entre dispositivos ---- */
@@ -1327,7 +1339,9 @@ let persistInFlight = false;
 let persistQueued = false;
 let persistSettledResolvers = [];
 async function persist(){
-  if(!currentUserId) return;
+  if(!currentUserId || stateLoadedFor !== currentUserId) return;
+  // El chat no tenía tope y viajaba entero en cada guardado (y en el respaldo local, que además tiene cuota): se conservan los últimos 300 mensajes.
+  if(state.chat && state.chat.length > 300) state.chat = state.chat.slice(-300);
   if(persistInFlight){ persistQueued = true; return; }
   persistInFlight = true;
   try{
@@ -1498,6 +1512,7 @@ async function loadUserAndEnter(user, isRetry){
     if(error) throw error;
     if(data && data.data && Object.keys(data.data).length){
       state = data.data; lang = state.lang || 'es';
+      stateLoadedFor = user.id;
       loadedStateVersion = data.updated_at || null;
       const pending = readPendingBackup(user.id);
       // El chequeo de "más carreras que en el servidor" solo (sin mirar cuándo se guardó cada
@@ -1580,6 +1595,7 @@ async function loadUserAndEnter(user, isRetry){
     }
     if(!(await ensureConsent())){ await supabaseClient.auth.signOut(); location.reload(); return; }   // el consentimiento viaja en state y se guarda con el onboarding
     pendingEmail = user.email;
+    stateLoadedFor = user.id;   // la consulta confirmó que no hay datos: cuenta nueva, el estado por defecto es el correcto
     document.getElementById('splash').style.display='none';
     document.getElementById('login').style.display='none';
     document.getElementById('onboard').style.display='block';
@@ -1903,6 +1919,10 @@ async function confirmKeepDataBeforeDisconnect(brand, sourceKey, idField){
   if(!keep) return false;
   matching.forEach(r=>{ delete r.source; delete r[idField]; });
   await persist();
+  // persist() devuelve enseguida si ya había un guardado en vuelo (queda encolado): esperamos a que termine TODO, y si no llegó al servidor no desconectamos
+  // (el backend borraría las carreras todavía marcadas como de esa marca).
+  await waitForPendingPersist();
+  if(hasPendingBackup()){ showToast(t('save_failed_retry'), 'error'); return false; }
   return true;
 }
 async function connectStrava(){
@@ -1949,6 +1969,7 @@ let deviceConnectionsLoaded = false;
 let deviceConnections = { strava:false, polar:false, wahoo:false, coros:false, suunto:false };
 async function refreshDeviceConnections(){
   if(!currentUserId) return;
+  invalidateServerConnections(); // se llama justo después de conectar/desconectar: tiene que ver el estado nuevo, no el cacheado
   try{
     const [s, p, w, c, su] = await Promise.all([
       supabaseClient.from('strava_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
@@ -2182,6 +2203,7 @@ async function disconnectWahoo(){
     }
     renderHistory(); renderHome(); renderPerfil(); persist();
   }
+  invalidateServerConnections(); // si no, la consulta de estado de los próximos 5 s devolvía el "conectado" de antes
   await updateWahooStatusDisplay();
 }
 /* ---- Suunto -----
@@ -2301,6 +2323,7 @@ async function finishPendingProviderLink(){
 // pudo saber, usar la consulta directa) o null si el servidor no respondió. Cache de unos segundos
 // para no repetir el pedido cuando varias pantallas lo piden juntas.
 let serverConnCache = { at: 0, promise: null };
+function invalidateServerConnections(){ serverConnCache = { at: 0, promise: null }; }
 function fetchServerConnections(){
   if(serverConnCache.promise && Date.now() - serverConnCache.at < 5000) return serverConnCache.promise;
   serverConnCache.at = Date.now();
@@ -2389,6 +2412,7 @@ async function disconnectSuunto(){
     }
     renderHistory(); renderHome(); renderPerfil(); persist();
   }
+  invalidateServerConnections();
   await updateSuuntoStatusDisplay();
 }
 /* ---- plan -> relojes (Suunto y Wahoo), automático -----
@@ -2464,6 +2488,8 @@ let wahooSyncTimer = null, wahooSyncRunning = false, wahooSyncAgain = false;
 // Wahoo dijo que el permiso de planes falta (token viejo sin plans_write): no se reintenta solo hasta la
 // próxima vez que se abre la app (cada intento gastaría cuota para recibir el mismo 403).
 let wahooSyncBlocked = false;
+// Backoff tras un envío que falló (el mismo motivo que suuntoBlockedUntil): scheduleWahooSync() sin demora explícita no pisa un reintento ya programado.
+let wahooBlockedUntil = 0;
 function watchSyncReady(){ return !!(state.weekStart && state.profile && state.profile.hrZones) && state.watchAutoPush!==false; }
 // Se llama desde persist(), al abrir/volver a la app y al conectar: espera unos segundos para
 // juntar varios cambios seguidos en un solo envío.
@@ -2474,6 +2500,7 @@ function scheduleSuuntoSync(){
 }
 function scheduleWahooSync(delayMs){
   if(!deviceConnections.wahoo || wahooSyncBlocked || !watchSyncReady()) return;
+  if(!delayMs && Date.now() < wahooBlockedUntil) return;
   clearTimeout(wahooSyncTimer);
   wahooSyncTimer = setTimeout(()=>{ syncPlanToWahoo(false).catch(e=>console.error('wahoo sync', e)); }, delayMs || 4000);
 }
@@ -2506,19 +2533,22 @@ async function syncPlanToSuunto(force){
           body: JSON.stringify({ reconcile:true, days:changed, keepDates:keep, weekStart, today:todayLocalISO(), zones, labels })
         });
         result = await res.json().catch(()=>null);
+        if(!result && !res.ok) suuntoBlockedUntil = Date.now() + 15*60*1000;   // la respuesta ni siquiera era JSON (502, HTML): tampoco insistir
         if(result){
           if(result.reason === 'not_connected'){ deviceConnections.suunto = false; }
+          const ok = res.ok && !result.error && !result.reason && !result.failed;
+          // Cualquier respuesta que no sea un éxito (token vencido, guides_forbidden, error del servidor...) frena los reintentos un rato: sin esto, el guardado
+          // que sigue a cada intento fallido (persist -> scheduleSuuntoSync) volvía a disparar el envío cada 4 segundos, gastando la cuota compartida de Suunto.
           if(result.reason === 'rate_limited'){ suuntoBlockedUntil = Date.now() + 60*60*1000; }
-          const ok = !result.reason && !result.failed;
+          else if(!ok){ suuntoBlockedUntil = Date.now() + 15*60*1000; }
           const next = {};
           keep.forEach(dt => { if(sent[dt] && !changed.some(c=>c.date===dt)) next[dt] = sent[dt]; });
           changed.forEach(d => { if((result.pushedDates||[]).includes(d.date)) next[d.date] = sigOf(d); });
           // Si algo falló no se dan por enviadas las que no llegaron (el próximo cambio lo reintenta)
           // ni se olvidan las que sobran todavía.
           if(!ok) stale.forEach(dt => { if(sent[dt]) next[dt] = sent[dt]; });
-          state.suuntoSent = next;
-          if(ok) state.suuntoWeek = weekStart;
-          dirty = true;
+          if(JSON.stringify(next) !== JSON.stringify(state.suuntoSent || {})){ state.suuntoSent = next; dirty = true; }
+          if(ok && state.suuntoWeek !== weekStart){ state.suuntoWeek = weekStart; dirty = true; }
         }
       }
     }
@@ -2559,13 +2589,16 @@ async function syncPlanToWahoo(force){
           body: JSON.stringify({ days:changed, removeDates:stale, known, zones, labels, tzOffsetMin:new Date().getTimezoneOffset(), weekStart })
         });
         result = await res.json().catch(()=>null);
+        if(!result && !res.ok) wahooBlockedUntil = Date.now() + 15*60*1000;
         if(result){
           if(result.reason === 'not_connected'){ deviceConnections.wahoo = false; }
           if(result.reason === 'reconnect_needed'){
             wahooSyncBlocked = true;
             if(!force) showToast(t('wahoo_reconnect_needed'),'error'); // en el envío manual ya lo avisa el botón
           }
-          const ok = !result.reason && !result.failed;
+          const ok = res.ok && !result.error && !result.reason && !result.failed;
+          if(result.reason === 'rate_limited') wahooBlockedUntil = Date.now() + 5.5*60*1000;
+          else if(!ok) wahooBlockedUntil = Date.now() + 15*60*1000;
           const next = {};
           keep.forEach(dt => { if(sent[dt] && !changed.some(c=>c.date===dt)) next[dt] = sent[dt]; });
           changed.forEach(d => {
@@ -2574,9 +2607,8 @@ async function syncPlanToWahoo(force){
             else if(sent[d.date]) next[d.date] = sent[d.date]; // no llegó: se conserva lo viejo y se reintenta
           });
           stale.forEach(dt => { if(!(result.removedDates||[]).includes(dt) && sent[dt]) next[dt] = sent[dt]; });
-          state.wahooSent = next;
-          if(ok) state.wahooWeek = weekStart;
-          dirty = true;
+          if(JSON.stringify(next) !== JSON.stringify(state.wahooSent || {})){ state.wahooSent = next; dirty = true; }
+          if(ok && state.wahooWeek !== weekStart){ state.wahooWeek = weekStart; dirty = true; }
           // Cuota de Wahoo agotada (la app en modo sandbox permite 25 llamadas cada 5 minutos): se
           // reintenta solo un poco después.
           if(result.reason === 'rate_limited') scheduleWahooSync(5.5*60*1000);
@@ -2945,6 +2977,7 @@ async function handleSignUp(){
     if(!data.session){ showConfirmEmailScreen(email, password); return; }
     pendingEmail = email;
     currentUserId = data.user.id;
+    stateLoadedFor = data.user.id;   // alta recién hecha: no hay nada que cargar
     document.getElementById('signup').style.display='none';
     document.getElementById('onboard').style.display='block';
     resetOnboardSteps();
@@ -3135,7 +3168,10 @@ document.querySelectorAll('.choice, .day-pill').forEach(el=>{
 document.addEventListener('keydown', e=>{
   if(e.key!=='Enter' && e.key!==' ') return;
   const el = e.target;
-  if(!el.hasAttribute || (!el.hasAttribute('onclick') && !(el.classList && (el.classList.contains('choice') || el.classList.contains('day-pill'))))) return;
+  // data-on-click: con la CSP estricta los handlers viven en data-on-click (ya no hay handlers inline), así que Enter/Espacio sobre una tarjeta o chip enfocado no hacía nada con teclado.
+  // Los elementos nativos (button, a, input...) ya reaccionan solos: no se duplica el click.
+  const isNativeControl = el.matches && el.matches('button, a, input, select, textarea, summary');
+  if(!el.hasAttribute || isNativeControl || (!el.hasAttribute('onclick') && !el.hasAttribute('data-on-click') && !(el.classList && (el.classList.contains('choice') || el.classList.contains('day-pill'))))) return;
   e.preventDefault();
   el.click();
 });
@@ -3614,6 +3650,11 @@ function savePersonalData(){
     ? state.profile.weight : parseWeightInput(weightInput.value);
   const height = (state.profile.height && heightInput.value === String(fmtHeight(state.profile.height)))
     ? state.profile.height : parseHeightInput(heightInput.value);
+  // un valor escrito que no es razonable (peso 5, altura 900...) se rechaza con aviso: antes se descartaba en silencio y el corredor creía que se había guardado
+  if((weightInput.value.trim() !== '' && !(weight > 0)) || (heightInput.value.trim() !== '' && !(height > 0))){
+    showToast(t('personal_invalid_error'), 'error');
+    return;
+  }
   const terrainChoice = document.querySelector('#perfil-terrain-choice .choice.active');
   const genderChoice = document.querySelector('#perfil-gender-choice .choice.active');
   const goal = document.getElementById('perfil-goal').value;
@@ -3663,12 +3704,20 @@ function applyGoalsChangeNow(){
     const weekRuns = (state.runs||[]).filter(r => getMondayISO(new Date(r.date)) === state.weekStart);
     const doneKm = weekRuns.reduce((s,r)=>s+(r.distanceKm||0), 0);
     const freshTotal = fresh.reduce((s,d)=>s+(d.dist||0), 0);
-    const remaining = Math.max(0, freshTotal - doneKm);
+    // los días futuros que el corredor personalizó o canceló a mano se conservan con su distancia: también ocupan parte de la meta
+    const keptFutureKm = merged.reduce((sum,d,i)=> sum + ((d!==fresh[i] && d.status!=='done' && d.status!=='skipped' && !d.cancelled) ? (d.dist||0) : 0), 0);
+    const remaining = Math.max(0, freshTotal - doneKm - keptFutureKm);
     const freshDays = merged.filter((d,i)=> d===fresh[i] && d.dist>0);
     const freshSum = freshDays.reduce((s,d)=>s+d.dist, 0);
     if(freshDays.length && freshSum>0){
-      const factor = remaining / freshSum;
-      freshDays.forEach(d=>{ d.dist = Math.max(0.1, Math.round(d.dist*factor*10)/10); });
+      if(remaining <= 0){
+        // ya se corrió igual o más que la meta nueva: los días que faltan son descanso (antes quedaban como sesiones fantasma de 0.1 km)
+        freshDays.forEach(d=>{ const i = merged.indexOf(d); merged[i] = {day:d.day, typeKey:'rest', dist:0, terrain:null, zone:null, beginner:d.beginner}; });
+      } else {
+        const factor = remaining / freshSum;
+        // scaleDayAmount: además de la distancia reescala repeticiones y minutos (plan por tiempo) para que la sesión no contradiga su propia descripción
+        freshDays.forEach(d=>{ scaleDayAmount(d, factor, true); });
+      }
     }
   }
   state.plan = merged;
@@ -5912,7 +5961,8 @@ async function syncTodayNow(){
 // proceso aparte disparado justo ese día, alcanza con recalcularlo cada vez que se renderiza
 // Perfil. Las semanas sin ninguna carrera suman 0 al promedio, no se excluyen -- así alguien
 // que viene de una pausa ve un promedio bajo de verdad, no uno inflado con carreras viejas.
-function computeActualWeeklyKmAvg(weeks){
+// requireFull: devuelve null si la cuenta todavía no tiene `weeks` semanas cerradas (para decisiones como graduar a un principiante: con una sola semana parcial se "graduaba" de golpe).
+function computeActualWeeklyKmAvg(weeks, requireFull){
   weeks = weeks || 3;
   const currentMonday = state.weekStart || getMondayISO(new Date());
   const byWeek = {};
@@ -5941,6 +5991,7 @@ function computeActualWeeklyKmAvg(weeks){
     sum += byWeek[wk] || 0;
     count++;
   }
+  if(requireFull && count < weeks) return null;
   return count>0 ? sum/count : null;
 }
 function computeWeekAdjustment(plan){
@@ -6181,6 +6232,9 @@ function checkWeekRollover(){
   // Cronograma al día ANTES de armar la semana nueva (más abajo): así generatePlan ya lo ve.
   refreshPhaseSchedule();
   const currentMonday = getMondayISO(new Date());
+  // weekStart en el FUTURO (reloj del teléfono atrasado, cambio de huso hacia el oeste, otro dispositivo adelantado): no hay semana que cerrar. Sin este corte cada
+  // llamada (una por cada vuelta a primer plano) avanzaba el plan una semana más.
+  if(state.weekStart && state.weekStart > currentMonday) return;
   if(state.weekStart !== currentMonday){
     if(!state.planHistory) state.planHistory = [];
     const prevMonday = new Date(state.weekStart || currentMonday);
@@ -6206,6 +6260,8 @@ function checkWeekRollover(){
         state.profile.weeklyKm = Math.max(5, Math.round(state.profile.weeklyKm * breakAdj.kmFactor));
         if(breakAdj.weekNumberReset){ promotedWeekNumber = breakAdj.weekNumberReset; breakReset = true; state.curveWeekOffset = 0; state.curveCap = null; }
         breakMsg = t('coach_return_from_break', {weeks: breakAdj.gapWeeks});
+        // Una pausa se descuenta UNA vez: sin recordar de qué última carrera salió, cada lunes siguiente sin correr volvía a aplicar el factor (30 -> 24 -> 19 -> ... -> 5 km).
+        state.breakAdjLastRunMs = lastRunTimeMs();
         // checkWeekRollover() solo corre una vez por transición real de semana (no en cada
         // render), así que esto es un "che, tanto tiempo" genuino, no algo que se repita cada
         // vez que se abre la app -- reusa la expresión "happy" (contento, sin la intensidad
@@ -6646,8 +6702,11 @@ function checkBeginnerGraduation(){
   if(!state.onboarded || !state.profile) return;
   const p = state.profile;
   if(!isBeginnerProfile(p)) return; // ya no está en modo principiante, nada que graduar
+  // goal 'start' ("empezar a correr desde cero") mantiene isBeginnerProfile en true siempre: la graduación no puede surtir efecto, y sin este corte se repetía el
+  // mensaje del coach y la regeneración del plan en cada apertura de la app.
+  if(p.goal === 'start') return;
   const graduationWeeks = hasCrossTrainingBase(p) ? BEGINNER_GRADUATION_WEEKS_WITH_BASE : BEGINNER_GRADUATION_WEEKS;
-  const avgKm = computeActualWeeklyKmAvg(graduationWeeks);
+  const avgKm = computeActualWeeklyKmAvg(graduationWeeks, true);
   if(avgKm === null || avgKm < BEGINNER_GRADUATION_MIN_KM) return;
   p.runnerType = 'active';
   p.currentWeeklyKm = Math.round(avgKm);
@@ -6676,7 +6735,7 @@ function checkReturningBreakGraduation(){
   // el *0.6 de returningFromBreak solo pesa en la rama de corredor activo con km actual>0),
   // así que el flag no le afecta el volumen igual, no hay apuro en sacarlo.
   if(!p.returningFromBreak || !(p.currentWeeklyKm > 0)) return;
-  const avgKm = computeActualWeeklyKmAvg(RETURNING_BREAK_GRADUATION_WEEKS);
+  const avgKm = computeActualWeeklyKmAvg(RETURNING_BREAK_GRADUATION_WEEKS, true);
   // El piso es lo que la persona declaró que corría ANTES de parar, no un número fijo --
   // alguien que volvía a 15km/semana no debería esperar lo mismo que alguien que volvía a
   // 60km/semana.
@@ -7721,6 +7780,10 @@ function nativeCalendarPlugin(){
   if(!(cap && cap.isNativePlatform && cap.isNativePlatform() && cap.getPlatform && cap.getPlatform() === 'android')) return null;
   return (cap.Plugins && cap.Plugins.ZancadaCalendar) || null;
 }
+// planLabel() devuelve texto pensado para innerHTML (el nombre de una carrera sale escapado): el calendario del teléfono es texto plano, así que "Rock & Run" aparecía como "Rock &amp; Run".
+function htmlEntitiesToText(str){
+  return String(str == null ? '' : str).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+}
 function buildNativeCalendarEvents(){
   const out = [];
   const addWeek = (plan, weekStart) => {
@@ -7730,8 +7793,8 @@ function buildNativeCalendarEvents(){
       const lbl = planLabel(d);
       out.push({
         date: addDaysToIsoLocal(weekStart, i),
-        title: `${d.status === 'done' ? '✓ ' : ''}${lbl.type} · ${planAmountText(d)}`,
-        description: ['Zancada', d.zone ? `${t('zone_word')} ${d.zone}` : '', lbl.desc].filter(Boolean).join('\n')
+        title: htmlEntitiesToText(`${d.status === 'done' ? '✓ ' : ''}${lbl.type} · ${planAmountText(d)}`),
+        description: htmlEntitiesToText(['Zancada', d.zone ? `${t('zone_word')} ${d.zone}` : '', lbl.desc].filter(Boolean).join('\n'))
       });
     });
   };
@@ -7963,7 +8026,9 @@ function swapPlanDaySessions(dayA, dayB){
   // pantalla y del reloj (los días de carrera no se muestran ni se mandan como sesión) y seguiría
   // contando en el total. Devuelve false si no hizo nada.
   if(!dayA || !dayB || dayA.raceDay || dayB.raceDay) return false;
-  const fields = ['typeKey','dist','terrain','zone','interval','custom','cancelled','type','desc'];
+  // En un plan por tiempo (y en los principiantes) la sesión también vive en durMin/timeBased/runWalk/racePace*: si no viajan con ella, la tirada larga
+  // movida al sábado mostraba los minutos del rodaje que estaba ahí.
+  const fields = ['typeKey','dist','terrain','zone','interval','custom','cancelled','type','desc','durMin','timeBased','runWalk','racePaceSec','racePaceBlockKm','userTest'];
   const aCopy = {};
   fields.forEach(f=>{ aCopy[f] = dayA[f]; });
   fields.forEach(f=>{ if(dayB[f]===undefined) delete dayA[f]; else dayA[f] = dayB[f]; });
@@ -8316,7 +8381,9 @@ function buildRacePlanImageBlob(){
       const targetSec = racePlanScenarioSec(est.sec, {source: est.source, endurance: est.endurance, calib: est.calib, basis: est.basis, km: km});
       const splits = buildRaceSplits(km, targetSec);
       const long = splits.length > 12;
-      const rows = splits.filter((s, i) => !long || (s.n % 5 === 0) || i === splits.length - 1).slice(0, 12);
+      const allRows = splits.filter((s, i) => !long || (s.n % 5 === 0) || i === splits.length - 1);
+      // en una ultra los múltiplos de 5 pasan de 12: se recorta el medio, nunca la fila de la llegada
+      const rows = allRows.length > 12 ? allRows.slice(0, 11).concat(allRows[allRows.length - 1]) : allRows;
       const gap = rows.length > 9 ? 60 : 74;
       const W = 1080, H = 1920, canvas = document.createElement('canvas');
       canvas.width = W; canvas.height = H;
@@ -8867,9 +8934,13 @@ function getWeekData(offset){
   const wn = (state.weekNumber||1) + offset;
   if(offset === 0) return { plan: state.plan, weekNumber: wn, editable: true, exists: true, mode:'current', weekStart: state.weekStart };
   if(offset < 0){
-    const found = (state.planHistory||[]).find(w => w.weekNumber === wn);
+    // Se identifica por la FECHA de inicio de la semana: el número de semana se reinicia (cambio de objetivo, plan regenerado) y puede repetirse en el historial,
+    // con lo que "la semana pasada" mostraba el plan de otra época. El número solo se usa para entradas viejas que no guardaron weekStart.
+    const targetStart = state.weekStart ? addDaysToIsoLocal(state.weekStart, offset*7) : null;
+    const hist = state.planHistory || [];
+    const found = (targetStart && hist.find(w => w.weekStart === targetStart)) || hist.find(w => !w.weekStart && w.weekNumber === wn);
     if(found) return { plan: found.plan, weekNumber: wn, editable: false, exists: true, mode:'past', weekStart: found.weekStart };
-    return { plan: [], weekNumber: wn, editable: false, exists: false, mode:'past', weekStart: null };
+    return { plan: [], weekNumber: wn, editable: false, exists: false, mode:'past', weekStart: targetStart };
   }
   if(offset === 1){
     // la semana que sigue ya no es "una estimación más" como el resto de las semanas futuras:
@@ -9703,7 +9774,9 @@ function lowerTodaySession(pct){
   const today = state.plan[idx];
   if(!today || today.dist<=0 || today.status) return false;
   const factor = 1 + (pct/100);
-  today.dist = Math.max(1, Math.round(today.dist*factor));
+  // Un decimal (con redondeo entero una sesión de 2 km con -15% seguía en 2 km), y protegida contra la regeneración del plan como cualquier otro recorte.
+  scaleDayAmount(today, factor, true);
+  freezeDayText(today);
   renderPlan(); renderHome();
   return true;
 }
@@ -11450,7 +11523,7 @@ function pushRunNotification(force){
   p.update({
     title: t('run_bg_notif_title'),
     dist: fmtDist(tracker.distanceKm),
-    distLabel: t('run_km'),
+    distLabel: distUnit().toUpperCase(),   // t('run_km') decia "Km" aunque el valor estuviera en millas
     distShort: distUnit(),
     paceShort: '/' + distUnit(),
     timeLabel: t('run_time'),
@@ -11572,9 +11645,17 @@ let liveMapFollowing = true;
 let liveMapProgrammaticMoveAt = 0;
 let wakeLockSentinel = null;
 
-async function requestWakeLock(){ try{ if('wakeLock' in navigator) wakeLockSentinel = await navigator.wakeLock.request('screen'); }catch(e){} }
+async function requestWakeLock(){
+  try{
+    if(!('wakeLock' in navigator)) return;
+    const sentinel = await navigator.wakeLock.request('screen');
+    wakeLockSentinel = sentinel;
+    // El navegador libera el lock solo al pasar a segundo plano: sin este aviso la variable seguía apuntando al sentinel liberado y nunca se volvía a pedir.
+    sentinel.addEventListener('release', ()=>{ if(wakeLockSentinel === sentinel) wakeLockSentinel = null; });
+  }catch(e){}
+}
 async function releaseWakeLock(){ try{ if(wakeLockSentinel){ await wakeLockSentinel.release(); wakeLockSentinel=null; } }catch(e){} }
-document.addEventListener('visibilitychange', async ()=>{ if(document.visibilityState==='visible' && tracker.running && !wakeLockSentinel) await requestWakeLock(); });
+document.addEventListener('visibilitychange', async ()=>{ if(document.visibilityState==='visible' && tracker && tracker.running && tracker.watchId!==null && tracker.watchId!==undefined && !wakeLockSentinel) await requestWakeLock(); });
 
 /* ---- guardado automático de la carrera en curso ----
    Si el navegador se cierra solo (poca batería, la app se va a segundo plano
@@ -11714,7 +11795,8 @@ function speak(text, isKey){
   if(nativeTTS){
     const targetLang = LOCALE_MAP[lang];
     getBestVoiceIndex(targetLang).then(voiceIdx => {
-      const opts = {text, lang: targetLang, rate: 0.95};
+      // queueStrategy 1 = QUEUE_ADD: el default del plugin (0) corta el aviso anterior, y en un mismo fix pueden salir "Kilómetro 5" y "Mitad de camino".
+      const opts = {text, lang: targetLang, rate: 0.95, queueStrategy: 1};
       if(voiceIdx!=null) opts.voice = voiceIdx;
       nativeTTS.speak(opts).catch(()=>{});
     });
@@ -12128,10 +12210,8 @@ function computeSplitsFromPoints(points){
     const segKm = cum[toIdx] - cum[fromIdx];
     const segTime = (points[toIdx].t||0) - fromTime;
     const paceMin = segKm>0 ? (segTime/60)/segKm : 0;
-    let elevGain = 0;
-    for(let j=fromIdx+1;j<=toIdx;j++){
-      if(points[j].alt!=null && points[j-1].alt!=null){ const d=points[j].alt-points[j-1].alt; if(d>0) elevGain+=d; }
-    }
+    const eg = elevationGainLoss(points.slice(fromIdx, toIdx+1).map(p => p.alt));
+    const elevGain = eg ? eg.gain : 0;
     return {km:label, paceMin: Math.round(paceMin*100)/100, elevGain: Math.round(elevGain), avgHr:null, avgCadence:null};
   }
   const splits = [];
@@ -12155,17 +12235,24 @@ function computeSplitsFromPoints(points){
 // puntos) -- devolvemos null/null cuando no hay ningún dato real de altitud
 // en vez de inventar un número, para que la pantalla de detalle simplemente
 // no muestre esa fila en esos casos.
+// Ascenso/descenso de una lista de altitudes: media móvil de 5 puntos y umbral de 3 m (histéresis). La altitud del GPS del celular oscila unos metros entre fixes
+// a 1 Hz; sumar cada diferencia positiva daba cientos de metros de "ascenso" en un 10K plano.
+function elevationGainLoss(alts){
+  const a = alts.filter(v => typeof v === 'number' && !isNaN(v));
+  if(a.length < 2) return null;
+  const sm = a.map((_, i) => { let sum = 0, n = 0; for(let j = Math.max(0, i-2); j <= Math.min(a.length-1, i+2); j++){ sum += a[j]; n++; } return sum / n; });
+  let anchor = sm[0], gain = 0, loss = 0;
+  for(let i = 1; i < sm.length; i++){
+    const d = sm[i] - anchor;
+    if(d >= 3){ gain += d; anchor = sm[i]; }
+    else if(d <= -3){ loss += -d; anchor = sm[i]; }
+  }
+  return {gain, loss};
+}
 function computeElevationFromPoints(points){
   if(!points || points.length<2) return {gain:null, loss:null};
-  let gain=0, loss=0, any=false;
-  for(let i=1;i<points.length;i++){
-    if(points[i].alt!=null && points[i-1].alt!=null){
-      any = true;
-      const d = points[i].alt - points[i-1].alt;
-      if(d>0) gain+=d; else loss+=-d;
-    }
-  }
-  return any ? {gain:Math.round(gain), loss:Math.round(loss)} : {gain:null, loss:null};
+  const r = elevationGainLoss(points.map(p => p.alt));
+  return r ? {gain:Math.round(r.gain), loss:Math.round(r.loss)} : {gain:null, loss:null};
 }
 // Curva de ritmo en el tiempo para el gráfico de la pestaña "Gráficos" en
 // carreras trackeadas en vivo (sin FC -- eso necesitaría un sensor externo
@@ -12779,7 +12866,7 @@ function startRun(){
   startRunWithCountdown();
 }
 function restoreTrackerFromSaved(saved){
-  tracker = {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:saved.elapsedSec||0, running:false, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt, autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null};
+  tracker = {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:saved.elapsedSec||0, running:false, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt, autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null, cadSum:saved.cadSum||0, cadN:saved.cadN||0};
 }
 // Cuenta regresiva de 3 segundos antes de arrancar a correr (pedido del usuario: "crea una
 // cinemática de 3 segundos cuando comenzamos a correr") -- ver #runCountdown en el CSS/HTML.
@@ -12903,15 +12990,18 @@ function actuallyStartRun(saved){
 function onPosition(pos){
   const {latitude:lat, longitude:lon, accuracy, altitude} = pos.coords;
   const nowMs = pos.timestamp || Date.now();
+  // Pone al día el cronómetro con el reloj de pared ANTES de grabar el punto: con la pantalla apagada el setInterval casi no dispara, pero el GPS sí sigue
+  // entregando fixes, y cada punto quedaba con el mismo `t` viejo (splits y gráfico de ritmo distorsionados).
+  if(tracker.lastTickAt) tickRunTimer();
   if(accuracy && accuracy>50){
-    // Igual actualizamos la referencia de tiempo del último fix aceptado -- si no, el
-    // próximo fix bueno calcula la velocidad sobre TODO el hueco de fixes filtrados
-    // (túnel, arboleda, edificios altos) en vez de solo su propio intervalo, y eso puede
-    // disparar una auto-pausa falsa por "quietud" que en realidad nunca existió.
-    tracker.lastFixMs = nowMs;
+    // Un fix impreciso se descarta SIN tocar lastFixMs/lastRawPoint: la velocidad del próximo fix bueno se calcula como distancia desde el último punto
+    // aceptado dividida por el tiempo desde ESE mismo punto. Antes lastFixMs sí avanzaba acá, y tras 4 fixes malos seguidos el siguiente bueno daba
+    // metros de 30 s sobre 1 s ("100 m/s"), se rechazaba por velocidad imposible y esos metros se perdían para siempre.
     return;
   }
-  const last = tracker.lastRawPoint || tracker.points[tracker.points.length-1];
+  // Sin lastRawPoint (arranque, o carrera recuperada tras un cierre) el primer fix es solo la referencia: medirlo contra el último punto guardado sumaba en línea
+  // recta todo lo que el corredor se movió con la app cerrada.
+  const last = tracker.lastRawPoint;
   const stepKm = last ? haversine(last.lat,last.lon,lat,lon) : 0;
 
   // Auto-pausa: la velocidad instantánea sale del propio timestamp del fix del GPS
@@ -12937,6 +13027,7 @@ function onPosition(pos){
   // stepKm se mediría contra el último punto grabado ANTES de pausar, sumando de golpe
   // a distanceKm todo lo caminado/manejado durante la pausa.
   tracker.lastRawPoint = {lat, lon};
+  { const w = document.getElementById('geo-warning'); if(w && w.style.display === 'block') w.style.display = 'none'; }   // llegó un fix bueno: el aviso de ubicación ya no aplica
   if(active && !isImplausibleRunSpeed(speedMps)){
     // Antes cualquier paso menor a 2m se descartaba directo -- a paso de caminata o
     // entrada en calor (~1 m/s) los fixes seguidos suelen quedar por debajo de esos 2m,
@@ -12968,7 +13059,15 @@ function onPosition(pos){
   // de arriba (setInterval, línea ~4642) ya guarda cada 15s, y pausar/reanudar guarda al
   // toque -- de sobra para no perder progreso real ante un cierre inesperado.
 }
-function onPosError(){ try{ showToast(t('geo_err_permission'), 'error'); }catch(e){} document.getElementById('geo-warning').style.display='block'; document.getElementById('geo-warning').textContent=t('geo_err_permission'); }
+// Solo el permiso denegado (code 1 / NOT_AUTHORIZED) merece el aviso de "activá la ubicación": un timeout o una señal perdida (túnel, arranque en frío) son pasajeros
+// y se repiten cada 15 s -- antes mostraban el mismo cartel de permiso una y otra vez aunque el permiso estuviera concedido, y el cartel nunca se ocultaba.
+function onPosError(err){
+  const denied = !err || err.code === 1 || err.code === 'NOT_AUTHORIZED' || err.code === 'PERMISSION_DENIED';
+  if(!denied) return;
+  try{ showToast(t('geo_err_permission'), 'error'); }catch(e){}
+  const w = document.getElementById('geo-warning');
+  if(w){ w.style.display='block'; w.textContent=t('geo_err_permission'); }
+}
 function updateRunUnitLabels(){
   const distLbl = distUnit().toUpperCase();
   const paceLbl = `${t('run_pace_word')} /${distUnit()}`;
@@ -12998,6 +13097,7 @@ function togglePause(){
     // pasen los AUTO_PAUSE_HOLD_MS aunque el corredor ya haya arrancado a correr otra vez.
     tracker.autoPaused = false;
     tracker.lastMoveMs = Date.now();
+    requestWakeLock();   // la pausa manual no lo soltaba, pero el sistema pudo haberlo liberado mientras tanto
   }
   updateRecordingLabel();
   // Guardamos el progreso justo al pausar/reanudar a mano -- si la app se cierra
@@ -13014,6 +13114,7 @@ function stopRun(){
   // return;) lo hubiera confundido con una carrera todavía activa, bloqueando arrancar la
   // PRÓXIMA carrera para siempre.
   tracker.watchId = null;
+  tracker.running = false;   // terminada: si seguía en true, al volver a primer plano se pedía de nuevo el wake lock y nadie lo soltaba
   clearRunNotification();
   stopCadence();
   releaseWakeLock();
@@ -13217,6 +13318,35 @@ async function submitRating(value){
   }
   setTimeout(checkPendingRating, 400);
 }
+// Escala la cantidad de una sesión (distancia, minutos, repeticiones) por `factor`. Para una sesión del algoritmo con estructura (series/cuestas/fartlek) se reducen las
+// repeticiones y la distancia sale de esa estructura; en un plan por tiempo también viajan durMin y las repeticiones de trote/caminata (planDurationMin lee durMin,
+// no dist: si solo cambiaba dist, la pantalla seguía mostrando los mismos minutos).
+function scaleDayAmount(d, factor, oneDecimal){
+  if(!d.custom && d.interval && (d.typeKey==='intervals' || d.typeKey==='hills' || d.typeKey==='fartlek')){
+    d.interval.reps = Math.max(1, Math.round(d.interval.reps*factor));
+    d.dist = d.typeKey==='intervals' ? intervalActualKm(d.interval)
+      : d.typeKey==='hills' ? hillActualKm(d.interval)
+      : fartlekActualKm(d.interval, state.profile);
+  } else {
+    d.dist = oneDecimal ? Math.max(0.1, Math.round(d.dist*factor*10)/10) : Math.max(1, Math.round(d.dist*factor));
+  }
+  if(d.runWalk && d.runWalk.reps > 0){
+    d.runWalk.reps = Math.max(1, Math.round(d.runWalk.reps*factor));
+    d.durMin = Math.max(1, Math.round(d.runWalk.reps*((d.runWalk.runSec||0) + (d.runWalk.walkSec||0))/60));
+  } else if(d.durMin > 0){
+    d.durMin = Math.max(5, Math.round(d.durMin*factor));
+  }
+}
+// Deja el texto de un día YA resuelto (tipo y descripción con los números reales) y lo marca custom: así ninguna regeneración del plan lo pisa. Marcar custom
+// sin resolver antes type/desc dejaba el día mostrando "undefined" y "NaNm" (planLabel lee d.type/d.desc en un día custom). Hay que llamarla DESPUÉS de escalar.
+function freezeDayText(d){
+  if(!d.custom){
+    const lbl = planLabelBody(d);
+    d.type = lbl.type; d.desc = lbl.desc; d.textLang = lang;
+    delete d.interval;
+    d.custom = true;
+  }
+}
 function lowerRemainingIntensity(pct){
   const factor = 1 + (pct/100);
   // Redondear al KM ENTERO (Math.round sin /10) se comía el recorte entero en sesiones
@@ -13245,19 +13375,23 @@ function lowerRemainingIntensity(pct){
     // d.dist a partir de la estructura YA reducida, con la misma fórmula que usa el propio
     // generador (intervalActualKm/hillActualKm/fartlekActualKm) -- así el número grande y
     // la descripción siempre están de acuerdo, para cualquier tipo de sesión.
-    if(d.interval && (d.typeKey==='intervals' || d.typeKey==='hills' || d.typeKey==='fartlek')){
-      d.interval.reps = Math.max(1, Math.round(d.interval.reps*factor));
-      d.dist = d.typeKey==='intervals' ? intervalActualKm(d.interval)
-        : d.typeKey==='hills' ? hillActualKm(d.interval)
-        : fartlekActualKm(d.interval, state.profile);
-    } else {
-      d.dist = Math.max(0.1, Math.round(d.dist*factor*10)/10);
-    }
-    d.custom = true;
+    scaleDayAmount(d, factor, true);
+    freezeDayText(d);
   });
   renderPlan(); renderHome(); persist();
 }
 async function closeSummary(){
+  // Arrancar y frenar sin querer (menos de 50 m y menos de 2 minutos) no es una carrera: guardarla sumaba una carrera fantasma a los logros y al Historial
+  // y hacía que Correr creyera que ya se había corrido hoy. Una cinta (0 km pero con tiempo real) sí se guarda.
+  if(tracker.distanceKm < 0.05 && tracker.elapsedSec < 120){
+    clearRunProgress();
+    document.getElementById('runSummary').style.display='none';
+    document.getElementById('runIdle').style.display='block';
+    renderAll(); renderRunTodayCard();
+    showView('inicio');
+    showToast(t('run_discarded_toast'), 'info');
+    return;
+  }
   const shoeId = parseInt(document.getElementById('sum-shoe').value);
   const shoe = state.shoes.find(s=>s.id===shoeId);
   if(shoe) shoe.km += tracker.distanceKm;
@@ -13435,6 +13569,8 @@ const PR_DISTANCES = [
 function nearestPRBucket(km){
   let best = null, bestDiff = Infinity;
   PR_DISTANCES.forEach(b=>{
+    // una carrera MÁS CORTA que la distancia no puede ser su marca (4,7 km no es un 5K): solo se tolera 1,5% por error del GPS; hacia arriba, hasta 6%
+    if(km < b.km * 0.985) return;
     const diff = Math.abs(km-b.km)/b.km;
     if(diff < bestDiff){ bestDiff = diff; best = b; }
   });
@@ -13637,7 +13773,7 @@ function computeRacePredictions(){
       const sec = r.durationSec * Math.pow(tg.km / r.distanceKm, 1.06);
       if(!best || sec < best) best = sec;
     });
-    return {key: tg.key, km: tg.km, sec: best, needKm: Math.ceil(tg.km / 4.2)};
+    return {key: tg.key, km: tg.km, sec: best, needKm: Math.max(3, Math.ceil(tg.km / 4.2))};
   });
 }
 function togglePredictions(btn){
@@ -14421,8 +14557,8 @@ function renderProgressCard(){
     const path = pts.map((p, j) => (j ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join('');
     const dots = pts.map((p, j) => '<circle class="pg-dot' + (j === pts.length - 1 ? ' cur' : '') + '" cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="' + (j === pts.length - 1 ? 4.5 : 3) + '"/>').join('');
     const first = withPace[0].p, last = withPace[withPace.length - 1].p, diff = first - last;
-    const dMin = Math.floor(Math.abs(diff)), dSec = Math.round((Math.abs(diff) - dMin) * 60);
-    const dTxt = dMin + ':' + String(dSec).padStart(2, '0');
+    // fmtPace convierte a millas y redondea a segundos totales (antes la diferencia salía siempre en min/km aunque se mostrara "/mi", y podía dar "0:60")
+    const dTxt = fmtPace(Math.abs(diff));
     const delta = Math.abs(diff) < 0.03 ? '' : '<p class="pg-delta ' + (diff > 0 ? 'good' : 'bad') + '">' + t(diff > 0 ? 'prog_pace_better' : 'prog_pace_worse', {d: dTxt, unit: distUnit()}) + '</p>';
     paceBlock = '<h4 class="pg-h">' + t('prog_pace') + '</h4><svg class="pg-svg" viewBox="0 0 ' + W + ' ' + pH + '" role="img" aria-label="' + t('prog_pace') + '"><path class="pg-line" d="' + path + '"/>' + dots +
       '<text class="pg-val" x="' + pts[0].x + '" y="' + (pts[0].y + (pts[1].y < pts[0].y ? 17 : -9)) + '" text-anchor="middle">' + fmtPace(first) + '</text>' +
@@ -14687,7 +14823,12 @@ function animateHistTrendBars(){
 }
 
 let detailMap = null;
+// Parciales COMPLETOS y con ritmo creíble: el último tramo suelto (0,4 km) y un parcial con GPS roto (ritmo de 40 min/km) distorsionan el ritmo máximo/mínimo y el veredicto de la segunda mitad.
+function fullSplitsOnly(splits){
+  return (splits || []).filter(s => s && s.paceMin > 0 && s.paceMin < 20 && (isNaN(parseFloat(s.km)) || Number.isInteger(parseFloat(s.km))));
+}
 function analyzeSplitPacing(splits){
+  splits = fullSplitsOnly(splits);
   // Compara el ritmo promedio de la primera mitad de la carrera contra la segunda para
   // detectar si se corrió parejo, acelerando (negative split, buena señal) o
   // desacelerando (positive split -- salir muy rápido y pagarlo después). Solo tiene
@@ -14899,7 +15040,7 @@ function renderRDRuta(panel){
   const {r, paceMin, cal} = rdCurrent;
   const dateStr = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
   const timeStr = new Date(r.date).toLocaleTimeString(LOCALE_MAP[lang], {hour:'numeric', minute:'2-digit'});
-  const paces = getDisplaySplits(r).map(s=>s.paceMin).filter(p=>p>0);
+  const paces = fullSplitsOnly(getDisplaySplits(r)).map(s=>s.paceMin);
   const slowest = paces.length ? Math.max(...paces) : paceMin;
   const fastest = paces.length ? Math.min(...paces) : paceMin;
   panel.innerHTML = `
@@ -15105,7 +15246,8 @@ function renderRDRitmo(panel){
   // izquierda tiene que reflejar eso, no asumir ciegamente distUnit().
   const unitLabel = displaySplitsAreMiles(r, splits) ? 'mi' : 'km';
   const splitPaces = splits.map(s=>s.paceMin).filter(p=>p>0);
-  const fastest = splitPaces.length ? Math.min(...splitPaces) : paceMin;
+  const fullPaces = fullSplitsOnly(splits).map(s=>s.paceMin);
+  const fastest = fullPaces.length ? Math.min(...fullPaces) : paceMin;
   const maxPaceForBar = Math.max(...splitPaces, paceMin) * 1.02 || 1;
   const pacingAnalysis = analyzeSplitPacing(splits);
   panel.innerHTML = `
@@ -15640,11 +15782,16 @@ function drawBrandWord(ctx, x, y, size){
 function drawRouteSilhouette(ctx, points, x, y, w, h, lineWidth, dotRadius){
   lineWidth = lineWidth || 11;
   dotRadius = dotRadius || 13;
+  // puntos sin coordenadas válidas (NaN/null) rompían Math.min/max y el trazo salía vacío
+  points = points.filter(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lon));
+  if(!points.length) return;
   const lats = points.map(p=>p.lat), lons = points.map(p=>p.lon);
   const minLat = Math.min(...lats), maxLat = Math.max(...lats);
   const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+  // un grado de longitud mide cos(latitud) veces lo que uno de latitud: sin esa corrección el recorrido salía ensanchado (en Buenos Aires ~20%)
+  const cosLat = Math.max(0.2, Math.cos(((minLat + maxLat) / 2) * Math.PI / 180));
   const latRange = (maxLat-minLat) || 0.001;
-  const lonRange = (maxLon-minLon) || 0.001;
+  const lonRange = ((maxLon-minLon) * cosLat) || 0.001;
   const scale = Math.min(w/lonRange, h/latRange) * 0.85;
   const drawW = lonRange*scale, drawH = latRange*scale;
   const offsetX = x + (w-drawW)/2;
@@ -15652,7 +15799,7 @@ function drawRouteSilhouette(ctx, points, x, y, w, h, lineWidth, dotRadius){
 
   ctx.beginPath();
   points.forEach((p,i)=>{
-    const px = offsetX + (p.lon-minLon)*scale;
+    const px = offsetX + (p.lon-minLon)*cosLat*scale;
     const py = offsetY + (maxLat-p.lat)*scale;
     if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
   });
@@ -15667,7 +15814,7 @@ function drawRouteSilhouette(ctx, points, x, y, w, h, lineWidth, dotRadius){
   ctx.stroke();
   ctx.restore();
 
-  const startPx = offsetX + (points[0].lon-minLon)*scale;
+  const startPx = offsetX + (points[0].lon-minLon)*cosLat*scale;
   const startPy = offsetY + (maxLat-points[0].lat)*scale;
   ctx.beginPath();
   ctx.arc(startPx, startPy, dotRadius, 0, Math.PI*2);
@@ -16548,8 +16695,9 @@ async function saveEditRun(){
   const date = document.getElementById('edit-run-date').value;
   const dist = parseDistInput(document.getElementById('edit-run-dist').value);
   const durMin = parseFloat(document.getElementById('edit-run-dur').value);
-  if(!date || !(dist>0) || !(durMin>0)){ showToast(t('edit_run_invalid'),'error'); return; }
   const hr = parseInt(document.getElementById('edit-run-hr').value);
+  // topes razonables: una distancia de 5000 km, 30 días de duración, una fecha futura o 900 bpm rompían récords, logros y la racha
+  if(!date || !(dist>0) || !(durMin>0) || dist > 500 || durMin > 2880 || date > localDateISO(new Date()) || (!isNaN(hr) && hr !== 0 && (hr < 30 || hr > 250))){ showToast(t('edit_run_invalid'),'error'); return; }
   const newShoeId = document.getElementById('edit-run-shoe').value || null;
   const newName = document.getElementById('edit-run-name').value.trim().slice(0,60);
   // checkNewPR(), unas líneas más abajo, recalcula el récord EXCLUYENDO esta misma carrera --
@@ -16784,6 +16932,11 @@ function paceMinPerKmOf(r){
   if(!r || !r.distanceKm) return '—';
   const p = (r.durationSec/60)/r.distanceKm;
   return `${Math.floor(p)}:${String(Math.round((p%1)*60)).padStart(2,'0')}`;
+}
+// buildContext() se evalúa FUERA del try de sendChat: si lanzaba (una carrera importada con distanceKm null, una zapatilla sin km...) el botón de enviar quedaba en "detener"
+// y el indicador de "pensando" encendidos para siempre. Sin contexto el coach igual responde con el mensaje y el historial.
+function safeBuildContext(){
+  try{ return buildContext(); }catch(e){ console.error('buildContext falló', e); return ''; }
 }
 function buildContext(){
   const p = state.profile;
@@ -17082,11 +17235,18 @@ function captureUndoSnapshot(){
     curveCap: state.curveCap ? JSON.parse(JSON.stringify(state.curveCap)) : null
   };
 }
+// Campos del perfil que puede cambiar el coach (modificar_perfil / guardar_nota_coach): lo único que "deshacer" revierte del perfil.
+const COACH_PROFILE_FIELDS = ['goal','raceDate','terrain','hrMax','hrKnown','hrZones','hrZonesCustom','currentWeeklyKm','runnerType','trainingDays','weeklyKm','coachNotes'];
 function applyUndoLastChange(){
   if(!state.coachUndoSnapshot) return 'No hay ningún cambio reciente para deshacer.';
-  state.plan = state.coachUndoSnapshot.plan;
-  state.nextWeekOverrides = state.coachUndoSnapshot.nextWeekOverrides;
-  state.profile = state.coachUndoSnapshot.profile;
+  // El snapshot dura hasta el lunes: entre el cambio del coach y el "deshacé" el corredor pudo correr, calificar la sesión, hacer el test de nivel o editar su peso.
+  // Restaurar el plan y el perfil ENTEROS pisaba todo eso (la sesión hecha volvía a pendiente y dejaba de contar para la racha; el perfil perdía levelTest/hrZones).
+  // Los días ya vividos se conservan como están ahora, y del perfil solo se revierte lo que el coach puede tocar.
+  const snap = state.coachUndoSnapshot;
+  const lived = d => d && (d.status === 'done' || d.status === 'skipped' || d.linkedRunId);
+  state.plan = snap.plan.map((d, i) => (lived(state.plan[i]) ? state.plan[i] : d));
+  state.nextWeekOverrides = snap.nextWeekOverrides;
+  COACH_PROFILE_FIELDS.forEach(k => { if(snap.profile[k] === undefined) delete state.profile[k]; else state.profile[k] = snap.profile[k]; });
   // primero el cronograma original; refreshPhaseSchedule lo conserva si sigue coincidiendo con el perfil restaurado
   if('phaseSchedule' in state.coachUndoSnapshot) state.phaseSchedule = state.coachUndoSnapshot.phaseSchedule;
   if(state.coachUndoSnapshot.weekNumber > 0) state.weekNumber = state.coachUndoSnapshot.weekNumber;
@@ -17185,6 +17345,9 @@ const COACH_GOALS = ['start', 'general', '5k', '10k', '15k', '21k', '42k', 'ultr
 function badCoachEnum(field, value, allowed){
   return `El valor de "${field}" (${String(value).slice(0, 30)}) no es válido -- usá uno de: ${allowed.join(', ')}.`;
 }
+function needsAmountMsg(dia){
+  return `Falta distancia_km o duracion_min: ${dia} no tenía ninguna sesión y sin cantidad el día seguiría siendo descanso -- volvé a llamar a modificar_sesion incluyendo uno de los dos.`;
+}
 function applyPlanChange(input){
   // El input_schema de la herramienta declara dia como enum:DAY_KEYS, pero eso es solo una
   // guía para el modelo -- la API de tool use no lo hace cumplir de verdad (mismo motivo que
@@ -17263,6 +17426,12 @@ function applyPlanChange(input){
     }
   }
   if(input.semana === 'siguiente'){
+    {
+      const baseDay = getNextWeekPlan().plan.find(x => x.day === input.dia);
+      const prev = state.nextWeekOverrides && state.nextWeekOverrides[input.dia];
+      const hadAmount = (prev && prev.dist > 0) || (baseDay && baseDay.dist > 0);
+      if(resolvePlanDistKm(input) === null && !hadAmount) return needsAmountMsg(input.dia);
+    }
     captureUndoSnapshot();
     // la semana que sigue no es un array persistido como state.plan, así que el cambio puntual
     // se guarda como "override" y se aplica encima de lo que genere getNextWeekPlan() cada vez
@@ -17275,6 +17444,10 @@ function applyPlanChange(input){
     const override = { type: input.tipo, desc: input.descripcion, typeKey: input.tipo_categoria, textLang: lang };
     const effectiveDistKm = resolvePlanDistKm(input);
     if(effectiveDistKm!==null) override.dist = effectiveDistKm;
+    // mismo criterio que la semana actual: duracion_min fija los minutos; solo distancia los recalcula; el trote/caminata del día base no se hereda
+    if(typeof input.duracion_min === 'number' && input.duracion_min > 0) override.durMin = Math.round(input.duracion_min);
+    else if(effectiveDistKm !== null) override.durMin = undefined;
+    override.runWalk = undefined;
     const zone = resolveZone(input.zona);
     if(zone!==null) override.zone = zone;
     if(input.terreno) override.terrain = input.terreno;
@@ -17301,6 +17474,8 @@ function applyPlanChange(input){
   // entrenamiento distinto de forma retroactiva. Se lo explicamos al modelo para
   // que se lo cuente al corredor en vez de aplicar el cambio silenciosamente.
   if(isDayLocked(input.dia)) return `No puedo modificar ${input.dia}: ya pasó (o ya se corrió/salteó) esta semana. Puedo ajustar desde hoy en adelante, o la semana que viene.`;
+  // Un día de descanso al que se le asigna una sesión sin distancia ni duración quedaba en 0 km (descanso para todo el resto de la app) y la herramienta decía OK.
+  if(resolvePlanDistKm(input) === null && !(d.dist > 0)) return needsAmountMsg(input.dia);
   captureUndoSnapshot();
   d.custom = true;
   d.cancelled = false; // si venía de cancelar_sesion, esta sesión nueva reemplaza esa cancelación
@@ -17311,6 +17486,11 @@ function applyPlanChange(input){
   d.typeKey = input.tipo_categoria;
   const effectiveDistKm = resolvePlanDistKm(input);
   if(effectiveDistKm!==null) d.dist = effectiveDistKm;
+  // Plan por tiempo: planDurationMin lee d.durMin (no d.dist). Con duracion_min se fija; si solo cambia la distancia se descarta durMin para que los minutos
+  // se recalculen de la distancia nueva; y el trote/caminata del principiante no vale para una sesión nueva.
+  if(typeof input.duracion_min === 'number' && input.duracion_min > 0) d.durMin = Math.round(input.duracion_min);
+  else if(effectiveDistKm !== null) delete d.durMin;
+  delete d.runWalk;
   const zone = resolveZone(input.zona);
   if(zone!==null) d.zone = zone;
   const customInterval = resolveCustomInterval(input);
@@ -17466,7 +17646,9 @@ function applyVolumeAdjust(input){
         // junto a planLabel(): guardar acá el texto YA envuelto con entrada en calor/vuelta a
         // la calma duplicaría esa envoltura la próxima vez que algo (Plan, Inicio, etc.)
         // llame a planLabel() sobre este mismo día, que para entonces ya quedó custom:true.
-        const lbl = d.custom ? {type:d.type, desc:d.desc} : planLabelBody(d);
+        const c = JSON.parse(JSON.stringify(d));
+        scaleDayAmount(c, factor, false);
+        const lbl = c.custom ? {type:c.type, desc:c.desc} : planLabelBody(c);
         // Mismo motivo que en applyPlanChange (ver su comentario sobre esta misma rama):
         // getNextWeekPlan() arma este día de cero cada vez con Object.assign({}, d, ov, ...),
         // así que si el override no trae su propia clave `interval`, queda colgado el
@@ -17476,7 +17658,10 @@ function applyVolumeAdjust(input){
         // null); si todavía era del algoritmo, el texto de lbl.desc ya tiene los números
         // reales incrustados (reps, metros, minutos), así que no hace falta ningún interval.
         const interval = d.custom ? (d.interval || null) : null;
-        state.nextWeekOverrides[d.day] = { type: lbl.type, desc: lbl.desc, dist: Math.max(1, Math.round(d.dist*factor)), zone: d.zone, terrain: d.terrain, interval };
+        // typeKey/textLang/durMin: sin typeKey el override dejaba el tipo del día base (un martes de descanso quedaba como rest con distancia); sin durMin un plan por tiempo no cambiaba.
+        const ov = { type: lbl.type, desc: lbl.desc, dist: c.dist, zone: d.zone, terrain: d.terrain, interval, typeKey: d.typeKey, textLang: c.textLang || lang, runWalk: undefined };
+        if(c.durMin > 0) ov.durMin = c.durMin;
+        state.nextWeekOverrides[d.day] = ov;
       }
     });
     renderPlan(); persist();
@@ -17493,21 +17678,9 @@ function applyVolumeAdjust(input){
   state.plan.forEach(d=>{
     if(d.dist>0 && !isDayLocked(d.day)){
       touchedCount++;
-      if(!d.custom){
-        // Mismo bug que ya se arregló en applyPlanChange (ver sus comentarios): marcar
-        // custom:true sin resolver antes tipo/descripción dejaba planLabel() leyendo
-        // d.type/d.desc undefined, y si el día era de series/cuestas (interval en formato
-        // reps/repMeters del algoritmo) encima intentaba mostrarlo como fartlek
-        // (workMin/restMin), saliendo "NaNm". planLabelBody(d) ACÁ (SIN la envoltura de
-        // entrada en calor/vuelta a la calma -- ver el comentario junto a planLabel(), si se
-        // guardara ya envuelta se duplicaría en el próximo render), antes de tocar nada, ya
-        // deja los números reales (reps, metros, minutos) incrustados como texto en desc.
-        const lbl = planLabelBody(d);
-        d.type = lbl.type; d.desc = lbl.desc; d.textLang = lang;
-        delete d.interval;
-        d.custom = true;
-      }
-      d.dist = Math.max(1, Math.round(d.dist*factor));
+      // escalar primero y recién después congelar el texto: así la descripción lleva las repeticiones y los minutos YA reducidos
+      scaleDayAmount(d, factor, false);
+      freezeDayText(d);
     }
   });
   if(!touchedCount){
@@ -17651,6 +17824,12 @@ function applyCoachNote(input){
   return plan_updated ? 'Nota guardada, y bajé un 15% lo que queda de la semana por la molestia.' : 'Nota guardada.';
 }
 let chatAbortController = null;
+// Enter en el campo: solo envía. Antes llamaba a handleChatSendClick(), que con una respuesta en vuelo la CANCELABA (un doble Enter descartaba la respuesta de Zonda).
+function sendChatFromKeyboard(){
+  const sendBtn = document.getElementById('chat-send-btn');
+  if(sendBtn && sendBtn.dataset.busy==='1') return;
+  sendChat();
+}
 function handleChatSendClick(){
   const sendBtn = document.getElementById('chat-send-btn');
   if(sendBtn && sendBtn.dataset.busy==='1'){ cancelChatRequest(); }
@@ -17669,7 +17848,8 @@ async function sendChat(){
   // justo antes de construir el contexto que ve el modelo.
   checkWeekRollover();
   const input = document.getElementById('chatInput');
-  const text = input.value.trim(); if(!text) return;
+  // Tope de largo: el servidor rechaza mensajes de más de 20.000 caracteres, y uno pegado quedaba en el historial reenviándose en cada pedido (el chat dejaba de responder).
+  const text = input.value.trim().slice(0, 1000); if(!text) return;
   const sendBtn = document.getElementById('chat-send-btn');
   if(sendBtn?.dataset.busy==='1') return; // ya hay un mensaje en camino
   // Nuevo turno de verdad (pasó el chequeo de arriba, este mensaje va a mandarse) -- reseteamos
@@ -17715,13 +17895,13 @@ async function sendChat(){
   const dateLabelOfTs = ts => new Date(ts).toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
   let messages = state.chat.filter(m=>m.role==='user'||m.role==='coach').slice(0,-1).slice(-CHAT_HISTORY_LIMIT).map(m=>({
     role: m.role==='user'?'user':'assistant',
-    content: (m.ts && dayKeyOfTs(m.ts) !== todayKeyNow) ? `[${dateLabelOfTs(m.ts)}] ${m.text}` : m.text
+    content: (m.ts && dayKeyOfTs(m.ts) !== todayKeyNow) ? `[${dateLabelOfTs(m.ts)}] ${String(m.text).slice(0, 2000)}` : String(m.text).slice(0, 2000)
   }));
   const nowLabelFull = nowDate.toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
   const nowClock = nowDate.toLocaleTimeString(LOCALE_MAP[lang], {hour:'2-digit', minute:'2-digit', hour12:false});
   messages.push({role:'user', content: text + `\n\n[Dato automático de la app, no lo escribió el corredor: ahora es ${nowLabelFull}, ${nowClock} hs. HOY es ${nowDate.toLocaleDateString(LOCALE_MAP[lang], {weekday:'long'})}.]`});
 
-  const system = `Sos "Zonda", el entrenador virtual dentro de la app Zancada (el nombre viene del viento cálido y seco típico del oeste argentino -- podés mencionar el origen del nombre si el corredor pregunta, pero no hace falta explicarlo de entrada). Hablás con calidez y honestidad, como un entrenador real de running (no un chatbot genérico). Respondé siempre en ${LANG_NAMES[lang]}. Datos del corredor: ${buildContext()}. Ayudás a definir ejercicios, responder dudas de entrenamiento en calle y trail, y personalizar el plan según los gustos del corredor.
+  const system = `Sos "Zonda", el entrenador virtual dentro de la app Zancada (el nombre viene del viento cálido y seco típico del oeste argentino -- podés mencionar el origen del nombre si el corredor pregunta, pero no hace falta explicarlo de entrada). Hablás con calidez y honestidad, como un entrenador real de running (no un chatbot genérico). Respondé siempre en ${LANG_NAMES[lang]}. Datos del corredor: ${safeBuildContext()}. Ayudás a definir ejercicios, responder dudas de entrenamiento en calle y trail, y personalizar el plan según los gustos del corredor.
 
 Si el corredor cargó una meta de km semanales o un objetivo personal en sus propias palabras, tenelos presentes: orientá tus sugerencias hacia ese objetivo, y si el plan actual no está bien encaminado para lograrlo, decilo con honestidad y proponé un ajuste concreto (usando las herramientas).
 
@@ -17824,6 +18004,12 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
   document.getElementById('typing')?.remove();
   mascotThinking = false;
   document.getElementById('coach-fab-thinking')?.classList.remove('show');
+  // Si ya se aplicó algún cambio al plan, un corte de red o una cancelación NO pueden tratarse como "no pasó nada": el corredor veía el error, reenviaba el mensaje
+  // y el cambio (por ejemplo +15% de volumen) se aplicaba dos veces. Se da por respondido con el aviso de que los cambios ya están.
+  if((networkFailed || cancelled) && anyToolApplied){
+    networkFailed = false; cancelled = false;
+    if(!finalText.trim()) finalText = t('coach_changes_applied_fallback');
+  }
   if(cancelled){
     // El corredor apretó "pausar": no mostramos error ni reintentamos, simplemente
     // dejamos el mensaje ya enviado en el historial y volvemos a dejar todo listo
@@ -17838,6 +18024,8 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
        falso del coach. Avisamos con un toast y devolvemos el texto para poder reintentar. */
     haptic(20);
     showToast(t('coach_connection_error'), 'error');
+    // el mensaje vuelve al campo para reintentarlo: sacarlo del historial, si no quedaba duplicado al reenviarlo
+    { const last = state.chat[state.chat.length-1]; if(last && last.role === 'user' && last.text === text) state.chat.pop(); }
     input.value = text;
     persist();
     restoreSendBtn();

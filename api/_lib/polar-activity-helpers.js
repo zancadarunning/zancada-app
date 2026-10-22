@@ -67,7 +67,8 @@ async function fetchFitSplits(exerciseId, accessToken) {
     const res = await fetchWithTimeout(`https://www.polaraccesslink.com/v3/exercises/${exerciseId}/fit`, {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
-    if (!res.ok) return emptyFitResult();
+    // _failed: falla pasajera (límite de uso, servicio caído, token) -> el llamador no marca el entreno como "completo" y se reintenta. Un 404 (sin archivo) sí es definitivo.
+    if (!res.ok) return (res.status === 429 || res.status === 401 || res.status === 408 || res.status >= 500) ? Object.assign(emptyFitResult(), { _failed: true }) : emptyFitResult();
     const buf = Buffer.from(await res.arrayBuffer());
     const records = await decodeFitRecords(buf);
     const result = buildSplitsAndSeriesFromFitRecords(records);
@@ -75,7 +76,8 @@ async function fetchFitSplits(exerciseId, accessToken) {
     return result;
   } catch (e) {
     console.error('polar fetchFitSplits: no se pudo leer el FIT de', exerciseId, e && e.message);
-    return emptyFitResult();
+    // timeout/red: pasajero. Un archivo que no se puede decodificar es definitivo (vacío).
+    return /abort|timeout|fetch failed|network|ECONN|ETIMEDOUT|ENOTFOUND/i.test(String(e && (e.name + ' ' + e.message))) ? Object.assign(emptyFitResult(), { _failed: true }) : emptyFitResult();
   }
 }
 
@@ -118,7 +120,7 @@ async function exerciseToRun(exercise, accessToken) {
     // ahora" (que omite el FIT a propósito, ver el comentario de accessToken arriba)
     // quedaba marcada como "ya completa" para siempre y ningún backfill la volvía a
     // mirar. Ahora solo se marca cuando de verdad se intentó buscar el FIT.
-    splitsV: accessToken ? 3 : undefined,
+    splitsV: (accessToken && !fit._failed) ? 3 : undefined,
     series: fit.series,
     // avgPower/maxPower: null si el reloj no tiene sensor de potencia (ej. sin Stryd
     // emparejado) -- ver buildSplitsAndSeriesFromFitRecords en fit-activity-helpers.js.

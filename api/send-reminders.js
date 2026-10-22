@@ -110,12 +110,20 @@ module.exports = withSentry(async (req, res) => {
     // Consultas dirigidas (antes: TODA la tabla app_state, de todos los usuarios, cada hora, para después descartar en JS a
     // los que no tienen notificaciones activadas). Primero las suscripciones (una fila chica por usuario con push), y recién
     // después el plan de ESOS usuarios, de a lotes por id.
-    const subsRes = await fetch(`${base}/rest/v1/push_subscriptions?select=user_id,subscription,platform`, { headers });
-    if (!subsRes.ok) {
-      const body = await subsRes.text().catch(() => '');
-      throw new Error(`push_subscriptions fetch failed: ${subsRes.status} ${body}`);
+    // Paginado y ordenado: PostgREST corta en ~1000 filas por pedido, y sin esto los usuarios de más allá de la fila 1000 nunca recibían avisos.
+    const SUBS_PAGE = 1000;
+    const subs = [];
+    for (let off = 0; ; off += SUBS_PAGE) {
+      const subsRes = await fetch(`${base}/rest/v1/push_subscriptions?select=user_id,subscription,platform&order=user_id&limit=${SUBS_PAGE}&offset=${off}`, { headers });
+      if (!subsRes.ok) {
+        const body = await subsRes.text().catch(() => '');
+        throw new Error(`push_subscriptions fetch failed: ${subsRes.status} ${body}`);
+      }
+      const page = await subsRes.json();
+      if (!Array.isArray(page)) throw new Error('push_subscriptions fetch failed: respuesta no es una lista');
+      subs.push(...page);
+      if (page.length < SUBS_PAGE) break;
     }
-    const subs = await subsRes.json();
     const subUserIds = (Array.isArray(subs) ? subs : []).map(x => x.user_id).filter(Boolean);
     const states = [];
     for (let i = 0; i < subUserIds.length; i += STATE_BATCH) {
@@ -153,7 +161,9 @@ module.exports = withSentry(async (req, res) => {
         // registro de enviados, se vuelve a "solo en su turno exacto"
         if (isWeeklyDue(row.user_id, slot, pending)) weekly.push({ row, subRow, period: mondayKeyFor(wNow, wtz), exact: isWeeklySlot(row.user_id, wClock.hour, wClock.minute, pending) });
       }
-      if (nudge.isNudgeTime(wClock.hour, wClock.minute)) {
+      // si el corredor eligió justo la hora del aviso de la noche como hora de su recordatorio diario, ya recibe "Hoy toca..." a esa hora: el aviso de "no apareció tu salida" saldría pegado y repetido
+      const chosenForNudge = parseInt(row.rh, 10);
+      if (nudge.isNudgeTime(wClock.hour, wClock.minute) && !(Number.isInteger(chosenForNudge) && nudge.isNudgeTime(chosenForNudge, 0))) {
         const ntz = row.tz || DEFAULT_TZ;
         const nSession = nudge.sessionDueToday(row.plan, row.weekStart, nudge.mondayOf(Date.now(), ntz, wClock.dayIdx), wClock.dayIdx);
         if (nSession) nudges.push({ row, subRow, tz: ntz, session: nSession });
@@ -182,12 +192,11 @@ module.exports = withSentry(async (req, res) => {
       // mitad de la hora LOCAL del corredor (siempre hay exactamente una, también en husos con :30 o :45), si no llegaría duplicado.
       if (hour !== wantHour || minute >= 30) { skipped++; continue; } // todavía no es la hora elegida en el huso de ESTE usuario
 
-      const today = plan[dayIdx];
-      // today.dist sigue siendo el km planeado aunque la sesión ya se haya marcado 'done'
-      // (autoMarkSessionDone en app.js no toca d.dist) -- sin chequear status, alguien que
-      // entrena temprano y ya terminó su sesión antes de las 8am igual recibía el recordatorio
-      // "Hoy toca: ..." como si no hubiera corrido todavía.
-      if (!today || !today.dist || today.status) { skipped++; continue; } // día de descanso o sesión ya resuelta, no molestamos
+      // sessionDueToday exige que el plan guardado sea el de ESTA semana (weekStart == lunes actual en el huso del corredor): antes bastaba con que tuviera menos de 10 días, y
+      // quien no abrió la app el lunes recibía el "Hoy toca" con la sesión del mismo día de la semana PASADA. Además descarta el descanso y la sesión ya resuelta
+      // (today.dist sigue siendo el km planeado aunque ya esté 'done'): no molestamos.
+      const today = nudge.sessionDueToday(plan, row.weekStart, nudge.mondayOf(Date.now(), tz, dayIdx), dayIdx);
+      if (!today) { skipped++; continue; }
 
       const lang = ownKey(MSGS, row.lang, 'es');
       const typeLabel = today.custom ? String(today.type) : (pick(MSGS[lang].types, today.typeKey, '__none__') || String(today.typeKey));

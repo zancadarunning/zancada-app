@@ -58,3 +58,13 @@ test('workoutToRun: un valor real (aunque venga como string) se parsea y redonde
   assert.equal(run.avgCadence, 87);
   assert.equal(run.calories, 311);
 });
+
+test('isImportableWorkout: un entrenamiento PLANIFICADO (sin workout_summary) no se importa como carrera hecha', () => {
+  const { isImportableWorkout } = require('../api/_lib/wahoo-activity-helpers');
+  assert.equal(isImportableWorkout({ id: 1, workout_type_id: 1, starts: '2026-10-25T07:00:00Z', minutes: 40, workout_token: 'zancada_u_2026-10-25' }), false, 'sin resumen: es un plan subido por Zancada');
+  assert.equal(isImportableWorkout({ id: 2, workout_type_id: 1, workout_summary: { distance_accum: '0.0', duration_active_accum: '0' } }), false, 'resumen vacío');
+  assert.equal(isImportableWorkout({ id: 3, workout_type_id: 1, workout_summary: { distance_accum: '8000.5', duration_active_accum: '2400' } }), true);
+  assert.equal(isImportableWorkout({ id: 4, workout_type_id: 1, workout_summary: { duration_active_accum: '1800' } }), true, 'solo tiempo también vale');
+  assert.equal(isImportableWorkout({ id: 5, workout_type_id: 0, workout_summary: { distance_accum: '9000' } }), false, 'no es running');
+  assert.equal(isImportableWorkout(null), false);
+});

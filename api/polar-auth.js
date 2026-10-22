@@ -89,11 +89,12 @@ const linkAccount = async (req, res) => {
     const base = process.env.SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_KEY;
     const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' };
-    await fetch(`${base}/rest/v1/polar_connections`, {
+    const saveRes = await fetch(`${base}/rest/v1/polar_connections`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ user_id: userId, polar_user_id: String(polarUserId), member_id: userId, access_token: encToken(accessToken) })
     });
+    if (!saveRes.ok) { failGracefully(res, 'no se pudo guardar la conexión', 'status ' + saveRes.status + ' ' + await saveRes.text().catch(() => '')); return; }  // antes no se miraba el resultado: la app decía "conectado" sin conexión guardada
 
     // Traer ejercicios de los últimos 30 días como punto de partida (es lo
     // máximo que devuelve /v3/exercises sin transacción -- ver swagger).

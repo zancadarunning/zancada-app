@@ -103,7 +103,7 @@ function scanTracked(root) {
 // Recorre todo el historial (líneas agregadas de cada commit, de todas las ramas).
 function scanHistory(root) {
   return new Promise((resolve, reject) => {
-    const p = spawn('git', ['log', '--all', '-p', '-U0', '--no-color', '--diff-filter=AM', '--format=@@COMMIT %H'], { cwd: root });
+    const p = spawn('git', ['log', '--all', '-p', '-U0', '--no-color', '--diff-filter=AMRC', '--format=@@COMMIT %H'], { cwd: root });
     const found = []; let commit = '', file = '';
     const rl = readline.createInterface({ input: p.stdout, crlfDelay: Infinity });
     rl.on('line', ln => {
@@ -114,7 +114,8 @@ function scanHistory(root) {
       for (const h of scanText(ln.slice(1))) found.push(Object.assign({ file, commit }, h));
     });
     p.on('error', reject);
-    p.on('close', () => resolve(found));
+    // si git falla (no es un repositorio, historial corrupto...) NO se da el historial por limpio: antes `close` resolvía igual con la lista vacía y el escaneo "pasaba"
+    p.on('close', code => (code === 0 ? resolve(found) : reject(new Error('git log terminó con código ' + code + ': no se pudo revisar el historial'))));
   });
 }
 

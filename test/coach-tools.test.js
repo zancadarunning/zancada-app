@@ -492,6 +492,25 @@ test('ajustar meta semanal "ahora" a mitad de semana: el total real de la semana
   assert.equal(app.state.plan.find(d=>d.day===firstDoneDay).dist, plan.find(d=>d.day===firstDoneDay).dist);
 });
 
+test('applyGoalsChangeNow: si ya se corrió igual o más que la meta nueva, los días que faltan quedan en descanso (no sesiones fantasma de 0,1 km)', t => {
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  if(todayIdx === 6){ t.skip('domingo: no hay días por delante'); return; }
+  const app = loadApp();
+  const trainingDays = Array.from(new Set([app.DAY_KEYS[todayIdx], app.DAY_KEYS[todayIdx+1]]));
+  app.state.profile = baseProfile(app, { weeklyKm: 20, currentWeeklyKm: 20, weeklyGoalKm: 20, trainingDays });
+  app.state.weekNumber = 1;
+  app.state.weekStart = app.getMondayISO(new Date());
+  const plan = app.generatePlan(app.state.profile, 1);
+  plan[todayIdx].status = 'done';
+  app.state.plan = plan;
+  app.state.runs = [{ id: 1, date: new Date().toISOString(), distanceKm: 60 }];   // ya corrió mucho más que cualquier meta
+  app.state.profile.weeklyGoalKm = 10;
+  app.applyGoalsChangeNow();
+  const future = app.state.plan.slice(todayIdx + 1);
+  assert.ok(future.every(d => !(d.dist > 0)), 'ningún día futuro con distancia: ' + JSON.stringify(future.map(d => d.dist)));
+  assert.ok(future.every(d => d.typeKey === 'rest'));
+});
+
 test('buildContext: le dice al modelo, ya resuelto, qué pasó hoy y qué toca mañana -- sin que tenga que cruzarlo contra el plan completo', () => {
   // Reportado por un usuario con una charla real: con el día de hoy y el plan completo de
   // la semana YA en el contexto, el coach (Haiku) igual se confundía cruzando "hoy es

@@ -33,6 +33,8 @@ module.exports = withSentry(async (req, res) => {
   // siempre es quien dice ser.
   const auth = await verifyUser(req);
   if (!auth.ok) { res.status(auth.status).json({ error: auth.error }); return; }
+  // Una cuenta con el mail sin confirmar no puede mandar emails reales a nuestra casilla (mismo criterio que chat.js): reply_to llevaría un mail ajeno sin verificar.
+  if (!auth.emailConfirmed) { res.status(403).json({ error: 'Email not confirmed' }); return; }
 
   const message = ((req.body && req.body.message) || '').toString().trim().slice(0, MAX_MESSAGE_CHARS);
   if (!message) { res.status(400).json({ error: 'Empty message' }); return; }
