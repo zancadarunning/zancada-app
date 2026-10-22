@@ -136,11 +136,9 @@ module.exports = withSentry(async (req, res) => {
         } catch (e) { failed.push(table); }
       };
       for (const t of ['strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'suunto_connections', 'push_subscriptions',
-        'chat_usage', 'sent_notifications', 'sync_cooldowns', 'known_devices', 'run_likes', 'run_feed', 'usernames']) {
+        'chat_usage', 'sent_notifications', 'sync_cooldowns', 'known_devices']) {
         await wipe(t, `user_id=eq.${userId}`);
       }
-      await wipe('follows', `follower_id=eq.${userId}`);
-      await wipe('follows', `followee_id=eq.${userId}`);
       await wipe('app_state', `user_id=eq.${userId}`);
       if (failed.length) {
         console.error('delete-account: no se pudo borrar', failed.join(','));
@@ -162,10 +160,9 @@ module.exports = withSentry(async (req, res) => {
     // ninguna fila de datos todavía: el usuario puede simplemente reintentar.
     //
     // Este es también el paso que de verdad limpia la base: strava_connections/
-    // polar_connections/wahoo_connections/coros_connections y las tablas sociales
-    // (usernames/follows/run_feed/run_likes) tienen su user_id con ON DELETE CASCADE
+    // polar_connections/wahoo_connections/coros_connections tienen su user_id con ON DELETE CASCADE
     // hacia auth.users (ver sql/create_polar_connections.sql, sql/create_wahoo_connections.sql,
-    // sql/create_coros_connections.sql, sql/social.sql), así que este DELETE las limpia
+    // sql/create_coros_connections.sql), así que este DELETE las limpia
     // solas. app_state/push_subscriptions/strava_connections se crearon a mano (no
     // versionadas) y también tienen cascade, pero se vuelven a borrar explícito más
     // abajo por las dudas.

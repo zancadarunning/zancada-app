@@ -32,8 +32,8 @@ const GENERIC_ERROR_MSG = {
   es: 'No me pude conectar ahora mismo. Probá de nuevo en un momento.',
   en: "I couldn't connect right now. Try again in a moment.",
   pt: 'Não consegui me conectar agora. Tente de novo em instantes.',
-  fr: "Je n'ai pas pu me connecter là. Réessaie dans un instant.",
-  it: 'Non sono riuscito a connettermi ora. Riprova tra un momento.',
+  fr: "Je n'ai pas pu me connecter pour le moment. Réessaie dans un instant.",
+  it: 'Non sono riuscito a connettermi in questo momento. Riprova tra un momento.',
   de: 'Ich konnte mich gerade nicht verbinden. Versuch es gleich noch mal.'
 };
 // Tope de mensajes por día por usuario -- ver sql/chat_usage.sql para el

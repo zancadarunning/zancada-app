@@ -45,7 +45,7 @@ test('toda función SECURITY DEFINER se revoca a anon/public (si no, cualquiera 
 });
 
 test('ninguna política deja una tabla abierta con using (true) / with check (true), salvo las listadas', () => {
-  const ALLOWED = ['usernames_select_any'];   // la tabla social de nombres de usuario (función sin uso, ver sql/drop_unused_social.sql)
+  const ALLOWED = [];
   const abiertas = [];
   for (const [file, text] of Object.entries(sql)) {
     for (const m of text.matchAll(/create\s+policy\s+"?(\w+)"?[^;]*?\b(?:using|with\s+check)\s*\(\s*true\s*\)/gi)) if (!ALLOWED.includes(m[1])) abiertas.push(`${file}: ${m[1]}`);
