@@ -42,7 +42,7 @@ function buildWahooPlan(day, zones, labels) {
   const L = (k, fb) => labels[k] || fb;
   const zone = posInt(day.zone, 1, 5, null);
   const warmMin = posInt(day.warmupMin, 0, 30, 10);
-  const coolMin = posInt(day.cooldownMin, 0, 30, 10);
+  const coolMin = posInt(day.cooldownMin, 0, 30, 5);
   const easy = hrTarget(zones, 2);
   const work = zone ? hrTarget(zones, zone) : null;
   const rest = hrTarget(zones, 1);

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22T18:10:17Z';
+const APP_VERSION = '2026-10-22T19:08:16Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6917,15 +6917,15 @@ function generatePlan(p, weekNumber, weekStartDate){
   // reales entre semana igual podía recibir una sesión de 8km calculada sin que nada en el
   // plan lo supiera. Acá SÍ lo usamos como techo real de las sesiones entre semana (no de la
   // tirada larga -- esa es a propósito la sesión más grande del fin de semana, caparla
-  // también la dejaría sin sentido). Restamos los 20 min fijos de entrada en calor + vuelta a
-  // la calma (ver desc_warmup_prefix/desc_cooldown_suffix, no están adentro de d.dist) antes
+  // también la dejaría sin sentido). Restamos los 15 min de entrada en calor + vuelta a
+  // la calma (3+5 y 5 en los rodajes, 3+10 y 5 en las sesiones de calidad) (ver desc_warmup_prefix/desc_cooldown_suffix, no están adentro de d.dist) antes
   // de convertir minutos a km con el ritmo estimado del corredor. No reparte el km "perdido"
   // en otro lado -- si de verdad tiene poco tiempo, el total semanal real es más bajo, así de
   // simple, en vez de inflarle la tirada larga para compensar.
   let sessionCapKm = Infinity;
   if(p.availableMinPerSession > 0){
     const pace = estimateBasePaceMinPerKm(p);
-    const maxSessionKm = Math.max(10, p.availableMinPerSession - 20) / pace;
+    const maxSessionKm = Math.max(10, p.availableMinPerSession - 15) / pace;
     sessionCapKm = Math.round(maxSessionKm*10)/10;
     Object.keys(distMap).forEach(type=>{ if(type!=='long') distMap[type] = Math.min(distMap[type], sessionCapKm); });
   }
@@ -7715,7 +7715,11 @@ function planLabel(d){
   // planLabelBody() nunca la agrega (ver su comentario) para que quien necesite el texto sin
   // envolver (applyMoveSession/applyVolumeAdjust, al congelar un día del algoritmo) lo pueda
   // pedir sin duplicarla en el próximo render.
-  const desc = d.dist>0 ? `${t('desc_warmup_prefix')}\n${lbl.desc}\n${t('desc_cooldown_suffix')}` : lbl.desc;
+  // Calentamiento según la sesión: rodajes y tiradas, 3 min de movilidad + 5 min muy suave (el primer tramo ya calienta); sesiones de calidad (series, tempo, cuestas,
+  // fartlek, progresivo, test) 3 min de movilidad + 10 min de trote suave. La vuelta a la calma es de 5 min en todas.
+  const qualityTypes = ['intervals', 'tempo', 'fartlek', 'hills', 'progression', 'test'];
+  const warmKey = qualityTypes.includes(d.typeKey) ? 'desc_warmup_quality' : 'desc_warmup_prefix';
+  const desc = d.dist>0 ? `${t(warmKey)}\n${lbl.desc}\n${t('desc_cooldown_suffix')}` : lbl.desc;
   return {type:lbl.type, desc};
 }
 

@@ -57,3 +57,17 @@ test('htmlEntitiesToText: el calendario del teléfono recibe texto plano ("Rock 
   assert.equal(app.htmlEntitiesToText('Rock &amp; Run &lt;10K&gt; &quot;hoy&quot; l&#39;ora'), 'Rock & Run <10K> "hoy" l\'ora');
   assert.equal(app.htmlEntitiesToText(null), '');
 });
+
+test('entrada en calor: rodajes 3+5 min, sesiones de calidad 3+10 min, vuelta a la calma de 5 min en todas', () => {
+  const app = loadApp();
+  const easy = app.planLabel({ day: 'tue', typeKey: 'easy', dist: 6, zone: 2 }).desc;
+  assert.match(easy, /3 minutos de movimiento articular/);
+  assert.match(easy, /5 minutos de trote muy suave o caminata/);
+  assert.match(easy, /5 minutos de vuelta a la calma/);
+  assert.doesNotMatch(easy, /10 minutos/);
+  const tempo = app.planLabel({ day: 'thu', typeKey: 'tempo', dist: 8, zone: 4 }).desc;
+  assert.match(tempo, /3 minutos de movimiento articular/);
+  assert.match(tempo, /10 minutos de trote suave/);
+  assert.match(tempo, /5 minutos de vuelta a la calma/);
+  assert.equal(app.planLabel({ day: 'mon', typeKey: 'rest', dist: 0 }).desc.includes('movimiento articular'), false, 'el descanso no lleva calentamiento');
+});

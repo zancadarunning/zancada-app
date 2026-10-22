@@ -68,7 +68,7 @@ function buildGuide(day, zones, labels) {
   const L = (k, fb) => labels[k] || fb;
   const zone = posInt(day.zone, 1, 5, null);
   const warmMin = posInt(day.warmupMin, 0, 30, 10);
-  const coolMin = posInt(day.cooldownMin, 0, 30, 10);
+  const coolMin = posInt(day.cooldownMin, 0, 30, 5);
   const easyTarget = hrTarget(zones, 2);
   const workTarget = zone ? hrTarget(zones, zone) : null;
   const hr = { type: 'heartRate', title: 'HR' };
