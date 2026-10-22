@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22T17:43:44Z';
+const APP_VERSION = '2026-10-22T17:45:36Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1334,6 +1334,8 @@ let persistQueued = false;
 let persistSettledResolvers = [];
 async function persist(){
   if(!currentUserId || stateLoadedFor !== currentUserId) return;
+  // El chat no tenía tope y viajaba entero en cada guardado (y en el respaldo local, que además tiene cuota): se conservan los últimos 300 mensajes.
+  if(state.chat && state.chat.length > 300) state.chat = state.chat.slice(-300);
   if(persistInFlight){ persistQueued = true; return; }
   persistInFlight = true;
   try{
@@ -16867,6 +16869,11 @@ function paceMinPerKmOf(r){
   const p = (r.durationSec/60)/r.distanceKm;
   return `${Math.floor(p)}:${String(Math.round((p%1)*60)).padStart(2,'0')}`;
 }
+// buildContext() se evalúa FUERA del try de sendChat: si lanzaba (una carrera importada con distanceKm null, una zapatilla sin km...) el botón de enviar quedaba en "detener"
+// y el indicador de "pensando" encendidos para siempre. Sin contexto el coach igual responde con el mensaje y el historial.
+function safeBuildContext(){
+  try{ return buildContext(); }catch(e){ console.error('buildContext falló', e); return ''; }
+}
 function buildContext(){
   const p = state.profile;
   // Sin esto, el coach no tenía NINGÚN dato explícito de qué día es hoy -- tenía que
@@ -17164,11 +17171,18 @@ function captureUndoSnapshot(){
     curveCap: state.curveCap ? JSON.parse(JSON.stringify(state.curveCap)) : null
   };
 }
+// Campos del perfil que puede cambiar el coach (modificar_perfil / guardar_nota_coach): lo único que "deshacer" revierte del perfil.
+const COACH_PROFILE_FIELDS = ['goal','raceDate','terrain','hrMax','hrKnown','hrZones','hrZonesCustom','currentWeeklyKm','runnerType','trainingDays','weeklyKm','coachNotes'];
 function applyUndoLastChange(){
   if(!state.coachUndoSnapshot) return 'No hay ningún cambio reciente para deshacer.';
-  state.plan = state.coachUndoSnapshot.plan;
-  state.nextWeekOverrides = state.coachUndoSnapshot.nextWeekOverrides;
-  state.profile = state.coachUndoSnapshot.profile;
+  // El snapshot dura hasta el lunes: entre el cambio del coach y el "deshacé" el corredor pudo correr, calificar la sesión, hacer el test de nivel o editar su peso.
+  // Restaurar el plan y el perfil ENTEROS pisaba todo eso (la sesión hecha volvía a pendiente y dejaba de contar para la racha; el perfil perdía levelTest/hrZones).
+  // Los días ya vividos se conservan como están ahora, y del perfil solo se revierte lo que el coach puede tocar.
+  const snap = state.coachUndoSnapshot;
+  const lived = d => d && (d.status === 'done' || d.status === 'skipped' || d.linkedRunId);
+  state.plan = snap.plan.map((d, i) => (lived(state.plan[i]) ? state.plan[i] : d));
+  state.nextWeekOverrides = snap.nextWeekOverrides;
+  COACH_PROFILE_FIELDS.forEach(k => { if(snap.profile[k] === undefined) delete state.profile[k]; else state.profile[k] = snap.profile[k]; });
   // primero el cronograma original; refreshPhaseSchedule lo conserva si sigue coincidiendo con el perfil restaurado
   if('phaseSchedule' in state.coachUndoSnapshot) state.phaseSchedule = state.coachUndoSnapshot.phaseSchedule;
   if(state.coachUndoSnapshot.weekNumber > 0) state.weekNumber = state.coachUndoSnapshot.weekNumber;
@@ -17746,6 +17760,12 @@ function applyCoachNote(input){
   return plan_updated ? 'Nota guardada, y bajé un 15% lo que queda de la semana por la molestia.' : 'Nota guardada.';
 }
 let chatAbortController = null;
+// Enter en el campo: solo envía. Antes llamaba a handleChatSendClick(), que con una respuesta en vuelo la CANCELABA (un doble Enter descartaba la respuesta de Zonda).
+function sendChatFromKeyboard(){
+  const sendBtn = document.getElementById('chat-send-btn');
+  if(sendBtn && sendBtn.dataset.busy==='1') return;
+  sendChat();
+}
 function handleChatSendClick(){
   const sendBtn = document.getElementById('chat-send-btn');
   if(sendBtn && sendBtn.dataset.busy==='1'){ cancelChatRequest(); }
@@ -17764,7 +17784,8 @@ async function sendChat(){
   // justo antes de construir el contexto que ve el modelo.
   checkWeekRollover();
   const input = document.getElementById('chatInput');
-  const text = input.value.trim(); if(!text) return;
+  // Tope de largo: el servidor rechaza mensajes de más de 20.000 caracteres, y uno pegado quedaba en el historial reenviándose en cada pedido (el chat dejaba de responder).
+  const text = input.value.trim().slice(0, 1000); if(!text) return;
   const sendBtn = document.getElementById('chat-send-btn');
   if(sendBtn?.dataset.busy==='1') return; // ya hay un mensaje en camino
   // Nuevo turno de verdad (pasó el chequeo de arriba, este mensaje va a mandarse) -- reseteamos
@@ -17810,13 +17831,13 @@ async function sendChat(){
   const dateLabelOfTs = ts => new Date(ts).toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
   let messages = state.chat.filter(m=>m.role==='user'||m.role==='coach').slice(0,-1).slice(-CHAT_HISTORY_LIMIT).map(m=>({
     role: m.role==='user'?'user':'assistant',
-    content: (m.ts && dayKeyOfTs(m.ts) !== todayKeyNow) ? `[${dateLabelOfTs(m.ts)}] ${m.text}` : m.text
+    content: (m.ts && dayKeyOfTs(m.ts) !== todayKeyNow) ? `[${dateLabelOfTs(m.ts)}] ${String(m.text).slice(0, 2000)}` : String(m.text).slice(0, 2000)
   }));
   const nowLabelFull = nowDate.toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
   const nowClock = nowDate.toLocaleTimeString(LOCALE_MAP[lang], {hour:'2-digit', minute:'2-digit', hour12:false});
   messages.push({role:'user', content: text + `\n\n[Dato automático de la app, no lo escribió el corredor: ahora es ${nowLabelFull}, ${nowClock} hs. HOY es ${nowDate.toLocaleDateString(LOCALE_MAP[lang], {weekday:'long'})}.]`});
 
-  const system = `Sos "Zonda", el entrenador virtual dentro de la app Zancada (el nombre viene del viento cálido y seco típico del oeste argentino -- podés mencionar el origen del nombre si el corredor pregunta, pero no hace falta explicarlo de entrada). Hablás con calidez y honestidad, como un entrenador real de running (no un chatbot genérico). Respondé siempre en ${LANG_NAMES[lang]}. Datos del corredor: ${buildContext()}. Ayudás a definir ejercicios, responder dudas de entrenamiento en calle y trail, y personalizar el plan según los gustos del corredor.
+  const system = `Sos "Zonda", el entrenador virtual dentro de la app Zancada (el nombre viene del viento cálido y seco típico del oeste argentino -- podés mencionar el origen del nombre si el corredor pregunta, pero no hace falta explicarlo de entrada). Hablás con calidez y honestidad, como un entrenador real de running (no un chatbot genérico). Respondé siempre en ${LANG_NAMES[lang]}. Datos del corredor: ${safeBuildContext()}. Ayudás a definir ejercicios, responder dudas de entrenamiento en calle y trail, y personalizar el plan según los gustos del corredor.
 
 Si el corredor cargó una meta de km semanales o un objetivo personal en sus propias palabras, tenelos presentes: orientá tus sugerencias hacia ese objetivo, y si el plan actual no está bien encaminado para lograrlo, decilo con honestidad y proponé un ajuste concreto (usando las herramientas).
 
@@ -17919,6 +17940,12 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
   document.getElementById('typing')?.remove();
   mascotThinking = false;
   document.getElementById('coach-fab-thinking')?.classList.remove('show');
+  // Si ya se aplicó algún cambio al plan, un corte de red o una cancelación NO pueden tratarse como "no pasó nada": el corredor veía el error, reenviaba el mensaje
+  // y el cambio (por ejemplo +15% de volumen) se aplicaba dos veces. Se da por respondido con el aviso de que los cambios ya están.
+  if((networkFailed || cancelled) && anyToolApplied){
+    networkFailed = false; cancelled = false;
+    if(!finalText.trim()) finalText = t('coach_changes_applied_fallback');
+  }
   if(cancelled){
     // El corredor apretó "pausar": no mostramos error ni reintentamos, simplemente
     // dejamos el mensaje ya enviado en el historial y volvemos a dejar todo listo
@@ -17933,6 +17960,8 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
        falso del coach. Avisamos con un toast y devolvemos el texto para poder reintentar. */
     haptic(20);
     showToast(t('coach_connection_error'), 'error');
+    // el mensaje vuelve al campo para reintentarlo: sacarlo del historial, si no quedaba duplicado al reenviarlo
+    { const last = state.chat[state.chat.length-1]; if(last && last.role === 'user' && last.text === text) state.chat.pop(); }
     input.value = text;
     persist();
     restoreSendBtn();

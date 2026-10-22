@@ -4280,7 +4280,7 @@
              se limpian bien al cerrar el teclado en layouts con position:fixed como este
              (ver el comentario largo en app.js, cerca de forceFixedLayoutReflow). Sacando
              la barra de sugerencias de raíz, no queda nada que pueda dejar ese resto. -->
-        <input type="text" id="chatInput" data-i18n-ph="coach_ph" data-i18n-aria="coach_ph" data-on-keydown="if(event.key==='Enter') handleChatSendClick();" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <input type="text" id="chatInput" data-i18n-ph="coach_ph" data-i18n-aria="coach_ph" data-on-keydown="if(event.key==='Enter') sendChatFromKeyboard();" maxlength="1000" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
         <button class="chat-send" id="chat-send-btn" data-on-click="handleChatSendClick()" data-i18n-aria="aria_send"><span class="icon-sq" style="width:18px; height:18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></span></button>
       </div>
     </div>

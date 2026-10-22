@@ -12,7 +12,7 @@ const ZONES = { 1: { min: 100, max: 120 }, 2: { min: 120, max: 140 }, 3: { min: 
 function setup(over) {
   const app = loadApp();
   app.state.onboarded = true;
-  app.state.profile = { units: 'metric', trainBy: 'distance', goal: '10k', runnerType: 'active', currentWeeklyKm: 30, weeklyKm: 30, trainingDays: ['tue', 'thu', 'sun'], createdAt: '2020-01-01', hrZones: ZONES, terrain: 'asfalto', ...(over && over.profile) };
+  app.state.profile = { name: 'Prueba', units: 'metric', trainBy: 'distance', goal: '10k', runnerType: 'active', currentWeeklyKm: 30, weeklyKm: 30, trainingDays: ['tue', 'thu', 'sun'], createdAt: '2020-01-01', hrZones: ZONES, terrain: 'asfalto', ...(over && over.profile) };
   app.state.weekStart = app.getMondayISO(new Date());
   app.state.plan = [
     { day: 'mon', typeKey: 'rest', dist: 0 },
@@ -116,5 +116,26 @@ test('modificar_sesion sobre un día de descanso sin distancia ni duración se r
     assert.match(r, /Falta distancia_km o duracion_min/);
     assert.equal(app.state.plan[2].custom, undefined, 'no tocó el día');
     assert.match(app.applyPlanChange({ dia: 'wed', tipo: 'Rodaje', tipo_categoria: 'easy', descripcion: 'suave', zona: 2, distancia_km: 5 }), /^OK/);
+  } finally { Date.prototype.getDay = realDay; }
+});
+
+test('deshacer: no pisa una sesión ya hecha ni los datos del perfil que no toca el coach', () => {
+  const app = setup();
+  const realDay = Date.prototype.getDay;
+  Date.prototype.getDay = function () { return 1; };   // lunes: todo ajustable
+  try {
+    app.applyVolumeAdjust({ porcentaje: 20 });
+    assert.ok(app.state.coachUndoSnapshot);
+    // pasa el tiempo: el jueves se corre y se califica, y se hace el test de nivel
+    app.state.plan[3].status = 'done'; app.state.plan[3].linkedRunId = 99; app.state.plan[3].rating = 'bien';
+    app.state.profile.levelTest = { date: '2026-10-22', vdot: 45 };
+    app.state.profile.weight = 66;
+    const r = app.applyUndoLastChange();
+    assert.match(r, /deshice/);
+    assert.equal(app.state.plan[3].status, 'done', 'la sesión vivida se conserva');
+    assert.equal(app.state.plan[3].rating, 'bien');
+    assert.ok(app.state.profile.levelTest, 'el test de nivel no se pierde');
+    assert.equal(app.state.profile.weight, 66);
+    assert.equal(app.state.plan[6].dist, 14, 'lo no vivido sí vuelve al original');
   } finally { Date.prototype.getDay = realDay; }
 });
