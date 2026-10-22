@@ -26,6 +26,8 @@ function readAll(dir, ext) {
 }
 
 // Qué (tabla, columna) está cubierta según sql/: claves primarias de un CREATE TABLE y CREATE INDEX.
+// Claves primarias COMPUESTAS (tabla -> columnas en orden): una consulta que filtra por la primera columna y además por otra de la clave la usa entera.
+const compositePk = {};
 function coveredByIndexes() {
   const covered = new Set();
   const sql = readAll(path.join(ROOT, 'sql'), '.sql').map(f => f.text).join('\n');
@@ -33,7 +35,11 @@ function coveredByIndexes() {
   for (const m of sql.matchAll(/create table(?: if not exists)?\s+(?:public\.)?(\w+)\s*\(([\s\S]*?)\n\)\s*;/gi)) {
     const table = m[1], body = m[2];
     for (const c of body.matchAll(/^\s*(\w+)\s+[^,\n]*primary key/gim)) covered.add(`${table}.${c[1]}`);
-    for (const c of body.matchAll(/primary key\s*\(([^)]*)\)/gi)) covered.add(`${table}.${c[1].split(',')[0].trim()}`);
+    for (const c of body.matchAll(/primary key\s*\(([^)]*)\)/gi)) {
+      const cols = c[1].split(',').map(x => x.trim());
+      covered.add(`${table}.${cols[0]}`);
+      if (cols.length > 1) compositePk[table] = cols;
+    }
   }
   // CREATE INDEX ... ON tabla (col, ...)  y la forma por expresión ((data->>'calendarToken'))
   for (const m of sql.matchAll(/create (?:unique )?index(?: if not exists)?\s+\w+\s+on\s+(?:public\.)?(\w+)\s*(?:using \w+\s*)?\(\(?\s*([^)]*?)\)\)?\s*(?:;|where|$)/gim)) {
@@ -53,9 +59,9 @@ function queriedColumns() {
   for (const f of readAll(path.join(ROOT, 'api'), '.js')) {
     for (const m of f.text.matchAll(/rest\/v1\/(\w+)\?([^`'"\s]*)/g)) {
       const table = m[1];
+      const siblings = [...m[2].matchAll(/(?:^|&)([\w>\-]+)=(?:eq|in)\./g)].map(x => x[1]);
       for (const c of m[2].matchAll(/(?:^|&)([\w>\-]+)=(?:eq|in)\./g)) {
-        const col = c[1].replace(/^data->>/, "data->>").replace(/^data->>(\w+)$/, "(data->>$1)");
-        out.push({ file: f.file, table, col: c[1] });
+        out.push({ file: f.file, table, col: c[1], siblings });
       }
     }
   }
@@ -68,7 +74,9 @@ test('toda búsqueda del servidor por una columna tiene un índice que la cubra 
   for (const q of queriedColumns()) {
     const key = `${q.table}.${q.col}`;
     const keyExpr = q.col.startsWith('data->>') ? `${q.table}.data->>${q.col.slice(7)}` : key;
-    if (!covered.has(key) && !covered.has(keyExpr)) missing.push(`${q.file}: ${q.table} filtra por "${q.col}" sin índice`);
+    const pk = compositePk[q.table];
+    const inCompositePk = pk && pk.includes(q.col) && q.siblings.includes(pk[0]);   // user_id=eq.X&device_hash=eq.Y usa la clave primaria (user_id, device_hash)
+    if (!covered.has(key) && !covered.has(keyExpr) && !inCompositePk) missing.push(`${q.file}: ${q.table} filtra por "${q.col}" sin índice`);
   }
   assert.deepEqual([...new Set(missing)], [], 'Agregá un CREATE INDEX en sql/indexes.sql para estas búsquedas');
 });

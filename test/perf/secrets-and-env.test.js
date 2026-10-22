@@ -97,6 +97,7 @@ test('los endpoints que cuestan plata o mandan emails tienen tope de frecuencia 
   const needLimit = {
     'api/chat.js': /p_limit|DAILY_LIMIT/,         // llama a Anthropic
     'api/send-feedback.js': /checkSyncCooldown/,  // manda un email real (Resend)
+    'api/login-alert.js': /checkSyncCooldown/,    // manda un email real (Resend)
     'api/remux-video.js': /checkSyncCooldown/,    // gasta CPU con ffmpeg
     'api/strava-sync-now.js': /checkSyncCooldown/, 'api/polar-sync-now.js': /checkSyncCooldown/,
     'api/wahoo-sync-now.js': /checkSyncCooldown/, 'api/coros-sync-now.js': /checkSyncCooldown/,

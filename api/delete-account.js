@@ -136,7 +136,7 @@ module.exports = withSentry(async (req, res) => {
         } catch (e) { failed.push(table); }
       };
       for (const t of ['strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'suunto_connections', 'push_subscriptions',
-        'chat_usage', 'sent_notifications', 'sync_cooldowns', 'run_likes', 'run_feed', 'usernames']) {
+        'chat_usage', 'sent_notifications', 'sync_cooldowns', 'known_devices', 'run_likes', 'run_feed', 'usernames']) {
         await wipe(t, `user_id=eq.${userId}`);
       }
       await wipe('follows', `follower_id=eq.${userId}`);
