@@ -68,3 +68,12 @@ test('renderCalendar: cada día habilitado se toca con data-on-click="calSelectD
   assert.match(fn, /data-on-click="calSelectDay\(\$\{c\.day\}\)"/);
   assert.doesNotMatch(fn, /\sonclick=/);
 });
+
+// Hoy + seleccionado: la regla de "hoy" pintaba el número del mismo lima que el fondo del seleccionado y el número desaparecía.
+test('el día de hoy seleccionado conserva el número oscuro sobre el lima, y en modo claro el aro de hoy es oscuro', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /\.cal-day\.today\.selected\s*\{\s*color:\s*var\(--ink\)/);
+  assert.match(html, /:root\[data-theme="light"\]\s*\.cal-day\.today:not\(\.selected\)\s*\{\s*border-color:\s*var\(--hivis-text\)/);
+  // la regla "hoy + seleccionado" tiene que ir DESPUÉS de la de "hoy" (si no, pierde)
+  assert.ok(html.indexOf('.cal-day.today.selected') > html.indexOf('.cal-day.today{border:1.5px solid var(--hivis)'));
+});

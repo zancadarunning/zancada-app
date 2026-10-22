@@ -1993,6 +1993,11 @@
   .cal-day:active{background:var(--press); transform:scale(.92);}
   .cal-day.today{border:1.5px solid var(--hivis); color:var(--hivis-text); font-weight:800;}
   .cal-day.selected{box-shadow:var(--neon-press);}
+  /* hoy + seleccionado: la regla de "hoy" (arriba) pintaba el número del mismo lima que el fondo y se perdía; el número vuelve a ser oscuro sobre el lima */
+  .cal-day.today.selected{color:var(--ink);}
+  /* en modo claro el aro lima de "hoy" casi no se veía sobre el fondo claro: usa el verde oscuro del texto */
+  :root[data-theme="light"] .cal-day.today:not(.selected){border-color:var(--hivis-text);}
+  @media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) .cal-day.today:not(.selected){border-color:var(--hivis-text);} }
   .cal-cell.current{border-color:var(--hivis);} .cal-cell.selected{box-shadow:var(--neon-press);}
 
   /* ===== Tu progreso (Historial) ===== */
