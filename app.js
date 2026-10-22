@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22T02:35:01Z';
+const APP_VERSION = '2026-10-22T03:15:00Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -162,6 +162,8 @@ function t(key, vars){
   // split/join reemplaza TODAS las apariciones del marcador (replace() con un string solo cambia la
   // primera: una clave con {unit} dos veces dejaba el segundo a la vista) y, como el valor va tal
   // cual, tampoco interpreta patrones con "$".
+  // Plurales en el propio texto: {n|carrera|carreras} -> singular si n vale 1, plural en cualquier otro caso (sin esto salia "1 carreras", "1 minutos").
+  if(vars) s = s.replace(/\{(\w+)\|([^|{}]*)\|([^|{}]*)\}/g, (m, k, one, many) => (k in vars) ? (Number(vars[k]) === 1 ? one : many) : m);
   if(vars) Object.keys(vars).forEach(k=>{ s = s.split('{'+k+'}').join(String(vars[k])); });
   return s;
 }
@@ -3862,7 +3864,7 @@ function renderCalMonths(){
   const today = new Date();
   const selMonth = (calSelectedDate && calSelectedDate.getFullYear()===y) ? calSelectedDate.getMonth() : null;
   document.getElementById('cal-months-grid').innerHTML = Array.from({length:12}, (_,m)=>{
-    const label = new Date(y,m,1).toLocaleDateString(LOCALE_MAP[lang], {month:'short'});
+    const label = new Date(y,m,1).toLocaleDateString(LOCALE_MAP[lang], {month:'short'}).replace(/^sept\.?$/i, 'sep');
     const isCurrent = today.getFullYear()===y && today.getMonth()===m;
     const isSelected = selMonth===m;
     return `<div class="cal-cell ${isCurrent?'current':''} ${isSelected?'selected':''}" data-on-click="calSelectMonth(${m})">${label}</div>`;
@@ -9750,8 +9752,8 @@ function renderPerfil(){
   const avgKm = computeActualWeeklyKmAvg(3);
   { const sk = document.getElementById('perfil-streak'); if(sk){ const n = state.streakWeeks||0; if(n >= 2){ sk.style.display = 'inline-flex'; sk.innerHTML = '<span class="ico" aria-hidden="true">' + ICONS.flame + '</span><span>' + escapeHtml(t('home_streak_badge', {n})) + '</span>'; } else { sk.style.display = 'none'; } } }
   document.getElementById('perfil-sub').textContent = avgKm!=null
-    ? `${t('perfil_avg_weekly_label')} ${fmtDist(avgKm,1)}${distUnit()}/sem · ${t('ob_goal_'+p.goal)}`
-    : `${fmtDist(p.weeklyKm,1)}${distUnit()}/sem · ${t('ob_goal_'+p.goal)}`;
+    ? `${t('perfil_avg_weekly_label')} ${t('perfil_per_week', {d: fmtDist(avgKm,1), u: distUnit()})} · ${t('ob_goal_'+p.goal)}`
+    : `${t('perfil_per_week', {d: fmtDist(p.weeklyKm,1), u: distUnit()})} · ${t('ob_goal_'+p.goal)}`;
   const avatarImg = document.getElementById('perfil-avatar-img');
   const avatarInitial = document.getElementById('perfil-initial');
   if(p.avatarPhoto){
@@ -11332,7 +11334,9 @@ function buildEventIcs(ev){
   // estándar -- si no, algunas apps de calendario (Outlook en particular) lo muestran
   // como si durara dos días.
   const endDate = new Date(ev.date+'T00:00:00'); endDate.setDate(endDate.getDate()+1);
-  const dtEnd = endDate.toISOString().slice(0,10).replace(/-/g,'');
+  // Componentes LOCALES, no toISOString(): en husos adelantados a UTC (Europa, Asia) la medianoche local de mañana cae todavía "hoy" en UTC,
+  // y DTEND quedaba igual a DTSTART (el evento de todo el día no se creaba bien en el calendario).
+  const dtEnd = `${endDate.getFullYear()}${String(endDate.getMonth()+1).padStart(2,'0')}${String(endDate.getDate()).padStart(2,'0')}`;
   const now = new Date();
   const dtStamp = now.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');
   const typeLabel = t('ev_type_'+ev.type);
@@ -13373,7 +13377,9 @@ function computeDailyTrend(days){
   const weekDayKeys = ['sun','mon','tue','wed','thu','fri','sat'];
   for(let i=days-1; i>=0; i--){
     const d = new Date(today); d.setDate(d.getDate()-i);
-    const dateStr = d.toISOString().slice(0,10);
+    // localDateISO(d), no d.toISOString().slice(0,10): d es la medianoche LOCAL, que en husos adelantados a UTC (Europa, Asia) cae el día anterior
+    // en UTC -- el gráfico diario quedaba corrido un día respecto de las carreras (que sí se comparan por día local).
+    const dateStr = localDateISO(d);
     // localDateISO(r.date), no r.date.slice(0,10): r.date es un timestamp UTC completo,
     // cortarlo a mano daba el día calendario en UTC en vez del día LOCAL real de la
     // carrera (ver el comentario junto a localDateISO/getTodayRun).
@@ -17829,7 +17835,7 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
   // vacío aunque sí se hayan aplicado cambios reales -- antes eso se mostraba como
   // un mensaje "..." confuso, como si el coach no hubiera hecho nada.
   if(!finalText.trim() && anyToolApplied) finalText = t('coach_changes_applied_fallback');
-  state.chat.push({role:'coach', text: finalText || '...', ts:Date.now()});
+  state.chat.push({role:'coach', text: finalText || t('coach_connection_error'), ts:Date.now()});
   restoreSendBtn();
   renderChat();
   persist();

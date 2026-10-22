@@ -494,6 +494,11 @@
   .choice-row.segmented{flex-wrap:nowrap; gap:2px; background:var(--asphalt-3); border-radius:var(--radius-sm); padding:3px;}
   .choice-row.segmented .choice{min-width:0; min-height:40px; border:none; background:none; box-shadow:none; padding:9px 4px; color:var(--chalk);}
   .choice-row.segmented .choice.active{background:var(--hivis); color:var(--ink); box-shadow:var(--neon-press);}
+  /* Avisos de voz: cuatro opciones con texto largo ("Solo lo importante") no entran en una fila de 360px sin cortar palabras a la mitad */
+  #voice-toggle{display:grid; grid-template-columns:1fr 1fr;}
+  /* Texto que explica por que el boton esta deshabilitado (registro y paso 2 del onboarding): la clase existia en el HTML pero sin ningun estilo */
+  .btn-reason{margin:10px 0 0; font-size:12.5px; line-height:1.45; color:var(--mist); text-align:center;}
+  .btn-reason:empty{display:none;}
   /* Lista con buscador del picker de deportes (#sport-picker-overlay) -- filas apiladas en
      vez de chips en grilla, porque con ~24 deportes un grid de .choice no entra ni se lee. */
   .sport-row{display:flex; align-items:center; justify-content:space-between; padding:13px 16px;
@@ -2911,7 +2916,7 @@
           <div style="margin-top:14px;">
             <label id="ob-refrace-label" data-i18n="ob_refrace_label"></label>
             <p class="muted" style="font-size:12px; margin:2px 0 8px;" data-i18n="ob_refrace_hint"></p>
-            <div class="two-col">
+            <div class="two-col" style="grid-template-columns:3fr 2fr;">
               <div class="field" style="margin:0;">
                 <select id="ob-refrace-dist" data-i18n-aria="aria_refrace_dist">
                   <option value="" data-i18n="ob_refrace_none"></option>

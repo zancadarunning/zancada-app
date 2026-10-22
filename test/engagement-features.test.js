@@ -627,7 +627,7 @@ test('seguimiento: dos "peor" seguidas mandan el aviso del coach; el resumen par
   assert.match(txt, /Lu/);
   assert.match(txt, /al bajar escaleras/);
   assert.match(txt, /dolió más/);
-  assert.match(txt, /1 salidas \(5\.0 km\)/, 'solo la carrera de dentro del período');
+  assert.match(txt, /1 salida \(5\.0 km\)/, 'solo la carrera de dentro del período (y en singular)');
 });
 
 test('regreso gradual: base = promedio de 4 semanas ANTES de la molestia; solo si hay base real, plan por distancia y sin otro regreso', () => {
