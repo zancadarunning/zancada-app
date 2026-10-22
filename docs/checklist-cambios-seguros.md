@@ -15,6 +15,7 @@ La idea: **no volver a revisar todo de nuevo**. Lo que se pudo convertir en una 
 | Toda tabla con datos de personas se borra en "Borrar mis datos" y al borrar la cuenta; las claves a `auth.users` sin cascada se vacían antes | `test/sql-guards.test.js`, `test/delete-account.test.js` |
 | El navegador solo consulta tablas conocidas y cada una tiene reglas de acceso por usuario (RLS) | `test/sql-guards.test.js` |
 | Cabeceras de seguridad y CSP estricta (sin scripts en línea), sin recursos de terceros | `test/security-headers.test.js`, `test/self-hosted-assets.test.js`, `test/ui-events.test.js` |
+| Cada botón y campo de la app llama a una función que existe (si no, queda mudo sin error visible); sin manejadores inline ni dentro de plantillas de JS | `test/ui-handlers-exist.test.js`, `test/ui-events.test.js` |
 | Nada de lo que escribe una persona se dibuja sin escapar | `test/xss-render.test.js` |
 | Tokens de relojes cifrados, nunca leídos ni guardados sin pasar por `token-crypto` | `test/token-crypto.test.js` |
 | Variables de seguridad de Vercel presentes (clave de cifrado de tokens válida, secretos de cron/Strava, base): si falta una, Sentry avisa por mail como máximo cada 12 h | `api/_lib/config-check.js` (lo llama el cron de recordatorios), `test/config-check.test.js` |
