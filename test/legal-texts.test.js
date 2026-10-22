@@ -39,7 +39,7 @@ test('la política declara los datos de seguridad de la cuenta (dispositivo, pa�
   }
 });
 
-test('la política describe la seguridad real: tokens cifrados, verificación en dos pasos, aviso de dispositivo nuevo y copias cifradas con plazo de 90 días', () => {
+test('la política describe la seguridad real: tokens cifrados, aviso de dispositivo nuevo y copias cifradas con plazo de 90 días', () => {
   for (const l of LANGS) {
     const seg = P[l].sections[7].p[0], cons = P[l].sections[8].p.join('\n');
     assert.match(seg, /HTTPS\/TLS/); assert.match(seg, /Strava/);
@@ -63,4 +63,18 @@ test('el respaldo semanal cumple lo que promete la política: nada con más de 9
   assert.match(ps, /Remove-OldBackups \$extra/);
   assert.match(ps, /Remove-OldBackups \$dest/);
   assert.match(ps, /Select-Object -Skip 2/, 'siempre quedan las 2 más nuevas');
+});
+
+test('no mencionan la verificación en dos pasos (se quitó de la app; el ingreso biométrico se agregará al lanzar)', () => {
+  const bad = /(dos pasos|two-step|duas etapas|deux étapes|due passaggi|zwei Schritten|2FA)/i;
+  for (const doc of [P, T]) for (const l of LANGS) assert.doesNotMatch(text(doc, l), bad, l);
+});
+
+test('edad mínima: 16 años en la política y en los Términos, igual que la pantalla de consentimiento; sin la cláusula de autorización de padres de 16 a 17', () => {
+  for (const l of LANGS) {
+    assert.match(P[l].sections[12].p[0], /16/, l); assert.match(T[l].sections[2].p[0], /16/, l);
+    assert.doesNotMatch(P[l].sections[12].p[0] + T[l].sections[2].p[0], /17/, l + ': ya no hay tramo 16-17');
+  }
+  const app = fs.readFileSync(path.join(__dirname, '..', 'locales', 'es.js'), 'utf8');
+  assert.match(app, /16/, 'la pantalla de consentimiento exige 16+');
 });
