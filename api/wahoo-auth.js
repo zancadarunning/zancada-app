@@ -7,7 +7,7 @@
 
 const { encToken } = require('./_lib/token-crypto');
 const crypto = require('crypto');
-const { workoutToRun, mergeWahooRuns, isRunningWorkoutType } = require('./_lib/wahoo-activity-helpers');
+const { workoutToRun, mergeWahooRuns, isImportableWorkout } = require('./_lib/wahoo-activity-helpers');
 
 const REDIRECT_URI = 'https://zancada.org/api/wahoo-auth';
 
@@ -85,7 +85,7 @@ const linkAccount = async (req, res) => {
     });
     const wData = await wRes.json();
     const workouts = (wData && wData.workouts) || [];
-    const runWorkouts = workouts.filter(w => isRunningWorkoutType(w.workout_type_id));
+    const runWorkouts = workouts.filter(isImportableWorkout);
     if (runWorkouts.length) {
       const plainHeaders = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
       const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${userId}&select=data`, { headers: plainHeaders });

@@ -27,6 +27,17 @@ function isRunningWorkoutType(workoutTypeId){
   return RUNNING_WORKOUT_TYPE_IDS.has(Number(workoutTypeId));
 }
 
+// ¿Es un entrenamiento que de verdad se hizo? Los entrenamientos PLANIFICADOS que Zancada sube a Wahoo (wahoo-plans-sync.js) aparecen en
+// GET /v1/workouts igual que los hechos, pero sin workout_summary: importarlos creaba una "carrera" de 0 km (con la fecha del día planeado, a veces
+// futura) que además daba por hecha la sesión del día. Solo se importa lo que trae un resumen con distancia o tiempo reales.
+function isImportableWorkout(w){
+  if (!w || !isRunningWorkoutType(w.workout_type_id)) return false;
+  const s = w.workout_summary;
+  if (!s) return false;
+  const dist = parseFloat(s.distance_accum), dur = parseFloat(s.duration_active_accum);
+  return (dist > 0) || (dur > 0);
+}
+
 // BUG SOSPECHADO, ahora arreglado igual que Strava/Polar/COROS: getUTCDay() a partir de
 // workout.starts le daba el día de la semana en UTC, no el local -- una corrida de noche
 // (pasadas las ~21hs en Argentina, UTC-3) se cargaba con la fecha del día SIGUIENTE.
@@ -199,4 +210,4 @@ async function refreshWahooToken(base, headers, userId, refreshToken){
   return { accessToken: tokenData.access_token, expiresAt };
 }
 
-module.exports = { isRunningWorkoutType, workoutToRun, mergeWahooRuns, purgeWahooRunsForUser, refreshWahooToken, fetchFitSplits };
+module.exports = { isImportableWorkout, isRunningWorkoutType, workoutToRun, mergeWahooRuns, purgeWahooRunsForUser, refreshWahooToken, fetchFitSplits };

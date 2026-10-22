@@ -7,7 +7,7 @@
 
 const { decToken } = require('./_lib/token-crypto');
 const verifyUser = require('./_lib/verify-user');
-const { workoutToRun, mergeWahooRuns, isRunningWorkoutType, refreshWahooToken } = require('./_lib/wahoo-activity-helpers');
+const { workoutToRun, mergeWahooRuns, isImportableWorkout, refreshWahooToken } = require('./_lib/wahoo-activity-helpers');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 
@@ -57,7 +57,7 @@ module.exports = withSentry(async (req, res) => {
     }
     const wData = await wRes.json();
     const workouts = (wData && wData.workouts) || [];
-    const runWorkouts = workouts.filter(w => isRunningWorkoutType(w.workout_type_id));
+    const runWorkouts = workouts.filter(isImportableWorkout);
 
     if (!runWorkouts.length) {
       return res.status(200).json({ synced: false, reason: 'no_new_activity' });

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22T12:48:23Z';
+const APP_VERSION = '2026-10-22T13:29:20Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -894,6 +894,10 @@ function showConfirm(message, opts){
 let state = {onboarded:false, profile:{}, plan:[], runs:[], shoes:[], event:null, chat:[], lang:lang, painLog:[], readinessLog:[]};
 let pendingEmail = '';
 let currentUserId = null;
+// Id de la cuenta cuyo `state` ya se CARGÓ de verdad desde el servidor (o que se confirmó vacía/nueva). persist() no escribe nada antes de eso: si la carga falla
+// (mala conexión), `state` sigue siendo el objeto vacío por defecto y un guardado -- por ejemplo el reintento automático del respaldo pendiente -- pisaba en la base
+// los datos reales con la cuenta en blanco y borraba el único respaldo local.
+let stateLoadedFor = null;
 /* ---- pantalla de "confirmá tu mail", con reintento automático de login mientras se espera ---- */
 let confirmEmailAddr = '';
 let confirmEmailPw = '';
@@ -971,7 +975,9 @@ function updateProfileUnitLabels(){
 function fmtPace(minPerKm){
   if(!minPerKm || minPerKm<=0) return '—';
   const val = isImperial() ? minPerKm * KM_PER_MI : minPerKm;
-  return `${Math.floor(val)}:${String(Math.round((val%1)*60)).padStart(2,'0')}`;
+  // Se redondea a segundos TOTALES antes de partir en minutos y segundos: redondear solo la fracción daba "5:60" para ritmos como 5.996 min/km.
+  const tot = Math.round(val * 60);
+  return `${Math.floor(tot / 60)}:${String(tot % 60).padStart(2,'0')}`;
 }
 
 /* ---- Supabase: cuentas y datos reales, sincronizados entre dispositivos ---- */
@@ -1327,7 +1333,7 @@ let persistInFlight = false;
 let persistQueued = false;
 let persistSettledResolvers = [];
 async function persist(){
-  if(!currentUserId) return;
+  if(!currentUserId || stateLoadedFor !== currentUserId) return;
   if(persistInFlight){ persistQueued = true; return; }
   persistInFlight = true;
   try{
@@ -1498,6 +1504,7 @@ async function loadUserAndEnter(user, isRetry){
     if(error) throw error;
     if(data && data.data && Object.keys(data.data).length){
       state = data.data; lang = state.lang || 'es';
+      stateLoadedFor = user.id;
       loadedStateVersion = data.updated_at || null;
       const pending = readPendingBackup(user.id);
       // El chequeo de "más carreras que en el servidor" solo (sin mirar cuándo se guardó cada
@@ -1580,6 +1587,7 @@ async function loadUserAndEnter(user, isRetry){
     }
     if(!(await ensureConsent())){ await supabaseClient.auth.signOut(); location.reload(); return; }   // el consentimiento viaja en state y se guarda con el onboarding
     pendingEmail = user.email;
+    stateLoadedFor = user.id;   // la consulta confirmó que no hay datos: cuenta nueva, el estado por defecto es el correcto
     document.getElementById('splash').style.display='none';
     document.getElementById('login').style.display='none';
     document.getElementById('onboard').style.display='block';
@@ -2464,6 +2472,8 @@ let wahooSyncTimer = null, wahooSyncRunning = false, wahooSyncAgain = false;
 // Wahoo dijo que el permiso de planes falta (token viejo sin plans_write): no se reintenta solo hasta la
 // próxima vez que se abre la app (cada intento gastaría cuota para recibir el mismo 403).
 let wahooSyncBlocked = false;
+// Backoff tras un envío que falló (el mismo motivo que suuntoBlockedUntil): scheduleWahooSync() sin demora explícita no pisa un reintento ya programado.
+let wahooBlockedUntil = 0;
 function watchSyncReady(){ return !!(state.weekStart && state.profile && state.profile.hrZones) && state.watchAutoPush!==false; }
 // Se llama desde persist(), al abrir/volver a la app y al conectar: espera unos segundos para
 // juntar varios cambios seguidos en un solo envío.
@@ -2474,6 +2484,7 @@ function scheduleSuuntoSync(){
 }
 function scheduleWahooSync(delayMs){
   if(!deviceConnections.wahoo || wahooSyncBlocked || !watchSyncReady()) return;
+  if(!delayMs && Date.now() < wahooBlockedUntil) return;
   clearTimeout(wahooSyncTimer);
   wahooSyncTimer = setTimeout(()=>{ syncPlanToWahoo(false).catch(e=>console.error('wahoo sync', e)); }, delayMs || 4000);
 }
@@ -2506,19 +2517,22 @@ async function syncPlanToSuunto(force){
           body: JSON.stringify({ reconcile:true, days:changed, keepDates:keep, weekStart, today:todayLocalISO(), zones, labels })
         });
         result = await res.json().catch(()=>null);
+        if(!result && !res.ok) suuntoBlockedUntil = Date.now() + 15*60*1000;   // la respuesta ni siquiera era JSON (502, HTML): tampoco insistir
         if(result){
           if(result.reason === 'not_connected'){ deviceConnections.suunto = false; }
+          const ok = res.ok && !result.error && !result.reason && !result.failed;
+          // Cualquier respuesta que no sea un éxito (token vencido, guides_forbidden, error del servidor...) frena los reintentos un rato: sin esto, el guardado
+          // que sigue a cada intento fallido (persist -> scheduleSuuntoSync) volvía a disparar el envío cada 4 segundos, gastando la cuota compartida de Suunto.
           if(result.reason === 'rate_limited'){ suuntoBlockedUntil = Date.now() + 60*60*1000; }
-          const ok = !result.reason && !result.failed;
+          else if(!ok){ suuntoBlockedUntil = Date.now() + 15*60*1000; }
           const next = {};
           keep.forEach(dt => { if(sent[dt] && !changed.some(c=>c.date===dt)) next[dt] = sent[dt]; });
           changed.forEach(d => { if((result.pushedDates||[]).includes(d.date)) next[d.date] = sigOf(d); });
           // Si algo falló no se dan por enviadas las que no llegaron (el próximo cambio lo reintenta)
           // ni se olvidan las que sobran todavía.
           if(!ok) stale.forEach(dt => { if(sent[dt]) next[dt] = sent[dt]; });
-          state.suuntoSent = next;
-          if(ok) state.suuntoWeek = weekStart;
-          dirty = true;
+          if(JSON.stringify(next) !== JSON.stringify(state.suuntoSent || {})){ state.suuntoSent = next; dirty = true; }
+          if(ok && state.suuntoWeek !== weekStart){ state.suuntoWeek = weekStart; dirty = true; }
         }
       }
     }
@@ -2559,13 +2573,16 @@ async function syncPlanToWahoo(force){
           body: JSON.stringify({ days:changed, removeDates:stale, known, zones, labels, tzOffsetMin:new Date().getTimezoneOffset(), weekStart })
         });
         result = await res.json().catch(()=>null);
+        if(!result && !res.ok) wahooBlockedUntil = Date.now() + 15*60*1000;
         if(result){
           if(result.reason === 'not_connected'){ deviceConnections.wahoo = false; }
           if(result.reason === 'reconnect_needed'){
             wahooSyncBlocked = true;
             if(!force) showToast(t('wahoo_reconnect_needed'),'error'); // en el envío manual ya lo avisa el botón
           }
-          const ok = !result.reason && !result.failed;
+          const ok = res.ok && !result.error && !result.reason && !result.failed;
+          if(result.reason === 'rate_limited') wahooBlockedUntil = Date.now() + 5.5*60*1000;
+          else if(!ok) wahooBlockedUntil = Date.now() + 15*60*1000;
           const next = {};
           keep.forEach(dt => { if(sent[dt] && !changed.some(c=>c.date===dt)) next[dt] = sent[dt]; });
           changed.forEach(d => {
@@ -2574,9 +2591,8 @@ async function syncPlanToWahoo(force){
             else if(sent[d.date]) next[d.date] = sent[d.date]; // no llegó: se conserva lo viejo y se reintenta
           });
           stale.forEach(dt => { if(!(result.removedDates||[]).includes(dt) && sent[dt]) next[dt] = sent[dt]; });
-          state.wahooSent = next;
-          if(ok) state.wahooWeek = weekStart;
-          dirty = true;
+          if(JSON.stringify(next) !== JSON.stringify(state.wahooSent || {})){ state.wahooSent = next; dirty = true; }
+          if(ok && state.wahooWeek !== weekStart){ state.wahooWeek = weekStart; dirty = true; }
           // Cuota de Wahoo agotada (la app en modo sandbox permite 25 llamadas cada 5 minutos): se
           // reintenta solo un poco después.
           if(result.reason === 'rate_limited') scheduleWahooSync(5.5*60*1000);
@@ -2945,6 +2961,7 @@ async function handleSignUp(){
     if(!data.session){ showConfirmEmailScreen(email, password); return; }
     pendingEmail = email;
     currentUserId = data.user.id;
+    stateLoadedFor = data.user.id;   // alta recién hecha: no hay nada que cargar
     document.getElementById('signup').style.display='none';
     document.getElementById('onboard').style.display='block';
     resetOnboardSteps();
@@ -7963,7 +7980,9 @@ function swapPlanDaySessions(dayA, dayB){
   // pantalla y del reloj (los días de carrera no se muestran ni se mandan como sesión) y seguiría
   // contando en el total. Devuelve false si no hizo nada.
   if(!dayA || !dayB || dayA.raceDay || dayB.raceDay) return false;
-  const fields = ['typeKey','dist','terrain','zone','interval','custom','cancelled','type','desc'];
+  // En un plan por tiempo (y en los principiantes) la sesión también vive en durMin/timeBased/runWalk/racePace*: si no viajan con ella, la tirada larga
+  // movida al sábado mostraba los minutos del rodaje que estaba ahí.
+  const fields = ['typeKey','dist','terrain','zone','interval','custom','cancelled','type','desc','durMin','timeBased','runWalk','racePaceSec','racePaceBlockKm','userTest'];
   const aCopy = {};
   fields.forEach(f=>{ aCopy[f] = dayA[f]; });
   fields.forEach(f=>{ if(dayB[f]===undefined) delete dayA[f]; else dayA[f] = dayB[f]; });
@@ -9703,7 +9722,9 @@ function lowerTodaySession(pct){
   const today = state.plan[idx];
   if(!today || today.dist<=0 || today.status) return false;
   const factor = 1 + (pct/100);
-  today.dist = Math.max(1, Math.round(today.dist*factor));
+  // Un decimal (con redondeo entero una sesión de 2 km con -15% seguía en 2 km), y protegida contra la regeneración del plan como cualquier otro recorte.
+  scaleDayAmount(today, factor, true);
+  freezeDayText(today);
   renderPlan(); renderHome();
   return true;
 }
@@ -13217,6 +13238,35 @@ async function submitRating(value){
   }
   setTimeout(checkPendingRating, 400);
 }
+// Escala la cantidad de una sesión (distancia, minutos, repeticiones) por `factor`. Para una sesión del algoritmo con estructura (series/cuestas/fartlek) se reducen las
+// repeticiones y la distancia sale de esa estructura; en un plan por tiempo también viajan durMin y las repeticiones de trote/caminata (planDurationMin lee durMin,
+// no dist: si solo cambiaba dist, la pantalla seguía mostrando los mismos minutos).
+function scaleDayAmount(d, factor, oneDecimal){
+  if(!d.custom && d.interval && (d.typeKey==='intervals' || d.typeKey==='hills' || d.typeKey==='fartlek')){
+    d.interval.reps = Math.max(1, Math.round(d.interval.reps*factor));
+    d.dist = d.typeKey==='intervals' ? intervalActualKm(d.interval)
+      : d.typeKey==='hills' ? hillActualKm(d.interval)
+      : fartlekActualKm(d.interval, state.profile);
+  } else {
+    d.dist = oneDecimal ? Math.max(0.1, Math.round(d.dist*factor*10)/10) : Math.max(1, Math.round(d.dist*factor));
+  }
+  if(d.runWalk && d.runWalk.reps > 0){
+    d.runWalk.reps = Math.max(1, Math.round(d.runWalk.reps*factor));
+    d.durMin = Math.max(1, Math.round(d.runWalk.reps*((d.runWalk.runSec||0) + (d.runWalk.walkSec||0))/60));
+  } else if(d.durMin > 0){
+    d.durMin = Math.max(5, Math.round(d.durMin*factor));
+  }
+}
+// Deja el texto de un día YA resuelto (tipo y descripción con los números reales) y lo marca custom: así ninguna regeneración del plan lo pisa. Marcar custom
+// sin resolver antes type/desc dejaba el día mostrando "undefined" y "NaNm" (planLabel lee d.type/d.desc en un día custom). Hay que llamarla DESPUÉS de escalar.
+function freezeDayText(d){
+  if(!d.custom){
+    const lbl = planLabelBody(d);
+    d.type = lbl.type; d.desc = lbl.desc; d.textLang = lang;
+    delete d.interval;
+    d.custom = true;
+  }
+}
 function lowerRemainingIntensity(pct){
   const factor = 1 + (pct/100);
   // Redondear al KM ENTERO (Math.round sin /10) se comía el recorte entero en sesiones
@@ -13245,15 +13295,8 @@ function lowerRemainingIntensity(pct){
     // d.dist a partir de la estructura YA reducida, con la misma fórmula que usa el propio
     // generador (intervalActualKm/hillActualKm/fartlekActualKm) -- así el número grande y
     // la descripción siempre están de acuerdo, para cualquier tipo de sesión.
-    if(d.interval && (d.typeKey==='intervals' || d.typeKey==='hills' || d.typeKey==='fartlek')){
-      d.interval.reps = Math.max(1, Math.round(d.interval.reps*factor));
-      d.dist = d.typeKey==='intervals' ? intervalActualKm(d.interval)
-        : d.typeKey==='hills' ? hillActualKm(d.interval)
-        : fartlekActualKm(d.interval, state.profile);
-    } else {
-      d.dist = Math.max(0.1, Math.round(d.dist*factor*10)/10);
-    }
-    d.custom = true;
+    scaleDayAmount(d, factor, true);
+    freezeDayText(d);
   });
   renderPlan(); renderHome(); persist();
 }
@@ -17185,6 +17228,9 @@ const COACH_GOALS = ['start', 'general', '5k', '10k', '15k', '21k', '42k', 'ultr
 function badCoachEnum(field, value, allowed){
   return `El valor de "${field}" (${String(value).slice(0, 30)}) no es válido -- usá uno de: ${allowed.join(', ')}.`;
 }
+function needsAmountMsg(dia){
+  return `Falta distancia_km o duracion_min: ${dia} no tenía ninguna sesión y sin cantidad el día seguiría siendo descanso -- volvé a llamar a modificar_sesion incluyendo uno de los dos.`;
+}
 function applyPlanChange(input){
   // El input_schema de la herramienta declara dia como enum:DAY_KEYS, pero eso es solo una
   // guía para el modelo -- la API de tool use no lo hace cumplir de verdad (mismo motivo que
@@ -17263,6 +17309,12 @@ function applyPlanChange(input){
     }
   }
   if(input.semana === 'siguiente'){
+    {
+      const baseDay = getNextWeekPlan().plan.find(x => x.day === input.dia);
+      const prev = state.nextWeekOverrides && state.nextWeekOverrides[input.dia];
+      const hadAmount = (prev && prev.dist > 0) || (baseDay && baseDay.dist > 0);
+      if(resolvePlanDistKm(input) === null && !hadAmount) return needsAmountMsg(input.dia);
+    }
     captureUndoSnapshot();
     // la semana que sigue no es un array persistido como state.plan, así que el cambio puntual
     // se guarda como "override" y se aplica encima de lo que genere getNextWeekPlan() cada vez
@@ -17275,6 +17327,10 @@ function applyPlanChange(input){
     const override = { type: input.tipo, desc: input.descripcion, typeKey: input.tipo_categoria, textLang: lang };
     const effectiveDistKm = resolvePlanDistKm(input);
     if(effectiveDistKm!==null) override.dist = effectiveDistKm;
+    // mismo criterio que la semana actual: duracion_min fija los minutos; solo distancia los recalcula; el trote/caminata del día base no se hereda
+    if(typeof input.duracion_min === 'number' && input.duracion_min > 0) override.durMin = Math.round(input.duracion_min);
+    else if(effectiveDistKm !== null) override.durMin = undefined;
+    override.runWalk = undefined;
     const zone = resolveZone(input.zona);
     if(zone!==null) override.zone = zone;
     if(input.terreno) override.terrain = input.terreno;
@@ -17301,6 +17357,8 @@ function applyPlanChange(input){
   // entrenamiento distinto de forma retroactiva. Se lo explicamos al modelo para
   // que se lo cuente al corredor en vez de aplicar el cambio silenciosamente.
   if(isDayLocked(input.dia)) return `No puedo modificar ${input.dia}: ya pasó (o ya se corrió/salteó) esta semana. Puedo ajustar desde hoy en adelante, o la semana que viene.`;
+  // Un día de descanso al que se le asigna una sesión sin distancia ni duración quedaba en 0 km (descanso para todo el resto de la app) y la herramienta decía OK.
+  if(resolvePlanDistKm(input) === null && !(d.dist > 0)) return needsAmountMsg(input.dia);
   captureUndoSnapshot();
   d.custom = true;
   d.cancelled = false; // si venía de cancelar_sesion, esta sesión nueva reemplaza esa cancelación
@@ -17311,6 +17369,11 @@ function applyPlanChange(input){
   d.typeKey = input.tipo_categoria;
   const effectiveDistKm = resolvePlanDistKm(input);
   if(effectiveDistKm!==null) d.dist = effectiveDistKm;
+  // Plan por tiempo: planDurationMin lee d.durMin (no d.dist). Con duracion_min se fija; si solo cambia la distancia se descarta durMin para que los minutos
+  // se recalculen de la distancia nueva; y el trote/caminata del principiante no vale para una sesión nueva.
+  if(typeof input.duracion_min === 'number' && input.duracion_min > 0) d.durMin = Math.round(input.duracion_min);
+  else if(effectiveDistKm !== null) delete d.durMin;
+  delete d.runWalk;
   const zone = resolveZone(input.zona);
   if(zone!==null) d.zone = zone;
   const customInterval = resolveCustomInterval(input);
@@ -17466,7 +17529,9 @@ function applyVolumeAdjust(input){
         // junto a planLabel(): guardar acá el texto YA envuelto con entrada en calor/vuelta a
         // la calma duplicaría esa envoltura la próxima vez que algo (Plan, Inicio, etc.)
         // llame a planLabel() sobre este mismo día, que para entonces ya quedó custom:true.
-        const lbl = d.custom ? {type:d.type, desc:d.desc} : planLabelBody(d);
+        const c = JSON.parse(JSON.stringify(d));
+        scaleDayAmount(c, factor, false);
+        const lbl = c.custom ? {type:c.type, desc:c.desc} : planLabelBody(c);
         // Mismo motivo que en applyPlanChange (ver su comentario sobre esta misma rama):
         // getNextWeekPlan() arma este día de cero cada vez con Object.assign({}, d, ov, ...),
         // así que si el override no trae su propia clave `interval`, queda colgado el
@@ -17476,7 +17541,10 @@ function applyVolumeAdjust(input){
         // null); si todavía era del algoritmo, el texto de lbl.desc ya tiene los números
         // reales incrustados (reps, metros, minutos), así que no hace falta ningún interval.
         const interval = d.custom ? (d.interval || null) : null;
-        state.nextWeekOverrides[d.day] = { type: lbl.type, desc: lbl.desc, dist: Math.max(1, Math.round(d.dist*factor)), zone: d.zone, terrain: d.terrain, interval };
+        // typeKey/textLang/durMin: sin typeKey el override dejaba el tipo del día base (un martes de descanso quedaba como rest con distancia); sin durMin un plan por tiempo no cambiaba.
+        const ov = { type: lbl.type, desc: lbl.desc, dist: c.dist, zone: d.zone, terrain: d.terrain, interval, typeKey: d.typeKey, textLang: c.textLang || lang, runWalk: undefined };
+        if(c.durMin > 0) ov.durMin = c.durMin;
+        state.nextWeekOverrides[d.day] = ov;
       }
     });
     renderPlan(); persist();
@@ -17493,21 +17561,9 @@ function applyVolumeAdjust(input){
   state.plan.forEach(d=>{
     if(d.dist>0 && !isDayLocked(d.day)){
       touchedCount++;
-      if(!d.custom){
-        // Mismo bug que ya se arregló en applyPlanChange (ver sus comentarios): marcar
-        // custom:true sin resolver antes tipo/descripción dejaba planLabel() leyendo
-        // d.type/d.desc undefined, y si el día era de series/cuestas (interval en formato
-        // reps/repMeters del algoritmo) encima intentaba mostrarlo como fartlek
-        // (workMin/restMin), saliendo "NaNm". planLabelBody(d) ACÁ (SIN la envoltura de
-        // entrada en calor/vuelta a la calma -- ver el comentario junto a planLabel(), si se
-        // guardara ya envuelta se duplicaría en el próximo render), antes de tocar nada, ya
-        // deja los números reales (reps, metros, minutos) incrustados como texto en desc.
-        const lbl = planLabelBody(d);
-        d.type = lbl.type; d.desc = lbl.desc; d.textLang = lang;
-        delete d.interval;
-        d.custom = true;
-      }
-      d.dist = Math.max(1, Math.round(d.dist*factor));
+      // escalar primero y recién después congelar el texto: así la descripción lleva las repeticiones y los minutos YA reducidos
+      scaleDayAmount(d, factor, false);
+      freezeDayText(d);
     }
   });
   if(!touchedCount){

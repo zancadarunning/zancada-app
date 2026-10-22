@@ -137,3 +137,18 @@ test('persist: si Supabase devuelve un error de red (no lanza), el cambio queda 
   await app.persist();
   assert.equal(app.hasPendingBackup(), false, 'con conexión el respaldo pendiente se limpia');
 });
+
+test('persist: si la cuenta todavía no se cargó (falló la consulta), NO escribe el estado vacío por defecto sobre los datos reales', async () => {
+  const upsertCalls = [];
+  const app = loadApp({ onUpsert(payload) { upsertCalls.push(payload); return Promise.resolve({ data: null, error: null }); } });
+  app.setCurrentUserId('user-de-prueba');
+  app.setStateLoadedFor(null);                       // loadUserAndEnter puso currentUserId pero la carga no terminó
+  await app.persist();
+  assert.equal(upsertCalls.length, 0, 'sin carga confirmada no se guarda nada (el respaldo pendiente queda para cuando sí cargue)');
+  app.setStateLoadedFor('otra-cuenta');
+  await app.persist();
+  assert.equal(upsertCalls.length, 0, 'un estado cargado para OTRA cuenta tampoco se escribe');
+  app.setStateLoadedFor('user-de-prueba');
+  await app.persist();
+  assert.equal(upsertCalls.length, 1, 'con la carga confirmada guarda normal');
+});
