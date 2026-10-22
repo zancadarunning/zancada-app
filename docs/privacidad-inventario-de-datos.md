@@ -13,7 +13,6 @@ Base para los textos legales y para el cumplimiento de privacidad en un lanzamie
 | Charla con Zonda | mensajes del usuario y respuestas de la IA | Puede incluir salud | `app_state` y, mientras se procesa, Anthropic |
 | Conexiones con relojes | tokens de acceso de Strava, Suunto, Wahoo, Polar y COROS (cifrados en la base) | Credencial | `*_connections` (Supabase) |
 | Notificaciones | suscripción push (web) o token de Firebase (Android) | No | `push_subscriptions` |
-| Social (opcional) | nombre de usuario público, a quién sigue, carreras compartidas (solo distancia, duración y fecha) | No | `usernames`, `follows`, `run_feed`, `run_likes` |
 | Técnicos | límites de uso del chat, avisos enviados | No | `chat_usage`, `sent_notifications`, `sync_cooldowns` |
 | Dispositivos conocidos | hash de un identificador al azar de cada instalación, tipo de dispositivo ("Android · app"), **país aproximado** (sin IP) y fechas; sirve solo para avisar por correo de un inicio de sesión desde un dispositivo nuevo. Máximo 20 por cuenta; se borra con la cuenta | No | `known_devices` (`sql/known_devices.sql`) |
 | Registros de errores | errores del servidor, con datos personales eliminados antes de enviarse (`scrubEvent`) | Mínimo | Sentry |

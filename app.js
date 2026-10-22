@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22T03:15:00Z';
+const APP_VERSION = '2026-10-22T12:48:23Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3457,7 +3457,7 @@ function relinkTodayRun(){
   const todayRun = (state.runs||[]).find(r=>{
     if(r.id === today.declinedRunId) return false;
     const d = new Date(r.date);
-    return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
+    return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate() && runCountsForSession(r, today);
   });
   if(todayRun){ today.status = 'done'; today.linkedRunId = todayRun.id; return true; }
   return false;
@@ -5821,7 +5821,7 @@ function repairSkippedDaysWithMatchingRuns(){
     if(d.status !== 'skipped' || d.linkedRunId) return;
     const dayDate = new Date(weekStartDate); dayDate.setDate(dayDate.getDate()+i);
     const dayIso = `${dayDate.getFullYear()}-${String(dayDate.getMonth()+1).padStart(2,'0')}-${String(dayDate.getDate()).padStart(2,'0')}`;
-    const match = state.runs.find(r => localDateISO(r.date) === dayIso);
+    const match = state.runs.find(r => localDateISO(r.date) === dayIso && runCountsForSession(r, d));
     if(match){ d.status = 'done'; d.linkedRunId = match.id; changed = true; }
   });
   if(changed) persist();
@@ -13296,6 +13296,19 @@ async function closeSummary(){
   setTimeout(checkPendingRating, 500);
   setTimeout(()=>maybePromptLevelTestFromRun(runId), 1200);
 }
+// ¿Esta carrera alcanza para dar por hecha la sesión planeada de ese día? Antes cualquier carrera del día valía: arrancar y frenar sin querer
+// (400 m) marcaba como hecha una tirada larga de 20 km, o el Test de nivel de 12 minutos, y sumaba a la racha. Ahora tiene que llegar al
+// 30% de la distancia O del tiempo planeado (un día sin sesión planeada, o un plan sin datos para comparar, no exige nada).
+const SESSION_MIN_FRACTION = 0.3;
+function runCountsForSession(run, d){
+  if(!run || !d) return false;
+  const plannedKm = Number(d.dist) > 0 ? Number(d.dist) : 0;
+  const plannedMin = d.typeKey === 'test' ? 12 : (Number(d.durMin) > 0 ? Number(d.durMin) : (plannedKm > 0 ? planDurationMin(d, state.profile) : 0));
+  if(!plannedKm && !plannedMin) return true;
+  const kmOk = plannedKm > 0 && (Number(run.distanceKm) || 0) >= plannedKm * SESSION_MIN_FRACTION;
+  const minOk = plannedMin > 0 && (Number(run.durationSec) || 0) >= plannedMin * 60 * SESSION_MIN_FRACTION;
+  return kmOk || minOk;
+}
 function autoMarkSessionDone(dateIso, runId){
   const monday = getMondayISO(new Date(dateIso));
   if(monday !== state.weekStart) return;
@@ -13307,7 +13320,8 @@ function autoMarkSessionDone(dateIso, runId){
   // siempre aunque la carrera ya esté en Historial. Un día ya 'done' sí se respeta tal cual
   // -- no le robamos el link a un run distinto que ya cuenta para ese día.
   const d = state.plan[idx];
-  if(d && (!d.status || d.status === 'skipped')){ d.status = 'done'; d.linkedRunId = runId; }
+  const run = (state.runs||[]).find(r => String(r.id) === String(runId));
+  if(d && (!d.status || d.status === 'skipped') && runCountsForSession(run, d)){ d.status = 'done'; d.linkedRunId = runId; }
 }
 function toggleManualForm(){
   const el = document.getElementById('manual-run-card');

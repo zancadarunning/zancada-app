@@ -25,13 +25,13 @@ function setup({ failTable } = {}) {
 }
 const call = async (body) => { const res = mkRes(); await handler({ method: 'POST', headers: { authorization: 'Bearer t', origin: 'https://zancada.org' }, body }, res); return res; };
 
-test('mode "data": borra todo lo de la persona (conexiones, push, chat, social, estado) y NO borra el usuario de acceso', async () => {
+test('mode "data": borra todo lo de la persona (conexiones, push, chat, estado) y NO borra el usuario de acceso', async () => {
   const log = setup();
   const r = await call({ mode: 'data' });
   assert.equal(r.code, 200);
   assert.equal(log.authDeleted, false);
   const tables = log.deleted.map(d => d.split('?')[0]);
-  for (const t of ['app_state', 'strava_connections', 'suunto_connections', 'wahoo_connections', 'polar_connections', 'coros_connections', 'push_subscriptions', 'chat_usage', 'sent_notifications', 'run_feed', 'usernames', 'follows']) {
+  for (const t of ['app_state', 'strava_connections', 'suunto_connections', 'wahoo_connections', 'polar_connections', 'coros_connections', 'push_subscriptions', 'chat_usage', 'sent_notifications']) {
     assert.ok(tables.includes(t), 'debería borrar ' + t);
   }
   assert.ok(log.deleted.every(d => d.includes('u1')), 'cada borrado está acotado al usuario');

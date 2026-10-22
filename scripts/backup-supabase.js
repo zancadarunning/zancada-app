@@ -13,7 +13,7 @@ const path = require('path');
 const os = require('os');
 
 const TABLES = [
-  'app_state', 'push_subscriptions', 'usernames', 'follows', 'run_feed', 'run_likes',
+  'app_state', 'push_subscriptions',
   'chat_usage', 'sent_notifications', 'sync_cooldowns'
 ];
 const TOKEN_TABLES = ['strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'suunto_connections'];
