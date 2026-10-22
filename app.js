@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22T00:05:21Z';
+const APP_VERSION = '2026-10-22T01:31:05Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1567,6 +1567,12 @@ let mfaSetupUri = '', mfaSetupSecret = '';
 function isPhoneLike(){
   return !!((window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || ''));
 }
+// iPhone/iPad: el sistema le da los enlaces otpauth:// a la app Contraseñas de Apple y no deja elegir otra (Google/Microsoft Authenticator, etc.):
+// ahí no se ofrece "abrir la app", solo copiar la clave y pegarla a mano.
+function isIOSLike(){
+  const ua = navigator.userAgent || '';
+  return /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && (navigator.maxTouchPoints || 0) > 1);
+}
 function openMfaApp(){
   // Solo un enlace de este formato: nunca se navega a otra cosa que pueda venir en la respuesta.
   if(!/^otpauth:\/\/totp\/[^\s]+$/.test(mfaSetupUri)){ showToast(t('mfa_error'), 'error'); return; }
@@ -1610,7 +1616,10 @@ async function toggleMfa(){
     set('mfa-setup-secret', data.totp.secret || '');
     mfaSetupUri = String(data.totp.uri || ''); mfaSetupSecret = String(data.totp.secret || '');
     set('mfa-open-app', t('mfa_open_app')); set('mfa-copy-key', t('mfa_copy_key'));
-    const openBtn = document.getElementById('mfa-open-app'); if(openBtn) openBtn.style.display = isPhoneLike() ? '' : 'none';
+    const phone = isPhoneLike(), ios = isIOSLike();
+    const openBtn = document.getElementById('mfa-open-app'); if(openBtn) openBtn.style.display = (phone && !ios) ? '' : 'none';
+    const copyBtn = document.getElementById('mfa-copy-key'); if(copyBtn) copyBtn.className = ios ? 'btn btn-primary' : 'btn btn-gray';
+    set('mfa-setup-manual', t('mfa_manual_hint')); const manual = document.getElementById('mfa-setup-manual'); if(manual) manual.style.display = phone ? '' : 'none';
     const qr = document.getElementById('mfa-setup-qr'); if(qr) qr.src = data.totp.qr_code || '';
     const code = document.getElementById('mfa-setup-code'); if(code) code.value = '';
     const err = document.getElementById('mfa-setup-err'); if(err){ err.textContent = ''; err.style.display = 'none'; }

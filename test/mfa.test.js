@@ -132,7 +132,7 @@ test('loadUserAndEnter exige el segundo paso ANTES de leer cualquier dato de la 
 test('los textos del segundo paso existen en los 6 idiomas', () => {
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
     const s = fs.readFileSync(path.join(__dirname, '..', 'locales', l + '.js'), 'utf8');
-    for (const k of ['mfa_row_title', 'mfa_row_on', 'mfa_row_off', 'mfa_setup_title', 'mfa_setup_intro', 'mfa_setup_step1', 'mfa_setup_secret', 'mfa_setup_step2', 'mfa_setup_warn', 'mfa_code_label', 'mfa_verify_btn', 'mfa_cancel_btn', 'mfa_enabled_toast', 'mfa_disabled_toast', 'mfa_disable_confirm', 'mfa_disable_btn', 'mfa_challenge_title', 'mfa_challenge_text', 'mfa_code_invalid', 'mfa_error', 'mfa_lost', 'mfa_open_app', 'mfa_copy_key', 'mfa_key_copied', 'mfa_open_app_none']) assert.ok(s.includes(k + ':'), l + ' sin ' + k);
+    for (const k of ['mfa_row_title', 'mfa_row_on', 'mfa_row_off', 'mfa_setup_title', 'mfa_setup_intro', 'mfa_setup_step1', 'mfa_setup_secret', 'mfa_setup_step2', 'mfa_setup_warn', 'mfa_code_label', 'mfa_verify_btn', 'mfa_cancel_btn', 'mfa_enabled_toast', 'mfa_disabled_toast', 'mfa_disable_confirm', 'mfa_disable_btn', 'mfa_challenge_title', 'mfa_challenge_text', 'mfa_code_invalid', 'mfa_error', 'mfa_lost', 'mfa_open_app', 'mfa_copy_key', 'mfa_key_copied', 'mfa_open_app_none', 'mfa_manual_hint']) assert.ok(s.includes(k + ':'), l + ' sin ' + k);
     assert.ok(s.includes('info@zancada.org'), l + ' dice cómo recuperar la cuenta');
   }
 });
@@ -227,4 +227,33 @@ test('el modal de 2FA tiene los dos botones nuevos y usan data-on-click (la CSP 
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(html, /id="mfa-open-app"[^>]*data-on-click="openMfaApp\(\)"/);
   assert.match(html, /id="mfa-copy-key"[^>]*data-on-click="copyMfaKey\(\)"/);
+});
+
+test('iPhone/iPad: no se ofrece "abrir la app" (iOS se lo da a Contraseñas de Apple); "Copiar clave" pasa a ser el botón principal y se explica cómo pegarla', async () => {
+  for (const ua of ['Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148', 'Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X)']) {
+    const { app, el } = setup(enrollMock('otpauth://totp/Zancada:a?secret=ABCDEF234567'));
+    app.navigator.userAgent = ua;
+    await app.toggleMfa();
+    assert.equal(el('mfa-open-app').style.display, 'none');
+    assert.equal(el('mfa-copy-key').className, 'btn btn-primary');
+    assert.equal(el('mfa-setup-manual').style.display, '');
+    assert.equal(el('mfa-setup-manual').textContent, app.t('mfa_manual_hint'));
+  }
+});
+
+test('Android: el botón de abrir la app sí aparece, "Copiar clave" queda secundario y la ayuda manual se ve', async () => {
+  const { app, el } = setup(enrollMock('otpauth://totp/Zancada:a?secret=ABCDEF234567'));
+  app.navigator.userAgent = 'Mozilla/5.0 (Linux; Android 14; Moto) Chrome/120 Mobile';
+  await app.toggleMfa();
+  assert.equal(el('mfa-open-app').style.display, '');
+  assert.equal(el('mfa-copy-key').className, 'btn btn-gray');
+  assert.equal(el('mfa-setup-manual').style.display, '');
+});
+
+test('computadora: sin botón de abrir app y sin la ayuda manual (alcanza con el QR)', async () => {
+  const { app, el } = setup(enrollMock('otpauth://totp/Zancada:a?secret=ABCDEF234567'));
+  app.navigator.userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120';
+  await app.toggleMfa();
+  assert.equal(el('mfa-open-app').style.display, 'none');
+  assert.equal(el('mfa-setup-manual').style.display, 'none');
 });
