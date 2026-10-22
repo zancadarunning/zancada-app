@@ -180,6 +180,8 @@ BEGIN
        AND v_day_idx IS NOT NULL
        AND jsonb_array_length(v_plan) > v_day_idx
        AND (v_plan -> v_day_idx ->> 'status') IS NULL
+       -- una actividad mínima (ej. 400 m) no da por hecha la sesión del día: ver sql/run_counts_for_session.sql
+       AND public.run_counts_for_session(v_plan -> v_day_idx, v_run_clean)
     THEN
       v_plan := jsonb_set(v_plan, ARRAY[v_day_idx::text, 'status'], '"done"');
       v_plan := jsonb_set(v_plan, ARRAY[v_day_idx::text, 'linkedRunId'], to_jsonb(v_run_clean ->> 'id'));
