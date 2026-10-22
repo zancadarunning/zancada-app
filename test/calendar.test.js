@@ -59,3 +59,12 @@ test('calBoundsFor: cada input tiene el límite que le corresponde (nacimiento n
   assert.deepEqual({...app.calBoundsFor('edit-run-date')}, { max: today });
   assert.deepEqual({...app.calBoundsFor('algo-sin-limite')}, {});
 });
+
+// Los días del calendario se tocaban con un onclick="..." escrito dentro de una plantilla: la CSP estricta lo bloquea y NINGÚN calendario dejaba elegir un día
+// (carga manual de carrera, fecha de carrera, nacimiento...). Tienen que ir como data-on-click, que sí ejecuta js/ui-events.js.
+test('renderCalendar: cada día habilitado se toca con data-on-click="calSelectDay(N)" (nunca con onclick inline)', () => {
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'app.js'), 'utf8');
+  const fn = src.slice(src.indexOf('function renderCalendar()'), src.indexOf('function renderCalendar()') + 3500);
+  assert.match(fn, /data-on-click="calSelectDay\(\$\{c\.day\}\)"/);
+  assert.doesNotMatch(fn, /\sonclick=/);
+});

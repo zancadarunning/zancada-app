@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22T01:42:25Z';
+const APP_VERSION = '2026-10-22T02:12:14Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4079,7 +4079,7 @@ function renderCalendar(){
     const isSelected = selectedTime!==null && cellDate.getTime()===selectedTime;
     const cellDateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(c.day).padStart(2,'0')}`;
     const isDisabled = !calDateAllowed(cellDateStr, bounds);
-    return `<div class="cal-day ${isToday?'today':''} ${isSelected?'selected':''} ${isDisabled?'disabled':''}" ${isDisabled?'':`onclick="calSelectDay(${c.day})"`}>${c.day}</div>`;
+    return `<div class="cal-day ${isToday?'today':''} ${isSelected?'selected':''} ${isDisabled?'disabled':''}" ${isDisabled?'':`data-on-click="calSelectDay(${c.day})"`}>${c.day}</div>`;
   }).join('');
   makeClickablesFocusable(document.getElementById('cal-grid'));
 }

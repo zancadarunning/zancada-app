@@ -84,10 +84,10 @@ test('el árbol se arma una vez por texto y no ejecuta nada al armarlo', () => {
 });
 
 // ---------- guardas del repositorio ----------
-const INLINE_ATTR = /[\s"'](on(click|input|change|keydown|keyup|keypress|error|load|submit|focus|blur|mouseover|mouseout|touchstart|touchend|pointerdown|pointerup))=/;
+const INLINE_ATTR = /[\s"'`](on(click|input|change|keydown|keyup|keypress|error|load|submit|focus|blur|mouseover|mouseout|touchstart|touchend|pointerdown|pointerup))=/;
 
 test('index.html y app.js no vuelven a escribir manejadores inline (onclick=...): van como data-on-*', () => {
-  for (const f of ['index.html', 'app.js', 'privacy.html', 'terms.html']) {
+  for (const f of ['index.html', 'app.js', 'privacy.html', 'terms.html', ...fs.readdirSync(path.join(__dirname, '..', 'js')).filter(x => x.endsWith('.js') && x !== 'ui-events.js').map(x => 'js/' + x)]) {
     const s = read(f);
     const m = s.match(INLINE_ATTR);
     assert.equal(m, null, f + ' tiene un manejador inline: ' + (m && m[0]));
