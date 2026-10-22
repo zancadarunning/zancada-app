@@ -49,7 +49,7 @@ async function runAt(isoUtc, users) {
     }
     if (url.includes('/rest/v1/push_subscriptions')) return ok(users.map(u => ({ user_id: u.id, platform: 'android', subscription: { token: 'tok-' + u.id } })));
     if (url.includes('select=runs:')) { const id = url.match(/user_id=eq\.([^&]+)/)[1]; return ok([{ runs: users.find(u => u.id === id).runs }]); }
-    if (url.includes('/rest/v1/app_state')) return ok(users.map(u => ({ user_id: u.id, plan: u.plan, weekStart: u.weekStart, tz: 'UTC', rh: '8', lang: 'es', streak: '0', units: null })));
+    if (url.includes('/rest/v1/app_state')) return ok(users.map(u => ({ user_id: u.id, plan: u.plan, weekStart: u.weekStart, tz: 'UTC', rh: '8', lang: u.lang || 'es', streak: '0', units: u.units || null, trainBy: u.trainBy || null })));
     return ok([]);
   };
   process.env.CRON_SECRET = 'test-secret'; process.env.SUPABASE_URL = 'https://x.test'; process.env.SUPABASE_SERVICE_KEY = 'k';
@@ -73,6 +73,16 @@ test('recordatorio diario: sale en la corrida de :00 y NO en la de :30 (no se du
   assert.equal(a.sent.filter(s => s.title === 'Zancada' && /Hoy toca/.test(s.body)).length, 1);
   const b = await runAt('2026-10-13T08:30:10Z', users);
   assert.equal(b.sent.length, 0, 'la corrida de :30 no manda el recordatorio diario otra vez');
+});
+
+test('recordatorio diario: respeta las unidades y el modo por tiempo (antes decía siempre km)', async () => {
+  const at = '2026-10-13T08:00:10Z';
+  const body = async (u) => (await runAt(at, [{ id: 'u1', plan, weekStart: '2026-10-12', runs: [], ...u }])).sent[0].body;
+  assert.equal(await body({}), 'Hoy toca: Rodaje suave · 5.0 km');
+  assert.equal(await body({ units: 'imperial' }), 'Hoy toca: Rodaje suave · 3.1 mi');
+  const timePlan = plan.map(d => ({ ...d, durMin: 40 }));
+  assert.equal(await body({ plan: timePlan, trainBy: 'time' }), 'Hoy toca: Rodaje suave · 40 min');
+  assert.equal(await body({ lang: 'en' }), 'Today: Easy run · 5.0 km');
 });
 
 // usuario cuyo turno (normal o tardío) sea el pedido
