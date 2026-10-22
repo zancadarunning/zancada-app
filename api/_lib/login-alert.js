@@ -59,8 +59,7 @@ const COPY = {
       'Si fuiste vos, no tenés que hacer nada.', '',
       'Si no fuiste vos:',
       '1. Cambiá tu contraseña ahora: en la pantalla de ingreso tocá «Olvidé mi contraseña».',
-      '2. Activá la verificación en dos pasos en Perfil.',
-      '3. Escribinos a info@zancada.org y lo revisamos juntos.', '',
+      '2. Escribinos a info@zancada.org y lo revisamos juntos.', '',
       'Este aviso no tiene enlaces a propósito: entrá siempre desde la app.', '', '— Zancada']
   },
   en: {
@@ -72,8 +71,7 @@ const COPY = {
       'If it was you, there is nothing to do.', '',
       'If it wasn’t you:',
       '1. Change your password now: on the sign-in screen tap “Forgot my password”.',
-      '2. Turn on two-step verification in Profile.',
-      '3. Write to us at info@zancada.org and we’ll look into it together.', '',
+      '2. Write to us at info@zancada.org and we’ll look into it together.', '',
       'This message has no links on purpose: always open the app yourself.', '', '— Zancada']
   },
   pt: {
@@ -85,8 +83,7 @@ const COPY = {
       'Se foi você, não precisa fazer nada.', '',
       'Se não foi você:',
       '1. Troque sua senha agora: na tela de login toque em “Esqueci minha senha”.',
-      '2. Ative a verificação em duas etapas em Perfil.',
-      '3. Escreva para info@zancada.org e vamos analisar juntos.', '',
+      '2. Escreva para info@zancada.org e vamos analisar juntos.', '',
       'Este aviso não tem links de propósito: abra sempre o app por conta própria.', '', '— Zancada']
   },
   fr: {
@@ -98,8 +95,7 @@ const COPY = {
       'Si c’était toi, il n’y a rien à faire.', '',
       'Si ce n’était pas toi :',
       '1. Change ton mot de passe maintenant : sur l’écran de connexion, appuie sur « Mot de passe oublié ».',
-      '2. Active la vérification en deux étapes dans Profil.',
-      '3. Écris-nous à info@zancada.org et on regarde ça ensemble.', '',
+      '2. Écris-nous à info@zancada.org et on regarde ça ensemble.', '',
       'Ce message n’a pas de lien, exprès : ouvre toujours l’appli toi-même.', '', '— Zancada']
   },
   it: {
@@ -111,8 +107,7 @@ const COPY = {
       'Se eri tu, non devi fare nulla.', '',
       'Se non eri tu:',
       '1. Cambia subito la password: nella schermata di accesso tocca «Password dimenticata».',
-      '2. Attiva la verifica in due passaggi in Profilo.',
-      '3. Scrivici a info@zancada.org e controlliamo insieme.', '',
+      '2. Scrivici a info@zancada.org e controlliamo insieme.', '',
       'Questo avviso non ha link di proposito: apri sempre l’app da solo.', '', '— Zancada']
   },
   de: {
@@ -124,8 +119,7 @@ const COPY = {
       'Wenn du es warst, musst du nichts tun.', '',
       'Wenn du es nicht warst:',
       '1. Ändere jetzt dein Passwort: Tippe auf dem Anmeldebildschirm auf „Passwort vergessen“.',
-      '2. Aktiviere die Bestätigung in zwei Schritten im Profil.',
-      '3. Schreib uns an info@zancada.org, dann sehen wir es uns gemeinsam an.', '',
+      '2. Schreib uns an info@zancada.org, dann sehen wir es uns gemeinsam an.', '',
       'Diese Nachricht enthält absichtlich keine Links: Öffne die App immer selbst.', '', '— Zancada']
   }
 };

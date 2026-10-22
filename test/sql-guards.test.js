@@ -15,7 +15,7 @@ const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 // Tablas que se crearon a mano en Supabase (no tienen CREATE TABLE en sql/) y guardan datos de personas.
 const HAND_MADE_USER_TABLES = ['app_state', 'push_subscriptions', 'strava_connections'];
-// Tablas que el navegador consulta directo con la sesión de la persona (`.from('...')` en app.js). Cada una necesita RLS por usuario Y la política del segundo paso.
+// Tablas que el navegador consulta directo con la sesión de la persona (`.from('...')` en app.js). Cada una necesita RLS por usuario.
 const CLIENT_TABLES = ['app_state', 'push_subscriptions', 'strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'suunto_connections'];
 
 function createdTables() {
@@ -70,11 +70,21 @@ test('las claves a auth.users sin ON DELETE CASCADE se vacían ANTES de borrar e
   for (const t of ['push_subscriptions', 'strava_connections']) assert.match(fix, new RegExp(`alter\\s+table\\s+public\\.${t}[\\s\\S]*?on\\s+delete\\s+cascade`, 'i'));
 });
 
-test('el navegador solo consulta tablas conocidas, y cada una tiene la política del segundo paso (mfa_required)', () => {
+test('el navegador solo consulta tablas conocidas, y cada una tiene reglas de acceso por usuario (RLS)', () => {
   const app = read('app.js');
   const usadas = [...new Set([...app.matchAll(/\.from\('([a-z_]+)'\)/g)].map(m => m[1]))];
-  assert.deepEqual(usadas.filter(t => !CLIENT_TABLES.includes(t)), [], 'una tabla nueva consultada desde el navegador necesita: RLS por usuario (auth.uid() = user_id), la política mfa_required (sql/mfa_rls.sql) y agregarse a CLIENT_TABLES acá');
-  for (const t of CLIENT_TABLES) assert.match(sql['mfa_rls.sql'], new RegExp(`create\\s+policy\\s+mfa_required\\s+on\\s+public\\.${t}\\b`, 'i'), `${t} no tiene la política mfa_required`);
+  assert.deepEqual(usadas.filter(t => !CLIENT_TABLES.includes(t)), [], 'una tabla nueva consultada desde el navegador necesita RLS por usuario (auth.uid() = user_id) y agregarse a CLIENT_TABLES acá');
+  // las tablas con sql/ propio activan RLS (lo verifica el primer test); las creadas a mano tienen su RLS en sql/user_data_rls.sql
+  const rls = Object.values(sql).join('\n');
+  for (const t of CLIENT_TABLES) assert.match(rls, new RegExp('alter\\s+table\\s+public\\.' + t + '\\s+enable\\s+row\\s+level\\s+security', 'i'), t + ' no activa RLS');
+});
+
+test('la verificación en dos pasos ya no existe: ni políticas mfa_required ni mfa_ok() en sql/ (solo el archivo que las quita)', () => {
+  for (const [file, text] of Object.entries(sql)) {
+    if (file === 'remove_mfa.sql') continue;
+    assert.doesNotMatch(text, /mfa_required|mfa_ok/i, file);
+  }
+  assert.match(sql['remove_mfa.sql'] || '', /drop function if exists public\.mfa_ok\(\)/i);
 });
 
 test('la base deja sin permisos de tabla al rol anónimo (la app solo usa sesiones iniciadas)', () => {

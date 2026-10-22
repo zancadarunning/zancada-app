@@ -10,7 +10,7 @@ Estado a 2026-10-21. Público: sin claves. Este archivo resume; el detalle está
 - Rechazo de cuentas sin correo confirmado para usar la IA.
 - Errores genéricos al cliente (sin detalles internos), sin enumeración de usuarios.
 - Edad mínima (16+) y consentimiento explícito para datos de salud, guardado con fecha y versión.
-- Verificación en dos pasos opcional para las cuentas (TOTP), exigida en la base y en la API cuando está activada (`docs/verificacion-dos-pasos.md`).
+- Sin verificación en dos pasos de la app (se quitó el 2026-10-21). **Planeado para el lanzamiento:** ingreso con datos biométricos (huella / rostro) en el celular.
 
 **Servidor**
 - Todos los endpoints exigen sesión, secreto de cron o firma de webhook (un test lo comprueba para cada archivo nuevo).
