@@ -177,3 +177,16 @@ test('si eligió las 20:00 para el recordatorio diario, no recibe además el avi
   assert.equal(a.sent.length, 1, JSON.stringify(a.sent));
   assert.match(a.sent[0].body, /Hoy toca/);
 });
+
+test('varios dispositivos por cuenta: el resumen/recordatorio llega a todos, sin repetir el mismo destino', async () => {
+  const { groupByUser } = require('../api/_lib/push-devices.js');
+  const g = groupByUser([
+    { user_id: 'u1', device_id: 'legacy', platform: 'web', subscription: { endpoint: 'https://web.push.apple.com/abc' } },
+    { user_id: 'u1', device_id: 'ios-1', platform: 'web', subscription: { endpoint: 'https://web.push.apple.com/abc' } },   // mismo iPhone ya registrado de nuevo
+    { user_id: 'u1', device_id: 'and-1', platform: 'android', subscription: { token: 'tok-android' } },
+    { user_id: 'u2', device_id: 'legacy', platform: 'android', subscription: { token: 'tok-u2' } },
+  ]);
+  assert.equal(g.u1.devices.length, 2, 'el iPhone duplicado (legacy + nuevo) cuenta una vez');
+  assert.deepEqual(g.u1.devices.map(d => d.platform).sort(), ['android', 'web']);
+  assert.equal(g.u2.devices.length, 1);
+});

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22T19:08:16Z';
+const APP_VERSION = '2026-10-26T01:41:32Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1108,13 +1108,32 @@ function nativePushPlugin(){ return window.Capacitor && window.Capacitor.Plugins
 // alguien apague/prenda el toggle a mano de nuevo. Antes de que haya sesión iniciada, o si
 // el corredor nunca activó el toggle en este dispositivo, el evento puede llegar igual
 // (el plugin no distingue) -- por eso el guard de state.nativePushEnabled/currentUserId.
+// Cada instalación tiene su propio id: push_subscriptions guarda una fila por (cuenta, dispositivo), así el celular y el iPhone de la misma cuenta reciben avisos a la vez
+// y apagar o cerrar sesión en uno no corta al otro (antes la clave era solo la cuenta: el último en activar pisaba a los demás y borrar una fila borraba todas).
+function pushDeviceId(){
+  try{
+    let id = localStorage.getItem('zancada_push_device');
+    if(!id){
+      id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+      localStorage.setItem('zancada_push_device', id);
+    }
+    return id;
+  }catch(e){ return 'sin-almacenamiento'; }
+}
+function savePushSubscription(subscription, platform){
+  return supabaseClient.from('push_subscriptions').upsert({ user_id: currentUserId, device_id: pushDeviceId(), subscription, platform }, { onConflict: 'user_id,device_id' });
+}
+// Baja SOLO la fila de este dispositivo (y la fila "legacy" de antes de la migración, de la que no se sabe de qué dispositivo era: se vuelve a registrar sola al reactivar).
+function deletePushRowsForThisDevice(){
+  return supabaseClient.from('push_subscriptions').delete().eq('user_id', currentUserId).in('device_id', [pushDeviceId(), 'legacy']);
+}
 function initNativePushListeners(){
   const nativePush = nativePushPlugin();
   if(!nativePush) return;
   nativePush.addListener('registration', async (token)=>{
     if(!currentUserId || !state.nativePushEnabled) return;
     try{
-      await supabaseClient.from('push_subscriptions').upsert({ user_id: currentUserId, subscription: {token: token.value}, platform: window.Capacitor.getPlatform() });
+      await savePushSubscription({token: token.value}, window.Capacitor.getPlatform());
     }catch(e){ console.error('push nativo: no se pudo guardar el token', e); }
   });
   nativePush.addListener('registrationError', (err)=>{ console.error('push nativo: registro falló', err); });
@@ -1198,7 +1217,7 @@ async function updatePushStatusDisplay(){
       // token que el sistema operativo ya cortó del otro lado.
       if(status.receive !== 'granted' && state.nativePushEnabled){
         state.nativePushEnabled = false;
-        if(currentUserId){ try{ await supabaseClient.from('push_subscriptions').delete().eq('user_id', currentUserId); }catch(e){} }
+        if(currentUserId){ try{ await deletePushRowsForThisDevice(); }catch(e){} }
       }
       const enabled = status.receive === 'granted' && !!state.nativePushEnabled;
       el.textContent = enabled ? t('push_enabled') : t('push_disabled');
@@ -1219,7 +1238,7 @@ async function updatePushStatusDisplay(){
     // endpoint que el usuario ya cortó del otro lado.
     if(sub && Notification.permission !== 'granted'){
       try{ await sub.unsubscribe(); }catch(e){}
-      if(currentUserId){ try{ await supabaseClient.from('push_subscriptions').delete().eq('user_id', currentUserId); }catch(e){} }
+      if(currentUserId){ try{ await deletePushRowsForThisDevice(); }catch(e){} }
       el.textContent = t('push_disabled'); if(toggle) toggle.checked = false;
       return;
     }
@@ -1265,7 +1284,7 @@ async function enablePushNotifications(){
     const permission = await Notification.requestPermission();
     if(permission !== 'granted'){ showToast(t('push_denied'),'error'); await updatePushStatusDisplay(); return; }
     const sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) });
-    await supabaseClient.from('push_subscriptions').upsert({ user_id: currentUserId, subscription: sub.toJSON(), platform: 'web' });
+    await savePushSubscription(sub.toJSON(), 'web');
     await updatePushStatusDisplay();
   }catch(e){ console.error(e); showToast(t('push_error'),'error'); await updatePushStatusDisplay(); }
 }
@@ -1279,7 +1298,7 @@ async function disablePushNotifications(){
       // que initNativePushListeners() usa para decidir si vale la pena guardar un token nuevo.
       state.nativePushEnabled = false;
       persist();
-      if(currentUserId) await supabaseClient.from('push_subscriptions').delete().eq('user_id', currentUserId);
+      if(currentUserId) await deletePushRowsForThisDevice();
       await updatePushStatusDisplay();
     }catch(e){ console.error(e); showToast(t('push_error'),'error'); await updatePushStatusDisplay(); }
     return;
@@ -1288,7 +1307,7 @@ async function disablePushNotifications(){
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
     if(sub) await sub.unsubscribe();
-    if(currentUserId) await supabaseClient.from('push_subscriptions').delete().eq('user_id', currentUserId);
+    if(currentUserId) await deletePushRowsForThisDevice();
     await updatePushStatusDisplay();
   }catch(e){
     // El checkbox nativo ya se muestra destildado apenas el usuario lo toca (antes de

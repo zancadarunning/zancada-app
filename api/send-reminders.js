@@ -1,6 +1,7 @@
 const webpush = require('web-push');
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { sendFcmPush } = require('./_lib/fcm');
+const pushDevices = require('./_lib/push-devices');
 const { isTrustedPushEndpoint } = require('./_lib/push-endpoint');
 const { buildWeeklySummary, isWeeklySlot, isWeeklyDue, sundayPending, currentWeeklySlot, mondayKeyFor } = require('./_lib/weekly-summary');
 const sentRegistry = require('./_lib/sent-registry');
@@ -114,7 +115,7 @@ module.exports = withSentry(async (req, res) => {
     const SUBS_PAGE = 1000;
     const subs = [];
     for (let off = 0; ; off += SUBS_PAGE) {
-      const subsRes = await fetch(`${base}/rest/v1/push_subscriptions?select=user_id,subscription,platform&order=user_id&limit=${SUBS_PAGE}&offset=${off}`, { headers });
+      const subsRes = await fetch(`${base}/rest/v1/push_subscriptions?select=*&order=user_id&limit=${SUBS_PAGE}&offset=${off}`, { headers });   // select=*: funciona antes y después de agregar device_id
       if (!subsRes.ok) {
         const body = await subsRes.text().catch(() => '');
         throw new Error(`push_subscriptions fetch failed: ${subsRes.status} ${body}`);
@@ -138,11 +139,8 @@ module.exports = withSentry(async (req, res) => {
     }
     const localClock = makeLocalClock();
 
-    const subsByUser = {};
-    // platform puede venir null en filas viejas si la columna se agregó sin DEFAULT en algún
-    // punto intermedio -- 'web' de fallback, mismo criterio que el DEFAULT de la columna (ver
-    // sql/push_subscriptions_add_platform.sql).
-    (subs || []).forEach(s => { subsByUser[s.user_id] = { subscription: s.subscription, platform: s.platform || 'web' }; });
+    // Todos los dispositivos de cada cuenta (platform puede venir null en filas viejas: 'web' de fallback, ver sql/push_subscriptions_add_platform.sql).
+    const subsByUser = pushDevices.groupByUser(subs);
 
     let sent = 0, skipped = 0, failed = 0;
     const due = [];
@@ -212,33 +210,32 @@ module.exports = withSentry(async (req, res) => {
 
     // El envío (una llamada de red por usuario) va en paralelo, de a SEND_CONCURRENCY: a las 8 am de un huso populoso pueden
     // juntarse cientos de avisos en la misma corrida y, de a uno, la función se quedaba sin tiempo antes de terminar.
+    // Manda a TODOS los dispositivos de la cuenta. 'sent' si llegó a alguno; 'dead' si todos estaban muertos (se borra solo esa fila); 'failed' si no llegó a
+    // ninguno y alguno falló por algo pasajero (red, servicio de push): se puede reintentar.
     async function sendOne({ row, subRow, body, title }) {
       title = title || 'Zancada';
-      try {
-        if (subRow.platform === 'android' || subRow.platform === 'ios') {
-          // App nativa (Capacitor) -- acá subscription es {token: '<token de FCM>'}, no una
-          // suscripción Web Push (ver sql/push_subscriptions_add_platform.sql y api/_lib/fcm.js).
-          const dead = await sendFcmPush(subRow.subscription && subRow.subscription.token, title, body);
-          if (dead) {
-            await fetch(`${base}/rest/v1/push_subscriptions?user_id=eq.${row.user_id}`, { method: 'DELETE', headers });
-            failed++;
-            return 'dead';
+      let anySent = false, anyTransient = false;
+      for (const dev of subRow.devices) {
+        try {
+          if (dev.platform === 'android' || dev.platform === 'ios') {
+            // App nativa (Capacitor) -- acá subscription es {token: '<token de FCM>'}, no una
+            // suscripción Web Push (ver sql/push_subscriptions_add_platform.sql y api/_lib/fcm.js).
+            const dead = await sendFcmPush(dev.subscription && dev.subscription.token, title, body);
+            if (dead) { await pushDevices.deleteDevice(base, headers, row.user_id, dev.device_id); continue; }
+          } else {
+            // el endpoint lo escribe el cliente: solo se le manda a los servicios de push reales (evita SSRF a ciegas)
+            if (!dev.subscription || !isTrustedPushEndpoint(dev.subscription.endpoint)) continue;
+            await webpush.sendNotification(dev.subscription, JSON.stringify({ title, body }));
           }
-        } else {
-          // el endpoint lo escribe el cliente: solo se le manda a los servicios de push reales (evita SSRF a ciegas)
-          if (!subRow.subscription || !isTrustedPushEndpoint(subRow.subscription.endpoint)) { failed++; return 'dead'; }
-          await webpush.sendNotification(subRow.subscription, JSON.stringify({ title, body }));
+          anySent = true;
+        } catch (err) {
+          if (err.statusCode === 404 || err.statusCode === 410) await pushDevices.deleteDevice(base, headers, row.user_id, dev.device_id);
+          else anyTransient = true;
         }
-        sent++;
-        return 'sent';
-      } catch (err) {
-        failed++;
-        if (err.statusCode === 404 || err.statusCode === 410) {
-          await fetch(`${base}/rest/v1/push_subscriptions?user_id=eq.${row.user_id}`, { method: 'DELETE', headers });
-          return 'dead';
-        }
-        return 'failed';   // falla pasajera (red, servicio de push): se puede reintentar
       }
+      if (anySent) { sent++; return 'sent'; }
+      failed++;
+      return anyTransient ? 'failed' : 'dead';
     }
     let nextDue = 0;
     const workers = Array.from({ length: Math.min(SEND_CONCURRENCY, due.length) }, async () => {
