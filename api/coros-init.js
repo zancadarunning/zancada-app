@@ -30,7 +30,8 @@
 
 const crypto = require('crypto');
 const verifyUser = require('./_lib/verify-user');
-const { encToken } = require('./_lib/token-crypto');
+const { userCooldown } = require('./_lib/sync-cooldown');
+const { encToken, keyIsValid } = require('./_lib/token-crypto');
 const { applyCors, isPreflight } = require('./_lib/cors');
 
 function base64url(buf) {
@@ -46,10 +47,14 @@ module.exports = withSentry(async (req, res) => {
 
   const secret = process.env.COROS_STATE_SECRET;
   if (!secret) { res.status(500).json({ error: 'Missing COROS_STATE_SECRET' }); return; }
+  // sin clave valida encToken guarda en texto plano: el verifier de PKCE quedaria legible en la URL de autorizacion y PKCE no protegeria nada
+  if (!keyIsValid()) { console.error('coros-init: falta una clave de cifrado de tokens valida'); res.status(500).json({ error: 'Not configured' }); return; }
 
   const auth = await verifyUser(req);
   if (!auth.ok) { res.status(auth.status).json({ error: auth.error }); return; }
   const userId = auth.userId;
+  // tope de frecuencia: sin esto una cuenta podia pedir states sin limite y usarlos para golpear el intercambio de codigo con la marca
+  if (!(await userCooldown(userId, 'coros-init', 5000))) { res.status(429).json({ error: 'Too many requests' }); return; }
 
   try {
     const codeVerifier = base64url(crypto.randomBytes(32)); // 43 caracteres, dentro del rango 43-128 que pide PKCE

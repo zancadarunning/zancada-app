@@ -131,10 +131,13 @@ module.exports = withSentry(async (req, res) => {
       const ids = subUserIds.slice(i, i + STATE_BATCH).map(encodeURIComponent).join(',');
       const statesRes = await fetch(`${base}/rest/v1/app_state?user_id=in.(${ids})&select=user_id,plan:data->plan,weekStart:data->>weekStart,tz:data->profile->>tz,rh:data->profile->>reminderHour,lang:data->>lang,streak:data->>streakWeeks,units:data->profile->>units,trainBy:data->profile->>trainBy`, { headers });
       if (!statesRes.ok) {
+        // un lote que falla (p. ej. un app_state enorme que agota el tiempo) no tumba el recordatorio de los demas: se sigue con el resto y se avisa
         const body = await statesRes.text().catch(() => '');
-        throw new Error(`app_state fetch failed: ${statesRes.status} ${body}`);
+        console.error(`send-reminders: app_state fetch failed: ${statesRes.status} ${body.slice(0, 200)}`);
+        await reportError(new Error(`app_state fetch failed: ${statesRes.status}`), { endpoint: 'send-reminders' }).catch(() => {});
+        continue;
       }
-      const chunk = await statesRes.json();
+      const chunk = await statesRes.json().catch(() => null);
       if (Array.isArray(chunk)) states.push(...chunk);
     }
     const localClock = makeLocalClock();

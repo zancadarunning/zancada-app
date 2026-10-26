@@ -236,7 +236,7 @@ module.exports = withSentry(async (req, res) => {
       // Segunda barrera: un secreto largo en la URL del callback (se registra en strava-setup-webhook.js). Si STRAVA_WEBHOOK_SECRET
       // está configurado, un POST sin el secreto correcto se ignora. Sin la variable queda el comportamiento anterior.
       const webhookSecret = Array.from(String(process.env.STRAVA_WEBHOOK_SECRET || '')).filter(c => c.trim() !== '').join('');
-      if (webhookSecret && !safeEqual(Array.from(String((req.query && req.query.k) || '').split('?')[0]).filter(c => c.trim() !== '').join(''), webhookSecret)) {
+      if (!webhookSecret || !safeEqual(Array.from(String((req.query && req.query.k) || '').split('?')[0]).filter(c => c.trim() !== '').join(''), webhookSecret)) {
         console.error('strava-webhook: falta o no coincide el secreto del callback, se ignora el evento');
         await reportSecurityEvent('Webhook de Strava sin el secreto correcto', {}).catch(() => {});
         return;

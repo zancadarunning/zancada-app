@@ -127,7 +127,7 @@ module.exports = withSentry(async (req, res) => {
     const rpcRes = await fetch(`${base}/rest/v1/rpc/increment_chat_usage`, {
       method: 'POST',
       headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_user_id: auth.userId, p_limit: CHAT_DAILY_LIMIT })
+      body: JSON.stringify({ p_user_id: auth.userId, p_limit: (auth.createdAt && Date.now() - new Date(auth.createdAt).getTime() < 48 * 3600 * 1000) ? Math.min(CHAT_DAILY_LIMIT, 20) : CHAT_DAILY_LIMIT })
     });
     if (rpcRes.ok) {
       const withinLimit = await rpcRes.json();

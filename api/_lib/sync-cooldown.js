@@ -34,4 +34,10 @@ async function checkSyncCooldown(base, headers, userId, provider, cooldownMs, op
   }
 }
 
-module.exports = { checkSyncCooldown };
+// Atajo para endpoints que no tienen a mano la base ni los headers de servicio (los -init de vinculacion). Falla cerrado.
+async function userCooldown(userId, provider, cooldownMs) {
+  const key = process.env.SUPABASE_SERVICE_KEY;
+  return checkSyncCooldown(process.env.SUPABASE_URL, { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, userId, provider, cooldownMs, { failClosed: true });
+}
+
+module.exports = { checkSyncCooldown, userCooldown };

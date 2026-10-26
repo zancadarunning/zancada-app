@@ -37,8 +37,9 @@ const { listZancadaGuides, syncGuides } = require('./_lib/suunto-guides-sync');
 const { DATE_RE, cleanZones, cleanLabels, cleanDay } = require('./_lib/watch-plan-clean');
 const { withSentry, reportError } = require('./_lib/sentry');
 const { payloadHash, isDuplicate, remember } = require('./_lib/plan-dedupe');
+const { withinDailyCap } = require('./_lib/daily-cap');
 
-const MAX_DAYS = 14;
+const MAX_DAYS = 7;   // la ventana que manda la app es de una semana; cada guia es una llamada a la API de Suunto (cuota compartida por toda la app)
 
 module.exports = withSentry(async (req, res) => {
   applyCors(req, res);
@@ -76,6 +77,10 @@ module.exports = withSentry(async (req, res) => {
   // Límite de frecuencia por usuario: la cuota de la API de la marca es de la APP (compartida por todos), así que un usuario que
   // mande pedidos en bucle podía agotarla y cortar la sincronización de los demás. Falla cerrado (si el limitador no responde, no pasa).
   if (!(await checkSyncCooldown(base, headers, userId, 'suunto-plan', 300000, { failClosed: true }))) {
+    res.status(200).json({ pushed: 0, reason: 'cooldown' });
+    return;
+  }
+  if (!(await withinDailyCap(base, headers, 'suunto-plan', userId, 24, { failClosed: true }))) {
     res.status(200).json({ pushed: 0, reason: 'cooldown' });
     return;
   }

@@ -18,8 +18,10 @@ const { syncWahooPlans } = require('./_lib/wahoo-plans-sync');
 const { DATE_RE, cleanZones, cleanLabels, cleanDay, cleanKnown } = require('./_lib/watch-plan-clean');
 const { withSentry, reportError } = require('./_lib/sentry');
 const { payloadHash, isDuplicate, remember } = require('./_lib/plan-dedupe');
+const { withinDailyCap } = require('./_lib/daily-cap');
 
-const MAX_DAYS = 14;
+const MAX_DAYS = 7;          // la ventana que manda la app es de una semana; cada dia son ~3 llamadas a Wahoo (cuota compartida por toda la app)
+const MAX_REMOVE = 10;
 
 module.exports = withSentry(async (req, res) => {
   applyCors(req, res);
@@ -33,7 +35,7 @@ module.exports = withSentry(async (req, res) => {
   const body = req.body || {};
   const days = (Array.isArray(body.days) ? body.days : []).slice(0, MAX_DAYS).map(cleanDay).filter(Boolean)
     .sort((a, b) => a.date.localeCompare(b.date));
-  const removeDates = (Array.isArray(body.removeDates) ? body.removeDates : []).filter(d => DATE_RE.test(String(d))).slice(0, 30);
+  const removeDates = (Array.isArray(body.removeDates) ? body.removeDates : []).filter(d => DATE_RE.test(String(d))).slice(0, MAX_REMOVE);
   const known = cleanKnown(body.known);
   const zones = cleanZones(body.zones);
   const labels = cleanLabels(body.labels);
@@ -53,6 +55,10 @@ module.exports = withSentry(async (req, res) => {
   // Límite de frecuencia por usuario: la cuota de la API de la marca es de la APP (compartida por todos), así que un usuario que
   // mande pedidos en bucle podía agotarla y cortar la sincronización de los demás. Falla cerrado (si el limitador no responde, no pasa).
   if (!(await checkSyncCooldown(base, headers, userId, 'wahoo-plan', 300000, { failClosed: true }))) {
+    res.status(200).json({ pushed: 0, reason: 'rate_limited' });
+    return;
+  }
+  if (!(await withinDailyCap(base, headers, 'wahoo-plan', userId, 48, { failClosed: true }))) {
     res.status(200).json({ pushed: 0, reason: 'rate_limited' });
     return;
   }

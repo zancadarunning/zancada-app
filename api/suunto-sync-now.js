@@ -9,9 +9,10 @@ const verifyUser = require('./_lib/verify-user');
 const { isRunningActivity, workoutToRun, mergeSuuntoRuns, ensureFreshSuuntoToken, listSuuntoWorkouts, fetchSuuntoFit } = require('./_lib/suunto-activity-helpers');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
+const { withinDailyCap } = require('./_lib/daily-cap');
 const { withSentry, reportError } = require('./_lib/sentry');
 
-const SYNC_COOLDOWN_MS = 20000;
+const SYNC_COOLDOWN_MS = 300000;   // antes 20 s: la API de Suunto permite ~200 llamadas por semana EN TOTAL para toda la app
 const LOOKBACK_DAYS = 30;
 
 module.exports = withSentry(async (req, res) => {
@@ -25,8 +26,9 @@ module.exports = withSentry(async (req, res) => {
   const serviceKey = process.env.SUPABASE_SERVICE_KEY;
   const headers = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' };
 
-  const allowed = await checkSyncCooldown(base, headers, userId, 'suunto', SYNC_COOLDOWN_MS);
+  const allowed = await checkSyncCooldown(base, headers, userId, 'suunto', SYNC_COOLDOWN_MS, { failClosed: true });
   if (!allowed) return res.status(200).json({ synced: false, reason: 'cooldown' });
+  if (!(await withinDailyCap(base, headers, 'suunto-sync-now', userId, 10, { failClosed: true }))) return res.status(200).json({ synced: false, reason: 'cooldown' });
 
   try {
     const connRes = await fetch(`${base}/rest/v1/suunto_connections?user_id=eq.${userId}&select=*`, { headers });

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-26T14:56:26Z';
+const APP_VERSION = '2026-10-26T19:40:05Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -898,6 +898,15 @@ function showConfirm(message, opts){
 
 /* ================= STATE ================= */
 let state = {onboarded:false, profile:{}, plan:[], runs:[], shoes:[], event:null, chat:[], lang:lang, painLog:[], readinessLog:[]};
+// Un estado que llega del servidor o del respaldo local con la forma rota (profile null, plan que no es lista...) hacía fallar el arranque en cada apertura y la app quedaba inutilizable
+// (solo ofrecía cerrar sesión). Se fuerza la forma mínima que el resto del código da por hecha y se descartan las entradas que no son objetos.
+function normalizeLoadedState(s){
+  if(!s || typeof s !== 'object' || Array.isArray(s)) return {onboarded:false, profile:{}, plan:[], runs:[], shoes:[], event:null, chat:[], lang:lang, painLog:[], readinessLog:[]};
+  if(!s.profile || typeof s.profile !== 'object' || Array.isArray(s.profile)) s.profile = {};
+  ['plan','runs','shoes','chat','painLog','readinessLog'].forEach(k => { s[k] = Array.isArray(s[k]) ? s[k].filter(x => x && typeof x === 'object') : []; });
+  if(typeof s.lang !== 'string') s.lang = lang;
+  return s;
+}
 let pendingEmail = '';
 let currentUserId = null;
 // Id de la cuenta cuyo `state` ya se CARGÓ de verdad desde el servidor (o que se confirmó vacía/nueva). persist() no escribe nada antes de eso: si la carga falla
@@ -1539,7 +1548,7 @@ async function loadUserAndEnter(user, isRetry){
     const { data, error } = await supabaseClient.from('app_state').select('data, updated_at').eq('user_id', user.id).maybeSingle();
     if(error) throw error;
     if(data && data.data && Object.keys(data.data).length){
-      state = data.data; lang = state.lang || 'es';
+      state = normalizeLoadedState(data.data); lang = state.lang || 'es';
       stateLoadedFor = user.id;
       loadedStateVersion = data.updated_at || null;
       const pending = readPendingBackup(user.id);
@@ -1566,7 +1575,7 @@ async function loadUserAndEnter(user, isRetry){
       const remoteTs = loadedStateVersion ? new Date(loadedStateVersion).getTime() : 0;
       if(pending && pending.data && pending.ts > remoteTs){
         // había una carrera guardada en el teléfono que no llegó a subirse la última vez -> la recuperamos
-        state = pending.data; lang = state.lang || lang;
+        state = normalizeLoadedState(pending.data); lang = state.lang || lang;
         persist();
       }
       // phaseNow guardado puede ser de otra semana (se guardó la semana pasada): se deriva de nuevo
@@ -2740,20 +2749,25 @@ async function disconnectCoros(){
    usuario lo pide, con la app abierta y state ya cargado en memoria.
    En la web (y en iOS) window.Capacitor.Plugins.HealthConnectBridge no existe, así
    que todo esto queda inerte -- mismo patrón que haptic(). */
+// Los datos de Health Connect los puede escribir CUALQUIER app del teléfono con permiso: se acotan a rangos humanos antes de guardarlos (el servidor hace lo mismo con los relojes con API propia).
+function hcNum(v, min, max){ const n = Number(v); return Number.isFinite(n) && n >= min && n <= max ? n : null; }
 function healthConnectExerciseToRun(ex){
+  const hcDistKm = hcNum((ex.distanceMeters || 0) / 1000, 0, 500) || 0;
+  const hcDur = hcNum(ex.durationSec || 0, 0, 48 * 3600) || 0;
+  const hcAvgHr = hcNum(ex.avgHr, 30, 250), hcMaxHr = hcNum(ex.maxHr, 30, 250);
   return {
     id: 'healthconnect_' + ex.id,
     healthConnectId: ex.id,
     date: ex.startTime,
     name: null,
-    distanceKm: (ex.distanceMeters || 0) / 1000,
-    durationSec: ex.durationSec || 0,
+    distanceKm: hcDistKm,
+    durationSec: hcDur,
     elevationGain: ex.elevationGainMeters > 0 ? Math.round(ex.elevationGainMeters) : 0,
     elevationLoss: null,
-    avgHr: ex.avgHr ? Math.round(ex.avgHr) : null,
-    maxHr: ex.maxHr ? Math.round(ex.maxHr) : null,
-    avgCadence: ex.avgCadence > 0 ? Math.round(ex.avgCadence) : null,
-    calories: ex.calories > 0 ? Math.round(ex.calories) : null,
+    avgHr: hcAvgHr ? Math.round(hcAvgHr) : null,
+    maxHr: hcMaxHr ? Math.round(hcMaxHr) : null,
+    avgCadence: hcNum(ex.avgCadence, 1, 300) ? Math.round(ex.avgCadence) : null,
+    calories: hcNum(ex.calories, 1, 20000) ? Math.round(ex.calories) : null,
     hrLog: [],
     points: [],
     splits: [],
@@ -2832,7 +2846,10 @@ async function syncHealthConnectNow(){
   try{
     const { exercises } = await HC.readExercises();
     const knownIds = new Set((state.runs||[]).map(r=>r.healthConnectId));
+    const hcNow = Date.now();
     const newRuns = (exercises||[])
+      .filter(ex=>ex && typeof ex.id === 'string' && ex.id.length <= 100)
+      .filter(ex=>{ const t0 = Date.parse(ex.startTime); return Number.isFinite(t0) && t0 > Date.UTC(2000,0,1) && t0 < hcNow + 24*3600*1000; })   // fecha creíble: ni de antes del 2000 ni del futuro
       .filter(ex=>!knownIds.has(ex.id))
       .filter(ex=>!isLikelyDuplicateOfExistingRun(ex.startTime, (ex.distanceMeters||0)/1000, state.runs, ex.durationSec))
       .map(healthConnectExerciseToRun);
@@ -4540,7 +4557,8 @@ function confirmLogout(){
 function wipeLocalUserData(uid){
   try{
     const keys = [];
-    for(let i=0; i<localStorage.length; i++){ const k = localStorage.key(i); if(k && (k.indexOf('zancada_pending_') === 0 || k === 'zancada_run_in_progress' || k.indexOf('zancada_run_in_progress') === 0 || k === WX_KEY)) keys.push(k); }
+    // solo las claves de ESTA cuenta (uid): el respaldo sin subir de otra cuenta que cerró sesión sin conexión en este mismo teléfono no se toca
+    for(let i=0; i<localStorage.length; i++){ const k = localStorage.key(i); if(k && (k === LINK_KEY || k === 'zancada_run_in_progress' || k === WX_KEY || (uid && (k === pendingBackupKey(uid) || k === 'zancada_run_in_progress_' + uid)))) keys.push(k); }
     keys.forEach(k => { try{ localStorage.removeItem(k); }catch(e){} });
   }catch(e){}
   try{ clearLastKnownPosition(); }catch(e){}
@@ -4565,6 +4583,9 @@ async function logout(){
   clearLastKnownPosition();
   // Si hay cambios que todavía no se subieron, el respaldo local se conserva (para no perderlos); si ya está todo sincronizado, no queda copia.
   try{ if(!hasPendingBackup()) wipeLocalUserData(currentUserId); }catch(e){}
+  // Se da de baja el push de ESTE dispositivo ANTES de cerrar la sesión (la baja necesita la sesión): sin esto el teléfono seguía recibiendo el plan y las carreras de la cuenta que se fue
+  // (pantalla de bloqueo incluida) aunque entrara otra persona. Al volver a iniciar sesión refreshNativePushRegistration() lo registra de nuevo. Tope de 4 s para no trabar el cierre sin conexión.
+  try{ await Promise.race([deletePushRowsForThisDevice(), new Promise(r => setTimeout(r, 4000))]); }catch(e){}
   await supabaseClient.auth.signOut();
   location.reload();
 }
@@ -10478,7 +10499,7 @@ async function refreshStateFromServer(){
         // termine.
       } else {
         const prevRunIds = new Set((state.runs||[]).map(r=>String(r.id)));
-        state = data.data;
+        state = normalizeLoadedState(data.data);
         // el phaseNow que viene del servidor puede ser de otra semana: se deriva de nuevo (ver refreshPhaseNow)
         refreshPhaseNow();
         // Reportado en una auditoría: esto pisaba state con lo que acaba de llegar del servidor
@@ -17736,7 +17757,7 @@ function applyPlanChange(input){
   captureUndoSnapshot();
   d.custom = true;
   d.cancelled = false; // si venía de cancelar_sesion, esta sesión nueva reemplaza esa cancelación
-  d.type = input.tipo; d.desc = input.descripcion; d.textLang = lang;
+  d.type = (typeof input.tipo === 'string' ? input.tipo : String(d.type || '')).slice(0, 120); d.desc = (typeof input.descripcion === 'string' ? input.descripcion : String(d.desc || '')).slice(0, 500); d.textLang = lang;
   // Sin esto, un día que antes era descanso (u otro tipo) quedaba con el typeKey viejo --
   // las estadísticas de variedad de sesiones de calidad y el tag de beneficio del entrenamiento
   // en el historial (que leen d.typeKey, no d.type) seguían viendo el tipo anterior.
