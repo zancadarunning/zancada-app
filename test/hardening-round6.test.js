@@ -150,3 +150,11 @@ test('sql/limits_app_state_and_push.sql: triggers con tope de tamano y forma, si
   assert.match(sql, /pg_advisory_xact_lock/);
   assert.match(sql, /SET search_path = public/);
 });
+
+test('al completar la recuperacion de contrasena se cierran las demas sesiones (queda solo la actual)', () => {
+  const s = read('app.js');
+  const i = s.indexOf('async function submitNewPassword(){');
+  const body = s.slice(i, i + 1800);
+  assert.ok(body.indexOf("updateUser({ password: newPw })") > -1);
+  assert.ok(body.indexOf("signOut({ scope: 'others' })") > body.indexOf('updateUser({ password: newPw })'));
+});

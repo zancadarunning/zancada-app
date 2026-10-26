@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-26T19:40:05Z';
+const APP_VERSION = '2026-10-26T20:07:11Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3146,6 +3146,9 @@ async function submitNewPassword(){
   try{
     const { error } = await supabaseClient.auth.updateUser({ password: newPw });
     if(error){ err.textContent = translateAuthError(error); err.style.display='block'; return; }
+    // Cambiar la contraseña NO cierra las otras sesiones abiertas (Supabase no lo hace solo, y el control de sesiones del panel es del plan Pro). Quien recupera la contraseña porque
+    // sospecha que se la robaron necesita que el atacante ya logueado quede afuera: se cierran todas las demás sesiones y queda solo esta.
+    try{ await supabaseClient.auth.signOut({ scope: 'others' }); }catch(e){ console.error('no se pudieron cerrar las otras sesiones', e); }
     const { data: { user } } = await supabaseClient.auth.getUser();
     document.getElementById('recovery-set-password').style.display='none';
     await loadUserAndEnter(user);
