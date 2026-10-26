@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-26T06:20:36Z';
+const APP_VERSION = '2026-10-26T14:01:41Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1321,7 +1321,16 @@ async function disablePushNotifications(){
 function pendingBackupKey(uid){ return 'zancada_pending_'+uid; }
 function savePendingBackup(){
   if(!currentUserId) return;
-  try{ localStorage.setItem(pendingBackupKey(currentUserId), JSON.stringify({data:state, ts:Date.now()})); }catch(e){}
+  const key = pendingBackupKey(currentUserId);
+  try{ localStorage.setItem(key, JSON.stringify({data:state, ts:Date.now()})); return; }catch(e){}
+  // No entró (localStorage admite ~5 MB y las rutas GPS de muchas carreras lo pasan): antes el respaldo fallaba EN SILENCIO y un guardado sin conexión quedaba sin copia.
+  // Se guarda una versión reducida: sin los puntos GPS ni el chat de las carreras/mensajes más viejos (lo reciente se conserva completo).
+  try{
+    const slim = Object.assign({}, state);
+    slim.runs = (state.runs||[]).map((r, i, a) => (i >= a.length - 3 ? r : Object.assign({}, r, {points: [], series: null})));
+    slim.chat = (state.chat||[]).slice(-60);
+    localStorage.setItem(key, JSON.stringify({data:slim, ts:Date.now(), reduced:true}));
+  }catch(e){}
 }
 function clearPendingBackup(){
   if(!currentUserId) return;
@@ -2947,6 +2956,8 @@ async function confirmLegalForNewAccount(user){
   if(user.app_metadata && user.app_metadata.provider === 'google') return true;
   const terms = `<a href="${apiUrl('/terms.html?lang='+lang)}" target="_blank" rel="noopener" style="color:var(--hivis-text); text-decoration:underline;">${t('legal_terms_link')}</a>`;
   const privacy = `<a href="${apiUrl('/privacy.html?lang='+lang)}" target="_blank" rel="noopener" style="color:var(--hivis-text); text-decoration:underline;">${t('legal_privacy_link')}</a>`;
+  // el splash de arranque (z-index altísimo) tapaba este cartel y se comía los toques hasta el tiempo de seguridad de 12 s: se retira antes de preguntar
+  if(window.zcBootDone) window.zcBootDone();
   const accepted = await showConfirm(t('oauth_legal_confirm', {terms, privacy}), {confirmText: t('oauth_legal_accept_btn'), cancelText: t('cancel_word')});
   if(accepted){ try{ await supabaseClient.auth.updateUser({ data: { legalAccepted: true } }); }catch(e){} }
   return accepted;
@@ -4055,8 +4066,9 @@ function obGotoStep(n){
 function updateObStep2ButtonState(){
   const btn = document.getElementById('ob-step2-continue-btn');
   if(!btn) return;
-  const weight = parseFloat(document.getElementById('ob-weight').value);
-  const height = parseFloat(document.getElementById('ob-height').value);
+  // parseWeightInput/parseHeightInput devuelven 0 fuera de un rango humano (25-250 kg, 100-230 cm): un "5" o un "900" ya no habilita Continuar para quedar reemplazado en silencio por 70 kg / 170 cm
+  const weight = parseWeightInput(document.getElementById('ob-weight').value);
+  const height = parseHeightInput(document.getElementById('ob-height').value);
   const birth = document.getElementById('ob-birth').value;
   btn.disabled = !(weight>0 && height>0 && birth);
   const why = document.getElementById('ob-step2-reason');
@@ -10424,6 +10436,14 @@ document.getElementById('perfil-name').addEventListener('change', ()=>{
 async function refreshStateFromServer(){
   if(!currentUserId) return;
   try{
+    // Cada cambio de pestaña bajaba el estado COMPLETO (con 100 carreras con GPS, ~12 MB). Ahora primero se pide solo updated_at: si es EXACTAMENTE la versión que ya
+    // tenemos (la que guardamos o cargamos nosotros), no hay nada nuevo y se evita la descarga. Igualdad exacta (no "<="): un reloj del teléfono adelantado no puede esconder
+    // una carrera que el servidor importó después de lo que sabíamos.
+    if(loadedStateVersion && !persistInFlight && !persistQueued){
+      const head = await supabaseClient.from('app_state').select('updated_at').eq('user_id', currentUserId).maybeSingle();
+      const hv = head && head.data && head.data.updated_at;
+      if(hv && new Date(hv).getTime() === new Date(loadedStateVersion).getTime()) return;
+    }
     const { data } = await supabaseClient.from('app_state').select('data, updated_at').eq('user_id', currentUserId).maybeSingle();
     if(data && data.data && Object.keys(data.data).length){
       const incomingRuns = (data.data.runs||[]).length;
@@ -13091,6 +13111,8 @@ function onPosError(err){
   try{ showToast(t('geo_err_permission'), 'error'); }catch(e){}
   const w = document.getElementById('geo-warning');
   if(w){ w.style.display='block'; w.textContent=t('geo_err_permission'); }
+  // Sin permiso y sin ningún metro registrado: se pausa el cronómetro. Antes seguía contando "REGISTRANDO" con 0,00 km y al terminar quedaba guardada una carrera de 0 km.
+  try{ if(tracker && tracker.distanceKm === 0 && isTrackingActive()) togglePause(); }catch(e){}
 }
 function updateRunUnitLabels(){
   const distLbl = distUnit().toUpperCase();
@@ -17982,8 +18004,13 @@ function applyCoachNote(input){
   // preferencia mencionada hace meses no se pierda nunca.
   if(!input || !input.nota) return 'Falta la nota a guardar.';
   if(!state.profile.coachNotes) state.profile.coachNotes = [];
-  state.profile.coachNotes.push(String(input.nota).slice(0,200));
-  if(state.profile.coachNotes.length > 12) state.profile.coachNotes = state.profile.coachNotes.slice(-12);
+  const noteText = String(input.nota).replace(/[\r\n]+/g, ' ').trim().slice(0,200);
+  if(!noteText) return 'Falta la nota a guardar.';
+  // sin repetidas, tope de 20 (antes 12: 30 llamadas seguidas desplazaban una lesión real), y el corredor ve qué se guardó para poder corregirlo desde Perfil
+  state.profile.coachNotes = state.profile.coachNotes.filter(n => n !== noteText);
+  state.profile.coachNotes.push(noteText);
+  if(state.profile.coachNotes.length > 20) state.profile.coachNotes = state.profile.coachNotes.slice(-20);
+  showToast(t('coach_note_saved', {nota: noteText}), 'info');
   // Antes, una lesión mencionada por chat quedaba SOLO en coachNotes -- una nota que el coach
   // podía mencionar en la charla, pero invisible para trainingCaution/generatePlan (que sí
   // reaccionan a una molestia cargada a mano en Perfil > Molestias, ver activePainEntries).
@@ -18138,6 +18165,7 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
   let networkFailed = false;
   let cancelled = false;
   let anyToolApplied = false;
+  const toolBudget = {total: 0, vol: 0, notes: 0};
   // Salvaguarda contra el modelo afirmando en TEXTO que ya aplicó un cambio (plan o perfil)
   // sin haber llamado ninguna herramienta -- el prompt de arriba ya se lo pide explícitamente
   // ("nunca digas que ya lo cambiaste sin haber llamado a la herramienta"), pero una
@@ -18186,7 +18214,13 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
       anyToolApplied = true;
       const toolResults = toolUses.map(tu=>{
         let result;
-        if(tu.name==='modificar_sesion') result = applyPlanChange(tu.input);
+        // Topes por mensaje del corredor: el tope de ±60% de ajustar_volumen_semana es POR LLAMADA, así que llamadas repetidas se acumulaban (dos de +60% = +156%), y varias
+        // notas seguidas desplazaban a las anteriores. Pasado el tope la herramienta no se ejecuta y el modelo recibe el motivo.
+        toolBudget.total++;
+        if(toolBudget.total > 6) result = 'Demasiadas acciones en un solo mensaje: dejá el resto para el próximo mensaje.';
+        else if(tu.name==='ajustar_volumen_semana' && ++toolBudget.vol > 1) result = 'El volumen ya se ajustó en este mensaje: no se puede ajustar dos veces seguidas.';
+        else if(tu.name==='guardar_nota_coach' && ++toolBudget.notes > 2) result = 'Ya guardé varias notas en este mensaje: dejá el resto para el próximo.';
+        else if(tu.name==='modificar_sesion') result = applyPlanChange(tu.input);
         else if(tu.name==='mover_sesion') result = applyMoveSession(tu.input);
         else if(tu.name==='cancelar_sesion') result = applyCancelSession(tu.input);
         else if(tu.name==='ajustar_volumen_semana') result = applyVolumeAdjust(tu.input);

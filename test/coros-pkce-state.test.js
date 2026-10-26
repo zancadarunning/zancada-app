@@ -50,3 +50,20 @@ test('resumen semanal: una fecha invalida en las carreras se ignora (no lanza Ra
   const msg = buildWeeklySummary({ runs: [{ date: 'garbage', distanceKm: 5 }, { date: '2026-10-21T12:00:00Z', distanceKm: 8 }], plan: null, weekStart: null, streak: 0, tz: 'America/Argentina/Buenos_Aires', lang: 'es', imperial: false, now: Date.parse('2026-10-25T23:00:00Z') });
   assert.ok(msg && /8\.0 km/.test(msg.body), JSON.stringify(msg));
 });
+
+test('Strava: revocar renueva el token vencido ANTES de llamar a deauthorize (antes fallaba en silencio)', async () => {
+  const { revokeStravaAccess } = require('../api/_lib/strava-revoke.js');
+  const { encToken } = require('../api/_lib/token-crypto.js');
+  const calls = [];
+  const realFetch = global.fetch;
+  global.fetch = async (url) => {
+    calls.push(String(url).split('?')[0]);
+    if (String(url).includes('/oauth/token')) return { ok: true, status: 200, json: async () => ({ access_token: 'fresco' }) };
+    return { ok: true, status: 200, json: async () => ({}) };
+  };
+  try {
+    const ok = await revokeStravaAccess({ access_token: encToken('viejo'), refresh_token: encToken('r'), expires_at: 1 });
+    assert.equal(ok, true);
+    assert.deepEqual(calls, ['https://www.strava.com/oauth/token', 'https://www.strava.com/oauth/deauthorize']);
+  } finally { global.fetch = realFetch; }
+});
