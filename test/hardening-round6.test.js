@@ -193,3 +193,16 @@ test('semana siguiente y notas de molestia: tipo/largo comprobados y sin saltos 
   assert.match(s, /const override = \{ type: String\(typeof input\.tipo === 'string'/);
   assert.match(s, /note:String\(input\.nota\)\.replace\(\/\[\\r\\n\]\+\/g, ' '\)\.trim\(\)\.slice\(0,200\)/);
 });
+
+test('coros-describe-tools: solo admin con mail confirmado, con tope de frecuencia, y no devuelve datos de personas', () => {
+  const s = read('api/coros-describe-tools.js');
+  assert.match(s, /verifyUser\(/);
+  assert.match(s, /!auth\.emailConfirmed \|\| !admins\.includes\(email\)/);
+  assert.match(s, /userCooldown\(auth\.userId, 'coros-describe'/);
+  assert.match(s, /tools\/list/);
+  assert.doesNotMatch(s, /req\.body/, 'no confia en nada del cuerpo');
+  const app = read('app.js');
+  assert.match(app, /data-on-click="admDescribeCoros\(\)"/);
+  assert.match(app, /async function admDescribeCoros\(\)\{/);
+  assert.match(app, /async function admCopyCorosTools\(\)\{/);
+});

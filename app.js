@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-26T20:33:29Z';
+const APP_VERSION = '2026-10-26T21:24:29Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10253,6 +10253,12 @@ function renderAdminStats(s){
     + admCard('languages', 'Idiomas', langs.length ? admBarRows(langs, a.with_data) : '<p class="muted">Sin datos.</p>')
     + admCard('goals', 'Objetivos', goals.length ? admBarRows(goals, a.with_data) : '<p class="muted">Sin datos.</p>')
     + admCard('external', 'Límites que hay que mirar a mano', '<p class="adm-note" style="margin-top:0;">Mapbox, Vercel, Anthropic, tráfico de Supabase y las llamadas a la API de Strava no se pueden medir desde acá. Tocá la ⓘ para ver dónde mirar cada uno.</p>');
+  // diagnóstico de COROS (solo admin): lee el formato de entrenamientos que publica COROS, para armar el envío de planes al reloj
+  document.getElementById('admin-body').insertAdjacentHTML('beforeend', admCard('coros', 'COROS: formato de entrenamientos',
+    '<p class="adm-note" style="margin-top:0;">Necesitás tener COROS conectado en Perfil → Conectividad (sirve cualquier cuenta de COROS). Toca el botón, copiá el resultado y pegalo en el chat.</p>'
+    + '<button type="button" class="btn btn-outline btn-sm" id="adm-coros-btn" data-on-click="admDescribeCoros()">Leer herramientas de COROS</button> '
+    + '<button type="button" class="btn btn-outline btn-sm" data-on-click="admCopyCorosTools()">Copiar</button>'
+    + '<textarea id="adm-coros-out" readonly rows="8" style="width:100%; margin-top:8px; font-size:11px; font-family:var(--font-mono, monospace);"></textarea>'));
   const when = s.generated_at ? new Date(s.generated_at) : new Date();
   document.getElementById('admin-updated').textContent = 'Actualizado ' + when.toLocaleString();
 }
@@ -10269,6 +10275,26 @@ async function loadAdminStats(){
   }catch(e){
     body.innerHTML = '<div class="adm-err">No se pudo cargar el panel: ' + escapeHtml(String(e.message || e)) + '</div>';
   }finally{ if(btn) btn.disabled = false; }
+}
+async function admDescribeCoros(){
+  const out = document.getElementById('adm-coros-out'), btn = document.getElementById('adm-coros-btn');
+  if(!out) return;
+  if(btn) btn.disabled = true;
+  out.value = 'Leyendo…';
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session) throw new Error('Sin sesión');
+    const r = await fetch(apiUrl('/api/coros-describe-tools'), { method: 'POST', headers: { 'Authorization': 'Bearer ' + session.access_token } });
+    const data = await r.json().catch(() => ({}));
+    out.value = JSON.stringify(data);
+  }catch(e){ out.value = 'Error: ' + String(e.message || e); }
+  finally{ if(btn) btn.disabled = false; }
+}
+async function admCopyCorosTools(){
+  const out = document.getElementById('adm-coros-out');
+  if(!out || !out.value) return;
+  try{ await navigator.clipboard.writeText(out.value); showToast('Copiado', 'success'); }
+  catch(e){ out.select(); }
 }
 function openZonesOverlay(){ openOverlaySheetEl(document.getElementById('zones-overlay')); }
 function closeZonesOverlay(){ document.getElementById('zones-overlay').classList.remove('overlay-open'); }
