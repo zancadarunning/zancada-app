@@ -67,3 +67,25 @@ test('Strava: revocar renueva el token vencido ANTES de llamar a deauthorize (an
     assert.deepEqual(calls, ['https://www.strava.com/oauth/token', 'https://www.strava.com/oauth/deauthorize']);
   } finally { global.fetch = realFetch; }
 });
+
+test('strava-disconnect: si la purga de carreras falla, NO se borra la conexión (se puede reintentar) y responde 502', async () => {
+  process.env.SUPABASE_URL = 'https://x.supabase.co'; process.env.SUPABASE_SERVICE_KEY = 'k';
+  const log = [];
+  const realFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    const u = String(url), m = (opts && opts.method) || 'GET';
+    log.push(m + ' ' + u.split('?')[0].replace('https://x.supabase.co', ''));
+    const ok = (d, st = 200) => ({ ok: st < 400, status: st, json: async () => d, text: async () => JSON.stringify(d) });
+    if (u.includes('/auth/v1/user')) return ok({ id: 'u1', email: 'a@b.com', email_confirmed_at: '2026-01-01' });
+    if (u.includes('/rpc/purge_provider_runs')) return ok({ message: 'boom' }, 500);
+    return ok([]);
+  };
+  try {
+    delete require.cache[require.resolve('../api/strava-disconnect.js')];
+    const h = require('../api/strava-disconnect.js');
+    const res = mkRes();
+    await h({ method: 'POST', headers: { authorization: 'Bearer t', origin: 'https://zancada.org' }, body: {} }, res);
+    assert.equal(res.code, 502, JSON.stringify(res.body));
+    assert.ok(!log.some(l => l.startsWith('DELETE') && l.includes('strava_connections')), 'no borró la conexión: ' + log.join(' | '));
+  } finally { global.fetch = realFetch; }
+});
