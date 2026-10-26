@@ -1,0 +1,18 @@
+# Lo que NO se publica en zancada.org. Es una segunda barrera: los redirects de vercel.json ya bloquean estas rutas, pero con esto los archivos ni siquiera se despliegan.
+sql
+docs
+test
+scripts
+loadtest
+email-templates
+mobile
+.github
+.claude
+.impeccable
+.superpowers
+DESIGN.md
+PRODUCT.md
+.env*
+dark_*.png
+light_*.png
+v[0-9]_*.png

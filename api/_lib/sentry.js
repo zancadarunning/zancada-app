@@ -86,7 +86,14 @@ async function reportError(err, context) {
 // mirar los logs a mano justo ese día. captureMessage (no captureException,
 // no hay ningún Error acá) con level 'warning' para no mezclarlo con los 500
 // de verdad que ya capta withSentry/reportError.
+// Como mucho UN evento por mensaje por minuto: sin esto cualquiera, sin autenticarse, podía mandar miles de pedidos rechazados y agotar la cuota de Sentry (tapando alertas reales).
+const lastSecurityEventAt = new Map();
 async function reportSecurityEvent(message, context) {
+  const key = String(message).slice(0, 120);
+  const now = Date.now();
+  if (now - (lastSecurityEventAt.get(key) || 0) < 60000) return;
+  lastSecurityEventAt.set(key, now);
+  if (lastSecurityEventAt.size > 200) lastSecurityEventAt.clear();
   ensureInit();
   Sentry.captureMessage(message, { level: 'warning', extra: context });
   await Sentry.flush(2000).catch(() => {});

@@ -61,13 +61,14 @@ function typeLabel(d, lang){
 }
 function amountText(d, profile){
   const imperial = !!(profile && profile.units === 'imperial');
-  const val = imperial ? d.dist * 0.621371 : d.dist;
+  const dist = Number(d.dist) || 0;
+  const val = imperial ? dist * 0.621371 : dist;
   return `${val.toFixed(1)}${imperial ? 'mi' : 'km'}`;
 }
 
 function buildWeekEvents(plan, weekStart, lang, profile, nowStamp){
   const monday = new Date(weekStart+'T00:00:00Z');
-  return (plan || []).filter(d => d && d.dist > 0 && d.status !== 'skipped').map(d => {
+  return (Array.isArray(plan) ? plan : []).filter(d => d && Number(d.dist) > 0 && d.status !== 'skipped').map(d => {
     const idx = DAY_KEYS.indexOf(d.day);
     if(idx < 0) return null;
     const date = new Date(monday); date.setUTCDate(monday.getUTCDate() + idx);

@@ -189,8 +189,9 @@ module.exports = withSentry(async (req, res) => {
     const param = name => {
       if (req.query && req.query[name] !== undefined) return req.query[name];
       if (hidden.has(name)) return hidden.get(name);
-      const m = rawUrl.match(new RegExp('[?&]' + name + '=([^&?#]*)'));
-      return m ? decodeURIComponent(m[1]) : undefined;
+      const m = rawUrl.match(new RegExp('[?&]' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^&?#]*)'));
+      if (!m) return undefined;
+      try { return decodeURIComponent(m[1]); } catch (e) { return undefined; }   // un %XX roto en una URL sin autenticar no puede tirar un 500
     };
     const mode = param('hub.mode');
     const token = param('hub.verify_token');

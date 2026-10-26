@@ -90,6 +90,7 @@ module.exports = withSentry(async (req, res) => {
 
   let inPath, outPath, workDir;
   try{
+    if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) { res.status(415).json({ error: 'Unsupported media type' }); return; }
     const input = await readRawBody(req);
     if(!input || !input.length){ res.status(400).json({error:'Empty body'}); return; }
     if(input.length > MAX_BYTES){ res.status(413).json({error:'Video too large'}); return; }

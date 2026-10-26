@@ -68,9 +68,16 @@ const L = {
 };
 
 // Fecha local (YYYY-MM-DD) de un instante en un huso horario
+const dateFormatters = new Map();
 function localDateKey(ms, tz) {
   try {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(ms);
+    let f = dateFormatters.get(tz);
+    if (!f) {
+      f = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+      if (dateFormatters.size > 50) dateFormatters.clear();
+      dateFormatters.set(tz, f);
+    }
+    return f.format(ms);
   } catch (e) {
     return new Date(ms).toISOString().slice(0, 10);
   }
@@ -91,7 +98,9 @@ function buildWeeklySummary({ runs, plan, weekStart, streak, tz, lang, imperial,
   let km = 0, n = 0, prevKm = 0, ranRecently = false;
   for (const r of runs || []) {
     if (!r || !r.date) continue;
-    const d = dayNum(localDateKey(new Date(r.date).getTime(), tz));
+    const rms = new Date(r.date).getTime();
+    if (!Number.isFinite(rms)) continue;   // fecha invalida (la escribe la propia cuenta): se ignora en vez de romper el resumen
+    const d = dayNum(localDateKey(rms, tz));
     const dist = Number(r.distanceKm) || 0;
     if (d > today - 7 && d <= today) { km += dist; n++; }
     else if (d > today - 14 && d <= today - 7) prevKm += dist;

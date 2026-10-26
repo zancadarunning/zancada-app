@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <!-- CSP también como <meta>: la app nativa (Capacitor) carga este archivo desde https://localhost y NO recibe los headers de vercel.json, así que sin esto no tenía ninguna.
+       Es la misma política que vercel.json (test/security-csp-meta.test.js lo exige) más https://www.zancada.org en connect-src, que es adonde llama la app nativa. frame-ancestors solo funciona como header. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://api.mapbox.com; media-src 'self' blob:; connect-src 'self' https://www.zancada.org https://challenges.cloudflare.com https://smcicgaraqlvalxvdriz.supabase.co wss://smcicgaraqlvalxvdriz.supabase.co https://api.open-meteo.com https://api.mapbox.com https://events.mapbox.com; worker-src 'self' blob:; child-src 'self' blob:; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta charset="UTF-8">
 <!-- interactive-widget: OJO -- confirmado (bugs.webkit.org #259770, todavía "NEW" sin
      resolver) que Safari/WebKit NO IMPLEMENTA esta propiedad en absoluto, así que este
@@ -418,10 +421,10 @@
     background-color:#1d1d20; background-image:conic-gradient(#2a2a2e 25%, #1d1d20 0 50%, #2a2a2e 0 75%, #1d1d20 0); background-size:22px 22px;}
   .share-tile.opaque{background:#0A0A0A;}
   .share-tile img{width:100%; height:100%; object-fit:contain; display:block;}
-  .share-tile.selected{border-color:var(--chalk);}
+  .share-tile.selected{border-color:var(--hivis); box-shadow:0 0 0 2px var(--chalk);}
   .share-tile-skel{position:absolute; inset:0; background:linear-gradient(110deg, transparent 30%, var(--sk-hl) 50%, transparent 70%); opacity:.35; animation:shareSkel 1.2s linear infinite;}
   @keyframes shareSkel{from{transform:translateX(-100%)} to{transform:translateX(100%)}}
-  .share-check{position:absolute; top:10px; right:10px; width:26px; height:26px; border-radius:50%; background:var(--chalk); color:var(--ink); display:none; align-items:center; justify-content:center;}
+  .share-check{position:absolute; top:10px; right:10px; width:26px; height:26px; border-radius:50%; background:#FFFFFF; color:#0A0A0A; box-shadow:0 0 0 2px rgba(0,0,0,.45); display:none; align-items:center; justify-content:center;}
   .share-check svg{width:16px; height:16px;}
   .share-tile.selected .share-check{display:flex;}
   .share-actions{position:sticky; bottom:0; display:flex; justify-content:center; gap:26px; padding:16px 0 calc(16px + var(--safe-bottom)); background:var(--asphalt); border-top:1px solid var(--overlay-hairline);}
@@ -1767,7 +1770,7 @@
   header.top.titled #headerDate{display:none;}
   @keyframes headerTitleIn{from{opacity:0; transform:translateY(5px);} to{opacity:1; transform:translateY(0);}}
   /* (4) Chat: burbujas con más aire, chips en una fila deslizable, indicador de escritura con neón. */
-  .msg{padding:12px 15px; line-height:1.55;}
+  .msg{padding:12px 15px; line-height:1.55; overflow-wrap:anywhere; word-break:break-word;}
   .msg.coach{border:1px solid var(--overlay-hairline);}
   .msg.user{box-shadow:0 0 16px -3px var(--ambient-card);}
   .chat-chips{flex-wrap:nowrap; overflow-x:auto; scroll-snap-type:x proximity; margin:2px -4px; padding:2px 4px 8px; scrollbar-width:none; -webkit-overflow-scrolling:touch; -webkit-mask-image:linear-gradient(90deg, #000 90%, transparent); mask-image:linear-gradient(90deg, #000 90%, transparent);}
