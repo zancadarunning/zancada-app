@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-26T14:01:41Z';
+const APP_VERSION = '2026-10-26T14:35:05Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2268,6 +2268,8 @@ const LINK_KEY = 'zancada_pending_link';
 function parseLinkReturn(urlStr){
   try{
     const u = new URL(urlStr, location.origin);
+    // solo enlaces de NUESTROS orígenes: otra app del teléfono podía mandar un intent explícito con cualquier host y un code/state inventados (el servidor los rechazaba, pero no tiene por qué llegar tan lejos)
+    if(u.origin !== location.origin && u.origin !== 'https://www.zancada.org' && u.origin !== 'https://zancada.org') return null;
     if(!/^\/conectar\/?$/.test(u.pathname)) return null;
     const p = u.searchParams.get('p'), code = u.searchParams.get('code'), state = u.searchParams.get('state');
     if(!/^(strava|polar|wahoo|suunto|coros)$/.test(p || '') || !code || !state) return null;
@@ -4538,6 +4540,13 @@ function wipeLocalUserData(uid){
     keys.forEach(k => { try{ localStorage.removeItem(k); }catch(e){} });
   }catch(e){}
   try{ clearLastKnownPosition(); }catch(e){}
+  // Mapbox guarda por su cuenta un id persistente (mapbox.eventData.*) y una caché de teselas: no son datos de la cuenta, pero sí del dispositivo/zonas vistas
+  try{
+    const mk = [];
+    for(let i=0; i<localStorage.length; i++){ const k = localStorage.key(i); if(k && k.indexOf('mapbox.') === 0) mk.push(k); }
+    mk.forEach(k => { try{ localStorage.removeItem(k); }catch(e){} });
+    if(typeof caches !== 'undefined' && caches.delete) caches.delete('mapbox-tiles').catch(()=>{});
+  }catch(e){}
 }
 async function logout(){
   await waitForPendingPersist();
@@ -12702,7 +12711,8 @@ function randomHex(n){
   catch(e){ return Math.random().toString(16).slice(2, 2+n).padEnd(n, '0'); }
 }
 function saveLastKnownPosition(lat, lng){
-  try{ localStorage.setItem(LAST_POS_KEY, JSON.stringify({lat, lng, ts: Date.now()})); }catch(e){}
+  // redondeada a 2 decimales (~1 km): la política de privacidad dice que la última ubicación se guarda redondeada (antes quedaba exacta en el teléfono)
+  try{ localStorage.setItem(LAST_POS_KEY, JSON.stringify({lat: Math.round(lat*100)/100, lng: Math.round(lng*100)/100, ts: Date.now()})); }catch(e){}
 }
 // La posición exacta es un dato personal: se borra al cerrar sesión, borrar los datos o borrar la cuenta (si no, la próxima
 // cuenta que entre en este mismo iPhone vería el mapa de dónde corría la anterior).

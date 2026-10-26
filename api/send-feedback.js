@@ -17,7 +17,7 @@ const { withSentry, reportError } = require('./_lib/sentry');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 
 // Un mensaje por minuto y por usuario: cada uno manda un email real.
-const FEEDBACK_COOLDOWN_MS = 60 * 1000;
+const FEEDBACK_COOLDOWN_MS = 30 * 60 * 1000;   // 48 por dia como maximo por cuenta (antes 1 por minuto = 1.440): una sola cuenta no puede agotar los mails de la app
 
 // Tope generoso para un mensaje de feedback -- bastante más que cualquier queja o idea
 // real, pero corta un abuso deliberado (igual que MAX_INPUT_CHARS en chat.js).

@@ -120,7 +120,7 @@ module.exports = withSentry(async (req, res) => {
   const key = process.env.SUPABASE_SERVICE_KEY;
   const headers = { apikey: key, Authorization: `Bearer ${key}` };
   try {
-    const url = `${base}/rest/v1/app_state?select=plan:data->plan,weekStart:data->>weekStart,nextWeek:data->calendarNextWeek,lang:data->>lang,profile:data->profile&data->>calendarToken=eq.${encodeURIComponent(token)}`;
+    const url = `${base}/rest/v1/app_state?select=plan:data->plan,weekStart:data->>weekStart,nextWeek:data->calendarNextWeek,lang:data->>lang,profile:data->profile&data->>calendarToken=eq.${encodeURIComponent(token)}&limit=1`;
     const r = await fetch(url, { headers });
     if (!r.ok) {
       const body = await r.text().catch(() => '');

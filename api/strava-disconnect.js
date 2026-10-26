@@ -56,20 +56,22 @@ module.exports = withSentry(async (req, res) => {
       console.error('strava-disconnect: revoke failed', e);
     }
 
+    // Primero se purgan las carreras de Strava y RECIÉN después se borra la conexión (como hace el webhook de revocación): si la purga falla, la conexión sigue ahí y la
+    // persona puede reintentar. Antes se borraba la conexión primero y un error de la purga se tragaba con un 200: quedaban datos de Strava sin forma de volver a purgarlos
+    // (la política de Strava exige borrarlos al desconectar).
+    try {
+      await purgeStravaRunsForUser(base, headers, userId);
+    } catch (e) {
+      console.error('strava-disconnect: error purging synced runs', e);
+      res.status(502).json({ error: 'Could not remove Strava data, try again' });
+      return;
+    }
+
     const delRes = await fetch(`${base}/rest/v1/strava_connections?user_id=eq.${userId}`, { method: 'DELETE', headers });
     if (!delRes.ok) {
       console.error('strava-disconnect: failed to delete connection row', await delRes.text());
       res.status(500).json({ error: 'Could not disconnect Strava' });
       return;
-    }
-
-    try {
-      await purgeStravaRunsForUser(base, headers, userId);
-    } catch (e) {
-      // No dejamos que un fallo acá bloquee la desconexión en sí (ya se borró
-      // strava_connections y se revocó el permiso) -- pero lo logueamos para
-      // no perder de vista que puede haber quedado data de Strava sin purgar.
-      console.error('strava-disconnect: error purging synced runs', e);
     }
 
     res.status(200).json({ ok: true });

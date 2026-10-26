@@ -66,7 +66,7 @@ module.exports = withSentry(async (req, res) => {
 
   // Límite de frecuencia por usuario: la cuota de la API de la marca es de la APP (compartida por todos), así que un usuario que
   // mande pedidos en bucle podía agotarla y cortar la sincronización de los demás. Falla cerrado (si el limitador no responde, no pasa).
-  if (!(await checkSyncCooldown(base, headers, userId, 'suunto-plan', 20000, { failClosed: true }))) {
+  if (!(await checkSyncCooldown(base, headers, userId, 'suunto-plan', 300000, { failClosed: true }))) {
     res.status(200).json({ pushed: 0, reason: 'cooldown' });
     return;
   }
