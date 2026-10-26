@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-26T14:35:05Z';
+const APP_VERSION = '2026-10-26T14:56:26Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1571,6 +1571,7 @@ async function loadUserAndEnter(user, isRetry){
       }
       // phaseNow guardado puede ser de otra semana (se guardó la semana pasada): se deriva de nuevo
       refreshPhaseNow();
+      if(thinStoredRoutes()) persist();   // carreras viejas guardadas con todos los puntos de GPS: se recortan una sola vez (ver ROUTE_MAX_POINTS)
       // El idioma guardado en la cuenta puede no ser el que index.html adivinó por
       // navigator.language y cargó de entrada (alguien que configuró el teléfono en
       // inglés pero eligió español en Perfil, por ejemplo) -- si es otro, hace falta
@@ -2560,7 +2561,7 @@ async function syncPlanToSuunto(force){
         const res = await fetch(apiUrl('/api/suunto-push-plan'), {
           method:'POST',
           headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
-          body: JSON.stringify({ reconcile:true, days:changed, keepDates:keep, weekStart, today:todayLocalISO(), zones, labels })
+          body: JSON.stringify({ reconcile:true, days:changed, keepDates:keep, weekStart, today:todayLocalISO(), zones, labels, force:!!force })
         });
         result = await res.json().catch(()=>null);
         if(!result && !res.ok) suuntoBlockedUntil = Date.now() + 15*60*1000;   // la respuesta ni siquiera era JSON (502, HTML): tampoco insistir
@@ -2616,7 +2617,7 @@ async function syncPlanToWahoo(force){
         const res = await fetch(apiUrl('/api/wahoo-sync-plan'), {
           method:'POST',
           headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
-          body: JSON.stringify({ days:changed, removeDates:stale, known, zones, labels, tzOffsetMin:new Date().getTimezoneOffset(), weekStart })
+          body: JSON.stringify({ days:changed, removeDates:stale, known, zones, labels, tzOffsetMin:new Date().getTimezoneOffset(), weekStart, force:!!force })
         });
         result = await res.json().catch(()=>null);
         if(!result && !res.ok) wahooBlockedUntil = Date.now() + 15*60*1000;
@@ -2626,7 +2627,9 @@ async function syncPlanToWahoo(force){
             wahooSyncBlocked = true;
             if(!force) showToast(t('wahoo_reconnect_needed'),'error'); // en el envío manual ya lo avisa el botón
           }
-          const ok = res.ok && !result.error && !result.reason && !result.failed;
+          // 'unchanged': el servidor ya tenía este mismo plan (lo mandó otro teléfono): cuenta como éxito, sin ids nuevos
+          const unchanged = result.reason === 'unchanged';
+          const ok = res.ok && !result.error && (!result.reason || unchanged) && !result.failed;
           if(result.reason === 'rate_limited') wahooBlockedUntil = Date.now() + 5.5*60*1000;
           else if(!ok) wahooBlockedUntil = Date.now() + 15*60*1000;
           const next = {};
@@ -2634,9 +2637,10 @@ async function syncPlanToWahoo(force){
           changed.forEach(d => {
             const m = result.pushedMap && result.pushedMap[d.date];
             if(m) next[d.date] = { sig: sigOf(d), workoutId: m.workoutId, planId: m.planId };
+            else if(unchanged) next[d.date] = { sig: sigOf(d), workoutId: sent[d.date] && sent[d.date].workoutId, planId: sent[d.date] && sent[d.date].planId };
             else if(sent[d.date]) next[d.date] = sent[d.date]; // no llegó: se conserva lo viejo y se reintenta
           });
-          stale.forEach(dt => { if(!(result.removedDates||[]).includes(dt) && sent[dt]) next[dt] = sent[dt]; });
+          stale.forEach(dt => { if(!unchanged && !(result.removedDates||[]).includes(dt) && sent[dt]) next[dt] = sent[dt]; });
           if(JSON.stringify(next) !== JSON.stringify(state.wahooSent || {})){ state.wahooSent = next; dirty = true; }
           if(ok && state.wahooWeek !== weekStart){ state.wahooWeek = weekStart; dirty = true; }
           // Cuota de Wahoo agotada (la app en modo sandbox permite 25 llamadas cada 5 minutos): se
@@ -12250,6 +12254,26 @@ function classifyPaceRelative(paceMin, avgPaceMin){
 // Antes esto solo existía para carreras sincronizadas de Strava -- las
 // trackeadas desde el celular no guardaban ni la hora de cada punto, así que
 // no había forma de calcular ritmo real por tramo.
+// Cuántos puntos de GPS se guardan por carrera en la cuenta. El teléfono registra ~1 por segundo (3.600 en una hora, ~200 KB por carrera) y todo viaja dentro de app_state:
+// con cientos de carreras la cuenta pesaba megas y cada guardado/carga subía y bajaba todo. Para dibujar el trazo, el video y el gráfico alcanzan ~900 puntos. Las vueltas
+// por km, el desnivel y la curva de ritmo se calculan ANTES de recortar, con todos los puntos, y se guardan aparte.
+const ROUTE_MAX_POINTS = 900;
+function downsampleRoute(points, max){
+  const n = Array.isArray(points) ? points.length : 0;
+  const cap = Math.max(2, max || ROUTE_MAX_POINTS);
+  if(n <= cap) return points || [];
+  const out = [];
+  for(let i = 0; i < cap; i++) out.push(points[Math.round(i * (n - 1) / (cap - 1))]);   // reparte los índices parejo y siempre conserva el primero y el último
+  return out;
+}
+// Recorta una sola vez las carreras viejas que se guardaron con todos los puntos. Solo toca las que superan el tope por mucho (>1,3x): devuelve true si cambió algo.
+function thinStoredRoutes(){
+  let changed = false;
+  (state.runs || []).forEach(r => {
+    if(r && Array.isArray(r.points) && r.points.length > ROUTE_MAX_POINTS * 1.3){ r.points = downsampleRoute(r.points, ROUTE_MAX_POINTS); changed = true; }
+  });
+  return changed;
+}
 function computeSplitsFromPoints(points){
   if(!points || points.length < 2) return [];
   const cum = [0];
@@ -13463,7 +13487,7 @@ async function closeSummary(){
   const paceSeries = computePaceSeriesFromPoints(tracker.points);
   state.runs.push({
     id:runId, date:runDate, distanceKm:tracker.distanceKm, durationSec:tracker.elapsedSec, avgCadence: runAvgCadence(),
-    hrLog:tracker.hrLog, points:tracker.points, shoeId:shoeId||null,
+    hrLog:tracker.hrLog, points:downsampleRoute(tracker.points), shoeId:shoeId||null,
     splits: computeSplitsFromPoints(tracker.points), splitsV:3,
     elevationGain: elev.gain, elevationLoss: elev.loss,
     series: paceSeries ? {t: paceSeries.t, hr: null, paceMin: paceSeries.paceMin} : null

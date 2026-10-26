@@ -197,7 +197,7 @@ module.exports = withSentry(async (req, res) => {
     // sin REFERENCES), así que el borrado de arriba no la toca -- sin este loop
     // quedaría huérfana para siempre una fila por cada día que el usuario haya usado
     // el chat con el coach.
-    const tables = ['app_state', 'push_subscriptions', 'strava_connections', 'chat_usage', 'sent_notifications', 'sync_cooldowns'];
+    const tables = ['app_state', 'push_subscriptions', 'strava_connections', 'chat_usage', 'sent_notifications', 'sync_cooldowns', 'entitlements'];
     for (const table of tables) {
       try {
         await fetch(`${base}/rest/v1/${table}?user_id=eq.${userId}`, { method: 'DELETE', headers });
