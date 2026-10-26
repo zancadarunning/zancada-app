@@ -30,6 +30,7 @@ const NOT_EDITABLE_RE = /not\s+editable|cannot be (edited|modified|updated)|comp
 function adminList() {
   return String(process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 }
+const REJECT_RE = /reject|invalid|error|fail|not allowed|must be|is required|violat|cannot|unable|denied/i;
 const errText = e => String((e && e.message) || e).slice(0, 400);
 
 module.exports = withSentry(async (req, res) => {
@@ -55,7 +56,8 @@ module.exports = withSentry(async (req, res) => {
   const key = process.env.SUPABASE_SERVICE_KEY;
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
-  const planHash = payloadHash({ days, keepDates: [...keepDates].sort(), zones, labels, today });
+  // v: versión del envío. Subirla invalida lo "ya enviado" recordado (la v1 contaba como enviados entrenamientos que COROS no había confirmado)
+  const planHash = payloadHash({ v: 2, days, keepDates: [...keepDates].sort(), zones, labels, today });
   if (body.force !== true && await isDuplicate(base, headers, userId, 'coros_plan', planHash)) {
     res.status(200).json({ pushed: 0, failed: 0, unchanged: true, pushedDates: days.map(d => d.date) });
     return;
@@ -95,6 +97,8 @@ module.exports = withSentry(async (req, res) => {
     };
 
     let created = 0, updated = 0, skipped = 0, failed = 0, noId = 0, firstError = null;
+    const raws = [];   // respuesta cruda de COROS (solo se devuelve al admin): una herramienta puede rechazar el entrenamiento con un texto normal, sin marcarlo como error
+    const rawOf = r => String(typeof r === 'string' ? r : JSON.stringify(r)).slice(0, 600);
     const pushedDates = [];
     const fail = (date, e) => { failed++; if (!firstError) firstError = { date, message: errText(e) }; };
 
@@ -106,6 +110,8 @@ module.exports = withSentry(async (req, res) => {
       if (knownId) {
         try {
           const r = await callCorosMcpTool(accessToken, 'updateScheduledWorkout', { date: date8, idInPlan: String(knownId), course });
+          if (raws.length < 3) raws.push({ date: day.date, tool: 'update', raw: rawOf(r) });
+          if (!extractIdInPlan(r) && REJECT_RE.test(rawOf(r))) throw new Error('COROS rechazó la actualización: ' + rawOf(r));
           const newId = extractIdInPlan(r) || knownId;
           if (newId !== knownId) await saveId(day.date, newId);
           updated++; pushedDates.push(day.date); done = true;
@@ -119,8 +125,11 @@ module.exports = withSentry(async (req, res) => {
       if (!done) {
         try {
           const r = await callCorosMcpTool(accessToken, 'createScheduledWorkout', { date: date8, course });
+          if (raws.length < 3) raws.push({ date: day.date, tool: 'create', raw: rawOf(r) });
           const newId = extractIdInPlan(r);
-          if (newId) await saveId(day.date, newId); else noId++;
+          // sin idInPlan COROS no confirmó que lo guardó (o lo rechazó con un texto normal): NO se cuenta como enviado
+          if (!newId) { noId++; throw new Error('COROS no confirmó el entrenamiento (sin idInPlan): ' + rawOf(r)); }
+          await saveId(day.date, newId);
           created++; pushedDates.push(day.date);
         } catch (e) { fail(day.date, e); }
       }
@@ -135,7 +144,7 @@ module.exports = withSentry(async (req, res) => {
     res.status(200).json({
       pushed: created + updated, created, updated, skipped, failed, noId, pushedDates, staleDates,
       reason: (created + updated + skipped || !days.length) ? undefined : 'coros_error',
-      debug: isAdmin && firstError ? firstError : undefined
+      debug: isAdmin ? { firstError: firstError || undefined, raws } : undefined
     });
   } catch (err) {
     console.error('coros-push-plan error', err);

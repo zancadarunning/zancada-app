@@ -179,7 +179,27 @@ test('un error de COROS se cuenta como fallo (y solo el admin ve el detalle)', a
   const r = await post(Object.assign({ days: [day('2026-10-28')], keepDates: ['2026-10-28'] }, BASE));
   assert.equal(r.body.failed, 1);
   assert.equal(r.body.reason, 'coros_error');
-  assert.match(r.body.debug.message, /Invalid course/);
+  assert.match(r.body.debug.firstError.message, /Invalid course/);
+});
+
+const mcpText = text => ({ ok: true, status: 200, headers: { get: () => 'application/json' }, text: async () => JSON.stringify({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text }] } }) });
+
+test('si COROS responde un texto normal SIN idInPlan (rechazo sin marcar error), no se cuenta como enviado y el admin ve la respuesta cruda', async () => {
+  const log = world({ mcp: () => mcpText('Rejected: sections[0].targetValue must be positive') });
+  const r = await post(Object.assign({ days: [day('2026-10-28')], keepDates: ['2026-10-28'] }, BASE));
+  assert.equal(r.body.failed, 1);
+  assert.equal(r.body.created, 0);
+  assert.deepEqual(r.body.pushedDates, [], 'no se marca como enviado');
+  assert.equal(r.body.reason, 'coros_error');
+  assert.match(r.body.debug.raws[0].raw, /Rejected/);
+  assert.equal(log.saved.filter(x => x.kind === 'coros_id').length, 0, 'sin idInPlan no se recuerda nada');
+});
+
+test('al actualizar, un rechazo en texto normal tampoco cuenta como actualizado', async () => {
+  world({ mapping: ['2026-10-28|555'], mcp: () => mcpText('Invalid course: cannot update') });
+  const r = await post(Object.assign({ days: [day('2026-10-28')], keepDates: ['2026-10-28'] }, BASE));
+  assert.equal(r.body.updated, 0);
+  assert.equal(r.body.failed, 1);
 });
 
 test('cableado: topes de frecuencia, memoria de ids en el servidor y la app lo programa con los demas relojes', () => {
