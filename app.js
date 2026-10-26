@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-26T21:24:29Z';
+const APP_VERSION = '2026-10-26T21:42:12Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2545,7 +2545,7 @@ function scheduleWahooSync(delayMs){
   clearTimeout(wahooSyncTimer);
   wahooSyncTimer = setTimeout(()=>{ syncPlanToWahoo(false).catch(e=>console.error('wahoo sync', e)); }, delayMs || 4000);
 }
-function scheduleWatchSync(){ scheduleSuuntoSync(); scheduleWahooSync(); }
+function scheduleWatchSync(){ scheduleSuuntoSync(); scheduleWahooSync(); scheduleCorosSync(); }
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') scheduleWatchSync(); });
 
 // force=true reenvía todo (botón manual). Devuelve la respuesta del backend o null si no hizo nada.
@@ -2666,6 +2666,73 @@ async function syncPlanToWahoo(force){
     if(wahooSyncAgain){ wahooSyncAgain = false; scheduleWahooSync(); }
   }
 }
+// COROS: envía la semana del plan al calendario de COROS por su MCP (api/coros-push-plan.js). COROS NO deja borrar ni mover un entrenamiento ya agendado desde afuera: una sesión
+// que cambia se ACTUALIZA en el lugar (el servidor recuerda cuál es cuál), y una que desaparece del plan queda en COROS y se avisa (state.corosStale, ver updateCorosStaleNote).
+// state.corosSent[fecha] = firma de lo ya enviado.
+let corosSyncTimer = null, corosSyncRunning = false, corosSyncAgain = false, corosBlockedUntil = 0;
+function scheduleCorosSync(delayMs){
+  if(!deviceConnections.coros || !watchSyncReady() || Date.now() < corosBlockedUntil) return;
+  clearTimeout(corosSyncTimer);
+  corosSyncTimer = setTimeout(()=>{ syncPlanToCoros(false).catch(e=>console.error('coros sync', e)); }, delayMs || 4000);
+}
+function updateCorosStaleNote(){
+  const el = document.getElementById('coros-stale-note');
+  if(!el) return;
+  const today = todayLocalISO();
+  const n = (state.corosStale || []).filter(d => d >= today).length;
+  el.textContent = n ? t('coros_stale_note', {n}) : '';
+  el.style.display = n ? '' : 'none';
+}
+async function syncPlanToCoros(force){
+  if(!deviceConnections.coros || !watchSyncReady() || (Date.now() < corosBlockedUntil && !force)) return null;
+  if(corosSyncRunning){ corosSyncAgain = true; return null; }
+  corosSyncRunning = true;
+  try{
+    const { win, weekStart } = watchWindow();
+    const zones = state.profile.hrZones, labels = suuntoLabels();
+    const ctx = JSON.stringify([zones, labels]);
+    const sigOf = d => suuntoHash(JSON.stringify(d) + ctx);
+    let dirty = false;
+    const sent = state.corosSent || {};
+    const keep = win.map(d => d.date);
+    const changed = win.filter(d => force || sent[d.date] !== sigOf(d));
+    const dropped = Object.keys(sent).filter(dt => !keep.includes(dt));
+    let result = null;
+    if(changed.length || dropped.length || force){
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if(session){
+        const res = await fetch(apiUrl('/api/coros-push-plan'), {
+          method:'POST',
+          headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
+          body: JSON.stringify({ days:changed, keepDates:keep, weekStart, today:todayLocalISO(), zones, labels, force:!!force })
+        });
+        result = await res.json().catch(()=>null);
+        if(!result && !res.ok) corosBlockedUntil = Date.now() + 15*60*1000;
+        if(result){
+          if(result.reason === 'not_connected'){ deviceConnections.coros = false; }
+          const ok = res.ok && !result.error && !result.reason && !result.failed;
+          if(result.reason === 'not_enabled') corosBlockedUntil = Date.now() + 24*3600*1000;      // todavía no está habilitado para esta cuenta: no insistir
+          else if(result.reason === 'cooldown' || result.reason === 'rate_limited') corosBlockedUntil = Date.now() + 6*60*1000;
+          else if(!ok) corosBlockedUntil = Date.now() + 15*60*1000;
+          const next = {};
+          keep.forEach(dt => { if(sent[dt] && !changed.some(c=>c.date===dt)) next[dt] = sent[dt]; });
+          changed.forEach(d => { if((result.pushedDates||[]).includes(d.date)) next[d.date] = sigOf(d); else if(sent[d.date]) next[d.date] = sent[d.date]; });
+          if(JSON.stringify(next) !== JSON.stringify(state.corosSent || {})){ state.corosSent = next; dirty = true; }
+          if(Array.isArray(result.staleDates)){
+            const st = result.staleDates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(String(d))).slice(0, 14);
+            if(JSON.stringify(st) !== JSON.stringify(state.corosStale || [])){ state.corosStale = st; dirty = true; }
+          }
+          updateCorosStaleNote();
+        }
+      }
+    }
+    if(dirty) persist();
+    return result;
+  }finally{
+    corosSyncRunning = false;
+    if(corosSyncAgain){ corosSyncAgain = false; scheduleCorosSync(); }
+  }
+}
 // A diferencia de Strava/Polar/Wahoo (OAuth clásico con un client_id/secret creados
 // en un panel de developers), COROS usa OAuth 2.1 + PKCE contra su servidor MCP, con
 // registro dinámico de cliente -- ver el comentario grande en api/coros-init.js. El
@@ -2699,6 +2766,7 @@ async function updateCorosStatusDisplay(){
   try{
     const { data } = await supabaseClient.from('coros_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
     deviceConnections.coros = !!data;
+    if(data){ scheduleCorosSync(); updateCorosStaleNote(); }   // recién conectada (o al abrir Perfil): deja la semana en COROS
     if(data){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
       if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectCoros; }
@@ -2727,6 +2795,8 @@ async function disconnectCoros(){
     console.error(e);
     try{ await supabaseClient.from('coros_connections').delete().eq('user_id', currentUserId); }catch(e2){}
   }
+  deviceConnections.coros = false; clearTimeout(corosSyncTimer);
+  if(state.corosSent || state.corosStale){ state.corosSent = null; state.corosStale = null; persist(); updateCorosStaleNote(); }
   if(state.runs && state.runs.some(r=>r.source==='coros')){
     state.runs = state.runs.filter(r=>r.source!=='coros');
     if(state.shoes){
