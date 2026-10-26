@@ -20,6 +20,24 @@ mobile/*
 !mobile/package-lock.json
 !mobile/capacitor.config.json
 
+# Lo ESCRITO A MANO del proyecto nativo de Android (manifest con el servicio de ubicación cerrado al exterior, los plugins Kotlin, file_paths.xml): si se regenera el proyecto con
+# `npx cap add android` esos arreglos de seguridad se pierden sin aviso, así que se versionan. Todo lo demás de mobile/android/ (build, local.properties, llaves) sigue afuera.
+!mobile/android/
+mobile/android/*
+!mobile/android/app/
+mobile/android/app/*
+!mobile/android/app/src/
+mobile/android/app/src/*
+!mobile/android/app/src/main/
+mobile/android/app/src/main/*
+!mobile/android/app/src/main/AndroidManifest.xml
+!mobile/android/app/src/main/java/
+!mobile/android/app/src/main/res/
+mobile/android/app/src/main/res/*
+!mobile/android/app/src/main/res/xml/
+mobile/android/app/src/main/res/xml/*
+!mobile/android/app/src/main/res/xml/file_paths.xml
+
 # Excepción: mobile/*-setup/ (widget-setup, healthconnect-setup, push-setup) NO es
 # código generado -- es la fuente de verdad escrita a mano para funcionalidad nativa
 # (Kotlin/Swift + manifest snippets + guías) que sobrevive a que mobile/android/ o

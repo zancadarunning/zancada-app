@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-26T20:07:11Z';
+const APP_VERSION = '2026-10-26T20:33:29Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1725,11 +1725,12 @@ const captchaReady = {};       // id del contenedor -> { token, at } pedido por 
 const captchaPending = {};     // id del contenedor -> promesa del pedido en curso
 const CAPTCHA_TOKEN_TTL_MS = 240000;
 function captchaAvailable(){
-  return !!(CAPTCHA_ENABLED && TURNSTILE_SITE_KEY && typeof window !== 'undefined' && window.turnstile && typeof window.turnstile.render === 'function');
+  return !!(CAPTCHA_ENABLED && TURNSTILE_SITE_KEY && typeof window !== 'undefined' && window.turnstile && typeof window.turnstile.render === 'function' && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()));
 }
 // El script de Cloudflare solo se descarga si el captcha está prendido (apagado, la app no le habla a ningún tercero para iniciar sesión)
 function loadTurnstileScript(){
-  if(!CAPTCHA_ENABLED || typeof document === 'undefined' || !document.head || document.getElementById('turnstile-script')) return;
+  // En la app nativa NUNCA: con el puente legacy de Capacitor (useLegacyBridge), el iframe/script de un tercero quedaría con acceso a todos los plugins nativos (Health Connect, calendario, selector de contraseñas)
+  if(!CAPTCHA_ENABLED || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) || typeof document === 'undefined' || !document.head || document.getElementById('turnstile-script')) return;
   const s = document.createElement('script');
   s.id = 'turnstile-script'; s.async = true; s.defer = true;
   s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
@@ -6384,7 +6385,7 @@ function checkWeekRollover(){
     // cambio de semana pisaría el plan nuevo con el de la semana pasada. Se invalida acá para
     // que "deshacer" nunca cruce un rollover semanal.
     state.coachUndoSnapshot = null;
-    if(recapMsg) state.chat.push({role:'coach', text: recapMsg, ts:Date.now()});
+    if(recapMsg) state.chat.push({role:'coach', text: recapMsg, ts:Date.now(), noAi:true});   // noAi: lleva km de la semana (pueden ser de Strava) y NO se reenvía a la IA como historial
     if(breakMsg) state.chat.push({role:'coach', text: breakMsg, ts:Date.now()});
     if(adjustNote) state.chat.push({role:'coach', text: adjustNote, ts:Date.now()});
     if(goalUpsellMsg) state.chat.push({role:'coach', text: goalUpsellMsg, ts:Date.now()});
@@ -13412,7 +13413,7 @@ async function submitRating(value){
   await persist();
   const run = d.linkedRunId ? (state.runs||[]).find(r=>r.id===d.linkedRunId) : null;
   const feedbackMsg = buildSessionFeedbackMessage(d, run, value);
-  if(feedbackMsg){ state.chat.push({role:'coach', text: feedbackMsg, ts:Date.now()}); renderChat(); }
+  if(feedbackMsg){ state.chat.push({role:'coach', text: feedbackMsg, ts:Date.now(), noAi:true}); renderChat(); }
   if(value === 'mal'){
     if(await showConfirm(t('rating_lower_intensity_confirm'))){
       lowerRemainingIntensity(-15);
@@ -13733,7 +13734,7 @@ function checkNewPR(run){
   if(!bucket) return;
   const prev = getPersonalRecords(run.id)[bucket.key];
   if(prev && prev.durationSec <= run.durationSec) return;
-  state.chat.push({role:'coach', text: t('coach_new_pr_'+bucket.key, {time: fmtTime(run.durationSec)}), ts:Date.now()});
+  state.chat.push({role:'coach', text: t('coach_new_pr_'+bucket.key, {time: fmtTime(run.durationSec)}), ts:Date.now(), noAi:true});
   renderChat();
   showToast(t('pr_toast_new', {label: t('pr_label_'+bucket.key), time: fmtTime(run.durationSec)}), 'success');
   celebrate();
@@ -13825,7 +13826,7 @@ function checkAchievementUnlocks(){
   // nueva sí avisa.
   if(isFirstCheck){ persist(); return; }
   if(!newlyUnlocked.length) return;
-  newlyUnlocked.forEach(a=>{ state.chat.push({role:'coach', text: t(a.key, a.vars), ts:Date.now()}); });
+  newlyUnlocked.forEach(a=>{ state.chat.push({role:'coach', text: t(a.key, a.vars), ts:Date.now(), noAi:true}); });
   renderChat();
   celebrate();
   persist();
@@ -13932,7 +13933,7 @@ function applyHistoryCalibration(){
   p.historyCalibrated = 'done';
   state.plan = preserveLivedDays(state.plan, generatePlan(p, state.weekNumber || 1));
   state.nextWeekOverrides = {};
-  state.chat.push({role:'coach', text: t('calib_coach_msg', {km: fmtDist(wk, 1), unit: distUnit()}), ts: Date.now()});
+  state.chat.push({role:'coach', text: t('calib_coach_msg', {km: fmtDist(wk, 1), unit: distUnit()}), ts: Date.now(), noAi:true});
   renderAll(); renderChat(); persist();
   showToast(t('calib_done_toast'), 'success');
 }
@@ -13996,7 +13997,8 @@ async function shareImageBlobFile(blob, filename, mime){
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-      const written = await Filesystem.writeFile({ path: filename, data: base64, directory: 'CACHE' });
+      // en la subcarpeta share/: es lo único del caché que el FileProvider comparte (ver res/xml/file_paths.xml)
+      const written = await Filesystem.writeFile({ path: 'share/' + filename, data: base64, directory: 'CACHE', recursive: true });
       await Share.share({ files: [written.uri], title: 'Zancada' });
     }catch(e){ /* usuario canceló el panel de compartir nativo, o algo falló -- no rompemos la UI por esto */ }
     return;
@@ -16866,7 +16868,7 @@ async function rdShareFile(f){
     const Filesystem = window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
     if(Share && Filesystem){
       try{
-        const written = await Filesystem.writeFile({ path: f.fileName, data: await rdBlobToBase64(f.blob), directory: 'CACHE' });
+        const written = await Filesystem.writeFile({ path: 'share/' + f.fileName, data: await rdBlobToBase64(f.blob), directory: 'CACHE', recursive: true });
         await Share.share({ files: [written.uri], title: 'Zancada' });
       }catch(e){ /* canceló el panel de compartir, o falló: no rompemos la pantalla */ }
       return true;
@@ -17722,7 +17724,7 @@ function applyPlanChange(input){
     // que le permite a runBenefitKey() reconocer esta sesión como lo que realmente es (series,
     // tempo, etc.) en vez de arrastrar el typeKey del día base -- ver applyPlanChange y el
     // comentario en getNextWeekPlan.
-    const override = { type: input.tipo, desc: input.descripcion, typeKey: input.tipo_categoria, textLang: lang };
+    const override = { type: String(typeof input.tipo === 'string' ? input.tipo : '').slice(0, 120), desc: String(typeof input.descripcion === 'string' ? input.descripcion : '').slice(0, 500), typeKey: input.tipo_categoria, textLang: lang };
     const effectiveDistKm = resolvePlanDistKm(input);
     if(effectiveDistKm!==null) override.dist = effectiveDistKm;
     // mismo criterio que la semana actual: duracion_min fija los minutos; solo distancia los recalcula; el trote/caminata del día base no se hereda
@@ -18093,7 +18095,7 @@ function applyCoachNote(input){
     if(!justLogged){
       captureUndoSnapshot();
       if(!state.painLog) state.painLog = [];
-      state.painLog.push({id:Date.now(), date:localDateISO(), bodyPart:input.zona_cuerpo, note:String(input.nota).slice(0,200), active:true, checkinSent:false, fromChat:true});
+      state.painLog.push({id:Date.now(), date:localDateISO(), bodyPart:input.zona_cuerpo, note:String(input.nota).replace(/[\r\n]+/g, ' ').trim().slice(0,200), active:true, checkinSent:false, fromChat:true});
       // El aumento de cautela (trainingCaution) recién se nota en la PRÓXIMA regeneración del
       // plan (semana que viene, o cualquier otro guardado que dispare generatePlan) -- para el
       // resto de ESTA semana, el mismo recorte directo que ya usa savePainLog() desde Perfil
@@ -18179,7 +18181,8 @@ async function sendChat(){
   const nowDate = new Date();
   const todayKeyNow = dayKeyOfTs(nowDate.getTime());
   const dateLabelOfTs = ts => new Date(ts).toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
-  let messages = state.chat.filter(m=>m.role==='user'||m.role==='coach').slice(0,-1).slice(-CHAT_HISTORY_LIMIT).map(m=>({
+  // los mensajes marcados noAi (resumen semanal, récords, logros, devolución de la sesión: llevan números de carreras que pueden venir de Strava) NO se reenvían a la IA; la política de Strava prohíbe usar sus datos como contexto de una conversación
+  let messages = state.chat.filter(m=>(m.role==='user'||m.role==='coach') && !m.noAi).slice(0,-1).slice(-CHAT_HISTORY_LIMIT).map(m=>({
     role: m.role==='user'?'user':'assistant',
     content: (m.ts && dayKeyOfTs(m.ts) !== todayKeyNow) ? `[${dateLabelOfTs(m.ts)}] ${String(m.text).slice(0, 2000)}` : String(m.text).slice(0, 2000)
   }));

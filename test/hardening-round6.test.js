@@ -158,3 +158,38 @@ test('al completar la recuperacion de contrasena se cierran las demas sesiones (
   assert.ok(body.indexOf("updateUser({ password: newPw })") > -1);
   assert.ok(body.indexOf("signOut({ scope: 'others' })") > body.indexOf('updateUser({ password: newPw })'));
 });
+
+test('FileProvider: solo se comparte la subcarpeta share/ del cache, y app.js escribe ahi lo que comparte', () => {
+  const xml = fs.readFileSync(path.join(__dirname, '..', 'mobile/android/app/src/main/res/xml/file_paths.xml'), 'utf8');
+  assert.match(xml, /<cache-path name="my_cache_images" path="share\/" \/>/);
+  assert.doesNotMatch(xml, /<cache-path[^>]*path="\."/);
+  const s = read('app.js');
+  assert.equal((s.match(/path: 'share\/' \+ /g) || []).length, 2, 'las dos escrituras a CACHE van a share/');
+  assert.doesNotMatch(s, /directory: 'CACHE' \}\)/, 'ninguna escritura al cache sin recursive/share');
+});
+
+test('el captcha de terceros nunca se carga en la app nativa (el puente legacy de Capacitor lo dejaria con acceso a los plugins)', () => {
+  const s = read('app.js');
+  const i = s.indexOf('function loadTurnstileScript(){');
+  assert.match(s.slice(i, i + 700), /Capacitor\.isNativePlatform\(\)\)/);
+  const j = s.indexOf('function captchaAvailable(){');
+  assert.match(s.slice(j, j + 500), /isNativePlatform\(\)/);
+});
+
+test('el proyecto nativo de Android versiona el manifest, los plugins y file_paths (los arreglos de seguridad no se pierden al regenerar)', () => {
+  const g = read('.gitignore');
+  for (const p of ['!mobile/android/app/src/main/AndroidManifest.xml', '!mobile/android/app/src/main/java/', '!mobile/android/app/src/main/res/xml/file_paths.xml']) assert.ok(g.includes(p), p);
+  assert.doesNotMatch(g, /^!mobile\/android\/app\/(keystore|local)/m);
+});
+
+test('mensajes automaticos con numeros de carreras (pueden ser de Strava) no se reenvian a la IA como historial', () => {
+  const s = read('app.js');
+  for (const frag of ["text: recapMsg, ts:Date.now(), noAi:true", "text: feedbackMsg, ts:Date.now(), noAi:true", "{time: fmtTime(run.durationSec)}), ts:Date.now(), noAi:true", "t(a.key, a.vars), ts:Date.now(), noAi:true", "t('calib_coach_msg', {km: fmtDist(wk, 1), unit: distUnit()}), ts: Date.now(), noAi:true"]) assert.ok(s.includes(frag), frag);
+  assert.match(s, /state\.chat\.filter\(m=>\(m\.role==='user'\|\|m\.role==='coach'\) && !m\.noAi\)/);
+});
+
+test('semana siguiente y notas de molestia: tipo/largo comprobados y sin saltos de linea', () => {
+  const s = read('app.js');
+  assert.match(s, /const override = \{ type: String\(typeof input\.tipo === 'string'/);
+  assert.match(s, /note:String\(input\.nota\)\.replace\(\/\[\\r\\n\]\+\/g, ' '\)\.trim\(\)\.slice\(0,200\)/);
+});

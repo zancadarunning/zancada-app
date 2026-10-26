@@ -7,6 +7,9 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # no se proponen versiones publicadas hace menos de 7 días: si un paquete se compromete, suele detectarse en los primeros días (las de seguridad llegan aparte, sin demora)
+    cooldown:
+      default-days: 7
     groups:
       minor-y-parches:
         update-types: [minor, patch]
@@ -15,6 +18,8 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
     groups:
       minor-y-parches:
         update-types: [minor, patch]
@@ -23,3 +28,5 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7

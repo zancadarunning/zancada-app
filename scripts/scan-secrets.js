@@ -46,6 +46,9 @@ function jwtRole(token) {
 
 // Asignaciones sospechosas: nombre que suena a secreto = texto largo y "al azar".
 const ASSIGN_RE = /(secret|passw(?:or)?d|passwd|api[_-]?key|private[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret)\w*["']?\s*[:=]\s*["']([A-Za-z0-9+/=_.-]{24,})["']/gi;
+// Líneas estilo .env (NOMBRE_KEY=valor, con o sin comillas): los nombres propios del proyecto (TOKEN_ENCRYPTION_KEY, CRON_SECRET, SUUNTO_SUBSCRIPTION_KEY, STRAVA_VERIFY_TOKEN...) no los cubría la regla de arriba, que exige comillas
+// y ciertas palabras en el nombre. Umbral de entropía más bajo (3.0) para que entren también los hex y UUID. Los nombres con PUBLIC / SITE / ANON no son secretos.
+const ENV_LINE_RE = /^\s*(?:export\s+)?([A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASS|DSN))\s*[=:]\s*["']?([A-Za-z0-9+/=_.-]{20,})["']?\s*[,;]?\s*$/;
 function entropy(s) {
   const f = {}; for (const c of s) f[c] = (f[c] || 0) + 1;
   return -Object.values(f).reduce((a, n) => a + (n / s.length) * Math.log2(n / s.length), 0);
@@ -71,6 +74,10 @@ function scanText(text) {
       const role = jwtRole(m[0]);
       if (role === 'anon') continue;
       out.push({ rule: 'jwt', desc: role === 'service_role' ? 'clave de SERVICIO de Supabase (acceso total a la base)' : 'JWT (' + (role || 'sin rol') + ')', line: i + 1, sample: mask(m[0]) });
+    }
+    const envm = ln.match(ENV_LINE_RE);
+    if (envm && !/PUBLIC|SITE|ANON|PUBLISHABLE/.test(envm[1]) && !ALLOWED_VALUES.some(a => a.test(envm[2])) && !PLACEHOLDER_RE.test(envm[2]) && entropy(envm[2]) >= 3.0 && !/^(https?:|\/|\.\/)/i.test(envm[2])) {
+      out.push({ rule: 'env-line', desc: 'valor largo asignado a "' + envm[1] + '" (formato .env)', line: i + 1, sample: mask(envm[2]) });
     }
     for (const m of ln.matchAll(ASSIGN_RE)) {
       const v = m[2];
