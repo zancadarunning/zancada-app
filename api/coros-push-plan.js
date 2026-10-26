@@ -8,8 +8,8 @@
 //   2) si una sesión ya enviada desaparece del plan (cancelada o movida), no se la puede borrar: se devuelve en `staleDates` y la app le avisa a la persona que la quite en COROS.
 // Qué entrenamiento corresponde a cada fecha lo recuerda el SERVIDOR (tabla sent_notifications, tipo 'coros_id', período 'fecha|idInPlan'): sirve aunque la persona use dos teléfonos.
 //
-// ESTADO: el formato del entrenamiento (`course`) todavía se está confirmando con el esquema real de COROS (ver coros-workout-builder.js y coros-describe-tools.js). Hasta entonces el envío
-// solo funciona para cuentas admin; para activarlo a todos: variable COROS_PLAN_PUSH=1 en Vercel.
+// ESTADO: el formato del entrenamiento (`course`) sigue el esquema real publicado por el MCP de COROS (ver coros-workout-builder.js), pero TODAVÍA NO se probó contra una cuenta real. Hasta
+// confirmarlo con un envío de verdad, solo funciona para cuentas admin (el panel muestra el error exacto de COROS si lo rechaza); para activarlo a todos: variable COROS_PLAN_PUSH=1 en Vercel.
 
 const { decToken } = require('./_lib/token-crypto');
 const verifyUser = require('./_lib/verify-user');
@@ -126,8 +126,9 @@ module.exports = withSentry(async (req, res) => {
       }
     }
 
-    // sesiones ya enviadas que el plan quitó (o movió): COROS no deja borrarlas por MCP -> se le avisa a la persona
-    const staleDates = Object.keys(idByDate).filter(d => (!today || d >= today) && keepDates.size && !keepDates.has(d)).sort();
+    // sesiones ya enviadas que el plan quitó (o movió): COROS no deja borrarlas por MCP -> se le avisa a la persona. Hoy no cuenta: una sesión de hoy que falta en el plan suele ser una hecha
+    // (el plan ya no la lista), no una sobrante
+    const staleDates = Object.keys(idByDate).filter(d => (!today || d > today) && keepDates.size && !keepDates.has(d)).sort();
 
     if (!failed) await remember(base, headers, userId, 'coros_plan', planHash);
     if (firstError) await reportError(new Error(`coros plan push failed: ${firstError.message}`), { endpoint: 'coros-push-plan' });
