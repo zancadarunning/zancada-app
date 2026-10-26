@@ -406,6 +406,31 @@
   .overlay-sheet.overlay-open{opacity:1; pointer-events:auto; transform:translateY(0);
     transition:opacity .3s var(--ease-spring), transform .3s var(--ease-spring);}
 
+
+  /* ---- Compartir actividad: plantillas + Copiar / Guardar / Más ---- */
+  #share-sheet-modal{z-index:60; padding:calc(14px + var(--safe-top)) 16px 0;}
+  .share-head{display:flex; align-items:center; gap:14px; padding:6px 0 14px;}
+  .share-head h2{font-size:20px; margin:0; flex:1;}
+  .share-close{width:var(--tap); height:var(--tap); border-radius:50%; border:0; background:var(--asphalt-3); color:var(--chalk); display:flex; align-items:center; justify-content:center; cursor:pointer;}
+  .share-close svg{width:20px; height:20px;}
+  .share-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px; padding-bottom:16px;}
+  .share-tile{position:relative; aspect-ratio:9/16; border-radius:18px; border:2px solid transparent; padding:0; overflow:hidden; cursor:pointer; color:var(--chalk);
+    background-color:#1d1d20; background-image:conic-gradient(#2a2a2e 25%, #1d1d20 0 50%, #2a2a2e 0 75%, #1d1d20 0); background-size:22px 22px;}
+  .share-tile.opaque{background:#0A0A0A;}
+  .share-tile img{width:100%; height:100%; object-fit:contain; display:block;}
+  .share-tile.selected{border-color:var(--chalk);}
+  .share-tile-skel{position:absolute; inset:0; background:linear-gradient(110deg, transparent 30%, var(--sk-hl) 50%, transparent 70%); opacity:.35; animation:shareSkel 1.2s linear infinite;}
+  @keyframes shareSkel{from{transform:translateX(-100%)} to{transform:translateX(100%)}}
+  .share-check{position:absolute; top:10px; right:10px; width:26px; height:26px; border-radius:50%; background:var(--chalk); color:var(--ink); display:none; align-items:center; justify-content:center;}
+  .share-check svg{width:16px; height:16px;}
+  .share-tile.selected .share-check{display:flex;}
+  .share-actions{position:sticky; bottom:0; display:flex; justify-content:center; gap:26px; padding:16px 0 calc(16px + var(--safe-bottom)); background:var(--asphalt); border-top:1px solid var(--overlay-hairline);}
+  .share-act{background:none; border:0; color:var(--chalk); display:flex; flex-direction:column; align-items:center; gap:8px; font-size:14px; cursor:pointer; min-width:72px;}
+  .share-act-ic{width:56px; height:56px; border-radius:50%; background:var(--asphalt-3); display:flex; align-items:center; justify-content:center;}
+  .share-act-ic svg{width:24px; height:24px;}
+  .share-act:active .share-act-ic{background:var(--asphalt-4);}
+  @media (prefers-reduced-motion: reduce){ .share-tile-skel{animation:none;} }
+
   .confirm-email-icon{width:76px; height:76px; border-radius:50%; background:var(--hivis-dim); color:var(--hivis-text);
     display:flex; align-items:center; justify-content:center; margin:4px auto 22px;}
   .confirm-email-icon svg{width:32px; height:32px;}
@@ -3525,6 +3550,21 @@
     <button class="week-nav-btn" data-on-click="closeWeekDetail()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" id="week-detail-title"></h2>
     <div class="card" id="week-detail-list" style="margin-top:16px;"></div>
+  </div>
+
+
+  <!-- Compartir actividad (ver openShareSheet en app.js): plantillas para elegir y Copiar / Guardar / Más -->
+  <div class="overlay overlay-sheet" id="share-sheet-modal">
+    <div class="share-head">
+      <button class="share-close" data-on-click="closeShareSheet()" data-i18n-aria="aria_close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
+      <h2 data-i18n="share_sheet_title">Compartir actividad</h2>
+    </div>
+    <div class="share-grid" id="share-grid"></div>
+    <div class="share-actions">
+      <button class="share-act" id="share-act-copy" data-on-click="shareSheetCopy()"><span class="share-act-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></span><span data-i18n="share_copy">Copiar</span></button>
+      <button class="share-act" id="share-act-save" data-on-click="shareSheetSave()"><span class="share-act-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><polyline points="7 11 12 16 17 11"/><path d="M5 20h14"/></svg></span><span data-i18n="share_save">Guardar</span></button>
+      <button class="share-act" id="share-act-more" data-on-click="shareSheetMore()"><span class="share-act-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><polyline points="8 8 12 4 16 8"/><path d="M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></span><span data-i18n="share_more">Más</span></button>
+    </div>
   </div>
 
   <!-- Suscripción al calendario (ver ensureCalendarToken/openCalendarSubscribe en app.js) --

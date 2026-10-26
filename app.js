@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-26T01:55:04Z';
+const APP_VERSION = '2026-10-26T02:12:36Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3228,7 +3228,7 @@ document.addEventListener('keydown', e=>{
   if(e.key!=='Escape') return;
   const openOverlay = document.querySelector('.overlay.overlay-open, .overlay-sheet.overlay-open');
   if(!openOverlay) return;
-  const backBtn = openOverlay.querySelector('[data-i18n-aria="aria_back"]');
+  const backBtn = openOverlay.querySelector('[data-i18n-aria="aria_back"], .share-close');
   if(backBtn) backBtn.click();
 });
 document.getElementById('voice-toggle').addEventListener('click', e=>{
@@ -15638,14 +15638,191 @@ window.addEventListener('appinstalled', ()=>{
   deferredInstallPrompt = null;
   dismissInstallBanner();
 });
+/* ================= COMPARTIR ACTIVIDAD (panel con plantillas) =================
+   Tocar "Compartir" en una carrera abre este panel: cuatro plantillas para elegir (con vista previa), y abajo Copiar / Guardar / Más.
+   Todas se dibujan en un canvas de 1080x1920 (formato historia). Las "transparentes" son stickers para poner sobre una foto propia. */
+let shareSheetState = null;
+function shareTemplatesFor(r){
+  const hasRoute = !!(r.points && r.points.length > 1);
+  return hasRoute ? ['sticker', 'card', 'route', 'strip'] : ['sticker', 'card', 'strip'];
+}
 async function shareRunImage(runId){
   const r = state.runs.find(x => String(x.id) === String(runId));
   if(!r) return;
-
-  const blob = await buildShareImageBlob(r);
+  openShareSheet(r);
+}
+function shareSheetRevoke(){
+  if(!shareSheetState) return;
+  Object.values(shareSheetState.urls).forEach(u => { try{ URL.revokeObjectURL(u); }catch(e){} });
+}
+function openShareSheet(r){
+  const el = document.getElementById('share-sheet-modal');
+  if(!el) return;
+  shareSheetRevoke();
+  const tpls = shareTemplatesFor(r);
+  shareSheetState = { run: r, tpls, blobs: {}, urls: {}, selected: tpls[0], token: Date.now() };
+  const token = shareSheetState.token;
+  const grid = document.getElementById('share-grid');
+  grid.innerHTML = tpls.map(k => `<button class="share-tile${k === tpls[0] ? ' selected' : ''}${k === 'card' ? ' opaque' : ''}" data-tpl="${k}" data-on-click="selectShareTemplate('${k}')" aria-label="${escapeHtml(t('share_tpl_' + k))}"><span class="share-tile-skel"></span><span class="share-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12.5 10 17.5 19 7.5"/></svg></span></button>`).join('');
+  // Copiar solo si el navegador sabe copiar imágenes
+  const copyBtn = document.getElementById('share-act-copy');
+  if(copyBtn) copyBtn.style.display = (navigator.clipboard && window.ClipboardItem) ? '' : 'none';
+  openOverlaySheetEl(el);
+  haptic(10);
+  // cada plantilla se dibuja por separado y aparece apenas está lista
+  tpls.forEach(async (k) => {
+    const blob = await buildRunShareBlob(r, k);
+    if(!shareSheetState || shareSheetState.token !== token || !blob) return;
+    shareSheetState.blobs[k] = blob;
+    const url = URL.createObjectURL(blob);
+    shareSheetState.urls[k] = url;
+    const tile = grid.querySelector(`.share-tile[data-tpl="${k}"]`);
+    if(tile){
+      const img = document.createElement('img');
+      img.src = url; img.alt = ''; img.decoding = 'async';
+      const skel = tile.querySelector('.share-tile-skel');
+      if(skel) skel.replaceWith(img); else tile.prepend(img);
+    }
+  });
+}
+function closeShareSheet(){
+  const el = document.getElementById('share-sheet-modal');
+  if(el) el.classList.remove('overlay-open');
+  shareSheetRevoke();
+  shareSheetState = null;
+}
+function selectShareTemplate(k){
+  if(!shareSheetState) return;
+  shareSheetState.selected = k;
+  document.querySelectorAll('#share-grid .share-tile').forEach(b => b.classList.toggle('selected', b.dataset.tpl === k));
+  haptic(8);
+}
+// La plantilla elegida, ya dibujada (si todavía se está dibujando, se espera un momento)
+async function shareSheetCurrentBlob(){
+  if(!shareSheetState) return null;
+  const { run, selected } = shareSheetState;
+  if(!shareSheetState.blobs[selected]){
+    const b = await buildRunShareBlob(run, selected);
+    if(shareSheetState) shareSheetState.blobs[selected] = b;
+    return b;
+  }
+  return shareSheetState.blobs[selected];
+}
+async function shareSheetCopy(){
+  const blob = await shareSheetCurrentBlob();
   if(!blob) return;
-
+  try{
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    showToast(t('share_copied'), 'success');
+  }catch(e){ showToast(t('share_copy_error'), 'error'); }
+}
+async function shareSheetSave(){
+  const blob = await shareSheetCurrentBlob();
+  if(!blob) return;
+  if(isNativeApp()){
+    const Media = window.Capacitor.Plugins && window.Capacitor.Plugins.ZancadaMedia;
+    if(Media && Media.saveImage){
+      try{
+        await Media.saveImage({ data: await rdBlobToBase64(blob), name: 'zancada-' + Date.now() + '.png', mime: 'image/png' });
+        showToast(t('share_saved_gallery'), 'success');
+      }catch(e){ showToast(t('share_save_error'), 'error'); }
+      return;
+    }
+    await shareImageBlobFile(blob, 'zancada.png');   // iPhone: el panel del sistema trae "Guardar imagen"
+    return;
+  }
+  // iPhone (web) / navegador: el panel de compartir del sistema ofrece guardar; en escritorio se descarga
+  const file = new File([blob], 'zancada.png', { type: 'image/png' });
+  if(navigator.share && navigator.canShare && navigator.canShare({ files: [file] })){ await shareImageBlobFile(blob, 'zancada.png'); return; }
+  rdBrowserDownload(blob, 'zancada.png');
+  showToast(t('share_saved_file'));
+}
+async function shareSheetMore(){
+  const blob = await shareSheetCurrentBlob();
+  if(!blob) return;
   await shareImageBlobFile(blob, 'zancada.png');
+}
+// ---- plantillas ----
+async function shareLoadFonts(){
+  try{
+    await Promise.all([
+      document.fonts.load('400 64px "Bebas Neue"'),
+      document.fonts.load('700 92px "JetBrains Mono"'),
+      document.fonts.load('700 28px "Inter"'),
+    ]);
+    await document.fonts.ready;
+  }catch(e){}
+}
+function shareStatsOf(r){
+  const paceMin = r.distanceKm > 0.02 ? (r.durationSec / 60) / r.distanceKm : 0;
+  return [
+    [fmtDist(r.distanceKm), distUnit().toUpperCase()],
+    [`${fmtPace(paceMin)}/${distUnit()}`, t('run_pace_word').toUpperCase()],
+    [fmtTime(r.durationSec), t('run_time').toUpperCase()],
+  ];
+}
+// tres cifras en fila, centradas en cada tercio del ancho
+function drawShareStatsRow(ctx, stats, W, topY, valueSize, labelColor){
+  ctx.save();
+  ctx.textAlign = 'center';
+  const colW = (W - 160) / 3;
+  stats.forEach((s, i) => {
+    const cx = 80 + colW * i + colW / 2;
+    ctx.fillStyle = '#EDEFEF';
+    ctx.font = '700 ' + valueSize + 'px "JetBrains Mono", monospace';
+    ctx.fillText(s[0], cx, topY);
+    ctx.fillStyle = labelColor || '#EDEFEF';
+    ctx.font = '700 28px "Inter", Arial, sans-serif';
+    ctx.fillText(s[1], cx, topY + 52);
+  });
+  ctx.restore();
+}
+function buildRunShareBlob(r, tpl){
+  if(tpl === 'sticker') return buildShareImageBlob(r);
+  return new Promise(async (resolve) => {
+    try{
+      await shareLoadFonts();
+      const W = 1080, H = 1920;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      const stats = shareStatsOf(r);
+      const hasRoute = !!(r.points && r.points.length > 1);
+      ctx.textAlign = 'center';
+      if(tpl === 'card'){
+        // tarjeta con fondo propio: fondo oscuro con un halo lima, la ruta grande arriba y las cifras abajo
+        ctx.fillStyle = '#0A0A0A';
+        ctx.fillRect(0, 0, W, H);
+        const g = ctx.createRadialGradient(W / 2, 640, 40, W / 2, 640, 900);
+        g.addColorStop(0, 'rgba(214,255,63,0.16)'); g.addColorStop(1, 'rgba(214,255,63,0)');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        const dateStr = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], { weekday: 'long', day: 'numeric', month: 'long' });
+        ctx.fillStyle = '#8B9296';
+        ctx.font = '700 34px "Inter", Arial, sans-serif';
+        ctx.fillText(dateStr.toUpperCase(), W / 2, 170);
+        if(hasRoute) drawRouteSilhouette(ctx, r.points, 110, 250, W - 220, 820);
+        else drawTrackEmblem(ctx, W / 2, 660, 620, 270);
+        ctx.save(); ctx.fillStyle = 'rgba(214,255,63,0.7)'; ctx.fillRect(W / 2 - 54, 1150, 108, 3); ctx.restore();
+        drawShareStatsRow(ctx, stats, W, 1290, 56, '#8B9296');
+        drawTrackEmblem(ctx, W / 2, 1640, 150, 62);
+        drawBrandWord(ctx, W / 2, 1760, 64);
+      } else if(tpl === 'route'){
+        // solo el recorrido, grande, con la distancia: sticker transparente
+        ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 3;
+        drawRouteSilhouette(ctx, r.points, 90, 330, W - 180, 1000, 14, 16);
+        ctx.fillStyle = '#EDEFEF';
+        ctx.font = '700 120px "JetBrains Mono", monospace';
+        ctx.fillText(fmtDist(r.distanceKm) + ' ' + distUnit(), W / 2, 1530);
+        drawBrandWord(ctx, W / 2, 1700, 70);
+      } else {
+        // 'strip': franja de cifras en el tercio de abajo, para una foto con el fondo libre
+        ctx.shadowColor = 'rgba(0,0,0,0.65)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 3;
+        drawShareStatsRow(ctx, stats, W, 1500, 60, '#EDEFEF');
+        drawBrandWord(ctx, W / 2, 1700, 72);
+      }
+      canvas.toBlob((blob) => resolve(blob || null), 'image/png');
+    }catch(e){ resolve(null); }
+  });
 }
 function buildShareImageBlob(r){
   return new Promise(async (resolve)=>{

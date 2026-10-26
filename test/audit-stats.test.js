@@ -87,3 +87,9 @@ test('Health Connect: al cargar carreras nuevas muestra el cartel "Cargamos N en
   await app.syncHealthConnectNow();
   assert.ok(toasts.some(m => /2 entrenamientos nuevos desde Health Connect/.test(m)), JSON.stringify(toasts));
 });
+
+test('compartir actividad: sin ruta (carga manual / cinta) no ofrece las plantillas que dependen del recorrido', () => {
+  const app = loadApp();
+  assert.equal(JSON.stringify(app.shareTemplatesFor({ points: [] })), JSON.stringify(['sticker', 'card', 'strip']));
+  assert.equal(JSON.stringify(app.shareTemplatesFor({ points: [{ lat: 1, lon: 1 }, { lat: 1.1, lon: 1.1 }] })), JSON.stringify(['sticker', 'card', 'route', 'strip']));
+});
