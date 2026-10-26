@@ -12,6 +12,7 @@
 // Nunca rompe la sincronización: cualquier error acá se traga (la notificación es un extra).
 
 const { sendFcmPush } = require('./fcm');
+const pushDevices = require('./push-devices');
 const { isTrustedPushEndpoint } = require('./push-endpoint');
 const { pick } = require('./own');
 const { localDateKey, dayNum } = require('./weekly-summary');
@@ -97,28 +98,30 @@ async function runExists(base, headers, userId, runId) {
 }
 
 async function pushToUser(base, headers, userId, message, tag) {
-  const subRes = await fetch(`${base}/rest/v1/push_subscriptions?user_id=eq.${encodeURIComponent(userId)}&select=subscription,platform`, { headers });
+  const subRes = await fetch(`${base}/rest/v1/push_subscriptions?user_id=eq.${encodeURIComponent(userId)}&select=*`, { headers });
   const subs = subRes.ok ? await subRes.json() : [];
   if (!Array.isArray(subs) || !subs.length) return false;   // sin notificaciones activadas
-  const sub = subs[0];
-  const platform = sub.platform || 'web';
-  try {
-    if (platform === 'android' || platform === 'ios') {
-      const dead = await sendFcmPush(sub.subscription && sub.subscription.token, message.title, message.body, { tag });
-      if (dead) await fetch(`${base}/rest/v1/push_subscriptions?user_id=eq.${encodeURIComponent(userId)}`, { method: 'DELETE', headers });
-      return !dead;
+  // a TODOS los dispositivos de la cuenta (sin repetir el mismo destino)
+  const devices = (pushDevices.groupByUser(subs.map(s => ({ ...s, user_id: userId }))) [userId] || { devices: [] }).devices;
+  let anySent = false;
+  for (const dev of devices) {
+    try {
+      if (dev.platform === 'android' || dev.platform === 'ios') {
+        const dead = await sendFcmPush(dev.subscription && dev.subscription.token, message.title, message.body, { tag });
+        if (dead) await pushDevices.deleteDevice(base, headers, userId, dev.device_id);
+        else anySent = true;
+        continue;
+      }
+      if (!dev.subscription || !isTrustedPushEndpoint(dev.subscription.endpoint)) continue;
+      const webpush = require('web-push');
+      webpush.setVapidDetails('mailto:info@zancada.org', process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
+      await webpush.sendNotification(dev.subscription, JSON.stringify({ title: message.title, body: message.body, tag }));
+      anySent = true;
+    } catch (err) {
+      if (err && (err.statusCode === 404 || err.statusCode === 410)) await pushDevices.deleteDevice(base, headers, userId, dev.device_id);
     }
-    if (!sub.subscription || !isTrustedPushEndpoint(sub.subscription.endpoint)) return false;
-    const webpush = require('web-push');
-    webpush.setVapidDetails('mailto:info@zancada.org', process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
-    await webpush.sendNotification(sub.subscription, JSON.stringify({ title: message.title, body: message.body, tag }));
-    return true;
-  } catch (err) {
-    if (err && (err.statusCode === 404 || err.statusCode === 410)) {
-      await fetch(`${base}/rest/v1/push_subscriptions?user_id=eq.${encodeURIComponent(userId)}`, { method: 'DELETE', headers }).catch(() => {});
-    }
-    return false;
   }
+  return anySent;
 }
 
 // Hace el merge de siempre (mergeFn) y, si dejó carreras nuevas y recientes, manda la notificación. Devuelve lo que devuelva mergeFn.
