@@ -93,3 +93,22 @@ test('compartir actividad: sin ruta (carga manual / cinta) no ofrece las plantil
   assert.equal(JSON.stringify(app.shareTemplatesFor({ points: [] })), JSON.stringify(['sticker', 'card', 'strip']));
   assert.equal(JSON.stringify(app.shareTemplatesFor({ points: [{ lat: 1, lon: 1 }, { lat: 1.1, lon: 1.1 }] })), JSON.stringify(['sticker', 'card', 'route', 'strip']));
 });
+
+test('Zonda: las notas no se repiten, caben 20 y una nota de salud no se pierde con unas pocas llamadas seguidas', () => {
+  const app = loadApp();
+  app.state.profile = { name: 'T', coachNotes: [] };
+  app.showToast = () => {};
+  app.applyCoachNote({ nota: 'Dolor en la rodilla derecha desde marzo' });
+  app.applyCoachNote({ nota: 'Dolor en la rodilla derecha desde marzo' });
+  assert.equal(app.state.profile.coachNotes.length, 1, 'sin repetidas');
+  for (let i = 0; i < 15; i++) app.applyCoachNote({ nota: 'preferencia ' + i });
+  assert.equal(app.state.profile.coachNotes.length, 16);
+  assert.ok(app.state.profile.coachNotes.includes('Dolor en la rodilla derecha desde marzo'), 'la lesión sigue ahí (antes con tope de 12 se perdía)');
+});
+
+test('onboarding paso 2: un peso o altura implausible no habilita Continuar', () => {
+  const app = loadApp();
+  assert.equal(app.parseWeightInput('5'), 0);
+  assert.equal(app.parseHeightInput('900'), 0);
+  assert.ok(app.parseWeightInput('70') > 0 && app.parseHeightInput('170') > 0);
+});

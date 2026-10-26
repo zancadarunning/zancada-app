@@ -63,10 +63,8 @@ module.exports = withSentry(async (req, res) => {
     }
 
     try {
-      const conn = await readConnection('strava_connections', 'access_token');
-      if (conn && decToken(conn.access_token)) {
-        await fetch(`https://www.strava.com/oauth/deauthorize?access_token=${encodeURIComponent(decToken(conn.access_token))}`, { method: 'POST' });
-      }
+      const conn = await readConnection('strava_connections', 'access_token,refresh_token,expires_at');
+      await revokeStravaAccess(conn);
     } catch (e) { console.error('delete-account: strava revoke failed', e); }
 
     try {
