@@ -71,3 +71,19 @@ test('entrada en calor: rodajes 3+5 min, sesiones de calidad 3+10 min, vuelta a 
   assert.match(tempo, /5 minutos de vuelta a la calma/);
   assert.equal(app.planLabel({ day: 'mon', typeKey: 'rest', dist: 0 }).desc.includes('movimiento articular'), false, 'el descanso no lleva calentamiento');
 });
+
+test('Health Connect: al cargar carreras nuevas muestra el cartel "Cargamos N entrenamientos" (no hay push porque no pasa por el servidor)', async () => {
+  const app = loadApp();
+  const toasts = [];
+  app.state.runs = [];
+  app.state.shoes = [];
+  const w = app.window || globalThis;
+  // el puente nativo de Health Connect simulado
+  app.window.Capacitor = { Plugins: { HealthConnectBridge: { readExercises: async () => ({ exercises: [
+    { id: 'hc1', startTime: '2026-10-20T10:00:00Z', distanceMeters: 5000, durationSec: 1500 },
+    { id: 'hc2', startTime: '2026-10-21T10:00:00Z', distanceMeters: 8000, durationSec: 2400 },
+  ] }) } } };
+  app.showToast = (m) => toasts.push(m);
+  await app.syncHealthConnectNow();
+  assert.ok(toasts.some(m => /2 entrenamientos nuevos desde Health Connect/.test(m)), JSON.stringify(toasts));
+});
