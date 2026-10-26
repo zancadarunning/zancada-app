@@ -19,7 +19,7 @@ const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { pickLang, deviceLabel, countryCode, buildAlertEmail } = require('./_lib/login-alert');
 
 const DEVICE_ID_RE = /^[a-f0-9]{32}$/;
-const ALERT_COOLDOWN_MS = 5 * 60 * 1000;
+const ALERT_COOLDOWN_MS = 30 * 60 * 1000;   // antes 5 min (288 mails por dia por cuenta con ids de dispositivo falsos)
 const NEW_ACCOUNT_MS = 10 * 60 * 1000;
 const MAX_DEVICES = 20;   // (la consulta de abajo lee hasta 25: un margen sobre este tope)
 
@@ -63,7 +63,7 @@ module.exports = withSentry(async (req, res) => {
     const silent = firstEver || ageMs < NEW_ACCOUNT_MS || !auth.email || !auth.emailConfirmed;
 
     // tope entre avisos de la misma cuenta; si se pasa, NO se registra (el aviso llega en un ingreso posterior)
-    if (!silent && !(await checkSyncCooldown(base, headers, userId, 'login-alert', ALERT_COOLDOWN_MS))) {
+    if (!silent && !(await checkSyncCooldown(base, headers, userId, 'login-alert', ALERT_COOLDOWN_MS, { failClosed: true }))) {
       res.status(200).json({ ok: true, new: true, notified: false, reason: 'cooldown' });
       return;
     }

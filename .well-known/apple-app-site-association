@@ -7,7 +7,7 @@
     "details": [
       {
         "appID": "TEAMID.org.zancada.app",
-        "paths": ["*"]
+        "paths": ["/conectar", "/conectar/*"]
       }
     ]
   }
