@@ -13,7 +13,7 @@
 // nuevo contra el servidor de esa región y armar la misma lógica de acá pero
 // eligiendo el host según de dónde sea el usuario (no hay forma de saberlo
 // de antemano, antes de que intente conectar).
-const { encToken } = require('./_lib/token-crypto');
+const { encToken, decToken } = require('./_lib/token-crypto');
 const crypto = require('crypto');
 const { enrichCorosRecord, activityToRun, mergeCorosRuns, callCorosMcpTool, corosDateRangeArgs, getCorosRunRecords, getCorosRecordId } = require('./_lib/coros-activity-helpers');
 
@@ -33,7 +33,10 @@ function verifyState(state) {
   if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) return null;
   const age = Date.now() - Number(timestamp);
   if (!Number.isFinite(age) || age < 0 || age > 10 * 60 * 1000) return null;
-  return { userId, codeVerifier };
+  // el verifier viaja cifrado dentro del state (ver coros-init.js); un state viejo con el verifier en claro también se acepta (decToken lo devuelve tal cual)
+  let verifier = codeVerifier;
+  try { verifier = decToken(Buffer.from(codeVerifier, 'base64url').toString()); } catch (e) { verifier = codeVerifier; }
+  return { userId, codeVerifier: verifier };
 }
 
 const { withSentry, reportError } = require('./_lib/sentry');

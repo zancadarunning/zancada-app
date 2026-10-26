@@ -34,7 +34,7 @@ RETURNS integer
 LANGUAGE sql
 IMMUTABLE
 SET search_path = public
-AS $ SELECT CASE WHEN jsonb_typeof(j) = 'array' THEN jsonb_array_length(j) ELSE 0 END $$;
+AS $$ SELECT CASE WHEN jsonb_typeof(j) = 'array' THEN jsonb_array_length(j) ELSE 0 END $$;
 REVOKE ALL ON FUNCTION public.safe_array_len(jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.safe_array_len(jsonb) TO service_role;
 
