@@ -33,6 +33,16 @@ function sanitizeActivityNumbers(run) {
   if (run.avgHr != null && (!Number.isFinite(run.avgHr) || run.avgHr < MIN_HR || run.avgHr > MAX_HR)) run.avgHr = null;
   if (run.maxHr != null && (!Number.isFinite(run.maxHr) || run.maxHr < MIN_HR || run.maxHr > MAX_HR)) run.maxHr = null;
 
+  // el resto de los numeros y el nombre: llegaban a app_state sin acotar (1e300, "Infinity" como texto, un nombre de 5 MB...)
+  const rangeOrNull = (v, max) => (v != null && (!Number.isFinite(Number(v)) || Number(v) < 0 || Number(v) > max)) ? null : v;
+  if ('elevationGain' in run && run.elevationGain != null) run.elevationGain = Number.isFinite(Number(run.elevationGain)) ? Math.min(Math.max(Number(run.elevationGain), 0), 30000) : 0;
+  if ('elevationLoss' in run && run.elevationLoss != null) run.elevationLoss = Number.isFinite(Number(run.elevationLoss)) ? Math.min(Math.max(Number(run.elevationLoss), 0), 30000) : null;
+  if ('avgCadence' in run) run.avgCadence = rangeOrNull(run.avgCadence, 300);
+  if ('avgPower' in run) run.avgPower = rangeOrNull(run.avgPower, 3000);
+  if ('maxPower' in run) run.maxPower = rangeOrNull(run.maxPower, 5000);
+  if ('calories' in run) run.calories = rangeOrNull(run.calories, 50000);
+  if ('name' in run && run.name != null) run.name = typeof run.name === 'string' ? run.name.slice(0, 120) : null;
+
   return run;
 }
 

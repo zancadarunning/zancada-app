@@ -141,7 +141,7 @@ function parseCorosSportRecordsText(text) {
   const chunks = String(text).split(/\n(?=\d+\.\s)/).filter(c => /^\d+\.\s/.test(c.trim()));
   const toSeconds = (mmss) => String(mmss).split(':').map(Number).reduce((acc, v) => acc * 60 + v, 0);
   return chunks.map(chunk => {
-    const header = chunk.match(/^\d+\.\s+(.+?)\s+—\s+(\d{4}-\d{2}-\d{2})/);
+    const header = chunk.slice(0, 400).match(/^\d+\.\s+(.+?)\s+—\s+(\d{4}-\d{2}-\d{2})/);
     const time = chunk.match(/startTimestamp=(\d+)\s*\|\s*endTimestamp=(\d+)/);
     const durDist = chunk.match(/Duration:\s*([\d:]+)\s*\|\s*Distance:\s*([\d.]+)\s*km/);
     const hr = chunk.match(/Avg HR:\s*(\d+)\s*bpm/);
