@@ -34,7 +34,7 @@ test('eliminar-cuenta.html: en los 6 idiomas, con el correo de contacto, el plaz
   const s = read('eliminar-cuenta.html');
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.match(s, new RegExp('<section id="' + l + '" lang="' + l + '">'), l);
   assert.equal((s.match(/mailto:info@zancada\.org/g) || []).length, 6);
-  assert.equal((s.match(/30/g) || []).length >= 6, true, 'el plazo de 30 días en cada idioma');
+  assert.equal((s.match(/5 (días hábiles|business days|dias úteis|jours ouvrés|giorni lavorativi|Werktagen)/g) || []).length, 6, 'el plazo de 5 días hábiles en cada idioma');
   assert.doesNotMatch(s, /<script/i, 'sin scripts');
   assert.match(s, /12/, 'se avisa de las copias de seguridad de hasta 12 semanas');
 });
