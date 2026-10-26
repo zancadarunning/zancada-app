@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-26T01:41:32Z';
+const APP_VERSION = '2026-10-26T01:55:04Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2839,6 +2839,8 @@ async function syncHealthConnectNow(){
       // tanda para detectar cualquier medalla que este lote de carreras nuevas haga cruzar.
       newRuns.forEach(checkNewPR);
       checkAchievementUnlocks();
+      // Health Connect se lee en el propio teléfono (no pasa por el servidor), así que no hay push de "entrenamiento cargado": este cartel dentro de la app cumple ese papel.
+      showToast(t('hc_new_runs_toast', {n: newRuns.length}), 'success');
       renderHistory(); renderHome(); renderPerfil();
     }
     return {synced:newRuns.length>0};
