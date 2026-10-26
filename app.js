@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-26T02:12:36Z';
+const APP_VERSION = '2026-10-26T02:33:42Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2989,10 +2989,9 @@ async function handleSignUp(){
     // Lo detectamos igual revisando identities: viene vacío solo en este caso puntual
     // (cuenta ya existente Y ya confirmada); para una cuenta recién creada, o una
     // todavía sin confirmar, identities trae al menos un elemento.
-    if(data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0){
-      err.innerHTML = `${t('login_err_exists')} <button type="button" class="small-link" style="padding:0; font-size:inherit; vertical-align:baseline;" data-on-click="goToLoginFromSignup()">${t('login_go_signin_short')}</button>`;
-      err.style.display='block'; return;
-    }
+    // OJO: acá antes se detectaba "identities vacío" para decir "ya existe una cuenta con ese email": eso le dejaba a cualquiera averiguar qué mails están registrados
+    // (enumeración de cuentas), justo lo que Supabase evita a propósito. Ahora la respuesta es la misma exista o no la cuenta (pantalla de confirmación, redactada
+    // en forma neutra); si el mail ya tenía cuenta y la contraseña coincide, la espera de confirmación inicia sesión sola (ver startConfirmEmailPolling).
     rememberLastEmail(email);
     await offerSavePassword(email, password);
     if(!data.session){ showConfirmEmailScreen(email, password); return; }

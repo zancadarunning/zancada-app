@@ -28,7 +28,7 @@ const { pick } = require('./_lib/own');
 // calendario privado (Trello, Google Calendar "dirección privada", etc.).
 
 function icsEscape(str){
-  return String(str||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
+  return String(str||'').replace(/\r/g,'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
 }
 function icsDateStamp(dateObj){
   const y = dateObj.getUTCFullYear();

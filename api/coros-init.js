@@ -30,6 +30,7 @@
 
 const crypto = require('crypto');
 const verifyUser = require('./_lib/verify-user');
+const { encToken } = require('./_lib/token-crypto');
 const { applyCors, isPreflight } = require('./_lib/cors');
 
 function base64url(buf) {
@@ -55,7 +56,9 @@ module.exports = withSentry(async (req, res) => {
     const codeChallenge = base64url(crypto.createHash('sha256').update(codeVerifier).digest());
 
     const timestamp = Date.now().toString();
-    const payload = `${userId}.${timestamp}.${codeVerifier}`;
+    // el state va en la URL de autorización (legible por quien la vea): el verifier de PKCE va CIFRADO ahí adentro, si no PKCE no protege nada
+    const sealed = Buffer.from(encToken(codeVerifier)).toString('base64url');
+    const payload = `${userId}.${timestamp}.${sealed}`;
     const signature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
     const state = `${payload}.${signature}`;
 
