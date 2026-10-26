@@ -54,8 +54,7 @@ const { withOAuthLink } = require('./_lib/oauth-link');
 async function failGracefully(res, reason, detail, code, diag) {
   console.error('suunto-auth: ' + reason, detail || '');
   await reportError(new Error('suunto-auth: ' + reason), { detail: detail == null ? null : String(detail).slice(0, 300) }).catch(() => {});
-  res.writeHead(302, { Location: '/?suunto_connect=error&why=' + encodeURIComponent(String(code || 'unknown').replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 60))
-    + (diag ? '&dx=' + encodeURIComponent(String(diag).replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 40)) : '') });
+  res.writeHead(302, { Location: '/?suunto_connect=error&why=' + encodeURIComponent(String(code || 'unknown').replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 60)) });
   res.end();
 }
 

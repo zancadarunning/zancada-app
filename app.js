@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-26T14:35:05Z';
+const APP_VERSION = '2026-10-26T21:42:12Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -898,6 +898,15 @@ function showConfirm(message, opts){
 
 /* ================= STATE ================= */
 let state = {onboarded:false, profile:{}, plan:[], runs:[], shoes:[], event:null, chat:[], lang:lang, painLog:[], readinessLog:[]};
+// Un estado que llega del servidor o del respaldo local con la forma rota (profile null, plan que no es lista...) hacía fallar el arranque en cada apertura y la app quedaba inutilizable
+// (solo ofrecía cerrar sesión). Se fuerza la forma mínima que el resto del código da por hecha y se descartan las entradas que no son objetos.
+function normalizeLoadedState(s){
+  if(!s || typeof s !== 'object' || Array.isArray(s)) return {onboarded:false, profile:{}, plan:[], runs:[], shoes:[], event:null, chat:[], lang:lang, painLog:[], readinessLog:[]};
+  if(!s.profile || typeof s.profile !== 'object' || Array.isArray(s.profile)) s.profile = {};
+  ['plan','runs','shoes','chat','painLog','readinessLog'].forEach(k => { s[k] = Array.isArray(s[k]) ? s[k].filter(x => x && typeof x === 'object') : []; });
+  if(typeof s.lang !== 'string') s.lang = lang;
+  return s;
+}
 let pendingEmail = '';
 let currentUserId = null;
 // Id de la cuenta cuyo `state` ya se CARGÓ de verdad desde el servidor (o que se confirmó vacía/nueva). persist() no escribe nada antes de eso: si la carga falla
@@ -1539,7 +1548,7 @@ async function loadUserAndEnter(user, isRetry){
     const { data, error } = await supabaseClient.from('app_state').select('data, updated_at').eq('user_id', user.id).maybeSingle();
     if(error) throw error;
     if(data && data.data && Object.keys(data.data).length){
-      state = data.data; lang = state.lang || 'es';
+      state = normalizeLoadedState(data.data); lang = state.lang || 'es';
       stateLoadedFor = user.id;
       loadedStateVersion = data.updated_at || null;
       const pending = readPendingBackup(user.id);
@@ -1566,11 +1575,12 @@ async function loadUserAndEnter(user, isRetry){
       const remoteTs = loadedStateVersion ? new Date(loadedStateVersion).getTime() : 0;
       if(pending && pending.data && pending.ts > remoteTs){
         // había una carrera guardada en el teléfono que no llegó a subirse la última vez -> la recuperamos
-        state = pending.data; lang = state.lang || lang;
+        state = normalizeLoadedState(pending.data); lang = state.lang || lang;
         persist();
       }
       // phaseNow guardado puede ser de otra semana (se guardó la semana pasada): se deriva de nuevo
       refreshPhaseNow();
+      if(thinStoredRoutes()) persist();   // carreras viejas guardadas con todos los puntos de GPS: se recortan una sola vez (ver ROUTE_MAX_POINTS)
       // El idioma guardado en la cuenta puede no ser el que index.html adivinó por
       // navigator.language y cargó de entrada (alguien que configuró el teléfono en
       // inglés pero eligió español en Perfil, por ejemplo) -- si es otro, hace falta
@@ -1715,11 +1725,12 @@ const captchaReady = {};       // id del contenedor -> { token, at } pedido por 
 const captchaPending = {};     // id del contenedor -> promesa del pedido en curso
 const CAPTCHA_TOKEN_TTL_MS = 240000;
 function captchaAvailable(){
-  return !!(CAPTCHA_ENABLED && TURNSTILE_SITE_KEY && typeof window !== 'undefined' && window.turnstile && typeof window.turnstile.render === 'function');
+  return !!(CAPTCHA_ENABLED && TURNSTILE_SITE_KEY && typeof window !== 'undefined' && window.turnstile && typeof window.turnstile.render === 'function' && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()));
 }
 // El script de Cloudflare solo se descarga si el captcha está prendido (apagado, la app no le habla a ningún tercero para iniciar sesión)
 function loadTurnstileScript(){
-  if(!CAPTCHA_ENABLED || typeof document === 'undefined' || !document.head || document.getElementById('turnstile-script')) return;
+  // En la app nativa NUNCA: con el puente legacy de Capacitor (useLegacyBridge), el iframe/script de un tercero quedaría con acceso a todos los plugins nativos (Health Connect, calendario, selector de contraseñas)
+  if(!CAPTCHA_ENABLED || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) || typeof document === 'undefined' || !document.head || document.getElementById('turnstile-script')) return;
   const s = document.createElement('script');
   s.id = 'turnstile-script'; s.async = true; s.defer = true;
   s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
@@ -2534,7 +2545,7 @@ function scheduleWahooSync(delayMs){
   clearTimeout(wahooSyncTimer);
   wahooSyncTimer = setTimeout(()=>{ syncPlanToWahoo(false).catch(e=>console.error('wahoo sync', e)); }, delayMs || 4000);
 }
-function scheduleWatchSync(){ scheduleSuuntoSync(); scheduleWahooSync(); }
+function scheduleWatchSync(){ scheduleSuuntoSync(); scheduleWahooSync(); scheduleCorosSync(); }
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') scheduleWatchSync(); });
 
 // force=true reenvía todo (botón manual). Devuelve la respuesta del backend o null si no hizo nada.
@@ -2560,7 +2571,7 @@ async function syncPlanToSuunto(force){
         const res = await fetch(apiUrl('/api/suunto-push-plan'), {
           method:'POST',
           headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
-          body: JSON.stringify({ reconcile:true, days:changed, keepDates:keep, weekStart, today:todayLocalISO(), zones, labels })
+          body: JSON.stringify({ reconcile:true, days:changed, keepDates:keep, weekStart, today:todayLocalISO(), zones, labels, force:!!force })
         });
         result = await res.json().catch(()=>null);
         if(!result && !res.ok) suuntoBlockedUntil = Date.now() + 15*60*1000;   // la respuesta ni siquiera era JSON (502, HTML): tampoco insistir
@@ -2616,7 +2627,7 @@ async function syncPlanToWahoo(force){
         const res = await fetch(apiUrl('/api/wahoo-sync-plan'), {
           method:'POST',
           headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
-          body: JSON.stringify({ days:changed, removeDates:stale, known, zones, labels, tzOffsetMin:new Date().getTimezoneOffset(), weekStart })
+          body: JSON.stringify({ days:changed, removeDates:stale, known, zones, labels, tzOffsetMin:new Date().getTimezoneOffset(), weekStart, force:!!force })
         });
         result = await res.json().catch(()=>null);
         if(!result && !res.ok) wahooBlockedUntil = Date.now() + 15*60*1000;
@@ -2626,7 +2637,9 @@ async function syncPlanToWahoo(force){
             wahooSyncBlocked = true;
             if(!force) showToast(t('wahoo_reconnect_needed'),'error'); // en el envío manual ya lo avisa el botón
           }
-          const ok = res.ok && !result.error && !result.reason && !result.failed;
+          // 'unchanged': el servidor ya tenía este mismo plan (lo mandó otro teléfono): cuenta como éxito, sin ids nuevos
+          const unchanged = result.reason === 'unchanged';
+          const ok = res.ok && !result.error && (!result.reason || unchanged) && !result.failed;
           if(result.reason === 'rate_limited') wahooBlockedUntil = Date.now() + 5.5*60*1000;
           else if(!ok) wahooBlockedUntil = Date.now() + 15*60*1000;
           const next = {};
@@ -2634,9 +2647,10 @@ async function syncPlanToWahoo(force){
           changed.forEach(d => {
             const m = result.pushedMap && result.pushedMap[d.date];
             if(m) next[d.date] = { sig: sigOf(d), workoutId: m.workoutId, planId: m.planId };
+            else if(unchanged) next[d.date] = { sig: sigOf(d), workoutId: sent[d.date] && sent[d.date].workoutId, planId: sent[d.date] && sent[d.date].planId };
             else if(sent[d.date]) next[d.date] = sent[d.date]; // no llegó: se conserva lo viejo y se reintenta
           });
-          stale.forEach(dt => { if(!(result.removedDates||[]).includes(dt) && sent[dt]) next[dt] = sent[dt]; });
+          stale.forEach(dt => { if(!unchanged && !(result.removedDates||[]).includes(dt) && sent[dt]) next[dt] = sent[dt]; });
           if(JSON.stringify(next) !== JSON.stringify(state.wahooSent || {})){ state.wahooSent = next; dirty = true; }
           if(ok && state.wahooWeek !== weekStart){ state.wahooWeek = weekStart; dirty = true; }
           // Cuota de Wahoo agotada (la app en modo sandbox permite 25 llamadas cada 5 minutos): se
@@ -2650,6 +2664,73 @@ async function syncPlanToWahoo(force){
   }finally{
     wahooSyncRunning = false;
     if(wahooSyncAgain){ wahooSyncAgain = false; scheduleWahooSync(); }
+  }
+}
+// COROS: envía la semana del plan al calendario de COROS por su MCP (api/coros-push-plan.js). COROS NO deja borrar ni mover un entrenamiento ya agendado desde afuera: una sesión
+// que cambia se ACTUALIZA en el lugar (el servidor recuerda cuál es cuál), y una que desaparece del plan queda en COROS y se avisa (state.corosStale, ver updateCorosStaleNote).
+// state.corosSent[fecha] = firma de lo ya enviado.
+let corosSyncTimer = null, corosSyncRunning = false, corosSyncAgain = false, corosBlockedUntil = 0;
+function scheduleCorosSync(delayMs){
+  if(!deviceConnections.coros || !watchSyncReady() || Date.now() < corosBlockedUntil) return;
+  clearTimeout(corosSyncTimer);
+  corosSyncTimer = setTimeout(()=>{ syncPlanToCoros(false).catch(e=>console.error('coros sync', e)); }, delayMs || 4000);
+}
+function updateCorosStaleNote(){
+  const el = document.getElementById('coros-stale-note');
+  if(!el) return;
+  const today = todayLocalISO();
+  const n = (state.corosStale || []).filter(d => d >= today).length;
+  el.textContent = n ? t('coros_stale_note', {n}) : '';
+  el.style.display = n ? '' : 'none';
+}
+async function syncPlanToCoros(force){
+  if(!deviceConnections.coros || !watchSyncReady() || (Date.now() < corosBlockedUntil && !force)) return null;
+  if(corosSyncRunning){ corosSyncAgain = true; return null; }
+  corosSyncRunning = true;
+  try{
+    const { win, weekStart } = watchWindow();
+    const zones = state.profile.hrZones, labels = suuntoLabels();
+    const ctx = JSON.stringify([zones, labels]);
+    const sigOf = d => suuntoHash(JSON.stringify(d) + ctx);
+    let dirty = false;
+    const sent = state.corosSent || {};
+    const keep = win.map(d => d.date);
+    const changed = win.filter(d => force || sent[d.date] !== sigOf(d));
+    const dropped = Object.keys(sent).filter(dt => !keep.includes(dt));
+    let result = null;
+    if(changed.length || dropped.length || force){
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if(session){
+        const res = await fetch(apiUrl('/api/coros-push-plan'), {
+          method:'POST',
+          headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
+          body: JSON.stringify({ days:changed, keepDates:keep, weekStart, today:todayLocalISO(), zones, labels, force:!!force })
+        });
+        result = await res.json().catch(()=>null);
+        if(!result && !res.ok) corosBlockedUntil = Date.now() + 15*60*1000;
+        if(result){
+          if(result.reason === 'not_connected'){ deviceConnections.coros = false; }
+          const ok = res.ok && !result.error && !result.reason && !result.failed;
+          if(result.reason === 'not_enabled') corosBlockedUntil = Date.now() + 24*3600*1000;      // todavía no está habilitado para esta cuenta: no insistir
+          else if(result.reason === 'cooldown' || result.reason === 'rate_limited') corosBlockedUntil = Date.now() + 6*60*1000;
+          else if(!ok) corosBlockedUntil = Date.now() + 15*60*1000;
+          const next = {};
+          keep.forEach(dt => { if(sent[dt] && !changed.some(c=>c.date===dt)) next[dt] = sent[dt]; });
+          changed.forEach(d => { if((result.pushedDates||[]).includes(d.date)) next[d.date] = sigOf(d); else if(sent[d.date]) next[d.date] = sent[d.date]; });
+          if(JSON.stringify(next) !== JSON.stringify(state.corosSent || {})){ state.corosSent = next; dirty = true; }
+          if(Array.isArray(result.staleDates)){
+            const st = result.staleDates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(String(d))).slice(0, 14);
+            if(JSON.stringify(st) !== JSON.stringify(state.corosStale || [])){ state.corosStale = st; dirty = true; }
+          }
+          updateCorosStaleNote();
+        }
+      }
+    }
+    if(dirty) persist();
+    return result;
+  }finally{
+    corosSyncRunning = false;
+    if(corosSyncAgain){ corosSyncAgain = false; scheduleCorosSync(); }
   }
 }
 // A diferencia de Strava/Polar/Wahoo (OAuth clásico con un client_id/secret creados
@@ -2685,6 +2766,7 @@ async function updateCorosStatusDisplay(){
   try{
     const { data } = await supabaseClient.from('coros_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
     deviceConnections.coros = !!data;
+    if(data){ scheduleCorosSync(); updateCorosStaleNote(); }   // recién conectada (o al abrir Perfil): deja la semana en COROS
     if(data){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
       if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectCoros; }
@@ -2713,6 +2795,8 @@ async function disconnectCoros(){
     console.error(e);
     try{ await supabaseClient.from('coros_connections').delete().eq('user_id', currentUserId); }catch(e2){}
   }
+  deviceConnections.coros = false; clearTimeout(corosSyncTimer);
+  if(state.corosSent || state.corosStale){ state.corosSent = null; state.corosStale = null; persist(); updateCorosStaleNote(); }
   if(state.runs && state.runs.some(r=>r.source==='coros')){
     state.runs = state.runs.filter(r=>r.source!=='coros');
     if(state.shoes){
@@ -2736,20 +2820,25 @@ async function disconnectCoros(){
    usuario lo pide, con la app abierta y state ya cargado en memoria.
    En la web (y en iOS) window.Capacitor.Plugins.HealthConnectBridge no existe, así
    que todo esto queda inerte -- mismo patrón que haptic(). */
+// Los datos de Health Connect los puede escribir CUALQUIER app del teléfono con permiso: se acotan a rangos humanos antes de guardarlos (el servidor hace lo mismo con los relojes con API propia).
+function hcNum(v, min, max){ const n = Number(v); return Number.isFinite(n) && n >= min && n <= max ? n : null; }
 function healthConnectExerciseToRun(ex){
+  const hcDistKm = hcNum((ex.distanceMeters || 0) / 1000, 0, 500) || 0;
+  const hcDur = hcNum(ex.durationSec || 0, 0, 48 * 3600) || 0;
+  const hcAvgHr = hcNum(ex.avgHr, 30, 250), hcMaxHr = hcNum(ex.maxHr, 30, 250);
   return {
     id: 'healthconnect_' + ex.id,
     healthConnectId: ex.id,
     date: ex.startTime,
     name: null,
-    distanceKm: (ex.distanceMeters || 0) / 1000,
-    durationSec: ex.durationSec || 0,
+    distanceKm: hcDistKm,
+    durationSec: hcDur,
     elevationGain: ex.elevationGainMeters > 0 ? Math.round(ex.elevationGainMeters) : 0,
     elevationLoss: null,
-    avgHr: ex.avgHr ? Math.round(ex.avgHr) : null,
-    maxHr: ex.maxHr ? Math.round(ex.maxHr) : null,
-    avgCadence: ex.avgCadence > 0 ? Math.round(ex.avgCadence) : null,
-    calories: ex.calories > 0 ? Math.round(ex.calories) : null,
+    avgHr: hcAvgHr ? Math.round(hcAvgHr) : null,
+    maxHr: hcMaxHr ? Math.round(hcMaxHr) : null,
+    avgCadence: hcNum(ex.avgCadence, 1, 300) ? Math.round(ex.avgCadence) : null,
+    calories: hcNum(ex.calories, 1, 20000) ? Math.round(ex.calories) : null,
     hrLog: [],
     points: [],
     splits: [],
@@ -2828,7 +2917,10 @@ async function syncHealthConnectNow(){
   try{
     const { exercises } = await HC.readExercises();
     const knownIds = new Set((state.runs||[]).map(r=>r.healthConnectId));
+    const hcNow = Date.now();
     const newRuns = (exercises||[])
+      .filter(ex=>ex && typeof ex.id === 'string' && ex.id.length <= 100)
+      .filter(ex=>{ const t0 = Date.parse(ex.startTime); return Number.isFinite(t0) && t0 > Date.UTC(2000,0,1) && t0 < hcNow + 24*3600*1000; })   // fecha creíble: ni de antes del 2000 ni del futuro
       .filter(ex=>!knownIds.has(ex.id))
       .filter(ex=>!isLikelyDuplicateOfExistingRun(ex.startTime, (ex.distanceMeters||0)/1000, state.runs, ex.durationSec))
       .map(healthConnectExerciseToRun);
@@ -3125,6 +3217,9 @@ async function submitNewPassword(){
   try{
     const { error } = await supabaseClient.auth.updateUser({ password: newPw });
     if(error){ err.textContent = translateAuthError(error); err.style.display='block'; return; }
+    // Cambiar la contraseña NO cierra las otras sesiones abiertas (Supabase no lo hace solo, y el control de sesiones del panel es del plan Pro). Quien recupera la contraseña porque
+    // sospecha que se la robaron necesita que el atacante ya logueado quede afuera: se cierran todas las demás sesiones y queda solo esta.
+    try{ await supabaseClient.auth.signOut({ scope: 'others' }); }catch(e){ console.error('no se pudieron cerrar las otras sesiones', e); }
     const { data: { user } } = await supabaseClient.auth.getUser();
     document.getElementById('recovery-set-password').style.display='none';
     await loadUserAndEnter(user);
@@ -4536,7 +4631,8 @@ function confirmLogout(){
 function wipeLocalUserData(uid){
   try{
     const keys = [];
-    for(let i=0; i<localStorage.length; i++){ const k = localStorage.key(i); if(k && (k.indexOf('zancada_pending_') === 0 || k === 'zancada_run_in_progress' || k.indexOf('zancada_run_in_progress') === 0 || k === WX_KEY)) keys.push(k); }
+    // solo las claves de ESTA cuenta (uid): el respaldo sin subir de otra cuenta que cerró sesión sin conexión en este mismo teléfono no se toca
+    for(let i=0; i<localStorage.length; i++){ const k = localStorage.key(i); if(k && (k === LINK_KEY || k === 'zancada_run_in_progress' || k === WX_KEY || (uid && (k === pendingBackupKey(uid) || k === 'zancada_run_in_progress_' + uid)))) keys.push(k); }
     keys.forEach(k => { try{ localStorage.removeItem(k); }catch(e){} });
   }catch(e){}
   try{ clearLastKnownPosition(); }catch(e){}
@@ -4561,6 +4657,9 @@ async function logout(){
   clearLastKnownPosition();
   // Si hay cambios que todavía no se subieron, el respaldo local se conserva (para no perderlos); si ya está todo sincronizado, no queda copia.
   try{ if(!hasPendingBackup()) wipeLocalUserData(currentUserId); }catch(e){}
+  // Se da de baja el push de ESTE dispositivo ANTES de cerrar la sesión (la baja necesita la sesión): sin esto el teléfono seguía recibiendo el plan y las carreras de la cuenta que se fue
+  // (pantalla de bloqueo incluida) aunque entrara otra persona. Al volver a iniciar sesión refreshNativePushRegistration() lo registra de nuevo. Tope de 4 s para no trabar el cierre sin conexión.
+  try{ await Promise.race([deletePushRowsForThisDevice(), new Promise(r => setTimeout(r, 4000))]); }catch(e){}
   await supabaseClient.auth.signOut();
   location.reload();
 }
@@ -6356,7 +6455,7 @@ function checkWeekRollover(){
     // cambio de semana pisaría el plan nuevo con el de la semana pasada. Se invalida acá para
     // que "deshacer" nunca cruce un rollover semanal.
     state.coachUndoSnapshot = null;
-    if(recapMsg) state.chat.push({role:'coach', text: recapMsg, ts:Date.now()});
+    if(recapMsg) state.chat.push({role:'coach', text: recapMsg, ts:Date.now(), noAi:true});   // noAi: lleva km de la semana (pueden ser de Strava) y NO se reenvía a la IA como historial
     if(breakMsg) state.chat.push({role:'coach', text: breakMsg, ts:Date.now()});
     if(adjustNote) state.chat.push({role:'coach', text: adjustNote, ts:Date.now()});
     if(goalUpsellMsg) state.chat.push({role:'coach', text: goalUpsellMsg, ts:Date.now()});
@@ -10224,6 +10323,12 @@ function renderAdminStats(s){
     + admCard('languages', 'Idiomas', langs.length ? admBarRows(langs, a.with_data) : '<p class="muted">Sin datos.</p>')
     + admCard('goals', 'Objetivos', goals.length ? admBarRows(goals, a.with_data) : '<p class="muted">Sin datos.</p>')
     + admCard('external', 'Límites que hay que mirar a mano', '<p class="adm-note" style="margin-top:0;">Mapbox, Vercel, Anthropic, tráfico de Supabase y las llamadas a la API de Strava no se pueden medir desde acá. Tocá la ⓘ para ver dónde mirar cada uno.</p>');
+  // diagnóstico de COROS (solo admin): lee el formato de entrenamientos que publica COROS, para armar el envío de planes al reloj
+  document.getElementById('admin-body').insertAdjacentHTML('beforeend', admCard('coros', 'COROS: formato de entrenamientos',
+    '<p class="adm-note" style="margin-top:0;">Necesitás tener COROS conectado en Perfil → Conectividad (sirve cualquier cuenta de COROS). Toca el botón, copiá el resultado y pegalo en el chat.</p>'
+    + '<button type="button" class="btn btn-outline btn-sm" id="adm-coros-btn" data-on-click="admDescribeCoros()">Leer herramientas de COROS</button> '
+    + '<button type="button" class="btn btn-outline btn-sm" data-on-click="admCopyCorosTools()">Copiar</button>'
+    + '<textarea id="adm-coros-out" readonly rows="8" style="width:100%; margin-top:8px; font-size:11px; font-family:var(--font-mono, monospace);"></textarea>'));
   const when = s.generated_at ? new Date(s.generated_at) : new Date();
   document.getElementById('admin-updated').textContent = 'Actualizado ' + when.toLocaleString();
 }
@@ -10240,6 +10345,26 @@ async function loadAdminStats(){
   }catch(e){
     body.innerHTML = '<div class="adm-err">No se pudo cargar el panel: ' + escapeHtml(String(e.message || e)) + '</div>';
   }finally{ if(btn) btn.disabled = false; }
+}
+async function admDescribeCoros(){
+  const out = document.getElementById('adm-coros-out'), btn = document.getElementById('adm-coros-btn');
+  if(!out) return;
+  if(btn) btn.disabled = true;
+  out.value = 'Leyendo…';
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session) throw new Error('Sin sesión');
+    const r = await fetch(apiUrl('/api/coros-describe-tools'), { method: 'POST', headers: { 'Authorization': 'Bearer ' + session.access_token } });
+    const data = await r.json().catch(() => ({}));
+    out.value = JSON.stringify(data);
+  }catch(e){ out.value = 'Error: ' + String(e.message || e); }
+  finally{ if(btn) btn.disabled = false; }
+}
+async function admCopyCorosTools(){
+  const out = document.getElementById('adm-coros-out');
+  if(!out || !out.value) return;
+  try{ await navigator.clipboard.writeText(out.value); showToast('Copiado', 'success'); }
+  catch(e){ out.select(); }
 }
 function openZonesOverlay(){ openOverlaySheetEl(document.getElementById('zones-overlay')); }
 function closeZonesOverlay(){ document.getElementById('zones-overlay').classList.remove('overlay-open'); }
@@ -10474,7 +10599,7 @@ async function refreshStateFromServer(){
         // termine.
       } else {
         const prevRunIds = new Set((state.runs||[]).map(r=>String(r.id)));
-        state = data.data;
+        state = normalizeLoadedState(data.data);
         // el phaseNow que viene del servidor puede ser de otra semana: se deriva de nuevo (ver refreshPhaseNow)
         refreshPhaseNow();
         // Reportado en una auditoría: esto pisaba state con lo que acaba de llegar del servidor
@@ -12250,6 +12375,26 @@ function classifyPaceRelative(paceMin, avgPaceMin){
 // Antes esto solo existía para carreras sincronizadas de Strava -- las
 // trackeadas desde el celular no guardaban ni la hora de cada punto, así que
 // no había forma de calcular ritmo real por tramo.
+// Cuántos puntos de GPS se guardan por carrera en la cuenta. El teléfono registra ~1 por segundo (3.600 en una hora, ~200 KB por carrera) y todo viaja dentro de app_state:
+// con cientos de carreras la cuenta pesaba megas y cada guardado/carga subía y bajaba todo. Para dibujar el trazo, el video y el gráfico alcanzan ~900 puntos. Las vueltas
+// por km, el desnivel y la curva de ritmo se calculan ANTES de recortar, con todos los puntos, y se guardan aparte.
+const ROUTE_MAX_POINTS = 900;
+function downsampleRoute(points, max){
+  const n = Array.isArray(points) ? points.length : 0;
+  const cap = Math.max(2, max || ROUTE_MAX_POINTS);
+  if(n <= cap) return points || [];
+  const out = [];
+  for(let i = 0; i < cap; i++) out.push(points[Math.round(i * (n - 1) / (cap - 1))]);   // reparte los índices parejo y siempre conserva el primero y el último
+  return out;
+}
+// Recorta una sola vez las carreras viejas que se guardaron con todos los puntos. Solo toca las que superan el tope por mucho (>1,3x): devuelve true si cambió algo.
+function thinStoredRoutes(){
+  let changed = false;
+  (state.runs || []).forEach(r => {
+    if(r && Array.isArray(r.points) && r.points.length > ROUTE_MAX_POINTS * 1.3){ r.points = downsampleRoute(r.points, ROUTE_MAX_POINTS); changed = true; }
+  });
+  return changed;
+}
 function computeSplitsFromPoints(points){
   if(!points || points.length < 2) return [];
   const cum = [0];
@@ -13364,7 +13509,7 @@ async function submitRating(value){
   await persist();
   const run = d.linkedRunId ? (state.runs||[]).find(r=>r.id===d.linkedRunId) : null;
   const feedbackMsg = buildSessionFeedbackMessage(d, run, value);
-  if(feedbackMsg){ state.chat.push({role:'coach', text: feedbackMsg, ts:Date.now()}); renderChat(); }
+  if(feedbackMsg){ state.chat.push({role:'coach', text: feedbackMsg, ts:Date.now(), noAi:true}); renderChat(); }
   if(value === 'mal'){
     if(await showConfirm(t('rating_lower_intensity_confirm'))){
       lowerRemainingIntensity(-15);
@@ -13463,7 +13608,7 @@ async function closeSummary(){
   const paceSeries = computePaceSeriesFromPoints(tracker.points);
   state.runs.push({
     id:runId, date:runDate, distanceKm:tracker.distanceKm, durationSec:tracker.elapsedSec, avgCadence: runAvgCadence(),
-    hrLog:tracker.hrLog, points:tracker.points, shoeId:shoeId||null,
+    hrLog:tracker.hrLog, points:downsampleRoute(tracker.points), shoeId:shoeId||null,
     splits: computeSplitsFromPoints(tracker.points), splitsV:3,
     elevationGain: elev.gain, elevationLoss: elev.loss,
     series: paceSeries ? {t: paceSeries.t, hr: null, paceMin: paceSeries.paceMin} : null
@@ -13685,7 +13830,7 @@ function checkNewPR(run){
   if(!bucket) return;
   const prev = getPersonalRecords(run.id)[bucket.key];
   if(prev && prev.durationSec <= run.durationSec) return;
-  state.chat.push({role:'coach', text: t('coach_new_pr_'+bucket.key, {time: fmtTime(run.durationSec)}), ts:Date.now()});
+  state.chat.push({role:'coach', text: t('coach_new_pr_'+bucket.key, {time: fmtTime(run.durationSec)}), ts:Date.now(), noAi:true});
   renderChat();
   showToast(t('pr_toast_new', {label: t('pr_label_'+bucket.key), time: fmtTime(run.durationSec)}), 'success');
   celebrate();
@@ -13777,7 +13922,7 @@ function checkAchievementUnlocks(){
   // nueva sí avisa.
   if(isFirstCheck){ persist(); return; }
   if(!newlyUnlocked.length) return;
-  newlyUnlocked.forEach(a=>{ state.chat.push({role:'coach', text: t(a.key, a.vars), ts:Date.now()}); });
+  newlyUnlocked.forEach(a=>{ state.chat.push({role:'coach', text: t(a.key, a.vars), ts:Date.now(), noAi:true}); });
   renderChat();
   celebrate();
   persist();
@@ -13884,7 +14029,7 @@ function applyHistoryCalibration(){
   p.historyCalibrated = 'done';
   state.plan = preserveLivedDays(state.plan, generatePlan(p, state.weekNumber || 1));
   state.nextWeekOverrides = {};
-  state.chat.push({role:'coach', text: t('calib_coach_msg', {km: fmtDist(wk, 1), unit: distUnit()}), ts: Date.now()});
+  state.chat.push({role:'coach', text: t('calib_coach_msg', {km: fmtDist(wk, 1), unit: distUnit()}), ts: Date.now(), noAi:true});
   renderAll(); renderChat(); persist();
   showToast(t('calib_done_toast'), 'success');
 }
@@ -13948,7 +14093,8 @@ async function shareImageBlobFile(blob, filename, mime){
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-      const written = await Filesystem.writeFile({ path: filename, data: base64, directory: 'CACHE' });
+      // en la subcarpeta share/: es lo único del caché que el FileProvider comparte (ver res/xml/file_paths.xml)
+      const written = await Filesystem.writeFile({ path: 'share/' + filename, data: base64, directory: 'CACHE', recursive: true });
       await Share.share({ files: [written.uri], title: 'Zancada' });
     }catch(e){ /* usuario canceló el panel de compartir nativo, o algo falló -- no rompemos la UI por esto */ }
     return;
@@ -16818,7 +16964,7 @@ async function rdShareFile(f){
     const Filesystem = window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
     if(Share && Filesystem){
       try{
-        const written = await Filesystem.writeFile({ path: f.fileName, data: await rdBlobToBase64(f.blob), directory: 'CACHE' });
+        const written = await Filesystem.writeFile({ path: 'share/' + f.fileName, data: await rdBlobToBase64(f.blob), directory: 'CACHE', recursive: true });
         await Share.share({ files: [written.uri], title: 'Zancada' });
       }catch(e){ /* canceló el panel de compartir, o falló: no rompemos la pantalla */ }
       return true;
@@ -17674,7 +17820,7 @@ function applyPlanChange(input){
     // que le permite a runBenefitKey() reconocer esta sesión como lo que realmente es (series,
     // tempo, etc.) en vez de arrastrar el typeKey del día base -- ver applyPlanChange y el
     // comentario en getNextWeekPlan.
-    const override = { type: input.tipo, desc: input.descripcion, typeKey: input.tipo_categoria, textLang: lang };
+    const override = { type: String(typeof input.tipo === 'string' ? input.tipo : '').slice(0, 120), desc: String(typeof input.descripcion === 'string' ? input.descripcion : '').slice(0, 500), typeKey: input.tipo_categoria, textLang: lang };
     const effectiveDistKm = resolvePlanDistKm(input);
     if(effectiveDistKm!==null) override.dist = effectiveDistKm;
     // mismo criterio que la semana actual: duracion_min fija los minutos; solo distancia los recalcula; el trote/caminata del día base no se hereda
@@ -17712,7 +17858,7 @@ function applyPlanChange(input){
   captureUndoSnapshot();
   d.custom = true;
   d.cancelled = false; // si venía de cancelar_sesion, esta sesión nueva reemplaza esa cancelación
-  d.type = input.tipo; d.desc = input.descripcion; d.textLang = lang;
+  d.type = (typeof input.tipo === 'string' ? input.tipo : String(d.type || '')).slice(0, 120); d.desc = (typeof input.descripcion === 'string' ? input.descripcion : String(d.desc || '')).slice(0, 500); d.textLang = lang;
   // Sin esto, un día que antes era descanso (u otro tipo) quedaba con el typeKey viejo --
   // las estadísticas de variedad de sesiones de calidad y el tag de beneficio del entrenamiento
   // en el historial (que leen d.typeKey, no d.type) seguían viendo el tipo anterior.
@@ -18045,7 +18191,7 @@ function applyCoachNote(input){
     if(!justLogged){
       captureUndoSnapshot();
       if(!state.painLog) state.painLog = [];
-      state.painLog.push({id:Date.now(), date:localDateISO(), bodyPart:input.zona_cuerpo, note:String(input.nota).slice(0,200), active:true, checkinSent:false, fromChat:true});
+      state.painLog.push({id:Date.now(), date:localDateISO(), bodyPart:input.zona_cuerpo, note:String(input.nota).replace(/[\r\n]+/g, ' ').trim().slice(0,200), active:true, checkinSent:false, fromChat:true});
       // El aumento de cautela (trainingCaution) recién se nota en la PRÓXIMA regeneración del
       // plan (semana que viene, o cualquier otro guardado que dispare generatePlan) -- para el
       // resto de ESTA semana, el mismo recorte directo que ya usa savePainLog() desde Perfil
@@ -18131,7 +18277,8 @@ async function sendChat(){
   const nowDate = new Date();
   const todayKeyNow = dayKeyOfTs(nowDate.getTime());
   const dateLabelOfTs = ts => new Date(ts).toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
-  let messages = state.chat.filter(m=>m.role==='user'||m.role==='coach').slice(0,-1).slice(-CHAT_HISTORY_LIMIT).map(m=>({
+  // los mensajes marcados noAi (resumen semanal, récords, logros, devolución de la sesión: llevan números de carreras que pueden venir de Strava) NO se reenvían a la IA; la política de Strava prohíbe usar sus datos como contexto de una conversación
+  let messages = state.chat.filter(m=>(m.role==='user'||m.role==='coach') && !m.noAi).slice(0,-1).slice(-CHAT_HISTORY_LIMIT).map(m=>({
     role: m.role==='user'?'user':'assistant',
     content: (m.ts && dayKeyOfTs(m.ts) !== todayKeyNow) ? `[${dateLabelOfTs(m.ts)}] ${String(m.text).slice(0, 2000)}` : String(m.text).slice(0, 2000)
   }));

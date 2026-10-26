@@ -3,6 +3,7 @@ const verifyUser = require('./_lib/verify-user');
 const { activityToRun, mergeStravaRuns, setStravaSyncStatus } = require('./_lib/strava-activity-helpers');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
+const { withinDailyCap } = require('./_lib/daily-cap');
 
 const { withSentry, reportError } = require('./_lib/sentry');
 
@@ -11,7 +12,7 @@ const { withSentry, reportError } = require('./_lib/sentry');
 // riesgo real no es solo el costo de Vercel, sino que golpear demasiado rápido a Strava
 // puede hacer que le pongan rate limit a las credenciales de TODA la app. 20s es más que
 // suficiente para un uso normal del botón (que ya se deshabilita mientras sincroniza).
-const SYNC_COOLDOWN_MS = 20000;
+const SYNC_COOLDOWN_MS = 60000;   // antes 20 s: una sola cuenta podia gastar ~4.300 pedidos por dia de la cuota de Strava, que es de TODA la app
 
 module.exports = withSentry(async (req, res) => {
   applyCors(req, res);
@@ -26,6 +27,7 @@ module.exports = withSentry(async (req, res) => {
 
   const allowed = await checkSyncCooldown(base, headers, userId, 'strava', SYNC_COOLDOWN_MS);
   if (!allowed) return res.status(200).json({ synced: false, reason: 'cooldown' });
+  if (!(await withinDailyCap(base, headers, 'strava-sync-now', userId, 48, { failClosed: true }))) return res.status(200).json({ synced: false, reason: 'cooldown' });
 
   try {
     const connRes = await fetch(`${base}/rest/v1/strava_connections?user_id=eq.${userId}&select=*`, { headers });

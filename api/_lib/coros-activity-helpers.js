@@ -113,6 +113,27 @@ async function callCorosMcpTool(accessToken, toolName, args) {
   try { return JSON.parse(textBlock.text); } catch (e) { return textBlock.text; }
 }
 
+// Pedido JSON-RPC genérico al servidor MCP (por ejemplo tools/list). Devuelve el `result` tal cual, sin interpretar content[]. Mismo manejo de SSE que callCorosMcpTool.
+async function corosMcpRequest(accessToken, method, params) {
+  const res = await fetchWithTimeout(MCP_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream', 'Authorization': `Bearer ${accessToken}` },
+    body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method, params: params || {} })
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`coros mcp ${method}: HTTP ${res.status} -- ${text.slice(0, 300)}`);
+  let jsonText = text;
+  if ((res.headers.get('content-type') || '').includes('text/event-stream')) {
+    const dataLines = text.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trim());
+    if (!dataLines.length) throw new Error(`coros mcp ${method}: stream SSE sin "data:"`);
+    jsonText = dataLines.join('');
+  }
+  let body;
+  try { body = JSON.parse(jsonText); } catch (e) { throw new Error(`coros mcp ${method}: respuesta no es JSON`); }
+  if (body.error) throw new Error(`coros mcp ${method}: JSON-RPC error ${body.error.code} -- ${body.error.message}`);
+  return body.result;
+}
+
 function isRunningSportCode(sportType) {
   if (sportType == null) return false;
   const s = String(sportType).toLowerCase();
@@ -491,6 +512,7 @@ module.exports = {
   applyCorosEnrichmentToRun,
   fetchCorosFit,
   callCorosMcpTool,
+  corosMcpRequest,
   isRunningSportCode,
   corosDateRangeArgs,
   getCorosRunRecords,

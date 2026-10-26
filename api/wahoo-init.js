@@ -14,6 +14,7 @@
 
 const crypto = require('crypto');
 const verifyUser = require('./_lib/verify-user');
+const { userCooldown } = require('./_lib/sync-cooldown');
 const { applyCors, isPreflight } = require('./_lib/cors');
 
 const { withSentry, reportError } = require('./_lib/sentry');
@@ -29,6 +30,8 @@ module.exports = withSentry(async (req, res) => {
   const auth = await verifyUser(req);
   if (!auth.ok) { res.status(auth.status).json({ error: auth.error }); return; }
   const userId = auth.userId;
+  // tope de frecuencia: sin esto una cuenta podia pedir states sin limite y usarlos para golpear el intercambio de codigo con la marca
+  if (!(await userCooldown(userId, 'wahoo-init', 5000))) { res.status(429).json({ error: 'Too many requests' }); return; }
 
   try {
     const timestamp = Date.now().toString();

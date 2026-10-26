@@ -41,7 +41,7 @@ Falta, para cada uno: firmar o aceptar el **contrato de tratamiento de datos (DP
 
 | Derecho | Estado |
 |---|---|
-| Acceso y portabilidad | **Por correo** a `info@zancada.org` (se exporta a mano desde la base). El botón "Descargar mis datos" se sacó de la app el 2026-10-21 por decisión del dueño; la ley (RGPD, LGPD) exige poder atender el pedido, así que hace falta definir un plazo de respuesta (por ejemplo 30 días) y quién lo ejecuta |
+| Acceso y portabilidad | **Por correo** a `info@zancada.org` (se exporta a mano desde la base). El botón "Descargar mis datos" se sacó de la app el 2026-10-21 por decisión del dueño; la ley (RGPD, LGPD) exige poder atender el pedido, y el plazo definido en la política es de 10 días corridos para el acceso (lo ejecuta el dueño exportando a mano desde la base) |
 | Borrado | **Hecho**: Perfil → "Borrar mis datos" y "Borrar cuenta" (borra todo, revoca las conexiones con relojes donde la marca lo permite (Strava, Polar, Wahoo, COROS) y exige confirmar la contraseña) |
 | Rectificación | **Hecho**: el perfil, el plan y las carreras se editan en la app |
 | Limitación y oposición | Por correo a `info@zancada.org`; sin automatizar |

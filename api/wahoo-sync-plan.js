@@ -17,8 +17,11 @@ const { refreshWahooToken } = require('./_lib/wahoo-activity-helpers');
 const { syncWahooPlans } = require('./_lib/wahoo-plans-sync');
 const { DATE_RE, cleanZones, cleanLabels, cleanDay, cleanKnown } = require('./_lib/watch-plan-clean');
 const { withSentry, reportError } = require('./_lib/sentry');
+const { payloadHash, isDuplicate, remember } = require('./_lib/plan-dedupe');
+const { withinDailyCap } = require('./_lib/daily-cap');
 
-const MAX_DAYS = 14;
+const MAX_DAYS = 7;          // la ventana que manda la app es de una semana; cada dia son ~3 llamadas a Wahoo (cuota compartida por toda la app)
+const MAX_REMOVE = 10;
 
 module.exports = withSentry(async (req, res) => {
   applyCors(req, res);
@@ -32,7 +35,7 @@ module.exports = withSentry(async (req, res) => {
   const body = req.body || {};
   const days = (Array.isArray(body.days) ? body.days : []).slice(0, MAX_DAYS).map(cleanDay).filter(Boolean)
     .sort((a, b) => a.date.localeCompare(b.date));
-  const removeDates = (Array.isArray(body.removeDates) ? body.removeDates : []).filter(d => DATE_RE.test(String(d))).slice(0, 30);
+  const removeDates = (Array.isArray(body.removeDates) ? body.removeDates : []).filter(d => DATE_RE.test(String(d))).slice(0, MAX_REMOVE);
   const known = cleanKnown(body.known);
   const zones = cleanZones(body.zones);
   const labels = cleanLabels(body.labels);
@@ -42,9 +45,20 @@ module.exports = withSentry(async (req, res) => {
   const key = process.env.SUPABASE_SERVICE_KEY;
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
+  // Mismo plan que el último envío exitoso (p. ej. desde un segundo teléfono): no se vuelve a gastar cuota de Wahoo, que es de la app entera. force = botón manual.
+  const planHash = payloadHash({ days, removeDates, zones, labels, tzOffsetMin, weekStart: body.weekStart || null });
+  if (body.force !== true && await isDuplicate(base, headers, userId, 'wahoo_plan', planHash)) {
+    res.status(200).json({ pushed: 0, reason: 'unchanged' });
+    return;
+  }
+
   // Límite de frecuencia por usuario: la cuota de la API de la marca es de la APP (compartida por todos), así que un usuario que
   // mande pedidos en bucle podía agotarla y cortar la sincronización de los demás. Falla cerrado (si el limitador no responde, no pasa).
   if (!(await checkSyncCooldown(base, headers, userId, 'wahoo-plan', 300000, { failClosed: true }))) {
+    res.status(200).json({ pushed: 0, reason: 'rate_limited' });
+    return;
+  }
+  if (!(await withinDailyCap(base, headers, 'wahoo-plan', userId, 48, { failClosed: true }))) {
     res.status(200).json({ pushed: 0, reason: 'rate_limited' });
     return;
   }
@@ -65,6 +79,7 @@ module.exports = withSentry(async (req, res) => {
 
     // Marca la semana ya reconciliada para el cron de los lunes (si la columna todavía no existe,
     // el error se ignora): sql/wahoo_plans_week.sql.
+    if (!out.failed && !out.reason) await remember(base, headers, userId, 'wahoo_plan', planHash);
     if (!out.failed && !out.reason && DATE_RE.test(String(body.weekStart || ''))) {
       await fetch(`${base}/rest/v1/wahoo_connections?user_id=eq.${userId}`, {
         method: 'PATCH', headers, body: JSON.stringify({ plans_week: body.weekStart })

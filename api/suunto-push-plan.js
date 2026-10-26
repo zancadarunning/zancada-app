@@ -36,8 +36,10 @@ const { ensureFreshSuuntoToken } = require('./_lib/suunto-activity-helpers');
 const { listZancadaGuides, syncGuides } = require('./_lib/suunto-guides-sync');
 const { DATE_RE, cleanZones, cleanLabels, cleanDay } = require('./_lib/watch-plan-clean');
 const { withSentry, reportError } = require('./_lib/sentry');
+const { payloadHash, isDuplicate, remember } = require('./_lib/plan-dedupe');
+const { withinDailyCap } = require('./_lib/daily-cap');
 
-const MAX_DAYS = 14;
+const MAX_DAYS = 7;   // la ventana que manda la app es de una semana; cada guia es una llamada a la API de Suunto (cuota compartida por toda la app)
 
 module.exports = withSentry(async (req, res) => {
   applyCors(req, res);
@@ -64,9 +66,21 @@ module.exports = withSentry(async (req, res) => {
   const key = process.env.SUPABASE_SERVICE_KEY;
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
+  // Mismo plan que el último envío exitoso (p. ej. desde un segundo teléfono): no se vuelve a gastar cuota de Suunto (200 llamadas por semana para TODA la app).
+  // Se responde como éxito con las fechas pedidas para que la app las dé por enviadas. force = botón manual.
+  const planHash = payloadHash({ reconcile, days, keepDates: keepDates ? [...keepDates].sort() : null, zones, labels, today, weekStart: body.weekStart || null });
+  if (body.force !== true && await isDuplicate(base, headers, userId, 'suunto_plan', planHash)) {
+    res.status(200).json({ pushed: 0, failed: 0, removed: 0, pushedDates: days.map(d => d.date), unchanged: true });
+    return;
+  }
+
   // Límite de frecuencia por usuario: la cuota de la API de la marca es de la APP (compartida por todos), así que un usuario que
   // mande pedidos en bucle podía agotarla y cortar la sincronización de los demás. Falla cerrado (si el limitador no responde, no pasa).
   if (!(await checkSyncCooldown(base, headers, userId, 'suunto-plan', 300000, { failClosed: true }))) {
+    res.status(200).json({ pushed: 0, reason: 'cooldown' });
+    return;
+  }
+  if (!(await withinDailyCap(base, headers, 'suunto-plan', userId, 24, { failClosed: true }))) {
     res.status(200).json({ pushed: 0, reason: 'cooldown' });
     return;
   }
@@ -88,6 +102,8 @@ module.exports = withSentry(async (req, res) => {
     const out = await syncGuides(accessToken, { days, zones, labels, keepDates, today, existing: found });
     const { pushed, failed, removed, pushedDates, firstError } = out;
     if (out.rateLimited) { res.status(200).json({ pushed, failed, removed: 0, pushedDates, reason: 'rate_limited' }); return; }
+
+    if (!failed) await remember(base, headers, userId, 'suunto_plan', planHash);
 
     // Marca la semana ya reconciliada: el cron de los lunes (suunto-guides-cron.js) la usa para
     // no repetir el trabajo. Si la columna todavía no existe (sql/suunto_guides_week.sql sin

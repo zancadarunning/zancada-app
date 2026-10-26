@@ -15,6 +15,7 @@ const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { withSentry, reportError } = require('./_lib/sentry');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
+const { withinDailyCap } = require('./_lib/daily-cap');
 const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { pickLang, deviceLabel, countryCode, buildAlertEmail } = require('./_lib/login-alert');
 
@@ -65,6 +66,11 @@ module.exports = withSentry(async (req, res) => {
     // tope entre avisos de la misma cuenta; si se pasa, NO se registra (el aviso llega en un ingreso posterior)
     if (!silent && !(await checkSyncCooldown(base, headers, userId, 'login-alert', ALERT_COOLDOWN_MS, { failClosed: true }))) {
       res.status(200).json({ ok: true, new: true, notified: false, reason: 'cooldown' });
+      return;
+    }
+    // tope global del dia de avisos por mail (cuota de Resend compartida con los mails de registro); si se pasa, NO se registra y el aviso llega en un ingreso posterior
+    if (!silent && !(await withinDailyCap(base, headers, 'login-alert-global', null, 40, { failClosed: true }))) {
+      res.status(200).json({ ok: true, new: true, notified: false, reason: 'daily_cap' });
       return;
     }
 

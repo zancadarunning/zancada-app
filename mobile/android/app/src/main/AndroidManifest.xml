@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Vuelta de la autorización de un reloj (api/_lib/oauth-link.js): https://www.zancada.org/conectar?p=..&code=..&state=.. abre ESTA app;
+                 el plugin @capacitor/app lo entrega a app.js (appUrlOpen), que confirma la conexión con la sesión del usuario. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="www.zancada.org" android:pathPrefix="/conectar" />
+            </intent-filter>
+        </activity>
+
+        <!-- El plugin de ubicación en carrera declara este servicio con exported="true" (visible para CUALQUIER otra app del teléfono, sin permiso). La propia app lo
+             usa por dentro (bindService del mismo proceso), así que no hace falta: se cierra al exterior. -->
+        <service
+            android:name="com.equimaps.capacitor_background_geolocation.BackgroundGeolocationService"
+            android:exported="false"
+            tools:replace="android:exported" />
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- Health Connect exige esta actividad (ver PermissionsRationaleActivity.kt) para
+             animarse a mostrar su pantalla de pedido de permisos: sin esto, ese pedido falla
+             en silencio: Health Connect abre y cierra su propia actividad en menos de un
+             segundo, sin mostrar ningún diálogo, y le devuelve a la app "ningún permiso
+             otorgado" como si el usuario hubiera dicho que no, aunque nunca vio nada.
+             Confirmado en un dispositivo real. Documentado acá: developer.android.com/
+             health-and-fitness/health-connect/get-started (sección "Cómo mostrar el diálogo
+             de la política de privacidad de tu app"). -->
+        <activity
+            android:name=".PermissionsRationaleActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Mismo motivo que arriba, pero para Android 14+ (donde Health Connect es parte del
+             sistema, no una app aparte): ahí el intent/categoría son distintos. -->
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".PermissionsRationaleActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+    </application>
+
+    <!-- Permissions -->
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Sin esto, navigator.geolocation.watchPosition()/getCurrentPosition() (usado para
+         el tracking en vivo de "Correr", la función central de la app) falla de entrada
+         con PERMISSION_DENIED en el WebView: Android nunca deja pasar el permiso a la
+         página web si la app anfitriona no lo declara acá, aunque el usuario nunca haya
+         visto ningún cuadro de diálogo para negarlo. Confirmado en un dispositivo real:
+         sin este permiso, getCurrentPosition() devolvía error code=1 ("User denied
+         Geolocation") de forma inmediata y silenciosa. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- @capacitor/push-notifications (ya instalado, ver package.json de mobile/) pide este
+         permiso en tiempo de ejecución en Android 13+, pero necesita estar declarado acá
+         también: sin esta línea, el pedido de permiso ni aparece, y las notificaciones push
+         se quedan mudas de entrada en cualquier usuario con Android 13 o más nuevo (no se
+         puede probar en este dispositivo puntual, que es Android 9: este permiso ni
+         existe en versiones tan viejas, así que agregarlo acá no cambia nada en ellas). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- app.js usa navigator.vibrate() (función haptic()) como feedback táctil en botones
+         clave: sin este permiso, el WebView de Android bloquea la llamada al servicio de
+         vibración del sistema de forma silenciosa (la función JS no lanza error y puede
+         devolver true igual, pero el teléfono nunca vibra de verdad). -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Guardar el video del recorrido en la galería (Android 9 o menos; desde Android 10 no hace falta) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+
+    <!-- Calendario del teléfono (ver ZancadaCalendarPlugin.kt): la app agrega los
+         entrenamientos del plan a un calendario propio "Zancada" y lo borra entero al
+         quitar el plan. Android pide los dos permisos juntos (son el mismo grupo). -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+
+    <!-- Health Connect (ver mobile/healthconnect-setup/) -->
+    <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+    <uses-permission android:name="android.permission.health.READ_DISTANCE" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_ELEVATION_GAINED" />
+    <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
+</manifest>

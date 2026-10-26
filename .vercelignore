@@ -3,6 +3,8 @@ sql
 docs
 test
 scripts
+scratch
+CLAUDE-SECURITY-*
 loadtest
 email-templates
 mobile

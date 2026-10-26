@@ -8,7 +8,7 @@ Respuestas redactadas a partir de `docs/privacidad-inventario-de-datos.md` y del
 |---|---|
 | Política de privacidad pública (URL) | `https://www.zancada.org/privacy.html`. **Pendiente**: completar entidad legal y jurisdicción (marcadores de posición) |
 | Forma de borrar la cuenta **dentro de la app** | Hecho: Perfil → "Borrar cuenta" (pide la contraseña) |
-| URL web para pedir el borrado (Google Play lo exige) | **Hecho**: `https://www.zancada.org/eliminar-cuenta.html` (6 idiomas; por correo a `info@zancada.org`, respuesta en 30 días). Falta que esté publicada (mergeada) y cargarla en Play Console |
+| URL web para pedir el borrado (Google Play lo exige) | **Hecho**: `https://www.zancada.org/eliminar-cuenta.html` (6 idiomas; por correo a `info@zancada.org`, respuesta en 5 días hábiles, según la política de privacidad). Falta que esté publicada (mergeada) y cargarla en Play Console |
 | Declaración de permisos sensibles (ubicación, Health Connect) | Ver más abajo, justificaciones listas |
 | Edad / público objetivo | La app exige 16+ al entrar (pantalla de consentimiento). Declarar "no dirigida a menores de 16" |
 | Funciones de IA | Zonda envía contexto a un proveedor de IA: está dicho en el consentimiento y en la política |

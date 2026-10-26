@@ -19,6 +19,7 @@
 // un intent (y un botón por si el navegador bloquea la apertura automática). En la web / iPhone sigue directo a /conectar.
 
 const verifyUser = require('./verify-user');
+const { userCooldown } = require('./sync-cooldown');
 const { applyCors, isPreflight } = require('./cors');
 
 const ERROR_RE = /[?&](link_error|suunto_connect=error)/;
@@ -59,6 +60,8 @@ function withOAuthLink(legacyHandler, { provider, verifyState }) {
       const stateUser = userIdOf(verifyState(state));
       if (!stateUser) { res.status(400).json({ ok: false, error: 'bad_state' }); return; }
       if (stateUser !== auth.userId) { res.status(403).json({ ok: false, error: 'state_mismatch' }); return; }
+      // cada confirmacion gasta un intercambio de code con la marca (con el secreto de la app) y puede avisar a Sentry: un tope por cuenta evita el abuso
+      if (!(await userCooldown(auth.userId, provider + '-link', 15000))) { res.status(429).json({ ok: false, error: 'rate_limited' }); return; }
 
       // Se corre el callback de siempre con un "res" que solo captura a dónde habría redirigido.
       let loc = null;
@@ -66,7 +69,7 @@ function withOAuthLink(legacyHandler, { provider, verifyState }) {
       await legacyHandler({ method: 'GET', headers: req.headers, query: { code, state } }, cap);
       if (loc && ERROR_RE.test(loc)) {
         const q = new URLSearchParams(loc.split('?')[1] || '');
-        res.status(502).json({ ok: false, error: 'link_failed', why: q.get('why') || null, dx: q.get('dx') || null });
+        res.status(502).json({ ok: false, error: 'link_failed', why: q.get('why') || null });
         return;
       }
       res.status(200).json({ ok: true });

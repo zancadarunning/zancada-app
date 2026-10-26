@@ -58,7 +58,8 @@ function readRawBody(req){
 
 function runFfmpeg(args){
   return new Promise((resolve, reject)=>{
-    const proc = spawn(ffmpegPath, args);
+    // env vacío: ffmpeg procesa archivos de usuarios y no necesita NINGUNA variable del servidor; sin esto heredaba SUPABASE_SERVICE_KEY, ANTHROPIC_API_KEY, TOKEN_ENCRYPTION_KEY, etc.
+    const proc = spawn(ffmpegPath, args, { env: {} });
     // un archivo armado a propósito no puede dejar el proceso girando: se corta a los 25 segundos
     const killer = setTimeout(() => { try { proc.kill('SIGKILL'); } catch (e) { /* ya terminó */ } }, 25000);
     proc.on('close', () => clearTimeout(killer));

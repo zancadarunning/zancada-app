@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 process.env.SUPABASE_URL = 'https://x.supabase.co';
 process.env.SUPABASE_SERVICE_KEY = 'service-key';
 process.env.STRAVA_SUBSCRIPTION_ID = '777';
+process.env.STRAVA_WEBHOOK_SECRET = 's3cret-largo';   // sin el secreto configurado el webhook ignora todo (falla cerrado)
 process.env.STRAVA_CLIENT_ID = 'cid';
 process.env.STRAVA_CLIENT_SECRET = 'csecret';
 const handler = require('../api/strava-webhook.js');
@@ -26,7 +27,7 @@ function setup({ refreshStatus = 200, activityStatus = 200, expired = false }) {
   };
   return log;
 }
-const post = async (event, query) => { const res = mkRes(); await handler({ method: 'POST', query: query || {}, body: event, headers: {} }, res); return res; };
+const post = async (event, query) => { const res = mkRes(); await handler({ method: 'POST', query: query || { k: 's3cret-largo' }, body: event, headers: {} }, res); return res; };
 const deauth = { subscription_id: 777, object_type: 'athlete', object_id: 55, owner_id: 55, aspect_type: 'update', updates: { authorized: 'false' } };
 const del = { subscription_id: 777, object_type: 'activity', object_id: 99, owner_id: 55, aspect_type: 'delete' };
 
@@ -63,7 +64,6 @@ test('borrado real: con 404 de Strava se elimina la carrera', async () => {
 });
 
 test('con STRAVA_WEBHOOK_SECRET configurado, un POST sin el secreto correcto se ignora por completo', async () => {
-  process.env.STRAVA_WEBHOOK_SECRET = 's3cret-largo';
   let log = setup({ refreshStatus: 400 });
   await post(deauth, {});
   await post(deauth, { k: 'otro' });
@@ -71,7 +71,17 @@ test('con STRAVA_WEBHOOK_SECRET configurado, un POST sin el secreto correcto se 
   log = setup({ refreshStatus: 400 });
   await post(deauth, { k: 's3cret-largo' });
   assert.equal(log.deletedConn, 1, 'con el secreto correcto sí');
+});
+
+test('sin STRAVA_WEBHOOK_SECRET configurado el webhook ignora TODO (falla cerrado), aunque el subscription_id sea correcto', async () => {
+  const saved = process.env.STRAVA_WEBHOOK_SECRET;
   delete process.env.STRAVA_WEBHOOK_SECRET;
+  try {
+    const log = setup({ refreshStatus: 400 });
+    await post(deauth, {});
+    await post(deauth, { k: 'cualquiera' });
+    assert.equal(log.deletedConn, 0);
+  } finally { process.env.STRAVA_WEBHOOK_SECRET = saved; }
 });
 
 test('subscription_id incorrecto: se ignora', async () => {

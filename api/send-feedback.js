@@ -15,6 +15,7 @@ const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { withSentry, reportError } = require('./_lib/sentry');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
+const { withinDailyCap } = require('./_lib/daily-cap');
 
 // Un mensaje por minuto y por usuario: cada uno manda un email real.
 const FEEDBACK_COOLDOWN_MS = 30 * 60 * 1000;   // 48 por dia como maximo por cuenta (antes 1 por minuto = 1.440): una sola cuenta no puede agotar los mails de la app
@@ -43,6 +44,11 @@ module.exports = withSentry(async (req, res) => {
   const sbKey = process.env.SUPABASE_SERVICE_KEY;
   const sbHeaders = { apikey: sbKey, Authorization: `Bearer ${sbKey}`, 'Content-Type': 'application/json' };
   if (!(await checkSyncCooldown(sbBase, sbHeaders, auth.userId, 'feedback', FEEDBACK_COOLDOWN_MS, { failClosed: true }))) {
+    res.status(429).json({ error: 'Too many requests' });
+    return;
+  }
+  // tope global del dia: varias cuentas confirmadas no pueden agotar entre todas la cuota de mails de la app (se comparte con los mails de registro)
+  if (!(await withinDailyCap(sbBase, sbHeaders, 'feedback-global', null, 20, { failClosed: true }))) {
     res.status(429).json({ error: 'Too many requests' });
     return;
   }
