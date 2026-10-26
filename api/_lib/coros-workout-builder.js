@@ -3,16 +3,15 @@
 // Convierte una sesión del plan de Zancada en el `course` (entrenamiento) que reciben las herramientas de escritura del MCP de COROS (createScheduledWorkout / updateScheduledWorkout).
 // Contraparte de wahoo-plan-builder.js y suunto-guide-builder.js: misma sesión de entrada (el cliente ya la armó, ver cleanDay en watch-plan-clean.js).
 //
-// ESTADO: PRIMERA VERSIÓN, A CONFIRMAR CON EL ESQUEMA REAL. La guía pública de COROS no publica los campos del `course`; lo que se sabe (issues del GitHub oficial coroslab/COROS-MCP):
-//   - course tiene `sections` (lista; cada sección puede traer `sets` anidadas), y el deporte va como código: 1 = correr, 2 = ciclismo, 5 = trail (4 = descanso en un plan).
-//   - cada sección tiene `targetType`: 1 = distancia, 2 = tiempo (segundos), 3 = desnivel, 4 = libre.
-//   - los trail NO aceptan tiempo; los calentamientos y vueltas a la calma deben ser por distancia en trail (no aplica acá: solo se envía correr).
-// Lo que NO se sabe y se asume (revisar con la salida del botón "Leer herramientas de COROS" del panel de admin, api/coros-describe-tools.js):
-//   - la unidad de la distancia (acá: metros), los nombres exactos de los campos de nombre/objetivo, y cómo se declara la intensidad. Por eso NO se manda intensidad: el pulso objetivo
-//     va en la descripción de la sesión, como texto. Las repeticiones se desarman en secciones seguidas (sin `sets`) para no depender de cómo se anidan.
-// Mientras no se confirme, el envío está limitado a cuentas admin (ver coros-push-plan.js).
-
-const MAX_SECTIONS = 40;
+// FORMATO (esquema real publicado por el MCP de COROS, leído con tools/list el 2026-10-26):
+//   course = { courseName (<=100), courseDescription (no vacío), sportType (1 = correr), sections: [...] }   -- sin dayNo (la fecha va aparte)
+//   sección simple:  { sectionType: 1 calentamiento | 2 entrenamiento | 3 recuperación | 4 vuelta a la calma,
+//                      targetType: 1 distancia (metros) | 2 tiempo (segundos), targetValue: entero positivo,
+//                      intensityType: 1 (pulso), y EXACTAMENTE un formato de intensidad:
+//                        intensityValueStart/End (rango absoluto en ppm, 30-240)  |  sectionIntensity (zona 1-6 de COROS) | intensityPercentStart/End }
+//   grupo de repeticiones: { intervalGroup: true, repeats: 1-20, sets: [secciones simples con sectionType 2 o 3] }  (sin objetivo ni intensidad en el contenedor; no se anidan)
+// Las secciones no tienen nombre propio; el nombre y la descripción van en el course.
+// Se usa el pulso (intensityType 1) con el rango en ppm de las zonas del corredor; si no hay zonas, la zona equivalente de COROS (sectionIntensity).
 
 function posInt(n, min, max, fallback) {
   const v = Math.round(Number(n));
@@ -20,52 +19,57 @@ function posInt(n, min, max, fallback) {
   return Math.min(max, Math.max(min, v));
 }
 
-function section(name, targetType, targetValue) {
-  return { name: String(name || '').slice(0, 40), targetType, targetValue };
+// Intensidad de pulso para una zona: rango absoluto en ppm si lo tenemos, si no la zona de COROS (1-6).
+function hrIntensity(zones, zone) {
+  const z = zones && zones[zone];
+  if (z) {
+    const lo = posInt(z.min, 30, 240, null), hi = posInt(z.max, 30, 240, null);
+    if (lo != null && hi != null && hi >= lo) return { intensityType: 1, intensityValueStart: lo, intensityValueEnd: hi };
+  }
+  return { intensityType: 1, sectionIntensity: posInt(zone, 1, 6, 2) };
 }
 
-function zoneText(zones, zone, labelFallback) {
-  const z = zones && zones[zone];
-  if (!z) return '';
-  return `${labelFallback} ${zone}: ${Math.round(z.min)}-${Math.round(z.max)} ppm`;
+function plain(sectionType, targetType, targetValue, intensity) {
+  return Object.assign({ sectionType, targetType, targetValue: Math.max(1, Math.round(targetValue)) }, intensity || {});
 }
 
 // day: { date, name, typeKey, zone, distKm, durMin, desc, interval:{reps,repMeters,recoveryMin,workMin,restMin}, repSec, restSec, timeBased }
 function buildCorosCourse(day, zones, labels) {
-  labels = labels || {};
-  const L = (k, fb) => labels[k] || fb;
   const zone = posInt(day.zone, 1, 5, null);
   const warmMin = 10, coolMin = 5;
+  const easy = hrIntensity(zones, 2);
+  const work = zone ? hrIntensity(zones, zone) : hrIntensity(zones, 2);
+  const rest = hrIntensity(zones, 1);
   const sections = [];
   const iv = day.interval && Number(day.interval.reps) > 0 ? day.interval : null;
   const isRepeatType = iv && (day.typeKey === 'intervals' || day.typeKey === 'hills' || day.typeKey === 'fartlek' || iv.workMin);
 
   if (isRepeatType) {
-    const reps = posInt(iv.reps, 1, 100, 1);
-    sections.push(section(L('warmup', 'Warm up'), 2, warmMin * 60));
-    let workSection, restSection;
+    const reps = posInt(iv.reps, 1, 20, 1);   // COROS admite 1-20 repeticiones por grupo
+    sections.push(plain(1, 2, warmMin * 60, easy));
+    let workSec, restSec;
     if (day.typeKey === 'fartlek' || (iv.workMin && !iv.repMeters)) {
-      workSection = section(L('work', 'Hard'), 2, Math.round((Number(iv.workMin) || 1) * 60));
-      restSection = section(L('rest', 'Easy'), 2, Math.round((Number(iv.restMin) || 1) * 60));
+      workSec = plain(2, 2, (Number(iv.workMin) || 1) * 60, work);
+      restSec = plain(3, 2, (Number(iv.restMin) || 1) * 60, rest);
     } else {
       const repMeters = posInt(iv.repMeters, 20, 20000, 400);
       const useTime = Number(day.repSec) > 0;
-      workSection = useTime ? section(L('work', 'Hard'), 2, Math.round(day.repSec)) : section(L('work', 'Hard'), 1, repMeters);
+      workSec = useTime ? plain(2, 2, day.repSec, work) : plain(2, 1, repMeters, work);
       const restSecV = Number(day.restSec) > 0 ? day.restSec : day.repSec;
-      if (day.typeKey === 'hills') restSection = useTime ? section(L('rest', 'Easy'), 2, Math.round(restSecV)) : section(L('rest', 'Easy'), 1, repMeters);
-      else restSection = section(L('rest', 'Easy'), 2, Math.round((Number(iv.recoveryMin) || 1) * 60));
+      if (day.typeKey === 'hills') restSec = useTime ? plain(3, 2, restSecV, rest) : plain(3, 1, repMeters, rest);
+      else restSec = plain(3, 2, (Number(iv.recoveryMin) || 1) * 60, rest);
     }
-    for (let i = 0; i < reps && sections.length < MAX_SECTIONS - 1; i++) { sections.push(Object.assign({}, workSection)); sections.push(Object.assign({}, restSection)); }
-    sections.push(section(L('cooldown', 'Cool down'), 2, coolMin * 60));
+    sections.push({ intervalGroup: true, repeats: reps, sets: [workSec, restSec] });
+    sections.push(plain(4, 2, coolMin * 60, easy));
   } else {
     const distM = Math.round((Number(day.distKm) || 0) * 1000);
-    if (distM > 0 && !(day.timeBased && Number(day.durMin) > 0)) sections.push(section(L('main', day.name || 'Run'), 1, distM));
-    else sections.push(section(L('main', day.name || 'Run'), 2, Math.max(300, posInt(day.durMin, 5, 600, 30) * 60)));
+    if (distM > 0 && !(day.timeBased && Number(day.durMin) > 0)) sections.push(plain(2, 1, distM, work));
+    else sections.push(plain(2, 2, Math.max(300, posInt(day.durMin, 5, 600, 30) * 60), work));
   }
 
-  const hr = zone ? zoneText(zones, zone, 'Z') : '';
-  const description = [String(day.desc || '').slice(0, 800), hr].filter(Boolean).join('\n').slice(0, 1000);
-  return { name: String(`Zancada - ${day.name || 'Run'}`).slice(0, 60), sportType: 1, description, sections: sections.slice(0, MAX_SECTIONS) };
+  const name = String(`Zancada - ${day.name || 'Run'}`).slice(0, 100);
+  const description = String(day.desc || '').trim().slice(0, 800) || name;
+  return { courseName: name, courseDescription: description, sportType: 1, sections };
 }
 
 // 'YYYY-MM-DD' -> 'yyyyMMdd' (formato de fecha de COROS)
@@ -88,4 +92,4 @@ function extractIdInPlan(res) {
   return walk(res, 0);
 }
 
-module.exports = { buildCorosCourse, corosDate, extractIdInPlan, MAX_SECTIONS };
+module.exports = { buildCorosCourse, corosDate, extractIdInPlan, hrIntensity };
