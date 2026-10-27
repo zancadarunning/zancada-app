@@ -1,4 +1,4 @@
-# Seguridad para el lanzamiento: qué está hecho y qué falta
+# Seguridad para el lanzamiento: qué está hecho
 
 Estado a 2026-10-21. Público: sin claves. Este archivo resume; el detalle está en `docs/` y en la carpeta de pruebas (`test/`).
 
@@ -37,22 +37,9 @@ Estado a 2026-10-21. Público: sin claves. Este archivo resume; el detalle está
 - Plan de incidentes escrito (`docs/plan-de-incidentes.md`).
 - Inventario de datos y proveedores (`docs/privacidad-inventario-de-datos.md`), borrador de formularios de las tiendas y tabla de contratos con proveedores.
 
-## Falta (depende de personas o del momento)
+## Falta
 
-| Tema | Qué hace falta | Quién |
-|---|---|---|
-| Textos legales | Entidad legal, jurisdicción, plazos, representante en la UE si corresponde | Dueño + abogado |
-| Edad mínima | Confirmar 16 en todos los países de lanzamiento | Abogado |
-| Pedidos de datos de las personas | Definir quién y en cuánto tiempo (el botón de descargar se sacó por decisión del dueño) | Dueño |
-| Contratos con proveedores (DPA) | Aceptarlos y archivarlos (`docs/dpa-proveedores.md`) | Dueño |
-| Región de los datos | Decidir si se mueve Supabase a Europa o Brasil | Dueño |
-| Strava | Decidir si se mantiene (prohíbe IA y exige borrar a los 7 días) | Dueño |
-| Formularios de las tiendas | Completarlos con `docs/tiendas-formularios-privacidad.md` y cargar la URL de borrado (`/eliminar-cuenta.html`, ya creada) | Dueño |
-| Traducciones del consentimiento | Revisión de pt, fr, it, de por hablantes nativos | Externo |
-| Plan de pago el día del lanzamiento | Supabase Pro (contraseñas filtradas, tope de sesión, más límites), Resend pago, subir el tope de correos por hora | Dueño |
-| Seguridad sobre el celular | Play Integrity en Android una vez publicada; revisión equivalente en iPhone cuando exista | Yo + dueño |
-| Prueba de intrusión externa | Contratar a alguien que ataque la app antes del lanzamiento. El alcance, los endpoints, lo ya conocido y las reglas están en `docs/pentest-alcance.md` | Externo |
-| Higiene periódica | Cambiar `CRON_SECRET` y claves cada seis meses; simulacro de restauración de un respaldo cada tres; renovar `security.txt` cada año; pasar DMARC a "quarantine" | Dueño |
+La lista de pendientes del lanzamiento (legales, contratos, pruebas externas) se mantiene en privado, fuera del repositorio público.
 
 ## Qué no se hizo a propósito
 
