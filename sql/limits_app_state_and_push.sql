@@ -38,6 +38,22 @@ BEGIN
   IF jsonb_typeof(v_data->'plan') = 'array' AND octet_length((v_data->'plan')::text) > 512 * 1024 THEN
     RAISE EXCEPTION 'plan demasiado grande' USING ERRCODE = '54000';
   END IF;
+  -- Topes POR CAMPO de lo que los endpoints publicos y los crons bajan entero en cada pedido (calendar-feed, send-reminders): con solo el tope de 30 MB, un campo de 29 MB
+  -- ("profile", "lang", "tz"...) se descargaba de Supabase a Vercel en cada pedido o en cada ciclo del cron (egress) y alargaba los recordatorios de todos.
+  IF length(coalesce(v_data->>'lang', '')) > 8
+     OR length(coalesce(v_data->>'weekStart', '')) > 10
+     OR length(coalesce(v_data->>'streakWeeks', '')) > 6
+     OR length(coalesce(v_data->>'calendarToken', '')) > 80
+     OR length(coalesce(v_data#>>'{profile,tz}', '')) > 64
+     OR length(coalesce(v_data#>>'{profile,reminderHour}', '')) > 4
+     OR length(coalesce(v_data#>>'{profile,units}', '')) > 16
+     OR length(coalesce(v_data#>>'{profile,trainBy}', '')) > 16
+     OR octet_length(coalesce((v_data->'profile')::text, '')) > 64 * 1024
+     OR octet_length(coalesce((v_data->'calendarNextWeek')::text, '')) > 512 * 1024
+     OR octet_length(coalesce((v_data->'watchPlan')::text, '')) > 512 * 1024
+     OR octet_length(coalesce((v_data->'suuntoPlan')::text, '')) > 512 * 1024 THEN
+    RAISE EXCEPTION 'campo de app_state demasiado grande' USING ERRCODE = '54000';
+  END IF;
   IF v_data ? 'runs' AND jsonb_typeof(v_data->'runs') NOT IN ('array', 'null') THEN
     RAISE EXCEPTION 'runs invalido' USING ERRCODE = '22023';
   END IF;
@@ -72,7 +88,7 @@ LANGUAGE plpgsql
 SET search_path = public
 AS $$
 BEGIN
-  IF octet_length(NEW.subscription::text) > 4096 OR length(NEW.device_id) > 64 THEN
+  IF octet_length(NEW.subscription::text) > 4096 OR length(NEW.device_id) > 64 OR length(coalesce(NEW.platform, '')) > 20 THEN
     RAISE EXCEPTION 'suscripcion invalida' USING ERRCODE = '22023';
   END IF;
   IF TG_OP = 'INSERT' THEN

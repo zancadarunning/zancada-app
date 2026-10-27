@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-27T11:50:50Z';
+const APP_VERSION = '2026-10-27T17:19:42Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1108,16 +1108,43 @@ const dualAuthStorage = {
 // Los mails de confirmar cuenta y recuperar contraseña traen ?token_hash=...&type=... (ver email-templates/) y se canjean con verifyOtp(): funcionan en cualquier navegador y solo para la cuenta a la que se mandó el mail.
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: dualAuthStorage, flowType: 'pkce' } });
 let emailLinkRecovery = false;   // el enlace de recuperar contraseña se canjeó recién: mostrar la pantalla de nueva contraseña, no entrar a la app
+let recoveryClient = null, recoveryEmail = '';   // sesión de recuperación: vive SOLO en memoria, en un cliente aparte (nunca reemplaza la sesión de este navegador)
+// Un token_hash no está atado al navegador: cualquiera puede pedir uno para SU propia cuenta y mandarte el enlace. Por eso el enlace NUNCA inicia sesión acá:
+//  - confirmar cuenta: solo confirma el mail (la pestaña que hizo el alta entra sola por el sondeo de contraseña);
+//  - recuperar contraseña: la sesión queda en un cliente en memoria, la pantalla muestra de qué cuenta es y, al terminar, hay que iniciar sesión con la contraseña nueva.
+function makeIsolatedAuthClient(){
+  const mem = {};
+  return window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession:false, autoRefreshToken:false, detectSessionInUrl:false, storageKey:'zc-isolated-auth',
+    storage:{ getItem:k=>(k in mem ? mem[k] : null), setItem:(k,v)=>{ mem[k] = v; }, removeItem:k=>{ delete mem[k]; } } } });
+}
+function showRecoveryScreen(){
+  ['splash','login','signup','onboard','confirm-email'].forEach(id=>{ const el = document.getElementById(id); if(el) el.style.display = 'none'; });
+  const acc = document.getElementById('recovery-account');
+  if(acc) acc.textContent = t('recovery_for_account', { email: recoveryEmail });
+  document.getElementById('recovery-set-password').style.display = 'block';
+}
+function cancelRecovery(){
+  try{ if(recoveryClient) recoveryClient.auth.signOut({ scope:'local' }); }catch(e){}
+  recoveryClient = null; recoveryEmail = '';
+  location.reload();
+}
 async function consumeEmailLinkParams(){
   try{
     const q = new URLSearchParams(location.search);
     const th = q.get('token_hash'), type = q.get('type');
     if(!th) return;
     try{ history.replaceState(null, '', location.pathname); }catch(e){}   // el código no queda en la barra ni en el historial
-    if(!/^[A-Za-z0-9_-]{10,300}$/.test(th) || !['recovery','signup','email','magiclink','email_change','invite'].includes(type)) return;
-    const { error } = await supabaseClient.auth.verifyOtp({ token_hash: th, type });
-    if(error){ showToast(t('login_link_invalid'), 'error'); return; }
-    if(type === 'recovery') emailLinkRecovery = true;
+    if(!/^[A-Za-z0-9_-]{10,300}$/.test(th) || !['recovery','signup','email'].includes(type)) return;
+    const iso = makeIsolatedAuthClient();
+    const { data, error } = await iso.auth.verifyOtp({ token_hash: th, type });
+    if(error || !data || !data.session){ showToast(t('login_link_invalid'), 'error'); return; }
+    if(type === 'recovery'){
+      recoveryClient = iso; recoveryEmail = (data.user && data.user.email) || '';
+      emailLinkRecovery = true;
+      showRecoveryScreen();
+    } else {
+      showToast(t('login_link_confirmed'));
+    }
   }catch(e){ console.error('no se pudo canjear el enlace del mail', e); }
 }
 
@@ -1638,6 +1665,11 @@ async function loadUserAndEnter(user, isRetry){
       // cada apertura de la app de balde.
       if(user.user_metadata && user.user_metadata.lang !== lang){
         try{ supabaseClient.auth.updateUser({ data: { lang } }); }catch(e){}
+      }
+      // Tras recuperar la contraseña se renueva el enlace público del calendario (si había uno): un enlace filtrado o de una sesión robada deja de servir.
+      if(user.user_metadata && user.user_metadata.rotate_calendar_token){
+        if(state.calendarToken){ state.calendarToken = (typeof crypto!=='undefined' && crypto.randomUUID) ? crypto.randomUUID() : secureRandomHex(16); refreshCalendarCache(); persist(); }
+        try{ supabaseClient.auth.updateUser({ data: { rotate_calendar_token: null } }); }catch(e){}
       }
       if(!hasConsent()){
         if(!(await ensureConsent())){ await supabaseClient.auth.signOut(); location.reload(); return; }
@@ -3305,12 +3337,27 @@ async function submitNewPassword(){
   if(!newPw || !isPasswordStrong(newPw)){ err.textContent = t('login_err_password_weak'); err.style.display='block'; return; }
   setBtnBusy('recovery-submit-btn', true, t('login_loading'));
   try{
-    const { error } = await supabaseClient.auth.updateUser({ password: newPw });
+    const c = recoveryClient || supabaseClient;
+    // rotate_calendar_token: el enlace público del calendario (token fijo en app_state) se renueva en el próximo ingreso, para que un enlace filtrado deje de servir
+    const { error } = await c.auth.updateUser({ password: newPw, data: { rotate_calendar_token: true } });
     if(error){ err.textContent = translateAuthError(error); err.style.display='block'; return; }
     // Cambiar la contraseña NO cierra las otras sesiones abiertas (Supabase no lo hace solo, y el control de sesiones del panel es del plan Pro). Quien recupera la contraseña porque
     // sospecha que se la robaron necesita que el atacante ya logueado quede afuera: se cierran todas las demás sesiones y queda solo esta.
-    try{ await supabaseClient.auth.signOut({ scope: 'others' }); }catch(e){ console.error('no se pudieron cerrar las otras sesiones', e); }
-    const { data: { user } } = await supabaseClient.auth.getUser();
+    try{ await c.auth.signOut({ scope: 'others' }); }catch(e){ console.error('no se pudieron cerrar las otras sesiones', e); }
+    const { data: { user } } = await c.auth.getUser();
+    if(recoveryClient){
+      // Sesión de recuperación (cliente aparte): se borran TODOS los dispositivos de aviso (este navegador no los tenía), se cierra esa sesión y se pide iniciar sesión con la contraseña nueva.
+      try{ if(user && user.id) await c.from('push_subscriptions').delete().eq('user_id', user.id); }catch(e){ console.error('no se pudieron limpiar los dispositivos de aviso', e); }
+      try{ await c.auth.signOut(); }catch(e){}
+      const doneEmail = recoveryEmail;
+      recoveryClient = null; recoveryEmail = ''; emailLinkRecovery = false;
+      document.getElementById('recovery-set-password').style.display='none';
+      document.getElementById('recovery-new-pw').value = '';
+      goLogin();
+      const em = document.getElementById('login-email'); if(em && doneEmail) em.value = doneEmail;
+      showToast(t('recovery_done'));
+      return;
+    }
     // Las otras sesiones ya están cerradas, pero un atacante que tuvo acceso pudo dejar registrado su propio dispositivo para seguir recibiendo los avisos (sesión del día, resúmenes, carreras): se borran las
     // filas de push de los demás dispositivos. Los dispositivos legítimos se vuelven a registrar solos al iniciar sesión de nuevo.
     try{ if(user && user.id) await supabaseClient.from('push_subscriptions').delete().eq('user_id', user.id).neq('device_id', pushDeviceId()); }catch(e){ console.error('no se pudieron limpiar los dispositivos de aviso', e); }

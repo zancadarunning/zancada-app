@@ -2862,6 +2862,7 @@
   <div class="overlay" id="recovery-set-password" style="display:none;">
     <h2 class="display" data-i18n="login_recovery_title"></h2>
     <p class="lead" data-i18n="login_recovery_lead"></p>
+    <p class="lead" id="recovery-account" style="font-weight:700; word-break:break-all;"></p>
     <div class="field">
       <label for="recovery-new-pw" data-i18n="login_new_password_label"></label>
       <div class="pw-wrap">
@@ -2872,6 +2873,7 @@
       <p class="err-text" id="recovery-new-pw-err"></p>
     </div>
     <div class="field"><button class="btn btn-primary" id="recovery-submit-btn" data-i18n="login_recovery_submit" data-on-click="submitNewPassword()"></button></div>
+    <button class="small-link" style="display:block; text-align:center; width:100%; margin-top:6px;" data-on-click="cancelRecovery()" data-i18n="recovery_cancel"></button>
   </div>
 
   <div class="overlay" id="onboard">
