@@ -200,9 +200,17 @@ test('coros-describe-tools: solo admin con mail confirmado, con tope de frecuenc
   assert.match(s, /!auth\.emailConfirmed \|\| !admins\.includes\(email\)/);
   assert.match(s, /userCooldown\(auth\.userId, 'coros-describe'/);
   assert.match(s, /tools\/list/);
-  assert.doesNotMatch(s, /req\.body/, 'no confia en nada del cuerpo');
+  assert.doesNotMatch(s, /req\.body\.(userId|user_id|email|token)/, 'el usuario sale solo de la sesión verificada; el cuerpo solo trae la acción y fechas yyyyMMdd');
+  assert.ok(s.includes('d{8}'), 'las fechas del calendario se validan como yyyyMMdd');
   const app = read('app.js');
   assert.match(app, /data-on-click="admDescribeCoros\(\)"/);
   assert.match(app, /async function admDescribeCoros\(\)\{/);
   assert.match(app, /async function admCopyCorosTools\(\)\{/);
+});
+
+test('COROS: un cambio que cae en la espera entre envios se reintenta solo (antes quedaba sin enviar)', () => {
+  const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8').split('\r\n').join('\n');
+  assert.ok(app.includes('scheduleCorosSync(6*60*1000 + 2000)'));
+  const i = app.indexOf('function scheduleCorosSync(delayMs){');
+  assert.ok(app.slice(i, i + 400).includes('if(!delayMs && Date.now() < corosBlockedUntil) return;'), 'una demora explicita pasa el bloqueo');
 });
