@@ -182,10 +182,20 @@ test('el enlace del mail (token_hash) nunca crea una sesión en este navegador: 
   assert.ok(read('index.html').includes('id="recovery-account"') && read('index.html').includes('cancelRecovery()'), 'la pantalla muestra de qué cuenta es y deja cancelar');
 });
 
-test('recuperar la contraseña renueva el enlace público del calendario (un enlace filtrado deja de servir)', () => {
+test('la función de calendario del plan se eliminó por completo (feed público, calendario nativo, permisos, textos)', () => {
+  const root = path.join(__dirname, '..');
+  assert.ok(!fs.existsSync(path.join(root, 'api/calendar-feed.js')), 'el feed público sin sesión ya no existe');
+  assert.ok(!fs.existsSync(path.join(root, 'mobile/android/app/src/main/java/org/zancada/app/ZancadaCalendarPlugin.kt')));
+  const manifest = read('mobile/android/app/src/main/AndroidManifest.xml');
+  assert.ok(!/_CALENDAR/.test(manifest), 'la app ya no pide permiso de calendario');
+  assert.ok(!read('mobile/android/app/src/main/java/org/zancada/app/MainActivity.java').includes('ZancadaCalendarPlugin'));
   const app = read('app.js');
-  assert.ok(app.includes('rotate_calendar_token: true'));
-  assert.ok(app.includes('user.user_metadata.rotate_calendar_token') && app.includes('rotate_calendar_token: null'));
+  for (const dead of ['calendarFeedUrl', 'ensureCalendarToken', 'NativeCalendar', 'rotate_calendar_token', 'webcal://']) assert.ok(!app.includes(dead), dead);
+  assert.ok(!read('index.html').includes('calendar-sub-modal'));
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.ok(!/cal_(sub|native)_/.test(read('locales/' + l + '.js')), l);
+  assert.ok(!/webcal/i.test(read('js/legal-privacy.js')), 'la política de privacidad ya no habla del calendario del plan');
+  // lo que había quedado guardado en las cuentas se descarta al cargar el estado
+  assert.ok(app.includes('delete s.calendarToken; delete s.calendarNextWeek; delete s.calendarNative;'));
 });
 
 test('SQL: topes por campo de app_state y largo de platform en push_subscriptions (lo que bajan calendar-feed y send-reminders)', () => {

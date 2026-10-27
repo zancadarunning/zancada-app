@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-27T17:19:42Z';
+const APP_VERSION = '2026-10-27T22:20:35Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -911,6 +911,8 @@ let state = {onboarded:false, profile:{}, plan:[], runs:[], shoes:[], event:null
 // Un estado que llega del servidor o del respaldo local con la forma rota (profile null, plan que no es lista...) hacía fallar el arranque en cada apertura y la app quedaba inutilizable
 // (solo ofrecía cerrar sesión). Se fuerza la forma mínima que el resto del código da por hecha y se descartan las entradas que no son objetos.
 function normalizeLoadedState(s){
+  // La función de calendario del plan se eliminó: se descarta lo que había quedado guardado en la cuenta (se borra solo en el próximo guardado).
+  if(s && typeof s === 'object'){ delete s.calendarToken; delete s.calendarNextWeek; delete s.calendarNative; }
   if(!s || typeof s !== 'object' || Array.isArray(s)) return {onboarded:false, profile:{}, plan:[], runs:[], shoes:[], event:null, chat:[], lang:lang, painLog:[], readinessLog:[]};
   if(!s.profile || typeof s.profile !== 'object' || Array.isArray(s.profile)) s.profile = {};
   ['plan','runs','shoes','chat','painLog','readinessLog'].forEach(k => { s[k] = Array.isArray(s[k]) ? s[k].filter(x => x && typeof x === 'object') : []; });
@@ -1457,8 +1459,6 @@ async function persist(){
     }
     if(!skipWrite){
       const nowIso = new Date().toISOString();
-      refreshCalendarCache();
-      scheduleNativeCalendarSync();
       scheduleWatchSync();
       // supabase-js NO lanza una excepción cuando falla la red: devuelve { error }. Sin revisarlo, un guardado sin conexión
       // se daba por bueno (se borraba el respaldo local y se avanzaba la versión conocida) y el cambio se perdía.
@@ -1665,11 +1665,6 @@ async function loadUserAndEnter(user, isRetry){
       // cada apertura de la app de balde.
       if(user.user_metadata && user.user_metadata.lang !== lang){
         try{ supabaseClient.auth.updateUser({ data: { lang } }); }catch(e){}
-      }
-      // Tras recuperar la contraseña se renueva el enlace público del calendario (si había uno): un enlace filtrado o de una sesión robada deja de servir.
-      if(user.user_metadata && user.user_metadata.rotate_calendar_token){
-        if(state.calendarToken){ state.calendarToken = (typeof crypto!=='undefined' && crypto.randomUUID) ? crypto.randomUUID() : secureRandomHex(16); refreshCalendarCache(); persist(); }
-        try{ supabaseClient.auth.updateUser({ data: { rotate_calendar_token: null } }); }catch(e){}
       }
       if(!hasConsent()){
         if(!(await ensureConsent())){ await supabaseClient.auth.signOut(); location.reload(); return; }
@@ -3338,8 +3333,7 @@ async function submitNewPassword(){
   setBtnBusy('recovery-submit-btn', true, t('login_loading'));
   try{
     const c = recoveryClient || supabaseClient;
-    // rotate_calendar_token: el enlace público del calendario (token fijo en app_state) se renueva en el próximo ingreso, para que un enlace filtrado deje de servir
-    const { error } = await c.auth.updateUser({ password: newPw, data: { rotate_calendar_token: true } });
+    const { error } = await c.auth.updateUser({ password: newPw });
     if(error){ err.textContent = translateAuthError(error); err.style.display='block'; return; }
     // Cambiar la contraseña NO cierra las otras sesiones abiertas (Supabase no lo hace solo, y el control de sesiones del panel es del plan Pro). Quien recupera la contraseña porque
     // sospecha que se la robaron necesita que el atacante ya logueado quede afuera: se cierran todas las demás sesiones y queda solo esta.
@@ -4786,7 +4780,6 @@ function wipeLocalUserData(uid){
 }
 async function logout(){
   await waitForPendingPersist();
-  await clearNativeCalendarQuietly();
   // Ver el comentario de runProgressKey(): sin esto, una carrera sin terminar quedaba
   // recuperable por la próxima cuenta que inicie sesión en este mismo dispositivo.
   clearRunProgress();
@@ -4841,7 +4834,6 @@ async function resetApp(){
   const accessToken = await confirmDestructiveWithPassword(t('reset_confirm_text'), {danger:true, confirmText:t('delete_word')});
   if(!accessToken) return;
   await waitForPendingPersist();
-  await clearNativeCalendarQuietly();
   // El servidor borra TODO (conexiones y tokens de relojes con su revocación, notificaciones, contadores, lo social y el estado) y confirma
   // cada borrado. Antes solo se borraba app_state y se ignoraba el error: el usuario creía que se había borrado todo y no era así.
   try{
@@ -4865,7 +4857,6 @@ async function deleteAccount(){
   if(!accessToken) return;
   try{
     await waitForPendingPersist();
-    await clearNativeCalendarQuietly();
     const res = await fetch(apiUrl('/api/delete-account'), {
       method:'POST',
       headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${accessToken}`},
@@ -8020,244 +8011,12 @@ function planLabel(d){
   return {type:lbl.type, desc};
 }
 
-/* ---- suscripción al calendario (webcal://) -----
-   Antes "Agregar semana al calendario" bajaba un .ics nuevo cada vez que se tocaba el
-   botón. Apple/Google Calendar tratan un .ics importado como eventos sueltos, no como una
-   fuente que se pueda refrescar -- cada semana exportada se sumaba a las anteriores en vez
-   de reemplazarlas, y la app nunca tuvo (ni puede tener) permiso para borrar lo que ya
-   quedó adentro del Calendario del usuario. Reportado por el usuario: después de varios
-   cambios de plan, terminó con un montón de eventos viejos pegoteados sin forma de
-   limpiarlos desde acá.
-   La solución de raíz es un feed SUSCRIBIBLE (ver api/calendar-feed.js): en vez de un
-   archivo de una sola vez, es una URL que el propio Calendario del usuario vuelve a pedir
-   solo, periódicamente. Como siempre devuelve el estado actual de la semana en curso con
-   los mismos UID de siempre, un evento que ya no aplica (semana vieja, día cambiado)
-   simplemente deja de aparecer en el próximo refresco, en vez de quedar duplicado para
-   siempre. state.calendarToken identifica al usuario en esa URL pública sin necesitar
-   login (ningún cliente de calendario sabe autenticarse) -- se genera una sola vez y viaja
-   con el resto de state a app_state.data, igual que cualquier otro campo. */
 // Aleatorio criptográfico en hexadecimal (no Math.random: es predecible). Para tokens secretos y nonces.
 function secureRandomHex(bytes){
   const buf = new Uint8Array(bytes || 16);
   crypto.getRandomValues(buf);
   return Array.from(buf, b => b.toString(16).padStart(2, '0')).join('');
 }
-function ensureCalendarToken(){
-  if(!state.calendarToken){
-    state.calendarToken = (typeof crypto!=='undefined' && crypto.randomUUID) ? crypto.randomUUID() : secureRandomHex(16);
-    persist();
-  }
-  return state.calendarToken;
-}
-// www. directo (zancada.org redirige ahí con un 308): un cliente de calendario que no sigue
-// bien redirecciones de un feed (Google Calendar, según el caso) fallaría en silencio.
-function calendarFeedUrl(){
-  return `https://www.zancada.org/api/calendar-feed?t=${ensureCalendarToken()}`;
-}
-// La semana siguiente solo se puede calcular acá (generatePlan()/getNextWeekPlan() viven en
-// el cliente) -- el feed del servidor no puede regenerarla, así que se deja ya resuelta
-// dentro de state en cada guardado (ver persist()), solo para quien ya tiene un enlace de
-// calendario. Se guardan únicamente los campos que el feed necesita, no el plan entero.
-function refreshCalendarCache(){
-  if(!state.calendarToken) return;
-  try{
-    const nw = getNextWeekPlan();
-    state.calendarNextWeek = {
-      weekStart: nw.weekStart,
-      plan: nw.plan.map(d => ({ day:d.day, dist:d.dist, typeKey:d.typeKey, zone:d.zone, custom:!!d.custom, type:d.custom ? d.type : undefined }))
-    };
-  }catch(e){ /* sin la semana siguiente el feed sigue funcionando con la actual */ }
-}
-/* ---- calendario del teléfono (solo app nativa de Android) -----
-   Pedido del usuario: como Huawei Health y otras apps de running -- tocar UN botón y que los
-   entrenamientos aparezcan en el calendario, sin bajar archivos ni copiar enlaces, y que
-   desaparezcan solos al quitar el plan. Eso solo se puede escribiendo directo en el calendario
-   del teléfono (permiso de Calendario), no con un .ics ni un enlace. ZancadaCalendarPlugin.kt
-   guarda todo en un calendario propio "Zancada": sync() reemplaza su contenido entero en cada
-   cambio de plan (nunca duplica) y clear() lo borra completo. state.calendarNative recuerda
-   que el usuario lo activó, así se mantiene al día solo (ver persist()). */
-function nativeCalendarPlugin(){
-  const cap = window.Capacitor;
-  if(!(cap && cap.isNativePlatform && cap.isNativePlatform() && cap.getPlatform && cap.getPlatform() === 'android')) return null;
-  return (cap.Plugins && cap.Plugins.ZancadaCalendar) || null;
-}
-// planLabel() devuelve texto pensado para innerHTML (el nombre de una carrera sale escapado): el calendario del teléfono es texto plano, así que "Rock & Run" aparecía como "Rock &amp; Run".
-function htmlEntitiesToText(str){
-  return String(str == null ? '' : str).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
-}
-function buildNativeCalendarEvents(){
-  const out = [];
-  const addWeek = (plan, weekStart) => {
-    if(!plan || !weekStart) return;
-    plan.forEach((d, i) => {
-      if(!(d.dist > 0) || d.status === 'skipped') return;
-      const lbl = planLabel(d);
-      out.push({
-        date: addDaysToIsoLocal(weekStart, i),
-        title: htmlEntitiesToText(`${d.status === 'done' ? '✓ ' : ''}${lbl.type} · ${planAmountText(d)}`),
-        description: htmlEntitiesToText(['Zancada', d.zone ? `${t('zone_word')} ${d.zone}` : '', lbl.desc].filter(Boolean).join('\n'))
-      });
-    });
-  };
-  addWeek(state.plan, state.weekStart);
-  try{ const nw = getNextWeekPlan(); addWeek(nw.plan, nw.weekStart); }catch(e){ /* sin la semana próxima, la actual alcanza */ }
-  return out;
-}
-let nativeCalLastSig = null;
-let nativeCalTimer = null;
-async function syncNativeCalendar(force){
-  const plugin = nativeCalendarPlugin();
-  if(!plugin || !state.calendarNative) return null;
-  const events = buildNativeCalendarEvents();
-  const sig = JSON.stringify(events);
-  if(!force && sig === nativeCalLastSig) return null;
-  const res = await plugin.sync({ events });
-  nativeCalLastSig = sig;
-  return res;
-}
-// Llamada desde persist(): se espera un momento para juntar varios guardados seguidos en una
-// sola escritura al calendario, y no hace nada si el permiso no está dado en este dispositivo
-// (state.calendarNative viaja con la cuenta, el permiso no).
-function scheduleNativeCalendarSync(){
-  if(!state.calendarNative || !nativeCalendarPlugin()) return;
-  clearTimeout(nativeCalTimer);
-  nativeCalTimer = setTimeout(()=>{ syncNativeCalendar(false).catch(()=>{}); }, 1500);
-}
-async function enableNativeCalendar(){
-  const plugin = nativeCalendarPlugin();
-  if(!plugin) return;
-  try{
-    const access = await plugin.requestAccess();
-    if(!access.granted){ showToast(t('cal_native_denied'), 'error'); return; }
-    state.calendarNative = true;
-    persist();
-    const res = await syncNativeCalendar(true);
-    showToast(t('cal_native_added', {n: (res && res.added) || 0}));
-    renderCalendarSubscribeMode();
-  }catch(e){ showToast(t('cal_native_failed'), 'error'); }
-}
-async function disableNativeCalendar(){
-  const plugin = nativeCalendarPlugin();
-  state.calendarNative = false;
-  nativeCalLastSig = null;
-  clearTimeout(nativeCalTimer);
-  persist();
-  try{ if(plugin) await plugin.clear(); }catch(e){}
-  showToast(t('cal_native_removed'));
-  renderCalendarSubscribeMode();
-}
-// Al cerrar sesión / reiniciar / borrar la cuenta: lo que la app agregó no se queda huérfano
-// en el calendario del teléfono.
-async function clearNativeCalendarQuietly(){
-  const plugin = nativeCalendarPlugin();
-  if(!plugin) return;
-  try{ await plugin.clear(); }catch(e){}
-}
-function openCalendarSubscribe(){
-  if(!state.plan.some(d=>d.dist>0)){ showToast(t('plan_export_ics_empty'),'error'); return; }
-  document.getElementById('cal-sub-link').textContent = calendarFeedUrl();
-  // Cada plataforma tiene un botón primario que sí funciona con un toque:
-  // - iOS: webcal:// abre directo la pantalla nativa de "Suscribirse" de Calendario, y queda
-  //   suscripto (se actualiza solo).
-  // - Android: ningún calendario está registrado para webcal:// (reportado: el botón no hacía
-  //   nada) y la app de Google Calendar tampoco acepta suscribirse por URL desde el celular
-  //   (probado en un dispositivo real: ignora el parámetro cid). Lo que sí funciona con un
-  //   toque es bajar el .ics y abrirlo con Calendar (importa esta semana y la próxima, una
-  //   sola vez, sin actualizarse) -- la suscripción real queda como alternativa.
-  // isIOSDevice() (no Capacitor.getPlatform()) a propósito: hoy no existe build nativo de iOS,
-  // así que un iPhone real llega acá por Safari/PWA y getPlatform() daría 'web', no 'ios'.
-  renderCalendarSubscribeMode();
-  openOverlaySheetEl(document.getElementById('calendar-sub-modal'));
-}
-// Tres modos: 'native' (app de Android: escribe directo en el calendario del teléfono, ver
-// ZancadaCalendarPlugin.kt), 'ios' (webcal://) y 'web' (Android sin la app: baja el .ics).
-function renderCalendarSubscribeMode(){
-  const mode = nativeCalendarPlugin() ? 'native' : (isIOSDevice() ? 'ios' : 'web');
-  const show = (id, on) => { document.getElementById(id).style.display = on ? '' : 'none'; };
-  show('cal-sub-link', mode !== 'native');
-  show('cal-sub-btn-native', mode === 'native');
-  show('cal-sub-btn-native-remove', mode === 'native' && !!state.calendarNative);
-  show('cal-sub-native-note', mode === 'native');
-  show('cal-sub-btn-ios', mode === 'ios');
-  show('cal-sub-btn-ios-file', mode === 'ios');
-  show('cal-sub-ios-note', mode === 'ios');
-  show('cal-sub-btn-android', mode === 'web');
-  show('cal-sub-android-hint', mode === 'web');
-  show('cal-sub-btn-share', mode !== 'native');
-}
-function closeCalendarSubscribe(){
-  document.getElementById('calendar-sub-modal').classList.remove('overlay-open');
-}
-// webcal:// es el esquema que Calendario de iOS/macOS reconoce para abrir directo su
-// pantalla nativa de "Suscribirse" -- en Android, en general ningún cliente de calendario
-// lo maneja, por eso el botón de abajo ("Compartir enlace") es la vía que de verdad
-// funciona ahí (pegar la URL en Google Calendar > Configuración > Agregar calendario >
-// Desde URL).
-// Se abre con un <a> real tocado desde el gesto del usuario, no con location.href: dentro de la
-// PWA instalada (standalone) de iPhone, asignar un esquema externo desde JS suele no hacer
-// nada, mientras que un enlace sí se entrega al sistema. Si pasado un momento la app sigue
-// al frente (Calendario no se abrió), se avisa y se ofrece el archivo .ics como alternativa.
-function subscribeToCalendarIOS(){
-  let left = false;
-  const mark = () => { left = true; };
-  document.addEventListener('visibilitychange', mark, {once:true});
-  window.addEventListener('pagehide', mark, {once:true});
-  window.addEventListener('blur', mark, {once:true});
-  const a = document.createElement('a');
-  a.href = calendarFeedUrl().replace('https://','webcal://');
-  a.rel = 'noopener';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(()=>{
-    document.removeEventListener('visibilitychange', mark);
-    window.removeEventListener('pagehide', mark);
-    window.removeEventListener('blur', mark);
-    if(!left && document.visibilityState === 'visible') showToast(t('cal_sub_ios_fallback'), 'error');
-  }, 1800);
-}
-// iPhone, vía alternativa: baja el feed (mismo origen que la app, sin CORS) y lo entrega como
-// archivo .ics por el panel de compartir, donde iOS ofrece abrirlo con Calendario -- se importa
-// una sola vez (no se actualiza solo), por eso es la alternativa y no el botón principal.
-async function addCalendarFileIOS(){
-  const path = '/api/calendar-feed?t=' + ensureCalendarToken();
-  let text = '';
-  try{
-    let res = await fetch(path);
-    if(!res.ok) res = await fetch(calendarFeedUrl());
-    if(!res.ok) throw new Error('feed ' + res.status);
-    text = await res.text();
-  }catch(e){ showToast(t('cal_native_failed'), 'error'); return; }
-  const blob = new Blob([text], {type:'text/calendar;charset=utf-8'});
-  const file = new File([blob], 'zancada.ics', {type:'text/calendar'});
-  if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
-    try{ await navigator.share({files:[file], title:'Zancada'}); }catch(e){ /* usuario canceló */ }
-    return;
-  }
-  const url = URL.createObjectURL(blob);
-  window.location.href = url;
-  setTimeout(()=>URL.revokeObjectURL(url), 10000);
-}
-// Android: el mismo feed con ?dl=1 (Content-Disposition: attachment, ver api/calendar-feed.js)
-// -- el navegador del sistema lo baja como zancada.ics y Calendar ofrece importarlo.
-function addCalendarFileAndroid(){
-  window.location.href = calendarFeedUrl() + '&dl=1';
-}
-async function shareCalendarLink(){
-  const url = calendarFeedUrl();
-  const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-  const Share = isNative && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
-  if(Share){
-    try{ await Share.share({ url, title:'Zancada' }); }catch(e){ /* usuario canceló el panel nativo */ }
-    return;
-  }
-  if(navigator.share){
-    try{ await navigator.share({ url, title:'Zancada' }); return; }catch(e){ /* canceló -- cae a copiar */ }
-  }
-  try{
-    await navigator.clipboard.writeText(url);
-    showToast(t('cal_sub_copied'));
-  }catch(e){ /* sin Share API ni Clipboard API no queda más que dejarlo seleccionable en pantalla */ }
-}
-
 /* ================= RENDER ================= */
 function renderAll(){ autoReadLevelTest(); renderHome(); renderPlan(); renderPerfil(); renderLevelTestUI(); }
 

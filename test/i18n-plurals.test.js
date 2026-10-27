@@ -27,7 +27,8 @@ test('t(): {n|uno|otros} usa el singular solo cuando vale 1', () => {
   assert.equal(inLang(app, 'en', 'rp_when', { date: 'Sunday', n: 3 }), 'Sunday · in 3 days');
   assert.equal(inLang(app, 'pt', 'ach_locked_streak_left', { n: 1 }), 'Falta 1 semana');
   assert.equal(inLang(app, 'fr', 'heat_stats', { n: 1, km: '5 km' }), '1 course avec GPS · 5 km');
-  assert.equal(inLang(app, 'it', 'cal_native_added', { n: 1 }), 'Fatto: 1 allenamento nel tuo calendario');
+  assert.equal(inLang(app, 'it', 'ach_locked_runs_left', { n: 1 }), 'Manca 1 corsa');
+  assert.equal(inLang(app, 'it', 'ach_locked_runs_left', { n: 4 }), 'Mancano 4 corse');
   assert.equal(inLang(app, 'de', 'ps_runs', { n: 1, km: '5 km' }), 'In diesem Zeitraum: 1 Lauf (5 km).');
 });
 
