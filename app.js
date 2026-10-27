@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-27T01:10:30Z';
+const APP_VERSION = '2026-10-27T01:32:50Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10700,6 +10700,9 @@ document.addEventListener('touchstart', e=>{
 }, {passive:true});
 document.addEventListener('touchmove', e=>{
   if(!pullActive || pullTriggered) return;
+  // Arrastrando una sesión del plan para moverla (initPlanDrag): el mismo gesto hacia abajo pasaba los 90 px y recargaba la pantalla a mitad del movimiento (del viernes al domingo siempre).
+  // Mientras hay un arrastre de sesión activo, "deslizar para actualizar" no corre.
+  if(document.querySelector('#plan-list.plan-dragging')){ pullActive = false; updatePullRing(0); return; }
   const scroller = document.scrollingElement || document.documentElement;
   if(scroller.scrollTop > 0) return;
   const delta = e.touches[0].clientY - pullStartY;
