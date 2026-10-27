@@ -77,6 +77,14 @@ function buildCorosCourse(day, zones, labels) {
   return { courseName: name, courseDescription: description, sportType: 1, sections };
 }
 
+// Entrenamiento que reemplaza a una sesión que el plan quitó o movió de día. COROS no deja borrar ni mover un entrenamiento agendado desde afuera, así que en vez de dejar una copia COMPLETA
+// (que alguien podría correr dos veces) se la reescribe como una sesión mínima, marcada "movida: podés borrarla".
+function buildCorosMovedCourse(moved, zones) {
+  const name = String((moved && moved.name) || 'Zancada - Moved session (you can delete it)').slice(0, 100);
+  const desc = String((moved && moved.desc) || "This session was moved to another day in Zancada and is no longer needed. COROS doesn't let other apps delete it: remove it in the COROS app.").slice(0, 400);
+  return { courseName: name, courseDescription: desc, sportType: 1, sections: [plain(2, 2, 300, hrIntensity(zones, 1))] };
+}
+
 // 'YYYY-MM-DD' -> 'yyyyMMdd' (formato de fecha de COROS)
 function corosDate(iso) { return String(iso).replace(/-/g, ''); }
 
@@ -97,4 +105,4 @@ function extractIdInPlan(res) {
   return walk(res, 0);
 }
 
-module.exports = { buildCorosCourse, corosDate, extractIdInPlan, hrIntensity };
+module.exports = { buildCorosCourse, buildCorosMovedCourse, corosDate, extractIdInPlan, hrIntensity };

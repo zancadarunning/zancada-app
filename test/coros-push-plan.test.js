@@ -222,3 +222,47 @@ test('cableado: topes de frecuencia, memoria de ids en el servidor y la app lo p
   assert.match(app, /function updateCorosStaleNote\(\)\{/);
   assert.match(read('index.html'), /id="coros-stale-note"/);
 });
+
+test('una sesión que el plan quitó se reescribe UNA vez como "sesión movida" (COROS no deja borrarla) y no se repite', async () => {
+  const MOVED = { name: 'Zancada - Sesión movida (podés borrarla)', desc: 'Ya no hace falta: borrala desde la app de COROS.' };
+  let log = world({ mapping: ['2026-10-28|555', '2026-10-30|556'], mcp: () => mcpOk(556) });
+  let r = await post(Object.assign({ days: [], keepDates: ['2026-10-28'], moved: MOVED }, BASE));
+  assert.deepEqual(r.body.staleDates, ['2026-10-30']);
+  assert.equal(r.body.marked, 1);
+  assert.equal(log.update.length, 1);
+  assert.equal(log.update[0].idInPlan, '556');
+  assert.equal(log.update[0].date, '20261030');
+  assert.equal(log.update[0].course.courseName, MOVED.name);
+  assert.equal(log.update[0].course.sections.length, 1, 'sesión mínima, no la copia completa');
+  assert.deepEqual(log.saved.filter(s => s.kind === 'coros_id').map(s => s.period), ['2026-10-30|556|x'], 'queda recordada como ya marcada');
+  // ya marcada: no se vuelve a tocar, pero sigue avisando
+  log = world({ mapping: ['2026-10-28|555', '2026-10-30|556|x'], mcp: () => mcpOk(556) });
+  r = await post(Object.assign({ days: [], keepDates: ['2026-10-28'], moved: MOVED }, BASE));
+  assert.equal(log.update.length, 0);
+  assert.equal(r.body.marked, 0);
+  assert.deepEqual(r.body.staleDates, ['2026-10-30']);
+  // si el plan vuelve a poner una sesión en esa fecha, se actualiza en el lugar con la sesión real y deja de estar marcada
+  log = world({ mapping: ['2026-10-30|556|x'], mcp: () => mcpOk(556) });
+  r = await post(Object.assign({ days: [day('2026-10-30')], keepDates: ['2026-10-30'], moved: MOVED }, BASE));
+  assert.equal(r.body.updated, 1);
+  assert.equal(log.update[0].course.courseName, 'Zancada - Rodaje');
+  assert.deepEqual(log.saved.filter(s => s.kind === 'coros_id').map(s => s.period).filter(p => p.startsWith('2026-10-30')), [], 'mismo id: no se reescribe la fila');
+});
+
+test('si COROS rechaza reescribir la sesión vieja (ya hecha o pasada), no falla el envío', async () => {
+  world({ mapping: ['2026-10-30|556'], mcp: () => mcpToolError('This workout is completed and not editable') });
+  const r = await post(Object.assign({ days: [], keepDates: ['2026-10-28'], moved: { name: 'x', desc: 'y' } }, BASE));
+  assert.equal(r.body.failed, 0);
+  assert.equal(r.body.marked, 0);
+});
+
+test('app: el aviso de sesiones viejas dice los días y manda los textos de la sesión movida en el idioma de la persona', () => {
+  const s = read('app.js');
+  assert.match(s, /t\('coros_stale_note', \{n, dates\}\)/);
+  assert.match(s, /moved:\{ name:t\('coros_moved_name'\), desc:t\('coros_moved_desc'\) \}/);
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
+    const loc = read(`locales/${l}.js`);
+    for (const k of ['coros_moved_name', 'coros_moved_desc', 'coros_stale_note']) assert.ok(loc.includes(k + ':"'), l + ' ' + k);
+    assert.match(loc, /coros_stale_note:"[^"]*\{dates\}/, l + ' lleva {dates}');
+  }
+});

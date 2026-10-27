@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-27T00:48:05Z';
+const APP_VERSION = '2026-10-27T01:10:30Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2738,7 +2738,8 @@ function updateCorosStaleNote(){
   if(!el) return;
   const today = todayLocalISO();
   const n = (state.corosStale || []).filter(d => d >= today).length;
-  el.textContent = n ? t('coros_stale_note', {n}) : '';
+  const dates = (state.corosStale || []).filter(d => d >= today).map(d => new Date(d + 'T00:00:00').toLocaleDateString(LOCALE_MAP[lang], { weekday: 'short', day: 'numeric' })).join(', ');
+  el.textContent = n ? t('coros_stale_note', {n, dates}) : '';
   el.style.display = n ? '' : 'none';
 }
 async function syncPlanToCoros(force){
@@ -2762,7 +2763,7 @@ async function syncPlanToCoros(force){
         const res = await fetch(apiUrl('/api/coros-push-plan'), {
           method:'POST',
           headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
-          body: JSON.stringify({ days:changed, keepDates:keep, weekStart, today:todayLocalISO(), zones, labels, force:!!force })
+          body: JSON.stringify({ days:changed, keepDates:keep, weekStart, today:todayLocalISO(), zones, labels, force:!!force, moved:{ name:t('coros_moved_name'), desc:t('coros_moved_desc') } })
         });
         result = await res.json().catch(()=>null);
         if(!result && !res.ok) corosBlockedUntil = Date.now() + 15*60*1000;
