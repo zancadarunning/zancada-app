@@ -16,6 +16,7 @@ const { applyCors, isPreflight } = require('./_lib/cors');
 const { ensureFreshSuuntoToken, suuntoApiHeaders, SUUNTO_API_BASE } = require('./_lib/suunto-activity-helpers');
 const { removeAllZancada } = require('./_lib/wahoo-plans-sync');
 const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
+const { revokeStravaAccess } = require('./_lib/strava-revoke');
 
 const { withSentry, reportError } = require('./_lib/sentry');
 
@@ -65,7 +66,7 @@ module.exports = withSentry(async (req, res) => {
     try {
       const conn = await readConnection('strava_connections', 'access_token,refresh_token,expires_at');
       await revokeStravaAccess(conn);
-    } catch (e) { console.error('delete-account: strava revoke failed', e); }
+    } catch (e) { console.error('delete-account: strava revoke failed', e); await reportError(e, { endpoint: 'delete-account', step: 'strava-revoke' }).catch(() => {}); }
 
     try {
       const conn = await readConnection('polar_connections', 'access_token,polar_user_id');

@@ -1,5 +1,6 @@
 const { decToken, encToken } = require('./_lib/token-crypto');
 const crypto = require('crypto');
+const { pick } = require('./_lib/own');
 const { activityToRun, mergeStravaRuns, purgeStravaRunsForUser, deleteStravaRun } = require('./_lib/strava-activity-helpers');
 
 // Comparación en tiempo constante (se hashea para que el largo no se filtre).
@@ -166,7 +167,7 @@ async function deauthorizeAthlete(athleteId) {
 
     // Primero se purgan las carreras y RECIÉN después se borra la conexión: si la purga falla (lanza), la conexión sigue ahí y el evento se puede reintentar;
     // al revés, la conexión borrada dejaba carreras de Strava sin forma de volver a purgarlas (y el acuerdo de Strava exige borrarlas).
-    await purgeStravaRunsForUser(base, headers, userId, (count, lang) => (REVOKED_MSGS[lang] || REVOKED_MSGS.es)(count));
+    await purgeStravaRunsForUser(base, headers, userId, (count, lang) => pick(REVOKED_MSGS, lang, 'es')(count));
     await fetch(`${base}/rest/v1/strava_connections?user_id=eq.${userId}`, { method: 'DELETE', headers });
   }
 }

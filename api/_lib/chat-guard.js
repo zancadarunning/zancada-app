@@ -21,6 +21,14 @@ const SYSTEM_PREFIXES = {
   translate: 'You translate short running-workout texts for a running app.'
 };
 
+// El traductor es una tarea cerrada: el texto de sistema completo es siempre el mismo salvo el idioma de destino (los 6 de app.js, LANG_NAME_EN).
+// Se exige idéntico y se manda el del servidor, así no queda texto del cliente después del arranque para dar otras instrucciones.
+const TRANSLATE_TARGETS = ['Spanish (Rioplatense, voseo)', 'English', 'Brazilian Portuguese', 'French', 'Italian', 'German'];
+function translateSystem(target) {
+  return SYSTEM_PREFIXES.translate + ' Translate the "type" and "desc" of every item into ' + target + '. Keep numbers, units, paces, heart-rate zones and line breaks exactly as they are. If a text is already in that language, return it unchanged. Reply with ONLY a JSON array like [{"i":0,"type":"...","desc":"..."}] and nothing else, no markdown.';
+}
+const TRANSLATE_LIMITS = { items: 40, type: 200, desc: 2000, input: 20000 };
+
 const LIMITS = {
   system: 60000,        // el prompt real del coach (perfil + plan + notas) ronda 10-20k caracteres
   toolDescription: 6000,
@@ -41,7 +49,31 @@ function sanitizeSystem(system) {
   if (system.length > LIMITS.system) return reject('system demasiado largo');
   const kind = Object.keys(SYSTEM_PREFIXES).find(k => system.startsWith(SYSTEM_PREFIXES[k]));
   if (!kind) return reject('system no es el de la app');
+  if (kind === 'translate') {
+    const target = TRANSLATE_TARGETS.find(t => system === translateSystem(t));
+    if (!target) return reject('system del traductor no es el de la app');
+    return { ok: true, value: translateSystem(target), kind };
+  }
   return { ok: true, value: system, kind };
+}
+
+// El traductor recibe UN mensaje: un arreglo JSON [{i,type,desc}] acotado. Nada de texto libre, historial ni mensajes del asistente.
+function sanitizeTranslateInput(messages) {
+  if (!Array.isArray(messages) || messages.length !== 1) return reject('el traductor recibe un solo mensaje');
+  const m = messages[0];
+  if (!isPlainObject(m) || m.role !== 'user' || typeof m.content !== 'string' || m.content.length > TRANSLATE_LIMITS.input) return reject('mensaje del traductor inválido');
+  let items;
+  try { items = JSON.parse(m.content); } catch (e) { return reject('el traductor espera un arreglo JSON'); }
+  if (!Array.isArray(items) || !items.length || items.length > TRANSLATE_LIMITS.items) return reject('cantidad de textos a traducir inválida');
+  const clean = [];
+  for (const it of items) {
+    if (!isPlainObject(it) || !Number.isInteger(it.i) || it.i < 0 || it.i > 1000) return reject('texto a traducir inválido');
+    if (typeof it.type !== 'string' || it.type.length > TRANSLATE_LIMITS.type) return reject('tipo a traducir inválido');
+    const desc = it.desc === undefined || it.desc === null ? '' : it.desc;
+    if (typeof desc !== 'string' || desc.length > TRANSLATE_LIMITS.desc) return reject('descripción a traducir inválida');
+    clean.push({ i: it.i, type: it.type, desc });
+  }
+  return { ok: true, value: [{ role: 'user', content: JSON.stringify(clean) }] };
 }
 
 function sanitizeTools(tools) {
@@ -116,10 +148,10 @@ function sanitizeChatRequest(body) {
   const s = sanitizeSystem(b.system); if (!s.ok) return s;
   const t = sanitizeTools(b.tools); if (!t.ok) return t;
   if (s.kind === 'translate' && t.value) return reject('el traductor no usa herramientas');
-  const m = sanitizeMessages(b.messages); if (!m.ok) return m;
+  const m = s.kind === 'translate' ? sanitizeTranslateInput(b.messages) : sanitizeMessages(b.messages); if (!m.ok) return m;
   const value = { system: s.value, tools: t.value, messages: m.value };
   if (jsonLen(value) > LIMITS.total) return reject('pedido demasiado grande');
   return { ok: true, value };
 }
 
-module.exports = { sanitizeChatRequest, ALLOWED_TOOLS, LIMITS, SYSTEM_PREFIXES };
+module.exports = { sanitizeChatRequest, ALLOWED_TOOLS, LIMITS, SYSTEM_PREFIXES, TRANSLATE_TARGETS, translateSystem };

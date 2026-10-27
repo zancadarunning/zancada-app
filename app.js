@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-27T02:27:36Z';
+const APP_VERSION = '2026-10-27T10:36:45Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3285,6 +3285,9 @@ async function submitNewPassword(){
     // sospecha que se la robaron necesita que el atacante ya logueado quede afuera: se cierran todas las demás sesiones y queda solo esta.
     try{ await supabaseClient.auth.signOut({ scope: 'others' }); }catch(e){ console.error('no se pudieron cerrar las otras sesiones', e); }
     const { data: { user } } = await supabaseClient.auth.getUser();
+    // Las otras sesiones ya están cerradas, pero un atacante que tuvo acceso pudo dejar registrado su propio dispositivo para seguir recibiendo los avisos (sesión del día, resúmenes, carreras): se borran las
+    // filas de push de los demás dispositivos. Los dispositivos legítimos se vuelven a registrar solos al iniciar sesión de nuevo.
+    try{ if(user && user.id) await supabaseClient.from('push_subscriptions').delete().eq('user_id', user.id).neq('device_id', pushDeviceId()); }catch(e){ console.error('no se pudieron limpiar los dispositivos de aviso', e); }
     document.getElementById('recovery-set-password').style.display='none';
     await loadUserAndEnter(user);
   }finally{ setBtnBusy('recovery-submit-btn', false); }

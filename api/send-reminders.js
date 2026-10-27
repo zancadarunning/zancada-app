@@ -228,7 +228,7 @@ module.exports = withSentry(async (req, res) => {
           } else {
             // el endpoint lo escribe el cliente: solo se le manda a los servicios de push reales (evita SSRF a ciegas)
             if (!dev.subscription || !isTrustedPushEndpoint(dev.subscription.endpoint)) continue;
-            await webpush.sendNotification(dev.subscription, JSON.stringify({ title, body }));
+            await webpush.sendNotification(dev.subscription, JSON.stringify({ title, body }), { timeout: 10000 });
           }
           anySent = true;
         } catch (err) {
