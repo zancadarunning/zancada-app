@@ -59,7 +59,7 @@ module.exports = withSentry(async (req, res) => {
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
   // v: versión del envío. Subirla invalida lo "ya enviado" recordado (la v1 contaba como enviados entrenamientos que COROS no había confirmado)
-  const planHash = payloadHash({ v: 3, days, keepDates: [...keepDates].sort(), zones, labels, today });
+  const planHash = payloadHash({ v: 4, days, keepDates: [...keepDates].sort(), zones, labels, today });
   if (body.force !== true && await isDuplicate(base, headers, userId, 'coros_plan', planHash)) {
     res.status(200).json({ pushed: 0, failed: 0, unchanged: true, pushedDates: days.map(d => d.date) });
     return;

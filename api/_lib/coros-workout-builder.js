@@ -99,7 +99,9 @@ function extractIdInPlan(res) {
       for (const k of Object.keys(v)) { const r = walk(v[k], depth + 1); if (r) return r; }
       return null;
     }
-    if (typeof v === 'string') { const m = v.match(/idInPlan["'\s:=]+(\d{1,30})/i); return m ? m[1] : null; }
+    // El éxito trae "idInPlan: 123" en una línea propia. NO se acepta la palabra en medio de un error ("COROS API error: No standalone scheduled workout with idInPlan 4 was found..."),
+    // que antes se leía como confirmación y dejaba el día vacío.
+    if (typeof v === 'string') { if (/COROS API error|\berror\b.*\bwas not found\b|\bwas found on\b/i.test(v) && !/updated successfully|created successfully|scheduled successfully/i.test(v)) return null; const m = v.match(/(?:^|\n)[ \t]*idInPlan[ \t]*[:=][ \t]*(\d{1,30})\b/i); return m ? m[1] : null; }
     return null;
   }
   return walk(res, 0);

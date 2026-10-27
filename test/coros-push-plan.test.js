@@ -85,7 +85,11 @@ test('buildCorosCourse: series con grupo de repeticiones nativo (calentamiento, 
 test('corosDate y extractIdInPlan', () => {
   assert.equal(corosDate('2026-10-28'), '20261028');
   assert.equal(extractIdInPlan({ ok: true, data: { idInPlan: '123456789012345678' } }), '123456789012345678');
-  assert.equal(extractIdInPlan('Saved. idInPlan: 777 on 20261028'), '777');
+  assert.equal(extractIdInPlan('Scheduled workout updated successfully (full replacement).\nidInPlan: 777\nDo not show idInPlan to the user.'), '777', 'el formato real del éxito');
+  assert.equal(extractIdInPlan('Workout created.\r\nidInPlan: 12345678901234567'), '12345678901234567');
+  // el error REAL de COROS menciona "idInPlan 4": NO es una confirmación (antes dejaba el sábado vacío)
+  assert.equal(extractIdInPlan('COROS API error: No standalone scheduled workout with idInPlan 4 was found on 20261031. Workouts from a training plan are read and updated through the training plan tools.'), null);
+  assert.equal(extractIdInPlan('Saved. idInPlan: 777 on 20261028'), null, 'en medio de una frase no cuenta');
   assert.equal(extractIdInPlan({ other: 1 }), null);
   assert.equal(extractIdInPlan(null), null);
 });
@@ -298,8 +302,8 @@ test('sesion "movida" sobre un registro viejo (el entrenamiento ya no existe): s
 });
 
 test('envio v3: el servidor y la app invalidan lo marcado como enviado antes de esta correccion', () => {
-  assert.match(read('api/coros-push-plan.js'), /payloadHash\(\{ v: 3,/);
-  assert.ok(read('app.js').includes("'coros3'"));
+  assert.match(read('api/coros-push-plan.js'), /payloadHash\(\{ v: 4,/);
+  assert.ok(read('app.js').includes("'coros4'"));
 });
 
 test('el admin puede saltear las esperas SOLO con skipCooldown (diagnostico); una cuenta común no puede', async () => {
@@ -308,4 +312,21 @@ test('el admin puede saltear las esperas SOLO con skipCooldown (diagnostico); un
   assert.match(src, /const adminBypass = isAdmin && body\.skipCooldown === true;/);
   // una cuenta común con skipCooldown sigue sujeta a las esperas (el endpoint de cooldown/daily cap se consulta igual)
   assert.doesNotMatch(src, /skipCooldown === true\) \{/);
+});
+
+test('REGRESION con las respuestas REALES de COROS: el error "No standalone scheduled workout with idInPlan 4 was found" se vuelve a crear, y el exito se lee del texto', async () => {
+  const REAL_ERROR = 'COROS API error: No standalone scheduled workout with idInPlan 4 was found on 20261031. Workouts from a training plan are read and updated through the training plan tools.';
+  const REAL_CREATED = 'Scheduled workout created successfully.\nidInPlan: 9\nDo not show idInPlan to the user.';
+  const log = world({ mapping: ['2026-10-31|4|x'], mcp: tool => tool === 'updateScheduledWorkout' ? mcpText(REAL_ERROR) : mcpText(REAL_CREATED) });
+  const r = await post(Object.assign({ days: [day('2026-10-31', { name: 'Tirada larga' })], keepDates: ['2026-10-31'] }, BASE));
+  assert.equal(r.body.updated, 0);
+  assert.equal(r.body.created, 1);
+  assert.deepEqual(r.body.pushedDates, ['2026-10-31']);
+  assert.ok(log.saved.some(s => s.kind === 'coros_id' && s.period === '2026-10-31|9'));
+  // y la sesion "movida" sobre un registro viejo tampoco se marca como hecha con ese error
+  const log2 = world({ mapping: ['2026-10-28|2', '2026-10-31|4'], mcp: () => mcpText(REAL_ERROR) });
+  const r2 = await post(Object.assign({ days: [], keepDates: ['2026-10-28'], moved: { name: 'x', desc: 'y' } }, BASE));
+  assert.equal(r2.body.marked, 0);
+  assert.deepEqual(r2.body.staleDates, []);
+  assert.ok(log2.deletedMap >= 1);
 });
