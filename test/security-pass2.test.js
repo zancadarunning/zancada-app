@@ -71,11 +71,12 @@ test('delete-account: con un ingreso reciente (la app vuelve a pedir la contrase
   assert.equal(log.authDeleted, true);
 });
 
-test('delete-account: las cuentas de Google/Apple siguen como antes (las protege su proveedor)', async () => {
+test('delete-account: las cuentas de Google/Apple sin ingreso reciente necesitan el código por mail (ver test/hallazgos-2026-10-27.test.js)', async () => {
   const log = setupDelete('google');
   const r = await callDelete('token-que-no-es-jwt', {});
-  assert.equal(r.code, 200);
-  assert.equal(log.authDeleted, true);
+  assert.equal(r.code, 403);
+  assert.equal(r.body.error, 'code_required');
+  assert.equal(log.authDeleted, false);
 });
 
 test('requireCronSecret: acepta el secreto correcto y rechaza uno distinto, más corto, más largo o vacío', async () => {

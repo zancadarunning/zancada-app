@@ -68,4 +68,6 @@ async function verifyUser(req) {
 
 module.exports = verifyUser;
 module.exports.isRecentLogin = isRecentLogin;
+// Ingreso reciente SIN excepciones por proveedor (para decidir si a una cuenta de Google/Apple hay que pedirle el código por mail).
+module.exports.isRecentAuth = (auth, maxAgeSec) => { const age = Date.now() / 1000 - ((auth && auth.lastAuthAt) || 0); return !!(auth && auth.lastAuthAt > 0 && age >= -60 && age <= (maxAgeSec || 600)); };
 module.exports.lastAuthAtFromToken = lastAuthAtFromToken;

@@ -125,7 +125,7 @@ async function pushToUser(base, headers, userId, message, tag) {
       if (!dev.subscription || !isTrustedPushEndpoint(dev.subscription.endpoint)) continue;
       const webpush = require('web-push');
       webpush.setVapidDetails('mailto:info@zancada.org', process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
-      await webpush.sendNotification(dev.subscription, JSON.stringify({ title: message.title, body: message.body, tag }));
+      await webpush.sendNotification(dev.subscription, JSON.stringify({ title: message.title, body: message.body, tag }), { timeout: 10000 });
       anySent = true;
     } catch (err) {
       if (err && (err.statusCode === 404 || err.statusCode === 410)) await pushDevices.deleteDevice(base, headers, userId, dev.device_id);

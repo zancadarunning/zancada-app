@@ -68,6 +68,11 @@ module.exports = withSentry(async (req, res) => {
       res.status(200).json({ ok: true, new: true, notified: false, reason: 'cooldown' });
       return;
     }
+    // tope diario POR CUENTA, antes del global: una sola cuenta (con ids de dispositivo al azar cada 30 min) no puede agotar el tope compartido y silenciar los avisos de todas las demás
+    if (!silent && !(await withinDailyCap(base, headers, 'login-alert-user', userId, 3, { failClosed: true }))) {
+      res.status(200).json({ ok: true, new: true, notified: false, reason: 'daily_cap_user' });
+      return;
+    }
     // tope global del dia de avisos por mail (cuota de Resend compartida con los mails de registro); si se pasa, NO se registra y el aviso llega en un ingreso posterior
     if (!silent && !(await withinDailyCap(base, headers, 'login-alert-global', null, 40, { failClosed: true }))) {
       res.status(200).json({ ok: true, new: true, notified: false, reason: 'daily_cap' });

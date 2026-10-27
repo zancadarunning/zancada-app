@@ -16,6 +16,10 @@ const { applyCors, isPreflight } = require('./_lib/cors');
 const { ensureFreshSuuntoToken, suuntoApiHeaders, SUUNTO_API_BASE } = require('./_lib/suunto-activity-helpers');
 const { removeAllZancada } = require('./_lib/wahoo-plans-sync');
 const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
+const { issueDeleteCode, consumeDeleteCode } = require('./_lib/delete-code');
+const { checkSyncCooldown } = require('./_lib/sync-cooldown');
+const { withinDailyCap } = require('./_lib/daily-cap');
+const { revokeStravaAccess } = require('./_lib/strava-revoke');
 
 const { withSentry, reportError } = require('./_lib/sentry');
 
@@ -37,6 +41,21 @@ module.exports = withSentry(async (req, res) => {
 
   const base = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_KEY;
+
+  // Cuentas de Google/Apple (sin contraseña): si el ingreso no es reciente, hace falta un código de 6 dígitos que se manda al mail verificado (ver api/_lib/delete-code.js).
+  // Una sesión robada o vieja ya no alcanza para borrar todo. action:'send-code' pide el código; al borrar se manda como "code".
+  const oauthNeedsCode = !!auth.provider && auth.provider !== 'email' && !verifyUser.isRecentAuth(auth, 600);
+  const codeHeaders = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
+  if (req.body && req.body.action === 'send-code') {
+    if (!oauthNeedsCode) { res.status(200).json({ needed: false }); return; }
+    if (!auth.email || !auth.emailConfirmed) { res.status(403).json({ error: 'email_not_confirmed' }); return; }
+    if (!(await checkSyncCooldown(base, codeHeaders, userId, 'delete-code', 60000, { failClosed: true })) || !(await withinDailyCap(base, codeHeaders, 'delete-code-send', userId, 5, { failClosed: true }))) { res.status(429).json({ error: 'Too many requests' }); return; }
+    const sent = await issueDeleteCode(base, codeHeaders, userId, auth.email, req.body.lang);
+    if (!sent) { res.status(502).json({ error: 'code_not_sent' }); return; }
+    res.status(200).json({ needed: true, sent: true });
+    return;
+  }
+  if (oauthNeedsCode && !(await consumeDeleteCode(base, codeHeaders, userId, req.body && req.body.code))) { res.status(403).json({ error: 'code_required' }); return; }
 
   try {
     const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
@@ -65,7 +84,7 @@ module.exports = withSentry(async (req, res) => {
     try {
       const conn = await readConnection('strava_connections', 'access_token,refresh_token,expires_at');
       await revokeStravaAccess(conn);
-    } catch (e) { console.error('delete-account: strava revoke failed', e); }
+    } catch (e) { console.error('delete-account: strava revoke failed', e); await reportError(e, { endpoint: 'delete-account', step: 'strava-revoke' }).catch(() => {}); }
 
     try {
       const conn = await readConnection('polar_connections', 'access_token,polar_user_id');

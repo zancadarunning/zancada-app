@@ -298,12 +298,15 @@ async function purgeStravaRunsForUser(base, headers, userId, buildNotifyMessage)
   const rows = await res.json();
   const removedCount = (rows && rows[0] && rows[0].removed_count) || 0;
   const lang = rows && rows[0] && rows[0].lang;
+  // El aviso en el chat es accesorio: si armarlo o mandarlo falla, NO debe impedir que el llamador siga (borrar la conexión de Strava).
   if (removedCount > 0 && buildNotifyMessage) {
-    await fetch(`${base}/rest/v1/rpc/append_chat_message`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ p_user_id: userId, p_role: 'coach', p_text: buildNotifyMessage(removedCount, lang) })
-    });
+    try {
+      await fetch(`${base}/rest/v1/rpc/append_chat_message`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ p_user_id: userId, p_role: 'coach', p_text: buildNotifyMessage(removedCount, lang) })
+      });
+    } catch (e) { console.error('purgeStravaRunsForUser: no se pudo avisar en el chat', e && e.message); }
   }
 }
 
