@@ -59,7 +59,7 @@ module.exports = withSentry(async (req, res) => {
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
   // v: versión del envío. Subirla invalida lo "ya enviado" recordado (la v1 contaba como enviados entrenamientos que COROS no había confirmado)
-  const planHash = payloadHash({ v: 2, days, keepDates: [...keepDates].sort(), zones, labels, today });
+  const planHash = payloadHash({ v: 3, days, keepDates: [...keepDates].sort(), zones, labels, today });
   if (body.force !== true && await isDuplicate(base, headers, userId, 'coros_plan', planHash)) {
     res.status(200).json({ pushed: 0, failed: 0, unchanged: true, pushedDates: days.map(d => d.date) });
     return;
@@ -91,6 +91,9 @@ module.exports = withSentry(async (req, res) => {
       }
     } catch (e) { /* sin memoria: se crean de nuevo (peor caso: un entrenamiento repetido) */ }
 
+    const forgetId = async date => {
+      try { await fetch(`${base}/rest/v1/sent_notifications?user_id=eq.${userId}&kind=eq.coros_id&period=like.${encodeURIComponent(date + '|')}*`, { method: 'DELETE', headers }); } catch (e) { /* no es crítico */ }
+    };
     const saveId = async (date, id, tomb) => {
       try {
         await fetch(`${base}/rest/v1/sent_notifications?user_id=eq.${userId}&kind=eq.coros_id&period=like.${encodeURIComponent(date + '|')}*`, { method: 'DELETE', headers });
@@ -113,14 +116,15 @@ module.exports = withSentry(async (req, res) => {
         try {
           const r = await callCorosMcpTool(accessToken, 'updateScheduledWorkout', { date: date8, idInPlan: String(knownId), course });
           if (raws.length < 3) raws.push({ date: day.date, tool: 'update', raw: rawOf(r) });
-          if (!extractIdInPlan(r) && REJECT_RE.test(rawOf(r))) throw new Error('COROS rechazó la actualización: ' + rawOf(r));
-          const newId = extractIdInPlan(r) || knownId;
-          if (newId !== knownId) await saveId(day.date, newId);
+          // Una actualización exitosa SIEMPRE devuelve el idInPlan. Sin él COROS no la confirmó (el entrenamiento ya no existe, o la rechazó con un texto normal): antes se daba por buena igual y el día quedaba vacío.
+          const upId = extractIdInPlan(r);
+          if (!upId) { const err = new Error('COROS no confirmó la actualización (sin idInPlan): ' + rawOf(r)); err.notConfirmed = true; throw err; }
+          if (upId !== knownId) await saveId(day.date, upId);
           updated++; pushedDates.push(day.date); done = true;
         } catch (e) {
           const msg = errText(e);
-          if (NOT_FOUND_RE.test(msg)) { /* la borraron a mano en COROS: se vuelve a crear */ }
-          else if (NOT_EDITABLE_RE.test(msg)) { skipped++; pushedDates.push(day.date); done = true; }   // hecha o pasada: no se toca (y no se crea otra encima)
+          if (NOT_EDITABLE_RE.test(msg)) { skipped++; pushedDates.push(day.date); done = true; }   // hecha o pasada: no se toca (y no se crea otra encima)
+          else if (NOT_FOUND_RE.test(msg) || e.notConfirmed) { /* ya no existe en COROS (lo borraron, o el registro quedó viejo): se vuelve a crear */ }
           else { fail(day.date, e); done = true; }
         }
       }
@@ -143,15 +147,22 @@ module.exports = withSentry(async (req, res) => {
 
     // las sesiones que sobran se reescriben UNA vez como "sesión movida" (el plan puede volver a poner una en esa fecha: se actualiza en el lugar y deja de estar marcada)
     let marked = 0;
+    const forgotten = [];   // fechas cuyo registro apuntaba a un entrenamiento que ya no existe en COROS
     for (const date of staleDates.slice(0, 7)) {
       if (tombByDate[date]) continue;
       try {
         const r = await callCorosMcpTool(accessToken, 'updateScheduledWorkout', { date: corosDate(date), idInPlan: String(idByDate[date]), course: buildCorosMovedCourse(moved, zones) });
-        if (!extractIdInPlan(r) && REJECT_RE.test(rawOf(r))) continue;   // rechazada: queda como estaba
-        await saveId(date, extractIdInPlan(r) || idByDate[date], true);
+        const mid = extractIdInPlan(r);
+        if (!mid) {
+          // sin idInPlan no se confirmó: si es porque ya está hecha o es de un día pasado se deja como está; si no, el registro es viejo (ya no existe) y se olvida
+          if (!NOT_EDITABLE_RE.test(rawOf(r))) { await forgetId(date); forgotten.push(date); }
+          continue;
+        }
+        await saveId(date, mid, true);
         marked++;
-      } catch (e) { /* ya hecha, pasada o borrada a mano: no se puede reescribir, se deja */ }
+      } catch (e) { /* ya hecha, pasada o rechazada: no se puede reescribir, se deja */ }
     }
+    for (const d of forgotten) { const k = staleDates.indexOf(d); if (k >= 0) staleDates.splice(k, 1); }
 
     if (!failed) await remember(base, headers, userId, 'coros_plan', planHash);
     if (firstError) await reportError(new Error(`coros plan push failed: ${firstError.message}`), { endpoint: 'coros-push-plan' });

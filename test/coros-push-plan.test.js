@@ -266,3 +266,38 @@ test('app: el aviso de sesiones viejas dice los días y manda los textos de la s
     assert.match(loc, /coros_stale_note:"[^"]*\{dates\}/, l + ' lleva {dates}');
   }
 });
+
+test('REGRESION: actualizar un entrenamiento que ya no existe y COROS responde un texto SIN idInPlan -> se vuelve a crear (antes se daba por actualizado y el dia quedaba vacio)', async () => {
+  const mcp = (tool) => tool === 'updateScheduledWorkout' ? mcpText('No scheduled workout was found for that date and id.') : mcpOk(777);
+  let log = world({ mapping: ['2026-10-31|4|x'], mcp });
+  let r = await post(Object.assign({ days: [day('2026-10-31', { name: 'Tirada larga' })], keepDates: ['2026-10-31'] }, BASE));
+  assert.equal(r.body.updated, 0);
+  assert.equal(r.body.created, 1, 'se creó de nuevo');
+  assert.equal(log.create.length, 1);
+  assert.deepEqual(r.body.pushedDates, ['2026-10-31']);
+  assert.ok(log.saved.some(s => s.kind === 'coros_id' && s.period === '2026-10-31|777'), 'recuerda el id nuevo');
+  // texto ambiguo sin idInPlan (ni "no encontrado"): tampoco se da por actualizado
+  log = world({ mapping: ['2026-10-31|4'], mcp: tool => tool === 'updateScheduledWorkout' ? mcpText('OK') : mcpOk(778) });
+  r = await post(Object.assign({ days: [day('2026-10-31')], keepDates: ['2026-10-31'] }, BASE));
+  assert.equal(r.body.updated, 0);
+  assert.equal(r.body.created, 1);
+  // pero si dice que esta hecha o no se puede editar, se saltea y NO se crea otra encima
+  log = world({ mapping: ['2026-10-31|4'], mcp: tool => tool === 'updateScheduledWorkout' ? mcpText('Workout is completed and cannot be edited') : mcpOk(779) });
+  r = await post(Object.assign({ days: [day('2026-10-31')], keepDates: ['2026-10-31'] }, BASE));
+  assert.equal(r.body.skipped, 1);
+  assert.equal(log.create.length, 0);
+});
+
+test('sesion "movida" sobre un registro viejo (el entrenamiento ya no existe): se olvida el registro y no se avisa de una sesion que no esta', async () => {
+  const log = world({ mapping: ['2026-10-28|555', '2026-10-31|4'], mcp: () => mcpText('No scheduled workout was found for that date and id.') });
+  const r = await post(Object.assign({ days: [], keepDates: ['2026-10-28'], moved: { name: 'x', desc: 'y' } }, BASE));
+  assert.equal(r.body.marked, 0);
+  assert.deepEqual(r.body.staleDates, [], 'no existe en COROS: nada que avisar');
+  assert.ok(log.deletedMap >= 1, 'el registro viejo se borra');
+  assert.equal(log.saved.filter(s => s.kind === 'coros_id').length, 0);
+});
+
+test('envio v3: el servidor y la app invalidan lo marcado como enviado antes de esta correccion', () => {
+  assert.match(read('api/coros-push-plan.js'), /payloadHash\(\{ v: 3,/);
+  assert.ok(read('app.js').includes("'coros3'"));
+});
