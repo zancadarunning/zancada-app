@@ -19,7 +19,7 @@ const { DATE_RE, cleanZones, cleanLabels, cleanDay } = require('./_lib/watch-pla
 const { payloadHash, isDuplicate, remember } = require('./_lib/plan-dedupe');
 const { withinDailyCap } = require('./_lib/daily-cap');
 const { callCorosMcpTool, refreshCorosToken } = require('./_lib/coros-activity-helpers');
-const { buildCorosCourse, corosDate, extractIdInPlan } = require('./_lib/coros-workout-builder');
+const { buildCorosCourse, buildCorosMovedCourse, corosDate, extractIdInPlan } = require('./_lib/coros-workout-builder');
 const { withSentry, reportError } = require('./_lib/sentry');
 
 const MAX_DAYS = 7;
@@ -52,6 +52,7 @@ module.exports = withSentry(async (req, res) => {
   const zones = cleanZones(body.zones);
   const labels = cleanLabels(body.labels);
   const today = DATE_RE.test(String(body.today || '')) ? body.today : null;
+  const moved = { name: String((body.moved && body.moved.name) || '').slice(0, 100), desc: String((body.moved && body.moved.desc) || '').slice(0, 400) };
 
   const base = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_KEY;
@@ -79,21 +80,21 @@ module.exports = withSentry(async (req, res) => {
     }
 
     // qué entrenamiento de COROS corresponde a cada fecha (la memoria vive en el servidor)
-    const idByDate = {};
+    const idByDate = {}, tombByDate = {};   // tombByDate: la sesión de esa fecha ya se reescribió como "movida"
     try {
       const fromDate = today || '0000-00-00';
       const r = await fetch(`${base}/rest/v1/sent_notifications?user_id=eq.${userId}&kind=eq.coros_id&period=gte.${encodeURIComponent(fromDate)}&select=period&limit=60`, { headers });
       const rows = r.ok ? await r.json() : [];
       for (const row of Array.isArray(rows) ? rows : []) {
-        const m = String(row.period).match(/^(\d{4}-\d{2}-\d{2})\|(\d{1,30})$/);
-        if (m) idByDate[m[1]] = m[2];
+        const m = String(row.period).match(/^(\d{4}-\d{2}-\d{2})\|(\d{1,30})(\|x)?$/);
+        if (m) { idByDate[m[1]] = m[2]; if (m[3]) tombByDate[m[1]] = true; }
       }
     } catch (e) { /* sin memoria: se crean de nuevo (peor caso: un entrenamiento repetido) */ }
 
-    const saveId = async (date, id) => {
+    const saveId = async (date, id, tomb) => {
       try {
         await fetch(`${base}/rest/v1/sent_notifications?user_id=eq.${userId}&kind=eq.coros_id&period=like.${encodeURIComponent(date + '|')}*`, { method: 'DELETE', headers });
-        await fetch(`${base}/rest/v1/sent_notifications`, { method: 'POST', headers: { ...headers, Prefer: 'resolution=ignore-duplicates' }, body: JSON.stringify({ user_id: userId, kind: KIND, period: `${date}|${id}` }) });
+        await fetch(`${base}/rest/v1/sent_notifications`, { method: 'POST', headers: { ...headers, Prefer: 'resolution=ignore-duplicates' }, body: JSON.stringify({ user_id: userId, kind: KIND, period: `${date}|${id}${tomb ? '|x' : ''}` }) });
       } catch (e) { /* no es crítico */ }
     };
 
@@ -140,10 +141,22 @@ module.exports = withSentry(async (req, res) => {
     // (el plan ya no la lista), no una sobrante
     const staleDates = Object.keys(idByDate).filter(d => (!today || d > today) && keepDates.size && !keepDates.has(d)).sort();
 
+    // las sesiones que sobran se reescriben UNA vez como "sesión movida" (el plan puede volver a poner una en esa fecha: se actualiza en el lugar y deja de estar marcada)
+    let marked = 0;
+    for (const date of staleDates.slice(0, 7)) {
+      if (tombByDate[date]) continue;
+      try {
+        const r = await callCorosMcpTool(accessToken, 'updateScheduledWorkout', { date: corosDate(date), idInPlan: String(idByDate[date]), course: buildCorosMovedCourse(moved, zones) });
+        if (!extractIdInPlan(r) && REJECT_RE.test(rawOf(r))) continue;   // rechazada: queda como estaba
+        await saveId(date, extractIdInPlan(r) || idByDate[date], true);
+        marked++;
+      } catch (e) { /* ya hecha, pasada o borrada a mano: no se puede reescribir, se deja */ }
+    }
+
     if (!failed) await remember(base, headers, userId, 'coros_plan', planHash);
     if (firstError) await reportError(new Error(`coros plan push failed: ${firstError.message}`), { endpoint: 'coros-push-plan' });
     res.status(200).json({
-      pushed: created + updated, created, updated, skipped, failed, noId, pushedDates, staleDates,
+      pushed: created + updated, created, updated, skipped, failed, noId, pushedDates, staleDates, marked,
       reason: (created + updated + skipped || !days.length) ? undefined : 'coros_error',
       debug: isAdmin ? { firstError: firstError || undefined, raws } : undefined
     });
