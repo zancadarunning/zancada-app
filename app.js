@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-27T01:47:23Z';
+const APP_VERSION = '2026-10-27T01:58:46Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2750,7 +2750,7 @@ async function syncPlanToCoros(force){
   try{
     const { win, weekStart } = watchWindow();
     const zones = state.profile.hrZones, labels = suuntoLabels();
-    const ctx = JSON.stringify([zones, labels, 'coros2']);   // 'coros2': versión del envío; cambiarla vuelve a mandar todo (la primera versión marcaba como enviado lo que COROS no había confirmado)
+    const ctx = JSON.stringify([zones, labels, 'coros3']);   // 'coros2': versión del envío; cambiarla vuelve a mandar todo (la primera versión marcaba como enviado lo que COROS no había confirmado)
     const sigOf = d => suuntoHash(JSON.stringify(d) + ctx);
     let dirty = false;
     const sent = state.corosSent || {};
