@@ -7,7 +7,6 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(HealthConnectBridgePlugin.class);
-        registerPlugin(ZancadaCalendarPlugin.class);
         registerPlugin(ZancadaRunNotificationPlugin.class);
         registerPlugin(ZancadaDisplayPlugin.class);
         registerPlugin(ZancadaCadencePlugin.class);

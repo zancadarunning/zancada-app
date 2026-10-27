@@ -104,12 +104,6 @@
     <!-- Guardar el video del recorrido en la galería (Android 9 o menos; desde Android 10 no hace falta) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
-    <!-- Calendario del teléfono (ver ZancadaCalendarPlugin.kt): la app agrega los
-         entrenamientos del plan a un calendario propio "Zancada" y lo borra entero al
-         quitar el plan. Android pide los dos permisos juntos (son el mismo grupo). -->
-    <uses-permission android:name="android.permission.READ_CALENDAR" />
-    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
-
     <!-- Health Connect (ver mobile/healthconnect-setup/) -->
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
     <uses-permission android:name="android.permission.health.READ_DISTANCE" />

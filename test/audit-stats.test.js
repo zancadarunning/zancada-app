@@ -52,12 +52,6 @@ test('getWeekData: la semana pasada se busca por fecha de inicio, no por número
   assert.equal(app.getWeekData(-2).exists, false, 'una semana sin entrada no inventa otra');
 });
 
-test('htmlEntitiesToText: el calendario del teléfono recibe texto plano ("Rock & Run", no "Rock &amp; Run")', () => {
-  const app = loadApp();
-  assert.equal(app.htmlEntitiesToText('Rock &amp; Run &lt;10K&gt; &quot;hoy&quot; l&#39;ora'), 'Rock & Run <10K> "hoy" l\'ora');
-  assert.equal(app.htmlEntitiesToText(null), '');
-});
-
 test('entrada en calor: rodajes 3+5 min, sesiones de calidad 3+10 min, vuelta a la calma de 5 min en todas', () => {
   const app = loadApp();
   const easy = app.planLabel({ day: 'tue', typeKey: 'easy', dist: 6, zone: 2 }).desc;

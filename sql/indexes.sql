@@ -5,19 +5,13 @@
 -- Cómo correrlo: pegar TODO en el SQL Editor de Supabase y ejecutar. Es seguro volver a correrlo (se fija si el índice
 -- ya existe) y no bloquea la app: son tablas chicas hoy.
 --
---  1) app_state: api/calendar-feed.js busca al usuario por data->>'calendarToken' EN CADA pedido del calendario
---     (el celular/Google Calendar lo piden cada pocas horas por cada suscripción) -> leía TODA la tabla app_state.
---  2) strava_connections(athlete_id): api/strava-webhook.js busca por athlete_id en CADA evento que manda Strava.
---  3) push_subscriptions(user_id): lo usan send-reminders.js (borrar suscripciones muertas) y los endpoints de push.
+--  1) strava_connections(athlete_id): api/strava-webhook.js busca por athlete_id en CADA evento que manda Strava.
+--  2) push_subscriptions(user_id): lo usan send-reminders.js (borrar suscripciones muertas) y los endpoints de push.
 --
--- Después de correrlo, el control de abajo (SELECT) tiene que listar los 3 índices.
+-- Después de correrlo, el control de abajo (SELECT) tiene que listar los 2 índices.
 -- ============================================================================
 
--- 1) Expresión sobre el JSON: coincide con el filtro "data->>calendarToken=eq.<token>" que arma PostgREST.
-CREATE INDEX IF NOT EXISTS app_state_calendar_token_idx
-  ON public.app_state ((data->>'calendarToken'));
-
--- 2 y 3) Solo si no hay ya un índice (o clave primaria) que arranque por esa columna.
+-- 1 y 2) Solo si no hay ya un índice (o clave primaria) que arranque por esa columna.
 DO $$
 BEGIN
   IF to_regclass('public.strava_connections') IS NOT NULL AND NOT EXISTS (
