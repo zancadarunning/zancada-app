@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-26T22:54:15Z';
+const APP_VERSION = '2026-10-27T00:48:05Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2478,14 +2478,72 @@ function suuntoHash(str){
   for(let i=0; i<str.length; i++){ h = ((h<<5) + h + str.charCodeAt(i)) | 0; }
   return (h>>>0).toString(36);
 }
+// Sesiones por bloques (series, cuestas, fartlek) que quedaron SOLO como texto: una sesión que escribió Zonda sin los datos estructurados de repeticiones (d.interval), o guardada antes de que
+// se exigieran. Sin estructura, el reloj recibe UN solo bloque corrido en vez de "cuesta 1/10 de 1 min, descanso 1/10 de 1:30...". Esta función saca repeticiones, esfuerzo y recuperación del propio texto de la
+// sesión, en los 6 idiomas (cantidad + palabra de repetición, y las duraciones o metros que siguen). Devuelve null si no está seguro: en ese caso se manda como hasta ahora.
+const REP_WORDS = 'subidas?|cuestas?|series?|repeticiones|repeats?|reps?|hills?|climbs?|intervals?|sprints?|mont[ée]es?|c[ôo]tes?|r[ée]p[ée]titions?|intervalles?|ripetute|salite|intervalli|wiederholungen|anstiege|intervalle|steigungen|bloques?|blocks?|blocs?|blocchi|bl[öo]cke';
+function parseRepsFromDesc(text){
+  const str = String(text || '');
+  let m = str.match(new RegExp('(\\d{1,2})\\s*(?:x|×)\\s*', 'i')) || str.match(new RegExp('(\\d{1,2})\\s+(?:[a-zñéèêàùâôûçäöüß]+\\s+){0,1}(?:' + REP_WORDS + ')\\b', 'i'));
+  if(!m) return null;
+  const reps = parseInt(m[1], 10);
+  if(!(reps >= 2 && reps <= 40)) return null;
+  const rest = str.slice(m.index + m[0].length);
+  // medidas que siguen a las repeticiones, en orden: duraciones ("1 min", "1 min 30 seg", "90 s") o metros ("400 m")
+  const measures = [];
+  const re = /(\d+(?:[.,]\d+)?)\s*(km|kilómetros?|kilometers?|kilomètres?|chilometri|kilometer|min(?:utos?|utes?|uten|uti)?\.?|mn|seg(?:undos?)?\.?|secs?\.?|secondes?|seconds?|secondi|sek(?:unden)?\.?|s|m(?:etros?|eters?|ètres?|etri)?)(?![a-zA-Z])/gi;
+  let mm;
+  while((mm = re.exec(rest)) && measures.length < 6){
+    const n = parseFloat(mm[1].replace(',', '.')), u = mm[2].toLowerCase();
+    if(/^km|^kil|^chil/.test(u)) continue;                         // km no sirve para una repetición
+    if(/^(min|mn)/.test(u)){
+      let sec = Math.round(n * 60), end = mm.index + mm[0].length;
+      // "1 min 30" (segundos sin la palabra): un número suelto de 1-2 cifras pegado a los minutos son segundos
+      const bare = rest.slice(end).match(/^\s+(\d{1,2})(?![\d.,]*\s*[a-zA-Z%])/);
+      if(bare && parseInt(bare[1], 10) < 60){ sec += parseInt(bare[1], 10); end += bare[0].length; re.lastIndex = end; }
+      measures.push({ kind: 't', sec, start: mm.index, end });
+    }
+    else if(/^(s|seg|sec|sek)/.test(u)) measures.push({ kind: 't', sec: Math.round(n), start: mm.index, end: mm.index + mm[0].length, secs: true });
+    else measures.push({ kind: 'm', meters: Math.round(n), start: mm.index, end: mm.index + mm[0].length });
+  }
+  // "1 min 30 seg": los segundos pegados a unos minutos se suman a esos minutos
+  const merged = [];
+  for(const x of measures){
+    const prev = merged[merged.length - 1];
+    if(x.secs && prev && prev.kind === 't' && !prev.secs && /^\s*(?:y|and|e|et|und)?\s*$/i.test(rest.slice(prev.end, x.start))){ prev.sec += x.sec; prev.end = x.end; prev.secs = true; }
+    else merged.push(x);
+  }
+  if(!merged.length) return null;
+  const work = merged[0];
+  const restM = merged.find((x, i) => i > 0 && x.kind === 't');
+  if(work.kind === 'm'){
+    if(work.meters < 20 || work.meters > 20000) return null;
+    return { reps, repMeters: work.meters, recSec: restM ? restM.sec : 0 };
+  }
+  if(work.sec < 10 || work.sec > 3600) return null;
+  return { reps, repSec: work.sec, recSec: restM ? restM.sec : 0 };
+}
 function watchDayPayload(d, date){
   const lbl = planLabel(d);
+  let iv = d.interval || null, repSecX = 0, recSecX = 0;
+  if(!iv && ['intervals','hills','fartlek'].includes(d.typeKey)){
+    const p = parseRepsFromDesc(d.desc);
+    if(p){
+      iv = p.repMeters
+        ? { reps: p.reps, repMeters: p.repMeters, recoveryMin: p.recSec > 0 ? p.recSec / 60 : 1 }
+        : { reps: p.reps, workMin: p.repSec / 60, restMin: p.recSec > 0 ? p.recSec / 60 : 1, recoveryMin: p.recSec > 0 ? p.recSec / 60 : 1 };
+      if(!p.repMeters){ repSecX = p.repSec; recSecX = p.recSec; }
+    }
+  }
   return {
     date, name: lbl.type, typeKey: d.typeKey, zone: d.zone||null, distKm: d.dist,
     durMin: planDurationMin(d),
-    desc: lbl.desc, interval: d.interval||null,
-    repSec: (d.interval && d.interval.repSec>0) ? Math.round(d.interval.repSec) : ((isTimeMode() && d.interval && d.interval.repMeters) ? Math.round(repDurationSec(d.interval.repMeters)) : 0),
-    restSec: (d.interval && d.interval.recSec>0) ? Math.round(d.interval.recSec) : 0,
+    desc: lbl.desc, interval: iv,
+    // los mismos minutos que dice el texto de la sesión (planLabel): calidad = 3 de movilidad + 10 de trote suave, rodajes y tiradas = 3 + 5; vuelta a la calma 5
+    warmupMin: d.dist > 0 ? (['intervals','tempo','fartlek','hills','progression','test'].includes(d.typeKey) ? 13 : 8) : 0,
+    cooldownMin: d.dist > 0 ? 5 : 0,
+    repSec: repSecX || ((d.interval && d.interval.repSec>0) ? Math.round(d.interval.repSec) : ((isTimeMode() && d.interval && d.interval.repMeters) ? Math.round(repDurationSec(d.interval.repMeters)) : 0)),
+    restSec: recSecX || ((d.interval && d.interval.recSec>0) ? Math.round(d.interval.recSec) : 0),
     timeBased: !!(d.timeBased && isTimeMode())
   };
 }
