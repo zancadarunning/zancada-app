@@ -166,3 +166,19 @@ test('cron: no manda si ya corrió, si la base no pudo contestar, fuera de las 2
   const rest = { id: 'n6', plan: mkPlan({ 1: { dist: 0 } }), weekStart: '2026-10-12' };
   assert.equal((await runAt(TUE + 'T20:00:10Z', rest, false)).sent.length, 0, 'día de descanso');
 });
+
+test('planFor: la sesión incluye entrada en calor y vuelta a la calma (rodaje 13 min, calidad 18 min) para que una carrera hecha tal cual no dé más del 100%', () => {
+  // tiempo: cuestas de 25 min de parte principal = 13 + 25 + 5 = 43 min
+  const planT = [{ dist: 0 }, { dist: 3.6, durMin: 25, typeKey: 'hills' }, {}, {}, {}, {}, {}];
+  const runT = { date: '2026-10-13T11:00:00Z', distanceKm: 6.1, durationSec: 43 * 60 };
+  assert.deepEqual(planFor(runT, planT, '2026-10-12', 'UTC', true), { timeMode: true, planned: 43, actual: 43 });
+  // rodaje: 8 + 35 + 5 = 48 min
+  const planE = [{ dist: 0 }, { dist: 5.1, durMin: 35, typeKey: 'easy' }, {}, {}, {}, {}, {}];
+  assert.equal(planFor({ ...runT, durationSec: 48 * 60 }, planE, '2026-10-12', 'UTC', true).planned, 48);
+  // distancia: 5 km principales a 6:00/km de ritmo medio + 13 min de calentamiento y calma = ~2.2 km más
+  const planD = [{ dist: 0 }, { dist: 5, typeKey: 'easy' }, {}, {}, {}, {}, {}];
+  const runD = { date: '2026-10-13T11:00:00Z', distanceKm: 7.2, durationSec: 7.2 * 6 * 60 };
+  assert.deepEqual(planFor(runD, planD, '2026-10-12', 'UTC', false), { timeMode: false, planned: 7.2, actual: 7.2 });
+  // sin typeKey (plan viejo) se compara solo con la parte principal, como antes
+  assert.equal(planFor(runT, [{}, { dist: 5, durMin: 25 }, {}, {}, {}, {}, {}], '2026-10-12', 'UTC', true).planned, 25);
+});

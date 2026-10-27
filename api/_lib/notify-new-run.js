@@ -72,6 +72,11 @@ function buildMessage(runs, source, lang, imperial, planInfo) {
 // Qué decía el plan para el día (en su huso horario) en que se hizo la carrera. Solo se compara si ese día cae en la semana del plan guardado
 // (weekStart = lunes) y tenía sesión planeada; un día de descanso o un plan viejo no se comenta. Los números salen del estado de la
 // persona (lo escribe ella): se leen como número y solo eso llega al texto.
+// La sesión del plan se corre CON entrada en calor y vuelta a la calma (el texto de la sesión lo indica y los relojes las traen como bloques): 3 min de movilidad + 10 de trote en las sesiones de
+// calidad o + 5 en rodajes y tiradas, y 5 de vuelta a la calma. El número del plan es solo la parte principal, así que sin esto una carrera hecha tal cual daba "hiciste el 170%".
+const QUALITY_TYPES = new Set(['intervals', 'tempo', 'fartlek', 'hills', 'progression', 'test']);
+function warmCoolMin(d) { return typeof d.typeKey === 'string' && d.typeKey !== 'rest' ? (QUALITY_TYPES.has(d.typeKey) ? 13 : 8) + 5 : 0; }
+
 function planFor(run, plan, weekStart, tz, timeMode) {
   if (!Array.isArray(plan) || !/^\d{4}-\d{2}-\d{2}$/.test(String(weekStart || ''))) return null;
   const runMs = new Date(run && run.date).getTime();
@@ -81,11 +86,16 @@ function planFor(run, plan, weekStart, tz, timeMode) {
   const d = plan[idx];
   if (!d || typeof d !== 'object') return null;
   if (timeMode) {
-    const planned = Number(d.durMin), actual = (Number(run.durationSec) || 0) / 60;
-    return planned > 0 && planned < 1000 ? { timeMode: true, planned, actual } : null;
+    const main = Number(d.durMin), actual = (Number(run.durationSec) || 0) / 60;
+    const planned = main + (main > 0 ? warmCoolMin(d) : 0);
+    return main > 0 && planned < 1000 ? { timeMode: true, planned, actual } : null;
   }
-  const planned = Number(d.dist), actual = Number(run.distanceKm) || 0;
-  return planned > 0 && planned < 1000 ? { timeMode: false, planned, actual } : null;
+  const main = Number(d.dist), actual = Number(run.distanceKm) || 0;
+  // en distancia, los minutos de calentamiento y vuelta a la calma se pasan a km con el ritmo medio de la propia carrera (si es creíble)
+  const paceMinPerKm = actual > 0 ? ((Number(run.durationSec) || 0) / 60) / actual : 0;
+  const extraKm = main > 0 && paceMinPerKm >= 2 && paceMinPerKm <= 20 ? Math.round((warmCoolMin(d) / paceMinPerKm) * 10) / 10 : 0;
+  const planned = main + extraKm;
+  return main > 0 && planned < 1000 ? { timeMode: false, planned, actual } : null;
 }
 
 async function runExists(base, headers, userId, runId) {
