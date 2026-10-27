@@ -41,4 +41,4 @@ Cada vez que se agregan archivos a la carpeta del proyecto en la PC: `npm run sc
 
 Cada trimestre: probar restaurar un respaldo (`scripts/restaurar-respaldo.ps1`), revisar quién tiene acceso a Vercel, Supabase, GitHub, Cloudflare, Sentry y Play Console (todos con verificación en dos pasos), renovar `.well-known/security.txt` (vence 2027-10-19).
 
-Antes de publicar en las tiendas: pentest externo (`docs/pentest-alcance.md`), acuerdos de datos aceptados (`docs/dpa-proveedores.md`), textos legales con abogado, Play Integrity (`docs/lanzamiento-seguridad-checklist.md`).
+Antes de publicar en las tiendas: pentest externo (alcance en la carpeta privada), acuerdos de datos aceptados (`docs/dpa-proveedores.md`), textos legales con abogado, Play Integrity (`docs/lanzamiento-seguridad-checklist.md`).
