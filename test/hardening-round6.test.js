@@ -155,8 +155,8 @@ test('al completar la recuperacion de contrasena se cierran las demas sesiones (
   const s = read('app.js');
   const i = s.indexOf('async function submitNewPassword(){');
   const body = s.slice(i, i + 1800);
-  assert.ok(body.indexOf("updateUser({ password: newPw })") > -1);
-  assert.ok(body.indexOf("signOut({ scope: 'others' })") > body.indexOf('updateUser({ password: newPw })'));
+  assert.ok(body.indexOf("updateUser({ password: newPw") > -1);
+  assert.ok(body.indexOf("signOut({ scope: 'others' })") > body.indexOf('updateUser({ password: newPw'));
 });
 
 test('FileProvider: solo se comparte la subcarpeta share/ del cache, y app.js escribe ahi lo que comparte', () => {

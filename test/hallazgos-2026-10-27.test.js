@@ -166,3 +166,29 @@ test('cada idioma tiene los textos nuevos (código por mail y enlace vencido)', 
     assert.ok(read('locales/' + l + '.js').includes('{email}'), l + ' reauth_code_text lleva {email}');
   }
 });
+
+// ---- ronda 2: enlace del mail sin sesión nueva, topes por campo, enlace del calendario ----
+test('el enlace del mail (token_hash) nunca crea una sesión en este navegador: usa un cliente aislado en memoria y solo acepta recovery/signup/email', () => {
+  const app = read('app.js');
+  const i = app.indexOf('async function consumeEmailLinkParams');
+  const body = app.slice(i, app.indexOf('/* ---- Notificaciones push ---- */', i));
+  assert.ok(body.includes('iso.auth.verifyOtp') && !body.includes('supabaseClient.auth.verifyOtp'), 'el canje no puede pasar por el cliente que guarda la sesión');
+  assert.ok(body.includes("['recovery','signup','email']"), 'magiclink / invite / email_change no se usan');
+  const mk = app.slice(app.indexOf('function makeIsolatedAuthClient'), app.indexOf('function showRecoveryScreen'));
+  assert.ok(mk.includes('persistSession:false') && mk.includes('autoRefreshToken:false') && mk.includes('detectSessionInUrl:false') && mk.includes("storageKey:'zc-isolated-auth'"));
+  // al terminar de cambiar la contraseña con el cliente aislado no se entra a la app: se pide iniciar sesión
+  const sub = app.slice(app.indexOf('async function submitNewPassword'), app.indexOf("document.getElementById('ob-terrain')"));
+  assert.ok(sub.includes('if(recoveryClient){') && sub.indexOf('goLogin();') > sub.indexOf('if(recoveryClient){') && sub.indexOf('goLogin();') < sub.indexOf('await loadUserAndEnter(user)'));
+  assert.ok(read('index.html').includes('id="recovery-account"') && read('index.html').includes('cancelRecovery()'), 'la pantalla muestra de qué cuenta es y deja cancelar');
+});
+
+test('recuperar la contraseña renueva el enlace público del calendario (un enlace filtrado deja de servir)', () => {
+  const app = read('app.js');
+  assert.ok(app.includes('rotate_calendar_token: true'));
+  assert.ok(app.includes('user.user_metadata.rotate_calendar_token') && app.includes('rotate_calendar_token: null'));
+});
+
+test('SQL: topes por campo de app_state y largo de platform en push_subscriptions (lo que bajan calendar-feed y send-reminders)', () => {
+  const sql = read('sql/limits_app_state_and_push.sql');
+  for (const frag of ["v_data->>'lang'", "v_data->>'weekStart'", "{profile,tz}", "{profile,reminderHour}", "v_data->'profile'", "v_data->'calendarNextWeek'", "v_data->>'calendarToken'", 'NEW.platform']) assert.ok(sql.includes(frag), frag);
+});
