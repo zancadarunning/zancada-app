@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-27T22:20:35Z';
+const APP_VERSION = '2026-10-27T22:38:55Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1923,6 +1923,7 @@ function setBtnBusy(btnId, busy, loadingLabel){
 
 /* ================= LOGIN / ONBOARD ================= */
 function goLogin(){ document.getElementById('splash').style.display='none'; document.getElementById('login').style.display='block'; prefillLoginEmail(); offerSavedLogin(); prefetchCaptcha('captcha-login'); }
+function goBackToStart(){ document.getElementById('login').style.display='none'; document.getElementById('splash').style.display=''; }
 function goSignup(){ document.getElementById('login').style.display='none'; document.getElementById('signup').style.display='block'; prefetchCaptcha('captcha-signup'); }
 function goBackToLogin(){ document.getElementById('signup').style.display='none'; document.getElementById('login').style.display='block'; prefillLoginEmail(); prefetchCaptcha('captcha-login'); }
 function goToLoginFromSignup(){
@@ -1949,7 +1950,6 @@ async function handleGoogleSignIn(btnId){
 // necesitar import ni bundler (mismo patrón que haptic() más arriba).
 async function handleAppleSignIn(btnId){
   // Mismo motivo que en handleGoogleSignIn: el checkbox solo existe en signup.
-  if(btnId === 'signup-apple-btn' && !checkLegalAccepted()) return;
   setBtnBusy(btnId, true, t('google_loading'));
   try{
     const AppleSignIn = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AppleSignIn;
@@ -4905,7 +4905,7 @@ async function sendFeedback(){
   // "Sign in with Apple" solo tiene sentido en la app nativa de iOS (Apple lo exige ahí
   // porque ya ofrecemos login con Google) -- en la web/PWA y en Android el botón queda oculto.
   if(window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'ios'){
-    ['login-apple-btn','signup-apple-btn'].forEach(id=>{
+    ['welcome-apple-btn'].forEach(id=>{
       const el = document.getElementById(id);
       if(el) el.style.display = '';
     });

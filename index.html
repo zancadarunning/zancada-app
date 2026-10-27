@@ -289,30 +289,11 @@
       radial-gradient(60% 40% at 100% 15%, rgba(192,106,46,.08), transparent 62%),
       var(--asphalt);
     display:flex; flex-direction:column;
-    align-items:center; justify-content:flex-start; text-align:center; padding:32px; max-width:480px; margin:0 auto;}
+    align-items:center; justify-content:flex-start; text-align:center; padding:32px 28px 0; max-width:480px; margin:0 auto;}
   /* Ver el script inline en <head> que agrega esta clase: alguien con pinta de sesión
      guardada nunca llega a ver la splash ni el login, ni por un instante, mientras init()
      (en app.js) confirma la sesión de verdad y trae los datos de la cuenta. */
   html.zc-maybe-session #splash, html.zc-maybe-session #login{display:none !important;}
-  /* Fondo atmosférico de la splash: una cordillera hecha con el mismo lenguaje que ya
-     usa el resto de la app (el mismo motivo de perfil de elevación de los separadores,
-     acá como escenario en vez de ícono) -- "el terreno que viene" detrás de la marca,
-     no una textura genérica. Muy tenue a propósito, atrás de todo el contenido real. */
-  .splash-bg{position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none;}
-  /* El resto del contenido de la splash queda arriba del fondo (mismo truco que ya usa
-     .run-bg-route con .go-circle en Correr: el fondo es z-index:0 absoluto, y todo lo
-     real se levanta a z-index:1). */
-  #splash > *:not(.splash-bg){position:relative; z-index:1;}
-  #login > *:not(.splash-bg), #signup > *:not(.splash-bg){position:relative; z-index:1;}
-  .splash-bg svg{position:absolute; bottom:0; left:0; width:100%; height:42%;}
-  .splash-terrain-far{fill:var(--asphalt-3); opacity:.4;}
-  .splash-terrain-near{fill:var(--asphalt-2); opacity:.92;}
-  /* La línea de cresta ya no traza el contorno entero como un marcador resaltador --
-     un brillo cálido y suave, como el horizonte justo antes de que salga el sol (la
-     hora en la que de verdad se corre esta pista nocturna), más fino y con menos
-     protagonismo que antes. */
-  .splash-terrain-line{fill:none; stroke:var(--clay); stroke-width:1.1; stroke-linejoin:round; stroke-linecap:round; opacity:.6;
-    filter:drop-shadow(0 0 6px rgba(192,106,46,.5));}
   /* Un solo gesto de entrada, en opacity+transform nada mas (nunca en alto/margen/padding)
      para no interferir con el ajuste de altura real de #splash que ya es delicado -- ver el
      comentario largo mas arriba junto a la regla de #splash sobre por que 100svh se elige a
@@ -341,18 +322,24 @@
      vez de comprimirse, empujando el botón después de las tarjetas en vez de superponerlo,
      y esos 467px pasan a formar parte del alto scrolleable real de #splash (que ya tiene
      overflow-y:auto) en vez de quedar flotando afuera de la cuenta. */
-  #splash .splash-mid{flex:1; width:100%; display:flex; flex-direction:column; justify-content:center; justify-content:safe center; align-items:center; padding-bottom:96px;
+  #splash .splash-mid{flex:1; width:100%; display:flex; flex-direction:column; justify-content:center; justify-content:safe center; align-items:center; padding-bottom:24px;
     animation:splashIn .55s cubic-bezier(.22,1,.36,1);}
   @keyframes splashIn{from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:translateY(0);}}
   @media (prefers-reduced-motion:reduce){ #splash .splash-mid{animation:none;} }
-  #splash .word{font-size:60px; line-height:.9;}
+  #splash .word{font-size:64px; line-height:.9;}
   #splash .word span{color:var(--hivis-text);}
   #splash .tag{color:var(--mist); margin-top:10px; font-size:15px;}
   #splash .pulse-strip{margin:28px 0; max-width:280px;}
-  .splash-features{width:100%; max-width:320px; margin-top:28px; display:flex; flex-direction:column; gap:16px; text-align:left;}
-  .splash-feature{display:flex; align-items:flex-start; gap:12px;}
-  .splash-feature strong{display:block; font-size:14px; color:var(--chalk); font-weight:700;}
-  .splash-feature p{margin:2px 0 0; font-size:12.5px; color:var(--mist); line-height:1.4;}
+  /* Pantalla de inicio (#splash): marca arriba al centro y las formas de entrar pegadas abajo. Google/Apple son botones claros (el "chalk" del tema: claro en oscuro, tinta en claro), el correo es el borde. */
+  .auth-actions{width:100%; max-width:340px; flex-shrink:0; display:flex; flex-direction:column; gap:10px; padding-bottom:max(26px, env(safe-area-inset-bottom));}
+  .auth-actions .btn{min-height:52px; font-size:15.5px;}
+  .btn-social{background:var(--chalk); color:var(--asphalt); box-shadow:none; transition:transform .13s var(--ease-out), opacity .13s ease;}
+  .btn-social:active{transform:scale(.97); opacity:.88;}
+  .btn-social:disabled{cursor:not-allowed;}
+  .btn .btn-glyph{width:20px; height:20px; flex-shrink:0;}
+  .auth-legal{margin:12px 4px 0; font-size:12px; line-height:1.55; color:var(--mist); text-align:center; text-wrap:balance;}
+  .auth-legal a{color:var(--chalk); text-decoration:underline; text-underline-offset:2px;}
+  .auth-legal a:active{opacity:.6;}
   /* Pantallas chicas de verdad (celulares viejos/baratos de gama baja, ej. Moto E6 Plus:
      320x619 CSS px -- bastante menos que un celular moderno típico, que ronda 360-412px de
      ancho y 700-900px de alto) -- probado en el dispositivo real. Con los tamaños "normales"
@@ -366,8 +353,9 @@
     #splash .word{font-size:44px;}
     #splash .pulse-strip{margin:14px 0;}
     #splash .tag{margin-top:6px; font-size:13.5px;}
-    .splash-features{margin-top:16px; gap:12px;}
-    #splash .splash-mid{padding-bottom:32px;}
+    #splash .splash-mid{padding-bottom:12px;}
+    .auth-actions{gap:8px;}
+    .auth-actions .btn{min-height:48px;}
   }
   .lang-row{display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:28px;}
   .lang-pill{padding:8px 13px; border-radius:999px; border:1.5px solid var(--asphalt-4); background:var(--asphalt-2);
@@ -2733,46 +2721,28 @@
   <div id="offline-banner"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="2" x2="22" y2="22"/><path d="M8.5 16.5a5 5 0 0 1 7 0"/><path d="M5 12.5a10 10 0 0 1 5-2.7"/><path d="M19 12.5a10 10 0 0 0-2.3-1.9"/><path d="M2 8.5a15 15 0 0 1 4.2-2.8"/><path d="M22 8.5a15 15 0 0 0-9-4.4"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg></span><span data-i18n="offline_banner"></span></div>
 
   <div id="splash">
-    <div class="splash-bg" aria-hidden="true">
-      <svg viewBox="0 0 400 220" preserveAspectRatio="none">
-        <polygon class="splash-terrain-far" points="0,220 0,150 45,110 95,145 150,95 210,140 270,100 330,135 400,105 400,220"/>
-        <polygon class="splash-terrain-near" points="0,220 0,185 40,160 85,195 130,120 175,175 220,105 265,165 300,145 345,180 400,150 400,220"/>
-        <polyline class="splash-terrain-line" points="0,185 40,160 85,195 130,120 175,175 220,105 265,165 300,145 345,180 400,150"/>
-      </svg>
-    </div>
-    <div class="pulse-strip"><svg viewBox="0 0 300 40" preserveAspectRatio="none"><path d="M0 20 H40 L48 6 L58 34 L66 20 H90 L98 8 L108 32 L116 20 H150 H190 L198 6 L208 34 L216 20 H240 L248 8 L258 32 L266 20 H300 L308 6 L318 34 L326 20 H350 H390 L398 6 L408 34 L416 20 H440 L448 8 L458 32 L466 20 H500 L508 6 L518 34 L526 20 H600" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg></div>
-    <h1 class="display word">ZANC<span>A</span>DA</h1>
-    <p class="tag" data-i18n="app_tag"></p>
     <div class="splash-mid">
-      <div class="splash-features">
-        <div class="splash-feature">
-          <span class="icon-sq" style="width:22px; height:22px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></span>
-          <div><strong data-i18n="splash_feat1_title"></strong><p data-i18n="splash_feat1_desc"></p></div>
-        </div>
-        <div class="splash-feature">
-          <span class="icon-sq" style="width:22px; height:22px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5.5h16v11H8l-4 4v-4H4z"/></svg></span>
-          <div><strong data-i18n="splash_feat2_title"></strong><p data-i18n="splash_feat2_desc"></p></div>
-        </div>
-        <div class="splash-feature">
-          <span class="icon-sq" style="width:22px; height:22px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span>
-          <div><strong data-i18n="splash_feat3_title"></strong><p data-i18n="splash_feat3_desc"></p></div>
-        </div>
-      </div>
+      <div class="pulse-strip"><svg viewBox="0 0 300 40" preserveAspectRatio="none"><path d="M0 20 H40 L48 6 L58 34 L66 20 H90 L98 8 L108 32 L116 20 H150 H190 L198 6 L208 34 L216 20 H240 L248 8 L258 32 L266 20 H300 L308 6 L318 34 L326 20 H350 H390 L398 6 L408 34 L416 20 H440 L448 8 L458 32 L466 20 H500 L508 6 L518 34 L526 20 H600" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg></div>
+      <h1 class="display word">ZANC<span>A</span>DA</h1>
+      <p class="tag" data-i18n="app_tag"></p>
     </div>
 
-    <div style="width:100%; max-width:280px; flex-shrink:0; margin-bottom:48px;">
-      <button class="btn btn-primary" data-i18n="start" data-on-click="goLogin()"></button>
+    <!-- Pantalla de inicio: cómo entrar. Google / Apple (solo iPhone nativo) o correo, que lleva a la pantalla de correo y contraseña (#login). El aviso legal va abajo, como en los apps de login con proveedores. -->
+    <div class="auth-actions">
+      <button class="btn btn-social" id="welcome-google-btn" data-on-click="handleGoogleSignIn('welcome-google-btn')"><svg class="btn-glyph" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.46a5.52 5.52 0 0 1-2.4 3.62v3h3.88c2.27-2.09 3.58-5.17 3.58-8.81z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.94-2.91l-3.88-3c-1.08.72-2.45 1.15-4.06 1.15-3.12 0-5.77-2.11-6.71-4.94H1.28v3.09A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.29 14.3A7.2 7.2 0 0 1 4.91 12c0-.8.14-1.57.38-2.3V6.61H1.28A12 12 0 0 0 0 12c0 1.94.46 3.77 1.28 5.39l4.01-3.09z"/><path fill="#EA4335" d="M12 4.75c1.76 0 3.34.61 4.58 1.8l3.43-3.43C17.95 1.19 15.24 0 12 0A12 12 0 0 0 1.28 6.61l4.01 3.09C6.23 6.86 8.88 4.75 12 4.75z"/></svg><span data-i18n="login_google"></span></button>
+      <button class="btn btn-social" id="welcome-apple-btn" style="display:none;" data-on-click="handleAppleSignIn('welcome-apple-btn')"><svg class="btn-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg><span data-i18n="login_apple"></span></button>
+      <button class="btn btn-outline" id="welcome-email-btn" data-on-click="goLogin()"><svg class="btn-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 6 10 7 10-7"/></svg><span data-i18n="welcome_email"></span></button>
+      <p class="auth-legal">
+        <span data-i18n="welcome_legal_pre"></span>
+        <a href="/terms.html" target="_blank" rel="noopener" data-i18n="legal_terms_link"></a>
+        <span data-i18n="signup_legal_and"></span>
+        <a href="/privacy.html" target="_blank" rel="noopener" data-i18n="legal_privacy_link"></a>.
+      </p>
     </div>
   </div>
 
   <div class="overlay" id="login">
-    <div class="splash-bg" aria-hidden="true">
-      <svg viewBox="0 0 400 220" preserveAspectRatio="none">
-        <polygon class="splash-terrain-far" points="0,220 0,150 45,110 95,145 150,95 210,140 270,100 330,135 400,105 400,220"/>
-        <polygon class="splash-terrain-near" points="0,220 0,185 40,160 85,195 130,120 175,175 220,105 265,165 300,145 345,180 400,150 400,220"/>
-        <polyline class="splash-terrain-line" points="0,185 40,160 85,195 130,120 175,175 220,105 265,165 300,145 345,180 400,150"/>
-      </svg>
-    </div>
+    <button class="week-nav-btn" data-on-click="goBackToStart()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="display" data-i18n="login_title"></h2>
     <p class="lead" data-i18n="login_lead_signin"></p>
     <form id="login-form" novalidate data-on-submit="event.preventDefault(); handleSignIn()">
@@ -2796,20 +2766,11 @@
     </form>
     <div class="captcha-box" id="captcha-login"></div>
     <button class="small-link" id="login-forgot-btn" style="display:block; text-align:center; width:100%; margin-top:14px;" data-on-click="handleForgotPassword()" data-i18n="login_forgot"></button>
-    <div class="divider-or"><span data-i18n="login_or"></span></div>
-    <button class="btn btn-outline" id="login-google-btn" data-on-click="handleGoogleSignIn('login-google-btn')"><span data-i18n="login_google"></span></button>
-    <button class="btn btn-outline" id="login-apple-btn" style="display:none; margin-top:10px;" data-on-click="handleAppleSignIn('login-apple-btn')"><span data-i18n="login_apple"></span></button>
-    <button class="small-link" style="display:block; text-align:center; width:100%; margin-top:18px;" data-on-click="goSignup()" data-i18n="login_go_signup"></button>
+    <div class="divider-or"><span data-i18n="login_or_plain"></span></div>
+    <button class="btn btn-outline" id="login-create-btn" data-on-click="goSignup()" data-i18n="login_create_account"></button>
   </div>
 
   <div class="overlay" id="signup" style="display:none;">
-    <div class="splash-bg" aria-hidden="true">
-      <svg viewBox="0 0 400 220" preserveAspectRatio="none">
-        <polygon class="splash-terrain-far" points="0,220 0,150 45,110 95,145 150,95 210,140 270,100 330,135 400,105 400,220"/>
-        <polygon class="splash-terrain-near" points="0,220 0,185 40,160 85,195 130,120 175,175 220,105 265,165 300,145 345,180 400,150 400,220"/>
-        <polyline class="splash-terrain-line" points="0,185 40,160 85,195 130,120 175,175 220,105 265,165 300,145 345,180 400,150"/>
-      </svg>
-    </div>
     <h2 class="display" data-i18n="signup_title"></h2>
     <p class="lead" data-i18n="signup_lead"></p>
     <form id="signup-form" novalidate data-on-submit="event.preventDefault(); handleSignUp()">
@@ -2838,9 +2799,6 @@
     <div class="field"><button type="submit" class="btn btn-primary" id="signup-submit-btn" data-i18n="login_create_account" disabled></button><p class="btn-reason" id="signup-reason" role="status"></p></div>
     </form>
     <div class="captcha-box" id="captcha-signup"></div>
-    <div class="divider-or"><span data-i18n="login_or"></span></div>
-    <button class="btn btn-outline" id="signup-google-btn" data-on-click="handleGoogleSignIn('signup-google-btn')"><span data-i18n="login_google"></span></button>
-    <button class="btn btn-outline" id="signup-apple-btn" style="display:none; margin-top:10px;" data-on-click="handleAppleSignIn('signup-apple-btn')"><span data-i18n="login_apple"></span></button>
     <button class="small-link" style="display:block; text-align:center; width:100%; margin-top:14px;" data-on-click="goBackToLogin()" data-i18n="signup_go_login"></button>
   </div>
 
