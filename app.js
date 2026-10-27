@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-27T10:36:45Z';
+const APP_VERSION = '2026-10-27T11:50:50Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -840,6 +840,7 @@ function showToast(message, type){
     setTimeout(()=>{ if(wrap && wrap.firstElementChild === el) wrap.innerHTML = ''; }, 250);
   }, 3200);
 }
+// opts.codeField: pide un código de 6 dígitos (cuentas de Google/Apple, ver confirmDestructiveWithPassword); resuelve con { code } o false.
 // opts.passwordField: pide también la contraseña (acciones que no se pueden deshacer). En ese modo resuelve con { password, captchaToken } o false.
 let confirmDismissPrev = null;
 function showConfirm(message, opts){
@@ -857,8 +858,10 @@ function showConfirm(message, opts){
     const cancelText = opts.cancelText || t('cancel_word');
     const danger = !!opts.danger;
     const pwField = !!opts.passwordField;
+    const codeField = !!opts.codeField;
+    const codeHtml = codeField ? `<div class="field" style="margin:14px 0 16px;"><label for="confirm-code">${escapeHtml(t('reauth_code_label'))}</label><input type="text" id="confirm-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*"></div>` : '';
     const pwHtml = pwField ? `<div class="field" style="margin:14px 0 16px;"><label for="confirm-pw">${escapeHtml(t('reauth_password_label'))}</label><input type="password" id="confirm-pw" autocomplete="current-password" maxlength="200"></div><div class="captcha-box" id="captcha-reauth"></div>` : '';
-    backdrop.innerHTML = `<div class="confirm-card"><p>${message}</p>${pwHtml}<div class="confirm-actions">
+    backdrop.innerHTML = `<div class="confirm-card"><p>${message}</p>${pwHtml}${codeHtml}<div class="confirm-actions">
       <button class="btn btn-outline" id="confirm-cancel-btn">${cancelText}</button>
       <button class="btn ${danger?'btn-danger':'btn-primary'}" id="confirm-ok-btn">${confirmText}</button>
     </div></div>`;
@@ -874,7 +877,14 @@ function showConfirm(message, opts){
     };
     const okBtn = document.getElementById('confirm-ok-btn');
     document.getElementById('confirm-cancel-btn').onclick = ()=>cleanup(false);
-    if(pwField){
+    if(codeField){
+      const codeInput = document.getElementById('confirm-code');
+      okBtn.disabled = true;
+      codeInput.addEventListener('input', ()=>{ codeInput.value = codeInput.value.replace(/[^0-9]/g, '').slice(0, 6); okBtn.disabled = codeInput.value.length !== 6; });
+      codeInput.addEventListener('keydown', e=>{ if(e.key === 'Enter' && codeInput.value.length === 6) okBtn.click(); });
+      setTimeout(()=>{ try{ codeInput.focus(); }catch(e){} }, 60);
+      okBtn.onclick = ()=>{ if(codeInput.value.length !== 6) return; haptic(20); cleanup({ code: codeInput.value }); };
+    } else if(pwField){
       const pwInput = document.getElementById('confirm-pw');
       okBtn.disabled = true;
       pwInput.addEventListener('input', ()=>{ okBtn.disabled = !pwInput.value; });
@@ -1093,7 +1103,23 @@ const dualAuthStorage = {
     try{ localStorage.removeItem(key); sessionStorage.removeItem(key); }catch(e){}
   }
 };
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: dualAuthStorage } });
+// flowType 'pkce': el inicio de sesión (Google) vuelve con un código que solo sirve en el navegador que lo pidió, y los tokens sueltos en la URL (#access_token=...) se RECHAZAN. Con el flujo implícito
+// de antes, un enlace armado por otra persona con SU sesión te dejaba adentro de SU cuenta (login CSRF), y con type=recovery mostraba la pantalla de "nueva contraseña" falsa.
+// Los mails de confirmar cuenta y recuperar contraseña traen ?token_hash=...&type=... (ver email-templates/) y se canjean con verifyOtp(): funcionan en cualquier navegador y solo para la cuenta a la que se mandó el mail.
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: dualAuthStorage, flowType: 'pkce' } });
+let emailLinkRecovery = false;   // el enlace de recuperar contraseña se canjeó recién: mostrar la pantalla de nueva contraseña, no entrar a la app
+async function consumeEmailLinkParams(){
+  try{
+    const q = new URLSearchParams(location.search);
+    const th = q.get('token_hash'), type = q.get('type');
+    if(!th) return;
+    try{ history.replaceState(null, '', location.pathname); }catch(e){}   // el código no queda en la barra ni en el historial
+    if(!/^[A-Za-z0-9_-]{10,300}$/.test(th) || !['recovery','signup','email','magiclink','email_change','invite'].includes(type)) return;
+    const { error } = await supabaseClient.auth.verifyOtp({ token_hash: th, type });
+    if(error){ showToast(t('login_link_invalid'), 'error'); return; }
+    if(type === 'recovery') emailLinkRecovery = true;
+  }catch(e){ console.error('no se pudo canjear el enlace del mail', e); }
+}
 
 /* ---- Notificaciones push ---- */
 const VAPID_PUBLIC_KEY = 'BLBsiej6FgDHLt2S5DvrDfYU9_jf1_qfIzRswRgjcvLvMTPT1lDnVo9NUu8lRfYSVobM_zI80R9KWDbfb-tZXfU';
@@ -4733,12 +4759,26 @@ async function logout(){
 // Antes de una acción que no se puede deshacer: quien tiene cuenta con contraseña la escribe de nuevo (así una sesión robada no alcanza) y se
 // inicia sesión otra vez para que el servidor vea un ingreso reciente. Las cuentas de Google/Apple solo confirman (las protege su proveedor).
 // Devuelve el token de sesión para llamar al servidor, o null si se canceló o la contraseña no sirvió (ya se avisó).
+let destructiveCode = null;   // código de 6 dígitos que confirmó la persona (cuentas de Google/Apple); lo manda quien llama a /api/delete-account
 async function confirmDestructiveWithPassword(message, confirmOpts){
   const { data: { session } } = await supabaseClient.auth.getSession();
   if(!session) return null;
   const provider = session.user && session.user.app_metadata && session.user.app_metadata.provider;
   if(provider && provider !== 'email'){
-    return (await showConfirm(message, confirmOpts)) ? session.access_token : null;
+    destructiveCode = null;
+    if(!(await showConfirm(message, confirmOpts))) return null;
+    // El servidor decide si hace falta un código: si el ingreso es reciente no se pide; si no, se manda al mail verificado de la cuenta.
+    try{
+      const r = await fetch(apiUrl('/api/delete-account'), { method:'POST', headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}, body: JSON.stringify({ action:'send-code', lang }) });
+      const d = await r.json().catch(()=>({}));
+      if(!r.ok){ showToast(t('reauth_code_send_error'), 'error'); return null; }
+      if(d && d.needed){
+        const ans = await showConfirm(t('reauth_code_text', {email: session.user.email || ''}), { codeField:true, danger:true, confirmText:t('reauth_code_confirm') });
+        if(!ans || !ans.code) return null;
+        destructiveCode = ans.code;
+      }
+    }catch(e){ showToast(t('reauth_code_send_error'), 'error'); return null; }
+    return session.access_token;
   }
   const answer = await showConfirm(message, Object.assign({}, confirmOpts, { passwordField: true }));
   if(!answer) return null;
@@ -4761,7 +4801,7 @@ async function resetApp(){
     const res = await fetch(apiUrl('/api/delete-account'), {
       method:'POST',
       headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${accessToken}`},
-      body: JSON.stringify({mode:'data'})
+      body: JSON.stringify({mode:'data', code: destructiveCode || undefined})
     });
     if(!res.ok) throw new Error('delete data failed');
   }catch(e){
@@ -4781,7 +4821,8 @@ async function deleteAccount(){
     await clearNativeCalendarQuietly();
     const res = await fetch(apiUrl('/api/delete-account'), {
       method:'POST',
-      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${accessToken}`}
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${accessToken}`},
+      body: JSON.stringify({ code: destructiveCode || undefined })
     });
     if(!res.ok) throw new Error('delete-account failed');
     wipeLocalUserData(currentUserId);
@@ -4838,8 +4879,10 @@ async function sendFeedback(){
     const bgLine = document.getElementById('run-bg-warning-line');
     if(bgLine) bgLine.style.display = 'none';
   }
+  await consumeEmailLinkParams();
   const { data: { session } } = await supabaseClient.auth.getSession();
-  if(session && session.user){ await loadUserAndEnter(session.user); }
+  if(emailLinkRecovery){ document.documentElement.classList.remove('zc-maybe-session'); if(window.zcBootDone) window.zcBootDone(); }   // la pantalla de nueva contraseña ya la mostró el evento PASSWORD_RECOVERY
+  else if(session && session.user){ await loadUserAndEnter(session.user); }
   // Contraparte del script inline en <head> (clase zc-maybe-session): ese script solo
   // adivina rápido, por la PRESENCIA de algo con forma de sesión guardada, para ocultar
   // splash/login antes de pintar nada -- welcomeUserAndEnter() de arriba (si corrió) ya se

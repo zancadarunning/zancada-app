@@ -100,7 +100,7 @@
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                       <tr>
                         <td align="center" bgcolor="#D6FF3F" style="border-radius:999px;">
-                          <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block; padding:15px 34px; font-family:Arial, Helvetica, sans-serif; font-size:15px; font-weight:800; color:#121415; text-decoration:none; border-radius:999px;">
+                          <a href="{{ .SiteURL }}/?token_hash={{ .TokenHash }}&type=email" target="_blank" style="display:inline-block; padding:15px 34px; font-family:Arial, Helvetica, sans-serif; font-size:15px; font-weight:800; color:#121415; text-decoration:none; border-radius:999px;">
                             {{ $button }}
                           </a>
                         </td>
@@ -127,7 +127,7 @@
                 </tr>
                 <tr>
                   <td style="font-family:'Courier New', monospace; font-size:11.5px; line-height:16px; color:#8B9296; word-break:break-all;">
-                    <a href="{{ .ConfirmationURL }}" target="_blank" style="color:#8B9296; text-decoration:underline;">{{ .ConfirmationURL }}</a>
+                    <a href="{{ .SiteURL }}/?token_hash={{ .TokenHash }}&type=email" target="_blank" style="color:#8B9296; text-decoration:underline;">{{ .SiteURL }}/?token_hash={{ .TokenHash }}&type=email</a>
                   </td>
                 </tr>
               </table>

@@ -70,3 +70,11 @@ por ejemplo, inglés, y pidiendo un reset de contraseña -- si el mail te llega
 en inglés, quedó funcionando. Si te sigue llegando en español a pesar de
 tener el idioma cambiado, avisame y lo resolvemos por otro camino (Auth Hooks
 + SMTP propio).
+
+## IMPORTANTE (2026-10-27): los enlaces ya no usan `{{ .ConfirmationURL }}`
+
+Desde que la app usa el flujo PKCE (`flowType: 'pkce'` en app.js) los tokens sueltos en la URL (`#access_token=...`) se rechazan a propósito: era la forma de que otra persona te dejara adentro de SU cuenta con un enlace armado a mano.
+Por eso las plantillas **Reset Password** y **Confirm signup** de este repo traen el enlace como
+`{{ .SiteURL }}/?token_hash={{ .TokenHash }}&type=recovery` (reset) y `...&type=email` (confirmar cuenta); la app lo canjea con `verifyOtp()` (ver `consumeEmailLinkParams()` en app.js).
+Funciona abriendo el mail en cualquier navegador. **Hay que pegar las dos plantillas nuevas en el Dashboard ANTES de mergear/desplegar el cambio** (y comprobar que *Site URL* en Authentication → URL Configuration sea la dirección real de la web, sin barra final).
+Los mails mandados con la plantilla vieja dejan de servir (el enlace dice "venció o ya se usó"; se pide uno nuevo).
