@@ -64,8 +64,10 @@ module.exports = withSentry(async (req, res) => {
     res.status(200).json({ pushed: 0, failed: 0, unchanged: true, pushedDates: days.map(d => d.date) });
     return;
   }
-  if (!(await checkSyncCooldown(base, headers, userId, 'coros-plan', 300000, { failClosed: true }))) { res.status(200).json({ pushed: 0, reason: 'cooldown' }); return; }
-  if (!(await withinDailyCap(base, headers, 'coros-plan', userId, 24, { failClosed: true }))) { res.status(200).json({ pushed: 0, reason: 'cooldown' }); return; }
+  // el admin puede saltear las esperas (body.skipCooldown) SOLO para diagnosticar: con otro teléfono reintentando el hueco entre envíos casi nunca queda libre
+  const adminBypass = isAdmin && body.skipCooldown === true;
+  if (!adminBypass && !(await checkSyncCooldown(base, headers, userId, 'coros-plan', 300000, { failClosed: true }))) { res.status(200).json({ pushed: 0, reason: 'cooldown' }); return; }
+  if (!adminBypass && !(await withinDailyCap(base, headers, 'coros-plan', userId, 24, { failClosed: true }))) { res.status(200).json({ pushed: 0, reason: 'cooldown' }); return; }
 
   try {
     const connRes = await fetch(`${base}/rest/v1/coros_connections?user_id=eq.${userId}&select=*`, { headers });
@@ -115,7 +117,7 @@ module.exports = withSentry(async (req, res) => {
       if (knownId) {
         try {
           const r = await callCorosMcpTool(accessToken, 'updateScheduledWorkout', { date: date8, idInPlan: String(knownId), course });
-          if (raws.length < 3) raws.push({ date: day.date, tool: 'update', raw: rawOf(r) });
+          if (raws.length < 8) raws.push({ date: day.date, tool: 'update', raw: rawOf(r) });
           // Una actualización exitosa SIEMPRE devuelve el idInPlan. Sin él COROS no la confirmó (el entrenamiento ya no existe, o la rechazó con un texto normal): antes se daba por buena igual y el día quedaba vacío.
           const upId = extractIdInPlan(r);
           if (!upId) { const err = new Error('COROS no confirmó la actualización (sin idInPlan): ' + rawOf(r)); err.notConfirmed = true; throw err; }
@@ -131,7 +133,7 @@ module.exports = withSentry(async (req, res) => {
       if (!done) {
         try {
           const r = await callCorosMcpTool(accessToken, 'createScheduledWorkout', { date: date8, course });
-          if (raws.length < 3) raws.push({ date: day.date, tool: 'create', raw: rawOf(r) });
+          if (raws.length < 8) raws.push({ date: day.date, tool: 'create', raw: rawOf(r), sent: { date: date8, sections: course.sections.length, name: course.courseName } });
           const newId = extractIdInPlan(r);
           // sin idInPlan COROS no confirmó que lo guardó (o lo rechazó con un texto normal): NO se cuenta como enviado
           if (!newId) { noId++; throw new Error('COROS no confirmó el entrenamiento (sin idInPlan): ' + rawOf(r)); }

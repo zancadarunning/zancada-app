@@ -301,3 +301,11 @@ test('envio v3: el servidor y la app invalidan lo marcado como enviado antes de 
   assert.match(read('api/coros-push-plan.js'), /payloadHash\(\{ v: 3,/);
   assert.ok(read('app.js').includes("'coros3'"));
 });
+
+test('el admin puede saltear las esperas SOLO con skipCooldown (diagnostico); una cuenta común no puede', async () => {
+  const fs2 = require('node:fs');
+  const src = fs2.readFileSync(require('node:path').join(__dirname, '..', 'api/coros-push-plan.js'), 'utf8');
+  assert.match(src, /const adminBypass = isAdmin && body\.skipCooldown === true;/);
+  // una cuenta común con skipCooldown sigue sujeta a las esperas (el endpoint de cooldown/daily cap se consulta igual)
+  assert.doesNotMatch(src, /skipCooldown === true\) \{/);
+});
