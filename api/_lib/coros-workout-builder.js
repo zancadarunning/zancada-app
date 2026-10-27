@@ -36,7 +36,8 @@ function plain(sectionType, targetType, targetValue, intensity) {
 // day: { date, name, typeKey, zone, distKm, durMin, desc, interval:{reps,repMeters,recoveryMin,workMin,restMin}, repSec, restSec, timeBased }
 function buildCorosCourse(day, zones, labels) {
   const zone = posInt(day.zone, 1, 5, null);
-  const warmMin = 10, coolMin = 5;
+  const warmMin = day.warmupMin != null ? posInt(day.warmupMin, 0, 30, 10) : 10;
+  const coolMin = day.cooldownMin != null ? posInt(day.cooldownMin, 0, 30, 5) : 5;
   const easy = hrIntensity(zones, 2);
   const work = zone ? hrIntensity(zones, zone) : hrIntensity(zones, 2);
   const rest = hrIntensity(zones, 1);
@@ -46,7 +47,7 @@ function buildCorosCourse(day, zones, labels) {
 
   if (isRepeatType) {
     const reps = posInt(iv.reps, 1, 20, 1);   // COROS admite 1-20 repeticiones por grupo
-    sections.push(plain(1, 2, warmMin * 60, easy));
+    if (warmMin > 0) sections.push(plain(1, 2, warmMin * 60, easy));
     let workSec, restSec;
     if (day.typeKey === 'fartlek' || (iv.workMin && !iv.repMeters)) {
       workSec = plain(2, 2, (Number(iv.workMin) || 1) * 60, work);
@@ -60,11 +61,15 @@ function buildCorosCourse(day, zones, labels) {
       else restSec = plain(3, 2, (Number(iv.recoveryMin) || 1) * 60, rest);
     }
     sections.push({ intervalGroup: true, repeats: reps, sets: [workSec, restSec] });
-    sections.push(plain(4, 2, coolMin * 60, easy));
+    if (coolMin > 0) sections.push(plain(4, 2, coolMin * 60, easy));
   } else {
+    // sesión continua: la entrada en calor y la vuelta a la calma van como secciones propias si la app las mandó (así el tiempo total del entrenamiento las incluye)
+    const withWarm = day.warmupMin != null;
+    if (withWarm && warmMin > 0) sections.push(plain(1, 2, warmMin * 60, easy));
     const distM = Math.round((Number(day.distKm) || 0) * 1000);
     if (distM > 0 && !(day.timeBased && Number(day.durMin) > 0)) sections.push(plain(2, 1, distM, work));
     else sections.push(plain(2, 2, Math.max(300, posInt(day.durMin, 5, 600, 30) * 60), work));
+    if (withWarm && coolMin > 0) sections.push(plain(4, 2, coolMin * 60, easy));
   }
 
   const name = String(`Zancada - ${day.name || 'Run'}`).slice(0, 100);

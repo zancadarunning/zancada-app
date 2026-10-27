@@ -106,13 +106,18 @@ function buildGuide(day, zones, labels) {
   } else {
     // Sesión continua (rodaje, tirada larga, tempo, progresivo...): un solo paso con
     // distancia/tiempo acumulados, pulso, ritmo y -- si el plan indica zona -- el objetivo de pulso.
+    // si la app mandó la entrada en calor y la vuelta a la calma (warmupMin/cooldownMin) van como pasos propios: el tiempo total del reloj los incluye. Entonces el tramo principal necesita su propio final (cuenta regresiva).
+    const withWarm = day.warmupMin != null;
+    if (withWarm && warmMin > 0) steps.push(fieldsStep(L('warmup', 'Warm up'), [{ type: 'stepDurationCountdown', value: warmMin * 60, title: 'time' }, hr, easyTarget], [T.duration(warmMin * 60)], L('warmup', 'Warm up')));
     const distM = Math.round((Number(day.distKm) || 0) * 1000);
+    const mainByTime = day.timeBased && Number(day.durMin) > 0;
     const fields = [
-      distM > 0 && !(day.timeBased && Number(day.durMin) > 0) ? { type: 'stepDistanceCountdown', value: distM, title: 'to go' } : { type: 'duration', window: 'workout', title: 'time' },
+      distM > 0 && !mainByTime ? { type: 'stepDistanceCountdown', value: distM, title: 'to go' } : ((withWarm && mainByTime) ? { type: 'stepDurationCountdown', value: Math.max(300, posInt(day.durMin, 5, 600, 30) * 60), title: 'time' } : { type: 'duration', window: 'workout', title: 'time' }),
       { type: 'distance', window: 'workout', title: 'dist' },
       hr, pace, workTarget
     ];
     steps.push(fieldsStep(L('main', day.name || 'Run'), fields, null, L('main', day.name || 'Run')));
+    if (withWarm && coolMin > 0) steps.push(fieldsStep(L('cooldown', 'Cool down'), [{ type: 'stepDurationCountdown', value: coolMin * 60, title: 'time' }, hr, easyTarget], [T.duration(coolMin * 60)], L('cooldown', 'Cool down')));
   }
 
   const date = /^\d{4}-\d{2}-\d{2}$/.test(day.date || '') ? day.date : null;
