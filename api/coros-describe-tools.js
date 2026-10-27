@@ -11,7 +11,7 @@ const { decToken } = require('./_lib/token-crypto');
 const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { userCooldown } = require('./_lib/sync-cooldown');
-const { corosMcpRequest, refreshCorosToken } = require('./_lib/coros-activity-helpers');
+const { corosMcpRequest, callCorosMcpTool, refreshCorosToken } = require('./_lib/coros-activity-helpers');
 const { withSentry, reportError } = require('./_lib/sentry');
 
 const TOOLS_OF_INTEREST = new Set([
@@ -49,6 +49,13 @@ module.exports = withSentry(async (req, res) => {
       const refreshed = await refreshCorosToken(base, headers, auth.userId, decToken(conn.refresh_token));
       if (!refreshed) { res.status(200).json({ error: 'token_expired', hint: 'Desconectá y volvé a conectar COROS.' }); return; }
       accessToken = refreshed.accessToken;
+    }
+    // action:'schedule' = qué tiene COROS agendado de verdad (para comprobar fechas e ids): llama a queryTrainingSchedule con la conexión del admin
+    if (req.body && req.body.action === 'schedule') {
+      const ymd = v => (/^\d{8}$/.test(String(v || '')) ? String(v) : undefined);
+      const r = await callCorosMcpTool(accessToken, 'queryTrainingSchedule', { startDate: ymd(req.body.startDate), endDate: ymd(req.body.endDate) });
+      res.status(200).json({ schedule: String(typeof r === 'string' ? r : JSON.stringify(r)).slice(0, 8000) });
+      return;
     }
     const result = await corosMcpRequest(accessToken, 'tools/list', {});
     const all = (result && Array.isArray(result.tools)) ? result.tools : [];

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-27T01:32:50Z';
+const APP_VERSION = '2026-10-27T01:47:23Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2729,7 +2729,8 @@ async function syncPlanToWahoo(force){
 // state.corosSent[fecha] = firma de lo ya enviado.
 let corosSyncTimer = null, corosSyncRunning = false, corosSyncAgain = false, corosBlockedUntil = 0;
 function scheduleCorosSync(delayMs){
-  if(!deviceConnections.coros || !watchSyncReady() || Date.now() < corosBlockedUntil) return;
+  if(!deviceConnections.coros || !watchSyncReady()) return;
+  if(!delayMs && Date.now() < corosBlockedUntil) return;   // con una demora explícita (reintento) sí se programa aunque haya bloqueo
   clearTimeout(corosSyncTimer);
   corosSyncTimer = setTimeout(()=>{ syncPlanToCoros(false).catch(e=>console.error('coros sync', e)); }, delayMs || 4000);
 }
@@ -2771,7 +2772,11 @@ async function syncPlanToCoros(force){
           if(result.reason === 'not_connected'){ deviceConnections.coros = false; }
           const ok = res.ok && !result.error && !result.reason && !result.failed;
           if(result.reason === 'not_enabled') corosBlockedUntil = Date.now() + 24*3600*1000;      // todavía no está habilitado para esta cuenta: no insistir
-          else if(result.reason === 'cooldown' || result.reason === 'rate_limited') corosBlockedUntil = Date.now() + 6*60*1000;
+          else if(result.reason === 'cooldown' || result.reason === 'rate_limited'){
+            // el servidor deja un envío cada 5 minutos: un cambio del plan que cae en esa espera se reintenta solo apenas termina (antes quedaba sin enviar hasta el próximo cambio)
+            corosBlockedUntil = Date.now() + 6*60*1000;
+            scheduleCorosSync(6*60*1000 + 2000);
+          }
           else if(!ok) corosBlockedUntil = Date.now() + 15*60*1000;
           const next = {};
           keep.forEach(dt => { if(sent[dt] && !changed.some(c=>c.date===dt)) next[dt] = sent[dt]; });
