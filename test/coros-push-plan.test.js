@@ -9,7 +9,7 @@ const { buildCorosCourse, corosDate, extractIdInPlan } = require('../api/_lib/co
 process.env.SUPABASE_URL = 'https://x.supabase.co';
 process.env.SUPABASE_SERVICE_KEY = 'service-key';
 process.env.ADMIN_EMAILS = 'admin@zancada.org';
-delete process.env.COROS_PLAN_PUSH;
+delete process.env.COROS_PLAN_PUSH;   // activo por defecto
 const handler = require('../api/coros-push-plan.js');
 
 const read = p => fs.readFileSync(path.join(__dirname, '..', p), 'utf8');
@@ -127,11 +127,20 @@ async function post(body) {
 }
 const BASE = { zones: ZONES, labels: {}, today: '2026-10-27', weekStart: '2026-10-26' };
 
-test('sin habilitar, una cuenta que no es admin no envia nada', async () => {
-  const log = world({ email: 'otra@persona.com', mcp: () => mcpOk(1) });
-  const r = await post(Object.assign({ days: [day('2026-10-28')], keepDates: ['2026-10-28'] }, BASE));
-  assert.equal(r.body.reason, 'not_enabled');
-  assert.equal(log.create.length, 0);
+test('activo para cualquier cuenta; con COROS_PLAN_PUSH=0 solo envia el admin', async () => {
+  let log = world({ email: 'otra@persona.com', mcp: () => mcpOk(7) });
+  let r = await post(Object.assign({ days: [day('2026-10-28')], keepDates: ['2026-10-28'] }, BASE));
+  assert.equal(r.body.created, 1, 'una cuenta cualquiera envia');
+  process.env.COROS_PLAN_PUSH = '0';
+  try {
+    log = world({ email: 'otra@persona.com', mcp: () => mcpOk(7) });
+    r = await post(Object.assign({ days: [day('2026-10-28')], keepDates: ['2026-10-28'] }, BASE));
+    assert.equal(r.body.reason, 'not_enabled');
+    assert.equal(log.create.length, 0);
+    log = world({ mcp: () => mcpOk(8) });
+    r = await post(Object.assign({ days: [day('2026-10-28')], keepDates: ['2026-10-28'] }, BASE));
+    assert.equal(r.body.created, 1, 'el admin sigue pudiendo probar');
+  } finally { delete process.env.COROS_PLAN_PUSH; }
 });
 
 test('admin: crea el entrenamiento, recuerda su id en el servidor y no manda el id de nadie mas', async () => {

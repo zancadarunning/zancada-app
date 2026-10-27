@@ -8,8 +8,8 @@
 //   2) si una sesión ya enviada desaparece del plan (cancelada o movida), no se la puede borrar: se devuelve en `staleDates` y la app le avisa a la persona que la quite en COROS.
 // Qué entrenamiento corresponde a cada fecha lo recuerda el SERVIDOR (tabla sent_notifications, tipo 'coros_id', período 'fecha|idInPlan'): sirve aunque la persona use dos teléfonos.
 //
-// ESTADO: el formato del entrenamiento (`course`) sigue el esquema real publicado por el MCP de COROS (ver coros-workout-builder.js), pero TODAVÍA NO se probó contra una cuenta real. Hasta
-// confirmarlo con un envío de verdad, solo funciona para cuentas admin (el panel muestra el error exacto de COROS si lo rechaza); para activarlo a todos: variable COROS_PLAN_PUSH=1 en Vercel.
+// ESTADO: probado de punta a punta el 2026-10-26 con una cuenta real (los entrenamientos aparecen en el calendario de COROS con duración, distancia, pulso y carga). Habilitado para todos;
+// COROS_PLAN_PUSH=0 en Vercel lo pausa. El formato sigue el esquema real publicado por el MCP de COROS (ver coros-workout-builder.js).
 
 const { decToken } = require('./_lib/token-crypto');
 const verifyUser = require('./_lib/verify-user');
@@ -43,7 +43,8 @@ module.exports = withSentry(async (req, res) => {
   const userId = auth.userId;
 
   const isAdmin = !!(auth.emailConfirmed && auth.email && adminList().includes(String(auth.email).toLowerCase()));
-  if (process.env.COROS_PLAN_PUSH !== '1' && !isAdmin) { res.status(200).json({ pushed: 0, reason: 'not_enabled' }); return; }
+  // Habilitado para todos. COROS_PLAN_PUSH=0 en Vercel lo pausa (el admin sigue pudiendo probar): interruptor de emergencia si COROS cambia algo o aparece un problema.
+  if (process.env.COROS_PLAN_PUSH === '0' && !isAdmin) { res.status(200).json({ pushed: 0, reason: 'not_enabled' }); return; }
 
   const body = req.body || {};
   const days = (Array.isArray(body.days) ? body.days : []).slice(0, MAX_DAYS).map(cleanDay).filter(Boolean).sort((a, b) => a.date.localeCompare(b.date));
