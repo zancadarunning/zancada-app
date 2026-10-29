@@ -53,8 +53,12 @@ test('las dos fechas de "última actualización" coinciden entre idiomas y entre
   for (const doc of [P, T]) for (const l of LANGS) assert.equal(nums(doc[l].updated), ref, l);
 });
 
-test('los datos a completar por el dueño (razón social, CUIT, domicilio) siguen marcados: no publicar la app sin completarlos', () => {
-  for (const doc of [P, T]) for (const l of LANGS) assert.ok(doc[l].sections[0].ph && doc[l].sections[0].ph.length > 40, l);
+test('la política de privacidad no tiene marcadores de "a completar" (se publica limpia); los términos todavía los llevan para el dueño', () => {
+  for (const l of LANGS) {
+    assert.ok(!P[l].sections.some(s => s.ph), l + ': la política ya no lleva recuadros de datos a completar');
+    assert.doesNotMatch(text(P, l), /(A completar|To be completed|À compléter|Da completare|zu ergänzen)/i, l);
+  }
+  for (const l of LANGS) assert.ok(T[l].sections[0].ph && T[l].sections[0].ph.length > 40, l + ': los términos conservan el aviso de datos a completar');
 });
 
 test('el respaldo semanal cumple lo que promete la política: nada con más de 90 días (en la carpeta local y en el segundo disco)', () => {
