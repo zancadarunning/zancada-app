@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-27T22:38:55Z';
+const APP_VERSION = '2026-10-29T02:40:13Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -14550,7 +14550,8 @@ function runsByDateAsc(list){
 }
 // Carreras que pueden llegar a Zonda (la IA). El acuerdo de desarrollador de Strava (API Policy 2026, sección 5.3) prohíbe usar datos de Strava
 // en cualquier aplicación de IA, incluso como contexto de una conversación: las carreras importadas de Strava (source:'strava') quedan afuera.
-function aiVisibleRuns(){ return (state.runs || []).filter(r => r.source !== 'strava'); }
+// Garmin (Connect Developer Program) se declara igual en el formulario de acceso: los datos que vienen de dispositivos Garmin (source:'garmin') tampoco llegan a la IA ni se usan para entrenarla.
+function aiVisibleRuns(){ return (state.runs || []).filter(r => r.source !== 'strava' && r.source !== 'garmin'); }
 // Boceto de la ruta (SVG) para las tarjetas del historial: se dibuja con los puntos del GPS, sin depender del mapa de Mapbox.
 // Queda detras de la imagen del mapa: si la imagen carga la tapa, si falla (sin red / sin token) se ve el trazo.
 function routeSketchSvg(points){
@@ -17334,7 +17335,7 @@ function buildContext(){
   if(p.weeklyGoalKm > 0) ctx += ` Meta ${isTimeMode() ? 'de tiempo' : 'de km'} que el corredor se puso para esta semana: ${isTimeMode() ? weeklyGoalAmount().km + ' minutos' : p.weeklyGoalKm + 'km'} (esto ya se usó para ajustar el volumen del plan actual, dentro de márgenes seguros).`;
   if(p.goalNote) ctx += ` Objetivo personal, en sus propias palabras: "${p.goalNote}".`;
   const aiRuns = aiVisibleRuns();   // sin las carreras de Strava (ver aiVisibleRuns)
-  const hasStravaRuns = (state.runs||[]).some(r => r.source === 'strava');
+  const hasStravaRuns = (state.runs||[]).some(r => r.source === 'strava' || r.source === 'garmin');   // (Strava o Garmin: las dos marcas prohíben pasar sus datos a una IA)
   // la pausa se mide sobre TODAS las carreras (es lo que ya redujo el plan), pero solo se le dice a Zonda que existe una pausa: nunca el contenido de una carrera de Strava
   const gapWeeks = detectTrainingGapWeeks(state.weekStart);
   if(gapWeeks >= 2) ctx += ` Hace ${gapWeeks} semanas que no registra una carrera -- si el volumen del plan actual parece bajo, es porque ya se lo redujo automáticamente por esta pausa.`;
@@ -17366,7 +17367,7 @@ function buildContext(){
     const last4wKm = aiRuns.filter(r=>new Date(r.date).getTime() >= cutoff).reduce((s,r)=>s+r.distanceKm,0);
     ctx += ` Últimas carreras registradas (de más vieja a más nueva): ${runsSummary}. Total corrido en los últimos 28 días: ${last4wKm.toFixed(1)}km.`;
   }
-  if(hasStravaRuns) ctx += ` Parte de las carreras del corredor se importaron de Strava y NO las ves (las reglas de Strava no permiten pasarlas a una IA): no saques conclusiones sobre su volumen, ritmo o carga recientes a partir de las carreras que sí ves, porque pueden estar incompletas -- si te pregunta por eso, pedile que te cuente cómo viene o que lo mire en Historial.`;
+  if(hasStravaRuns) ctx += ` Parte de las carreras del corredor se importaron de Strava o de Garmin y NO las ves (las reglas de esas marcas no permiten pasarlas a una IA): no saques conclusiones sobre su volumen, ritmo o carga recientes a partir de las carreras que sí ves, porque pueden estar incompletas -- si te pregunta por eso, pedile que te cuente cómo viene o que lo mire en Historial.`;
   if(state.shoes.length) ctx += ` Zapatillas: ${state.shoes.map(s=>`${s.name} (${s.km.toFixed(0)}km, ${s.terrain})`).join(', ')}.`;
   // Le pasamos al coach el mismo indicador de carga (agudo:crónico) que ya ve el
   // corredor en la pantalla de Inicio -- antes lo calculábamos solo para mostrar el

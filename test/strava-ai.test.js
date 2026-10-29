@@ -26,3 +26,9 @@ test('el contexto de Zonda usa solo carreras sin Strava', () => {
   assert.match(ctx, /hasStravaRuns \? null : calcTrainingLoad\(aiRuns\)/);
   assert.doesNotMatch(ctx.split('=== PLAN DE ESTA SEMANA')[0], /state\.runs\.(filter|slice|map|reduce)/);
 });
+
+// Garmin Connect Developer Program: la misma regla (se declara en el formulario de acceso). Las carreras con source:'garmin' no llegan a Zonda.
+test('aiVisibleRuns descarta también las carreras de Garmin, y Zonda sabe que hay carreras que no ve', () => {
+  assert.match(body('aiVisibleRuns'), /source\s*!==\s*'garmin'/);
+  assert.match(src, /hasStravaRuns = \(state\.runs\|\|\[\]\)\.some\(r => r\.source === 'strava' \|\| r\.source === 'garmin'\)/);
+});
