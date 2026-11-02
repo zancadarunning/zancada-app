@@ -19,7 +19,7 @@ const { buildGarminWorkout, countSteps } = require('./_lib/garmin-workout-builde
 const { loadKnown, saveKnown, forgetKnown, deleteGarminWorkout } = require('./_lib/garmin-plan-sync');
 const { withSentry, reportError } = require('./_lib/sentry');
 
-const MAX_DAYS = 7;
+const MAX_DAYS = 14;   // esta semana y la próxima
 const errText = e => String((e && e.message) || e).slice(0, 300);
 
 module.exports = withSentry(async (req, res) => {
