@@ -355,3 +355,18 @@ test('webhook: la dirección /api/garmin-webhook/<secreto> se reescribe a ?k=<se
   const ev = scrubEvent({ request: { url: 'https://www.zancada.org/api/garmin-webhook/SECRETO-LARGO-123?x=1' } });
   assert.equal(ev.request.url, 'https://www.zancada.org/api/garmin-webhook/[oculto]');
 });
+
+test('enviar el plan: si Garmin programa sin devolver el id, se busca por fecha para poder borrarlo/moverlo después', async () => {
+  const state = {};
+  const routes = [
+    [/POST https:\/\/apis\.garmin\.com\/training-api\/schedule\//, () => ({ ok: true, status: 204, json: async () => { throw new Error('sin cuerpo'); }, text: async () => '' })],
+    [/GET https:\/\/apis\.garmin\.com\/training-api\/schedule\?startDate=2026-11-03&endDate=2026-11-03/, () => json([{ scheduleId: 7777, workoutId: 1001, date: '2026-11-03' }])],
+    ...garminRoutes(state)
+  ];
+  const n = net(routes);
+  try {
+    const r = await callPush({ days: [DAY('2026-11-03')], keepDates: ['2026-11-03'], zones: ZONES, today: '2026-11-02', force: true });
+    assert.equal(r.body.created, 1, JSON.stringify(r.body));
+    assert.match(state.known[0], /^2026-11-03\|1001\|7777\|[a-f0-9]{16}$/);
+  } finally { n.restore(); }
+});
