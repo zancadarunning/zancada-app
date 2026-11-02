@@ -17,6 +17,8 @@ const PUBLIC = {
   'wahoo-auth.js': /verifyState/,
   'suunto-auth.js': /verifyState/,
   'coros-auth.js': /verifyState/,
+  'garmin-callback.js': /verifyState/,           // vuelta del OAuth de Garmin: el state lo firmó nuestro servidor
+  'garmin-webhook.js': /GARMIN_WEBHOOK_SECRET/,  // avisos de Garmin (no firman): secreto en la dirección, comparado en tiempo constante
   'strava-webhook.js': /STRAVA_WEBHOOK_SECRET/,  // avisos de Strava: secreto en la URL + subscription_id
   'suunto-webhook.js': /signatureMatches/,        // avisos de Suunto: firma HMAC del cuerpo
   'health.js': /status: 'ok'/                      // chequeo de vida para el monitoreo: sin datos y sin tocar la base
