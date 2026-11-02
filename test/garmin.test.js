@@ -86,6 +86,12 @@ test('un resumen de Garmin se convierte en una carrera de Zancada marcada como G
   // el app marca source:'garmin' y aiVisibleRuns() lo excluye (test/strava-ai.test.js)
 });
 
+test('una actividad cargada a mano en Garmin Connect (deviceName "unknown") no queda con un modelo de reloj inventado', () => {
+  const base = { summaryId: '9001', activityId: 9001, activityType: 'RUNNING', startTimeInSeconds: 1793545200, startTimeOffsetInSeconds: -10800, durationInSeconds: 1200, distanceInMeters: 3000 };
+  assert.equal(H.activityToRun(Object.assign({ deviceName: 'unknown' }, base)).device, null);
+  assert.equal(H.activityToRun(Object.assign({ deviceName: 'Garmin Venu 3S' }, base)).device, 'Venu 3S');
+});
+
 test('el detalle y el resumen de la misma actividad comparten garminId (el detalle completa la carrera, no la duplica)', () => {
   assert.equal(H.garminActivityId({ summaryId: '777-detail' }), '777');
   assert.equal(H.garminActivityId({ summaryId: '777-detail', activityId: 777 }), '777');
