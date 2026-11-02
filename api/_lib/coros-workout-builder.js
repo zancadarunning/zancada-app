@@ -61,7 +61,7 @@ function buildCorosCourse(day, zones, labels) {
       else restSec = plain(3, 2, (Number(iv.recoveryMin) || 1) * 60, rest);
     }
     sections.push({ intervalGroup: true, repeats: reps, sets: [workSec, restSec] });
-    if (coolMin > 0) sections.push(plain(4, 2, coolMin * 60, easy));
+    if (coolMin > 0) sections.push(plain(4, 2, coolMin * 60));
   } else {
     // sesión continua: la entrada en calor y la vuelta a la calma van como secciones propias si la app las mandó (así el tiempo total del entrenamiento las incluye)
     const withWarm = day.warmupMin != null;
@@ -69,7 +69,7 @@ function buildCorosCourse(day, zones, labels) {
     const distM = Math.round((Number(day.distKm) || 0) * 1000);
     if (distM > 0 && !(day.timeBased && Number(day.durMin) > 0)) sections.push(plain(2, 1, distM, work));
     else sections.push(plain(2, 2, Math.max(300, posInt(day.durMin, 5, 600, 30) * 60), work));
-    if (withWarm && coolMin > 0) sections.push(plain(4, 2, coolMin * 60, easy));
+    if (withWarm && coolMin > 0) sections.push(plain(4, 2, coolMin * 60));
   }
 
   const name = String(`Zancada - ${day.name || 'Run'}`).slice(0, 100);
