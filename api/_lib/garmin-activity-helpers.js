@@ -179,6 +179,20 @@ async function garminCall(accessToken, method, url, body) {
   return { ok: res.ok, status: res.status, json, text: text.slice(0, 300) };
 }
 
+// Los permisos que la persona aceptó. Al conectar a veces vuelven vacíos (Garmin todavía no los tenía) y el aviso de cambio de permisos solo llega si los cambia después:
+// por eso, si quedaron vacíos, se vuelven a pedir y se guardan. Devuelve la lista (puede seguir vacía) o null si no se pudo consultar.
+async function refreshGarminPermissions(base, headers, userId, accessToken) {
+  try {
+    const r = await garminCall(accessToken, 'GET', `${GARMIN_API}/partner-gateway/rest/user/permissions`);
+    if (!r.ok || !r.json || !Array.isArray(r.json.permissions)) return null;
+    const perms = r.json.permissions.map(String).slice(0, 20);
+    if (perms.length) {
+      await fetch(`${base}/rest/v1/garmin_connections?user_id=eq.${encodeURIComponent(userId)}`, { method: 'PATCH', headers, body: JSON.stringify({ permissions: perms }) }).catch(() => {});
+    }
+    return perms;
+  } catch (e) { return null; }
+}
+
 // Avisa a Garmin que la persona quitó su conexión desde Zancada (obligatorio por el acuerdo: ver OAuth2 PKCE, "Delete User Registration").
 async function deleteGarminRegistration(accessToken) {
   try {
@@ -190,5 +204,5 @@ async function deleteGarminRegistration(accessToken) {
 module.exports = {
   GARMIN_TOKEN_URL, GARMIN_AUTHORIZE_URL, GARMIN_API, REDIRECT_URI, RUNNING_TYPES,
   isRunningActivity, garminActivityId, activityToRun, fitFromSamples, mergeGarminRuns, purgeGarminRunsForUser,
-  exchangeGarminCode, ensureFreshGarminToken, garminCall, deleteGarminRegistration
+  exchangeGarminCode, ensureFreshGarminToken, garminCall, deleteGarminRegistration, refreshGarminPermissions
 };

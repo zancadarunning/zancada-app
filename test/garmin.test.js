@@ -319,6 +319,28 @@ test('enviar el plan: sin conexión, sin permiso de importar entrenamientos o co
   } finally { n.restore(); }
 });
 
+test('enviar el plan: con los permisos vacíos se vuelven a pedir a Garmin y se guardan; si dicen que no hay permiso de importar, no se envía', async () => {
+  const state = {};
+  const empty = [/GET .*garmin_connections\?user_id=eq\.u1/, () => json([Object.assign(conn(), { permissions: [] })])];
+  let patched = null;
+  let n = net([empty, [/PATCH .*garmin_connections/, (u, o) => { patched = JSON.parse(o.body); return json([]); }],
+    [/GET https:\/\/apis\.garmin\.com\/partner-gateway\/rest\/user\/permissions/, () => json({ permissions: ['ACTIVITY_EXPORT', 'WORKOUT_IMPORT'] })], ...garminRoutes(state)]);
+  try {
+    const r = await callPush({ days: [DAY('2026-11-03')], keepDates: [], zones: ZONES, today: '2026-11-02', force: true });
+    assert.equal(r.body.created, 1);
+    assert.deepEqual(patched.permissions, ['ACTIVITY_EXPORT', 'WORKOUT_IMPORT'], 'los permisos recuperados quedan guardados');
+  } finally { n.restore(); }
+  n = net([empty, ...garminRoutes({}), [/GET https:\/\/apis\.garmin\.com\/partner-gateway\/rest\/user\/permissions/, () => json({ permissions: ['ACTIVITY_EXPORT'] })]]);
+  try {
+    const r = await callPush({ days: [DAY('2026-11-03')], keepDates: [], zones: ZONES, today: '2026-11-02', force: true });
+    assert.equal(r.body.reason, 'no_permission');
+    assert.equal(n.log.filter(l => /workoutportal/.test(l.url)).length, 0, 'no se crea nada sin permiso');
+  } finally { n.restore(); }
+  // si Garmin no responde la consulta de permisos, se sigue como antes (vacío = se intenta igual)
+  n = net([empty, ...garminRoutes({}), [/GET https:\/\/apis\.garmin\.com\/partner-gateway\/rest\/user\/permissions/, () => json({}, 500)]]);
+  try { assert.equal((await callPush({ days: [DAY('2026-11-03')], keepDates: [], zones: ZONES, today: '2026-11-02', force: true })).body.created, 1); } finally { n.restore(); }
+});
+
 test('enviar el plan: si Garmin crea el entrenamiento pero no lo programa, se borra el suelto (no deja basura en la cuenta)', async () => {
   const state = {};
   const routes = garminRoutes(state);
