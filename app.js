@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T13:59:50Z';
+const APP_VERSION = '2026-11-02T14:04:59Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -9375,8 +9375,10 @@ function renderSessionBlocks(plan){
   }).join('');
   const names = {warmup:t('sess_warmup'), cooldown:t('sess_cooldown'), main:t('sess_main')};
   const text = sessionBlocks(plan.steps).map(b => {
-    const title = b.kind === 'reps' ? t('sess_reps', {n:b.reps}) : names[b.kind];
-    const lines = b.lines.map(s => `<li>${escapeHtml(fmtSessionAmount(s))} · ${t('zone_word')} ${s.zone}${s.kind === 'rest' ? ' · ' + t('sess_recovery') : ''}</li>`).join('');
+    const leg = b.lines[0] && b.lines[0].leg;
+    const title = b.kind === 'reps' ? t('sess_reps', {n:b.reps}) : leg ? t('sess_leg', {n:leg}) : names[b.kind];
+    const legWord = n => t(['sess_leg_easy', 'sess_leg_mid', 'sess_leg_hard'][n - 1]);
+    const lines = b.lines.map(s => `<li>${escapeHtml(fmtSessionAmount(s))} · ${t('zone_word')} ${s.zone}${s.kind === 'rest' ? ' · ' + t('sess_recovery') : ''}${s.leg ? ' · ' + legWord(s.leg) : ''}</li>`).join('');
     return `<div class="ss-block"><h4>${title}</h4><ul>${lines}</ul></div>`;
   }).join('');
   return `<div class="ss-card"><div class="ss-bars" aria-hidden="true">${bars}</div>${text}</div>`;
@@ -9508,17 +9510,7 @@ function buildDayListHtml(wd){
       statusBlock = canEdit ? `<p style="color:var(--hivis-text); font-weight:700; margin-top:12px;">${doneText} · <button class="small-link" data-on-click="markSession(${i},null)">${t('plan_undo')}</button></p>` : `<p style="color:var(--hivis-text); font-weight:700; margin-top:12px;">${doneText}${isPastDay?' · '+t('plan_locked'):''}</p>`;
     }
     else if(d.status==='skipped') statusBlock = canEdit ? `<p style="color:var(--danger); font-weight:700; margin-top:12px;">${t('plan_status_skipped')} · <button class="small-link" data-on-click="markSession(${i},null)">${t('plan_undo')}</button></p>` : `<p style="color:var(--danger); font-weight:700; margin-top:12px;">${t('plan_status_skipped')}${isPastDay?' · '+t('plan_locked'):''}</p>`;
-    else if(d.dist>0 && canEdit){
-      // El botón "Sincronizar" solo tiene sentido si hay al menos una fuente conectada
-      // (Strava/Polar/Wahoo/Health Connect) -- mostrarlo siempre, aunque no haya nada
-      // conectado, era confuso: tocarlo no traía nada y no explicaba por qué. Mismo
-      // criterio para "Enviar a mi reloj", pero solo mirando Wahoo (es la única que
-      // recibe datos). Ver deviceConnections / refreshDeviceConnections() más arriba.
-      const anyDeviceConnected = deviceConnections.strava || deviceConnections.polar || deviceConnections.wahoo || deviceConnections.coros || deviceConnections.suunto || deviceConnections.garmin || !!state.healthConnectConnected;
-      const showSyncBtn = isToday && anyDeviceConnected;
-      const planBtns = `${showSyncBtn?`<button class="btn btn-outline btn-sm" id="sync-today-btn" data-on-click="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}`;
-      if(planBtns) statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">${planBtns}</div>`;
-    }
+    // Sin botón "Sincronizar" en el ejercicio del día (pedido del usuario): las carreras llegan solas desde el reloj conectado.
     if(d.typeKey==='test' && !d.testRead && d.status!=='skipped') statusBlock += `<div style="margin-top:12px;"><button class="btn btn-primary btn-sm" data-on-click="event.stopPropagation(); openLevelTest()">${t('ltest_load_btn')}</button></div>`;
     planSheetData[i] = buildSessionSheetHtml({d, date:dayIso, title:lblType, lblDesc, statusBlock, isEventDay});
     const kmHtml = isEventDay ? (eventAmountText ? `<span class="day-km-inline">${eventAmountText}</span>` : '') : (d.dist>0 ? `<span class="day-km-inline">${planAmountText(d)}</span>` : (extraRunAmountText ? `<span class="day-km-inline">${extraRunAmountText}</span>` : ''));
@@ -15865,8 +15857,19 @@ function planStepsFromPayload(p){
     }
   } else {
     const distM = Math.round(Number(p.distKm) * 1000);
-    if(distM > 0 && !(p.timeBased && Number(p.durMin) > 0)) steps.push({kind:'main', meters:distM, zone});
-    else steps.push({kind:'main', sec:Math.max(300, Math.round(Number(p.durMin) || 30) * 60), zone});
+    const byTime = !(distM > 0 && !(p.timeBased && Number(p.durMin) > 0));
+    const totalSec = Math.max(300, Math.round(Number(p.durMin) || 30) * 60);
+    if(p.typeKey === 'progression'){
+      // Progresivo: tres tramos iguales, cada uno más exigente que el anterior (suave, moderado, al ritmo más fuerte que se sostiene) -- como dice el texto de la sesión.
+      const legZones = [2, 3, 4];
+      legZones.forEach((z, k) => {
+        const n = k + 1;
+        if(byTime) steps.push({kind:'main', leg:n, n, sec:Math.round(totalSec / 3), zone:z});
+        else steps.push({kind:'main', leg:n, n, meters:Math.round(distM / 3), zone:z});
+      });
+    }
+    else if(!byTime) steps.push({kind:'main', meters:distM, zone});
+    else steps.push({kind:'main', sec:totalSec, zone});
   }
   if(cool) steps.push({kind:'cooldown', sec:cool, zone:2});
   return {steps, checkFaster: isRepeat && p.typeKey !== 'hills'};
@@ -15927,7 +15930,7 @@ function evaluateRunSteps(run, plan, zones){
       else if(hr < z.min - 3 && sec >= 150 && (s.kind === 'main' || s.kind === 'work')) hrStatus = 'low';
       else hrStatus = 'ok';
     }
-    rows.push({kind:s.kind, n:s.n || null, sec, meters, paceMin, hr, hrStatus});
+    rows.push({kind:s.kind, n:s.n || null, leg:s.leg || null, sec, meters, paceMin, hr, hrStatus});
     cursor = end;
   }
   if(rows.length < 2) return null;
@@ -15948,9 +15951,15 @@ function evaluateRunSteps(run, plan, zones){
   const workJudged = rows.filter(x => x.kind === 'work' && x.hrStatus);
   summary.workJudged = workJudged.length;
   summary.workHigh = workJudged.filter(x => x.hrStatus === 'high').length;
-  const mainRow = rows.find(x => x.kind === 'main' && x.hrStatus);
-  summary.mainJudged = mainRow ? 1 : 0;
-  summary.mainHigh = mainRow && mainRow.hrStatus === 'high' ? 1 : 0;
+  const mainRows = rows.filter(x => x.kind === 'main' && x.hrStatus);   // una sola fila, salvo el progresivo (tres tramos)
+  summary.mainJudged = mainRows.length ? 1 : 0;
+  summary.mainHigh = mainRows.some(x => x.hrStatus === 'high') ? 1 : 0;
+  const legs = rows.filter(x => x.leg && x.paceMin != null);
+  if(legs.length === 3){
+    // progresivo: cada tramo tendría que ser más rápido que el anterior
+    summary.legPaces = legs.map(x => x.paceMin);
+    summary.progressed = legs[2].paceMin < legs[0].paceMin - 0.05;   // el último, al menos ~3 s/km más rápido que el primero
+  }
   const judged = rows.filter(x => x.hrStatus);
   summary.judged = judged.length;
   summary.high = judged.filter(x => x.hrStatus === 'high').length;
@@ -15967,7 +15976,7 @@ function renderRunPlanSteps(r){
   if(!ev) return '';
   const unitK = isImperial() ? KM_PER_MI : 1, u = distUnit();
   const label = x => {
-    const key = {warmup:'seg_step_warmup', cooldown:'seg_step_cooldown', main:'seg_step_main', work:'seg_step_work', rest:'seg_step_rest'}[x.kind];
+    const key = x.leg ? 'sess_leg' : {warmup:'seg_step_warmup', cooldown:'seg_step_cooldown', main:'seg_step_main', work:'seg_step_work', rest:'seg_step_rest'}[x.kind];
     return t(key, {n:x.n || ''});
   };
   const anyHr = ev.rows.some(x => x.hr != null);
@@ -15986,6 +15995,7 @@ function renderRunPlanSteps(r){
     else if(s.deltaSec <= -8) lines.push(t('seg_sum_improve', {n:conv(s.deltaSec), u}));
     else lines.push(t('seg_sum_var', {n:conv(s.spreadSec), u}));
   }
+  if(s.progressed != null) lines.push(t(s.progressed ? 'seg_sum_prog_ok' : 'seg_sum_prog_flat'));
   if(s.judged > 0) lines.push(s.high > 0 ? t('seg_sum_hr_high', {n:s.high, m:s.judged}) : t('seg_sum_hr_ok'));
   return `<div class="card" style="margin-bottom:16px;">
     <h3 style="font-size:16px; margin-bottom:10px;">${t('seg_plan_title')}</h3>
