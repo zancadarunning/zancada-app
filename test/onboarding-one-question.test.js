@@ -46,9 +46,8 @@ test('"¿Cómo conociste Zancada?" se guarda en el perfil solo con valores de la
   assert.ok(!block.includes('confirmLogout'), 'sin cerrar sesión en el inicio');
 });
 
-test('el vidrio del inicio respeta "reducir transparencia" y los dos temas; los textos están en los 6 idiomas', () => {
+test('el inicio tiene estilos para los dos temas; los textos están en los 6 idiomas', () => {
   assert.ok(html.includes('id="ob-glass-css"'));
-  assert.match(html, /@media \(prefers-reduced-transparency:reduce\)/);
   assert.match(html, /:root\[data-theme="light"\] #onboard/);
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
     const s = read('locales/' + l + '.js');
@@ -117,15 +116,15 @@ test('el botón principal del inicio no pierde su estilo: los selectores compart
   }
 });
 
-test('el vidrio es vidrio de verdad: fondo con luz de colores, relleno en diagonal, borde con brillo (--g-rim) y desenfoque con saturación (--g-blur) en todas las superficies', () => {
+test('sin efecto vidrio (pedido del usuario, 2026-11-02): superficies planas, sin desenfoque, sin luces de colores ni brillos de borde', () => {
   const css = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').split(String.fromCharCode(13)).join('');
   const glass = css.slice(css.indexOf('<style id="ob-glass-css">'), css.indexOf('</style>', css.indexOf('<style id="ob-glass-css">')));
-  assert.ok(glass.split('--g-rim:inset').length - 1 >= 3, 'el borde de cristal está definido para oscuro, claro y claro por sistema');
-  assert.ok(!glass.includes('inset 0 1px 0 var(--g-edge-top), inset 0 -1px 0 var(--g-edge-bot)'), 'ya no se usa el filete plano de 1 px');
-  assert.ok(glass.includes('--g-fill:linear-gradient('), 'relleno en degradé, no plano');
-  assert.match(glass, /--g-blur:blur\(\d+px\) saturate\(/);
-  assert.ok(glass.split('radial-gradient(').length - 1 >= 10, 'el fondo tiene varias luces de colores (el vidrio necesita algo detrás)');
-  for (const sel of ['.cw-row', '.ob-options .choice', '.ss-card', '#consent-modal .cs-card']) assert.ok(glass.includes(sel), sel);
-  assert.ok(glass.includes('backdrop-filter:var(--g-blur)'));
-  assert.ok(glass.includes('@media (prefers-reduced-transparency:reduce)'), 'respeta "reducir transparencia"');
+  assert.ok(glass.length > 1000, 'el bloque de estilos del inicio sigue');
+  assert.ok(!/backdrop-filter/.test(glass), 'sin desenfoque de fondo');
+  assert.ok(!glass.includes('--g-blur'), 'sin variable de desenfoque');
+  assert.ok(!glass.includes('radial-gradient('), 'sin luces de colores detrás');
+  assert.ok(!glass.includes('linear-gradient(158deg'), 'sin relleno en diagonal');
+  assert.ok(!/--g-rim:[^;]*inset [0-9.]+px [0-9.]+px/.test(glass), 'sin brillo de borde arriba-izquierda / abajo-derecha');
+  assert.ok(glass.includes('--g-fill:var(--asphalt-2)'), 'tarjetas sólidas del sistema de diseño');
+  assert.ok(!css.includes('--lq-edge') && !css.includes('--lq-surface'), 'la barra de abajo y los diálogos volvieron a su estilo anterior');
 });
