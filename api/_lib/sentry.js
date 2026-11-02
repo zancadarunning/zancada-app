@@ -16,7 +16,8 @@ const Sentry = require('@sentry/node');
 
 // Los pedidos salientes (a Supabase, Strava, etc.) llevan secretos en la query string: el token del calendario de una persona, access_token de Strava,
 // filtros con datos. El SDK los agregaba como breadcrumbs a cualquier error reportado. Acá se sacan antes de enviar nada a Sentry.
-const stripQuery = u => (typeof u === 'string' ? u.split('?')[0] : u);
+// Además de la query: el webhook de Garmin lleva su secreto en la RUTA (/api/garmin-webhook/<secreto>, porque Garmin recorta la query de la dirección que se registra), así que también se oculta.
+const stripQuery = u => (typeof u === 'string' ? u.split('?')[0].replace(/(\/api\/garmin-webhook\/)[^/?#\s]+/, '$1[oculto]') : u);
 function scrubBreadcrumb(b) {
   if (b && b.data) {
     for (const k of ['http.query', 'url.query', 'query', 'http.fragment']) delete b.data[k];

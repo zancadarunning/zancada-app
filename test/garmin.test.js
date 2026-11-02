@@ -345,3 +345,13 @@ test('borrar la cuenta o los datos también le avisa a Garmin (obligatorio por e
   assert.ok(src.includes('deleteGarminRegistration(accessToken)') && src.includes('removeAllGarminWorkouts'));
   assert.ok(src.includes("'garmin_connections'"), 'la tabla se limpia en Borrar mis datos');
 });
+
+// ---------- el secreto del webhook va en la ruta (Garmin recorta la query de la dirección registrada) ----------
+test('webhook: la dirección /api/garmin-webhook/<secreto> se reescribe a ?k=<secreto> y el secreto no llega a Sentry', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const vercel = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'vercel.json'), 'utf8'));
+  assert.ok(vercel.rewrites.some(r => r.source === '/api/garmin-webhook/:k' && r.destination === '/api/garmin-webhook?k=:k'));
+  const { scrubEvent } = require('../api/_lib/sentry.js');
+  const ev = scrubEvent({ request: { url: 'https://www.zancada.org/api/garmin-webhook/SECRETO-LARGO-123?x=1' } });
+  assert.equal(ev.request.url, 'https://www.zancada.org/api/garmin-webhook/[oculto]');
+});

@@ -1,7 +1,8 @@
 // api/garmin-webhook.js
 //
 // Recibe las notificaciones PUSH de Garmin (Activity API, nivel Starter: solo push). Se registra en https://apis.garmin.com/tools/endpoints, una URL por tipo de dato, todas a esta dirección:
-//   https://www.zancada.org/api/garmin-webhook?k=<GARMIN_WEBHOOK_SECRET>
+//   https://www.zancada.org/api/garmin-webhook/<GARMIN_WEBHOOK_SECRET>
+// (Garmin recorta la query de la dirección que se registra, por eso el secreto va en la RUTA; vercel.json la reescribe a ?k=<secreto>. La forma con ?k= también anda.)
 // Garmin no firma los avisos: la defensa es el secreto en la dirección (comparado en tiempo constante) y que solo se actúa sobre cuentas de Garmin que ya conectó alguien en Zancada.
 //
 // Tipos que se atienden (lista con el nombre del tipo como clave del JSON):
