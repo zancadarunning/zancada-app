@@ -63,3 +63,18 @@ test('el plan habla de "fecha objetivo", no de "fecha de carrera", en pantalla y
   assert.match(app, /changes\.push\('fecha objetivo'\)/);
   assert.match(app, /La fecha objetivo "\$\{input\.fecha_carrera\}" no es válida/);
 });
+
+test('al crear la cuenta se ofrece "Conectá tu reloj" (lista de integraciones), ya no "Traé tu historial"', () => {
+  assert.ok(!html.includes('history-import-overlay') && !app.includes('history-import-overlay'));
+  assert.ok(!/hist_import_(title|lead)/.test(html + app));
+  assert.match(app, /setTimeout\(maybeOpenConnectWatch, 1600\)/);
+  const overlay = html.slice(html.indexOf('id="connect-watch-overlay"'), html.indexOf('id="connect-watch-overlay"') + 6000);
+  for (const brand of ['garmin', 'suunto', 'wahoo', 'coros', 'polar', 'healthconnect']) assert.ok(overlay.includes(`data-conn="${brand}"`), brand);
+  assert.ok(!overlay.includes('connectStrava'), 'Strava ya no se ofrece acá');
+  assert.match(app, /row\.disabled = on/);
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
+    const s = read('locales/' + l + '.js');
+    for (const k of ['conn_title', 'conn_lead', 'conn_section', 'conn_connect', 'conn_continue', 'conn_skip']) assert.ok(s.includes(k + ':'), l + ' ' + k);
+    assert.ok(!s.includes('hist_import_title:'), l);
+  }
+});

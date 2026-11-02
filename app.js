@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T13:02:43Z';
+const APP_VERSION = '2026-11-02T13:14:39Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4656,7 +4656,7 @@ async function finishOnboard(){
   seedCoachGreeting();
   await persist();
   enterApp();
-  setTimeout(maybeOpenHistoryImport, 1600);
+  setTimeout(maybeOpenConnectWatch, 1600);
   // Primera vez que el personaje se muestra de verdad para esta cuenta -- un festejo (mismos
   // ojos/color que ya usa celebrate() para una marca personal) en vez del parpadeo genérico
   // de "recién cargó la página", para que arrancar el plan también se sienta como un logro.
@@ -14224,19 +14224,33 @@ function dismissHistoryCalibration(){
   persist();
   renderHistoryCalibCard();
 }
-function openHistoryImport(){
+// "Conectá tu reloj": lista de integraciones con "Conectar" a la derecha. Lo conectado figura como "Conectado" y no se puede tocar de nuevo.
+function openConnectWatch(){
   const hc = document.getElementById('hi-hc');
   if(hc) hc.style.display = getHealthConnectBridge() ? 'flex' : 'none';
-  openOverlaySheetEl(document.getElementById('history-import-overlay'));
+  let any = false;
+  document.querySelectorAll('#connect-watch-overlay .cw-row').forEach(row => {
+    const brand = row.dataset.conn;
+    const on = brand === 'healthconnect' ? !!state.healthConnectConnected : !!(deviceConnections && deviceConnections[brand]);
+    row.classList.toggle('on', on);
+    row.disabled = on;
+    const action = row.querySelector('.cw-action');
+    if(action) action.textContent = t(on ? 'perfil_strava_connected' : 'conn_connect');
+    if(on) any = true;
+  });
+  const btn = document.getElementById('cw-continue-btn');
+  if(btn) btn.textContent = t(any ? 'conn_continue' : 'conn_skip');
+  openOverlaySheetEl(document.getElementById('connect-watch-overlay'));
 }
-function closeHistoryImport(){ document.getElementById('history-import-overlay').classList.remove('overlay-open'); setTimeout(maybeStartTour, 600); }
-// Después de crear la cuenta: si todavía no hay ningún reloj/app conectado, se ofrece traer el historial (una sola vez).
-function maybeOpenHistoryImport(){
+function closeConnectWatch(){ document.getElementById('connect-watch-overlay').classList.remove('overlay-open'); setTimeout(maybeStartTour, 600); }
+// Después de crear la cuenta: si todavía no hay ningún reloj/app conectado, se ofrece conectarlo (una sola vez).
+// (state.historyImportPrompted conserva su nombre: es el aviso de "ya se ofreció" que las cuentas existentes ya tienen guardado.)
+function maybeOpenConnectWatch(){
   if(!state || state.historyImportPrompted) return;
   state.historyImportPrompted = true;
   persist();
   const anyConn = Object.values(deviceConnections || {}).some(Boolean) || !!state.healthConnectConnected;
-  if(!anyConn) openHistoryImport();
+  if(!anyConn) openConnectWatch();
 }
 const CUP_SVG = '<svg viewBox="0 0 48 52" aria-hidden="true"><path class="cup-handle" d="M13 9H7v4a7 7 0 0 0 7 7M35 9h6v4a7 7 0 0 1-7 7"/><path class="cup-body" d="M13 5h22v15a11 11 0 0 1-22 0z"/><path class="cup-shine" d="M17 9v10a7 7 0 0 0 3 5.6"/><polygon class="cup-star" points="24,11 25.6,15.2 30,15.4 26.5,18.1 27.7,22.4 24,19.9 20.3,22.4 21.5,18.1 18,15.4 22.4,15.2"/><rect class="cup-stem" x="21" y="31" width="6" height="7"/><rect class="cup-base" x="15" y="38" width="18" height="5" rx="2"/><rect class="cup-base" x="12" y="43" width="24" height="5" rx="2"/></svg>';
 function renderPersonalRecordsCard(){

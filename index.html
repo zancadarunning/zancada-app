@@ -2657,26 +2657,45 @@
 /* ===== Inicio para usuarios nuevos: una pregunta por pantalla, vidrio líquido sobre un fondo suave (2026-11-02) =====
    El vidrio se arma con relleno translúcido + reflejo en el borde de arriba (siempre); el desenfoque de lo que hay detrás (backdrop-filter) se suma solo donde el navegador lo soporta y no hay "reducir transparencia".
    Es una pantalla pasajera sobre un fondo fijo: no hay contenido que se desplace debajo, a diferencia de las barras siempre visibles (ver "Rendimiento de scroll"). */
-#onboard{
+#onboard, #connect-watch-overlay{
   --g-fill:rgba(255,255,255,.07); --g-fill-on:rgba(214,255,63,.16); --g-edge-top:rgba(255,255,255,.2); --g-edge-bot:rgba(255,255,255,.04);
   --g-shadow:0 12px 30px -16px rgba(0,0,0,.85); --g-ring:var(--hivis); --g-ink:var(--chalk);
   --g-cta-top:#E6FF7A; --g-cta-bot:#C4EF1C; --g-cta-text:#101200; --g-sheen:rgba(255,255,255,.55);
   --g-bg:radial-gradient(70% 38% at 12% -4%, rgba(214,255,63,.17), transparent 62%), radial-gradient(60% 34% at 104% 16%, rgba(110,140,255,.13), transparent 62%), radial-gradient(80% 40% at 50% 112%, rgba(214,255,63,.07), transparent 60%), var(--asphalt);
 }
-:root[data-theme="light"] #onboard{
+:root[data-theme="light"] #onboard, :root[data-theme="light"] #connect-watch-overlay{
   --g-fill:rgba(255,255,255,.66); --g-fill-on:rgba(255,255,255,.95); --g-edge-top:rgba(255,255,255,1); --g-edge-bot:rgba(24,28,48,.07);
   --g-shadow:0 12px 28px -16px rgba(30,40,90,.4); --g-ring:#0A0A0A; --g-ink:#101114;
   --g-cta-top:#2A2A30; --g-cta-bot:#0A0A0A; --g-cta-text:#FFFFFF; --g-sheen:rgba(255,255,255,.28);
   --g-bg:radial-gradient(70% 38% at 12% -4%, rgba(214,255,63,.42), transparent 62%), radial-gradient(60% 34% at 104% 16%, rgba(140,160,255,.3), transparent 62%), radial-gradient(80% 40% at 50% 112%, rgba(214,255,63,.2), transparent 60%), #F4F5FA;
 }
-@media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #onboard{
+@media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #onboard, :root:not([data-theme="dark"]) #connect-watch-overlay{
   --g-fill:rgba(255,255,255,.66); --g-fill-on:rgba(255,255,255,.95); --g-edge-top:rgba(255,255,255,1); --g-edge-bot:rgba(24,28,48,.07);
   --g-shadow:0 12px 28px -16px rgba(30,40,90,.4); --g-ring:#0A0A0A; --g-ink:#101114;
   --g-cta-top:#2A2A30; --g-cta-bot:#0A0A0A; --g-cta-text:#FFFFFF; --g-sheen:rgba(255,255,255,.28);
   --g-bg:radial-gradient(70% 38% at 12% -4%, rgba(214,255,63,.42), transparent 62%), radial-gradient(60% 34% at 104% 16%, rgba(140,160,255,.3), transparent 62%), radial-gradient(80% 40% at 50% 112%, rgba(214,255,63,.2), transparent 60%), #F4F5FA;
 } }
 
-#onboard{background:var(--g-bg); padding-left:22px; padding-right:22px;}
+#onboard, #connect-watch-overlay{background:var(--g-bg); padding-left:22px; padding-right:22px;}
+
+/* "Conectá tu reloj": título centrado, lista de integraciones de vidrio con "Conectar" a la derecha y la acción abajo */
+#connect-watch-overlay .cw-shell{display:flex; flex-direction:column; min-height:calc(100dvh - 56px - var(--safe-top) - var(--safe-bottom));}
+#connect-watch-overlay .cw-title{margin:clamp(14px,5vh,48px) 0 0; font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text',Inter,system-ui,sans-serif; font-size:clamp(26px,7.6vw,32px); font-weight:700; line-height:1.14; letter-spacing:-.022em; text-align:center; text-transform:none; color:var(--g-ink);}
+#connect-watch-overlay .cw-lead{margin:12px auto 0; max-width:34ch; text-align:center; color:var(--mist); font-size:15px; line-height:1.5; text-wrap:pretty;}
+#connect-watch-overlay .cw-section{margin:30px 4px 10px; font-size:13px; font-weight:700; color:var(--mist); letter-spacing:.01em;}
+#connect-watch-overlay .cw-list{display:flex; flex-direction:column; gap:10px; flex:1;}
+#connect-watch-overlay .cw-row{display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; min-height:68px; padding:12px 18px; border:0; border-radius:22px; text-align:left; font:inherit; color:var(--g-ink); cursor:pointer;
+  background:var(--g-fill); box-shadow:inset 0 1px 0 var(--g-edge-top), inset 0 -1px 0 var(--g-edge-bot), var(--g-shadow); transition:transform .12s ease, background .18s ease;}
+#connect-watch-overlay .cw-row:active:not(:disabled){transform:scale(.985);}
+#connect-watch-overlay .cw-left{display:flex; flex-direction:column; align-items:flex-start; gap:4px; min-width:0;}
+#connect-watch-overlay .cw-name{font-size:14.5px; font-weight:700; color:var(--g-ink);}
+#connect-watch-overlay .cw-sub{font-size:12px; color:var(--mist);}
+#connect-watch-overlay .cw-action{flex-shrink:0; font-size:14.5px; font-weight:700; color:var(--hivis-text);}
+:root[data-theme="light"] #connect-watch-overlay .cw-action{color:#0A5BD8;}
+@media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #connect-watch-overlay .cw-action{color:#0A5BD8;} }
+#connect-watch-overlay .cw-row.on{background:var(--g-fill-on); box-shadow:inset 0 0 0 1.5px var(--g-ring), inset 0 1px 0 var(--g-edge-top);}
+#connect-watch-overlay .cw-row.on .cw-action{color:var(--zone2);}
+#connect-watch-overlay .cw-actions{padding-top:20px; margin-top:auto;}
 #onboard .ob-shell{display:flex; flex-direction:column; min-height:calc(100dvh - 56px - var(--safe-top) - var(--safe-bottom));}
 
 /* arriba: volver (vidrio), progreso fino, contador */
@@ -2736,11 +2755,11 @@
 @media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #onboard .day-pill.active{color:#fff;} }
 
 /* botón principal: píldora con reflejo; texto "Omitir" suave debajo */
-#onboard .ob-cta{width:100%; height:58px; border:0; border-radius:999px; font-size:16.5px; font-weight:700; letter-spacing:.005em; color:var(--g-cta-text); position:relative; overflow:hidden;
+#onboard .ob-cta, #connect-watch-overlay .ob-cta{width:100%; height:58px; border:0; border-radius:999px; font-size:16.5px; font-weight:700; letter-spacing:.005em; color:var(--g-cta-text); position:relative; overflow:hidden;
   background:linear-gradient(180deg, var(--g-cta-top), var(--g-cta-bot)); box-shadow:inset 0 1px 0 var(--g-sheen), 0 14px 28px -12px rgba(0,0,0,.55); transition:transform .12s ease, opacity .18s ease;}
-#onboard .ob-cta::before{content:''; position:absolute; inset:0 0 52% 0; border-radius:inherit; pointer-events:none; background:linear-gradient(180deg, var(--g-sheen), transparent);}
-#onboard .ob-cta:active:not(:disabled){transform:scale(.98);}
-#onboard .ob-cta:disabled{opacity:.34; box-shadow:inset 0 1px 0 var(--g-sheen);}
+#onboard .ob-cta::before, #connect-watch-overlay .ob-cta::before{content:''; position:absolute; inset:0 0 52% 0; border-radius:inherit; pointer-events:none; background:linear-gradient(180deg, var(--g-sheen), transparent);}
+#onboard .ob-cta:active:not(:disabled), #connect-watch-overlay .ob-cta:active:not(:disabled){transform:scale(.98);}
+#onboard .ob-cta:disabled, #connect-watch-overlay .ob-cta:disabled{opacity:.34; box-shadow:inset 0 1px 0 var(--g-sheen);}
 #onboard .ob-skip{background:none; border:0; color:var(--mist); font-size:15px; font-weight:600; padding:13px; align-self:center;}
 #onboard .btn-reason{text-align:center; margin:8px 0 0;}
 
@@ -2754,7 +2773,7 @@
 /* desenfoque real, solo donde se banca y sin "reducir transparencia" */
 @supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
   @media (prefers-reduced-transparency:no-preference){
-    #onboard #ob-back-btn, #onboard .ob-options .choice, #onboard .ob-field-big input, #onboard .ob-field-big select, #onboard .two-col input, #onboard .ob-date, #onboard .ob-textarea, #onboard .day-pill, #onboard .ob-callout{
+    #connect-watch-overlay .cw-row, #onboard #ob-back-btn, #onboard .ob-options .choice, #onboard .ob-field-big input, #onboard .ob-field-big select, #onboard .two-col input, #onboard .ob-date, #onboard .ob-textarea, #onboard .day-pill, #onboard .ob-callout{
       -webkit-backdrop-filter:blur(16px) saturate(1.5); backdrop-filter:blur(16px) saturate(1.5);}
   }
 }
@@ -3894,17 +3913,21 @@
        tres que no están en ningún set de íconos de marca abierto, un glifo propio en su
        color de marca real) separada por un divisor fino, para que se lea como un solo
        bloque de "conectá tu reloj". -->
-  <div class="overlay overlay-sheet" id="history-import-overlay">
-    <h2 class="display" style="font-size:32px; margin:10px 0 8px;" data-i18n="hist_import_title"></h2>
-    <p class="muted" style="margin:0 0 20px;" data-i18n="hist_import_lead"></p>
-    <button class="hi-row" data-on-click="closeHistoryImport(); connectStrava()"><span class="brand-logo-chip"><img src="img/brand-logos/strava.svg" alt="Strava"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
-    <button class="hi-row" data-on-click="closeHistoryImport(); connectPolar()"><span class="brand-logo-chip"><img src="img/brand-logos/polar.svg" alt="Polar"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
-    <button class="hi-row" data-on-click="closeHistoryImport(); connectWahoo()"><span class="brand-logo-chip"><img src="img/brand-logos/wahoo.svg" alt="Wahoo"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
-    <button class="hi-row" data-on-click="closeHistoryImport(); connectSuunto()"><span class="brand-logo-chip brand-logo-plate"><img class="brand-logo-color" src="img/brand-logos/suunto.png" alt="Suunto" width="600" height="213"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
-    <button class="hi-row" data-on-click="closeHistoryImport(); connectCoros()"><span class="brand-logo-chip"><img src="img/brand-logos/coros.png" alt="COROS"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
-    <button class="hi-row" data-on-click="closeHistoryImport(); connectGarmin()"><span class="brand-logo-chip" style="gap:10px;"><img class="brand-logo-color" src="img/brand-logos/garmin.png" alt="" width="26" height="26" style="height:26px; width:26px; max-width:26px; border-radius:7px;"><span style="font-size:14.5px; font-weight:700; color:var(--chalk);">Garmin Connect</span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
-    <button class="hi-row" id="hi-hc" style="display:none;" data-on-click="closeHistoryImport(); connectHealthConnect()"><span class="brand-logo-chip" style="gap:10px;"><img class="brand-logo-color" src="img/brand-logos/healthconnect.png" alt="" style="height:26px; max-width:26px; border-radius:7px;"><span style="font-size:14.5px; font-weight:700;">Health Connect</span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
-    <button class="small-link" style="display:block; margin:20px auto 0;" data-on-click="closeHistoryImport()" data-i18n="hist_import_skip"></button>
+  <div class="overlay overlay-sheet" id="connect-watch-overlay">
+    <div class="cw-shell">
+      <h2 class="cw-title" data-i18n="conn_title"></h2>
+      <p class="cw-lead" data-i18n="conn_lead"></p>
+      <p class="cw-section" data-i18n="conn_section"></p>
+      <div class="cw-list">
+        <button class="cw-row" data-conn="garmin" data-on-click="closeConnectWatch(); connectGarmin()"><span class="cw-left"><span class="brand-logo-chip" style="gap:10px;"><img class="brand-logo-color" src="img/brand-logos/garmin.png" alt="" width="26" height="26" style="height:26px; width:26px; max-width:26px; border-radius:7px;"><span class="cw-name">Garmin Connect</span></span><small class="cw-sub" data-i18n="conn_sub_workouts"></small></span><span class="cw-action" data-i18n="conn_connect"></span></button>
+        <button class="cw-row" data-conn="suunto" data-on-click="closeConnectWatch(); connectSuunto()"><span class="cw-left"><span class="brand-logo-chip brand-logo-plate"><img class="brand-logo-color" src="img/brand-logos/suunto.png" alt="Suunto" width="600" height="213"></span><small class="cw-sub" data-i18n="conn_sub_workouts"></small></span><span class="cw-action" data-i18n="conn_connect"></span></button>
+        <button class="cw-row" data-conn="wahoo" data-on-click="closeConnectWatch(); connectWahoo()"><span class="cw-left"><span class="brand-logo-chip"><img src="img/brand-logos/wahoo.svg" alt="Wahoo"></span><small class="cw-sub" data-i18n="conn_sub_workouts"></small></span><span class="cw-action" data-i18n="conn_connect"></span></button>
+        <button class="cw-row" data-conn="coros" data-on-click="closeConnectWatch(); connectCoros()"><span class="cw-left"><span class="brand-logo-chip"><img src="img/brand-logos/coros.png" alt="COROS"></span><small class="cw-sub" data-i18n="conn_sub_workouts"></small></span><span class="cw-action" data-i18n="conn_connect"></span></button>
+        <button class="cw-row" data-conn="polar" data-on-click="closeConnectWatch(); connectPolar()"><span class="cw-left"><span class="brand-logo-chip"><img src="img/brand-logos/polar.svg" alt="Polar"></span><small class="cw-sub" data-i18n="conn_sub_runs"></small></span><span class="cw-action" data-i18n="conn_connect"></span></button>
+        <button class="cw-row" id="hi-hc" data-conn="healthconnect" style="display:none;" data-on-click="closeConnectWatch(); connectHealthConnect()"><span class="cw-left"><span class="brand-logo-chip" style="gap:10px;"><img class="brand-logo-color" src="img/brand-logos/healthconnect.png" alt="" style="height:26px; max-width:26px; border-radius:7px;"><span class="cw-name">Health Connect</span></span><small class="cw-sub" data-i18n="conn_sub_health"></small></span><span class="cw-action" data-i18n="conn_connect"></span></button>
+      </div>
+      <div class="cw-actions"><button class="btn btn-primary ob-cta" id="cw-continue-btn" data-on-click="closeConnectWatch()"></button></div>
+    </div>
   </div>
 
   <div class="overlay overlay-sheet" id="devices-overlay">
