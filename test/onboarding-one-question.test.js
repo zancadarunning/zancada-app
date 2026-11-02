@@ -67,7 +67,8 @@ test('el plan habla de "fecha objetivo", no de "fecha de carrera", en pantalla y
 test('al crear la cuenta se ofrece "Conectá tu reloj" (lista de integraciones), ya no "Traé tu historial"', () => {
   assert.ok(!html.includes('history-import-overlay') && !app.includes('history-import-overlay'));
   assert.ok(!/hist_import_(title|lead)/.test(html + app));
-  assert.match(app, /setTimeout\(maybeOpenConnectWatch, 1600\)/);
+  assert.match(app, /setTimeout\(maybeOpenNotifPrompt, 1600\)/, 'primero las notificaciones');
+  assert.match(app, /function closeNotifPrompt\(\)\{[\s\S]*?setTimeout\(maybeOpenConnectWatch, 350\)/, 'al cerrarla sigue conectar el reloj');
   const from = html.indexOf('id="connect-watch-overlay"');
   const overlay = html.slice(from, html.indexOf('id="cw-continue-btn"', from) + 120);
   for (const brand of ['garmin', 'suunto', 'wahoo', 'coros', 'polar', 'healthconnect']) assert.ok(overlay.includes(`data-conn="${brand}"`), brand);
@@ -77,5 +78,20 @@ test('al crear la cuenta se ofrece "Conectá tu reloj" (lista de integraciones),
     const s = read('locales/' + l + '.js');
     for (const k of ['conn_title', 'conn_lead', 'conn_section', 'conn_connect', 'conn_continue', 'conn_skip']) assert.ok(s.includes(k + ':'), l + ' ' + k);
     assert.ok(!s.includes('hist_import_title:'), l);
+  }
+});
+
+test('al crear la cuenta se ofrece activar las notificaciones: una sola vez, sin doble cartel, y solo si hay algo que pedir', () => {
+  assert.ok(html.includes('id="notif-prompt-overlay"') && html.includes('data-on-click="acceptNotifPrompt()"') && html.includes('data-on-click="closeNotifPrompt()"'));
+  const fn = app.slice(app.indexOf('async function maybeOpenNotifPrompt()'), app.indexOf('function closeNotifPrompt()'));
+  assert.match(fn, /state\.historyImportPrompted\)\{ return; \}/, 'solo cuentas nuevas');
+  assert.match(fn, /state\.notifPrompted = true/, 'una sola vez');
+  assert.match(fn, /Notification\.permission === 'default'/, 'si ya está concedido o bloqueado no se pide');
+  assert.match(app, /enablePushNotifications\(\{skipSoftAsk:true\}\)/, 'la pestaña ya explicó: no se pregunta dos veces');
+  assert.match(app, /async function enablePushNotifications\(opts\)/);
+  assert.match(app, /Notification\.permission === 'default' && !\(opts && opts\.skipSoftAsk\)/);
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
+    const s = read('locales/' + l + '.js');
+    for (const k of ['notif_prompt_title', 'notif_prompt_lead', 'notif_prompt_r1', 'notif_prompt_r2', 'notif_prompt_enable', 'notif_prompt_skip']) assert.ok(s.includes(k + ':'), l + ' ' + k);
   }
 });

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T13:22:00Z';
+const APP_VERSION = '2026-11-02T13:29:19Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1219,11 +1219,12 @@ async function refreshNativePushRegistration(){
     await nativePush.register();
   }catch(e){ nativePushRefreshed = false; console.error('push nativo: no se pudo renovar el registro', e); }
 }
-async function enableNativePushNotifications(nativePush){
+async function enableNativePushNotifications(nativePush, opts){
   try{
     let status = await nativePush.checkPermissions();
     if(status.receive === 'prompt' || status.receive === 'prompt-with-rationale'){
-      const proceed = await showConfirm(t('push_soft_ask'), { confirmText: t('push_soft_ask_confirm'), cancelText: t('push_soft_ask_cancel') });
+      // la pestaña de bienvenida ya explicó para qué sirven (opts.skipSoftAsk): no se pregunta dos veces
+      const proceed = (opts && opts.skipSoftAsk) || await showConfirm(t('push_soft_ask'), { confirmText: t('push_soft_ask_confirm'), cancelText: t('push_soft_ask_cancel') });
       if(!proceed){ await updatePushStatusDisplay(); return; }
       status = await nativePush.requestPermissions();
     }
@@ -1335,12 +1336,12 @@ async function handlePushToggle(checked){
     if(toggleEl) toggleEl.disabled = false;
   }
 }
-async function enablePushNotifications(){
+async function enablePushNotifications(opts){
   const nativePush = nativePushPlugin();
-  if(nativePush){ await enableNativePushNotifications(nativePush); return; }
+  if(nativePush){ await enableNativePushNotifications(nativePush, opts); return; }
   try{
     if(!('serviceWorker' in navigator) || !('PushManager' in window)){ showToast(t('push_not_supported'),'error'); await updatePushStatusDisplay(); return; }
-    if(Notification.permission === 'default'){
+    if(Notification.permission === 'default' && !(opts && opts.skipSoftAsk)){
       const proceed = await showConfirm(t('push_soft_ask'), { confirmText: t('push_soft_ask_confirm'), cancelText: t('push_soft_ask_cancel') });
       if(!proceed){ await updatePushStatusDisplay(); return; }
     }
@@ -4656,7 +4657,7 @@ async function finishOnboard(){
   seedCoachGreeting();
   await persist();
   enterApp();
-  setTimeout(maybeOpenConnectWatch, 1600);
+  setTimeout(maybeOpenNotifPrompt, 1600);
   // Primera vez que el personaje se muestra de verdad para esta cuenta -- un festejo (mismos
   // ojos/color que ya usa celebrate() para una marca personal) en vez del parpadeo genérico
   // de "recién cargó la página", para que arrancar el plan también se sienta como un logro.
@@ -14296,6 +14297,31 @@ function dismissHistoryCalibration(){
   if(state.profile) state.profile.historyCalibrated = 'dismissed';
   persist();
   renderHistoryCalibCard();
+}
+// Después de crear la cuenta: pestaña para activar las notificaciones (una sola vez) y, al cerrarla, la de conectar el reloj.
+async function maybeOpenNotifPrompt(){
+  if(!state || state.historyImportPrompted){ return; }   // solo cuentas nuevas: las que ya existían pasaron por acá
+  if(state.notifPrompted){ maybeOpenConnectWatch(); return; }
+  state.notifPrompted = true;
+  persist();
+  let needs = true;
+  try{
+    const nativePush = nativePushPlugin();
+    if(nativePush){ const st = await nativePush.checkPermissions(); needs = st.receive !== 'granted' || !state.nativePushEnabled; }
+    else if(!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') needs = false;
+    else needs = Notification.permission === 'default';   // si ya está concedido o bloqueado no hay nada que pedir
+  }catch(e){ needs = false; }
+  if(!needs){ maybeOpenConnectWatch(); return; }
+  openOverlaySheetEl(document.getElementById('notif-prompt-overlay'));
+}
+function closeNotifPrompt(){
+  document.getElementById('notif-prompt-overlay').classList.remove('overlay-open');
+  setTimeout(maybeOpenConnectWatch, 350);
+}
+async function acceptNotifPrompt(){
+  const btn = document.getElementById('np-enable-btn');
+  if(btn) btn.disabled = true;
+  try{ await enablePushNotifications({skipSoftAsk:true}); }finally{ if(btn) btn.disabled = false; closeNotifPrompt(); }
 }
 // "Conectá tu reloj": lista de integraciones con "Conectar" a la derecha. Lo conectado figura como "Conectado" y no se puede tocar de nuevo.
 function openConnectWatch(){
