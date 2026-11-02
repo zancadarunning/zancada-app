@@ -76,11 +76,13 @@ module.exports = withSentry(async (req, res) => {
         const workout = buildGarminWorkout(day, zones);
         if (countSteps(workout) > 100) throw new Error('demasiados pasos para Garmin');
         const wr = await garminCall(accessToken, 'POST', `${GARMIN_API}/workoutportal/workout/v2`, workout);
+        console.log('garmin-push-plan: crear entrenamiento', day.date, 'HTTP', wr.status, 'workoutId', wr.json && wr.json.workoutId, String(wr.text || '').slice(0, 200));
         stop = classify(wr);
         if (stop) break;
         const workoutId = wr.json && wr.json.workoutId != null ? String(wr.json.workoutId) : null;
         if (!wr.ok || !workoutId) throw new Error(`Garmin no creó el entrenamiento (HTTP ${wr.status}) ${wr.text}`);
         const sr = await garminCall(accessToken, 'POST', `${GARMIN_API}/training-api/schedule/`, { workoutId: Number(workoutId), date: day.date });
+        console.log('garmin-push-plan: programar', day.date, 'workoutId', workoutId, 'HTTP', sr.status, String(sr.text || '').slice(0, 200));
         stop = classify(sr);
         if (stop || !sr.ok) {
           // no quedó programado: se borra el entrenamiento suelto para no dejar basura en la cuenta de la persona
