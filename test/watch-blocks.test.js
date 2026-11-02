@@ -98,3 +98,21 @@ test('Suunto: cuestas con paso repeat de 10 y calentamiento/vuelta a la calma; e
   const old = buildGuide(cleanDay({ date: '2026-10-29', name: 'Rodaje', typeKey: 'easy', zone: 2, distKm: 5, durMin: 35, timeBased: true }), ZONES, {});
   assert.equal(old.steps.length, 1, 'sin warmupMin se comporta como antes');
 });
+
+test('la vuelta a la calma va sin objetivo de pulso en los cuatro relojes (el pulso tarda en bajar y el reloj pitaría), y el calentamiento sigue con el suyo', () => {
+  const { buildGarminWorkout } = require('../api/_lib/garmin-workout-builder');
+  const day = { date: '2026-11-03', name: 'Tempo', typeKey: 'tempo', zone: 3, distKm: 6, durMin: 40, desc: 'x', warmupMin: 10, cooldownMin: 5 };
+  const zones = { 1: { min: 100, max: 120 }, 2: { min: 121, max: 140 }, 3: { min: 141, max: 158 } };
+  const g = buildGarminWorkout(day, zones).segments[0].steps;
+  assert.equal(g[0].intensity, 'WARMUP'); assert.equal(g[0].targetType, 'HEART_RATE');
+  const gc = g.find(s => s.intensity === 'COOLDOWN');
+  assert.equal(gc.durationValue, 300); assert.equal(gc.targetType, 'OPEN'); assert.equal(gc.targetValueLow, null);
+  const w = buildWahooPlan(cleanDay(day), zones, {}).intervals;
+  assert.ok(w[0].targets && w[0].targets.length === 1, 'calentamiento con pulso');
+  const wc = w.find(i => i.intensity_type === 'cd');
+  assert.equal(wc.exit_trigger_value, 300); assert.equal(wc.targets, undefined);
+  const c = buildCorosCourse(cleanDay(day), zones, {}).sections;
+  assert.equal(c[0].intensityType, 1, 'calentamiento con pulso');
+  const cc = c.find(s => s.sectionType === 4);
+  assert.equal(cc.targetValue, 300); assert.equal(cc.intensityType, undefined);
+});

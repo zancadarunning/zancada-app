@@ -76,7 +76,7 @@ function buildGarminWorkout(day, zones, labels) {
       else inner.push(timeStep(next(), 'RECOVERY', (Number(iv.recoveryMin) || 1) * 60, rest));
     }
     steps.push({ type: 'WorkoutRepeatStep', stepOrder: repeatOrder, repeatType: 'REPEAT_UNTIL_STEPS_CMPLT', repeatValue: reps, skipLastRestStep: false, steps: inner });
-    if (coolMin > 0) steps.push(timeStep(next(), 'COOLDOWN', coolMin * 60, easy));
+    if (coolMin > 0) steps.push(timeStep(next(), 'COOLDOWN', coolMin * 60, { targetType: 'OPEN' }));
   } else {
     // sesión continua: calentamiento y vuelta a la calma como pasos propios si la app los mandó (así entran en el tiempo total)
     const withWarm = day.warmupMin != null;
@@ -84,7 +84,7 @@ function buildGarminWorkout(day, zones, labels) {
     const distM = Math.round((Number(day.distKm) || 0) * 1000);
     if (distM > 0 && !(day.timeBased && Number(day.durMin) > 0)) steps.push(distStep(next(), 'ACTIVE', distM, work));
     else steps.push(timeStep(next(), 'ACTIVE', Math.max(300, posInt(day.durMin, 5, 600, 30) * 60), work));
-    if (withWarm && coolMin > 0) steps.push(timeStep(next(), 'COOLDOWN', coolMin * 60, easy));
+    if (withWarm && coolMin > 0) steps.push(timeStep(next(), 'COOLDOWN', coolMin * 60, { targetType: 'OPEN' }));
   }
 
   const name = String(`Zancada - ${day.name || 'Run'}`).slice(0, 80);

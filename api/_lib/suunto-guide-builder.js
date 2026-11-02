@@ -102,7 +102,7 @@ function buildGuide(day, zones, labels) {
       }
     }
     steps.push({ type: 'repeat', times: reps, steps: [workStep, restStep] });
-    if (coolMin > 0) steps.push(fieldsStep(L('cooldown', 'Cool down'), [{ type: 'stepDurationCountdown', value: coolMin * 60, title: 'time' }, hr, easyTarget], [T.duration(coolMin * 60)], L('cooldown', 'Cool down')));
+    if (coolMin > 0) steps.push(fieldsStep(L('cooldown', 'Cool down'), [{ type: 'stepDurationCountdown', value: coolMin * 60, title: 'time' }, hr], [T.duration(coolMin * 60)], L('cooldown', 'Cool down')));
   } else {
     // Sesión continua (rodaje, tirada larga, tempo, progresivo...): un solo paso con
     // distancia/tiempo acumulados, pulso, ritmo y -- si el plan indica zona -- el objetivo de pulso.
@@ -117,7 +117,7 @@ function buildGuide(day, zones, labels) {
       hr, pace, workTarget
     ];
     steps.push(fieldsStep(L('main', day.name || 'Run'), fields, null, L('main', day.name || 'Run')));
-    if (withWarm && coolMin > 0) steps.push(fieldsStep(L('cooldown', 'Cool down'), [{ type: 'stepDurationCountdown', value: coolMin * 60, title: 'time' }, hr, easyTarget], [T.duration(coolMin * 60)], L('cooldown', 'Cool down')));
+    if (withWarm && coolMin > 0) steps.push(fieldsStep(L('cooldown', 'Cool down'), [{ type: 'stepDurationCountdown', value: coolMin * 60, title: 'time' }, hr], [T.duration(coolMin * 60)], L('cooldown', 'Cool down')));
   }
 
   const date = /^\d{4}-\d{2}-\d{2}$/.test(day.date || '') ? day.date : null;

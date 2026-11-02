@@ -73,7 +73,7 @@ function buildWahooPlan(day, zones, labels) {
     }
     // El grupo de repeticiones: exit_trigger_value = repeticiones DESPUÉS de la primera.
     intervals.push({ name: String(day.name || 'Series').slice(0, 60), exit_trigger_type: 'repeat', exit_trigger_value: reps - 1, intervals: [workIv, restIv] });
-    if (coolMin > 0) intervals.push(interval(L('cooldown', 'Cool down'), 'time', coolMin * 60, 'cd', easy));
+    if (coolMin > 0) intervals.push(interval(L('cooldown', 'Cool down'), 'time', coolMin * 60, 'cd', null));
   } else {
     // sesión continua: si la app mandó la entrada en calor y la vuelta a la calma (warmupMin/cooldownMin) van como bloques propios, para que el tiempo total del reloj los incluya
     const withWarm = day.warmupMin != null;
@@ -81,7 +81,7 @@ function buildWahooPlan(day, zones, labels) {
     const distM = Math.round((Number(day.distKm) || 0) * 1000);
     if (distM > 0 && !(day.timeBased && Number(day.durMin) > 0)) intervals.push(interval(L('main', day.name || 'Run'), 'distance', distM, 'active', work));
     else intervals.push(interval(L('main', day.name || 'Run'), 'time', Math.max(300, posInt(day.durMin, 5, 600, 30) * 60), 'active', work));
-    if (withWarm && coolMin > 0) intervals.push(interval(L('cooldown', 'Cool down'), 'time', coolMin * 60, 'cd', easy));
+    if (withWarm && coolMin > 0) intervals.push(interval(L('cooldown', 'Cool down'), 'time', coolMin * 60, 'cd', null));
   }
 
   const header = {
