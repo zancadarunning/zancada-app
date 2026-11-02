@@ -1,5 +1,5 @@
 // Adaptación por ejecución: la semana que sigue se mira también con lo que se hizo de verdad (ritmo y pulso por tramo), no solo con las calificaciones.
-// Fase 1 (por defecto): solo avisa. Con apply: también mueve el volumen, con tope 0,85-1,05 y sin recortar dos semanas seguidas por esto.
+// Activo desde 2026-11-02 (apply por defecto): además de avisar mueve el volumen, con tope 0,85-1,05 y sin recortar dos semanas seguidas por esto. apply:false deja solo el aviso.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -40,10 +40,11 @@ function setup(app, days, runs) {
 const quality = (id, extra) => Object.assign({ typeKey: 'intervals', zone: 4, dist: 6, interval: { reps: 3, repMeters: 400, recoveryMin: 1 }, status: 'done', linkedRunId: id }, extra || {});
 const easy = id => ({ typeKey: 'easy', zone: 2, dist: 3, status: 'done', linkedRunId: id });
 
-test('dos sesiones de calidad que se aflojaron: en fase 1 solo avisa y no toca el volumen', () => {
+test('dos sesiones de calidad que se aflojaron: con el ajuste apagado (apply:false) solo avisa y no toca el volumen; por defecto (activo) baja 8 %', () => {
   const app = loadApp();
   setup(app, [quality('a'), null, quality('b')], [intervalRun('a', FADE, 165), intervalRun('b', FADE, 165)]);
-  const adj = app.computeWeekAdjustment(app.state.plan);
+  assert.equal(app.computeWeekAdjustment(app.state.plan).factor, 0.92, 'por defecto el ajuste está activo');
+  const adj = app.computeWeekAdjustment(app.state.plan, { apply: false });
   assert.equal(adj.factor, 1);
   assert.equal(adj.objKind, 'strain');
   assert.equal(adj.objCut, false);
@@ -67,7 +68,7 @@ test('con el ajuste activado baja 8 %, respeta el tope, y no recorta dos semanas
 test('series parejas y con el pulso en zona: aviso positivo, y con el ajuste activado sube 3 % (solo si no hubo señales malas)', () => {
   const app = loadApp();
   setup(app, [quality('a'), null, quality('b')], [intervalRun('a', EVEN, 165), intervalRun('b', EVEN, 165)]);
-  const msg = app.computeWeekAdjustment(app.state.plan);
+  const msg = app.computeWeekAdjustment(app.state.plan, { apply: false });
   assert.equal(msg.objKind, 'good'); assert.equal(msg.factor, 1);
   assert.equal(app.computeWeekAdjustment(app.state.plan, { apply: true }).factor, 1.03);
   app.state.plan[1] = { typeKey: 'rest', dist: 5, status: 'skipped' }; app.state.plan[3] = { typeKey: 'rest', dist: 5, status: 'skipped' };
@@ -98,7 +99,7 @@ test('el cambio de semana manda el aviso al chat sin reenviarlo a la IA, y recue
   const src = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
   assert.match(src, /if\(objNote\) state\.chat\.push\(\{role:'coach', text: objNote, ts:Date\.now\(\), noAi:true\}\)/);
   assert.match(src, /if\(adj\.objCut\) state\.objCutAppliedTo = promotedWeekStart/);
-  assert.match(src, /const OBJ_ADJUST_APPLY = false;/, 'la fase 1 sale apagada');
+  assert.match(src, /const OBJ_ADJUST_APPLY = true;/, 'la fase 2 (mueve el volumen) está activa');
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
     const s = fs.readFileSync(path.join(__dirname, '..', 'locales', l + '.js'), 'utf8');
     for (const k of ['obj_note_strain', 'obj_note_strain_applied', 'obj_note_easy', 'obj_note_good', 'obj_note_good_applied']) assert.ok(s.includes(k + ':'), l + ' ' + k);
