@@ -11,7 +11,7 @@
 const verifyUser = require('./_lib/verify-user');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 const { applyCors, isPreflight } = require('./_lib/cors');
-const { DATE_RE, cleanZones, cleanDay } = require('./_lib/watch-plan-clean');
+const { DATE_RE, cleanZones, cleanDay, cleanLabels } = require('./_lib/watch-plan-clean');
 const { payloadHash, isDuplicate, remember } = require('./_lib/plan-dedupe');
 const { withinDailyCap } = require('./_lib/daily-cap');
 const { ensureFreshGarminToken, garminCall, GARMIN_API } = require('./_lib/garmin-activity-helpers');
@@ -35,13 +35,14 @@ module.exports = withSentry(async (req, res) => {
   const days = (Array.isArray(body.days) ? body.days : []).slice(0, MAX_DAYS).map(cleanDay).filter(Boolean).sort((a, b) => a.date.localeCompare(b.date));
   const keepDates = new Set((Array.isArray(body.keepDates) ? body.keepDates : []).filter(d => DATE_RE.test(String(d))).slice(0, 14));
   const zones = cleanZones(body.zones);
+  const labels = cleanLabels(body.labels);
   const today = DATE_RE.test(String(body.today || '')) ? body.today : null;
 
   const base = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_KEY;
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
-  const planHash = payloadHash({ v: 1, days, keepDates: [...keepDates].sort(), zones, today });
+  const planHash = payloadHash({ v: 2, days, keepDates: [...keepDates].sort(), zones, labels, today });
   if (body.force !== true && await isDuplicate(base, headers, userId, 'garmin_plan', planHash)) {
     res.status(200).json({ pushed: 0, failed: 0, unchanged: true, pushedDates: days.map(d => d.date) });
     return;
@@ -67,13 +68,13 @@ module.exports = withSentry(async (req, res) => {
 
     for (const day of days) {
       if (stop) break;
-      const dayHash = payloadHash({ v: 1, day, zones }).slice(0, 16);
+      const dayHash = payloadHash({ v: 2, day, zones, labels }).slice(0, 16);
       const rec = known[day.date];
       if (rec && rec.hash === dayHash) { skipped++; pushedDates.push(day.date); continue; }   // sin cambios: no se gasta cuota
       try {
         // cambió (o no existía): se borra lo anterior de esa fecha y se crea de nuevo
         if (rec) { await deleteGarminWorkout(accessToken, rec); await forgetKnown(base, headers, userId, day.date); }
-        const workout = buildGarminWorkout(day, zones);
+        const workout = buildGarminWorkout(day, zones, labels);
         if (countSteps(workout) > 100) throw new Error('demasiados pasos para Garmin');
         const wr = await garminCall(accessToken, 'POST', `${GARMIN_API}/workoutportal/workout/v2`, workout);
         console.log('garmin-push-plan: crear entrenamiento', day.date, 'HTTP', wr.status, 'workoutId', wr.json && wr.json.workoutId, String(wr.text || '').slice(0, 200));

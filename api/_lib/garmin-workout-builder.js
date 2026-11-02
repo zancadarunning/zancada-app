@@ -37,11 +37,21 @@ function hrTarget(zones, zone) {
   return { targetType: 'OPEN' };
 }
 
+// El calentamiento de la app son 3 min de movilidad articular + trote suave (warmMin en total). En el reloj van como dos pasos: la movilidad no lleva objetivo de pulso (parado el pulso está bajo y el reloj avisaría "demasiado bajo") y el trote sí.
+const MOBILITY_MIN = 3;
+function warmupSteps(next, warmMin, easy, labels) {
+  const out = [];
+  const mobility = warmMin > MOBILITY_MIN + 1 ? MOBILITY_MIN : 0;
+  if (mobility) out.push(timeStep(next(), 'WARMUP', mobility * 60, { targetType: 'OPEN' }, (labels && labels.mobility) || 'Movilidad articular'));
+  out.push(timeStep(next(), 'WARMUP', (warmMin - mobility) * 60, easy, (labels && labels.jog) || 'Trote suave'));
+  return out;
+}
+
 const timeStep = (order, intensity, seconds, target, description) => step(order, Object.assign({ intensity, durationType: 'TIME', durationValue: Math.max(1, Math.round(seconds)), description: description || null }, target));
 const distStep = (order, intensity, meters, target, description) => step(order, Object.assign({ intensity, durationType: 'DISTANCE', durationValue: Math.max(1, Math.round(meters)), durationValueType: 'METER', description: description || null }, target));
 
 // day: { date, name, typeKey, zone, distKm, durMin, desc, interval:{reps,repMeters,recoveryMin,workMin,restMin}, repSec, restSec, timeBased, warmupMin, cooldownMin }
-function buildGarminWorkout(day, zones) {
+function buildGarminWorkout(day, zones, labels) {
   const zone = posInt(day.zone, 1, 5, null);
   const warmMin = day.warmupMin != null ? posInt(day.warmupMin, 0, 30, 10) : 10;
   const coolMin = day.cooldownMin != null ? posInt(day.cooldownMin, 0, 30, 5) : 5;
@@ -56,7 +66,7 @@ function buildGarminWorkout(day, zones) {
 
   if (isRepeatType) {
     const reps = posInt(iv.reps, 1, 50, 1);
-    if (warmMin > 0) steps.push(timeStep(next(), 'WARMUP', warmMin * 60, easy));
+    if (warmMin > 0) steps.push(...warmupSteps(next, warmMin, easy, labels));
     const repeatOrder = next();
     const inner = [];
     if (day.typeKey === 'fartlek' || (iv.workMin && !iv.repMeters)) {
@@ -75,7 +85,7 @@ function buildGarminWorkout(day, zones) {
   } else {
     // sesión continua: calentamiento y vuelta a la calma como pasos propios si la app los mandó (así entran en el tiempo total)
     const withWarm = day.warmupMin != null;
-    if (withWarm && warmMin > 0) steps.push(timeStep(next(), 'WARMUP', warmMin * 60, easy));
+    if (withWarm && warmMin > 0) steps.push(...warmupSteps(next, warmMin, easy, labels));
     const distM = Math.round((Number(day.distKm) || 0) * 1000);
     if (distM > 0 && !(day.timeBased && Number(day.durMin) > 0)) steps.push(distStep(next(), 'ACTIVE', distM, work));
     else steps.push(timeStep(next(), 'ACTIVE', Math.max(300, posInt(day.durMin, 5, 600, 30) * 60), work));
