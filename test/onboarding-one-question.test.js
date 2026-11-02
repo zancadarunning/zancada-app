@@ -51,3 +51,15 @@ test('el vidrio del inicio respeta "reducir transparencia" y los dos temas; los 
     for (const k of ['ob_q_name', 'ob_q_body', 'ob_q_referral', 'ob_ref_store', 'ob_ref_friend', 'ob_ref_ai', 'ob_ref_other', 'ob_skip', 'ob_done_title', 'ob_done_lead']) assert.ok(s.includes(k + ':'), l + ' ' + k);
   }
 });
+
+test('el plan habla de "fecha objetivo", no de "fecha de carrera", en pantalla y en los mensajes del coach', () => {
+  const expected = { es: 'Fecha objetivo (opcional)', en: 'Target date (optional)', pt: 'Data objetivo (opcional)', fr: 'Date objectif (facultatif)', it: 'Data obiettivo (opzionale)', de: 'Zieldatum (optional)' };
+  for (const [l, text] of Object.entries(expected)) {
+    const s = read('locales/' + l + '.js');
+    assert.ok(s.includes(`ob_racedate_label:"${text}"`), l);
+    assert.ok(!/ob_racedate_label:"[^"]*(race date|carrera|prova|course|gara|Rennen)/i.test(s), l + ' sin "carrera"');
+  }
+  assert.ok(!/perfil_weeklykm_auto_note:"[^"]*fecha de carrera/.test(read('locales/es.js')));
+  assert.match(app, /changes\.push\('fecha objetivo'\)/);
+  assert.match(app, /La fecha objetivo "\$\{input\.fecha_carrera\}" no es válida/);
+});

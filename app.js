@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T12:57:54Z';
+const APP_VERSION = '2026-11-02T13:02:43Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -17786,7 +17786,7 @@ function buildContext(){
     // husos negativos (Argentina) eso corre la cuenta regresiva: una carrera de hoy o mañana
     // a la tarde podía aparecer como "ya pasó" en el contexto que lee el coach del chat.
     const weeksLeft = Math.round((new Date(p.raceDate+'T00:00:00') - new Date()) / (7*86400000));
-    ctx += ` Fecha de la carrera objetivo: ${p.raceDate} (${weeksLeft>0?`faltan ${weeksLeft} semanas`:'ya pasó'}).`;
+    ctx += ` Fecha objetivo del plan (la fecha para la que se entrena la distancia del objetivo): ${p.raceDate} (${weeksLeft>0?`faltan ${weeksLeft} semanas`:'ya pasó'}).`;
   }
   // Fase del plan por fases (solo si está activa, ver refreshPhaseNow): le damos la fase y cuánto falta,
   // no el pico semanal -- el volumen real ya está en los bloques del plan de más abajo.
@@ -17926,10 +17926,10 @@ const TOOLS = [
   },
   {
     name:"modificar_perfil",
-    description:"Modifica datos personales del corredor que afectan cómo se generan sus PRÓXIMOS planes semanales: objetivo de entrenamiento, fecha de la carrera objetivo, terreno preferido, frecuencia cardíaca máxima o los días de la semana en que entrena. Los km semanales se recalculan solos según el objetivo y el tiempo hasta la carrera. Si el corredor está cambiando de objetivo (por ejemplo de 5K a 10K) y menciona cuántos km corre actualmente, pasalo en km_actuales para que el nuevo plan arranque desde su realidad real, no de una fórmula genérica — si cambia el objetivo y no te dice cuántos km corre, preguntáselo antes de aplicar el cambio. Usala para cambios permanentes o 'de ahora en adelante', no solo para esta semana. IMPORTANTE: si el corredor dice que quiere cambiar QUÉ DÍAS entrena de forma habitual (ej. 'de ahora en adelante entreno martes y jueves' o 'ya no puedo los lunes'), usá dias_entreno acá en vez de mover o cancelar sesiones sueltas con modificar_sesion/cancelar_sesion/mover_sesion — esas herramientas solo afectan un día puntual de una semana y no cambian el cronograma de base, así que la semana siguiente el corredor volvería a ver sesiones en los días viejos.",
+    description:"Modifica datos personales del corredor que afectan cómo se generan sus PRÓXIMOS planes semanales: objetivo de entrenamiento, fecha objetivo del plan, terreno preferido, frecuencia cardíaca máxima o los días de la semana en que entrena. Los km semanales se recalculan solos según el objetivo y el tiempo hasta la carrera. Si el corredor está cambiando de objetivo (por ejemplo de 5K a 10K) y menciona cuántos km corre actualmente, pasalo en km_actuales para que el nuevo plan arranque desde su realidad real, no de una fórmula genérica — si cambia el objetivo y no te dice cuántos km corre, preguntáselo antes de aplicar el cambio. Usala para cambios permanentes o 'de ahora en adelante', no solo para esta semana. IMPORTANTE: si el corredor dice que quiere cambiar QUÉ DÍAS entrena de forma habitual (ej. 'de ahora en adelante entreno martes y jueves' o 'ya no puedo los lunes'), usá dias_entreno acá en vez de mover o cancelar sesiones sueltas con modificar_sesion/cancelar_sesion/mover_sesion — esas herramientas solo afectan un día puntual de una semana y no cambian el cronograma de base, así que la semana siguiente el corredor volvería a ver sesiones en los días viejos.",
     input_schema:{type:"object", properties:{
       objetivo:{type:"string", enum:["start","5k","10k","15k","21k","42k","ultra","lifestyle"]},
-      fecha_carrera:{type:"string", description:"Fecha de la carrera objetivo en formato YYYY-MM-DD, si el corredor la menciona."},
+      fecha_carrera:{type:"string", description:"Fecha objetivo del plan (la fecha para la que el corredor quiere llegar entrenado a la distancia de su objetivo) en formato YYYY-MM-DD, si el corredor la menciona. Llamala siempre 'fecha objetivo', no 'fecha de carrera'."},
       terreno:{type:"string", enum:["asfalto","trail","mixto"]},
       fc_maxima:{type:"number"},
       km_actuales:{type:"number", description:"Km semanales que el corredor dice estar corriendo ahora mismo. Solo incluir si lo menciona explícitamente."},
@@ -18467,7 +18467,7 @@ function applyProfileChange(input){
   if(input.fecha_carrera){
     const validFormat = /^\d{4}-\d{2}-\d{2}$/.test(input.fecha_carrera) && !isNaN(new Date(input.fecha_carrera+'T00:00:00').getTime());
     if(!validFormat || !calDateAllowed(input.fecha_carrera, calBoundsFor('perfil-racedate'))){
-      return `La fecha de carrera "${input.fecha_carrera}" no es válida -- tiene que ser una fecha real en formato YYYY-MM-DD y no puede ser una fecha ya pasada. Confirmá la fecha correcta con el corredor y volvé a llamar a modificar_perfil.`;
+      return `La fecha objetivo "${input.fecha_carrera}" no es válida -- tiene que ser una fecha real en formato YYYY-MM-DD y no puede ser una fecha ya pasada. Confirmá la fecha correcta con el corredor y volvé a llamar a modificar_perfil.`;
     }
   }
   captureUndoSnapshot();
@@ -18482,7 +18482,7 @@ function applyProfileChange(input){
   let recalc = false;
   if(input.objetivo && !COACH_GOALS.includes(input.objetivo)) rejectedNotes.push(badCoachEnum('objetivo', input.objetivo, COACH_GOALS) + ' -- no se aplicó');
   else if(input.objetivo){ state.profile.goal = input.objetivo; changes.push('objetivo'); recalc = true; clearLegacyCurveCapOnEdit(); }
-  if(input.fecha_carrera){ state.profile.raceDate = input.fecha_carrera; changes.push('fecha de carrera'); recalc = true; }
+  if(input.fecha_carrera){ state.profile.raceDate = input.fecha_carrera; changes.push('fecha objetivo'); recalc = true; }
   if(input.terreno && !COACH_TERRAINS.includes(input.terreno)) rejectedNotes.push(badCoachEnum('terreno', input.terreno, COACH_TERRAINS) + ' -- no se aplicó');
   else if(input.terreno){ state.profile.terrain = input.terreno; changes.push('terreno'); }
   // Mismo motivo que MAX_SESSION_KM/resolveZone en modificar_sesion: el input_schema de la
