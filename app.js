@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T11:54:22Z';
+const APP_VERSION = '2026-11-02T12:10:24Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6440,8 +6440,8 @@ function computeActualWeeklyKmAvg(weeks, requireFull){
 }
 /* ===== Adaptación por ejecución: lo que se hizo de verdad (ritmo y pulso por tramo) además de lo que la persona califica =====
    Todo es código determinista sobre las carreras de la propia semana (evaluateRunSteps): nada va a una IA (licencia de Garmin, sección 15.11) y las carreras de Strava no entran.
-   Fase 1 (OBJ_ADJUST_APPLY = false): solo avisa qué se notó. Fase 2 (true): además mueve el volumen de la semana que sigue, con tope y sin recortar dos semanas seguidas por esto. */
-const OBJ_ADJUST_APPLY = false;
+   Fase 1 (OBJ_ADJUST_APPLY = false): solo avisa qué se notó. Fase 2 (true, ACTIVA desde 2026-11-02 por decisión del dueño): además mueve el volumen de la semana que sigue, con tope y sin recortar dos semanas seguidas por esto. */
+const OBJ_ADJUST_APPLY = true;
 const OBJ_FADE_PCT = 0.06;        // última repetición >= 6 % más lenta que la primera = se fue aflojando
 const OBJ_CLEAN_PCT = 0.03;       // diferencia chica = repeticiones parejas
 const OBJ_HR_SHARE = 0.4;         // pulso por encima de la zona en el 40 % o más de las repeticiones
