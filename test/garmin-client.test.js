@@ -13,7 +13,7 @@ test('Perfil tiene la tarjeta de Garmin Connect con su estado, el botón y el av
   for (const id of ['garmin-status', 'garmin-connect-btn', 'garmin-perm-note']) assert.ok(html.includes(`id="${id}"`), id);
   assert.ok(html.includes('data-on-click="connectGarmin()"'));
   assert.ok(html.includes('data-i18n="garmin_not_for_ai"'));
-  assert.ok(html.includes('closeConnectWatch(); connectGarmin()'), 'fila en "Conectá tu reloj"');
+  assert.ok(html.includes('obSaveDraft(); connectGarmin()'), 'fila en "Conectá tu reloj" del inicio');
   assert.ok(html.includes('src="img/brand-logos/garmin.png"') && fs.existsSync(path.join(__dirname, '..', 'img/brand-logos/garmin.png')));
   assert.ok(html.includes('>Garmin Connect<'), 'se usa el nombre completo de la app, como pide la guía de marca');
 });
