@@ -30,6 +30,12 @@ function secretMatches(given, expected) {
 
 const list = v => (Array.isArray(v) ? v : []);
 
+// Convertir una actividad puede fallar si el aviso viene roto. Eso NO puede devolver 500: Garmin reintentaría cada hora durante 7 días el MISMO lote (con las actividades de otras personas) y una sola
+// rota las dejaría a todas trabadas. Se salta esa actividad y se sigue. Los errores de la base de datos, en cambio, sí siguen devolviendo 500 para que Garmin reintente.
+function safeRun(fn, what) {
+  try { return fn(); } catch (e) { console.error('garmin-webhook: ' + what + ' con datos rotos, se salta:', e && e.message); return null; }
+}
+
 module.exports = withSentry(async (req, res) => {
   if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return; }
 
@@ -83,8 +89,8 @@ module.exports = withSentry(async (req, res) => {
     // --- actividades terminadas ---
     for (const a of list(body.activities).slice(0, 100)) {
       if (!a || !isRunningActivity(a.activityType) || a.isParent) continue;
-      const run = activityToRun(a);
-      if (!run.garminId || !run.distanceKm) continue;
+      const run = safeRun(() => activityToRun(a), 'actividad');
+      if (!run || !run.garminId || !run.distanceKm) continue;
       for (const row of await connsFor(a.userId)) {
         await mergeAndNotify(mergeGarminRuns, base, headers, row.user_id, [run], 'skip', 'garmin', 900);
       }
@@ -95,8 +101,8 @@ module.exports = withSentry(async (req, res) => {
     for (const a of list(body.manuallyUpdatedActivities).slice(0, 100)) {
       if (!a || !isRunningActivity(a.activityType) || a.isParent) continue;
       if (String(a.deviceName || 'unknown').trim().toLowerCase() !== 'unknown') continue;
-      const run = activityToRun(a);
-      if (!run.garminId || !run.distanceKm) continue;
+      const run = safeRun(() => activityToRun(a), 'actividad');
+      if (!run || !run.garminId || !run.distanceKm) continue;
       for (const row of await connsFor(a.userId)) {
         await mergeGarminRuns(base, headers, row.user_id, [run], 'upsert');
       }
@@ -106,8 +112,8 @@ module.exports = withSentry(async (req, res) => {
     for (const d of list(body.activityDetails).slice(0, 20)) {
       const summary = d && d.summary;
       if (!summary || !isRunningActivity(summary.activityType)) continue;
-      const run = activityToRun(Object.assign({}, summary, { activityId: d.activityId != null ? d.activityId : summary.activityId, summaryId: d.summaryId }), d);
-      if (!run.garminId || !run.distanceKm) continue;
+      const run = safeRun(() => activityToRun(Object.assign({}, summary, { activityId: d.activityId != null ? d.activityId : summary.activityId, summaryId: d.summaryId }), d), 'detalle');
+      if (!run || !run.garminId || !run.distanceKm) continue;
       for (const row of await connsFor(d.userId)) {
         await mergeGarminRuns(base, headers, row.user_id, [run], 'upsert');
       }

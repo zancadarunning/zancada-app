@@ -155,6 +155,19 @@ test('webhook: una carrera de Garmin se suma al estado de la cuenta conectada; c
   } finally { n.restore(); }
 });
 
+test('webhook: una actividad con datos rotos en medio del lote se salta y las demás se guardan (nada de 500: Garmin reintentaría el mismo lote 7 días)', async () => {
+  const n = net([[/GET .*garmin_connections\?garmin_user_id=eq\.g-1/, () => json([{ user_id: 'u1' }])]]);
+  try {
+    const now = Math.floor(Date.now() / 1000) - 600;
+    const ok = id => ({ userId: 'g-1', summaryId: 'S' + id, activityId: id, activityType: 'RUNNING', startTimeInSeconds: now, startTimeOffsetInSeconds: 0, durationInSeconds: 1800, distanceInMeters: 5000 });
+    const poisoned = Object.assign(ok(2), { startTimeInSeconds: 1e30 });
+    const r = await callWebhook({ activities: [ok(1), poisoned, ok(3)], activityDetails: [{ userId: 'g-1', activityId: 4, summary: { activityType: 'RUNNING', startTimeInSeconds: 1e30, durationInSeconds: 50, distanceInMeters: 1500 }, samples: [null, { startTimeInSeconds: 'x' }] }] });
+    assert.equal(r.code, 200, 'responde 200, no 500');
+    const ids = n.log.filter(l => /rpc\/merge_garmin_runs/.test(l.url)).map(l => JSON.parse(l.body).p_new_runs[0].garminId);
+    assert.deepEqual(ids, ['1', '3'], 'se guardan las buenas y se salta la rota');
+  } finally { n.restore(); }
+});
+
 test('webhook: el detalle completa la carrera con upsert (sin duplicarla)', async () => {
   const n = net([[/GET .*garmin_connections\?garmin_user_id=eq\.g-1/, () => json([{ user_id: 'u1' }])]]);
   try {
