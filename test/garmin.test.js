@@ -160,6 +160,23 @@ test('webhook: el detalle completa la carrera con upsert (sin duplicarla)', asyn
   } finally { n.restore(); }
 });
 
+test('webhook: una actividad manual corregida en Garmin Connect reemplaza a la importada (upsert); la de un reloj o ajena al correr no', async () => {
+  const n = net([[/GET .*garmin_connections\?garmin_user_id=eq\.g-1/, () => json([{ user_id: 'u1' }])]]);
+  try {
+    const base = { userId: 'g-1', activityType: 'RUNNING', startTimeInSeconds: 1793545200, startTimeOffsetInSeconds: -10800, distanceInMeters: 3000, manual: true };
+    const r = await callWebhook({ manuallyUpdatedActivities: [
+      Object.assign({}, base, { summaryId: 'm1', activityId: 24938186935, durationInSeconds: 900, deviceName: 'unknown' }),
+      Object.assign({}, base, { summaryId: 'm2', activityId: 2, durationInSeconds: 900, deviceName: 'Garmin Venu 3S' }),   // de un reloj: no
+      Object.assign({}, base, { summaryId: 'm3', activityId: 3, durationInSeconds: 900, deviceName: 'unknown', activityType: 'CYCLING' })   // no es correr: no
+    ] });
+    assert.equal(r.code, 200);
+    const m = n.log.filter(l => /rpc\/merge_garmin_runs/.test(l.url));
+    assert.equal(m.length, 1);
+    const sent = JSON.parse(m[0].body);
+    assert.equal(sent.p_mode, 'upsert'); assert.equal(sent.p_new_runs[0].garminId, '24938186935'); assert.equal(sent.p_new_runs[0].durationSec, 900);
+  } finally { n.restore(); }
+});
+
 test('webhook: la desconexión desde Garmin borra la conexión, lo importado y los entrenamientos recordados; el cambio de permisos se guarda', async () => {
   const n = net([[/GET .*garmin_connections\?garmin_user_id=eq\.g-1/, () => json([{ user_id: 'u1' }])]]);
   try {

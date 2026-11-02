@@ -8,6 +8,7 @@
 // Tipos que se atienden (lista con el nombre del tipo como clave del JSON):
 //   activities            resumen de una actividad terminada -> se suma al Historial (y avisa con una notificación si es reciente)
 //   activityDetails       el detalle (ruta GPS, pulso, parciales) -> completa la misma carrera
+//   manuallyUpdatedActivities  una actividad cargada o corregida a mano en Garmin Connect (sin reloj) -> reemplaza a la ya importada
 //   deregistrations       la persona se desconectó desde Garmin -> se borra la conexión y lo importado
 //   userPermissionsChange la persona cambió qué comparte -> se guardan los permisos
 // El resto (salud diaria, archivos FIT, etc.) se ignora con un 200 para que Garmin no reintente.
@@ -86,6 +87,18 @@ module.exports = withSentry(async (req, res) => {
       if (!run.garminId || !run.distanceKm) continue;
       for (const row of await connsFor(a.userId)) {
         await mergeAndNotify(mergeGarminRuns, base, headers, row.user_id, [run], 'skip', 'garmin', 900);
+      }
+    }
+
+    // --- actividades cargadas o corregidas a mano en Garmin Connect (sin reloj, deviceName "unknown"): la versión nueva reemplaza a la anterior, igual que cuando el detalle completa una carrera.
+    // Las de un reloj no se tocan acá: su ruta y sus parciales vienen del detalle y un reemplazo los borraría. ---
+    for (const a of list(body.manuallyUpdatedActivities).slice(0, 100)) {
+      if (!a || !isRunningActivity(a.activityType) || a.isParent) continue;
+      if (String(a.deviceName || 'unknown').trim().toLowerCase() !== 'unknown') continue;
+      const run = activityToRun(a);
+      if (!run.garminId || !run.distanceKm) continue;
+      for (const row of await connsFor(a.userId)) {
+        await mergeGarminRuns(base, headers, row.user_id, [run], 'upsert');
       }
     }
 
