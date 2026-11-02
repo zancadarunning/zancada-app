@@ -116,3 +116,16 @@ test('el botón principal del inicio no pierde su estilo: los selectores compart
     assert.ok(css.includes('#onboard .ob-cta' + tail + ', #consent-modal .ob-cta' + tail + '{'), tail);
   }
 });
+
+test('el vidrio es vidrio de verdad: fondo con luz de colores, relleno en diagonal, borde con brillo (--g-rim) y desenfoque con saturación (--g-blur) en todas las superficies', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').split(String.fromCharCode(13)).join('');
+  const glass = css.slice(css.indexOf('<style id="ob-glass-css">'), css.indexOf('</style>', css.indexOf('<style id="ob-glass-css">')));
+  assert.ok(glass.split('--g-rim:inset').length - 1 >= 3, 'el borde de cristal está definido para oscuro, claro y claro por sistema');
+  assert.ok(!glass.includes('inset 0 1px 0 var(--g-edge-top), inset 0 -1px 0 var(--g-edge-bot)'), 'ya no se usa el filete plano de 1 px');
+  assert.ok(glass.includes('--g-fill:linear-gradient('), 'relleno en degradé, no plano');
+  assert.match(glass, /--g-blur:blur\(\d+px\) saturate\(/);
+  assert.ok(glass.split('radial-gradient(').length - 1 >= 10, 'el fondo tiene varias luces de colores (el vidrio necesita algo detrás)');
+  for (const sel of ['.cw-row', '.ob-options .choice', '.ss-card', '#consent-modal .cs-card']) assert.ok(glass.includes(sel), sel);
+  assert.ok(glass.includes('backdrop-filter:var(--g-blur)'));
+  assert.ok(glass.includes('@media (prefers-reduced-transparency:reduce)'), 'respeta "reducir transparencia"');
+});
