@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T02:33:08Z';
+const APP_VERSION = '2026-11-02T02:49:01Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2948,7 +2948,8 @@ async function syncPlanToGarmin(force){
     // Garmin recibe ESTA semana y la PRÓXIMA (hasta 14 sesiones): deja programar con anticipación y borrar/mover, y así un lunes sin abrir la app no deja el reloj sin entrenamientos.
     const { all: win, weekStart } = watchWindow();
     const zones = state.profile.hrZones;
-    const ctx = JSON.stringify([zones, 'garmin1']);   // cambiar la versión vuelve a mandar todo
+    const labels = { mobility:t('garmin_step_mobility'), jog:t('garmin_step_jog') };
+    const ctx = JSON.stringify([zones, labels, 'garmin2']);   // cambiar la versión vuelve a mandar todo
     const sigOf = d => suuntoHash(JSON.stringify(d) + ctx);
     let dirty = false;
     const sent = state.garminSent || {};
@@ -2962,7 +2963,7 @@ async function syncPlanToGarmin(force){
         const res = await fetch(apiUrl('/api/garmin-push-plan'), {
           method:'POST',
           headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
-          body: JSON.stringify({ days:changed, keepDates:keep, weekStart, today:todayLocalISO(), zones, force:!!force })
+          body: JSON.stringify({ days:changed, keepDates:keep, weekStart, today:todayLocalISO(), zones, labels, force:!!force })
         });
         result = await res.json().catch(()=>null);
         if(!result && !res.ok) garminBlockedUntil = Date.now() + 15*60*1000;
