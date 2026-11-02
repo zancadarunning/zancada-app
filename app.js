@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T12:10:24Z';
+const APP_VERSION = '2026-11-02T12:20:26Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10208,9 +10208,6 @@ function renderPerfil(){
     </div>` : '';
     evBox.innerHTML = `<p style="font-size:14.5px; font-weight:700;">${escapeHtml(state.event.name)} <span class="tag tag-${state.event.type==='ruta'?'asfalto':state.event.type==='trail'?'trail':'mixto'}">${t('ev_type_'+state.event.type)}</span></p>
       <p class="display" style="font-size:34px; color:var(--hivis-text); margin-top:4px;">${Math.max(0,days)} <span style="font-size:13px; font-family:Inter; color:var(--mist);">${t('perfil_event_days')}</span></p>
-      <div style="display:flex; align-items:center; gap:14px; margin-top:6px; flex-wrap:wrap;">
-        <button class="small-link" style="display:flex; align-items:center; gap:5px;" data-on-click="downloadEventIcs()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.calendar}</span>${t('add_to_calendar')}</button>
-      </div>
       ${paceBlock}
       <button class="btn btn-danger event-delete-btn" data-on-click="deleteEvent()">${t('delete_event')}</button>`;
     document.getElementById('ev-name').value = state.event.name;
@@ -10695,7 +10692,6 @@ function removeAvatarPhoto(e){
   persist();
 }
 function updateCredits(){
-  document.getElementById('credits-text').textContent = t('perfil_credits');
   // Versión visible del build cargado -- sin esto, no había forma de que el usuario
   // (ni nosotros, por lo que nos cuenta) confirmara si ya estaba probando la versión
   // nueva o todavía una vieja cacheada, lo que hizo perder tiempo varias veces
@@ -11710,75 +11706,6 @@ async function deleteEvent(){
   state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
   renderAll(); persist();
 }
-/* ---- agregar la carrera de "Próximos eventos" al calendario del celular (.ics) ----
-   Un evento de calendario ICS estándar (RFC 5545) que cualquier app de calendario sabe
-   abrir (Calendario de iOS/macOS, Google Calendar, Outlook, etc.) -- no depende de
-   ningún permiso especial ni de una integración puntual con un calendario en particular.
-   Se arma como evento DE TODO EL DÍA (VALUE=DATE, sin hora) a propósito: acá solo
-   tenemos la FECHA de la carrera, nunca una hora de largada, así que un evento con hora
-   (DTSTART/DTEND con TZID) obligaría a inventar una hora que probablemente esté mal --
-   mejor un evento de todo el día, sin ambigüedad de huso horario posible (a diferencia
-   de los recordatorios del coach, esto no depende para nada de detectDeviceTz()). */
-function escapeIcsText(s){
-  // Caracteres que el RFC 5545 pide escapar en valores de texto (SUMMARY, DESCRIPTION).
-  return String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
-}
-function buildEventIcs(ev){
-  // YYYYMMDD sin separadores, como pide VALUE=DATE -- ev.date ya viene en formato
-  // YYYY-MM-DD (mismo string que usa el resto de la app, ver setEvent()).
-  const dtStart = ev.date.replace(/-/g,'');
-  // DTEND en un evento de todo el día es EXCLUSIVO (el día siguiente), tal cual pide el
-  // estándar -- si no, algunas apps de calendario (Outlook en particular) lo muestran
-  // como si durara dos días.
-  const endDate = new Date(ev.date+'T00:00:00'); endDate.setDate(endDate.getDate()+1);
-  // Componentes LOCALES, no toISOString(): en husos adelantados a UTC (Europa, Asia) la medianoche local de mañana cae todavía "hoy" en UTC,
-  // y DTEND quedaba igual a DTSTART (el evento de todo el día no se creaba bien en el calendario).
-  const dtEnd = `${endDate.getFullYear()}${String(endDate.getMonth()+1).padStart(2,'0')}${String(endDate.getDate()).padStart(2,'0')}`;
-  const now = new Date();
-  const dtStamp = now.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');
-  const typeLabel = t('ev_type_'+ev.type);
-  const descParts = [typeLabel];
-  if(ev.distanceKm>0) descParts.push(fmtDist(ev.distanceKm,1)+' '+distUnit());
-  descParts.push('Zancada');
-  const uid = 'evt-'+dtStart+'-'+randomHex(8)+'@zancada.org';
-  // CRLF (\r\n): el RFC 5545 pide ese fin de línea puntual, no alcanza con \n solo --
-  // algunos lectores de calendario más estrictos (Outlook) lo rechazan sin esto.
-  return [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//Zancada//Coach de running//ES',
-    'CALSCALE:GREGORIAN',
-    'BEGIN:VEVENT',
-    'UID:'+uid,
-    'DTSTAMP:'+dtStamp,
-    'DTSTART;VALUE=DATE:'+dtStart,
-    'DTEND;VALUE=DATE:'+dtEnd,
-    'SUMMARY:'+escapeIcsText(ev.name),
-    'DESCRIPTION:'+escapeIcsText(descParts.join(' · ')),
-    'END:VEVENT',
-    'END:VCALENDAR',
-  ].join('\r\n')+'\r\n';
-}
-async function downloadEventIcs(){
-  if(!state.event) return;
-  const ics = buildEventIcs(state.event);
-  const blob = new Blob([ics], {type:'text/calendar;charset=utf-8'});
-  // Mismo patrón que shareRunImage(): en el celular (donde de verdad importa "agregar al
-  // calendario") preferimos el panel nativo para compartir/abrir archivos -- ahí el
-  // sistema ya sabe ofrecer "Agregar a Calendario" directo, sin pasar por la carpeta de
-  // Descargas. En desktop (sin Web Share API) caemos a la descarga clásica del archivo.
-  const file = new File([blob], 'zancada-carrera.ics', {type:'text/calendar'});
-  if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
-    try{ await navigator.share({files:[file], title:state.event.name}); }catch(e){ /* usuario canceló */ }
-  } else {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'zancada-carrera.ics';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(()=>URL.revokeObjectURL(url), 5000);
-  }
-}
-
 /* ================= LIVE TRACKER + MAP ================= */
 let tracker = {watchId:null, timerId:null, points:[], distanceKm:0, elapsedSec:0, running:false, hrLog:[], lastAnnouncedKm:0, startedAt:null, workout:null, autoPaused:false, lastMoveMs:null, lastFixMs:null};
 /* ---- Auto-pausa: detectar solo cuando el corredor se frena (semáforo, cruce, tomar
