@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T15:11:49Z';
+const APP_VERSION = '2026-11-02T18:23:00Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -14349,8 +14349,8 @@ function obCollectDraft(){
   const pills = sel => [...document.querySelectorAll(sel + ' .day-pill.active')].map(e => e.dataset.v);
   return { v:1, step: obCurrentStep, name: val('ob-name'), runnertype: choice('#ob-runnertype'), currentkm: val('ob-currentkm'), returning: choice('#ob-returning'),
     refDist: val('ob-refrace-dist'), refMin: val('ob-refrace-min'), sports: obSelectedSports.slice(), sportDays: pills('#ob-sport-days'), terrain: choice('#ob-terrain'), trainby: choice('#ob-trainby'),
-    days: pills('#ob-days'), availmin: val('ob-availmin'), goal: val('ob-goal'), racedate: val('ob-racedate'), gender: choice('#ob-gender'), pregnancy: choice('#ob-pregnancy'),
-    birth: val('ob-birth'), weight: val('ob-weight'), height: val('ob-height'), health: val('ob-healthnotes'), referral: choice('#ob-referral') };
+    days: pills('#ob-days'), availmin: val('ob-availmin'), goal: val('ob-goal'), racedate: val('ob-racedate'), gender: choice('#ob-gender'),
+    birth: val('ob-birth'), weight: val('ob-weight'), height: val('ob-height'), referral: choice('#ob-referral') };   // sin embarazo/posparto ni molestias/lesiones: son datos de salud sensibles y no se dejan en sessionStorage
 }
 function obSaveDraft(){ const key = obDraftKey(); if(!key) return; try{ sessionStorage.setItem(key, JSON.stringify(obCollectDraft())); }catch(e){} }
 function obClearDraft(){
@@ -14369,9 +14369,9 @@ function obRestoreDraft(){
   const setPills = (sel, arr) => { const ok = Array.isArray(arr) ? arr.filter(x => DAY_KEYS.includes(x)) : []; document.querySelectorAll(sel + ' .day-pill').forEach(p => p.classList.toggle('active', ok.includes(p.dataset.v))); };
   setVal('ob-name', d.name); setVal('ob-currentkm', d.currentkm); setVal('ob-refrace-dist', d.refDist); setVal('ob-refrace-min', d.refMin);
   setVal('ob-availmin', d.availmin); setVal('ob-goal', d.goal); setVal('ob-racedate', d.racedate); setVal('ob-birth', d.birth);
-  setVal('ob-weight', d.weight); setVal('ob-height', d.height); setVal('ob-healthnotes', d.health);
+  setVal('ob-weight', d.weight); setVal('ob-height', d.height);
   setChoice('#ob-runnertype', d.runnertype); setChoice('#ob-returning', d.returning); setChoice('#ob-terrain', d.terrain); setChoice('#ob-trainby', d.trainby);
-  setChoice('#ob-gender', d.gender); setChoice('#ob-pregnancy', d.pregnancy); setChoice('#ob-referral', d.referral);
+  setChoice('#ob-gender', d.gender); setChoice('#ob-referral', d.referral);
   const note = document.getElementById('ob-newrunner-note'); if(note) note.style.display = d.runnertype === 'active' ? 'none' : 'block';
   const preg = document.getElementById('ob-pregnancy-wrap'); if(preg) preg.style.display = d.gender === 'f' ? 'block' : 'none';
   setPills('#ob-days', d.days);

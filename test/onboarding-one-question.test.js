@@ -128,3 +128,13 @@ test('sin efecto vidrio (pedido del usuario, 2026-11-02): superficies planas, si
   assert.ok(glass.includes('--g-fill:var(--asphalt-2)'), 'tarjetas sólidas del sistema de diseño');
   assert.ok(!css.includes('--lq-edge') && !css.includes('--lq-surface'), 'la barra de abajo y los diálogos volvieron a su estilo anterior');
 });
+
+test('el borrador del inicio (sessionStorage) no guarda datos de salud sensibles: ni molestias/lesiones ni embarazo/posparto', () => {
+  const a = app.indexOf('function obCollectDraft');
+  const b = app.indexOf('function obClearDraft');
+  const draft = app.slice(a, b);
+  assert.ok(draft.length > 200);
+  assert.ok(!draft.includes('ob-healthnotes') && !draft.includes('ob-pregnancy') && !/pregnancy|health:/.test(draft.replace(/\/\/.*$/gm, '')), 'ni se guardan ni se restauran');
+  const restore = app.slice(app.indexOf('function obRestoreDraft'), app.indexOf('async function obCheckNotifNeeded'));
+  assert.ok(!restore.includes("setVal('ob-healthnotes'") && !restore.includes("setChoice('#ob-pregnancy'"), 'no se restauran');
+});

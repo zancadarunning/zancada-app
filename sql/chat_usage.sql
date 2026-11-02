@@ -33,6 +33,9 @@ CREATE TABLE IF NOT EXISTS public.chat_usage (
 -- porque usa la clave de SERVICIO (SUPABASE_SERVICE_KEY), que siempre se
 -- salta el RLS.
 ALTER TABLE public.chat_usage ENABLE ROW LEVEL SECURITY;
+-- Defensa en profundidad (auditoría 2026-11-02): Supabase le da por defecto todos los permisos de tabla a "authenticated"; sin políticas el RLS ya no deja pasar nada,
+-- pero si alguien desactivara el RLS por error una persona podría borrarse el contador y saltarse el tope diario del chat. Esta tabla solo la toca el backend.
+REVOKE ALL ON public.chat_usage FROM anon, authenticated;
 
 -- increment_chat_usage: suma 1 al contador de HOY para p_user_id (creando la
 -- fila si no existía) en una sola operación atómica -- así dos requests que
