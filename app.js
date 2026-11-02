@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T04:12:09Z';
+const APP_VERSION = '2026-11-02T11:54:22Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3123,7 +3123,8 @@ function healthConnectExerciseToRun(ex){
 // para el buscador) aunque llegaran de un reloj sincronizado igual que las de Strava.
 const SOURCE_LABELS = {strava:'Strava', polar:'Polar', wahoo:'Wahoo', coros:'COROS', suunto:'Suunto', garmin:'Garmin', healthconnect:'Health Connect'};
 // Garmin exige mostrar "Garmin [modelo del reloj]" en TODO lugar donde se vean sus datos (historial, detalle, imágenes y videos compartidos); sin el modelo, solo "Garmin" (guía de marca de la API de Garmin).
-function garminAttribution(run){ return run && run.source === 'garmin' ? ('Garmin' + (run.device ? ' ' + String(run.device).replace(/^garmin\s+/i, '') : '')) : ''; }
+// una actividad cargada a mano en Garmin Connect llega con deviceName "unknown": no es un modelo, se muestra solo "Garmin"
+function garminAttribution(run){ return run && run.source === 'garmin' ? ('Garmin' + (run.device && !/^unknown$/i.test(String(run.device).trim()) ? ' ' + String(run.device).replace(/^garmin\s+/i, '') : '')) : ''; }
 function sourceBadgeHtml(source, withMargin, run){
   const label = source === 'garmin' ? (garminAttribution(run || { source }) ) : SOURCE_LABELS[source];
   if(!label) return '';

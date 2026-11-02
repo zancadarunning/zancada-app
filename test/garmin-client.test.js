@@ -37,6 +37,7 @@ test('atribución de Garmin: "Garmin [modelo]" (sin repetir "Garmin") en el hist
   assert.equal(a.garminAttribution({ source: 'garmin', device: 'Forerunner 265' }), 'Garmin Forerunner 265');
   assert.equal(a.garminAttribution({ source: 'garmin', device: 'Garmin fenix 8' }), 'Garmin fenix 8');
   assert.equal(a.garminAttribution({ source: 'garmin' }), 'Garmin');
+  assert.equal(a.garminAttribution({ source: 'garmin', device: 'unknown' }), 'Garmin', 'una actividad manual no tiene modelo de reloj');
   assert.equal(a.garminAttribution({ source: 'strava', device: 'x' }), '', 'solo para datos de Garmin');
   assert.match(a.sourceBadgeHtml('garmin', false, { source: 'garmin', device: 'Forerunner 265' }), />Garmin Forerunner 265</);
   assert.ok(!/<script/.test(a.sourceBadgeHtml('garmin', false, { source: 'garmin', device: '<script>x</script>' })), 'el modelo se escapa');
