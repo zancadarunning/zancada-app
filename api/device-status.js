@@ -9,7 +9,7 @@ const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { withSentry, reportError } = require('./_lib/sentry');
 
-const TABLES = { strava: 'strava_connections', polar: 'polar_connections', wahoo: 'wahoo_connections', coros: 'coros_connections', suunto: 'suunto_connections' };
+const TABLES = { strava: 'strava_connections', polar: 'polar_connections', wahoo: 'wahoo_connections', coros: 'coros_connections', suunto: 'suunto_connections', garmin: 'garmin_connections' };
 
 module.exports = withSentry(async (req, res) => {
   applyCors(req, res);

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-29T02:40:13Z';
+const APP_VERSION = '2026-11-02T01:49:25Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1988,6 +1988,7 @@ async function confirmMultiDeviceConnect(newBrand){
   if(deviceConnections.wahoo && newBrand!=='Wahoo') others.push('Wahoo');
   if(deviceConnections.coros && newBrand!=='COROS') others.push('COROS');
   if(deviceConnections.suunto && newBrand!=='Suunto') others.push('Suunto');
+  if(deviceConnections.garmin && newBrand!=='Garmin') others.push('Garmin');
   // Faltaba Health Connect acá -- reportado en una auditoría. No vive en deviceConnections
   // (ver el comentario grande arriba de esa variable: Health Connect se lee directo de
   // state.healthConnectConnected, no se cachea ahí), así que había que agregarlo aparte.
@@ -2058,21 +2059,22 @@ async function connectStrava(){
 // confirme una conexión real, que mostrarlo de entrada y tener que ocultarlo después
 // (ver refreshDeviceConnections(), llamada una vez al entrar a la app).
 let deviceConnectionsLoaded = false;
-let deviceConnections = { strava:false, polar:false, wahoo:false, coros:false, suunto:false };
+let deviceConnections = { strava:false, polar:false, wahoo:false, coros:false, suunto:false, garmin:false };
 async function refreshDeviceConnections(){
   if(!currentUserId) return;
   invalidateServerConnections(); // se llama justo después de conectar/desconectar: tiene que ver el estado nuevo, no el cacheado
   try{
-    const [s, p, w, c, su] = await Promise.all([
+    const [s, p, w, c, su, g] = await Promise.all([
       supabaseClient.from('strava_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
       supabaseClient.from('polar_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
       supabaseClient.from('wahoo_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
       supabaseClient.from('coros_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
-      supabaseClient.from('suunto_connections').select('user_id').eq('user_id', currentUserId).maybeSingle()
+      supabaseClient.from('suunto_connections').select('user_id').eq('user_id', currentUserId).maybeSingle(),
+      supabaseClient.from('garmin_connections').select('user_id').eq('user_id', currentUserId).maybeSingle()
     ]);
     const srv = await fetchServerConnections();
     const pick = (brand, direct) => (srv && typeof srv[brand] === 'boolean') ? srv[brand] : !!direct;
-    deviceConnections = { strava: pick('strava', s.data), polar: pick('polar', p.data), wahoo: pick('wahoo', w.data), coros: pick('coros', c.data), suunto: pick('suunto', su.data) };
+    deviceConnections = { strava: pick('strava', s.data), polar: pick('polar', p.data), wahoo: pick('wahoo', w.data), coros: pick('coros', c.data), suunto: pick('suunto', su.data), garmin: pick('garmin', g.data) };
     scheduleWatchSync();
   }catch(e){ console.error(e); }
   deviceConnectionsLoaded = true;
@@ -2336,7 +2338,7 @@ function parseLinkReturn(urlStr){
     if(u.origin !== location.origin && u.origin !== 'https://www.zancada.org' && u.origin !== 'https://zancada.org') return null;
     if(!/^\/conectar\/?$/.test(u.pathname)) return null;
     const p = u.searchParams.get('p'), code = u.searchParams.get('code'), state = u.searchParams.get('state');
-    if(!/^(strava|polar|wahoo|suunto|coros)$/.test(p || '') || !code || !state) return null;
+    if(!/^(strava|polar|wahoo|suunto|coros|garmin)$/.test(p || '') || !code || !state) return null;
     return { p, code, state };
   }catch(e){ return null; }
 }
@@ -2356,7 +2358,7 @@ async function finishPendingProviderLink(){
   linkFinishing = true;
   clearLinkReturn(); // el code es de un solo uso: no se reintenta
   try{
-    const res = await fetch(apiUrl('/api/' + link.p + '-auth'), {
+    const res = await fetch(apiUrl(link.p === 'garmin' ? '/api/garmin-callback' : '/api/' + link.p + '-auth'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
       body: JSON.stringify({ code: link.code, state: link.state })
@@ -2656,7 +2658,7 @@ function scheduleWahooSync(delayMs){
   clearTimeout(wahooSyncTimer);
   wahooSyncTimer = setTimeout(()=>{ syncPlanToWahoo(false).catch(e=>console.error('wahoo sync', e)); }, delayMs || 4000);
 }
-function scheduleWatchSync(){ scheduleSuuntoSync(); scheduleWahooSync(); scheduleCorosSync(); }
+function scheduleWatchSync(){ scheduleSuuntoSync(); scheduleWahooSync(); scheduleCorosSync(); scheduleGarminSync(); }
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') scheduleWatchSync(); });
 
 // force=true reenvía todo (botón manual). Devuelve la respuesta del backend o null si no hizo nada.
@@ -2927,6 +2929,134 @@ async function disconnectCoros(){
   await updateCorosStatusDisplay();
 }
 
+/* ---- Garmin Connect (Garmin Connect Developer Program) -----
+   Conexión OAuth2 con PKCE (el secreto de la app vive solo en el servidor: api/garmin-init.js, api/garmin-callback.js). Las carreras llegan por webhook (api/garmin-webhook.js),
+   sin sincronización manual, y el plan se manda al reloj con la Training API (api/garmin-push-plan.js). Los datos de Garmin se muestran con la atribución "Garmin [modelo]" y NUNCA
+   llegan a Zonda (aiVisibleRuns). state.garminSent[fecha] = firma de lo ya enviado. */
+let garminSyncTimer = null, garminSyncRunning = false, garminSyncAgain = false, garminBlockedUntil = 0;
+function scheduleGarminSync(delayMs){
+  if(!deviceConnections.garmin || !watchSyncReady()) return;
+  if(!delayMs && Date.now() < garminBlockedUntil) return;
+  clearTimeout(garminSyncTimer);
+  garminSyncTimer = setTimeout(()=>{ syncPlanToGarmin(false).catch(e=>console.error('garmin sync', e)); }, delayMs || 4000);
+}
+async function syncPlanToGarmin(force){
+  if(!deviceConnections.garmin || !watchSyncReady() || (Date.now() < garminBlockedUntil && !force)) return null;
+  if(garminSyncRunning){ garminSyncAgain = true; return null; }
+  garminSyncRunning = true;
+  try{
+    const { win, weekStart } = watchWindow();
+    const zones = state.profile.hrZones;
+    const ctx = JSON.stringify([zones, 'garmin1']);   // cambiar la versión vuelve a mandar todo
+    const sigOf = d => suuntoHash(JSON.stringify(d) + ctx);
+    let dirty = false;
+    const sent = state.garminSent || {};
+    const keep = win.map(d => d.date);
+    const changed = win.filter(d => force || sent[d.date] !== sigOf(d));
+    const dropped = Object.keys(sent).filter(dt => !keep.includes(dt));
+    let result = null;
+    if(changed.length || dropped.length || force){
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if(session){
+        const res = await fetch(apiUrl('/api/garmin-push-plan'), {
+          method:'POST',
+          headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
+          body: JSON.stringify({ days:changed, keepDates:keep, weekStart, today:todayLocalISO(), zones, force:!!force })
+        });
+        result = await res.json().catch(()=>null);
+        if(!result && !res.ok) garminBlockedUntil = Date.now() + 15*60*1000;
+        if(result){
+          if(result.reason === 'not_connected'){ deviceConnections.garmin = false; }
+          const ok = res.ok && !result.error && !result.reason && !result.failed;
+          if(result.reason === 'cooldown' || result.reason === 'rate_limited'){
+            garminBlockedUntil = Date.now() + 6*60*1000;
+            scheduleGarminSync(6*60*1000 + 2000);   // el servidor deja un envío cada 5 minutos: lo que cae en esa espera se reintenta solo
+          } else if(!ok) garminBlockedUntil = Date.now() + 15*60*1000;
+          const next = {};
+          keep.forEach(dt => { if(sent[dt] && !changed.some(c=>c.date===dt)) next[dt] = sent[dt]; });
+          changed.forEach(d => { if((result.pushedDates||[]).includes(d.date)) next[d.date] = sigOf(d); else if(sent[d.date]) next[d.date] = sent[d.date]; });
+          if(JSON.stringify(next) !== JSON.stringify(state.garminSent || {})){ state.garminSent = next; dirty = true; }
+        }
+      }
+    }
+    if(dirty) persist();
+    return result;
+  }finally{
+    garminSyncRunning = false;
+    if(garminSyncAgain){ garminSyncAgain = false; scheduleGarminSync(); }
+  }
+}
+async function connectGarmin(){
+  if(!(await confirmMultiDeviceConnect('Garmin'))) return;
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session){ showToast(t('garmin_connect_error'),'error'); return; }
+    const res = await fetch(apiUrl('/api/garmin-init'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
+    });
+    if(!res.ok) throw new Error('garmin-init failed');
+    const { authUrl } = await res.json();
+    if(!/^https:\/\/connect\.garmin\.com\//.test(String(authUrl))) throw new Error('garmin-init: dirección inesperada');
+    window.location.href = authUrl;
+  }catch(e){
+    console.error(e);
+    showToast(t('garmin_connect_error'),'error');
+  }
+}
+async function updateGarminStatusDisplay(){
+  const el = document.getElementById('garmin-status');
+  const btn = document.getElementById('garmin-connect-btn');
+  if(!el || !currentUserId) return;
+  try{
+    const { data } = await supabaseClient.from('garmin_connections').select('user_id,permissions').eq('user_id', currentUserId).maybeSingle();
+    deviceConnections.garmin = !!data;
+    if(data) scheduleGarminSync();   // recién conectada (o al abrir Perfil): deja la semana en Garmin Connect
+    if(data){
+      el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
+      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectGarmin; }
+      const perms = Array.isArray(data.permissions) ? data.permissions : [];
+      const note = document.getElementById('garmin-perm-note');
+      if(note){ const missing = perms.length && !perms.includes('WORKOUT_IMPORT'); note.textContent = missing ? t('garmin_no_workout_permission') : ''; note.style.display = missing ? '' : 'none'; }
+    } else {
+      el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
+      if(btn){ btn.textContent = t('garmin_connect'); btn.onclick = connectGarmin; }
+    }
+    renderPlan();
+  }catch(e){}
+}
+async function disconnectGarmin(){
+  if(!currentUserId) return;
+  if(!(await confirmKeepDataBeforeDisconnect('Garmin', 'garmin', 'garminId'))) return;
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session) throw new Error('sin sesión');
+    const res = await fetch(apiUrl('/api/garmin-disconnect'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
+    });
+    if(!res.ok) throw new Error('garmin-disconnect failed');
+  }catch(e){
+    // Garmin exige avisarle la desconexión desde el servidor: si falla NO se simula que se desconectó (la fila solo la puede borrar el backend)
+    console.error(e);
+    showToast(t('garmin_disconnect_error'),'error');
+    return;
+  }
+  deviceConnections.garmin = false; clearTimeout(garminSyncTimer);
+  if(state.garminSent){ state.garminSent = null; persist(); }
+  if(state.runs && state.runs.some(r=>r.source==='garmin')){
+    state.runs = state.runs.filter(r=>r.source!=='garmin');
+    if(state.shoes){
+      state.shoes.forEach(shoe=>{
+        shoe.km = state.runs.filter(r=>String(r.shoeId)===String(shoe.id)).reduce((a,r)=>a+(r.distanceKm||0),0);
+      });
+      checkShoeWearAlerts();
+    }
+    renderHistory(); renderHome(); renderPerfil(); persist();
+  }
+  await updateGarminStatusDisplay();
+}
+
 /* ---- Health Connect (solo Android nativo) -----
    A diferencia de Strava/Polar, acá no hay backend ni OAuth: todo el permiso y la
    lectura pasan en el propio teléfono, vía el plugin local HealthConnectBridge (ver
@@ -2968,11 +3098,13 @@ function healthConnectExerciseToRun(ex){
 // Antes Historial solo reconocía r.source==='strava' para la insignia y la búsqueda --
 // Polar/Wahoo/Health Connect quedaban con carreras "sin marca" (sin insignia, invisibles
 // para el buscador) aunque llegaran de un reloj sincronizado igual que las de Strava.
-const SOURCE_LABELS = {strava:'Strava', polar:'Polar', wahoo:'Wahoo', coros:'COROS', suunto:'Suunto', healthconnect:'Health Connect'};
-function sourceBadgeHtml(source, withMargin){
-  const label = SOURCE_LABELS[source];
+const SOURCE_LABELS = {strava:'Strava', polar:'Polar', wahoo:'Wahoo', coros:'COROS', suunto:'Suunto', garmin:'Garmin', healthconnect:'Health Connect'};
+// Garmin exige mostrar "Garmin [modelo del reloj]" en TODO lugar donde se vean sus datos (historial, detalle, imágenes y videos compartidos); sin el modelo, solo "Garmin" (guía de marca de la API de Garmin).
+function garminAttribution(run){ return run && run.source === 'garmin' ? ('Garmin' + (run.device ? ' ' + String(run.device).replace(/^garmin\s+/i, '') : '')) : ''; }
+function sourceBadgeHtml(source, withMargin, run){
+  const label = source === 'garmin' ? (garminAttribution(run || { source }) ) : SOURCE_LABELS[source];
   if(!label) return '';
-  return `<span class="tag tag-asfalto"${withMargin?' style="margin-right:6px;"':''}>${label}</span>`;
+  return `<span class="tag tag-asfalto"${withMargin?' style="margin-right:6px;"':''}>${escapeHtml(label)}</span>`;
 }
 function isLikelyDuplicateOfExistingRun(startIso, distanceKm, existingRuns, durationSec){
   // Compara contra CUALQUIER carrera ya guardada, sin importar la fuente -- si el mismo
@@ -9118,7 +9250,7 @@ function buildDayListHtml(wd){
       // conectado, era confuso: tocarlo no traía nada y no explicaba por qué. Mismo
       // criterio para "Enviar a mi reloj", pero solo mirando Wahoo (es la única que
       // recibe datos). Ver deviceConnections / refreshDeviceConnections() más arriba.
-      const anyDeviceConnected = deviceConnections.strava || deviceConnections.polar || deviceConnections.wahoo || deviceConnections.coros || deviceConnections.suunto || !!state.healthConnectConnected;
+      const anyDeviceConnected = deviceConnections.strava || deviceConnections.polar || deviceConnections.wahoo || deviceConnections.coros || deviceConnections.suunto || deviceConnections.garmin || !!state.healthConnectConnected;
       const showSyncBtn = isToday && anyDeviceConnected;
       const planBtns = `${showSyncBtn?`<button class="btn btn-outline btn-sm" id="sync-today-btn" data-on-click="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>`:''}`;
       if(planBtns) statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">${planBtns}</div>`;
@@ -10005,6 +10137,7 @@ function renderPerfil(){
     if(deviceConnections.wahoo) connectedNames.push('Wahoo');
     if(deviceConnections.suunto) connectedNames.push('Suunto');
     if(deviceConnections.coros) connectedNames.push('COROS');
+    if(deviceConnections.garmin) connectedNames.push('Garmin');
     if(state.healthConnectConnected) connectedNames.push('Health Connect');
     if(!deviceConnectionsLoaded && currentUserId){ devicesSummaryEl.innerHTML = '<span class="skel-line"></span>'; }
     else devicesSummaryEl.textContent = connectedNames.length ? connectedNames.join(', ') : t('perfil_devices_none');
@@ -11338,10 +11471,10 @@ async function showView(v){
     if(devOv && devOv.classList && currentUserId){
       devOv.classList.add('conn-loading');
       const stopLoading = () => devOv.classList.remove('conn-loading');
-      Promise.allSettled([updateStravaStatusDisplay(), updatePolarStatusDisplay(), updateWahooStatusDisplay(), updateCorosStatusDisplay(), updateSuuntoStatusDisplay()]).then(stopLoading);
+      Promise.allSettled([updateStravaStatusDisplay(), updatePolarStatusDisplay(), updateWahooStatusDisplay(), updateCorosStatusDisplay(), updateSuuntoStatusDisplay(), updateGarminStatusDisplay()]).then(stopLoading);
       setTimeout(stopLoading, 8000);
     } else {
-      updateStravaStatusDisplay(); updatePolarStatusDisplay(); updateWahooStatusDisplay(); updateCorosStatusDisplay(); updateSuuntoStatusDisplay();
+      updateStravaStatusDisplay(); updatePolarStatusDisplay(); updateWahooStatusDisplay(); updateCorosStatusDisplay(); updateSuuntoStatusDisplay(); updateGarminStatusDisplay();
     }
     updateHealthConnectStatusDisplay();
   }
@@ -14836,6 +14969,7 @@ function renderHistory(){
       <div class="stat-cell"><div class="n">${fmtDist(tr.totalKm,0)}</div><div class="l">${t('hist_total_km')} (${distUnit()})</div></div>
       <div class="stat-cell"><div class="n">${tr.totalRuns}</div><div class="l">${t('hist_total_runs')}</div></div>
     </div>
+    ${(state.runs||[]).some(r=>r.source==='garmin') ? `<p class="muted garmin-derived" style="margin:10px 0 0; font-size:12px;">${t('garmin_derived_note')}</p>` : ''}
     <div class="trend-bars" id="hist-trend-bars" style="margin-top:46px;">${daily.map((x,i)=>{
       const h = x.km>0 ? Math.max(6, Math.round((x.km/maxKmDay)*70)) : (x.planned ? 4 : 2);
       const cls = (x.km>0 ? '' : (x.planned ? 'trend-planned' : 'trend-rest')) + (i===daily.length-1 ? ' trend-today' : '');
@@ -14884,8 +15018,8 @@ function renderHistory(){
     return `${monthHeader}<div class="swipe-item" data-swipe-id="${r.id}">
       <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" data-on-click="deleteRun('${r.id}')"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
       <div class="card hist-card swipe-content" data-on-click="openRunDetail('${r.id}')" style="cursor:pointer;">
-        <div class="hist-top"><span style="font-weight:700;">${dateStr}</span>${hasMap ? '' : `<span class="hist-date">${r.manual? `<span class="tag tag-asfalto" style="margin-right:6px;">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, true)}${fmtTime(r.durationSec)}</span>`}</div>
-        ${hasMap ? `<div class="hist-map" data-run-id="${r.id}">${routeSketchSvg(r.points)}<img class="hist-map-img" src="${buildHistMapStaticUrl(r, histMapCssWidth(), 108)}" loading="lazy" alt="" decoding="async" data-on-load="this.classList.add('loaded')" data-on-error="this.style.display='none'"><div class="hist-map-badge">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false)}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
+        <div class="hist-top"><span style="font-weight:700;">${dateStr}</span>${hasMap ? '' : `<span class="hist-date">${r.manual? `<span class="tag tag-asfalto" style="margin-right:6px;">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, true, r)}${fmtTime(r.durationSec)}</span>`}</div>
+        ${hasMap ? `<div class="hist-map" data-run-id="${r.id}">${routeSketchSvg(r.points)}<img class="hist-map-img" src="${buildHistMapStaticUrl(r, histMapCssWidth(), 108)}" loading="lazy" alt="" decoding="async" data-on-load="this.classList.add('loaded')" data-on-error="this.style.display='none'"><div class="hist-map-badge">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false, r)}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
         <div class="stat-row-divided">
           <div class="stat-cell"><div class="n">${fmtDist(r.distanceKm)}</div><div class="l">${distUnit()}</div></div>
           <div class="stat-cell"><div class="n">${fmtPace(paceMin)}</div><div class="l">${t('run_pace_word')}</div></div>
@@ -15019,6 +15153,7 @@ function openRunDetail(runId){
   document.getElementById('run-detail-content').innerHTML = `
     <h2 class="subtitle" style="font-size:22px; margin-bottom:2px;">${escapeHtml(r.name) || dateStr}</h2>
     ${r.name ? `<p class="muted" style="margin-bottom:10px;">${dateStr}</p>` : '<div style="margin-bottom:10px;"></div>'}
+    ${r.source === 'garmin' ? `<p class="muted garmin-attr" style="margin:-4px 0 10px; font-weight:700; letter-spacing:.02em;">${escapeHtml(garminAttribution(r))}</p>` : ''}
     <div class="rd-tabs">${tabs.map(tb=>`<button class="rd-tab-btn" id="rd-tabbtn-${tb}" data-on-click="switchRDTab('${tb}')">${tabLabels[tb]}</button>`).join('')}</div>
     ${tabs.map(tb=>`<div class="rd-panel" id="rd-panel-${tb}"></div>`).join('')}
     <button class="btn btn-outline" style="width:100%; margin-top:24px;" data-on-click="openEditRun('${r.id}')">${t('edit_run_btn')}</button>
@@ -15874,6 +16009,17 @@ function drawShareStatsRow(ctx, stats, W, topY, valueSize, labelColor){
   });
   ctx.restore();
 }
+// Garmin exige que toda imagen con datos de sus dispositivos lleve "Garmin [modelo]" visible. Se dibuja chico y legible abajo del todo, con sombra para que se vea sobre cualquier foto.
+function drawShareAttribution(ctx, W, H, text){
+  if(!text) return;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.shadowColor = 'rgba(0,0,0,0.75)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 2;
+  ctx.fillStyle = '#EDEFEF';
+  ctx.font = '600 30px "Inter", Arial, sans-serif';
+  ctx.fillText(text, W / 2, H - 70);
+  ctx.restore();
+}
 function buildRunShareBlob(r, tpl){
   if(tpl === 'sticker') return buildShareImageBlob(r);
   return new Promise(async (resolve) => {
@@ -15917,6 +16063,7 @@ function buildRunShareBlob(r, tpl){
         drawShareStatsRow(ctx, stats, W, 1500, 60, '#EDEFEF');
         drawBrandWord(ctx, W / 2, 1700, 72);
       }
+      drawShareAttribution(ctx, W, H, garminAttribution(r));
       canvas.toBlob((blob) => resolve(blob || null), 'image/png');
     }catch(e){ resolve(null); }
   });
@@ -16560,6 +16707,7 @@ async function startDynamicVideo(runId){
     ctx.font = '500 22px "Inter", Arial, sans-serif';
     ctx.textAlign = 'right';
     ctx.fillText(dateStr, W-40, 90);
+    if(typeof r !== 'undefined' && r && r.source === 'garmin'){ ctx.fillStyle = '#EDEFEF'; ctx.font = '700 24px "Inter", Arial, sans-serif'; ctx.fillText(garminAttribution(r), W-40, 124); ctx.fillStyle = 'rgba(237,239,239,0.7)'; }
     ctx.textAlign = 'left';
     if(runName){
       ctx.fillStyle = '#EDEFEF';

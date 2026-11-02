@@ -69,6 +69,7 @@ function activityToRun(summary, detail) {
     maxPower: fit.maxPower,
     shoeId: null,
     source: 'garmin',
+    device: s.deviceName ? String(s.deviceName).replace(/^garmin\s+/i, '').slice(0, 60) : null,
     planMonday: getMondayISO(localDate),
     planDayIndex: (startDate.getUTCDay() + 6) % 7
   });

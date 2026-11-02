@@ -25,3 +25,5 @@ los logos oficiales reales de cada marca (no recreados a mano) — bajados de es
 Si alguna marca cambia su logo o publica un kit de marca más específico, actualizar acá.
 
 - `suunto.png`: logo oficial de Suunto bajado del material de marca (media.suunto.com, cuenta de partner) el 2026-10-07; solo se recortó el margen y se achicó a 600 px de ancho, sin cambiar colores. Se muestra sobre una placa blanca (`.brand-logo-plate`).
+
+- `garmin.png`: ícono oficial de la app "Garmin Connect" (paquete de marca del Garmin Connect Developer Program, `GCDP Branding Assets_v2`), solo achicado a 160 px, sin cambios. Se usa junto al nombre completo "Garmin Connect" como pide la guía de marca de la API de Garmin; la atribución "Garmin [modelo]" se muestra en Historial y en lo que se comparte.
