@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T14:18:05Z';
+const APP_VERSION = '2026-11-02T14:30:27Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1549,40 +1549,80 @@ if(typeof window !== 'undefined'){
   window.addEventListener('offline', updateOfflineBanner);
   document.addEventListener('DOMContentLoaded', updateOfflineBanner);
 }
-/* ---- Edad mínima y consentimiento para datos de salud ----
-   Antes de usar la app (cuenta nueva o ya existente, con correo o Google) hay que confirmar tener 16 años o más y consentir de forma explícita el
-   tratamiento de datos de salud y actividad. Se guarda en el estado de la cuenta (state.consent) con la versión del texto y la fecha: si el texto cambia
-   y se sube CONSENT_VERSION, se vuelve a pedir. Rechazar cierra la sesión. */
-const CONSENT_VERSION = 1;
+/* ---- Consentimientos antes de empezar ----
+   Antes de usar la app (cuenta nueva o ya existente, con correo o Google) hay que aceptar, en una sola pantalla: los Términos y la Política de Privacidad, el tratamiento de datos de salud,
+   el análisis con IA (Zonda manda datos a un proveedor de IA) y tener 16 años o más. "Aceptar todo" tilda los cuatro y el ⓘ explica cada uno. Se guarda en el estado de la cuenta
+   (state.consent) con la versión del texto y la fecha: si el texto cambia y se sube CONSENT_VERSION, se vuelve a pedir. Rechazar cierra la sesión.
+   Versión 2 (2026-11-02): el consentimiento de IA y el de Términos pasan a ser propios (antes iban dentro del de salud), así que las cuentas con versión 1 lo vuelven a confirmar una vez. */
+const CONSENT_VERSION = 2;
+const CONSENT_FIELDS = ['terms', 'health', 'ai', 'age'];
 function hasConsent(){
   const c = state && state.consent;
-  return !!(c && c.v >= CONSENT_VERSION && c.age16 === true && c.health === true);
+  return !!(c && c.v >= CONSENT_VERSION && c.age16 === true && c.health === true && c.ai === true && c.terms === true);
 }
 let consentResolve = null;
+function consentEl(field){ return document.getElementById('consent-' + field); }
+// "Acepto los {terms} y la {privacy}.": los enlaces se arman como nodos (sin innerHTML) a partir del texto del idioma
+function fillConsentTerms(){
+  const box = document.getElementById('consent-terms-label');
+  if(!box) return;
+  box.textContent = '';
+  t('consent_terms').split(/(\{terms\}|\{privacy\})/).forEach(part => {
+    if(part === '{terms}' || part === '{privacy}'){
+      const a = document.createElement('a');
+      a.href = apiUrl((part === '{terms}' ? '/terms.html' : '/privacy.html') + '?lang=' + lang);
+      a.target = '_blank'; a.rel = 'noopener';
+      a.textContent = t(part === '{terms}' ? 'legal_terms_link' : 'legal_privacy_link');
+      box.appendChild(a);
+    } else if(part){
+      const txt = document.createElement('span'); txt.textContent = part; box.appendChild(txt);
+    }
+  });
+}
+function showConsentInfo(show){
+  const main = document.getElementById('consent-main'), info = document.getElementById('consent-info');
+  if(main) main.style.display = show ? 'none' : 'flex';
+  if(info) info.style.display = show ? 'flex' : 'none';
+  const modal = document.getElementById('consent-modal'); if(modal) modal.scrollTop = 0;
+}
 function showConsentScreen(){
   return new Promise(resolve => {
     consentResolve = resolve;
-    const set = (id, text) => { const e = document.getElementById(id); if(e) e.textContent = text; };
-    set('consent-title', t('consent_title')); set('consent-body', t('consent_body'));
-    set('consent-age-label', t('consent_age')); set('consent-health-label', t('consent_health'));
-    set('consent-accept-btn', t('consent_accept')); set('consent-decline-btn', t('consent_decline'));
-    set('consent-privacy-link', t('legal_privacy_link'));
-    const link = document.getElementById('consent-privacy-link'); if(link) link.href = apiUrl('/privacy.html?lang=' + lang);
-    ['consent-age', 'consent-health'].forEach(id => { const e = document.getElementById(id); if(e) e.checked = false; });
+    const set = (id, key) => { const e = document.getElementById(id); if(e) e.textContent = t(key); };
+    set('consent-title', 'consent_title'); set('consent-body', 'consent_lead'); set('consent-all-label', 'consent_all');
+    set('consent-health-label', 'consent_health'); set('consent-ai-label', 'consent_ai'); set('consent-age-label', 'consent_age');
+    set('consent-accept-btn', 'consent_accept'); set('consent-decline-btn', 'consent_decline');
+    fillConsentTerms();
+    set('consent-info-title', 'consent_info_title'); set('consent-info-h-health', 'consent_info_h_health'); set('consent-info-p-health', 'consent_info_p_health');
+    ['hl1', 'hl2', 'hl3', 'hl4'].forEach(k => set('consent-info-' + k, 'consent_info_' + k));
+    set('consent-info-h-ai', 'consent_info_h_ai'); set('consent-info-p-ai', 'consent_info_p_ai');
+    ['ai1', 'ai2', 'ai3'].forEach(k => set('consent-info-' + k, 'consent_info_' + k));
+    set('consent-info-medical', 'consent_info_medical'); set('consent-info-withdraw', 'consent_info_withdraw');
+    ['consent-info-btn', 'consent-back-btn'].forEach(id => { const e = document.getElementById(id); if(e) e.setAttribute('aria-label', t(id === 'consent-back-btn' ? 'consent_back' : 'consent_info_label')); });
+    CONSENT_FIELDS.concat(['all']).forEach(k => { const e = consentEl(k); if(e) e.checked = false; });
     const btn = document.getElementById('consent-accept-btn'); if(btn) btn.disabled = true;
+    showConsentInfo(false);
     ['splash', 'login', 'onboard'].forEach(id => { const e = document.getElementById(id); if(e) e.style.display = 'none'; });
     document.getElementById('consent-modal').style.display = 'block';
     if(window.zcBootDone) window.zcBootDone();
   });
 }
+function allConsentChecked(){ return CONSENT_FIELDS.every(k => { const e = consentEl(k); return !!(e && e.checked); }); }
+// "Aceptar todo" tilda o destilda los cuatro
+function toggleConsentAll(){
+  const on = !!(consentEl('all') && consentEl('all').checked);
+  CONSENT_FIELDS.forEach(k => { const e = consentEl(k); if(e) e.checked = on; });
+  updateConsentButton();
+}
 function updateConsentButton(){
-  const age = document.getElementById('consent-age'), health = document.getElementById('consent-health'), btn = document.getElementById('consent-accept-btn');
-  if(btn) btn.disabled = !(age && age.checked && health && health.checked);
+  const ok = allConsentChecked();
+  const all = consentEl('all'); if(all) all.checked = ok;   // "Aceptar todo" refleja si están los cuatro
+  const btn = document.getElementById('consent-accept-btn');
+  if(btn) btn.disabled = !ok;
 }
 function acceptConsent(){
-  const age = document.getElementById('consent-age'), health = document.getElementById('consent-health');
-  if(!(age && age.checked && health && health.checked)) return;   // el botón gris ya no deja, pero por las dudas
-  state.consent = { v: CONSENT_VERSION, at: new Date().toISOString(), age16: true, health: true };
+  if(!allConsentChecked()) return;   // el botón gris ya no deja, pero por las dudas
+  state.consent = { v: CONSENT_VERSION, at: new Date().toISOString(), age16: true, health: true, ai: true, terms: true };
   document.getElementById('consent-modal').style.display = 'none';
   const done = consentResolve; consentResolve = null;
   if(done) done(true);

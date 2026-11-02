@@ -2657,26 +2657,26 @@
 /* ===== Inicio para usuarios nuevos: una pregunta por pantalla, vidrio líquido sobre un fondo suave (2026-11-02) =====
    El vidrio se arma con relleno translúcido + reflejo en el borde de arriba (siempre); el desenfoque de lo que hay detrás (backdrop-filter) se suma solo donde el navegador lo soporta y no hay "reducir transparencia".
    Es una pantalla pasajera sobre un fondo fijo: no hay contenido que se desplace debajo, a diferencia de las barras siempre visibles (ver "Rendimiento de scroll"). */
-#onboard, #session-sheet, #run-detail-content{
+#onboard, #session-sheet, #consent-modal, #run-detail-content{
   --g-fill:rgba(255,255,255,.07); --g-fill-on:rgba(214,255,63,.16); --g-edge-top:rgba(255,255,255,.2); --g-edge-bot:rgba(255,255,255,.04);
   --g-shadow:0 12px 30px -16px rgba(0,0,0,.85); --g-ring:var(--hivis); --g-ink:var(--chalk);
   --g-cta-top:#E6FF7A; --g-cta-bot:#C4EF1C; --g-cta-text:#101200; --g-sheen:rgba(255,255,255,.55);
   --g-bg:radial-gradient(70% 38% at 12% -4%, rgba(214,255,63,.17), transparent 62%), radial-gradient(60% 34% at 104% 16%, rgba(110,140,255,.13), transparent 62%), radial-gradient(80% 40% at 50% 112%, rgba(214,255,63,.07), transparent 60%), var(--asphalt);
 }
-:root[data-theme="light"] #onboard, :root[data-theme="light"] #session-sheet, :root[data-theme="light"] #run-detail-content{
+:root[data-theme="light"] #onboard, :root[data-theme="light"] #session-sheet, :root[data-theme="light"] #consent-modal, :root[data-theme="light"] #run-detail-content{
   --g-fill:rgba(255,255,255,.66); --g-fill-on:rgba(255,255,255,.95); --g-edge-top:rgba(255,255,255,1); --g-edge-bot:rgba(24,28,48,.07);
   --g-shadow:0 12px 28px -16px rgba(30,40,90,.4); --g-ring:#0A0A0A; --g-ink:#101114;
   --g-cta-top:#2A2A30; --g-cta-bot:#0A0A0A; --g-cta-text:#FFFFFF; --g-sheen:rgba(255,255,255,.28);
   --g-bg:radial-gradient(70% 38% at 12% -4%, rgba(214,255,63,.42), transparent 62%), radial-gradient(60% 34% at 104% 16%, rgba(140,160,255,.3), transparent 62%), radial-gradient(80% 40% at 50% 112%, rgba(214,255,63,.2), transparent 60%), #F4F5FA;
 }
-@media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #onboard, :root:not([data-theme="dark"]) #session-sheet, :root:not([data-theme="dark"]) #run-detail-content{
+@media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #onboard, :root:not([data-theme="dark"]) #session-sheet, :root:not([data-theme="dark"]) #consent-modal, :root:not([data-theme="dark"]) #run-detail-content{
   --g-fill:rgba(255,255,255,.66); --g-fill-on:rgba(255,255,255,.95); --g-edge-top:rgba(255,255,255,1); --g-edge-bot:rgba(24,28,48,.07);
   --g-shadow:0 12px 28px -16px rgba(30,40,90,.4); --g-ring:#0A0A0A; --g-ink:#101114;
   --g-cta-top:#2A2A30; --g-cta-bot:#0A0A0A; --g-cta-text:#FFFFFF; --g-sheen:rgba(255,255,255,.28);
   --g-bg:radial-gradient(70% 38% at 12% -4%, rgba(214,255,63,.42), transparent 62%), radial-gradient(60% 34% at 104% 16%, rgba(140,160,255,.3), transparent 62%), radial-gradient(80% 40% at 50% 112%, rgba(214,255,63,.2), transparent 60%), #F4F5FA;
 } }
 
-#onboard, #session-sheet{background:var(--g-bg); padding-left:22px; padding-right:22px;}
+#onboard, #session-sheet, #consent-modal{background:var(--g-bg); padding-left:22px; padding-right:22px;}
 
 /* "Conectá tu reloj" (pantalla 19 del inicio): lista de integraciones de vidrio con "Conectar" a la derecha */
 #onboard .cw-section{margin:30px 4px 10px; font-size:13px; font-weight:700; color:var(--mist); letter-spacing:.01em;}
@@ -2753,12 +2753,12 @@
 @media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #onboard .day-pill.active{color:#fff;} }
 
 /* botón principal: píldora con reflejo; texto "Omitir" suave debajo */
-#onboard .ob-cta{width:100%; height:58px; border:0; border-radius:999px; font-size:16.5px; font-weight:700; letter-spacing:.005em; color:var(--g-cta-text); position:relative; overflow:hidden;
+#onboard .ob-cta, #consent-modal .ob-cta{width:100%; height:58px; border:0; border-radius:999px; font-size:16.5px; font-weight:700; letter-spacing:.005em; color:var(--g-cta-text); position:relative; overflow:hidden;
   background:linear-gradient(180deg, var(--g-cta-top), var(--g-cta-bot)); box-shadow:inset 0 1px 0 var(--g-sheen), 0 14px 28px -12px rgba(0,0,0,.55); transition:transform .12s ease, opacity .18s ease;}
-#onboard .ob-cta::before{content:''; position:absolute; inset:0 0 52% 0; border-radius:inherit; pointer-events:none; background:linear-gradient(180deg, var(--g-sheen), transparent);}
-#onboard .ob-cta:active:not(:disabled){transform:scale(.98);}
-#onboard .ob-cta:disabled{opacity:.34; box-shadow:inset 0 1px 0 var(--g-sheen);}
-#onboard .ob-skip{background:none; border:0; color:var(--mist); font-size:15px; font-weight:600; padding:13px; align-self:center;}
+#onboard .ob-cta, #consent-modal .ob-cta::before{content:''; position:absolute; inset:0 0 52% 0; border-radius:inherit; pointer-events:none; background:linear-gradient(180deg, var(--g-sheen), transparent);}
+#onboard .ob-cta, #consent-modal .ob-cta:active:not(:disabled){transform:scale(.98);}
+#onboard .ob-cta, #consent-modal .ob-cta:disabled{opacity:.34; box-shadow:inset 0 1px 0 var(--g-sheen);}
+#onboard .ob-skip, #consent-modal .ob-skip{background:none; border:0; color:var(--mist); font-size:15px; font-weight:600; padding:13px; align-self:center;}
 #onboard .btn-reason{text-align:center; margin:8px 0 0;}
 
 /* pantalla final */
@@ -2831,6 +2831,28 @@
   :root:root .confirm-card{background:var(--asphalt-2);} :root[data-theme="light"] .confirm-card{background:#FFFFFF;}
 }
 @media (prefers-reduced-transparency:reduce){ :root:root .confirm-card{background:var(--asphalt-2);} :root[data-theme="light"] .confirm-card{background:#FFFFFF;} }
+
+/* Consentimientos antes de empezar: todo en una pantalla de vidrio, con "Aceptar todo" y un ⓘ que explica cada uno */
+#consent-modal .cs-panel{display:flex; flex-direction:column; max-width:520px; margin:0 auto; padding:calc(var(--safe-top) + 18px) 0 calc(var(--safe-bottom) + 18px); min-height:100dvh; box-sizing:border-box;}
+#consent-modal .cs-head{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px;}
+#consent-modal .cs-title{margin:0; font-size:26px; font-weight:800; letter-spacing:-.02em; color:var(--g-ink); font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text',Inter,system-ui,sans-serif;}
+#consent-modal .cs-title-sm{font-size:19px; flex:1; text-align:center; margin-right:42px;}
+#consent-modal .cs-icon-btn{width:42px; height:42px; flex:0 0 42px; border-radius:50%; border:0; padding:0; display:flex; align-items:center; justify-content:center; color:var(--g-ink); background:var(--g-fill); box-shadow:inset 0 1px 0 var(--g-edge-top), inset 0 -1px 0 var(--g-edge-bot), var(--g-shadow);}
+#consent-modal .cs-lead{margin:8px 0 18px; font-size:15px; line-height:1.5; color:var(--mist);}
+#consent-modal .cs-card{background:var(--g-fill); border-radius:22px; padding:6px 16px 14px; box-shadow:inset 0 1px 0 var(--g-edge-top), inset 0 -1px 0 var(--g-edge-bot), var(--g-shadow);}
+#consent-modal .cs-row{margin-top:14px; align-items:flex-start;}
+#consent-modal .cs-row span{font-size:14.5px; line-height:1.45; color:var(--g-ink);}
+#consent-modal .cs-row a{color:var(--g-ink); text-decoration:underline;}
+#consent-modal .cs-all{padding-bottom:14px; border-bottom:1px solid var(--g-edge-bot);}
+#consent-modal .cs-all span{font-size:17px; font-weight:700;}
+#consent-modal .ob-cta{margin-top:auto; flex:none;}
+#consent-modal .cs-card + .ob-cta{margin-top:24px;}
+#consent-modal .cs-info{padding-top:14px; font-size:14.5px; line-height:1.55; color:var(--g-ink);}
+#consent-modal .cs-info h3{margin:0 0 6px; font-size:16.5px; font-weight:800;}
+#consent-modal .cs-info p{margin:0 0 10px; color:var(--g-ink);}
+#consent-modal .cs-info ul{margin:0 0 10px; padding-left:20px;}
+#consent-modal .cs-info li{margin:4px 0;}
+#consent-modal .cs-info hr{border:0; border-top:1px solid var(--g-edge-bot); margin:14px 0;}
 </style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
@@ -4503,13 +4525,40 @@
   </div>
 
   <div class="overlay" id="consent-modal" style="display:none; z-index:70; overflow-y:auto;" role="dialog" aria-modal="true" aria-labelledby="consent-title">
-    <h2 class="subtitle" id="consent-title" style="font-size:24px;"></h2>
-    <p class="lead" id="consent-body" style="margin-top:12px;"></p>
-    <p class="lead" style="margin-top:8px;"><a id="consent-privacy-link" href="/privacy.html" target="_blank" rel="noopener" style="color:var(--hivis-text); text-decoration:underline;"></a></p>
-    <label class="legal-checkbox-row"><input type="checkbox" id="consent-age" data-on-change="updateConsentButton()"><span id="consent-age-label" style="font-size:13.5px;"></span></label>
-    <label class="legal-checkbox-row"><input type="checkbox" id="consent-health" data-on-change="updateConsentButton()"><span id="consent-health-label" style="font-size:13.5px;"></span></label>
-    <button class="btn btn-primary" id="consent-accept-btn" style="width:100%; margin-top:22px;" disabled data-on-click="acceptConsent()"></button>
-    <button class="btn btn-gray" id="consent-decline-btn" style="width:100%; margin-top:10px;" data-on-click="declineConsent()"></button>
+    <div class="cs-panel" id="consent-main">
+      <div class="cs-head">
+        <h2 class="cs-title" id="consent-title"></h2>
+        <button type="button" class="cs-icon-btn" id="consent-info-btn" data-on-click="showConsentInfo(true)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="7.8" r=".6" fill="currentColor"/></svg></button>
+      </div>
+      <p class="cs-lead" id="consent-body"></p>
+      <div class="cs-card">
+        <label class="legal-checkbox-row cs-row cs-all"><input type="checkbox" id="consent-all" data-on-change="toggleConsentAll()"><span id="consent-all-label"></span></label>
+        <label class="legal-checkbox-row cs-row"><input type="checkbox" id="consent-terms" data-on-change="updateConsentButton()"><span id="consent-terms-label"></span></label>
+        <label class="legal-checkbox-row cs-row"><input type="checkbox" id="consent-health" data-on-change="updateConsentButton()"><span id="consent-health-label"></span></label>
+        <label class="legal-checkbox-row cs-row"><input type="checkbox" id="consent-ai" data-on-change="updateConsentButton()"><span id="consent-ai-label"></span></label>
+        <label class="legal-checkbox-row cs-row"><input type="checkbox" id="consent-age" data-on-change="updateConsentButton()"><span id="consent-age-label"></span></label>
+      </div>
+      <button class="btn btn-primary ob-cta" id="consent-accept-btn" disabled data-on-click="acceptConsent()"></button>
+      <button type="button" class="ob-skip" id="consent-decline-btn" data-on-click="declineConsent()"></button>
+    </div>
+    <div class="cs-panel" id="consent-info" style="display:none;">
+      <div class="cs-head">
+        <button type="button" class="cs-icon-btn" id="consent-back-btn" data-on-click="showConsentInfo(false)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <h2 class="cs-title cs-title-sm" id="consent-info-title"></h2>
+      </div>
+      <div class="cs-card cs-info">
+        <h3 id="consent-info-h-health"></h3>
+        <p id="consent-info-p-health"></p>
+        <ul><li id="consent-info-hl1"></li><li id="consent-info-hl2"></li><li id="consent-info-hl3"></li><li id="consent-info-hl4"></li></ul>
+        <hr>
+        <h3 id="consent-info-h-ai"></h3>
+        <p id="consent-info-p-ai"></p>
+        <ul><li id="consent-info-ai1"></li><li id="consent-info-ai2"></li><li id="consent-info-ai3"></li></ul>
+        <hr>
+        <p id="consent-info-medical"></p>
+        <p id="consent-info-withdraw"></p>
+      </div>
+    </div>
   </div>
 
   <div class="overlay" id="whats-new-modal" style="display:none; z-index:60;">
