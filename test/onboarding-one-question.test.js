@@ -68,7 +68,8 @@ test('al crear la cuenta se ofrece "Conectá tu reloj" (lista de integraciones),
   assert.ok(!html.includes('history-import-overlay') && !app.includes('history-import-overlay'));
   assert.ok(!/hist_import_(title|lead)/.test(html + app));
   assert.match(app, /setTimeout\(maybeOpenConnectWatch, 1600\)/);
-  const overlay = html.slice(html.indexOf('id="connect-watch-overlay"'), html.indexOf('id="connect-watch-overlay"') + 6000);
+  const from = html.indexOf('id="connect-watch-overlay"');
+  const overlay = html.slice(from, html.indexOf('id="cw-continue-btn"', from) + 120);
   for (const brand of ['garmin', 'suunto', 'wahoo', 'coros', 'polar', 'healthconnect']) assert.ok(overlay.includes(`data-conn="${brand}"`), brand);
   assert.ok(!overlay.includes('connectStrava'), 'Strava ya no se ofrece acá');
   assert.match(app, /row\.disabled = on/);
