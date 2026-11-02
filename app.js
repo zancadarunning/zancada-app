@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T03:38:08Z';
+const APP_VERSION = '2026-11-02T03:51:02Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2602,19 +2602,29 @@ function watchDayPayload(d, date){
     timeBased: !!(d.timeBased && isTimeMode())
   };
 }
+// El día de la carrera cargada en "Próximos eventos" (con distancia): lo que se manda a los relojes y se muestra en Inicio. Es una sola vuelta de distancia, sin entrada en calor ni vuelta a la calma
+// armadas por la app y sin objetivo de pulso (race:true). Devuelve null si ese día no es la carrera cargada.
+function eventRaceDayPayload(date){
+  const ev = state.event;
+  if(!ev || !date || ev.date !== date || !(Number(ev.distanceKm) > 0)) return null;
+  const name = String(ev.name || '');
+  return { date, name: (t('plan_race_day_type') + ': ' + name).slice(0, 60), typeKey:'race', race:true, zone:null, distKm:Number(ev.distanceKm), durMin:0,
+    desc: t('plan_race_day_desc', {name}), interval:null, repSec:0, restSec:0, timeBased:false, warmupMin:0, cooldownMin:0 };
+}
 // Sesiones con distancia desde hoy en adelante (semana actual + la que viene), sin las ya
-// hechas/salteadas ni el día de carrera.
+// hechas/salteadas. El día de la carrera cargada va como carrera (eventRaceDayPayload).
 function buildWatchPlanDays(){
   const today = todayLocalISO();
   const out = [];
-  // la carrera cargada en "Próximos eventos" deja guardada por debajo la sesión normal de ese día (solo se ve distinto en pantalla, ver isEventDay): al reloj NO se manda, ese día es la carrera
-  const eventDate = state.event && state.event.date;
   const addWeek = (plan, weekStart) => {
     if(!plan || !weekStart) return;
     plan.forEach((d, i) => {
       const date = addDaysToIsoLocal(weekStart, i);
       if(date < today) return;
-      if(eventDate && date === eventDate) return;
+      // la carrera cargada en "Próximos eventos" deja guardada por debajo la sesión normal de ese día (solo se ve distinto en pantalla, ver isEventDay): al reloj va la CARRERA, no esa sesión
+      const race = eventRaceDayPayload(date);
+      if(race){ if(!(d && (d.status==='done' || d.status==='skipped'))) out.push(race); return; }
+      if(state.event && state.event.date === date) return;   // carrera sin distancia: tampoco se manda la sesión normal de ese día
       if(!d || !(d.dist>0) || d.raceDay || d.typeKey==='test' || d.status==='done' || d.status==='skipped') return;
       out.push(watchDayPayload(d, date));
     });
@@ -8894,16 +8904,18 @@ function renderHome(){
   }
   const idx = (new Date().getDay()+6)%7;
   const today = state.plan[idx];
-  const lbl = planLabel(today);
+  // el día de la carrera cargada en "Próximos eventos" se ve como la carrera, no como la sesión normal que queda guardada por debajo
+  const raceToday = eventRaceDayPayload(todayLocalISO());
+  const lbl = raceToday ? {type: raceToday.name, desc: t('plan_race_day_desc', {name: escapeHtml(state.event.name)})} : planLabel(today);
   document.getElementById('home-next-title').textContent = lbl.type;
   // lbl.desc trae saltos de línea reales (entrada en calor / sesión / vuelta a la calma,
   // ver planLabel) -- se listan como viñetas breves en vez de un párrafo corrido. En un día
   // "custom" el texto del medio lo escribió el coach (IA) a partir de la charla, así que se
   // escapa antes de insertarlo como HTML -- mismo criterio que ya usa renderPlan().
-  const nextDescLines = (today.custom ? escapeHtml(lbl.desc) : lbl.desc).split('\n').filter(Boolean);
+  const nextDescLines = ((today.custom && !raceToday) ? escapeHtml(lbl.desc) : lbl.desc).split('\n').filter(Boolean);
   document.getElementById('home-next-desc').innerHTML = nextDescLines.map(line=>`<div class="next-session-bullet">${line}</div>`).join('');
-  document.getElementById('home-next-dist').textContent = planAmountText(today);
-  document.getElementById('home-next-zone').innerHTML = (today.dist>0 && today.zone) ? `<span class="zone-chip zone-${today.zone}">${t('zone_word')} ${today.zone}</span>` : '';
+  document.getElementById('home-next-dist').textContent = raceToday ? `${fmtDist(raceToday.distKm, 1)} ${distUnit()}` : planAmountText(today);
+  document.getElementById('home-next-zone').innerHTML = (!raceToday && today.dist>0 && today.zone) ? `<span class="zone-chip zone-${today.zone}">${t('zone_word')} ${today.zone}</span>` : '';
   // Colapsado de nuevo en cada render (cambiar de pestaña y volver, o cualquier otro cambio
   // de estado) -- no tiene sentido arrastrar "abierto" de una sesión anterior del día de hoy.
   document.getElementById('home-next-detail').classList.remove('open');
@@ -17699,8 +17711,10 @@ function buildContext(){
     else if(d.status==='skipped') s += ' (salteado)';
     return s;
   };
-  const todaySessionDesc = describePlanDayForCtx(state.plan[todayIdx]);
-  const tomorrowSessionDesc = describePlanDayForCtx(tomorrowIsNextWeek ? nw.plan[tomorrowIdx] : state.plan[tomorrowIdx]);
+  // el día de la carrera cargada en "Próximos eventos" es la carrera, no la sesión normal que queda guardada por debajo
+  const raceDayDesc = iso => (state.event && state.event.date === iso && Number(state.event.distanceKm) > 0) ? `el día de tu carrera cargada (${state.event.name}, ${state.event.distanceKm}km)` : null;
+  const todaySessionDesc = raceDayDesc(todayLocalISO()) || describePlanDayForCtx(state.plan[todayIdx]);
+  const tomorrowSessionDesc = raceDayDesc(addDaysToIsoLocal(todayLocalISO(), 1)) || describePlanDayForCtx(tomorrowIsNextWeek ? nw.plan[tomorrowIdx] : state.plan[tomorrowIdx]);
   let ctx = `HOY es ${todayLabel}, ${nowTimeLabel} hs (código de día: ${DAY_KEYS[todayIdx]}). Mañana es ${t('day_'+DAY_KEYS[tomorrowIdx])} (código: ${DAY_KEYS[tomorrowIdx]})${tomorrowNote}. Usá esto como la referencia exacta para cualquier pedido con "hoy", "mañana", "ayer" u otro día relativo, y para saber si es de mañana/tarde/noche -- nunca lo adivines mirando el estado del plan NI un "hoy es..." que vos mismo hayas dicho en un mensaje anterior de esta charla: los mensajes viejos pueden ser de otro día, así que este dato (el de ESTE mensaje) manda siempre, incluso si contradice algo que dijiste antes. Los mensajes anteriores de esta charla que empiezan con una fecha entre corchetes, como [lunes 5 de octubre], son de ESE día, no de hoy: nunca copies de ellos qué día es, y jamás escribas esos corchetes en tus respuestas. La sesión de HOY es: ${todaySessionDesc}. La sesión de MAÑANA es: ${tomorrowSessionDesc}. Estos dos datos ya están resueltos -- no hace falta que los recalcules ni los cruces contra el resto del plan más abajo, y si contradicen algo que vos mismo dijiste antes en esta charla, estos mandan siempre.${yesterdayNote}${p.tz ? ` Zona horaria del corredor: ${p.tz} (usala para inferir de qué país/región es -- por ejemplo para saber si está en el hemisferio sur o norte a la hora de hablar de estaciones del año, clima o época de carreras).` : ''} `;
   const ageForCtx = ageFromBirth(p.birth);
   ctx += `Nombre: ${p.name}.${ageForCtx !== null ? ` Edad aprox: ${ageForCtx}.` : ''} Peso: ${p.weight}kg. Altura: ${p.height}cm. Corre ${p.weeklyKm}km/semana (calculado automáticamente según objetivo y fecha de carrera). Terreno: ${p.terrain}. Objetivo: ${t('ob_goal_'+p.goal)}. Zonas de FC (bpm): ${JSON.stringify(p.hrZones)}.`;

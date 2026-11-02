@@ -56,7 +56,7 @@ function buildGarminWorkout(day, zones, labels) {
   const warmMin = day.warmupMin != null ? posInt(day.warmupMin, 0, 30, 10) : 10;
   const coolMin = day.cooldownMin != null ? posInt(day.cooldownMin, 0, 30, 5) : 5;
   const easy = hrTarget(zones, 2);
-  const work = zone ? hrTarget(zones, zone) : hrTarget(zones, 2);
+  const work = day.race ? { targetType: 'OPEN' } : (zone ? hrTarget(zones, zone) : hrTarget(zones, 2));   // una carrera no lleva objetivo de pulso
   const rest = hrTarget(zones, 1);
   const steps = [];
   let order = 0;

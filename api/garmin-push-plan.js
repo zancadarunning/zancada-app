@@ -16,7 +16,7 @@ const { payloadHash, isDuplicate, remember } = require('./_lib/plan-dedupe');
 const { withinDailyCap } = require('./_lib/daily-cap');
 const { ensureFreshGarminToken, garminCall, refreshGarminPermissions, GARMIN_API } = require('./_lib/garmin-activity-helpers');
 const { buildGarminWorkout, countSteps } = require('./_lib/garmin-workout-builder');
-const { loadKnown, saveKnown, forgetKnown, deleteGarminWorkout } = require('./_lib/garmin-plan-sync');
+const { loadKnown, saveKnown, forgetKnown, deleteGarminWorkout, removeOrphanZancadaWorkouts } = require('./_lib/garmin-plan-sync');
 const { withSentry, reportError } = require('./_lib/sentry');
 
 const MAX_DAYS = 14;   // esta semana y la próxima
@@ -51,7 +51,7 @@ module.exports = withSentry(async (req, res) => {
   if (!(await withinDailyCap(base, headers, 'garmin-plan', userId, 12, { failClosed: true }))) { res.status(200).json({ pushed: 0, reason: 'cooldown' }); return; }
 
   try {
-    const connRes = await fetch(`${base}/rest/v1/garmin_connections?user_id=eq.${userId}&select=user_id,access_token,refresh_token,expires_at,refresh_expires_at,permissions`, { headers });
+    const connRes = await fetch(`${base}/rest/v1/garmin_connections?user_id=eq.${userId}&select=user_id,garmin_user_id,access_token,refresh_token,expires_at,refresh_expires_at,permissions`, { headers });
     const conns = await connRes.json();
     if (!Array.isArray(conns) || !conns.length) { res.status(200).json({ pushed: 0, reason: 'not_connected' }); return; }
     const conn = conns[0];
@@ -84,12 +84,15 @@ module.exports = withSentry(async (req, res) => {
         if (stop) break;
         const workoutId = wr.json && wr.json.workoutId != null ? String(wr.json.workoutId) : null;
         if (!wr.ok || !workoutId) throw new Error(`Garmin no creó el entrenamiento (HTTP ${wr.status}) ${wr.text}`);
+        // se anota ya (sin huella): si el envío se corta antes de programarlo, el próximo lo encuentra, lo borra y lo vuelve a crear en vez de dejar una copia suelta en el calendario
+        await saveKnown(base, headers, userId, day.date, { workoutId, scheduleId: '', hash: '' });
         const sr = await garminCall(accessToken, 'POST', `${GARMIN_API}/training-api/schedule/`, { workoutId: Number(workoutId), date: day.date });
         console.log('garmin-push-plan: programar', day.date, 'workoutId', workoutId, 'HTTP', sr.status, String(sr.text || '').slice(0, 200));
         stop = classify(sr);
         if (stop || !sr.ok) {
           // no quedó programado: se borra el entrenamiento suelto para no dejar basura en la cuenta de la persona
           await deleteGarminWorkout(accessToken, { workoutId, scheduleId: null }).catch(() => {});
+          await forgetKnown(base, headers, userId, day.date);
           if (stop) break;
           throw new Error(`Garmin no programó el entrenamiento (HTTP ${sr.status}) ${sr.text}`);
         }
@@ -115,10 +118,18 @@ module.exports = withSentry(async (req, res) => {
       }
     }
 
+    // entrenamientos de Zancada sueltos en el calendario (envíos cortados, conexiones anteriores): se borran cuando se creó algo nuevo (un reenvío sin cambios no gasta cuota)
+    let orphansRemoved = 0;
+    if (!stop && today && created > 0) {
+      const allDates = [...days.map(d => d.date), ...keepDates].filter(d => DATE_RE.test(String(d))).sort();
+      try { orphansRemoved = await removeOrphanZancadaWorkouts(base, headers, userId, accessToken, conn.garmin_user_id, today, allDates[allDates.length - 1] || today); }
+      catch (e) { console.error('garmin-push-plan: limpieza de sueltos', errText(e)); }
+    }
+
     if (!failed && !stop) await remember(base, headers, userId, 'garmin_plan', planHash);
     if (firstError) await reportError(new Error(`garmin plan push failed: ${firstError.message}`), { endpoint: 'garmin-push-plan' });
     res.status(200).json({
-      pushed: created, created, skipped, failed, deleted, pushedDates, staleDates,
+      pushed: created, created, skipped, failed, deleted, orphansRemoved, pushedDates, staleDates,
       reason: stop || (created + skipped || !days.length ? undefined : 'garmin_error')
     });
   } catch (err) {
