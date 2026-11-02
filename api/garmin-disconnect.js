@@ -45,7 +45,7 @@ module.exports = withSentry(async (req, res) => {
       res.status(500).json({ error: 'Could not disconnect Garmin' });
       return;
     }
-    await fetch(`${base}/rest/v1/sent_notifications?user_id=eq.${userId}&kind=eq.garmin_wk`, { method: 'DELETE', headers }).catch(() => {});
+    await fetch(`${base}/rest/v1/sent_notifications?user_id=eq.${userId}&kind=in.(garmin_wk,garmin_plan)`, { method: 'DELETE', headers }).catch(() => {});
     try { await purgeGarminRunsForUser(base, headers, userId); } catch (e) { console.error('garmin-disconnect: error purgando las carreras', e && e.message); }
 
     res.status(200).json({ ok: true });

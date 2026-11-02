@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T03:51:02Z';
+const APP_VERSION = '2026-11-02T04:12:09Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2230,6 +2230,8 @@ async function disconnectPolar(){
 const WAHOO_CLIENT_ID = 'WH3lkrMmnMc9vrsIzK5ihi2_FxV2W0zB_LaAxl0EZ-Q';
 async function connectWahoo(){
   if(!(await confirmMultiDeviceConnect('Wahoo'))) return;
+  // conexión nueva: lo que esta app recordaba haber enviado pudo borrarse de Wahoo (desconexión desde otro dispositivo): se manda todo de nuevo
+  if(state.wahooSent || state.wahooWeek){ state.wahooSent = null; state.wahooWeek = null; try{ await persist(); }catch(e){} }
   try{
     const { data: { session } } = await supabaseClient.auth.getSession();
     if(!session){ showToast(t('wahoo_connect_error'),'error'); return; }
@@ -2308,6 +2310,8 @@ async function disconnectWahoo(){
    api/_lib/suunto-guide-builder.js). El client_id lo devuelve suunto-init (no es secreto). */
 async function connectSuunto(){
   if(!(await confirmMultiDeviceConnect('Suunto'))) return;
+  // conexión nueva: lo que esta app recordaba haber enviado pudo borrarse del reloj (desconexión desde otro dispositivo): se manda todo de nuevo
+  if(state.suuntoSent || state.suuntoPlan){ state.suuntoSent = null; state.suuntoPlan = null; state.suuntoPlanSig = null; state.suuntoWeek = null; try{ await persist(); }catch(e){} }
   try{
     const { data: { session } } = await supabaseClient.auth.getSession();
     if(!session){ showToast(t('suunto_connect_error'),'error'); return; }
@@ -2873,6 +2877,8 @@ async function syncPlanToCoros(force){
 const COROS_CLIENT_ID = '8df2bc64-ed53-41f6-a04f-d4d9bf4bb929';
 async function connectCoros(){
   if(!(await confirmMultiDeviceConnect('COROS'))) return;
+  // conexión nueva: lo que esta app recordaba haber enviado pudo borrarse de COROS (desconexión desde otro dispositivo): se manda todo de nuevo
+  if(state.corosSent || state.corosStale){ state.corosSent = null; state.corosStale = null; try{ await persist(); }catch(e){} }
   try{
     const { data: { session } } = await supabaseClient.auth.getSession();
     if(!session){ showToast(t('coros_connect_error'),'error'); return; }
@@ -2967,7 +2973,9 @@ async function syncPlanToGarmin(force){
     let dirty = false;
     const sent = state.garminSent || {};
     const keep = win.map(d => d.date);
-    const changed = win.filter(d => force || sent[d.date] !== sigOf(d));
+    // siempre se manda toda la ventana: el servidor recuerda qué hay de verdad en Garmin (huella por día) y no gasta cuota en lo que no cambió. La memoria de este lado no sabe si algo se borró en Garmin
+    // (desconexión, otro dispositivo) y por eso dejaba días sin reenviar al reconectar.
+    const changed = win;
     const dropped = Object.keys(sent).filter(dt => !keep.includes(dt));
     let result = null;
     if(changed.length || dropped.length || force){

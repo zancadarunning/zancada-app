@@ -95,6 +95,8 @@ const linkAccount = async (req, res) => {
       })
     });
     if (!saveRes.ok) { await failGracefully(res, 'no se pudo guardar la conexión', await saveRes.text().catch(() => ''), 'save_' + saveRes.status); return; }
+    // conexión nueva: la memoria del último plan enviado ya no vale (ese plan pudo borrarse del reloj) y, sin borrarla, un plan igual se tomaba como "sin cambios" y no se mandaba
+    await fetch(`${base}/rest/v1/sent_notifications?user_id=eq.${userId}&kind=eq.suunto_plan`, { method: 'DELETE', headers }).catch(() => {});
 
     res.writeHead(302, { Location: '/' });
     res.end();
