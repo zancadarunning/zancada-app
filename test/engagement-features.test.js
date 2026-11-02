@@ -551,8 +551,10 @@ test('frase de la carrera: más rápido que la última parecida, constancia del 
   assert.equal(faster.key, 'hl_faster_than_last');
   assert.equal(faster.vars.s, 12);
   // sin parecidas ni parciales: solo la constancia del mes, y únicamente si ya van 3 o más
-  const monthRuns = [hlRun(app, 'x', 1, 12, 6), hlRun(app, 'y', 2, 2, 7)];
-  assert.equal(app.computeRunHighlight(hlRun(app, 'n', 0, 7, 6.5), monthRuns).key, 'hl_month');
+  // fechas fijas a mitad de mes: con "hace 1 y 2 días" el test fallaba los días 1 y 2 de cada mes (esas salidas caían en el mes anterior)
+  const at = (id, day, km, paceMin) => ({ id, date: new Date(2026, 5, day, 12).toISOString(), distanceKm: km, durationSec: Math.round(km * paceMin * 60), splits: [] });
+  const monthRuns = [at('x', 14, 12, 6), at('y', 13, 2, 7)];
+  assert.equal(app.computeRunHighlight(at('n', 15, 7, 6.5), monthRuns).key, 'hl_month');
   assert.equal(app.computeRunHighlight(hlRun(app, 'n', 0, 7, 6.5), [hlRun(app, 'x', 40, 12, 6)]), null);
   assert.equal(app.computeRunHighlight({ distanceKm: 0.4, durationSec: 200 }, []), null, 'una carrera de menos de 1 km no tiene frase');
 });
