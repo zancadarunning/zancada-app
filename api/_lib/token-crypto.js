@@ -39,6 +39,9 @@ function encToken(plain) {
   if (isEncrypted(text)) return text;
   const key = keyFromEnv('TOKEN_ENCRYPTION_KEY');
   if (!key) {
+    // En producción NO se guarda nada sin cifrar: si la clave falta o se rompió (una variable borrada por error en un redeploy), vincular un reloj falla a la vista (y llega a Sentry)
+    // en vez de dejar tokens en texto plano en la base sin que nadie se entere. Fuera de producción (previews, tests) se mantiene el comportamiento de siempre.
+    if (process.env.VERCEL_ENV === 'production') throw new Error('token-crypto: falta TOKEN_ENCRYPTION_KEY válida (32 bytes en base64): no se guardan tokens sin cifrar en producción');
     if (!warnedNoKey) { warnedNoKey = true; console.error('token-crypto: falta TOKEN_ENCRYPTION_KEY (32 bytes en base64): los tokens se guardan SIN cifrar'); }
     return text;
   }

@@ -147,3 +147,24 @@ test('keyIsValid: solo una clave de 32 bytes en base64 sirve (el script de migra
   setKeys(KEY_A);
 });
 
+
+test('en producción sin clave válida NO se guarda nada sin cifrar: falla a la vista (en previews y tests sigue guardando como siempre)', () => {
+  const prev = process.env.VERCEL_ENV;
+  try {
+    process.env.VERCEL_ENV = 'production';
+    setKeys(null);
+    assert.throws(() => encToken('secreto'), /no se guardan tokens sin cifrar en producción/);
+    setKeys('clave-corta-no-valida');
+    assert.throws(() => encToken('secreto'), /no se guardan tokens sin cifrar/);
+    setKeys(KEY_A);
+    assert.ok(isEncrypted(encToken('secreto')), 'con clave válida cifra normal');
+    assert.equal(encToken(''), '', 'los vacíos pasan igual');
+    process.env.VERCEL_ENV = 'preview';
+    setKeys(null);
+    const realError = console.error; console.error = () => {};
+    try { assert.equal(encToken('secreto'), 'secreto'); } finally { console.error = realError; }
+  } finally {
+    if (prev === undefined) delete process.env.VERCEL_ENV; else process.env.VERCEL_ENV = prev;
+    setKeys(KEY_A);
+  }
+});
