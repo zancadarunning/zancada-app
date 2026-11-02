@@ -1,6 +1,7 @@
 {
   "rewrites": [
-    { "source": "/conectar", "destination": "/index.html" }
+    { "source": "/conectar", "destination": "/index.html" },
+    { "source": "/api/garmin-webhook/:k", "destination": "/api/garmin-webhook?k=:k" }
   ],
   "redirects": [
     { "source": "/:dir(sql|docs|test|scripts|loadtest|mobile|email-templates|\\.github|\\.impeccable|\\.superpowers|\\.claude)/:path*", "destination": "/", "permanent": false },
