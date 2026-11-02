@@ -2653,6 +2653,20 @@
   }
 
 </style>
+<style id="text-guard-css">
+/* ===== Texto largo que nunca se pisa con lo de al lado (2026-11-02) =====
+   Pasó en Inicio: "PROGRESSION RUN" (Bebas, 52px) se montaba sobre "30 MIN" porque la columna izquierda podía achicarse más que su palabra más larga.
+   Regla general: (1) todo texto puede cortar una palabra imposible de entrar (overflow-wrap) en vez de salirse de su caja; (2) los títulos grandes junto a un dato
+   (tarjeta de hoy) escalan con el ancho de la pantalla y, si aun así no entran, el dato baja a la línea de abajo en vez de superponerse. */
+body{overflow-wrap:break-word;}
+.card, .card-shell, .day-info, .day-info .t, .ss-title, .ss-card, .cs-card, .ob-q, .ob-sub, .greeting{min-width:0; overflow-wrap:break-word;}
+.display, .big, h1, h2, h3, h4{overflow-wrap:break-word; min-width:0;}
+.next-session{gap:10px 12px; flex-wrap:wrap;}
+.next-session > :first-child{flex:1 1 0; min-width:min-content; max-width:100%;}
+.next-session > :last-child{flex:0 0 auto; margin-left:auto; max-width:100%;}
+.next-session .big{font-size:clamp(34px, 11.5vw, 52px);}
+.next-session .day-dist{font-size:clamp(30px, 10vw, 44px) !important; white-space:nowrap;}
+</style>
 <style id="ob-glass-css">
 /* ===== Inicio para usuarios nuevos: una pregunta por pantalla, vidrio líquido sobre un fondo suave (2026-11-02) =====
    El vidrio se arma con relleno translúcido + reflejo en el borde de arriba (siempre); el desenfoque de lo que hay detrás (backdrop-filter) se suma solo donde el navegador lo soporta y no hay "reducir transparencia".
