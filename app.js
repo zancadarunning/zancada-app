@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T02:54:47Z';
+const APP_VERSION = '2026-11-02T03:04:22Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2091,7 +2091,7 @@ async function updateStravaStatusDisplay(){
     deviceConnections.strava = !!data;
     if(data){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
-      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectStrava; }
+      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.setAttribute('data-on-click', 'disconnectStrava()'); }
       // Mismo aviso que el cartel de Historial (ver getStravaSyncIssue), pero acá como
       // nota corta -- este es justo el lugar donde ya está el botón para reconectar.
       const issue = getStravaSyncIssue();
@@ -2101,7 +2101,7 @@ async function updateStravaStatusDisplay(){
       }
     } else {
       el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
-      if(btn){ btn.textContent = t('perfil_strava_connect'); btn.onclick = connectStrava; }
+      if(btn){ btn.textContent = t('perfil_strava_connect'); btn.setAttribute('data-on-click', 'connectStrava()'); }
       if(note) note.style.display = 'none';
     }
     renderPlan();
@@ -2182,10 +2182,10 @@ async function updatePolarStatusDisplay(){
     deviceConnections.polar = !!data;
     if(data){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
-      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectPolar; }
+      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.setAttribute('data-on-click', 'disconnectPolar()'); }
     } else {
       el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
-      if(btn){ btn.textContent = t('perfil_polar_connect'); btn.onclick = connectPolar; }
+      if(btn){ btn.textContent = t('perfil_polar_connect'); btn.setAttribute('data-on-click', 'connectPolar()'); }
     }
     renderPlan();
   }catch(e){}
@@ -2259,10 +2259,10 @@ async function updateWahooStatusDisplay(){
     if(wahooConnected) scheduleWahooSync(); // recién conectada (o al abrir Perfil): deja la semana en Wahoo
     if(wahooConnected){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
-      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectWahoo; }
+      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.setAttribute('data-on-click', 'disconnectWahoo()'); }
     } else {
       el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
-      if(btn){ btn.textContent = t('wahoo_connect'); btn.onclick = connectWahoo; }
+      if(btn){ btn.textContent = t('wahoo_connect'); btn.setAttribute('data-on-click', 'connectWahoo()'); }
     }
     renderPlan();
   }catch(e){}
@@ -2470,10 +2470,10 @@ async function updateSuuntoStatusDisplay(){
 
     if(connected){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
-      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectSuunto; }
+      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.setAttribute('data-on-click', 'disconnectSuunto()'); }
     } else {
       el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
-      if(btn){ btn.textContent = t('suunto_connect'); btn.onclick = connectSuunto; }
+      if(btn){ btn.textContent = t('suunto_connect'); btn.setAttribute('data-on-click', 'connectSuunto()'); }
     }
     renderPlan();
   }catch(e){}
@@ -2888,10 +2888,10 @@ async function updateCorosStatusDisplay(){
     if(data){ scheduleCorosSync(); updateCorosStaleNote(); }   // recién conectada (o al abrir Perfil): deja la semana en COROS
     if(data){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
-      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectCoros; }
+      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.setAttribute('data-on-click', 'disconnectCoros()'); }
     } else {
       el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
-      if(btn){ btn.textContent = t('coros_connect'); btn.onclick = connectCoros; }
+      if(btn){ btn.textContent = t('coros_connect'); btn.setAttribute('data-on-click', 'connectCoros()'); }
     }
     renderPlan();
   }catch(e){}
@@ -3016,13 +3016,13 @@ async function updateGarminStatusDisplay(){
     if(data) scheduleGarminSync();   // recién conectada (o al abrir Perfil): deja la semana en Garmin Connect
     if(data){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
-      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectGarmin; }
+      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.setAttribute('data-on-click', 'disconnectGarmin()'); }
       const perms = Array.isArray(data.permissions) ? data.permissions : [];
       const note = document.getElementById('garmin-perm-note');
       if(note){ const missing = perms.length && !perms.includes('WORKOUT_IMPORT'); note.textContent = missing ? t('garmin_no_workout_permission') : ''; note.style.display = missing ? '' : 'none'; }
     } else {
       el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
-      if(btn){ btn.textContent = t('garmin_connect'); btn.onclick = connectGarmin; }
+      if(btn){ btn.textContent = t('garmin_connect'); btn.setAttribute('data-on-click', 'connectGarmin()'); }
     }
     renderPlan();
   }catch(e){}
@@ -3222,10 +3222,10 @@ function updateHealthConnectStatusDisplay(){
   if(!el) return;
   if(state.healthConnectConnected){
     el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
-    if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectHealthConnect; }
+    if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.setAttribute('data-on-click', 'disconnectHealthConnect()'); }
   } else {
     el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
-    if(btn){ btn.textContent = t('healthconnect_connect'); btn.onclick = connectHealthConnect; }
+    if(btn){ btn.textContent = t('healthconnect_connect'); btn.setAttribute('data-on-click', 'connectHealthConnect()'); }
   }
 }
 async function disconnectHealthConnect(){
