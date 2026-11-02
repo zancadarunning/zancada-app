@@ -2653,6 +2653,134 @@
   }
 
 </style>
+<style id="ob-glass-css">
+/* ===== Inicio para usuarios nuevos: una pregunta por pantalla, vidrio líquido sobre un fondo suave (2026-11-02) =====
+   El vidrio se arma con relleno translúcido + reflejo en el borde de arriba (siempre); el desenfoque de lo que hay detrás (backdrop-filter) se suma solo donde el navegador lo soporta y no hay "reducir transparencia".
+   Es una pantalla pasajera sobre un fondo fijo: no hay contenido que se desplace debajo, a diferencia de las barras siempre visibles (ver "Rendimiento de scroll"). */
+#onboard{
+  --g-fill:rgba(255,255,255,.07); --g-fill-on:rgba(214,255,63,.16); --g-edge-top:rgba(255,255,255,.2); --g-edge-bot:rgba(255,255,255,.04);
+  --g-shadow:0 12px 30px -16px rgba(0,0,0,.85); --g-ring:var(--hivis); --g-ink:var(--chalk);
+  --g-cta-top:#E6FF7A; --g-cta-bot:#C4EF1C; --g-cta-text:#101200; --g-sheen:rgba(255,255,255,.55);
+  --g-bg:radial-gradient(70% 38% at 12% -4%, rgba(214,255,63,.17), transparent 62%), radial-gradient(60% 34% at 104% 16%, rgba(110,140,255,.13), transparent 62%), radial-gradient(80% 40% at 50% 112%, rgba(214,255,63,.07), transparent 60%), var(--asphalt);
+}
+:root[data-theme="light"] #onboard{
+  --g-fill:rgba(255,255,255,.66); --g-fill-on:rgba(255,255,255,.95); --g-edge-top:rgba(255,255,255,1); --g-edge-bot:rgba(24,28,48,.07);
+  --g-shadow:0 12px 28px -16px rgba(30,40,90,.4); --g-ring:#0A0A0A; --g-ink:#101114;
+  --g-cta-top:#2A2A30; --g-cta-bot:#0A0A0A; --g-cta-text:#FFFFFF; --g-sheen:rgba(255,255,255,.28);
+  --g-bg:radial-gradient(70% 38% at 12% -4%, rgba(214,255,63,.42), transparent 62%), radial-gradient(60% 34% at 104% 16%, rgba(140,160,255,.3), transparent 62%), radial-gradient(80% 40% at 50% 112%, rgba(214,255,63,.2), transparent 60%), #F4F5FA;
+}
+@media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #onboard{
+  --g-fill:rgba(255,255,255,.66); --g-fill-on:rgba(255,255,255,.95); --g-edge-top:rgba(255,255,255,1); --g-edge-bot:rgba(24,28,48,.07);
+  --g-shadow:0 12px 28px -16px rgba(30,40,90,.4); --g-ring:#0A0A0A; --g-ink:#101114;
+  --g-cta-top:#2A2A30; --g-cta-bot:#0A0A0A; --g-cta-text:#FFFFFF; --g-sheen:rgba(255,255,255,.28);
+  --g-bg:radial-gradient(70% 38% at 12% -4%, rgba(214,255,63,.42), transparent 62%), radial-gradient(60% 34% at 104% 16%, rgba(140,160,255,.3), transparent 62%), radial-gradient(80% 40% at 50% 112%, rgba(214,255,63,.2), transparent 60%), #F4F5FA;
+} }
+
+#onboard{background:var(--g-bg); padding-left:22px; padding-right:22px;}
+#onboard .ob-shell{display:flex; flex-direction:column; min-height:calc(100dvh - 56px - var(--safe-top) - var(--safe-bottom));}
+
+/* arriba: volver (vidrio), progreso fino, contador */
+#onboard .ob-progress-wrap{gap:12px; margin-bottom:0; align-items:center;}
+#onboard #ob-back-btn{width:42px; height:42px; flex:0 0 42px; border-radius:50%; border:0; padding:0; align-items:center; justify-content:center; color:var(--g-ink);
+  background:var(--g-fill); box-shadow:inset 0 1px 0 var(--g-edge-top), inset 0 -1px 0 var(--g-edge-bot), var(--g-shadow);}
+#onboard #ob-back-btn[style*="display:none"]{display:none !important;}
+#onboard .ob-progress{height:4px; background:var(--g-edge-bot); box-shadow:inset 0 1px 1px rgba(0,0,0,.08);}
+:root:root #onboard .ob-progress-fill{background:var(--g-ring); box-shadow:none;}
+#onboard .ob-step-count{color:var(--mist); font-size:12px; min-width:34px;}
+
+/* cada pregunta: título grande centrado, el contenido, y la acción fija abajo */
+#onboard .ob-step{display:none;}
+#onboard .ob-step.active{display:flex; flex-direction:column; flex:1; animation:obIn .3s cubic-bezier(.2,.8,.2,1);}
+@keyframes obIn{from{opacity:0; transform:translateX(18px);} to{opacity:1; transform:none;}}
+@media (prefers-reduced-motion:reduce){ #onboard .ob-step.active{animation:none;} }
+#onboard .ob-body{flex:1; padding-top:clamp(20px,7vh,64px);}
+#onboard .ob-q{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text',Inter,system-ui,sans-serif; font-size:clamp(26px,7.6vw,32px); font-weight:700; line-height:1.14; letter-spacing:-.022em; text-align:center; text-transform:none; color:var(--g-ink); margin:0; text-wrap:balance;}
+#onboard .ob-sub{text-align:center; color:var(--mist); font-size:15px; line-height:1.5; margin:12px auto 0; max-width:34ch; text-wrap:pretty;}
+#onboard .ob-note{text-align:center; color:var(--mist); font-size:13px; line-height:1.55; margin:18px auto 0; max-width:38ch; text-wrap:pretty;}
+#onboard .ob-actions{display:flex; flex-direction:column; align-items:stretch; gap:4px; padding-top:20px; margin-top:auto;}
+
+/* opciones: tarjetas de vidrio apiladas con círculo de selección */
+#onboard .ob-options{display:flex; flex-direction:column; gap:10px; margin-top:30px; flex-wrap:nowrap; background:none; padding:0;}
+#onboard .ob-options .choice{position:relative; display:flex; align-items:center; justify-content:flex-start; text-align:left; min-height:60px; padding:0 58px 0 20px; border:0; border-radius:22px; flex:none;
+  font-size:16.5px; font-weight:600; color:var(--g-ink); background:var(--g-fill);
+  box-shadow:inset 0 1px 0 var(--g-edge-top), inset 0 -1px 0 var(--g-edge-bot), var(--g-shadow); transition:background .18s ease, transform .12s ease;}
+#onboard .ob-options .choice::after{content:''; position:absolute; right:20px; top:50%; width:24px; height:24px; margin-top:-12px; border-radius:50%; box-sizing:border-box; border:2px solid var(--mist); opacity:.55; transition:all .18s ease;}
+#onboard .ob-options .choice.active{background:var(--g-fill-on); box-shadow:inset 0 0 0 1.5px var(--g-ring), inset 0 1px 0 var(--g-edge-top), var(--g-shadow);}
+#onboard .ob-options .choice.active::after{opacity:1; border-color:var(--g-ring); background:var(--g-ring) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5.5 12.5l4.2 4.2L18.5 8'/%3E%3C/svg%3E") center/70% no-repeat;}
+:root:not([data-theme="light"]) #onboard .ob-options .choice.active::after{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23101200' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5.5 12.5l4.2 4.2L18.5 8'/%3E%3C/svg%3E");}
+@media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #onboard .ob-options .choice.active::after{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5.5 12.5l4.2 4.2L18.5 8'/%3E%3C/svg%3E");} }
+#onboard .ob-options .choice:active{transform:scale(.985);}
+#onboard .ob-options.ob-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+#onboard .ob-options.ob-grid .choice{min-height:54px; padding:0 14px; justify-content:center; text-align:center; font-size:15px;}
+#onboard .ob-options.ob-grid .choice::after{display:none;}
+
+/* campos: vidrio, texto grande centrado */
+#onboard .ob-field-big{margin-top:34px;}
+#onboard .field label{text-align:center; display:block; color:var(--mist);}
+#onboard input[type="text"], #onboard input[type="number"], #onboard select, #onboard .ob-textarea, #onboard .ob-date{
+  border:0; border-radius:22px; background:var(--g-fill); color:var(--g-ink); box-shadow:inset 0 1px 0 var(--g-edge-top), inset 0 -1px 0 var(--g-edge-bot), var(--g-shadow);}
+#onboard .ob-field-big input, #onboard .ob-field-big select{height:64px; font-size:22px; font-weight:600; text-align:center; text-align-last:center;}
+#onboard .two-col{margin-top:30px; gap:12px;}
+#onboard .two-col input{height:58px; font-size:20px; font-weight:600; text-align:center;}
+#onboard .ob-refrace-row{margin-top:28px;}
+#onboard .ob-refrace-row select, #onboard .ob-refrace-row input{height:58px; font-size:17px; font-weight:600; text-align:center; text-align-last:center;}
+#onboard .ob-textarea{margin-top:26px; width:100%; padding:16px 18px; font-size:16px; line-height:1.5; resize:none;}
+#onboard .ob-date{display:flex; align-items:center; justify-content:center; min-height:64px; margin-top:34px; font-size:20px; font-weight:600; cursor:pointer;}
+
+/* días de la semana */
+#onboard .day-picker{display:flex; justify-content:center; gap:6px; margin-top:34px;}
+#onboard .day-pill{flex:1 1 0; min-width:0; width:auto; padding:14px 0; text-align:center; font-size:13px; border-radius:16px;}
+#onboard .day-pill{border:0; background:var(--g-fill); color:var(--g-ink); box-shadow:inset 0 1px 0 var(--g-edge-top), inset 0 -1px 0 var(--g-edge-bot), var(--g-shadow);}
+#onboard .day-pill.active{background:var(--g-ring); color:var(--g-cta-text);}
+:root:not([data-theme="light"]) #onboard .day-pill.active{color:#101200;}
+@media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #onboard .day-pill.active{color:#fff;} }
+
+/* botón principal: píldora con reflejo; texto "Omitir" suave debajo */
+#onboard .ob-cta{width:100%; height:58px; border:0; border-radius:999px; font-size:16.5px; font-weight:700; letter-spacing:.005em; color:var(--g-cta-text); position:relative; overflow:hidden;
+  background:linear-gradient(180deg, var(--g-cta-top), var(--g-cta-bot)); box-shadow:inset 0 1px 0 var(--g-sheen), 0 14px 28px -12px rgba(0,0,0,.55); transition:transform .12s ease, opacity .18s ease;}
+#onboard .ob-cta::before{content:''; position:absolute; inset:0 0 52% 0; border-radius:inherit; pointer-events:none; background:linear-gradient(180deg, var(--g-sheen), transparent);}
+#onboard .ob-cta:active:not(:disabled){transform:scale(.98);}
+#onboard .ob-cta:disabled{opacity:.34; box-shadow:inset 0 1px 0 var(--g-sheen);}
+#onboard .ob-skip{background:none; border:0; color:var(--mist); font-size:15px; font-weight:600; padding:13px; align-self:center;}
+#onboard .btn-reason{text-align:center; margin:8px 0 0;}
+
+/* pantalla final */
+#onboard .ob-done{display:flex; flex-direction:column; align-items:center;}
+#onboard .ob-done-mark{width:88px; height:88px; margin:6vh 0 24px; border-radius:50%; display:grid; place-items:center; color:#101200;
+  background:linear-gradient(180deg,#E6FF7A,#C4EF1C); box-shadow:inset 0 1px 0 rgba(255,255,255,.7), 0 18px 36px -14px rgba(196,239,28,.7);}
+#onboard .ob-done-mark svg{width:42px; height:42px;}
+#onboard .ob-callout{margin:26px 0 0; border:0; border-radius:20px; background:var(--g-fill); box-shadow:inset 0 1px 0 var(--g-edge-top), inset 0 -1px 0 var(--g-edge-bot); color:var(--g-ink); text-align:left;}
+
+/* desenfoque real, solo donde se banca y sin "reducir transparencia" */
+@supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
+  @media (prefers-reduced-transparency:no-preference){
+    #onboard #ob-back-btn, #onboard .ob-options .choice, #onboard .ob-field-big input, #onboard .ob-field-big select, #onboard .two-col input, #onboard .ob-date, #onboard .ob-textarea, #onboard .day-pill, #onboard .ob-callout{
+      -webkit-backdrop-filter:blur(16px) saturate(1.5); backdrop-filter:blur(16px) saturate(1.5);}
+  }
+}
+@media (prefers-reduced-transparency:reduce){
+  #onboard{--g-fill:var(--asphalt-2);} :root[data-theme="light"] #onboard{--g-fill:#FFFFFF;}
+}
+
+/* ===== Vidrio líquido en lo que flota o es pasajero (2026-11-02) =====
+   Barra de abajo: reflejo en el borde de arriba y de abajo, SIN desenfoque (está siempre a la vista y el desenfoque trabó el scroll en celulares de gama baja).
+   Hojas y diálogos: vidrio de verdad (translúcido + desenfoque), porque aparecen un rato sobre una pantalla quieta. */
+:root{--lq-edge:rgba(255,255,255,.16); --lq-edge-low:rgba(0,0,0,.35); --lq-surface:rgba(32,32,36,.66);}
+:root[data-theme="light"]{--lq-edge:rgba(255,255,255,1); --lq-edge-low:rgba(24,28,48,.08); --lq-surface:rgba(255,255,255,.72);}
+@media (prefers-color-scheme:light){ :root:not([data-theme="dark"]){--lq-edge:rgba(255,255,255,1); --lq-edge-low:rgba(24,28,48,.08); --lq-surface:rgba(255,255,255,.72);} }
+:root:root nav.tabbar{box-shadow:inset 0 1px 0 var(--lq-edge), inset 0 -1px 0 var(--lq-edge-low), 0 14px 32px -12px var(--liq-shadow);}
+:root:root .confirm-card{background:var(--lq-surface); box-shadow:inset 0 1px 0 var(--lq-edge), 0 -24px 50px -22px rgba(0,0,0,.55);}
+@supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
+  @media (prefers-reduced-transparency:no-preference){
+    :root:root .confirm-card{-webkit-backdrop-filter:blur(28px) saturate(1.7); backdrop-filter:blur(28px) saturate(1.7);}
+    .confirm-backdrop{-webkit-backdrop-filter:blur(5px); backdrop-filter:blur(5px);}
+  }
+}
+@supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
+  :root:root .confirm-card{background:var(--asphalt-2);} :root[data-theme="light"] .confirm-card{background:#FFFFFF;}
+}
+@media (prefers-reduced-transparency:reduce){ :root:root .confirm-card{background:var(--asphalt-2);} :root[data-theme="light"] .confirm-card{background:#FFFFFF;} }
+</style>
 <style id="boot-css">
 /* Pantalla de arranque: se pinta con el primer byte del HTML (CSS y marca van inline), siempre oscura
    -- igual que el splash nativo de Android, para que el paso de uno al otro no se note. La marca ocupa
@@ -2835,100 +2963,92 @@
   </div>
 
   <div class="overlay" id="onboard">
+   <div class="ob-shell">
     <div class="ob-progress-wrap">
       <button class="week-nav-btn" id="ob-back-btn" data-i18n-aria="aria_back" data-on-click="obPrevStep()" style="display:none;"><span class="icon-sq" style="width:15px; height:15px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
       <div class="ob-progress"><div class="ob-progress-fill" id="ob-progress-fill"></div></div>
       <span class="ob-step-count" id="ob-step-count" aria-hidden="true"></span>
-      <button class="small-link" style="flex-shrink:0; white-space:nowrap;" data-on-click="confirmLogout()" data-i18n="perfil_logout"></button>
     </div>
 
+    <!-- 1 · nombre -->
     <div class="ob-step active" data-step="1">
-      <h2 class="display" data-i18n="ob_title"></h2>
-      <p class="lead" data-i18n="ob_lead"></p>
-      <div class="field"><label for="ob-name" data-i18n="ob_name_label"></label><input type="text" id="ob-name" data-i18n-ph="ob_name_ph"></div>
-      <div class="field"><button class="btn btn-primary" data-i18n="login_continue" data-on-click="obNextStep()"></button></div>
+      <div class="ob-body">
+        <h2 class="ob-q" data-i18n="ob_q_name"></h2>
+        <p class="ob-sub" data-i18n="ob_lead"></p>
+        <div class="field ob-field-big"><input type="text" id="ob-name" autocomplete="given-name" data-i18n-ph="ob_name_label" data-i18n-aria="ob_name_label" data-on-input="updateObStep2ButtonState()"></div>
+      </div>
+      <div class="ob-actions"><button class="btn btn-primary ob-cta" id="ob-name-continue-btn" data-i18n="login_continue" data-on-click="obNextStep()" disabled></button></div>
     </div>
 
+    <!-- 2 · ¿ya corrés? -->
     <div class="ob-step" data-step="2">
-      <h2 class="display" data-i18n="ob_step2_title"></h2>
-      <div class="two-col">
-        <div class="field"><label for="ob-weight" data-i18n="ob_weight_label"></label><input type="number" id="ob-weight" value="70" min="30" max="200" data-on-input="updateObStep2ButtonState()"></div>
-        <div class="field"><label for="ob-height" data-i18n="ob_height_label"></label><input type="number" id="ob-height" value="170" min="120" max="230" data-on-input="updateObStep2ButtonState()"></div>
-      </div>
-      <div class="field"><label data-i18n="ob_birth_label"></label>
-        <div class="date-box" role="button" tabindex="0" data-i18n-aria="ob_birth_label" data-on-click="openCalendar('ob-birth','ob-birth-text')"><span class="date-box-text" id="ob-birth-text"></span></div>
-        <input type="hidden" id="ob-birth">
-        <p class="muted" style="margin:6px 0 0; font-size:12px; line-height:1.4;" data-i18n="ob_birth_hint"></p>
-      </div>
-      <div class="field">
-        <label id="ob-gender-label" data-i18n="ob_gender_label"></label>
-        <div class="choice-row segmented" id="ob-gender" role="group" aria-labelledby="ob-gender-label">
-          <div class="choice" data-v="f" data-i18n="ob_gender_f"></div>
-          <div class="choice" data-v="m" data-i18n="ob_gender_m"></div>
-          <div class="choice active" data-v="x" data-i18n="ob_gender_x"></div>
-        </div>
-        <div id="ob-pregnancy-wrap" style="margin-top:14px; display:none;">
-          <label id="ob-pregnancy-label" data-i18n="ob_pregnancy_label"></label>
-          <div class="choice-row segmented" id="ob-pregnancy" role="group" aria-labelledby="ob-pregnancy-label">
-            <div class="choice" data-v="yes" data-i18n="ob_pregnancy_yes"></div>
-            <div class="choice active" data-v="no" data-i18n="ob_pregnancy_no"></div>
-          </div>
-        </div>
-      </div>
-      <div class="field">
-        <label for="ob-healthnotes" data-i18n="ob_healthnotes_label"></label>
-        <textarea id="ob-healthnotes" rows="2" data-i18n-ph="ob_healthnotes_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
-      </div>
-      <p class="muted" style="margin-top:10px; font-size:12px;" data-i18n="ob_step2_hint"></p>
-      <div class="field"><button class="btn btn-primary" id="ob-step2-continue-btn" data-i18n="login_continue" data-on-click="obNextStep()" disabled></button><p class="btn-reason" id="ob-step2-reason" role="status"></p></div>
-    </div>
-
-    <div class="ob-step" data-step="3">
-      <h2 class="display" data-i18n="ob_step3_title"></h2>
-      <div class="field">
-        <label id="ob-runnertype-label" data-i18n="ob_runnertype_label"></label>
-        <div class="choice-row segmented" id="ob-runnertype" role="group" aria-labelledby="ob-runnertype-label">
+      <div class="ob-body">
+        <h2 class="ob-q" id="ob-runnertype-label" data-i18n="ob_runnertype_label"></h2>
+        <div class="choice-row ob-options" id="ob-runnertype" role="group" aria-labelledby="ob-runnertype-label">
           <div class="choice active" data-v="new" data-i18n="ob_runnertype_new"></div>
           <div class="choice" data-v="active" data-i18n="ob_runnertype_active"></div>
         </div>
-        <div id="ob-currentkm-wrap" style="margin-top:14px; display:none;">
-          <label for="ob-currentkm" data-i18n="ob_currentkm_label"></label>
-          <input type="number" id="ob-currentkm" placeholder="20" min="0" max="200">
-          <div style="margin-top:14px;">
-            <label id="ob-returning-label" data-i18n="ob_returning_label"></label>
-            <div class="choice-row segmented" id="ob-returning" role="group" aria-labelledby="ob-returning-label">
-              <div class="choice" data-v="yes" data-i18n="ob_returning_yes"></div>
-              <div class="choice active" data-v="no" data-i18n="ob_returning_no"></div>
-            </div>
+        <p class="ob-note" id="ob-newrunner-note" data-i18n="ob_newrunner_note"></p>
+      </div>
+      <div class="ob-actions"><button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button></div>
+    </div>
+
+    <!-- 3 · km por semana (solo si ya corre) -->
+    <div class="ob-step" data-step="3" data-when="active">
+      <div class="ob-body">
+        <h2 class="ob-q" data-i18n="ob_currentkm_label"></h2>
+        <div class="field ob-field-big"><input type="number" id="ob-currentkm" inputmode="decimal" placeholder="20" min="0" max="200" data-i18n-aria="ob_currentkm_label"></div>
+      </div>
+      <div class="ob-actions"><button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button></div>
+    </div>
+
+    <!-- 4 · vuelve de una pausa (solo si ya corre) -->
+    <div class="ob-step" data-step="4" data-when="active">
+      <div class="ob-body">
+        <h2 class="ob-q" id="ob-returning-label" data-i18n="ob_returning_label"></h2>
+        <div class="choice-row ob-options" id="ob-returning" role="group" aria-labelledby="ob-returning-label">
+          <div class="choice" data-v="yes" data-i18n="ob_returning_yes"></div>
+          <div class="choice active" data-v="no" data-i18n="ob_returning_no"></div>
+        </div>
+      </div>
+      <div class="ob-actions"><button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button></div>
+    </div>
+
+    <!-- 5 · marca reciente (solo si ya corre, opcional) -->
+    <div class="ob-step" data-step="5" data-when="active">
+      <div class="ob-body">
+        <h2 class="ob-q" id="ob-refrace-label" data-i18n="ob_refrace_label"></h2>
+        <p class="ob-sub" data-i18n="ob_refrace_hint"></p>
+        <div class="two-col ob-refrace-row">
+          <div class="field">
+            <select id="ob-refrace-dist" data-i18n-aria="aria_refrace_dist">
+              <option value="" data-i18n="ob_refrace_none"></option>
+              <option value="5">5K</option>
+              <option value="10">10K</option>
+              <option value="15">15K</option>
+              <option value="21.0975">21K</option>
+              <option value="42.195">42K</option>
+            </select>
           </div>
-          <div style="margin-top:14px;">
-            <label id="ob-refrace-label" data-i18n="ob_refrace_label"></label>
-            <p class="muted" style="font-size:12px; margin:2px 0 8px;" data-i18n="ob_refrace_hint"></p>
-            <div class="two-col" style="grid-template-columns:3fr 2fr;">
-              <div class="field" style="margin:0;">
-                <select id="ob-refrace-dist" data-i18n-aria="aria_refrace_dist">
-                  <option value="" data-i18n="ob_refrace_none"></option>
-                  <option value="5">5K</option>
-                  <option value="10">10K</option>
-                  <option value="15">15K</option>
-                  <option value="21.0975">21K</option>
-                  <option value="42.195">42K</option>
-                </select>
-              </div>
-              <div class="field" style="margin:0;">
-                <input type="number" id="ob-refrace-min" min="0" data-i18n-ph="ob_refrace_min_ph" data-i18n-aria="ob_refrace_min_ph">
-              </div>
-            </div>
+          <div class="field">
+            <input type="number" id="ob-refrace-min" inputmode="numeric" min="0" data-i18n-ph="ob_refrace_min_ph" data-i18n-aria="ob_refrace_min_ph">
           </div>
         </div>
-        <p class="muted" id="ob-newrunner-note" style="margin-top:8px;" data-i18n="ob_newrunner_note"></p>
       </div>
-      <div class="field">
-        <label id="ob-crosstraining-label" data-i18n="ob_crosstraining_label"></label>
-        <p class="muted" style="font-size:12px; margin:2px 0 8px;" data-i18n="ob_crosstraining_hint"></p>
+      <div class="ob-actions">
+        <button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button>
+        <button type="button" class="ob-skip" data-on-click="obNextStep()" data-i18n="ob_skip"></button>
+      </div>
+    </div>
+
+    <!-- 6 · otros deportes (opcional) -->
+    <div class="ob-step" data-step="6">
+      <div class="ob-body">
+        <h2 class="ob-q" id="ob-crosstraining-label" data-i18n="ob_crosstraining_label"></h2>
+        <p class="ob-sub" data-i18n="ob_crosstraining_hint"></p>
         <div class="choice-row" id="ob-sports-selected" role="group" aria-labelledby="ob-crosstraining-label" style="flex-wrap:wrap; display:none;"></div>
-        <button type="button" class="btn btn-outline btn-sm" id="ob-sports-select-btn" style="margin-top:8px; width:100%;" data-on-click="openSportPicker('ob')" data-i18n="sport_select_btn"></button>
-        <div id="ob-sport-days-wrap" style="margin-top:14px; display:none;">
+        <button type="button" class="btn btn-outline" id="ob-sports-select-btn" style="margin-top:14px; width:100%;" data-on-click="openSportPicker('ob')" data-i18n="sport_select_btn"></button>
+        <div id="ob-sport-days-wrap" style="margin-top:22px; display:none;">
           <label id="ob-sport-days-label" data-i18n="ob_sport_days_label"></label>
           <div class="day-picker" id="ob-sport-days">
             <div class="day-pill" data-v="mon"></div>
@@ -2941,29 +3061,42 @@
           </div>
         </div>
       </div>
-      <div class="field">
-        <label id="ob-terrain-label" data-i18n="ob_terrain_label"></label>
-        <div class="choice-row segmented" id="ob-terrain" role="group" aria-labelledby="ob-terrain-label">
+      <div class="ob-actions">
+        <button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button>
+        <button type="button" class="ob-skip" data-on-click="obNextStep()" data-i18n="ob_skip"></button>
+      </div>
+    </div>
+
+    <!-- 7 · terreno -->
+    <div class="ob-step" data-step="7">
+      <div class="ob-body">
+        <h2 class="ob-q" id="ob-terrain-label" data-i18n="ob_terrain_label"></h2>
+        <div class="choice-row ob-options" id="ob-terrain" role="group" aria-labelledby="ob-terrain-label">
           <div class="choice active" data-v="asfalto" data-i18n="ob_terrain_asfalto"></div>
           <div class="choice" data-v="trail" data-i18n="ob_terrain_trail"></div>
           <div class="choice" data-v="mixto" data-i18n="ob_terrain_mixto"></div>
         </div>
       </div>
-      <div class="field">
-        <label id="ob-trainby-label" data-i18n="ob_trainby_label"></label>
-        <div class="choice-row segmented" id="ob-trainby" role="group" aria-labelledby="ob-trainby-label">
+      <div class="ob-actions"><button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button></div>
+    </div>
+
+    <!-- 8 · cómo mide los entrenamientos -->
+    <div class="ob-step" data-step="8">
+      <div class="ob-body">
+        <h2 class="ob-q" id="ob-trainby-label" data-i18n="ob_trainby_label"></h2>
+        <div class="choice-row ob-options" id="ob-trainby" role="group" aria-labelledby="ob-trainby-label">
           <div class="choice active" data-v="distance" data-i18n="ob_trainby_distance"></div>
           <div class="choice" data-v="time" data-i18n="ob_trainby_time"></div>
         </div>
-        <p class="muted" style="margin-top:8px; font-size:12.5px; line-height:1.5;" data-i18n="trainby_tip"></p>
+        <p class="ob-note" data-i18n="trainby_tip"></p>
       </div>
-      <div class="field"><button class="btn btn-primary" data-i18n="login_continue" data-on-click="obNextStep()"></button></div>
+      <div class="ob-actions"><button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button></div>
     </div>
 
-    <div class="ob-step" data-step="4">
-      <h2 class="display" data-i18n="ob_step4_title"></h2>
-      <div class="field">
-        <label id="ob-days-label" data-i18n="ob_days_label"></label>
+    <!-- 9 · días de entrenamiento -->
+    <div class="ob-step" data-step="9">
+      <div class="ob-body">
+        <h2 class="ob-q" id="ob-days-label" data-i18n="ob_days_label"></h2>
         <div class="day-picker" id="ob-days" role="group" aria-labelledby="ob-days-label">
           <div class="day-pill" data-v="mon"></div>
           <div class="day-pill active" data-v="tue"></div>
@@ -2974,35 +3107,153 @@
           <div class="day-pill active" data-v="sun"></div>
         </div>
       </div>
-      <div class="field">
-        <label for="ob-availmin" data-i18n="ob_availmin_label"></label>
-        <input type="number" id="ob-availmin" placeholder="45" min="10" max="240">
-      </div>
-      <div class="field"><button class="btn btn-primary" data-i18n="login_continue" data-on-click="obNextStep()"></button></div>
+      <div class="ob-actions"><button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button></div>
     </div>
 
-    <div class="ob-step" data-step="5">
-      <h2 class="display" data-i18n="ob_step5_title"></h2>
-      <div class="field">
-        <label for="ob-goal" data-i18n="ob_goal_label"></label>
-        <select id="ob-goal">
-          <option value="start" data-i18n="ob_goal_start"></option>
-          <option value="5k" data-i18n="ob_goal_5k"></option>
-          <option value="10k" data-i18n="ob_goal_10k"></option>
-          <option value="15k" data-i18n="ob_goal_15k"></option>
-          <option value="21k" data-i18n="ob_goal_21k"></option>
-          <option value="42k" data-i18n="ob_goal_42k"></option>
-          <option value="ultra" data-i18n="ob_goal_ultra"></option>
-          <option value="lifestyle" data-i18n="ob_goal_lifestyle"></option>
-        </select>
-        <label style="margin-top:14px;" data-i18n="ob_racedate_label"></label>
-        <div class="date-box" role="button" tabindex="0" data-i18n-aria="ob_racedate_label" data-on-click="openCalendar('ob-racedate','ob-racedate-text')"><span class="date-box-text placeholder" id="ob-racedate-text"></span></div>
-        <input type="hidden" id="ob-racedate">
-        <p class="muted" style="margin-top:6px;" data-i18n="ob_racedate_hint"></p>
+    <!-- 10 · minutos por sesión (opcional) -->
+    <div class="ob-step" data-step="10">
+      <div class="ob-body">
+        <h2 class="ob-q" data-i18n="ob_availmin_label"></h2>
+        <div class="field ob-field-big"><input type="number" id="ob-availmin" inputmode="numeric" placeholder="45" min="10" max="240" data-i18n-aria="ob_availmin_label"></div>
       </div>
-      <p class="ob-callout" style="margin:4px 0 14px;" data-i18n="ob_test_note"></p>
-      <div class="field"><button class="btn btn-primary" data-i18n="ob_submit" data-on-click="finishOnboard()"></button></div>
+      <div class="ob-actions">
+        <button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button>
+        <button type="button" class="ob-skip" data-on-click="obNextStep()" data-i18n="ob_skip"></button>
+      </div>
     </div>
+
+    <!-- 11 · objetivo -->
+    <div class="ob-step" data-step="11">
+      <div class="ob-body">
+        <h2 class="ob-q" data-i18n="ob_goal_label"></h2>
+        <div class="field ob-field-big">
+          <select id="ob-goal" data-i18n-aria="ob_goal_label">
+            <option value="start" data-i18n="ob_goal_start"></option>
+            <option value="5k" data-i18n="ob_goal_5k"></option>
+            <option value="10k" data-i18n="ob_goal_10k"></option>
+            <option value="15k" data-i18n="ob_goal_15k"></option>
+            <option value="21k" data-i18n="ob_goal_21k"></option>
+            <option value="42k" data-i18n="ob_goal_42k"></option>
+            <option value="ultra" data-i18n="ob_goal_ultra"></option>
+            <option value="lifestyle" data-i18n="ob_goal_lifestyle"></option>
+          </select>
+        </div>
+      </div>
+      <div class="ob-actions"><button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button></div>
+    </div>
+
+    <!-- 12 · fecha de la carrera (opcional) -->
+    <div class="ob-step" data-step="12">
+      <div class="ob-body">
+        <h2 class="ob-q" data-i18n="ob_racedate_label"></h2>
+        <p class="ob-sub" data-i18n="ob_racedate_hint"></p>
+        <div class="date-box ob-date" role="button" tabindex="0" data-i18n-aria="ob_racedate_label" data-on-click="openCalendar('ob-racedate','ob-racedate-text')"><span class="date-box-text placeholder" id="ob-racedate-text"></span></div>
+        <input type="hidden" id="ob-racedate">
+      </div>
+      <div class="ob-actions">
+        <button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button>
+        <button type="button" class="ob-skip" data-on-click="obNextStep()" data-i18n="ob_skip"></button>
+      </div>
+    </div>
+
+    <!-- 13 · género (opcional) -->
+    <div class="ob-step" data-step="13">
+      <div class="ob-body">
+        <h2 class="ob-q" id="ob-gender-label" data-i18n="ob_gender_label"></h2>
+        <div class="choice-row ob-options" id="ob-gender" role="group" aria-labelledby="ob-gender-label">
+          <div class="choice" data-v="f" data-i18n="ob_gender_f"></div>
+          <div class="choice" data-v="m" data-i18n="ob_gender_m"></div>
+          <div class="choice active" data-v="x" data-i18n="ob_gender_x"></div>
+        </div>
+        <div id="ob-pregnancy-wrap" style="margin-top:26px; display:none;">
+          <label id="ob-pregnancy-label" data-i18n="ob_pregnancy_label"></label>
+          <div class="choice-row ob-options" id="ob-pregnancy" role="group" aria-labelledby="ob-pregnancy-label">
+            <div class="choice" data-v="yes" data-i18n="ob_pregnancy_yes"></div>
+            <div class="choice active" data-v="no" data-i18n="ob_pregnancy_no"></div>
+          </div>
+        </div>
+      </div>
+      <div class="ob-actions"><button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button></div>
+    </div>
+
+    <!-- 14 · fecha de nacimiento (obligatoria) -->
+    <div class="ob-step" data-step="14">
+      <div class="ob-body">
+        <h2 class="ob-q" data-i18n="ob_birth_label"></h2>
+        <div class="date-box ob-date" role="button" tabindex="0" data-i18n-aria="ob_birth_label" data-on-click="openCalendar('ob-birth','ob-birth-text')"><span class="date-box-text" id="ob-birth-text"></span></div>
+        <input type="hidden" id="ob-birth">
+        <p class="ob-note" data-i18n="ob_birth_hint"></p>
+        <p class="ob-note" data-i18n="ob_step2_hint"></p>
+      </div>
+      <div class="ob-actions">
+        <button class="btn btn-primary ob-cta" id="ob-birth-continue-btn" data-i18n="login_continue" data-on-click="obNextStep()" disabled></button>
+        <p class="btn-reason" id="ob-birth-reason" role="status"></p>
+      </div>
+    </div>
+
+    <!-- 15 · peso y altura (obligatorios) -->
+    <div class="ob-step" data-step="15">
+      <div class="ob-body">
+        <h2 class="ob-q" data-i18n="ob_q_body"></h2>
+        <div class="two-col">
+          <div class="field"><label for="ob-weight" data-i18n="ob_weight_label"></label><input type="number" id="ob-weight" inputmode="decimal" value="70" min="30" max="200" data-on-input="updateObStep2ButtonState()"></div>
+          <div class="field"><label for="ob-height" data-i18n="ob_height_label"></label><input type="number" id="ob-height" inputmode="numeric" value="170" min="120" max="230" data-on-input="updateObStep2ButtonState()"></div>
+        </div>
+        <p class="ob-note" data-i18n="ob_step2_hint"></p>
+      </div>
+      <div class="ob-actions">
+        <button class="btn btn-primary ob-cta" id="ob-step2-continue-btn" data-i18n="login_continue" data-on-click="obNextStep()" disabled></button>
+        <p class="btn-reason" id="ob-step2-reason" role="status"></p>
+      </div>
+    </div>
+
+    <!-- 16 · lesiones o condiciones (opcional) -->
+    <div class="ob-step" data-step="16">
+      <div class="ob-body">
+        <h2 class="ob-q" data-i18n="ob_healthnotes_label"></h2>
+        <textarea id="ob-healthnotes" class="ob-textarea" rows="4" maxlength="400" data-i18n-ph="ob_healthnotes_ph" data-i18n-aria="ob_healthnotes_label"></textarea>
+      </div>
+      <div class="ob-actions">
+        <button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button>
+        <button type="button" class="ob-skip" data-on-click="obNextStep()" data-i18n="ob_skip"></button>
+      </div>
+    </div>
+
+    <!-- 17 · cómo nos conociste (opcional) -->
+    <div class="ob-step" data-step="17">
+      <div class="ob-body">
+        <h2 class="ob-q" id="ob-referral-label" data-i18n="ob_q_referral"></h2>
+        <div class="choice-row ob-options ob-grid" id="ob-referral" role="group" aria-labelledby="ob-referral-label">
+          <div class="choice" data-v="instagram">Instagram</div>
+          <div class="choice" data-v="tiktok">TikTok</div>
+          <div class="choice" data-v="youtube">YouTube</div>
+          <div class="choice" data-v="google">Google</div>
+          <div class="choice" data-v="facebook">Facebook</div>
+          <div class="choice" data-v="x">X</div>
+          <div class="choice" data-v="reddit">Reddit</div>
+          <div class="choice" data-v="store" data-i18n="ob_ref_store"></div>
+          <div class="choice" data-v="friend" data-i18n="ob_ref_friend"></div>
+          <div class="choice" data-v="ai" data-i18n="ob_ref_ai"></div>
+          <div class="choice" data-v="other" data-i18n="ob_ref_other"></div>
+        </div>
+      </div>
+      <div class="ob-actions">
+        <button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button>
+        <button type="button" class="ob-skip" data-on-click="obNextStep()" data-i18n="ob_skip"></button>
+      </div>
+    </div>
+
+    <!-- 18 · listo -->
+    <div class="ob-step" data-step="18">
+      <div class="ob-body ob-done">
+        <div class="ob-done-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+        <h2 class="ob-q" data-i18n="ob_done_title"></h2>
+        <p class="ob-sub" data-i18n="ob_done_lead"></p>
+        <p class="ob-callout" data-i18n="ob_test_note"></p>
+      </div>
+      <div class="ob-actions"><button class="btn btn-primary ob-cta" data-i18n="ob_submit" data-on-click="finishOnboard()"></button></div>
+    </div>
+   </div>
   </div>
 
   <header class="top" id="mainHeader" style="display:none;">

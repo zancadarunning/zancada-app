@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T12:30:20Z';
+const APP_VERSION = '2026-11-02T12:57:54Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3561,8 +3561,17 @@ document.getElementById('ob-runnertype').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
   [...document.getElementById('ob-runnertype').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
   const isActive = c.dataset.v==='active';
-  document.getElementById('ob-currentkm-wrap').style.display = isActive?'block':'none';
+  // los pasos de "km por semana / pausa / marca reciente" solo se muestran si ya corre (data-when="active", ver obStepApplies)
   document.getElementById('ob-newrunner-note').style.display = isActive?'none':'block';
+  updateObProgress();
+});
+// "¿Cómo conociste Zancada?" (opcional): una sola opción, o ninguna
+document.getElementById('ob-referral').addEventListener('click', e=>{
+  const c=e.target.closest('.choice'); if(!c) return;
+  haptic(15);
+  const was = c.classList.contains('active');
+  [...document.getElementById('ob-referral').children].forEach(x=>x.classList.remove('active'));
+  if(!was) c.classList.add('active');
 });
 // Los divs clickeables (choice chips, day-pill, cards con onclick, toggles de "mas info")
 // no tenian equivalente de teclado en ningun lado de la app (a diferencia de
@@ -4442,20 +4451,36 @@ function computeZonesFor(p, hrmax){
   const rest = validHrRest(p, hrmax);
   return rest ? computeZonesKarvonen(hrmax, rest) : computeZones(hrmax);
 }
-const OB_STEP_COUNT = 5;
+// El inicio es de UNA pregunta por pantalla (ver #onboard en index.html). Algunos pasos solo aplican según una respuesta anterior (data-when="active": los de quien ya corre).
+const OB_STEP_COUNT = document.querySelectorAll('#onboard .ob-step').length;
 let obCurrentStep = 1;
+function obStepEls(){ return [...document.querySelectorAll('#onboard .ob-step')]; }
+function obStepApplies(el){
+  if(el.dataset.when === 'active') return (document.querySelector('#ob-runnertype .choice.active') || {dataset:{}}).dataset.v === 'active';
+  return true;
+}
+// Barra de progreso y contador cuentan solo los pasos que le tocan a esta persona
+function updateObProgress(){
+  const steps = obStepEls().filter(obStepApplies);
+  const pos = Math.max(1, steps.findIndex(el => parseInt(el.dataset.step,10) === obCurrentStep) + 1);
+  document.getElementById('ob-progress-fill').style.transform = `scaleX(${pos/steps.length})`;
+  { const c = document.getElementById('ob-step-count'); if(c) c.textContent = pos + '/' + steps.length; }
+}
 function resetOnboardSteps(){
   obCurrentStep = 1;
   obGotoStep(1);
 }
 function obGotoStep(n){
   obCurrentStep = n;
-  document.querySelectorAll('.ob-step').forEach(el=>el.classList.toggle('active', parseInt(el.dataset.step,10)===n));
-  document.getElementById('ob-progress-fill').style.transform = `scaleX(${n/OB_STEP_COUNT})`;
-  { const c = document.getElementById('ob-step-count'); if(c) c.textContent = n + '/' + OB_STEP_COUNT; }
+  document.querySelectorAll('#onboard .ob-step').forEach(el=>el.classList.toggle('active', parseInt(el.dataset.step,10)===n));
+  updateObProgress();
   document.getElementById('ob-back-btn').style.display = n>1 ? 'flex' : 'none';
   document.getElementById('onboard').scrollTop = 0;
-  if(n === 2) updateObStep2ButtonState();
+  updateObStep2ButtonState();
+  // en el celular, la pregunta de texto o número abre el teclado sola (no en pasos de elegir una opción)
+  const active = document.querySelector('#onboard .ob-step.active');
+  const first = active && active.querySelector('input[type="text"], input[type="number"], textarea');
+  if(first && !first.value && window.matchMedia && window.matchMedia('(pointer:coarse)').matches){ try{ first.focus({preventScroll:true}); }catch(e){} }
 }
 // El paso 2 del onboarding (peso/altura/fecha de nacimiento) dejaba avanzar sin llenar nada
 // -- finishOnboard() al final caía en defaults silenciosos (70kg, 170cm, nacido en 1995) sin
@@ -4464,30 +4489,38 @@ function obGotoStep(n){
 // el atributo disabled en index.html) y solo se habilita cuando los 3 campos tienen un valor
 // real -- oninput en peso/altura, y calSelectDay() para la fecha (se elige desde el calendario
 // compartido, no dispara 'input').
+// Con una pregunta por pantalla, cada botón Continuar se habilita con lo suyo: nombre (pantalla 1), fecha de nacimiento (14) y peso + altura (15).
 function updateObStep2ButtonState(){
+  const nameBtn = document.getElementById('ob-name-continue-btn');
+  if(nameBtn) nameBtn.disabled = !document.getElementById('ob-name').value.trim();
+  const birth = document.getElementById('ob-birth').value;
+  const birthBtn = document.getElementById('ob-birth-continue-btn');
+  if(birthBtn) birthBtn.disabled = !birth;
+  const birthWhy = document.getElementById('ob-birth-reason');
+  if(birthWhy) birthWhy.textContent = birth ? '' : t('why_missing', {items: t('why_item_birth')});
   const btn = document.getElementById('ob-step2-continue-btn');
   if(!btn) return;
   // parseWeightInput/parseHeightInput devuelven 0 fuera de un rango humano (25-250 kg, 100-230 cm): un "5" o un "900" ya no habilita Continuar para quedar reemplazado en silencio por 70 kg / 170 cm
   const weight = parseWeightInput(document.getElementById('ob-weight').value);
   const height = parseHeightInput(document.getElementById('ob-height').value);
-  const birth = document.getElementById('ob-birth').value;
-  btn.disabled = !(weight>0 && height>0 && birth);
+  btn.disabled = !(weight>0 && height>0);
   const why = document.getElementById('ob-step2-reason');
   if(why){
     const missing = [];
     if(!(weight>0)) missing.push(t('why_item_weight'));
     if(!(height>0)) missing.push(t('why_item_height'));
-    if(!birth) missing.push(t('why_item_birth'));
     why.textContent = missing.length ? t('why_missing', {items: missing.join(', ')}) : '';
   }
 }
 function obNextStep(){
   haptic(10);
-  if(obCurrentStep < OB_STEP_COUNT) obGotoStep(obCurrentStep+1);
+  const next = obStepEls().find(el => parseInt(el.dataset.step,10) > obCurrentStep && obStepApplies(el));
+  if(next) obGotoStep(parseInt(next.dataset.step,10));
 }
 function obPrevStep(){
   haptic(10);
-  if(obCurrentStep > 1) obGotoStep(obCurrentStep-1);
+  const prev = obStepEls().filter(el => parseInt(el.dataset.step,10) < obCurrentStep && obStepApplies(el)).pop();
+  if(prev) obGotoStep(parseInt(prev.dataset.step,10));
 }
 async function finishOnboard(){
   const name = document.getElementById('ob-name').value.trim() || 'Runner';
@@ -4574,7 +4607,9 @@ async function finishOnboard(){
   // esto, alguien que se sumaba un martes con lunes/miércoles/viernes como días de
   // entrenamiento veía el lunes (e incluso el domingo previo) ya marcado como sesión
   // perdida, cuando en realidad todavía ni tenía cuenta esos días.
-  state.profile = {email:pendingEmail, name, weight, height, birth, gender, pregnancyPostpartum, coachNotes: healthNotes ? [healthNotes] : [], terrain, trainBy, trainingDays: trainingDays.length?trainingDays:['tue','thu','sun'], goal, raceDate, runnerType, currentWeeklyKm, returningFromBreak, refRace, availableMinPerSession, crossTrainingSports, crossTrainingDays, hrMax, hrKnown, hrZones:computeZones(hrMax), tz:detectDeviceTz(), createdAt: todayLocalISO()};
+  // "¿Cómo conociste Zancada?" (opcional): un valor de una lista fija, o null
+  const referral = document.querySelector('#ob-referral .choice.active')?.dataset.v || null;
+  state.profile = {email:pendingEmail, name, weight, height, birth, gender, referral,pregnancyPostpartum, coachNotes: healthNotes ? [healthNotes] : [], terrain, trainBy, trainingDays: trainingDays.length?trainingDays:['tue','thu','sun'], goal, raceDate, runnerType, currentWeeklyKm, returningFromBreak, refRace, availableMinPerSession, crossTrainingSports, crossTrainingDays, hrMax, hrKnown, hrZones:computeZones(hrMax), tz:detectDeviceTz(), createdAt: todayLocalISO()};
   // Antes esto era un flag propio (hasInjuryNote) que, a diferencia de toda otra señal de
   // cautela, no tenía forma de destildarse -- una molestia mencionada una sola vez en el
   // onboarding subía la cautela del plan para siempre, sin vencimiento ni botón en Perfil
