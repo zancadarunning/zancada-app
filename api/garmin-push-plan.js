@@ -14,7 +14,7 @@ const { applyCors, isPreflight } = require('./_lib/cors');
 const { DATE_RE, cleanZones, cleanDay, cleanLabels } = require('./_lib/watch-plan-clean');
 const { payloadHash, isDuplicate, remember } = require('./_lib/plan-dedupe');
 const { withinDailyCap } = require('./_lib/daily-cap');
-const { ensureFreshGarminToken, garminCall, GARMIN_API } = require('./_lib/garmin-activity-helpers');
+const { ensureFreshGarminToken, garminCall, refreshGarminPermissions, GARMIN_API } = require('./_lib/garmin-activity-helpers');
 const { buildGarminWorkout, countSteps } = require('./_lib/garmin-workout-builder');
 const { loadKnown, saveKnown, forgetKnown, deleteGarminWorkout } = require('./_lib/garmin-plan-sync');
 const { withSentry, reportError } = require('./_lib/sentry');
@@ -55,9 +55,11 @@ module.exports = withSentry(async (req, res) => {
     const conns = await connRes.json();
     if (!Array.isArray(conns) || !conns.length) { res.status(200).json({ pushed: 0, reason: 'not_connected' }); return; }
     const conn = conns[0];
-    if (Array.isArray(conn.permissions) && conn.permissions.length && !conn.permissions.includes('WORKOUT_IMPORT')) { res.status(200).json({ pushed: 0, reason: 'no_permission' }); return; }
     const accessToken = await ensureFreshGarminToken(base, headers, conn);
     if (!accessToken) { res.status(200).json({ pushed: 0, reason: 'token_expired' }); return; }
+    let perms = Array.isArray(conn.permissions) ? conn.permissions : [];
+    if (!perms.length) perms = (await refreshGarminPermissions(base, headers, userId, accessToken)) || [];   // vacíos = no sabemos: se vuelven a pedir
+    if (perms.length && !perms.includes('WORKOUT_IMPORT')) { res.status(200).json({ pushed: 0, reason: 'no_permission' }); return; }
 
     const known = await loadKnown(base, headers, userId, today || '0000-00-00');
     let created = 0, skipped = 0, failed = 0, deleted = 0, firstError = null;
