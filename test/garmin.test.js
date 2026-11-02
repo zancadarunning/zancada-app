@@ -19,24 +19,25 @@ const ZONES = { 1: { min: 100, max: 120 }, 2: { min: 120, max: 140 }, 3: { min: 
 
 // ---------- constructor de entrenamientos ----------
 test('sesión continua: calentamiento + tramo principal por distancia + vuelta a la calma, con el rango de pulso de la zona', () => {
-  const w = buildGarminWorkout({ date: '2026-11-03', name: 'Rodaje', typeKey: 'easy', zone: 2, distKm: 6, warmupMin: 8, cooldownMin: 5, desc: 'Suave' }, ZONES);
+  const w = buildGarminWorkout({ date: '2026-11-03', name: 'Rodaje', typeKey: 'easy', zone: 2, distKm: 6, warmupMin: 5, cooldownMin: 5, desc: 'Suave' }, ZONES);
   assert.equal(w.sport, 'RUNNING');
   assert.ok(w.workoutProvider.length <= 20 && w.workoutSourceId.length <= 20);
   const steps = w.segments[0].steps;
-  // calentamiento de 8 min = 3 de movilidad (sin objetivo de pulso) + 5 de trote suave (zona 2)
-  assert.deepEqual(steps.map(s => s.intensity), ['WARMUP', 'WARMUP', 'ACTIVE', 'COOLDOWN']);
-  assert.deepEqual(steps.map(s => s.stepOrder), [1, 2, 3, 4]);
-  assert.equal(steps[0].durationType, 'TIME'); assert.equal(steps[0].durationValue, 180); assert.equal(steps[0].targetType, 'OPEN'); assert.equal(steps[0].description, 'Movilidad articular');
-  assert.equal(steps[1].durationType, 'TIME'); assert.equal(steps[1].durationValue, 300); assert.equal(steps[1].targetType, 'HEART_RATE'); assert.equal(steps[1].targetValueLow, 120); assert.equal(steps[1].targetValueHigh, 140); assert.equal(steps[1].description, 'Trote suave');
-  assert.equal(steps[2].durationType, 'DISTANCE'); assert.equal(steps[2].durationValue, 6000); assert.equal(steps[2].durationValueType, 'METER');
-  assert.equal(steps[2].targetType, 'HEART_RATE'); assert.equal(steps[2].targetValueLow, 120); assert.equal(steps[2].targetValueHigh, 140);
+  // calentamiento de 5 min: un solo paso de trote suave (zona 2), sin movilidad aparte
+  assert.deepEqual(steps.map(s => s.intensity), ['WARMUP', 'ACTIVE', 'COOLDOWN']);
+  assert.deepEqual(steps.map(s => s.stepOrder), [1, 2, 3]);
+  assert.equal(steps[0].durationType, 'TIME'); assert.equal(steps[0].durationValue, 300); assert.equal(steps[0].targetType, 'HEART_RATE'); assert.equal(steps[0].targetValueLow, 120); assert.equal(steps[0].targetValueHigh, 140); assert.equal(steps[0].description, 'Trote suave');
+  assert.equal(steps[1].durationType, 'DISTANCE'); assert.equal(steps[1].durationValue, 6000); assert.equal(steps[1].durationValueType, 'METER');
+  assert.equal(steps[1].targetType, 'HEART_RATE'); assert.equal(steps[1].targetValueLow, 120); assert.equal(steps[1].targetValueHigh, 140);
 });
 
-test('los nombres de los pasos del calentamiento salen en el idioma de la persona; un calentamiento corto no se parte', () => {
-  const w = buildGarminWorkout({ date: '2026-11-03', name: 'Run', typeKey: 'easy', zone: 2, distKm: 5, warmupMin: 8, cooldownMin: 5 }, ZONES, { mobility: 'Joint mobility', jog: 'Easy jog' });
-  assert.deepEqual(w.segments[0].steps.slice(0, 2).map(s => s.description), ['Joint mobility', 'Easy jog']);
-  const short = buildGarminWorkout({ date: '2026-11-03', name: 'Run', typeKey: 'easy', zone: 2, distKm: 5, warmupMin: 4, cooldownMin: 5 }, ZONES);
-  assert.equal(short.segments[0].steps.filter(s => s.intensity === 'WARMUP').length, 1);
+test('el calentamiento es un solo paso, con su tiempo y el nombre en el idioma de la persona; no hay movilidad aparte', () => {
+  const w = buildGarminWorkout({ date: '2026-11-03', name: 'Run', typeKey: 'tempo', zone: 3, distKm: 5, warmupMin: 10, cooldownMin: 5 }, ZONES, { jog: 'Easy jog' });
+  const warm = w.segments[0].steps.filter(s => s.intensity === 'WARMUP');
+  assert.equal(warm.length, 1);
+  assert.equal(warm[0].durationValue, 600);
+  assert.equal(warm[0].description, 'Easy jog');
+  assert.ok(!JSON.stringify(w).includes('Movilidad'));
 });
 
 test('sesión por tiempo sin calentamiento propio: un solo paso de tiempo', () => {
@@ -49,14 +50,14 @@ test('sesión por tiempo sin calentamiento propio: un solo paso de tiempo', () =
 test('intervalos: calentamiento, grupo de repeticiones (trabajo + recuperación) y vuelta a la calma, con orden de pasos único', () => {
   const w = buildGarminWorkout({ date: '2026-11-04', name: 'Series', typeKey: 'intervals', zone: 4, interval: { reps: 6, repMeters: 400, recoveryMin: 1.5 } }, ZONES);
   const steps = w.segments[0].steps;
-  assert.deepEqual(steps.slice(0, 2).map(s => s.intensity), ['WARMUP', 'WARMUP']);
-  const rep = steps[2];
+  assert.deepEqual(steps.slice(0, 1).map(s => s.intensity), ['WARMUP']);
+  const rep = steps[1];
   assert.equal(rep.type, 'WorkoutRepeatStep'); assert.equal(rep.repeatType, 'REPEAT_UNTIL_STEPS_CMPLT'); assert.equal(rep.repeatValue, 6);
   assert.deepEqual(rep.steps.map(s => s.intensity), ['INTERVAL', 'RECOVERY']);
   assert.equal(rep.steps[0].durationType, 'DISTANCE'); assert.equal(rep.steps[0].durationValue, 400);
   assert.equal(rep.steps[0].targetValueLow, 155); assert.equal(rep.steps[0].targetValueHigh, 170);
   assert.equal(rep.steps[1].durationType, 'TIME'); assert.equal(rep.steps[1].durationValue, 90);
-  assert.equal(steps[3].intensity, 'COOLDOWN');
+  assert.equal(steps[2].intensity, 'COOLDOWN');
   const orders = [];
   (function walk(list) { for (const s of list) { orders.push(s.stepOrder); if (s.steps) walk(s.steps); } })(steps);
   assert.equal(new Set(orders).size, orders.length, 'cada paso tiene su propio stepOrder');

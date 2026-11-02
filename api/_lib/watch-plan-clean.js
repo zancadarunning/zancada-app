@@ -17,7 +17,7 @@ function cleanZones(zones) {
 
 function cleanLabels(labels) {
   const out = {};
-  for (const k of ['warmup', 'cooldown', 'work', 'rest', 'main', 'mobility', 'jog']) {
+  for (const k of ['warmup', 'cooldown', 'work', 'rest', 'main', 'jog']) {
     if (labels && typeof labels[k] === 'string') out[k] = labels[k].slice(0, 40);
   }
   return out;

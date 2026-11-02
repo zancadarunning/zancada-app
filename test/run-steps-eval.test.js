@@ -51,7 +51,10 @@ test('cada tramo sale con su duración, distancia, ritmo y pulso reales, y el pu
   assert.ok(Math.abs(w1.paceMin - 3.7) < 0.15, 'ritmo de la repetición: ' + w1.paceMin);
   assert.ok(w1.hr >= 174 && w1.hr <= 180, 'pulso de la repetición ' + w1.hr); assert.equal(w1.hrStatus, 'high');
   assert.equal(r1.hrStatus, null, 'la recuperación no se juzga por pulso');
-  assert.equal(ev.summary.high, 3); assert.ok(ev.summary.judged >= 5);
+  assert.equal(ev.summary.high, 3); assert.equal(ev.summary.judged, 4, 'calentamiento + 3 repeticiones: la vuelta a la calma no se juzga por pulso');
+  assert.equal(ev.rows[ev.rows.length - 1].hrStatus, null);
+  const cool = app.planStepsFromPayload(PAYLOAD).steps.find(x => x.kind === 'cooldown');
+  assert.equal(cool.zone, 1, 'la vuelta a la calma es en zona 1');
   assert.ok(ev.summary.spreadSec <= 8, 'repeticiones parejas');
 });
 

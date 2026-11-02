@@ -72,10 +72,10 @@ function buildMessage(runs, source, lang, imperial, planInfo) {
 // Qué decía el plan para el día (en su huso horario) en que se hizo la carrera. Solo se compara si ese día cae en la semana del plan guardado
 // (weekStart = lunes) y tenía sesión planeada; un día de descanso o un plan viejo no se comenta. Los números salen del estado de la
 // persona (lo escribe ella): se leen como número y solo eso llega al texto.
-// La sesión del plan se corre CON entrada en calor y vuelta a la calma (el texto de la sesión lo indica y los relojes las traen como bloques): 3 min de movilidad + 10 de trote en las sesiones de
-// calidad o + 5 en rodajes y tiradas, y 5 de vuelta a la calma. El número del plan es solo la parte principal, así que sin esto una carrera hecha tal cual daba "hiciste el 170%".
+// La sesión del plan se corre CON entrada en calor y vuelta a la calma (el texto de la sesión lo indica y los relojes las traen como bloques): 10 min de calentamiento en las sesiones de
+// calidad o 5 en rodajes y tiradas, y 5 de vuelta a la calma. El número del plan es solo la parte principal, así que sin esto una carrera hecha tal cual daba "hiciste el 170%".
 const QUALITY_TYPES = new Set(['intervals', 'tempo', 'fartlek', 'hills', 'progression', 'test']);
-function warmCoolMin(d) { return typeof d.typeKey === 'string' && d.typeKey !== 'rest' ? (QUALITY_TYPES.has(d.typeKey) ? 13 : 8) + 5 : 0; }
+function warmCoolMin(d) { return typeof d.typeKey === 'string' && d.typeKey !== 'rest' ? (QUALITY_TYPES.has(d.typeKey) ? 10 : 5) + 5 : 0; }
 
 function planFor(run, plan, weekStart, tz, timeMode) {
   if (!Array.isArray(plan) || !/^\d{4}-\d{2}-\d{2}$/.test(String(weekStart || ''))) return null;

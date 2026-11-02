@@ -23,11 +23,11 @@ function makeRun(id, segs, source) {
 }
 // series de 3 repeticiones de 400 m; reps = [{sec, v}] (ritmo por repetición), hr = pulso en las repeticiones
 function intervalRun(id, reps, hr, source) {
-  return makeRun(id, [{ sec: 780, v: 3, hr: 125 }, ...reps.flatMap(r => [{ sec: r.sec, v: r.v, hr }, { sec: 60, v: 2, hr: 140 }]), { sec: 300, v: 2.5, hr: 128 }], source);
+  return makeRun(id, [{ sec: 600, v: 3, hr: 125 }, ...reps.flatMap(r => [{ sec: r.sec, v: r.v, hr }, { sec: 60, v: 2, hr: 140 }]), { sec: 300, v: 2.5, hr: 128 }], source);
 }
 const FADE = [{ sec: 89, v: 4.5 }, { sec: 93, v: 4.3 }, { sec: 98, v: 4.08 }];
 const EVEN = [{ sec: 89, v: 4.5 }, { sec: 89, v: 4.5 }, { sec: 89, v: 4.5 }];
-const easyRun = (id, hr) => makeRun(id, [{ sec: 480, v: 2.6, hr: 120 }, { sec: 1000, v: 3, hr }, { sec: 300, v: 2.4, hr: 125 }]);
+const easyRun = (id, hr) => makeRun(id, [{ sec: 300, v: 2.6, hr: 120 }, { sec: 1000, v: 3, hr }, { sec: 300, v: 2.4, hr: 125 }]);
 
 function setup(app, days, runs) {
   app.state.profile = { weeklyKm: 30, currentWeeklyKm: 30, goal: '10k', runnerType: 'active', trainingDays: ['tue', 'thu', 'sun'], terrain: 'asfalto', units: 'metric', trainBy: 'distance', hrZones: ZONES };
