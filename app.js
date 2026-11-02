@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T03:12:34Z';
+const APP_VERSION = '2026-11-02T03:38:08Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2607,11 +2607,14 @@ function watchDayPayload(d, date){
 function buildWatchPlanDays(){
   const today = todayLocalISO();
   const out = [];
+  // la carrera cargada en "Próximos eventos" deja guardada por debajo la sesión normal de ese día (solo se ve distinto en pantalla, ver isEventDay): al reloj NO se manda, ese día es la carrera
+  const eventDate = state.event && state.event.date;
   const addWeek = (plan, weekStart) => {
     if(!plan || !weekStart) return;
     plan.forEach((d, i) => {
       const date = addDaysToIsoLocal(weekStart, i);
       if(date < today) return;
+      if(eventDate && date === eventDate) return;
       if(!d || !(d.dist>0) || d.raceDay || d.typeKey==='test' || d.status==='done' || d.status==='skipped') return;
       out.push(watchDayPayload(d, date));
     });
