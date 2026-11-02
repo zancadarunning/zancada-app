@@ -89,7 +89,9 @@ const linkAccount = async (req, res) => {
         expires_at: expiresAt
       })
     });
-    if (!saveRes.ok) { failGracefully(res, 'no se pudo guardar la conexión', 'status ' + saveRes.status + ' ' + await saveRes.text().catch(() => '')); return; }  // antes no se miraba el resultado: la app decía "conectado" sin conexión guardada
+    // conexión nueva: la memoria del último plan enviado ya no vale (ese plan pudo borrarse de COROS) y, sin borrarla, un plan igual se tomaba como "sin cambios" y no se mandaba
+    if (saveRes.ok) await fetch(`${base}/rest/v1/sent_notifications?user_id=eq.${userId}&kind=eq.coros_plan`, { method: 'DELETE', headers }).catch(() => {});
+    if (!saveRes.ok) { failGracefully(res, 'no se pudo guardar la conexión', 'status ' + saveRes.status + ' ' + await saveRes.text().catch(() => '')); return; }// antes no se miraba el resultado: la app decía "conectado" sin conexión guardada
 
     // Traer las carreras recientes como punto de partida, igual que al conectar
     // Strava/Polar/Wahoo. querySportRecords devuelve un reporte de texto (no JSON) cuando

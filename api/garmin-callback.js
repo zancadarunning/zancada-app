@@ -75,6 +75,8 @@ const linkAccount = async (req, res) => {
       })
     });
     if (!saveRes.ok) { failGracefully(res, 'no se pudo guardar la conexión', 'status ' + saveRes.status); return; }
+    // conexión nueva = la memoria de lo enviado en una conexión anterior ya no vale (esos entrenamientos pudieron borrarse en Garmin): se manda todo de nuevo (lo que sobre lo limpia la limpieza de sueltos)
+    await fetch(`${base}/rest/v1/sent_notifications?user_id=eq.${userId}&kind=in.(garmin_wk,garmin_plan)`, { method: 'DELETE', headers }).catch(() => {});
 
     res.writeHead(302, { Location: '/' });
     res.end();

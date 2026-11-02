@@ -48,6 +48,7 @@ module.exports = withSentry(async (req, res) => {
       console.error('suunto-disconnect: no se pudieron borrar las guías', e && e.message);
     }
 
+    await fetch(`${base}/rest/v1/sent_notifications?user_id=eq.${userId}&kind=eq.suunto_plan`, { method: 'DELETE', headers }).catch(() => {});   // el plan enviado ya no está en el reloj: la próxima conexión tiene que mandarlo de nuevo
     const delRes = await fetch(`${base}/rest/v1/suunto_connections?user_id=eq.${userId}`, { method: 'DELETE', headers });
     if (!delRes.ok) {
       console.error('suunto-disconnect: failed to delete connection row', await delRes.text());

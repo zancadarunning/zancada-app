@@ -43,6 +43,7 @@ module.exports = withSentry(async (req, res) => {
       console.error('coros-disconnect: revoke failed', e);
     }
 
+    await fetch(`${base}/rest/v1/sent_notifications?user_id=eq.${userId}&kind=eq.coros_plan`, { method: 'DELETE', headers }).catch(() => {});   // el plan enviado ya no está en COROS: la próxima conexión tiene que mandarlo de nuevo
     const delRes = await fetch(`${base}/rest/v1/coros_connections?user_id=eq.${userId}`, { method: 'DELETE', headers });
     if (!delRes.ok) {
       console.error('coros-disconnect: failed to delete connection row', await delRes.text());

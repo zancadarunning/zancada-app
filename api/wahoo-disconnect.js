@@ -43,6 +43,7 @@ module.exports = withSentry(async (req, res) => {
       console.error('wahoo-disconnect: revoke failed', e);
     }
 
+    await fetch(`${base}/rest/v1/sent_notifications?user_id=eq.${userId}&kind=eq.wahoo_plan`, { method: 'DELETE', headers }).catch(() => {});   // el plan enviado ya no está en Wahoo: la próxima conexión tiene que mandarlo de nuevo
     const delRes = await fetch(`${base}/rest/v1/wahoo_connections?user_id=eq.${userId}`, { method: 'DELETE', headers });
     if (!delRes.ok) {
       console.error('wahoo-disconnect: failed to delete connection row', await delRes.text());

@@ -66,7 +66,7 @@ module.exports = withSentry(async (req, res) => {
     for (const d of list(body.deregistrations).slice(0, 50)) {
       for (const row of await connsFor(d && d.userId)) {
         try { await purgeGarminRunsForUser(base, headers, row.user_id); } catch (e) { console.error('garmin-webhook: no se pudieron purgar las carreras', e && e.message); throw e; }
-        await fetch(`${base}/rest/v1/sent_notifications?user_id=eq.${row.user_id}&kind=eq.garmin_wk`, { method: 'DELETE', headers }).catch(() => {});
+        await fetch(`${base}/rest/v1/sent_notifications?user_id=eq.${row.user_id}&kind=in.(garmin_wk,garmin_plan)`, { method: 'DELETE', headers }).catch(() => {});
         await fetch(`${base}/rest/v1/garmin_connections?user_id=eq.${row.user_id}`, { method: 'DELETE', headers });
       }
     }

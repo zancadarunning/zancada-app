@@ -167,7 +167,7 @@ test('webhook: la desconexión desde Garmin borra la conexión, lo importado y l
     assert.equal(r.code, 200);
     assert.ok(n.log.some(l => /rpc\/purge_provider_runs/.test(l.url) && JSON.parse(l.body).p_source === 'garmin'));
     assert.ok(n.log.some(l => l.method === 'DELETE' && /garmin_connections\?user_id=eq\.u1/.test(l.url)));
-    assert.ok(n.log.some(l => l.method === 'DELETE' && /sent_notifications\?user_id=eq\.u1&kind=eq\.garmin_wk/.test(l.url)));
+    assert.ok(n.log.some(l => l.method === 'DELETE' && /sent_notifications\?user_id=eq\.u1&kind=in\.\(garmin_wk,garmin_plan\)/.test(l.url)), 'borra la memoria de lo enviado y la del plan');
     n.log.length = 0;
     r = await callWebhook({ userPermissionsChange: [{ userId: 'g-1', permissions: ['ACTIVITY_EXPORT'] }] });
     const patch = n.log.find(l => l.method === 'PATCH' && /garmin_connections/.test(l.url));
