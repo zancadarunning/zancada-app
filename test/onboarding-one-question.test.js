@@ -8,10 +8,11 @@ const html = read('index.html');
 const app = read('app.js');
 const block = html.slice(html.indexOf('<div class="overlay" id="onboard">'), html.indexOf('<header class="top" id="mainHeader"'));
 
-test('hay 18 pantallas numeradas sin huecos; solo las de "ya corre" se saltan para quien es nuevo', () => {
+test('hay 20 pantallas numeradas sin huecos; las de "ya corre" y la de notificaciones se saltan cuando no aplican', () => {
   const steps = [...block.matchAll(/<div class="ob-step[^"]*" data-step="(\d+)"([^>]*)>/g)];
-  assert.deepEqual(steps.map(m => Number(m[1])), Array.from({ length: 18 }, (_, i) => i + 1));
+  assert.deepEqual(steps.map(m => Number(m[1])), Array.from({ length: 20 }, (_, i) => i + 1));
   assert.deepEqual(steps.filter(m => /data-when="active"/.test(m[2])).map(m => Number(m[1])), [3, 4, 5]);
+  assert.deepEqual(steps.filter(m => /data-when="notif"/.test(m[2])).map(m => Number(m[1])), [18]);
 });
 
 test('cada campo que lee finishOnboard sigue en el inicio', () => {
@@ -64,34 +65,42 @@ test('el plan habla de "fecha objetivo", no de "fecha de carrera", en pantalla y
   assert.match(app, /La fecha objetivo "\$\{input\.fecha_carrera\}" no es válida/);
 });
 
-test('al crear la cuenta se ofrece "Conectá tu reloj" (lista de integraciones), ya no "Traé tu historial"', () => {
-  assert.ok(!html.includes('history-import-overlay') && !app.includes('history-import-overlay'));
+test('antes de "Todo listo" el inicio ofrece activar las notificaciones (18) y conectar el reloj (19); ya no hay pestañas sueltas después de crear la cuenta ni "Traé tu historial"', () => {
+  assert.ok(!html.includes('history-import-overlay') && !html.includes('connect-watch-overlay') && !html.includes('notif-prompt-overlay'));
   assert.ok(!/hist_import_(title|lead)/.test(html + app));
-  assert.match(app, /setTimeout\(maybeOpenNotifPrompt, 1600\)/, 'primero las notificaciones');
-  assert.match(app, /function closeNotifPrompt\(\)\{[\s\S]*?setTimeout\(maybeOpenConnectWatch, 350\)/, 'al cerrarla sigue conectar el reloj');
-  const from = html.indexOf('id="connect-watch-overlay"');
-  const overlay = html.slice(from, html.indexOf('id="cw-continue-btn"', from) + 120);
-  for (const brand of ['garmin', 'suunto', 'wahoo', 'coros', 'polar', 'healthconnect']) assert.ok(overlay.includes(`data-conn="${brand}"`), brand);
-  assert.ok(!overlay.includes('connectStrava'), 'Strava ya no se ofrece acá');
-  assert.match(app, /row\.disabled = on/);
+  assert.ok(!/maybeOpenNotifPrompt|maybeOpenConnectWatch|openConnectWatch/.test(app), 'sin avisos después de crear la cuenta');
+  const at = n => block.indexOf(`data-step="${n}"`);
+  assert.ok(at(17) < at(18) && at(18) < at(19) && at(19) < at(20), 'orden: referencia, notificaciones, reloj, listo');
+  const connect = block.slice(at(19), at(20));
+  for (const brand of ['garmin', 'suunto', 'wahoo', 'coros', 'polar', 'healthconnect']) assert.ok(connect.includes(`data-conn="${brand}"`), brand);
+  assert.ok(!connect.includes('connectStrava'), 'Strava ya no se ofrece acá');
+  assert.ok(connect.split('obSaveDraft(); connect').length - 1 === 6, 'cada fila guarda las respuestas antes de salir a la página de la marca');
+  assert.ok(app.includes('row.disabled = on'));
+  assert.ok(app.includes('state.historyImportPrompted = true; state.notifPrompted = true;'), 'al terminar no se vuelve a ofrecer');
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
     const s = read('locales/' + l + '.js');
-    for (const k of ['conn_title', 'conn_lead', 'conn_section', 'conn_connect', 'conn_continue', 'conn_skip']) assert.ok(s.includes(k + ':'), l + ' ' + k);
+    for (const k of ['conn_title', 'conn_lead', 'conn_section', 'conn_connect', 'conn_continue', 'conn_skip', 'notif_prompt_title', 'notif_prompt_lead', 'notif_prompt_r1', 'notif_prompt_r2', 'notif_prompt_enable', 'notif_prompt_skip']) assert.ok(s.includes(k + ':'), l + ' ' + k);
     assert.ok(!s.includes('hist_import_title:'), l);
   }
 });
 
-test('al crear la cuenta se ofrece activar las notificaciones: una sola vez, sin doble cartel, y solo si hay algo que pedir', () => {
-  assert.ok(html.includes('id="notif-prompt-overlay"') && html.includes('data-on-click="acceptNotifPrompt()"') && html.includes('data-on-click="closeNotifPrompt()"'));
-  const fn = app.slice(app.indexOf('async function maybeOpenNotifPrompt()'), app.indexOf('function closeNotifPrompt()'));
-  assert.match(fn, /state\.historyImportPrompted\)\{ return; \}/, 'solo cuentas nuevas');
-  assert.match(fn, /state\.notifPrompted = true/, 'una sola vez');
-  assert.match(fn, /Notification\.permission === 'default'/, 'si ya está concedido o bloqueado no se pide');
-  assert.match(app, /enablePushNotifications\(\{skipSoftAsk:true\}\)/, 'la pestaña ya explicó: no se pregunta dos veces');
-  assert.match(app, /async function enablePushNotifications\(opts\)/);
-  assert.match(app, /Notification\.permission === 'default' && !\(opts && opts\.skipSoftAsk\)/);
-  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
-    const s = read('locales/' + l + '.js');
-    for (const k of ['notif_prompt_title', 'notif_prompt_lead', 'notif_prompt_r1', 'notif_prompt_r2', 'notif_prompt_enable', 'notif_prompt_skip']) assert.ok(s.includes(k + ':'), l + ' ' + k);
-  }
+test('notificaciones en el inicio: se pide el permiso sin doble cartel, la pantalla se salta si no hay nada que pedir, y se sigue al terminar', () => {
+  assert.ok(app.includes('enablePushNotifications({skipSoftAsk:true})'));
+  assert.ok(app.includes('async function enablePushNotifications(opts)'));
+  assert.ok(app.includes("Notification.permission === 'default' && !(opts && opts.skipSoftAsk)"));
+  const fn = app.slice(app.indexOf('async function obCheckNotifNeeded()'), app.indexOf('async function acceptNotifPrompt()'));
+  assert.ok(fn.includes("Notification.permission === 'default'"), 'si ya está concedido o bloqueado no se pide');
+  assert.ok(app.includes("if(el.dataset.when === 'notif') return obNotifNeeded;"));
+  assert.ok(app.includes('await obCheckNotifNeeded(); obNextStep(); }'), 'al aceptar o rechazar se sigue a la próxima pantalla');
+});
+
+test('conectar un reloj sale a la página de la marca: las respuestas se guardan en sessionStorage (solo esta cuenta y esta pestaña) y se retoma en la misma pantalla', () => {
+  assert.ok(app.includes('sessionStorage.setItem(key, JSON.stringify(obCollectDraft()))'));
+  assert.ok(app.includes("OB_DRAFT_PREFIX + currentUserId"), 'solo la misma cuenta: el id va en la clave, no en el valor (CodeQL: clear-text-storage)');
+  assert.ok(!/uid: *currentUserId/.test(app.slice(app.indexOf('function obCollectDraft'), app.indexOf('function obSaveDraft'))), 'el id de la sesión no se guarda dentro del borrador');
+  assert.ok(app.includes('k.indexOf(OB_DRAFT_PREFIX) === 0'), 'al borrar se limpian todos los borradores');
+  assert.ok(app.includes('if(obRestoreDraft()) obRefreshConnections()'), 'al volver, se retoma y se actualiza lo conectado');
+  assert.ok(app.includes('.test(s)') && app.includes('{1,30}'), 'los deportes restaurados se validan (se usan para armar HTML)');
+  assert.ok(app.includes('obClearDraft();\n  enterApp();') || app.includes('obClearDraft();\r\n  enterApp();'), 'al terminar se borra');
+  assert.ok(app.includes('async function logout(){\n  obClearDraft();') || app.includes('async function logout(){\r\n  obClearDraft();'), 'al cerrar sesión también');
 });

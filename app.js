@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T13:29:19Z';
+const APP_VERSION = '2026-11-02T13:59:50Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4455,8 +4455,10 @@ function computeZonesFor(p, hrmax){
 // El inicio es de UNA pregunta por pantalla (ver #onboard en index.html). Algunos pasos solo aplican según una respuesta anterior (data-when="active": los de quien ya corre).
 const OB_STEP_COUNT = document.querySelectorAll('#onboard .ob-step').length;
 let obCurrentStep = 1;
+let obNotifNeeded = true;   // ¿falta pedir las notificaciones? (data-when="notif")
 function obStepEls(){ return [...document.querySelectorAll('#onboard .ob-step')]; }
 function obStepApplies(el){
+  if(el.dataset.when === 'notif') return obNotifNeeded;
   if(el.dataset.when === 'active') return (document.querySelector('#ob-runnertype .choice.active') || {dataset:{}}).dataset.v === 'active';
   return true;
 }
@@ -4470,6 +4472,9 @@ function updateObProgress(){
 function resetOnboardSteps(){
   obCurrentStep = 1;
   obGotoStep(1);
+  obCheckNotifNeeded();
+  // volviendo de conectar un reloj: se retoma donde se estaba, con las respuestas ya cargadas
+  if(obRestoreDraft()) obRefreshConnections();
 }
 function obGotoStep(n){
   obCurrentStep = n;
@@ -4478,6 +4483,7 @@ function obGotoStep(n){
   document.getElementById('ob-back-btn').style.display = n>1 ? 'flex' : 'none';
   document.getElementById('onboard').scrollTop = 0;
   updateObStep2ButtonState();
+  if(n === 19) obRefreshConnections();
   // en el celular, la pregunta de texto o número abre el teclado sola (no en pasos de elegir una opción)
   const active = document.querySelector('#onboard .ob-step.active');
   const first = active && active.querySelector('input[type="text"], input[type="number"], textarea');
@@ -4656,8 +4662,9 @@ async function finishOnboard(){
   document.getElementById('perfil-name').value = name;
   seedCoachGreeting();
   await persist();
+  state.historyImportPrompted = true; state.notifPrompted = true;   // el aviso de notificaciones y de conectar el reloj ya pasaron dentro del inicio
+  obClearDraft();
   enterApp();
-  setTimeout(maybeOpenNotifPrompt, 1600);
   // Primera vez que el personaje se muestra de verdad para esta cuenta -- un festejo (mismos
   // ojos/color que ya usa celebrate() para una marca personal) en vez del parpadeo genérico
   // de "recién cargó la página", para que arrancar el plan también se sienta como un logro.
@@ -4985,6 +4992,7 @@ function wipeLocalUserData(uid){
   }catch(e){}
 }
 async function logout(){
+  obClearDraft();   // las respuestas a medio cargar del inicio no quedan para la próxima cuenta
   await waitForPendingPersist();
   // Ver el comentario de runProgressKey(): sin esto, una carrera sin terminar quedaba
   // recuperable por la próxima cuenta que inicie sesión en este mismo dispositivo.
@@ -14298,37 +14306,77 @@ function dismissHistoryCalibration(){
   persist();
   renderHistoryCalibCard();
 }
-// Después de crear la cuenta: pestaña para activar las notificaciones (una sola vez) y, al cerrarla, la de conectar el reloj.
-async function maybeOpenNotifPrompt(){
-  if(!state || state.historyImportPrompted){ return; }   // solo cuentas nuevas: las que ya existían pasaron por acá
-  if(state.notifPrompted){ maybeOpenConnectWatch(); return; }
-  state.notifPrompted = true;
-  persist();
+/* ===== Notificaciones y reloj DENTRO del inicio (pantallas 18 y 19, antes de "Todo listo") ===== */
+// Conectar un reloj saca a la persona a la página de la marca y vuelve a la app: las respuestas se guardan en sessionStorage (solo esta pestaña, se borra al cerrarla o al terminar) para retomar en la misma pantalla.
+// La cuenta va en la CLAVE (zc_ob_draft_<id>), no dentro del valor guardado: así el borrador solo se retoma con la misma cuenta y no se guarda ningún dato que venga del inicio de sesión.
+const OB_DRAFT_PREFIX = 'zc_ob_draft_';
+function obDraftKey(){ return currentUserId ? OB_DRAFT_PREFIX + currentUserId : null; }
+function obCollectDraft(){
+  const val = id => (document.getElementById(id) || {}).value || '';
+  const choice = sel => (document.querySelector(sel + ' .choice.active') || {dataset:{}}).dataset.v || null;
+  const pills = sel => [...document.querySelectorAll(sel + ' .day-pill.active')].map(e => e.dataset.v);
+  return { v:1, step: obCurrentStep, name: val('ob-name'), runnertype: choice('#ob-runnertype'), currentkm: val('ob-currentkm'), returning: choice('#ob-returning'),
+    refDist: val('ob-refrace-dist'), refMin: val('ob-refrace-min'), sports: obSelectedSports.slice(), sportDays: pills('#ob-sport-days'), terrain: choice('#ob-terrain'), trainby: choice('#ob-trainby'),
+    days: pills('#ob-days'), availmin: val('ob-availmin'), goal: val('ob-goal'), racedate: val('ob-racedate'), gender: choice('#ob-gender'), pregnancy: choice('#ob-pregnancy'),
+    birth: val('ob-birth'), weight: val('ob-weight'), height: val('ob-height'), health: val('ob-healthnotes'), referral: choice('#ob-referral') };
+}
+function obSaveDraft(){ const key = obDraftKey(); if(!key) return; try{ sessionStorage.setItem(key, JSON.stringify(obCollectDraft())); }catch(e){} }
+function obClearDraft(){
+  try{
+    for(let i = sessionStorage.length - 1; i >= 0; i--){ const k = sessionStorage.key(i); if(k && k.indexOf(OB_DRAFT_PREFIX) === 0) sessionStorage.removeItem(k); }
+  }catch(e){}
+}
+function obRestoreDraft(){
+  const key = obDraftKey();
+  if(!key) return false;
+  let d = null;
+  try{ d = JSON.parse(sessionStorage.getItem(key) || 'null'); }catch(e){ d = null; }
+  if(!d || d.v !== 1) return false;
+  const setVal = (id, v) => { const el = document.getElementById(id); if(el && typeof v === 'string') el.value = v; };
+  const setChoice = (sel, v) => { if(typeof v !== 'string') return; document.querySelectorAll(sel + ' .choice').forEach(c => c.classList.toggle('active', c.dataset.v === v)); };
+  const setPills = (sel, arr) => { const ok = Array.isArray(arr) ? arr.filter(x => DAY_KEYS.includes(x)) : []; document.querySelectorAll(sel + ' .day-pill').forEach(p => p.classList.toggle('active', ok.includes(p.dataset.v))); };
+  setVal('ob-name', d.name); setVal('ob-currentkm', d.currentkm); setVal('ob-refrace-dist', d.refDist); setVal('ob-refrace-min', d.refMin);
+  setVal('ob-availmin', d.availmin); setVal('ob-goal', d.goal); setVal('ob-racedate', d.racedate); setVal('ob-birth', d.birth);
+  setVal('ob-weight', d.weight); setVal('ob-height', d.height); setVal('ob-healthnotes', d.health);
+  setChoice('#ob-runnertype', d.runnertype); setChoice('#ob-returning', d.returning); setChoice('#ob-terrain', d.terrain); setChoice('#ob-trainby', d.trainby);
+  setChoice('#ob-gender', d.gender); setChoice('#ob-pregnancy', d.pregnancy); setChoice('#ob-referral', d.referral);
+  const note = document.getElementById('ob-newrunner-note'); if(note) note.style.display = d.runnertype === 'active' ? 'none' : 'block';
+  const preg = document.getElementById('ob-pregnancy-wrap'); if(preg) preg.style.display = d.gender === 'f' ? 'block' : 'none';
+  setPills('#ob-days', d.days);
+  // los deportes llegan como texto del almacenamiento: solo claves simples (se usan para armar HTML)
+  obSelectedSports = (Array.isArray(d.sports) ? d.sports : []).filter(s => typeof s === 'string' && /^[a-z_]{1,30}$/.test(s));
+  obLastSportsKey = obSelectedSports.slice().sort().join(',');   // igual que lo que se va a dibujar: así renderSportChips no borra los días
+  renderSportChips('ob');
+  setPills('#ob-sport-days', d.sportDays);
+  dateBoxUpdaters['ob-birth'] && dateBoxUpdaters['ob-birth']();
+  dateBoxUpdaters['ob-racedate'] && dateBoxUpdaters['ob-racedate']();
+  const step = Number(d.step);
+  if(step >= 1 && step <= OB_STEP_COUNT) obGotoStep(step);
+  return true;
+}
+// ¿Falta pedir las notificaciones? (si ya están concedidas o bloqueadas, o el dispositivo no las soporta, esa pantalla se salta)
+async function obCheckNotifNeeded(){
   let needs = true;
   try{
     const nativePush = nativePushPlugin();
     if(nativePush){ const st = await nativePush.checkPermissions(); needs = st.receive !== 'granted' || !state.nativePushEnabled; }
     else if(!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') needs = false;
-    else needs = Notification.permission === 'default';   // si ya está concedido o bloqueado no hay nada que pedir
+    else needs = Notification.permission === 'default';
   }catch(e){ needs = false; }
-  if(!needs){ maybeOpenConnectWatch(); return; }
-  openOverlaySheetEl(document.getElementById('notif-prompt-overlay'));
-}
-function closeNotifPrompt(){
-  document.getElementById('notif-prompt-overlay').classList.remove('overlay-open');
-  setTimeout(maybeOpenConnectWatch, 350);
+  obNotifNeeded = needs;
+  updateObProgress();
 }
 async function acceptNotifPrompt(){
   const btn = document.getElementById('np-enable-btn');
   if(btn) btn.disabled = true;
-  try{ await enablePushNotifications({skipSoftAsk:true}); }finally{ if(btn) btn.disabled = false; closeNotifPrompt(); }
+  try{ await enablePushNotifications({skipSoftAsk:true}); }finally{ if(btn) btn.disabled = false; await obCheckNotifNeeded(); obNextStep(); }
 }
-// "Conectá tu reloj": lista de integraciones con "Conectar" a la derecha. Lo conectado figura como "Conectado" y no se puede tocar de nuevo.
-function openConnectWatch(){
+// Pantalla de conectar el reloj: lo conectado figura como "Conectado" y no se puede tocar de nuevo
+function refreshObConnectRows(){
   const hc = document.getElementById('hi-hc');
   if(hc) hc.style.display = getHealthConnectBridge() ? 'flex' : 'none';
   let any = false;
-  document.querySelectorAll('#connect-watch-overlay .cw-row').forEach(row => {
+  document.querySelectorAll('#onboard .cw-row').forEach(row => {
     const brand = row.dataset.conn;
     const on = brand === 'healthconnect' ? !!state.healthConnectConnected : !!(deviceConnections && deviceConnections[brand]);
     row.classList.toggle('on', on);
@@ -14339,17 +14387,14 @@ function openConnectWatch(){
   });
   const btn = document.getElementById('cw-continue-btn');
   if(btn) btn.textContent = t(any ? 'conn_continue' : 'conn_skip');
-  openOverlaySheetEl(document.getElementById('connect-watch-overlay'));
 }
-function closeConnectWatch(){ document.getElementById('connect-watch-overlay').classList.remove('overlay-open'); setTimeout(maybeStartTour, 600); }
-// Después de crear la cuenta: si todavía no hay ningún reloj/app conectado, se ofrece conectarlo (una sola vez).
-// (state.historyImportPrompted conserva su nombre: es el aviso de "ya se ofreció" que las cuentas existentes ya tienen guardado.)
-function maybeOpenConnectWatch(){
-  if(!state || state.historyImportPrompted) return;
-  state.historyImportPrompted = true;
-  persist();
-  const anyConn = Object.values(deviceConnections || {}).some(Boolean) || !!state.healthConnectConnected;
-  if(!anyConn) openConnectWatch();
+async function obRefreshConnections(){
+  try{
+    invalidateServerConnections();
+    const srv = await fetchServerConnections();
+    if(srv) ['strava','polar','wahoo','coros','suunto','garmin'].forEach(b => { if(typeof srv[b] === 'boolean') deviceConnections[b] = srv[b]; });
+  }catch(e){ /* sin red: se queda lo que había */ }
+  refreshObConnectRows();
 }
 const CUP_SVG = '<svg viewBox="0 0 48 52" aria-hidden="true"><path class="cup-handle" d="M13 9H7v4a7 7 0 0 0 7 7M35 9h6v4a7 7 0 0 1-7 7"/><path class="cup-body" d="M13 5h22v15a11 11 0 0 1-22 0z"/><path class="cup-shine" d="M17 9v10a7 7 0 0 0 3 5.6"/><polygon class="cup-star" points="24,11 25.6,15.2 30,15.4 26.5,18.1 27.7,22.4 24,19.9 20.3,22.4 21.5,18.1 18,15.4 22.4,15.2"/><rect class="cup-stem" x="21" y="31" width="6" height="7"/><rect class="cup-base" x="15" y="38" width="18" height="5" rx="2"/><rect class="cup-base" x="12" y="43" width="24" height="5" rx="2"/></svg>';
 function renderPersonalRecordsCard(){
