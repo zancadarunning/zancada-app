@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T03:04:22Z';
+const APP_VERSION = '2026-11-02T03:12:34Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6416,7 +6416,62 @@ function computeActualWeeklyKmAvg(weeks, requireFull){
   if(requireFull && count < weeks) return null;
   return count>0 ? sum/count : null;
 }
-function computeWeekAdjustment(plan){
+/* ===== Adaptación por ejecución: lo que se hizo de verdad (ritmo y pulso por tramo) además de lo que la persona califica =====
+   Todo es código determinista sobre las carreras de la propia semana (evaluateRunSteps): nada va a una IA (licencia de Garmin, sección 15.11) y las carreras de Strava no entran.
+   Fase 1 (OBJ_ADJUST_APPLY = false): solo avisa qué se notó. Fase 2 (true): además mueve el volumen de la semana que sigue, con tope y sin recortar dos semanas seguidas por esto. */
+const OBJ_ADJUST_APPLY = false;
+const OBJ_FADE_PCT = 0.06;        // última repetición >= 6 % más lenta que la primera = se fue aflojando
+const OBJ_CLEAN_PCT = 0.03;       // diferencia chica = repeticiones parejas
+const OBJ_HR_SHARE = 0.4;         // pulso por encima de la zona en el 40 % o más de las repeticiones
+const OBJ_MIN_SESSIONS = 2;       // evidencia mínima: dos sesiones evaluadas
+const OBJ_FACTOR_MIN = 0.85, OBJ_FACTOR_MAX = 1.05;
+function weekExecutionSignals(plan, weekStart){
+  const out = {qualityEvaluated:0, strain:0, clean:0, easyEvaluated:0, easyHard:0};
+  if(!plan || !weekStart) return out;
+  plan.forEach((d, i) => {
+    if(!d || d.status !== 'done' || d.linkedRunId == null || !(d.dist > 0)) return;
+    const run = (state.runs || []).find(r => String(r.id) === String(d.linkedRunId));
+    if(!run || run.source === 'strava') return;
+    let ev = null;
+    try{ ev = evaluateRunSteps(run, planStepsFromPayload(watchDayPayload(d, addDaysToIsoLocal(weekStart, i))), state.profile && state.profile.hrZones); }catch(e){ ev = null; }
+    if(!ev) return;
+    const s = ev.summary;
+    if(['intervals','hills','fartlek'].includes(d.typeKey)){
+      if(s.deltaPct == null) return;   // menos de 3 repeticiones medibles: poca evidencia
+      const fade = s.deltaPct >= OBJ_FADE_PCT;
+      const hrHigh = s.workJudged >= 3 && s.workHigh / s.workJudged >= OBJ_HR_SHARE;
+      out.qualityEvaluated++;
+      if(fade || hrHigh) out.strain++;
+      else if(s.deltaPct < OBJ_CLEAN_PCT) out.clean++;
+    } else if(['tempo','progression'].includes(d.typeKey)){
+      if(!s.mainJudged) return;
+      out.qualityEvaluated++;
+      if(s.mainHigh) out.strain++; else out.clean++;
+    } else if(['easy','long'].includes(d.typeKey)){
+      if(!s.mainJudged) return;
+      out.easyEvaluated++;
+      if(s.mainHigh) out.easyHard++;
+    }
+  });
+  return out;
+}
+// base: el factor que ya salió de las calificaciones y los saltos. apply: si además se mueve el volumen. cutBlocked: la semana actual ya fue un recorte por esto.
+function objectiveAdjustment(sig, baseFactor, apply, cutBlocked){
+  const res = {factor: baseFactor, kind: null, n: 0, cut: false};
+  if(sig.strain >= OBJ_MIN_SESSIONS){
+    res.kind = 'strain'; res.n = sig.strain;
+    if(apply && !cutBlocked){ res.factor = baseFactor * 0.92; res.cut = true; }
+  } else if(sig.easyHard >= 2){
+    res.kind = 'easy'; res.n = sig.easyHard;   // solo aviso: salir más fuerte en el rodaje no se arregla recortando km
+  } else if(sig.qualityEvaluated >= OBJ_MIN_SESSIONS && sig.clean === sig.qualityEvaluated && baseFactor >= 1){
+    res.kind = 'good'; res.n = sig.clean;
+    if(apply) res.factor = baseFactor * 1.03;
+  }
+  if(apply && res.kind) res.factor = Math.min(OBJ_FACTOR_MAX, Math.max(OBJ_FACTOR_MIN, res.factor));
+  res.factor = Math.round(res.factor * 1000) / 1000;
+  return res;
+}
+function computeWeekAdjustment(plan, opts){
   // Mismo criterio de siempre (antes vivía adentro de checkWeekRollover): si calificaste mal
   // o saltaste 2+ sesiones, baja un poco el volumen; si calificaste excelente sin ningún "mal",
   // lo sube un poco. Separado en su propia función para poder usarlo también al PREVISUALIZAR
@@ -6427,9 +6482,19 @@ function computeWeekAdjustment(plan){
   const badCount = rated.filter(d=>d.rating==='mal').length;
   const excellentCount = rated.filter(d=>d.rating==='excelente').length;
   const skippedCount = plan.filter(d=>d.status==='skipped').length;
-  if(badCount>=2 || skippedCount>=2) return {factor:0.9, note:t('coach_week_adjusted_down')};
-  if(excellentCount>=3 && badCount===0 && skippedCount===0) return {factor:1.05, note:t('coach_week_adjusted_up')};
-  return {factor:1, note:null};
+  let base;
+  if(badCount>=2 || skippedCount>=2) base = {factor:0.9, note:t('coach_week_adjusted_down')};
+  else if(excellentCount>=3 && badCount===0 && skippedCount===0) base = {factor:1.05, note:t('coach_week_adjusted_up')};
+  else base = {factor:1, note:null};
+  if(plan !== state.plan) return base;   // la ejecución solo se mira sobre la semana en curso
+  let sig;
+  try{ sig = weekExecutionSignals(plan, state.weekStart); }catch(e){ return base; }
+  const apply = opts && opts.apply != null ? !!opts.apply : OBJ_ADJUST_APPLY;
+  const obj = objectiveAdjustment(sig, base.factor, apply, !!state.weekStart && state.objCutAppliedTo === state.weekStart);
+  if(!obj.kind) return base;
+  const applied = apply && obj.factor !== base.factor;
+  return {factor: obj.factor, note: base.note, objKind: obj.kind, objCut: obj.cut,
+    objNote: t('obj_note_' + obj.kind + (applied ? '_applied' : ''), {n: obj.n})};
 }
 function getNextWeekPlan(){
   // La semana que sigue a la actual: se calcula con el mismo ajuste automático que se aplicaría
@@ -6661,7 +6726,7 @@ function checkWeekRollover(){
     if(!state.planHistory) state.planHistory = [];
     const prevMonday = new Date(state.weekStart || currentMonday);
     const diffWeeks = Math.max(1, Math.round((new Date(currentMonday) - prevMonday)/(7*86400000)));
-    let adjustNote = null, recapMsg = null, goalUpsellMsg = null, breakMsg = null, breakReset = false;
+    let adjustNote = null, objNote = null, recapMsg = null, goalUpsellMsg = null, breakMsg = null, breakReset = false;
     let promotedPlan = null, promotedWeekNumber = (state.weekNumber||1) + diffWeeks, promotedWeekStart = currentMonday;
     const breakAdj = (state.breakAdjLastRunMs && state.breakAdjLastRunMs === lastRunTimeMs()) ? null : computeReturnFromBreakAdjustment(detectTrainingGapWeeks(state.weekStart));
     // techo de v4 vencido: pasa al corrimiento de la curva antes de armar la semana nueva (ver expireLegacyCurveCap)
@@ -6700,6 +6765,8 @@ function checkWeekRollover(){
           adjustNote = adj.note;
           adjustedDown = adj.factor < 1;
         }
+        if(adj.objNote) objNote = adj.objNote;
+        if(adj.objCut) state.objCutAppliedTo = promotedWeekStart;   // esa semana ya es un recorte por ejecución: la siguiente no se vuelve a recortar por lo mismo
       }
       // checkGoalUpsell() sugiere pasar a un objetivo más exigente -- pero se puede cumplir
       // el plan casi entero (streak sigue en pie, metGoal en buildWeeklyRecapMessage solo
@@ -6740,8 +6807,9 @@ function checkWeekRollover(){
     if(recapMsg) state.chat.push({role:'coach', text: recapMsg, ts:Date.now(), noAi:true});   // noAi: lleva km de la semana (pueden ser de Strava) y NO se reenvía a la IA como historial
     if(breakMsg) state.chat.push({role:'coach', text: breakMsg, ts:Date.now()});
     if(adjustNote) state.chat.push({role:'coach', text: adjustNote, ts:Date.now()});
+    if(objNote) state.chat.push({role:'coach', text: objNote, ts:Date.now(), noAi:true});   // noAi: sale de carreras (posiblemente de Garmin) y NO se reenvía a la IA como historial
     if(goalUpsellMsg) state.chat.push({role:'coach', text: goalUpsellMsg, ts:Date.now()});
-    if(recapMsg || breakMsg || adjustNote || goalUpsellMsg) renderChat();
+    if(recapMsg || breakMsg || adjustNote || objNote || goalUpsellMsg) renderChat();
     persist();
   }
 }
@@ -15652,7 +15720,14 @@ function evaluateRunSteps(run, plan, zones){
     const paces = works.map(x => x.paceMin);
     summary.spreadSec = Math.round((Math.max(...paces) - Math.min(...paces)) * 60);
     summary.deltaSec = Math.round((paces[paces.length-1] - paces[0]) * 60);   // positivo = la última más lenta que la primera
+    summary.deltaPct = (paces[paces.length-1] - paces[0]) / paces[0];
   }
+  const workJudged = rows.filter(x => x.kind === 'work' && x.hrStatus);
+  summary.workJudged = workJudged.length;
+  summary.workHigh = workJudged.filter(x => x.hrStatus === 'high').length;
+  const mainRow = rows.find(x => x.kind === 'main' && x.hrStatus);
+  summary.mainJudged = mainRow ? 1 : 0;
+  summary.mainHigh = mainRow && mainRow.hrStatus === 'high' ? 1 : 0;
   const judged = rows.filter(x => x.hrStatus);
   summary.judged = judged.length;
   summary.high = judged.filter(x => x.hrStatus === 'high').length;
