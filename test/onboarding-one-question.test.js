@@ -107,3 +107,12 @@ test('conectar un reloj sale a la página de la marca: las respuestas se guardan
   assert.ok(app.includes('obClearDraft();\n  enterApp();') || app.includes('obClearDraft();\r\n  enterApp();'), 'al terminar se borra');
   assert.ok(app.includes('async function logout(){\n  obClearDraft();') || app.includes('async function logout(){\r\n  obClearDraft();'), 'al cerrar sesión también');
 });
+
+test('el botón principal del inicio no pierde su estilo: los selectores compartidos con la pantalla de consentimientos llevan el mismo estado/pseudo-elemento en cada parte', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').split(String.fromCharCode(13)).join('');
+  // un reemplazo mal hecho dejó "#onboard .ob-cta, #consent-modal .ob-cta:disabled{opacity:.34}": el botón de TODO el inicio quedaba casi transparente (y el ::before, pegado arriba)
+  assert.ok(!/#onboard \.ob-cta, #consent-modal \.ob-cta[:]/.test(css), 'cada parte del selector lleva su pseudo/estado');
+  for (const tail of ['::before', ':active:not(:disabled)', ':disabled']) {
+    assert.ok(css.includes('#onboard .ob-cta' + tail + ', #consent-modal .ob-cta' + tail + '{'), tail);
+  }
+});

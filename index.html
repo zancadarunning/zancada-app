@@ -2755,9 +2755,9 @@
 /* botón principal: píldora con reflejo; texto "Omitir" suave debajo */
 #onboard .ob-cta, #consent-modal .ob-cta{width:100%; height:58px; border:0; border-radius:999px; font-size:16.5px; font-weight:700; letter-spacing:.005em; color:var(--g-cta-text); position:relative; overflow:hidden;
   background:linear-gradient(180deg, var(--g-cta-top), var(--g-cta-bot)); box-shadow:inset 0 1px 0 var(--g-sheen), 0 14px 28px -12px rgba(0,0,0,.55); transition:transform .12s ease, opacity .18s ease;}
-#onboard .ob-cta, #consent-modal .ob-cta::before{content:''; position:absolute; inset:0 0 52% 0; border-radius:inherit; pointer-events:none; background:linear-gradient(180deg, var(--g-sheen), transparent);}
-#onboard .ob-cta, #consent-modal .ob-cta:active:not(:disabled){transform:scale(.98);}
-#onboard .ob-cta, #consent-modal .ob-cta:disabled{opacity:.34; box-shadow:inset 0 1px 0 var(--g-sheen);}
+#onboard .ob-cta::before, #consent-modal .ob-cta::before{content:''; position:absolute; inset:0 0 52% 0; border-radius:inherit; pointer-events:none; background:linear-gradient(180deg, var(--g-sheen), transparent);}
+#onboard .ob-cta:active:not(:disabled), #consent-modal .ob-cta:active:not(:disabled){transform:scale(.98);}
+#onboard .ob-cta:disabled, #consent-modal .ob-cta:disabled{opacity:.34; box-shadow:inset 0 1px 0 var(--g-sheen);}
 #onboard .ob-skip, #consent-modal .ob-skip{background:none; border:0; color:var(--mist); font-size:15px; font-weight:600; padding:13px; align-self:center;}
 #onboard .btn-reason{text-align:center; margin:8px 0 0;}
 
