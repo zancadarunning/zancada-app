@@ -18,6 +18,8 @@ const { removeAllZancada } = require('./_lib/wahoo-plans-sync');
 const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { issueDeleteCode, consumeDeleteCode } = require('./_lib/delete-code');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
+const { ensureFreshGarminToken, deleteGarminRegistration } = require('./_lib/garmin-activity-helpers');
+const { removeAllGarminWorkouts } = require('./_lib/garmin-plan-sync');
 const { withinDailyCap } = require('./_lib/daily-cap');
 const { revokeStravaAccess } = require('./_lib/strava-revoke');
 
@@ -142,6 +144,19 @@ module.exports = withSentry(async (req, res) => {
       }
     } catch (e) { console.error('delete-account: coros revoke failed', e); }
 
+    // Garmin (acuerdo del Garmin Connect Developer Program): al borrar la cuenta o los datos hay que avisarle con DELETE user/registration, y se sacan los entrenamientos que Zancada había mandado.
+    try {
+      const gRes = await fetch(`${base}/rest/v1/garmin_connections?user_id=eq.${userId}&select=user_id,access_token,refresh_token,expires_at,refresh_expires_at`, { headers });
+      const gRows = gRes.ok ? await gRes.json() : [];
+      if (Array.isArray(gRows) && gRows.length) {
+        const accessToken = await ensureFreshGarminToken(base, headers, gRows[0]);
+        if (accessToken) {
+          try { await removeAllGarminWorkouts(base, headers, userId, accessToken); } catch (e) { console.error('delete-account: garmin workouts cleanup failed', e && e.message); }
+          await deleteGarminRegistration(accessToken);
+        }
+      }
+    } catch (e) { console.error('delete-account: garmin revoke failed', e && e.message); }
+
     if (wipeDataOnly) {
       // Borra TODO lo de la persona (conexiones con sus tokens, notificaciones, contadores, lo social y el estado de la app), sin tocar
       // su usuario de acceso. Cada borrado se verifica: si algo falla se responde error y la app NO le dice al usuario que se borró.
@@ -154,7 +169,7 @@ module.exports = withSentry(async (req, res) => {
       };
       // chat_usage y sync_cooldowns NO se borran acá: son solo contadores de uso (cuántos mensajes al coach hoy, cuándo fue la última sincronización) y existen para frenar el abuso;
       // borrarlos permitía reiniciar el tope diario del coach y el enfriamiento de la sincronización con "Borrar mis datos". Se borran igual al eliminar la cuenta entera (más abajo).
-      for (const t of ['strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'suunto_connections', 'push_subscriptions',
+      for (const t of ['strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'suunto_connections', 'garmin_connections', 'push_subscriptions',
         'sent_notifications', 'known_devices']) {
         await wipe(t, `user_id=eq.${userId}`);
       }

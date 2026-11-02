@@ -3651,6 +3651,7 @@
     <button class="hi-row" data-on-click="closeHistoryImport(); connectWahoo()"><span class="brand-logo-chip"><img src="img/brand-logos/wahoo.svg" alt="Wahoo"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
     <button class="hi-row" data-on-click="closeHistoryImport(); connectSuunto()"><span class="brand-logo-chip brand-logo-plate"><img class="brand-logo-color" src="img/brand-logos/suunto.png" alt="Suunto" width="600" height="213"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
     <button class="hi-row" data-on-click="closeHistoryImport(); connectCoros()"><span class="brand-logo-chip"><img src="img/brand-logos/coros.png" alt="COROS"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
+    <button class="hi-row" data-on-click="closeHistoryImport(); connectGarmin()"><span class="brand-logo-chip" style="gap:10px;"><img class="brand-logo-color" src="img/brand-logos/garmin.png" alt="" width="26" height="26" style="height:26px; width:26px; max-width:26px; border-radius:7px;"><span style="font-size:14.5px; font-weight:700; color:var(--chalk);">Garmin Connect</span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
     <button class="hi-row" id="hi-hc" style="display:none;" data-on-click="closeHistoryImport(); connectHealthConnect()"><span class="brand-logo-chip" style="gap:10px;"><img class="brand-logo-color" src="img/brand-logos/healthconnect.png" alt="" style="height:26px; max-width:26px; border-radius:7px;"><span style="font-size:14.5px; font-weight:700;">Health Connect</span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>
     <button class="small-link" style="display:block; margin:20px auto 0;" data-on-click="closeHistoryImport()" data-i18n="hist_import_skip"></button>
   </div>
@@ -3712,6 +3713,19 @@
           </ul>
         </div>
       
+        </div>
+      </div>
+
+      <div class="conn-row">
+        <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" data-on-click="toggleConnRow(this)">
+          <span class="brand-logo-chip" style="gap:10px;"><img class="brand-logo-color" src="img/brand-logos/garmin.png" alt="" width="26" height="26" style="height:26px; width:26px; max-width:26px; border-radius:7px;"><span style="font-size:14.5px; font-weight:700; color:var(--chalk);">Garmin Connect</span></span>
+          <span id="garmin-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
+        <span class="icon-sq conn-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></div>
+        <div class="conn-body">
+        <p class="muted" style="margin-bottom:8px;" data-i18n="perfil_garmin_desc"></p>
+        <p class="muted" id="garmin-perm-note" style="margin-bottom:8px; display:none;"></p>
+        <button class="btn btn-outline btn-sm" id="garmin-connect-btn" style="margin-top:10px; width:100%;" data-on-click="connectGarmin()"></button>
+        <p class="muted" style="margin:12px 0 0; font-size:12px;" data-i18n="garmin_not_for_ai"></p>
         </div>
       </div>
 

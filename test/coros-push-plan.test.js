@@ -221,7 +221,7 @@ test('cableado: topes de frecuencia, memoria de ids en el servidor y la app lo p
   assert.match(s, /checkSyncCooldown\(base, headers, userId, 'coros-plan', 300000, \{ failClosed: true \}\)/);
   assert.match(s, /withinDailyCap\(base, headers, 'coros-plan', userId, 24/);
   const app = read('app.js');
-  assert.match(app, /function scheduleWatchSync\(\)\{ scheduleSuuntoSync\(\); scheduleWahooSync\(\); scheduleCorosSync\(\); \}/);
+  assert.match(app, /function scheduleWatchSync\(\)\{ scheduleSuuntoSync\(\); scheduleWahooSync\(\); scheduleCorosSync\(\); scheduleGarminSync\(\); \}/);
   assert.match(app, /async function syncPlanToCoros\(force\)\{/);
   assert.match(app, /function updateCorosStaleNote\(\)\{/);
   assert.match(read('index.html'), /id="coros-stale-note"/);

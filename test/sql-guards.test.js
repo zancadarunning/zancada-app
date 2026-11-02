@@ -16,7 +16,7 @@ const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
 // Tablas que se crearon a mano en Supabase (no tienen CREATE TABLE en sql/) y guardan datos de personas.
 const HAND_MADE_USER_TABLES = ['app_state', 'push_subscriptions', 'strava_connections'];
 // Tablas que el navegador consulta directo con la sesión de la persona (`.from('...')` en app.js). Cada una necesita RLS por usuario.
-const CLIENT_TABLES = ['app_state', 'push_subscriptions', 'strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'suunto_connections'];
+const CLIENT_TABLES = ['app_state', 'push_subscriptions', 'strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'suunto_connections', 'garmin_connections'];
 
 function createdTables() {
   const out = [];
