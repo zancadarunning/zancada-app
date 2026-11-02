@@ -52,18 +52,18 @@ test('getWeekData: la semana pasada se busca por fecha de inicio, no por número
   assert.equal(app.getWeekData(-2).exists, false, 'una semana sin entrada no inventa otra');
 });
 
-test('entrada en calor: rodajes 3+5 min, sesiones de calidad 3+10 min, vuelta a la calma de 5 min en todas', () => {
+test('calentamiento: 5 min en rodajes, 10 min en sesiones de calidad (sin movilidad articular aparte), vuelta a la calma de 5 min en todas', () => {
   const app = loadApp();
   const easy = app.planLabel({ day: 'tue', typeKey: 'easy', dist: 6, zone: 2 }).desc;
-  assert.match(easy, /3 minutos de movimiento articular/);
-  assert.match(easy, /5 minutos de trote muy suave o caminata/);
+  assert.match(easy, /Calentamiento: 5 minutos de trote muy suave o caminata/);
+  assert.doesNotMatch(easy, /articular/);
   assert.match(easy, /5 minutos de vuelta a la calma/);
   assert.doesNotMatch(easy, /10 minutos/);
   const tempo = app.planLabel({ day: 'thu', typeKey: 'tempo', dist: 8, zone: 4 }).desc;
-  assert.match(tempo, /3 minutos de movimiento articular/);
-  assert.match(tempo, /10 minutos de trote suave/);
+  assert.match(tempo, /Calentamiento: 10 minutos de trote suave/);
+  assert.doesNotMatch(tempo, /articular/);
   assert.match(tempo, /5 minutos de vuelta a la calma/);
-  assert.equal(app.planLabel({ day: 'mon', typeKey: 'rest', dist: 0 }).desc.includes('movimiento articular'), false, 'el descanso no lleva calentamiento');
+  assert.equal(app.planLabel({ day: 'mon', typeKey: 'rest', dist: 0 }).desc.includes('Calentamiento:'), false, 'el descanso no lleva calentamiento');
 });
 
 test('Health Connect: al cargar carreras nuevas muestra el cartel "Cargamos N entrenamientos" (no hay push porque no pasa por el servidor)', async () => {

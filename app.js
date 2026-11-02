@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T14:04:59Z';
+const APP_VERSION = '2026-11-02T14:18:05Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2599,8 +2599,8 @@ function watchDayPayload(d, date){
     date, name: lbl.type, typeKey: d.typeKey, zone: d.zone||null, distKm: d.dist,
     durMin: planDurationMin(d),
     desc: lbl.desc, interval: iv,
-    // los mismos minutos que dice el texto de la sesión (planLabel): calidad = 3 de movilidad + 10 de trote suave, rodajes y tiradas = 3 + 5; vuelta a la calma 5
-    warmupMin: d.dist > 0 ? (['intervals','tempo','fartlek','hills','progression','test'].includes(d.typeKey) ? 13 : 8) : 0,
+    // los mismos minutos que dice el texto de la sesión (planLabel): calentamiento de 10 min en las sesiones de calidad y de 5 en rodajes y tiradas; vuelta a la calma 5
+    warmupMin: d.dist > 0 ? (['intervals','tempo','fartlek','hills','progression','test'].includes(d.typeKey) ? 10 : 5) : 0,
     cooldownMin: d.dist > 0 ? 5 : 0,
     repSec: repSecX || ((d.interval && d.interval.repSec>0) ? Math.round(d.interval.repSec) : ((isTimeMode() && d.interval && d.interval.repMeters) ? Math.round(repDurationSec(d.interval.repMeters)) : 0)),
     restSec: recSecX || ((d.interval && d.interval.recSec>0) ? Math.round(d.interval.recSec) : 0),
@@ -2968,7 +2968,7 @@ async function syncPlanToGarmin(force){
     // Garmin recibe ESTA semana y la PRÓXIMA (hasta 14 sesiones): deja programar con anticipación y borrar/mover, y así un lunes sin abrir la app no deja el reloj sin entrenamientos.
     const { all: win, weekStart } = watchWindow();
     const zones = state.profile.hrZones;
-    const labels = { mobility:t('garmin_step_mobility'), jog:t('garmin_step_jog') };
+    const labels = { jog:t('garmin_step_jog') };
     const ctx = JSON.stringify([zones, labels, 'garmin2']);   // cambiar la versión vuelve a mandar todo
     const sigOf = d => suuntoHash(JSON.stringify(d) + ctx);
     let dirty = false;
@@ -8327,8 +8327,8 @@ function planLabel(d){
   // planLabelBody() nunca la agrega (ver su comentario) para que quien necesite el texto sin
   // envolver (applyMoveSession/applyVolumeAdjust, al congelar un día del algoritmo) lo pueda
   // pedir sin duplicarla en el próximo render.
-  // Calentamiento según la sesión: rodajes y tiradas, 3 min de movilidad + 5 min muy suave (el primer tramo ya calienta); sesiones de calidad (series, tempo, cuestas,
-  // fartlek, progresivo, test) 3 min de movilidad + 10 min de trote suave. La vuelta a la calma es de 5 min en todas.
+  // Calentamiento según la sesión: rodajes y tiradas, 5 min muy suave (el primer tramo ya calienta); sesiones de calidad (series, tempo, cuestas,
+  // fartlek, progresivo, test) 10 min de trote suave. Sin movilidad articular aparte. La vuelta a la calma es de 5 min en todas.
   const qualityTypes = ['intervals', 'tempo', 'fartlek', 'hills', 'progression', 'test'];
   const warmKey = qualityTypes.includes(d.typeKey) ? 'desc_warmup_quality' : 'desc_warmup_prefix';
   const desc = d.dist>0 ? `${t(warmKey)}\n${lbl.desc}\n${t('desc_cooldown_suffix')}` : lbl.desc;
@@ -15871,7 +15871,7 @@ function planStepsFromPayload(p){
     else if(!byTime) steps.push({kind:'main', meters:distM, zone});
     else steps.push({kind:'main', sec:totalSec, zone});
   }
-  if(cool) steps.push({kind:'cooldown', sec:cool, zone:2});
+  if(cool) steps.push({kind:'cooldown', sec:cool, zone:1});   // vuelta a la calma en zona 1, trotando o caminando
   return {steps, checkFaster: isRepeat && p.typeKey !== 'hills'};
 }
 function evaluateRunSteps(run, plan, zones){
@@ -15925,7 +15925,7 @@ function evaluateRunSteps(run, plan, zones){
     const hr = hrBetween(cursor, end);
     let hrStatus = null;
     const z = zones && zones[s.zone];
-    if(z && hr != null && ['warmup','cooldown','main','work'].includes(s.kind)){
+    if(z && hr != null && ['warmup','main','work'].includes(s.kind)){   // la vuelta a la calma no se juzga por pulso: tarda minutos en bajar después del esfuerzo
       if(hr > z.max + 3) hrStatus = 'high';
       else if(hr < z.min - 3 && sec >= 150 && (s.kind === 'main' || s.kind === 'work')) hrStatus = 'low';
       else hrStatus = 'ok';

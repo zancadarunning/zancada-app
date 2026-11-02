@@ -37,14 +37,9 @@ function hrTarget(zones, zone) {
   return { targetType: 'OPEN' };
 }
 
-// El calentamiento de la app son 3 min de movilidad articular + trote suave (warmMin en total). En el reloj van como dos pasos: la movilidad no lleva objetivo de pulso (parado el pulso está bajo y el reloj avisaría "demasiado bajo") y el trote sí.
-const MOBILITY_MIN = 3;
+// El calentamiento de la app (warmMin: 10 en sesiones de calidad, 5 en rodajes y tiradas) es un solo paso de trote suave con objetivo de pulso fácil; sin movilidad aparte.
 function warmupSteps(next, warmMin, easy, labels) {
-  const out = [];
-  const mobility = warmMin > MOBILITY_MIN + 1 ? MOBILITY_MIN : 0;
-  if (mobility) out.push(timeStep(next(), 'WARMUP', mobility * 60, { targetType: 'OPEN' }, (labels && labels.mobility) || 'Movilidad articular'));
-  out.push(timeStep(next(), 'WARMUP', (warmMin - mobility) * 60, easy, (labels && labels.jog) || 'Trote suave'));
-  return out;
+  return [timeStep(next(), 'WARMUP', warmMin * 60, easy, (labels && labels.jog) || 'Trote suave')];
 }
 
 const timeStep = (order, intensity, seconds, target, description) => step(order, Object.assign({ intensity, durationType: 'TIME', durationValue: Math.max(1, Math.round(seconds)), description: description || null }, target));

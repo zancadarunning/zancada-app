@@ -44,7 +44,7 @@ test('watchDayPayload: una cuesta que solo tiene texto igual manda las repeticio
   assert.equal(p.interval.reps, 10);
   assert.equal(p.repSec, 60);
   assert.equal(p.restSec, 90);
-  assert.equal(p.warmupMin, 13, 'calidad: 3 de movilidad + 10 de trote');
+  assert.equal(p.warmupMin, 10, 'calidad: 10 min de calentamiento');
   assert.equal(p.cooldownMin, 5);
 });
 

@@ -38,8 +38,11 @@ test('la navegación salta los pasos que no aplican y la barra cuenta solo los q
 test('"¿Cómo conociste Zancada?" se guarda en el perfil solo con valores de la lista, y no hay "Cerrar sesión" arriba del inicio', () => {
   assert.match(app, /const referral = document\.querySelector\('#ob-referral \.choice\.active'\)\?\.dataset\.v \|\| null;/);
   assert.match(app, /state\.profile = \{email:pendingEmail, name, weight, height, birth, gender, referral,/);
-  const options = [...block.matchAll(/<div class="choice" data-v="([a-z]+)"[^>]*>[^<]*<\/div>/g)].map(m => m[1]);
-  for (const v of ['instagram', 'tiktok', 'youtube', 'google', 'facebook', 'x', 'reddit', 'store', 'friend', 'ai', 'other']) assert.ok(options.includes(v), v);
+  const refBlock = block.slice(block.indexOf('id="ob-referral"'), block.indexOf('data-step="18"'));
+  const options = [...refBlock.matchAll(/<div class="choice" data-v="([a-z]+)">(<svg.*?<\/svg>)+<span/g)].map(m => m[1]);
+  assert.deepEqual(options, ['instagram', 'tiktok', 'youtube', 'google', 'facebook', 'appstore', 'playstore', 'friend', 'ai', 'other'], 'App Store y Play Store separadas, sin Reddit ni X, cada opción con su logo');
+  assert.ok(!/reddit/i.test(block + app), 'Reddit ya no se ofrece');
+  assert.ok(!/<div class="choice" data-v="x">/.test(refBlock), 'X ya no se ofrece como red');
   assert.ok(!block.includes('confirmLogout'), 'sin cerrar sesión en el inicio');
 });
 
@@ -49,7 +52,7 @@ test('el vidrio del inicio respeta "reducir transparencia" y los dos temas; los 
   assert.match(html, /:root\[data-theme="light"\] #onboard/);
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
     const s = read('locales/' + l + '.js');
-    for (const k of ['ob_q_name', 'ob_q_body', 'ob_q_referral', 'ob_ref_store', 'ob_ref_friend', 'ob_ref_ai', 'ob_ref_other', 'ob_skip', 'ob_done_title', 'ob_done_lead']) assert.ok(s.includes(k + ':'), l + ' ' + k);
+    for (const k of ['ob_q_name', 'ob_q_body', 'ob_q_referral', 'ob_ref_friend', 'ob_ref_ai', 'ob_ref_other', 'ob_skip', 'ob_done_title', 'ob_done_lead']) assert.ok(s.includes(k + ':'), l + ' ' + k);
   }
 });
 
