@@ -95,8 +95,10 @@ test('notificaciones en el inicio: se pide el permiso sin doble cartel, la panta
 });
 
 test('conectar un reloj sale a la página de la marca: las respuestas se guardan en sessionStorage (solo esta cuenta y esta pestaña) y se retoma en la misma pantalla', () => {
-  assert.ok(app.includes('sessionStorage.setItem(OB_DRAFT_KEY'));
-  assert.ok(app.includes('d.uid !== currentUserId) return false'), 'solo la misma cuenta');
+  assert.ok(app.includes('sessionStorage.setItem(key, JSON.stringify(obCollectDraft()))'));
+  assert.ok(app.includes("OB_DRAFT_PREFIX + currentUserId"), 'solo la misma cuenta: el id va en la clave, no en el valor (CodeQL: clear-text-storage)');
+  assert.ok(!/uid: *currentUserId/.test(app.slice(app.indexOf('function obCollectDraft'), app.indexOf('function obSaveDraft'))), 'el id de la sesión no se guarda dentro del borrador');
+  assert.ok(app.includes('k.indexOf(OB_DRAFT_PREFIX) === 0'), 'al borrar se limpian todos los borradores');
   assert.ok(app.includes('if(obRestoreDraft()) obRefreshConnections()'), 'al volver, se retoma y se actualiza lo conectado');
   assert.ok(app.includes('.test(s)') && app.includes('{1,30}'), 'los deportes restaurados se validan (se usan para armar HTML)');
   assert.ok(app.includes('obClearDraft();\n  enterApp();') || app.includes('obClearDraft();\r\n  enterApp();'), 'al terminar se borra');

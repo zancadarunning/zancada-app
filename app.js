@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T13:54:37Z';
+const APP_VERSION = '2026-11-02T13:59:50Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -14308,22 +14308,30 @@ function dismissHistoryCalibration(){
 }
 /* ===== Notificaciones y reloj DENTRO del inicio (pantallas 18 y 19, antes de "Todo listo") ===== */
 // Conectar un reloj saca a la persona a la página de la marca y vuelve a la app: las respuestas se guardan en sessionStorage (solo esta pestaña, se borra al cerrarla o al terminar) para retomar en la misma pantalla.
-const OB_DRAFT_KEY = 'zc_ob_draft';
+// La cuenta va en la CLAVE (zc_ob_draft_<id>), no dentro del valor guardado: así el borrador solo se retoma con la misma cuenta y no se guarda ningún dato que venga del inicio de sesión.
+const OB_DRAFT_PREFIX = 'zc_ob_draft_';
+function obDraftKey(){ return currentUserId ? OB_DRAFT_PREFIX + currentUserId : null; }
 function obCollectDraft(){
   const val = id => (document.getElementById(id) || {}).value || '';
   const choice = sel => (document.querySelector(sel + ' .choice.active') || {dataset:{}}).dataset.v || null;
   const pills = sel => [...document.querySelectorAll(sel + ' .day-pill.active')].map(e => e.dataset.v);
-  return { v:1, uid: currentUserId, step: obCurrentStep, name: val('ob-name'), runnertype: choice('#ob-runnertype'), currentkm: val('ob-currentkm'), returning: choice('#ob-returning'),
+  return { v:1, step: obCurrentStep, name: val('ob-name'), runnertype: choice('#ob-runnertype'), currentkm: val('ob-currentkm'), returning: choice('#ob-returning'),
     refDist: val('ob-refrace-dist'), refMin: val('ob-refrace-min'), sports: obSelectedSports.slice(), sportDays: pills('#ob-sport-days'), terrain: choice('#ob-terrain'), trainby: choice('#ob-trainby'),
     days: pills('#ob-days'), availmin: val('ob-availmin'), goal: val('ob-goal'), racedate: val('ob-racedate'), gender: choice('#ob-gender'), pregnancy: choice('#ob-pregnancy'),
     birth: val('ob-birth'), weight: val('ob-weight'), height: val('ob-height'), health: val('ob-healthnotes'), referral: choice('#ob-referral') };
 }
-function obSaveDraft(){ try{ sessionStorage.setItem(OB_DRAFT_KEY, JSON.stringify(obCollectDraft())); }catch(e){} }
-function obClearDraft(){ try{ sessionStorage.removeItem(OB_DRAFT_KEY); }catch(e){} }
+function obSaveDraft(){ const key = obDraftKey(); if(!key) return; try{ sessionStorage.setItem(key, JSON.stringify(obCollectDraft())); }catch(e){} }
+function obClearDraft(){
+  try{
+    for(let i = sessionStorage.length - 1; i >= 0; i--){ const k = sessionStorage.key(i); if(k && k.indexOf(OB_DRAFT_PREFIX) === 0) sessionStorage.removeItem(k); }
+  }catch(e){}
+}
 function obRestoreDraft(){
+  const key = obDraftKey();
+  if(!key) return false;
   let d = null;
-  try{ d = JSON.parse(sessionStorage.getItem(OB_DRAFT_KEY) || 'null'); }catch(e){ d = null; }
-  if(!d || d.v !== 1 || !currentUserId || d.uid !== currentUserId) return false;
+  try{ d = JSON.parse(sessionStorage.getItem(key) || 'null'); }catch(e){ d = null; }
+  if(!d || d.v !== 1) return false;
   const setVal = (id, v) => { const el = document.getElementById(id); if(el && typeof v === 'string') el.value = v; };
   const setChoice = (sel, v) => { if(typeof v !== 'string') return; document.querySelectorAll(sel + ' .choice').forEach(c => c.classList.toggle('active', c.dataset.v === v)); };
   const setPills = (sel, arr) => { const ok = Array.isArray(arr) ? arr.filter(x => DAY_KEYS.includes(x)) : []; document.querySelectorAll(sel + ' .day-pill').forEach(p => p.classList.toggle('active', ok.includes(p.dataset.v))); };
