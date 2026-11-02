@@ -2657,26 +2657,26 @@
 /* ===== Inicio para usuarios nuevos: una pregunta por pantalla, vidrio líquido sobre un fondo suave (2026-11-02) =====
    El vidrio se arma con relleno translúcido + reflejo en el borde de arriba (siempre); el desenfoque de lo que hay detrás (backdrop-filter) se suma solo donde el navegador lo soporta y no hay "reducir transparencia".
    Es una pantalla pasajera sobre un fondo fijo: no hay contenido que se desplace debajo, a diferencia de las barras siempre visibles (ver "Rendimiento de scroll"). */
-#onboard, #connect-watch-overlay, #session-sheet, #run-detail-content{
+#onboard, #connect-watch-overlay, #session-sheet, #notif-prompt-overlay, #run-detail-content{
   --g-fill:rgba(255,255,255,.07); --g-fill-on:rgba(214,255,63,.16); --g-edge-top:rgba(255,255,255,.2); --g-edge-bot:rgba(255,255,255,.04);
   --g-shadow:0 12px 30px -16px rgba(0,0,0,.85); --g-ring:var(--hivis); --g-ink:var(--chalk);
   --g-cta-top:#E6FF7A; --g-cta-bot:#C4EF1C; --g-cta-text:#101200; --g-sheen:rgba(255,255,255,.55);
   --g-bg:radial-gradient(70% 38% at 12% -4%, rgba(214,255,63,.17), transparent 62%), radial-gradient(60% 34% at 104% 16%, rgba(110,140,255,.13), transparent 62%), radial-gradient(80% 40% at 50% 112%, rgba(214,255,63,.07), transparent 60%), var(--asphalt);
 }
-:root[data-theme="light"] #onboard, :root[data-theme="light"] #connect-watch-overlay, :root[data-theme="light"] #session-sheet, :root[data-theme="light"] #run-detail-content{
+:root[data-theme="light"] #onboard, :root[data-theme="light"] #connect-watch-overlay, :root[data-theme="light"] #session-sheet, :root[data-theme="light"] #notif-prompt-overlay, :root[data-theme="light"] #run-detail-content{
   --g-fill:rgba(255,255,255,.66); --g-fill-on:rgba(255,255,255,.95); --g-edge-top:rgba(255,255,255,1); --g-edge-bot:rgba(24,28,48,.07);
   --g-shadow:0 12px 28px -16px rgba(30,40,90,.4); --g-ring:#0A0A0A; --g-ink:#101114;
   --g-cta-top:#2A2A30; --g-cta-bot:#0A0A0A; --g-cta-text:#FFFFFF; --g-sheen:rgba(255,255,255,.28);
   --g-bg:radial-gradient(70% 38% at 12% -4%, rgba(214,255,63,.42), transparent 62%), radial-gradient(60% 34% at 104% 16%, rgba(140,160,255,.3), transparent 62%), radial-gradient(80% 40% at 50% 112%, rgba(214,255,63,.2), transparent 60%), #F4F5FA;
 }
-@media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #onboard, :root:not([data-theme="dark"]) #connect-watch-overlay, :root:not([data-theme="dark"]) #session-sheet, :root:not([data-theme="dark"]) #run-detail-content{
+@media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #onboard, :root:not([data-theme="dark"]) #connect-watch-overlay, :root:not([data-theme="dark"]) #session-sheet, :root:not([data-theme="dark"]) #notif-prompt-overlay, :root:not([data-theme="dark"]) #run-detail-content{
   --g-fill:rgba(255,255,255,.66); --g-fill-on:rgba(255,255,255,.95); --g-edge-top:rgba(255,255,255,1); --g-edge-bot:rgba(24,28,48,.07);
   --g-shadow:0 12px 28px -16px rgba(30,40,90,.4); --g-ring:#0A0A0A; --g-ink:#101114;
   --g-cta-top:#2A2A30; --g-cta-bot:#0A0A0A; --g-cta-text:#FFFFFF; --g-sheen:rgba(255,255,255,.28);
   --g-bg:radial-gradient(70% 38% at 12% -4%, rgba(214,255,63,.42), transparent 62%), radial-gradient(60% 34% at 104% 16%, rgba(140,160,255,.3), transparent 62%), radial-gradient(80% 40% at 50% 112%, rgba(214,255,63,.2), transparent 60%), #F4F5FA;
 } }
 
-#onboard, #connect-watch-overlay, #session-sheet{background:var(--g-bg); padding-left:22px; padding-right:22px;}
+#onboard, #connect-watch-overlay, #session-sheet, #notif-prompt-overlay{background:var(--g-bg); padding-left:22px; padding-right:22px;}
 
 /* "Conectá tu reloj": título centrado, lista de integraciones de vidrio con "Conectar" a la derecha y la acción abajo */
 #connect-watch-overlay .cw-shell{display:flex; flex-direction:column; min-height:calc(100dvh - 56px - var(--safe-top) - var(--safe-bottom));}
@@ -2755,12 +2755,12 @@
 @media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #onboard .day-pill.active{color:#fff;} }
 
 /* botón principal: píldora con reflejo; texto "Omitir" suave debajo */
-#onboard .ob-cta, #connect-watch-overlay .ob-cta{width:100%; height:58px; border:0; border-radius:999px; font-size:16.5px; font-weight:700; letter-spacing:.005em; color:var(--g-cta-text); position:relative; overflow:hidden;
+#onboard .ob-cta, #connect-watch-overlay .ob-cta, #notif-prompt-overlay .ob-cta{width:100%; height:58px; border:0; border-radius:999px; font-size:16.5px; font-weight:700; letter-spacing:.005em; color:var(--g-cta-text); position:relative; overflow:hidden;
   background:linear-gradient(180deg, var(--g-cta-top), var(--g-cta-bot)); box-shadow:inset 0 1px 0 var(--g-sheen), 0 14px 28px -12px rgba(0,0,0,.55); transition:transform .12s ease, opacity .18s ease;}
-#onboard .ob-cta::before, #connect-watch-overlay .ob-cta::before{content:''; position:absolute; inset:0 0 52% 0; border-radius:inherit; pointer-events:none; background:linear-gradient(180deg, var(--g-sheen), transparent);}
-#onboard .ob-cta:active:not(:disabled), #connect-watch-overlay .ob-cta:active:not(:disabled){transform:scale(.98);}
-#onboard .ob-cta:disabled, #connect-watch-overlay .ob-cta:disabled{opacity:.34; box-shadow:inset 0 1px 0 var(--g-sheen);}
-#onboard .ob-skip{background:none; border:0; color:var(--mist); font-size:15px; font-weight:600; padding:13px; align-self:center;}
+#onboard .ob-cta::before, #connect-watch-overlay .ob-cta::before, #notif-prompt-overlay .ob-cta::before{content:''; position:absolute; inset:0 0 52% 0; border-radius:inherit; pointer-events:none; background:linear-gradient(180deg, var(--g-sheen), transparent);}
+#onboard .ob-cta:active:not(:disabled), #connect-watch-overlay .ob-cta:active:not(:disabled), #notif-prompt-overlay .ob-cta:active:not(:disabled){transform:scale(.98);}
+#onboard .ob-cta:disabled, #connect-watch-overlay .ob-cta:disabled, #notif-prompt-overlay .ob-cta:disabled{opacity:.34; box-shadow:inset 0 1px 0 var(--g-sheen);}
+#onboard .ob-skip, #notif-prompt-overlay .ob-skip{background:none; border:0; color:var(--mist); font-size:15px; font-weight:600; padding:13px; align-self:center;}
 #onboard .btn-reason{text-align:center; margin:8px 0 0;}
 
 /* pantalla final */
@@ -2809,6 +2809,16 @@
 .rd-score-num{font:800 34px/1 -apple-system,BlinkMacSystemFont,'SF Pro Display',Inter,system-ui,sans-serif;}
 .rd-score-label{margin:0 0 4px; font-size:20px; font-weight:700; color:var(--g-ink); text-transform:none; letter-spacing:0;}
 .rd-score-text{margin:0; font-size:13.5px; line-height:1.5; color:var(--mist);}
+
+/* Pestaña "Activá las notificaciones" (al crear la cuenta) */
+#notif-prompt-overlay .np-shell{display:flex; flex-direction:column; min-height:calc(100dvh - 56px - var(--safe-top) - var(--safe-bottom));}
+#notif-prompt-overlay .np-body{flex:1; display:flex; flex-direction:column; align-items:center; padding-top:clamp(24px,10vh,96px); text-align:center;}
+#notif-prompt-overlay .np-bell{width:92px; height:92px; border-radius:50%; display:grid; place-items:center; color:#101200; background:linear-gradient(180deg,#E6FF7A,#C4EF1C); box-shadow:inset 0 1px 0 rgba(255,255,255,.7), 0 18px 36px -14px rgba(196,239,28,.7);}
+#notif-prompt-overlay .np-title{margin:26px 0 0; font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text',Inter,system-ui,sans-serif; font-size:clamp(26px,7.6vw,32px); font-weight:700; line-height:1.14; letter-spacing:-.022em; text-transform:none; color:var(--g-ink);}
+#notif-prompt-overlay .np-lead{margin:12px auto 0; max-width:32ch; color:var(--mist); font-size:15px; line-height:1.5; text-wrap:pretty;}
+#notif-prompt-overlay .np-list{list-style:none; margin:28px 0 0; padding:0; width:100%; display:flex; flex-direction:column; gap:10px;}
+#notif-prompt-overlay .np-list li{padding:16px 18px; border-radius:20px; text-align:left; font-size:15px; font-weight:600; line-height:1.4; color:var(--g-ink); background:var(--g-fill); box-shadow:inset 0 1px 0 var(--g-edge-top), inset 0 -1px 0 var(--g-edge-bot), var(--g-shadow);}
+#notif-prompt-overlay .np-actions{display:flex; flex-direction:column; align-items:stretch; gap:4px; padding-top:20px; margin-top:auto;}
 
 /* ===== Vidrio líquido en lo que flota o es pasajero (2026-11-02) =====
    Barra de abajo: reflejo en el borde de arriba y de abajo, SIN desenfoque (está siempre a la vista y el desenfoque trabó el scroll en celulares de gama baja).
@@ -3963,6 +3973,24 @@
     <div class="ss-shell">
       <div class="ss-top"><button class="ss-close" data-on-click="closeSessionSheet()" data-i18n-aria="aria_back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
       <div id="session-sheet-body"></div>
+    </div>
+  </div>
+
+  <div class="overlay overlay-sheet" id="notif-prompt-overlay">
+    <div class="np-shell">
+      <div class="np-body">
+        <div class="np-bell" aria-hidden="true"><svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 17h12l-1.4-1.8a4 4 0 0 1-.9-2.5V10a3.7 3.7 0 0 0-7.4 0v2.7a4 4 0 0 1-.9 2.5L6 17z"/><path d="M10.2 20a2 2 0 0 0 3.6 0"/></svg></div>
+        <h2 class="np-title" data-i18n="notif_prompt_title"></h2>
+        <p class="np-lead" data-i18n="notif_prompt_lead"></p>
+        <ul class="np-list">
+          <li data-i18n="notif_prompt_r1"></li>
+          <li data-i18n="notif_prompt_r2"></li>
+        </ul>
+      </div>
+      <div class="np-actions">
+        <button class="btn btn-primary ob-cta" id="np-enable-btn" data-on-click="acceptNotifPrompt()" data-i18n="notif_prompt_enable"></button>
+        <button type="button" class="ob-skip" data-on-click="closeNotifPrompt()" data-i18n="notif_prompt_skip"></button>
+      </div>
     </div>
   </div>
 
