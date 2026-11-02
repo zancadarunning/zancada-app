@@ -21,6 +21,7 @@ const REDIRECT_URI = 'https://www.zancada.org/api/garmin-callback';
 const RUNNING_TYPES = new Set(['RUNNING', 'INDOOR_RUNNING', 'STREET_RUNNING', 'TRACK_RUNNING', 'TRAIL_RUNNING', 'TREADMILL_RUNNING', 'ULTRA_RUN', 'VIRTUAL_RUN']);
 const isRunningActivity = type => RUNNING_TYPES.has(String(type || '').toUpperCase());
 
+const MAX_EPOCH_SEC = 4102444800;   // 1/1/2100: más allá es un dato roto
 const num = v => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
 
 function getMondayISO(d) {
@@ -41,8 +42,12 @@ function garminActivityId(a) {
 function activityToRun(summary, detail) {
   const s = summary || {};
   const id = garminActivityId(s);
-  const startSec = num(s.startTimeInSeconds) || 0;
-  const offsetSec = num(s.startTimeOffsetInSeconds) || 0;
+  // un número absurdo en la hora (1e30, por ejemplo, es un JSON válido) hacía tirar "Invalid time value" y, en el webhook, un 500 que Garmin reintenta cada hora durante 7 días con el mismo lote:
+  // una actividad rota dejaba trabadas las de las demás personas. Una hora fuera de rango deja la actividad sin distancia y el webhook la salta (no se guarda).
+  let startSec = num(s.startTimeInSeconds) || 0;
+  let offsetSec = num(s.startTimeOffsetInSeconds) || 0;
+  const badTime = Math.abs(startSec) > MAX_EPOCH_SEC || Math.abs(offsetSec) > 172800;
+  if (badTime) { startSec = 0; offsetSec = 0; }
   const localDate = new Date((startSec + offsetSec) * 1000).toISOString().slice(0, 10);
   const startDate = new Date(localDate + 'T00:00:00Z');
   const durationSec = Math.round(num(s.durationInSeconds) || 0);
@@ -52,7 +57,7 @@ function activityToRun(summary, detail) {
     garminId: id,
     date: new Date(startSec * 1000).toISOString(),
     name: s.activityName ? String(s.activityName).slice(0, 120) : null,
-    distanceKm: (num(s.distanceInMeters) || 0) / 1000,
+    distanceKm: badTime ? 0 : (num(s.distanceInMeters) || 0) / 1000,
     durationSec,
     elevationGain: fit.elevationGain != null ? fit.elevationGain : (num(s.totalElevationGainInMeters) != null ? Math.round(num(s.totalElevationGainInMeters)) : null),
     elevationLoss: fit.elevationLoss != null ? fit.elevationLoss : (num(s.totalElevationLossInMeters) != null ? Math.round(num(s.totalElevationLossInMeters)) : null),
@@ -80,8 +85,9 @@ function fitFromSamples(samples, startSec) {
   const SEMI = 2147483648 / 180;
   const records = [];
   for (const p of samples.slice(0, 40000)) {
+    if (!p || typeof p !== 'object') continue;
     const t = num(p.startTimeInSeconds);
-    if (t == null) continue;
+    if (t == null || Math.abs(t) > MAX_EPOCH_SEC) continue;
     const r = { timestamp: new Date(t * 1000) };
     const dist = num(p.totalDistanceInMeters); if (dist != null) r.distance = dist;
     const hr = num(p.heartRate); if (hr != null && hr > 0) r.heartRate = hr;
