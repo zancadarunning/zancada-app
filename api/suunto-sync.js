@@ -14,6 +14,7 @@ const {
 } = require('./_lib/suunto-activity-helpers');
 const { withSentry, reportError } = require('./_lib/sentry');
 const { mergeAndNotify } = require('./_lib/notify-new-run');
+const { safeConvertSync } = require('./_lib/safe-convert');
 
 const FIT_BACKFILL_BATCH = 3;
 const LOOKBACK_DAYS = 7;
@@ -33,7 +34,7 @@ async function syncOneConnection(base, headers, conn) {
   const workouts = await listSuuntoWorkouts(accessToken, Date.now() - LOOKBACK_DAYS * 86400000, 50);
   const missing = workouts.filter(w => isRunningActivity(w.activityId) && !knownIds.has(String(w.workoutKey || w.key)));
   if (missing.length) {
-    await mergeAndNotify(mergeSuuntoRuns, base, headers, conn.user_id, missing.map(w => workoutToRun(w, null)), 'skip', 'suunto');
+    await mergeAndNotify(mergeSuuntoRuns, base, headers, conn.user_id, missing.map(w => safeConvertSync(() => workoutToRun(w, null), 'suunto')).filter(Boolean), 'skip', 'suunto');
     added = missing.length;
   }
 

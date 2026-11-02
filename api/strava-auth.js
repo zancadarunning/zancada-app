@@ -27,6 +27,7 @@ function verifyState(state) {
 
 const { withSentry, reportError } = require('./_lib/sentry');
 const { withOAuthLink } = require('./_lib/oauth-link');
+const { safeConvert } = require('./_lib/safe-convert');
 
 // Antes cada rama de error de acá abajo dejaba al usuario en una página muerta (texto plano
 // o el JSON crudo que devolvió Strava) sin ningún link de vuelta a la app -- pasa de verdad
@@ -94,7 +95,7 @@ const linkAccount = async (req, res) => {
         const newRuns = [];
         for (const act of runActs) {
           if (knownIds.has(act.id)) continue;
-          newRuns.push(await activityToRun(act, tokenData.access_token));
+          const run = await safeConvert(() => activityToRun(act, tokenData.access_token), 'strava'); if (run) newRuns.push(run);
         }
         await mergeStravaRuns(base, plainHeaders, userId, newRuns, 'skip');
       }
