@@ -15,6 +15,7 @@ const { activityToRun, mergeCorosRuns, refreshCorosToken, callCorosMcpTool, coro
 const { withSentry, reportError } = require('./_lib/sentry');
 const { mergeAndNotify } = require('./_lib/notify-new-run');
 const { enrichCorosRecord, applyCorosEnrichmentToRun } = require('./_lib/coros-activity-helpers');
+const { safeConvertSync } = require('./_lib/safe-convert');
 
 module.exports = withSentry(async (req, res) => {
   if (!(await requireCronSecret(req))) {
@@ -63,7 +64,7 @@ module.exports = withSentry(async (req, res) => {
             const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.corosId));
             const newRecs = runRecords.filter(r => !knownIds.has(getCorosRecordId(r)));
             for (const rec of newRecs.slice(0, 3)) await enrichCorosRecord(accessToken, rec);
-            const newRuns = newRecs.map(record => activityToRun(record));
+            const newRuns = newRecs.map(record => safeConvertSync(() => activityToRun(record), 'coros')).filter(Boolean);
             if (newRuns.length) await mergeAndNotify(mergeCorosRuns, base, headers, conn.user_id, newRuns, 'skip', 'coros');
 
             // Carreras que ya estaban guardadas sin mapa/parciales/cadencia (se sincronizaron antes de que se leyera el

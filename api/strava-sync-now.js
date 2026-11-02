@@ -6,6 +6,7 @@ const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 const { withinDailyCap } = require('./_lib/daily-cap');
 
 const { withSentry, reportError } = require('./_lib/sentry');
+const { safeConvert } = require('./_lib/safe-convert');
 
 // Auditoría de costos: sin esto, alguien apretando "Sincronizar ahora" muy seguido (o un
 // script pegándole directo al endpoint) podía disparar muchos intentos por segundo -- el
@@ -88,7 +89,7 @@ module.exports = withSentry(async (req, res) => {
     for (const act of runs) {
       if (knownIds.has(act.id)) continue;
       // sin parciales acá, para que sea rápido; se completan solos con la sincronización periódica
-      newRuns.push(await activityToRun(act, null));
+      const run = await safeConvert(() => activityToRun(act, null), 'strava'); if (run) newRuns.push(run);
     }
 
     if (newRuns.length) {

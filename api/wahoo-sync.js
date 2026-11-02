@@ -12,6 +12,7 @@ const { workoutToRun, mergeWahooRuns, isImportableWorkout, refreshWahooToken, fe
 const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { withSentry, reportError } = require('./_lib/sentry');
 const { mergeAndNotify } = require('./_lib/notify-new-run');
+const { safeConvert } = require('./_lib/safe-convert');
 
 // Cuántas carreras sin splits reales se completan por cuenta en cada corrida del cron --
 // ver el comentario grande de backfillWahooSplits.
@@ -172,7 +173,7 @@ module.exports = withSentry(async (req, res) => {
             // apuro por responder rápido a un usuario esperando en pantalla.
             const newRuns = [];
             for (const w of runWorkouts.filter(w => !knownIds.has(w.id))) {
-              newRuns.push(await workoutToRun(w, accessToken));
+              const run = await safeConvert(() => workoutToRun(w, accessToken), 'wahoo'); if (run) newRuns.push(run);
             }
             if (newRuns.length) await mergeAndNotify(mergeWahooRuns, base, headers, conn.user_id, newRuns, 'skip', 'wahoo');
           }

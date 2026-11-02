@@ -13,6 +13,7 @@ const { exerciseToRun, mergePolarRuns, fetchFitSplits } = require('./_lib/polar-
 const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { withSentry, reportError } = require('./_lib/sentry');
 const { mergeAndNotify } = require('./_lib/notify-new-run');
+const { safeConvert } = require('./_lib/safe-convert');
 
 // Cuántas carreras sin splits reales se completan por cuenta en cada corrida del cron.
 // Un lote chico en vez de todas de una: la mayoría de las cuentas no van a tener nada
@@ -121,7 +122,7 @@ module.exports = withSentry(async (req, res) => {
             // apuro por responder rápido a un usuario esperando en pantalla.
             const newRuns = [];
             for (const ex of runExercises.filter(ex => !knownIds.has(ex.id))) {
-              newRuns.push(await exerciseToRun(ex, decToken(conn.access_token)));
+              const run = await safeConvert(() => exerciseToRun(ex, decToken(conn.access_token)), 'polar'); if (run) newRuns.push(run);
             }
             if (newRuns.length) await mergeAndNotify(mergePolarRuns, base, headers, conn.user_id, newRuns, 'skip', 'polar');
           }

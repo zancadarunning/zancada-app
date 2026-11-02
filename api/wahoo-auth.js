@@ -29,6 +29,7 @@ function verifyState(state) {
 
 const { withSentry, reportError } = require('./_lib/sentry');
 const { withOAuthLink } = require('./_lib/oauth-link');
+const { safeConvert } = require('./_lib/safe-convert');
 
 // Ver el comentario igual a este en strava-auth.js: antes cada rama de error de acá abajo
 // dejaba al usuario en una página muerta (texto plano o el JSON crudo del proveedor) sin
@@ -112,7 +113,7 @@ const linkAccount = async (req, res) => {
         // potencia solo un rato después -- ver el backfill de ese archivo.
         const newRuns = [];
         for (const w of runWorkouts.filter(w => !knownIds.has(w.id))) {
-          newRuns.push(await workoutToRun(w, null));
+          const run = await safeConvert(() => workoutToRun(w, null), 'wahoo'); if (run) newRuns.push(run);
         }
         await mergeWahooRuns(base, plainHeaders, userId, newRuns, 'skip');
       }

@@ -12,6 +12,7 @@ const { applyCors, isPreflight } = require('./_lib/cors');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 
 const { withSentry, reportError } = require('./_lib/sentry');
+const { safeConvertSync } = require('./_lib/safe-convert');
 
 // Auditoría de costos: ver el mismo comentario en strava-sync-now.js.
 const SYNC_COOLDOWN_MS = 20000;
@@ -66,7 +67,7 @@ module.exports = withSentry(async (req, res) => {
     // El reporte de querySportRecords ya trae todo lo necesario (distancia, duración, FC
     // promedio, calorías) -- no hace falta getActivityDetail para armar un run decente.
     for (const rec of newRecords.slice(0, 5)) await enrichCorosRecord(decToken(conn.access_token), rec);
-    const newRuns = newRecords.map(record => activityToRun(record));
+    const newRuns = newRecords.map(record => safeConvertSync(() => activityToRun(record), 'coros')).filter(Boolean);
 
     if (newRuns.length) {
       await mergeCorosRuns(base, headers, userId, newRuns, 'skip');

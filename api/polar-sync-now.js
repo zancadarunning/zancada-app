@@ -12,6 +12,7 @@ const { applyCors, isPreflight } = require('./_lib/cors');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 
 const { withSentry, reportError } = require('./_lib/sentry');
+const { safeConvert } = require('./_lib/safe-convert');
 
 // Auditoría de costos: ver el mismo comentario en strava-sync-now.js.
 const SYNC_COOLDOWN_MS = 20000;
@@ -78,7 +79,7 @@ module.exports = withSentry(async (req, res) => {
     // strava-sync-now.js.
     const newRuns = [];
     for (const ex of runExercises.filter(ex => !knownIds.has(ex.id))) {
-      newRuns.push(await exerciseToRun(ex, null));
+      const run = await safeConvert(() => exerciseToRun(ex, null), 'polar'); if (run) newRuns.push(run);
     }
 
     if (newRuns.length) {

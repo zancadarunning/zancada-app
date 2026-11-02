@@ -11,6 +11,7 @@ const { applyCors, isPreflight } = require('./_lib/cors');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 const { withinDailyCap } = require('./_lib/daily-cap');
 const { withSentry, reportError } = require('./_lib/sentry');
+const { safeConvertSync } = require('./_lib/safe-convert');
 
 const SYNC_COOLDOWN_MS = 300000;   // antes 20 s: la API de Suunto permite ~200 llamadas por semana EN TOTAL para toda la app
 const LOOKBACK_DAYS = 30;
@@ -64,7 +65,7 @@ module.exports = withSentry(async (req, res) => {
     const newRuns = [];
     for (let i = 0; i < fresh.length; i++) {
       const fit = i < MAX_FIT_NOW ? await fetchSuuntoFit(String(fresh[i].workoutKey || fresh[i].key), accessToken) : null;
-      newRuns.push(workoutToRun(fresh[i], fit && !fit._failed ? fit : null));
+      const run = safeConvertSync(() => workoutToRun(fresh[i], fit && !fit._failed ? fit : null), 'suunto'); if (run) newRuns.push(run);
     }
     if (newRuns.length) await mergeSuuntoRuns(base, headers, userId, newRuns, 'skip');
 
