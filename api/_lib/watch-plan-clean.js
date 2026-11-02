@@ -43,6 +43,8 @@ function cleanDay(d) {
     repSec: Number(d.repSec) > 0 ? Number(d.repSec) : 0,
     restSec: Number(d.restSec) > 0 ? Math.min(3600, Number(d.restSec)) : 0,
     timeBased: !!d.timeBased,
+    // día de una carrera cargada en "Próximos eventos": una sola vuelta de distancia, sin objetivo de pulso
+    race: d.race === true,
     // entrada en calor y vuelta a la calma de la sesión (minutos): van como bloques propios del reloj, así el tiempo total del entrenamiento los incluye. undefined = la app no los mandó (versión vieja)
     warmupMin: d.warmupMin == null ? undefined : Math.min(30, Math.max(0, Math.round(Number(d.warmupMin)) || 0)),
     cooldownMin: d.cooldownMin == null ? undefined : Math.min(30, Math.max(0, Math.round(Number(d.cooldownMin)) || 0))

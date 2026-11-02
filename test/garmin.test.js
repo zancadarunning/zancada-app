@@ -341,6 +341,48 @@ test('enviar el plan: con los permisos vacíos se vuelven a pedir a Garmin y se 
   try { assert.equal((await callPush({ days: [DAY('2026-11-03')], keepDates: [], zones: ZONES, today: '2026-11-02', force: true })).body.created, 1); } finally { n.restore(); }
 });
 
+test('limpieza: se borran los entrenamientos sueltos con el sello de Zancada y nunca los de otras apps; si otra cuenta comparte el Garmin no se toca nada', async () => {
+  const withG = [/GET .*garmin_connections\?user_id=eq\.u1/, () => json([Object.assign(conn(), { garmin_user_id: 'G1' })])];
+  const schedule = [/GET https:\/\/apis\.garmin\.com\/training-api\/schedule\?startDate/, () => json([
+    { scheduleId: 9001, workoutId: 1001, date: '2026-11-03' },   // el que se acaba de crear
+    { scheduleId: 7001, workoutId: 555, date: '2026-11-03' },    // suelto de Zancada
+    { scheduleId: 7002, workoutId: 777, date: '2026-11-04' }     // de otra app
+  ])];
+  const workouts = [/GET https:\/\/apis\.garmin\.com\/training-api\/workout\/v2\/(\d+)/, u => json(/\/555$/.test(u) ? { workoutProvider: 'Zancada', workoutName: 'Zancada - Rodaje' } : { workoutProvider: 'OtraApp', workoutName: 'Mi plan' })];
+  let n = net([withG, [/GET .*garmin_connections\?garmin_user_id=eq\.G1/, () => json([])], schedule, workouts, ...garminRoutes({})]);
+  try {
+    const r = await callPush({ days: [DAY('2026-11-03')], keepDates: ['2026-11-03'], zones: ZONES, today: '2026-11-02', force: true });
+    assert.equal(r.body.created, 1); assert.equal(r.body.orphansRemoved, 1);
+    const del = n.log.filter(l => l.method === 'DELETE' && /training-api/.test(l.url)).map(l => l.url.replace('https://apis.garmin.com/training-api/', ''));
+    assert.deepEqual(del.sort(), ['schedule/7001', 'workout/v2/555']);
+  } finally { n.restore(); }
+  n = net([withG, [/GET .*garmin_connections\?garmin_user_id=eq\.G1/, () => json([{ user_id: 'u2' }])], schedule, workouts, ...garminRoutes({})]);
+  try {
+    const r = await callPush({ days: [DAY('2026-11-03')], keepDates: ['2026-11-03'], zones: ZONES, today: '2026-11-02', force: true });
+    assert.equal(r.body.created, 1); assert.equal(r.body.orphansRemoved, 0);
+    assert.equal(n.log.filter(l => l.method === 'DELETE' && /training-api/.test(l.url)).length, 0, 'con otra cuenta en el mismo Garmin no se borra nada');
+  } finally { n.restore(); }
+});
+
+test('enviar el plan: el entrenamiento se anota apenas se crea (sin huella) y se vuelve a anotar completo al programarlo; si no se programa, no queda anotado', async () => {
+  const state = {};
+  const n = net(garminRoutes(state));
+  try {
+    await callPush({ days: [DAY('2026-11-03')], keepDates: ['2026-11-03'], zones: ZONES, today: '2026-11-02', force: true });
+    const posts = n.log.filter(l => l.method === 'POST' && /sent_notifications$/.test(l.url)).map(l => JSON.parse(l.body).period);
+    assert.match(posts[0], /^2026-11-03\|1001\|\|$/, 'primero sin programación ni huella');
+    assert.match(posts[1], /^2026-11-03\|1001\|10\d+\|[a-f0-9]{16}$/);
+    assert.equal(state.known.length, 1);
+  } finally { n.restore(); }
+  const state2 = {};
+  const routes = garminRoutes(state2); routes.splice(routes.findIndex(r => String(r[0]).includes('schedule\\/')), 1, [/POST https:\/\/apis\.garmin\.com\/training-api\/schedule\//, () => json({}, 400)]);
+  const n2 = net(routes);
+  try {
+    const r = await callPush({ days: [DAY('2026-11-03')], keepDates: ['2026-11-03'], zones: ZONES, today: '2026-11-02', force: true });
+    assert.equal(r.body.failed, 1); assert.equal(state2.known.length, 0, 'no queda anotado un entrenamiento que se borró');
+  } finally { n2.restore(); }
+});
+
 test('enviar el plan: si Garmin crea el entrenamiento pero no lo programa, se borra el suelto (no deja basura en la cuenta)', async () => {
   const state = {};
   const routes = garminRoutes(state);

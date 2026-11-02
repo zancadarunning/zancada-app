@@ -50,6 +50,35 @@ async function deleteGarminWorkout(accessToken, rec) {
   return ok;
 }
 
+// Limpieza de entrenamientos "sueltos": programados en el calendario de Garmin con el sello de Zancada pero que ya no figuran en lo que recordamos (quedaron de un envío cortado a la mitad, de una
+// conexión anterior, etc.). Sin esto el calendario de la persona podría juntar copias. Solo toca lo que Garmin dice que es de Zancada (proveedor o nombre "Zancada - …"), nunca entrenamientos de otras apps.
+// Si otra cuenta de Zancada está conectada a esta misma cuenta de Garmin no se hace nada (cada una se llevaría por delante los entrenamientos de la otra). Devuelve cuántos se borraron.
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+async function removeOrphanZancadaWorkouts(base, headers, userId, accessToken, garminUserId, fromDate, toDate, maxChecks) {
+  if (!DATE_ONLY.test(String(fromDate)) || !DATE_ONLY.test(String(toDate)) || toDate < fromDate) return 0;
+  if (garminUserId) {
+    const r = await fetch(`${base}/rest/v1/garmin_connections?garmin_user_id=eq.${encodeURIComponent(garminUserId)}&user_id=neq.${userId}&select=user_id&limit=1`, { headers });
+    const rows = r.ok ? await r.json().catch(() => null) : null;
+    if (!Array.isArray(rows) || rows.length) return 0;   // no se pudo comprobar, o la comparte otra cuenta
+  }
+  const known = await loadKnown(base, headers, userId, fromDate);
+  const knownIds = new Set(Object.values(known).map(r => String(r.workoutId)));
+  const lr = await garminCall(accessToken, 'GET', `${GARMIN_API}/training-api/schedule?startDate=${fromDate}&endDate=${toDate}`);
+  if (!lr.ok || !Array.isArray(lr.json)) return 0;
+  const orphans = lr.json.filter(x => x && x.workoutId != null && !knownIds.has(String(x.workoutId))).slice(0, maxChecks || 8);
+  let removed = 0;
+  for (const o of orphans) {
+    const wr = await garminCall(accessToken, 'GET', `${GARMIN_API}/training-api/workout/v2/${encodeURIComponent(String(o.workoutId))}`);
+    if (wr.status === 429) break;
+    if (!wr.ok || !wr.json) continue;
+    const mine = wr.json.workoutProvider === 'Zancada' || /^Zancada - /.test(String(wr.json.workoutName || ''));
+    if (!mine) continue;
+    await deleteGarminWorkout(accessToken, { workoutId: String(o.workoutId), scheduleId: o.scheduleId != null ? String(o.scheduleId) : null });
+    removed++;
+  }
+  return removed;
+}
+
 // Quita TODO lo que Zancada mandó (al desconectar o al borrar la cuenta). Devuelve cuántos entrenamientos se borraron.
 async function removeAllGarminWorkouts(base, headers, userId, accessToken) {
   const known = await loadKnown(base, headers, userId, '0000-00-00');
@@ -61,4 +90,4 @@ async function removeAllGarminWorkouts(base, headers, userId, accessToken) {
   return removed;
 }
 
-module.exports = { KIND, loadKnown, saveKnown, forgetKnown, deleteGarminWorkout, removeAllGarminWorkouts };
+module.exports = { KIND, loadKnown, saveKnown, forgetKnown, deleteGarminWorkout, removeAllGarminWorkouts, removeOrphanZancadaWorkouts };
