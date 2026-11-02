@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T13:14:39Z';
+const APP_VERSION = '2026-11-02T13:22:00Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -9330,6 +9330,76 @@ function getWeekData(offset){
   if(offset > 12) return { plan: [], weekNumber: wn, editable: false, exists: false, mode:'future', weekStart: futureStartIso };
   return { plan: generatePlan(state.profile, wn, futureStartIso), weekNumber: wn, editable: false, exists: true, mode:'future', weekStart: futureStartIso };
 }
+/* ===== Sesión del Plan en bloques: al tocar un día se abre una pestaña con el gráfico de bloques, qué hacer en cada uno y las notas (en vez de desplegar todo el texto abajo) ===== */
+const planSheetData = {};
+let sessionSheetIdx = null;
+function fmtSessionAmount(step){
+  if(step.sec != null){
+    const s = Math.round(step.sec);
+    return s % 60 === 0 || s >= 120 ? `${Math.round(s/60)} ${t('time_unit_min')}` : `${s} ${t('time_unit_sec')}`;
+  }
+  const m = Math.round(step.meters);
+  return m >= 1000 ? `${fmtDist(m/1000, 1)} ${distUnit()}` : `${m} m`;
+}
+// Los pasos sueltos que arma planStepsFromPayload se agrupan como los ve la persona: calentamiento, parte principal o repeticiones (trabajo + recuperación), vuelta a la calma.
+function sessionBlocks(steps){
+  const out = [];
+  let i = 0;
+  while(i < steps.length){
+    const x = steps[i];
+    if(x.kind === 'work' || x.kind === 'rest'){
+      const group = [];
+      while(i < steps.length && (steps[i].kind === 'work' || steps[i].kind === 'rest')) group.push(steps[i++]);
+      out.push({kind:'reps', reps: group.filter(g => g.kind === 'work').length || 1, lines:[group.find(g => g.kind === 'work'), group.find(g => g.kind === 'rest')].filter(Boolean)});
+    } else { out.push({kind:x.kind, lines:[x]}); i++; }
+  }
+  return out;
+}
+function renderSessionBlocks(plan){
+  const pace = estimateBasePaceMinPerKm(state.profile) || 6;
+  const secOf = s => s.sec != null ? s.sec : (s.meters/1000) * pace * 60;
+  const total = plan.steps.reduce((a, s) => a + secOf(s), 0) || 1;
+  const bars = plan.steps.map(s => {
+    const strong = s.kind === 'work' || s.kind === 'main';
+    const color = strong ? zoneColorVar(s.zone || 2) : 'var(--asphalt-4)';
+    return `<span class="ss-bar" style="flex:${Math.max(secOf(s) / total, 0.012).toFixed(4)}; background:${color};"></span>`;
+  }).join('');
+  const names = {warmup:t('sess_warmup'), cooldown:t('sess_cooldown'), main:t('sess_main')};
+  const text = sessionBlocks(plan.steps).map(b => {
+    const title = b.kind === 'reps' ? t('sess_reps', {n:b.reps}) : names[b.kind];
+    const lines = b.lines.map(s => `<li>${escapeHtml(fmtSessionAmount(s))} · ${t('zone_word')} ${s.zone}${s.kind === 'rest' ? ' · ' + t('sess_recovery') : ''}</li>`).join('');
+    return `<div class="ss-block"><h4>${title}</h4><ul>${lines}</ul></div>`;
+  }).join('');
+  return `<div class="ss-card"><div class="ss-bars" aria-hidden="true">${bars}</div>${text}</div>`;
+}
+function buildSessionSheetHtml(c){
+  const {d, date, title, statusBlock, isEventDay} = c;
+  let chips = '';
+  if(d.dist > 0 && !isEventDay){
+    const z = state.profile.hrZones;
+    if(d.zone) chips += `<span class="zone-chip zone-${d.zone}">${t('zone_word')} ${d.zone}</span>`;
+    chips += `<span class="ss-chip">${planDurationMin(d)} ${t('time_unit_min')}</span><span class="ss-chip">${fmtDist(d.dist, 1)} ${distUnit()}</span>`;
+    if(d.zone && z && z[d.zone]) chips += `<span class="ss-chip mono">${z[d.zone].min}-${z[d.zone].max} bpm</span>`;
+  }
+  let blocks = '';
+  if(d.dist > 0 && !isEventDay && d.typeKey !== 'test' && date){
+    try{ const plan = planStepsFromPayload(watchDayPayload(d, date)); if(plan && plan.steps.length) blocks = renderSessionBlocks(plan); }catch(e){ blocks = ''; }
+  }
+  // las notas son el texto de la sesión sin la envoltura de calentamiento / vuelta a la calma (eso ya está en los bloques)
+  let notes = c.lblDesc;
+  if(!isEventDay && d.dist > 0){ try{ const body = planLabelBody(d).desc; notes = d.custom ? escapeHtml(body) : body; }catch(e){ notes = c.lblDesc; } }
+  const notesCard = notes ? `<div class="ss-card ss-notes"><h3>${t('sess_notes')}</h3><p>${notes}</p></div>` : '';
+  return `<h2 class="ss-title">${title}</h2>${chips ? `<div class="ss-chips">${chips}</div>` : ''}${blocks}${notesCard}${statusBlock ? `<div class="ss-actions">${statusBlock}</div>` : ''}`;
+}
+function openSessionSheet(i){
+  if(planSwipeSuppressClick) return;
+  const html = planSheetData[i];
+  if(html == null) return;
+  sessionSheetIdx = i;
+  document.getElementById('session-sheet-body').innerHTML = html;
+  openOverlaySheetEl(document.getElementById('session-sheet'));
+}
+function closeSessionSheet(){ sessionSheetIdx = null; document.getElementById('session-sheet').classList.remove('overlay-open'); }
 // Extraído de renderPlan() -- sigue siendo el día-por-día completo y editable de la
 // pestaña Plan. La pantalla de "Semanas anteriores" (ver openWeekDetail/
 // buildWeekDoneListHtml más abajo) NO reusa esto: pedido explícito del usuario, esa
@@ -9441,6 +9511,7 @@ function buildDayListHtml(wd){
       if(planBtns) statusBlock = `<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">${planBtns}</div>`;
     }
     if(d.typeKey==='test' && !d.testRead && d.status!=='skipped') statusBlock += `<div style="margin-top:12px;"><button class="btn btn-primary btn-sm" data-on-click="event.stopPropagation(); openLevelTest()">${t('ltest_load_btn')}</button></div>`;
+    planSheetData[i] = buildSessionSheetHtml({d, date:dayIso, title:lblType, lblDesc, statusBlock, isEventDay});
     const kmHtml = isEventDay ? (eventAmountText ? `<span class="day-km-inline">${eventAmountText}</span>` : '') : (d.dist>0 ? `<span class="day-km-inline">${planAmountText(d)}</span>` : (extraRunAmountText ? `<span class="day-km-inline">${extraRunAmountText}</span>` : ''));
     return `<div>
       <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" data-idx="${i}"${(wd.mode==='current' && canEdit && !isEventDay && !d.status && !d.raceDay) ? (d.dist>0 ? ' data-src="1" data-drop="1"' : ' data-drop="1"') : ''} data-zone="${(d.dist>0 && d.zone && !isEventDay)?d.zone:''}" data-on-click="toggleDay(${i})">
@@ -9451,7 +9522,6 @@ function buildDayListHtml(wd){
         </div>
         <div class="day-row-end">${kmHtml}<span class="day-end-slot">${statusIcon}</span></div>
       </div>
-      <div class="day-detail" id="detail-${i}"><div>${lblDesc}${zoneDetail}${statusBlock}</div></div>
     </div>`;
   }).join('');
 }
@@ -9612,6 +9682,8 @@ function renderPlan(){
   }
 
   document.getElementById('plan-list').innerHTML = buildDayListHtml(wd);
+  // si la pestaña de una sesión está abierta (marcar hecha, deshacer, sincronizar), se refresca con el estado nuevo
+  if(sessionSheetIdx != null && planSheetData[sessionSheetIdx] != null){ const sb = document.getElementById('session-sheet-body'); if(sb) sb.innerHTML = planSheetData[sessionSheetIdx]; }
   makeClickablesFocusable(document.getElementById('plan-list'));
   renderPastWeeks();
 }
@@ -9692,7 +9764,8 @@ function openWeekDetail(weekNumber){
 function closeWeekDetail(){
   document.getElementById('week-detail-modal').classList.remove('overlay-open');
 }
-function toggleDay(i){ if(planSwipeSuppressClick) return; document.getElementById('detail-'+i).classList.toggle('open'); }
+// Tocar un día abre la pestaña con la sesión en bloques (ver openSessionSheet); ya no se despliega el texto debajo de la fila.
+function toggleDay(i){ openSessionSheet(i); }
 // Tarjeta de "próxima sesión" en Inicio: colapsada solo muestra tipo + km (pedido del
 // usuario -- antes mostraba siempre la descripción completa, mucho texto para lo que en
 // general es solo un vistazo rápido). "Ver detalle" avisa que hay más para tocar; mismo
@@ -15304,6 +15377,7 @@ function openRunDetail(runId){
     ${r.source === 'garmin' ? `<p class="muted garmin-attr" style="margin:-4px 0 10px; font-weight:700; letter-spacing:.02em;">${escapeHtml(garminAttribution(r))}</p>` : ''}
     <div class="rd-tabs">${tabs.map(tb=>`<button class="rd-tab-btn" id="rd-tabbtn-${tb}" data-on-click="switchRDTab('${tb}')">${tabLabels[tb]}</button>`).join('')}</div>
     ${tabs.map(tb=>`<div class="rd-panel" id="rd-panel-${tb}"></div>`).join('')}
+    ${renderRunPlanScore(r)}
     <button class="btn btn-outline" style="width:100%; margin-top:24px;" data-on-click="openEditRun('${r.id}')">${t('edit_run_btn')}</button>
     <button class="btn btn-danger" style="width:100%; margin-top:12px;" data-on-click="deleteRun('${r.id}')">${t('hist_delete_run')}</button>
   `;
@@ -15847,6 +15921,60 @@ function renderRunPlanSteps(r){
     ${lines.length ? `<p style="margin:0 0 12px; font-size:13.5px; line-height:1.5;">${lines.map(escapeHtml).join('<br>')}</p>` : ''}
     <div style="overflow-x:auto;"><table class="rd-seg-table"><thead><tr><th>${t('seg_col_step')}</th><th>${t('rd_seg_dur')}</th><th>${t('rd_seg_dist')} (${u})</th><th>${t('run_pace_word')} (/${u})</th>${anyHr ? `<th>${t('hist_avg_hr')}</th>` : ''}</tr></thead><tbody>${body}</tbody></table></div>
     <p class="muted" style="margin:10px 0 0; font-size:12px; line-height:1.45;">${t('seg_plan_note')}</p>
+  </div>`;
+}
+/* ===== Puntuación de la sesión: cuánto de lo previsto se hizo (70 %) y cómo se hizo (30 %: pulso en zona y repeticiones parejas, cuando hay datos por tramo). Cuenta determinista sobre la propia carrera, sin IA. ===== */
+function scoreRunAgainstPlan(run, d, date){
+  if(!run || !d || !(d.dist > 0)) return null;
+  const byTime = !!(d.timeBased && isTimeMode()) || !!(d.durMin > 0 && isTimeMode());
+  const planned = byTime ? planDurationMin(d) : Number(d.dist);
+  const actual = byTime ? (run.durationSec || 0) / 60 : (run.distanceKm || 0);
+  if(!(planned > 0) || !(actual >= 0)) return null;
+  const ratio = actual / planned;
+  const completion = Math.min(1, ratio);
+  const overPenalty = ratio > 1.25 ? Math.min(15, (ratio - 1.25) * 30) : 0;
+  let quality = null, fade = false, hrHigh = false, hrOk = false;
+  try{
+    const ev = date ? evaluateRunSteps(run, planStepsFromPayload(watchDayPayload(d, date)), state.profile && state.profile.hrZones) : null;
+    if(ev){
+      const parts = [];
+      if(ev.summary.judged > 0){ parts.push(1 - ev.summary.high / ev.summary.judged); hrHigh = ev.summary.high > 0; hrOk = ev.summary.high === 0; }
+      if(ev.summary.deltaPct != null){ parts.push(Math.max(0, 1 - Math.max(0, ev.summary.deltaPct) / 0.12)); fade = ev.summary.deltaPct >= OBJ_FADE_PCT; }
+      if(parts.length) quality = parts.reduce((a, b) => a + b, 0) / parts.length;
+    }
+  }catch(e){ quality = null; }
+  const raw = (quality != null ? 0.7 * completion + 0.3 * quality : completion) * 100 - overPenalty;
+  const score = Math.max(0, Math.min(100, Math.round(raw)));
+  return {score, planned, actual, byTime, fade, hrHigh, hrOk};
+}
+function renderRunPlanScore(r){
+  let found = null, sc = null;
+  try{
+    found = runPlannedDay(r);
+    if(!found || found.d.raceDay || found.d.typeKey === 'test') return '';
+    sc = scoreRunAgainstPlan(r, found.d, found.date);
+  }catch(e){ return ''; }
+  if(!sc) return '';
+  const lbl = planLabel(found.d);
+  const title = found.d.custom ? escapeHtml(lbl.type) : lbl.type;
+  const band = sc.score >= 90 ? 'a' : sc.score >= 75 ? 'b' : sc.score >= 55 ? 'c' : 'd';
+  const color = sc.score >= 85 ? 'var(--zone2-fill)' : sc.score >= 65 ? 'var(--zone3-fill)' : 'var(--zone5-fill)';
+  const unit = sc.byTime ? t('time_unit_min') : distUnit();
+  const fmtAmt = v => sc.byTime ? String(Math.round(v)) : fmtDist(v, 1);
+  const lines = [t('score_band_' + band), t('score_done', {done: fmtAmt(sc.actual), plan: fmtAmt(sc.planned), unit})];
+  if(sc.fade) lines.push(t('score_fade'));
+  if(sc.hrHigh) lines.push(t('score_hr_high'));
+  else if(sc.hrOk) lines.push(t('score_hr_ok'));
+  const C = 2 * Math.PI * 44, off = (C * (1 - sc.score / 100)).toFixed(1);
+  const chips = `${found.d.zone ? `<span class="zone-chip zone-${found.d.zone}">${t('zone_word')} ${found.d.zone}</span>` : ''}<span class="ss-chip">${planDurationMin(found.d)} ${t('time_unit_min')}</span>`;
+  return `<div class="ss-card rd-score-card">
+    <div class="rd-score-head"><span class="rd-score-check" aria-hidden="true">${ICONS.check}</span><span>${t('score_plan')}</span></div>
+    <p class="rd-score-title">${title}</p>
+    <div class="ss-chips">${chips}</div>
+    <div class="rd-score-row">
+      <svg class="rd-score-ring" viewBox="0 0 100 100" role="img" aria-label="${t('score_title')} ${sc.score}"><circle cx="50" cy="50" r="44" fill="none" stroke="var(--asphalt-3)" stroke-width="10"/><circle cx="50" cy="50" r="44" fill="none" stroke="${color}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off}" transform="rotate(-90 50 50)"/><text x="50" y="58" text-anchor="middle" class="rd-score-num" fill="${color}">${sc.score}</text></svg>
+      <div><h3 class="rd-score-label">${t('score_title')}</h3><p class="rd-score-text">${lines.map(escapeHtml).join(' ')}</p></div>
+    </div>
   </div>`;
 }
 function renderRDSegmentos(panel){
