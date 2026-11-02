@@ -4006,6 +4006,14 @@
     </div>
     <div class="card" id="perfil-zones-card" style="margin-top:16px;">
       <p class="muted" id="zones-status" data-i18n="perfil_zones_manual_note"></p>
+      <div class="field" style="margin-top:12px;">
+        <label for="zones-rest" data-i18n="zones_rest_label"></label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="number" id="zones-rest" class="zone-input" inputmode="numeric" min="30" max="100" placeholder="55" style="width:90px;">
+          <button class="btn btn-gray btn-sm" data-on-click="applyRestHrZones()" data-i18n="zones_rest_btn"></button>
+        </div>
+        <p class="muted" style="font-size:12px; margin:6px 0 0;" data-i18n="zones_rest_hint"></p>
+      </div>
       <div id="zones-list" style="margin-top:8px;"></div>
       <button class="btn btn-primary btn-sm perfil-save-btn" id="save-zones-btn" style="margin-top:12px; width:100%;" data-i18n="save_word" data-on-click="confirmAndSave('zones')"></button>
     </div>

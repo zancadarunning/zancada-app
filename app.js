@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T12:20:26Z';
+const APP_VERSION = '2026-11-02T12:30:20Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4428,6 +4428,20 @@ function computeZones(hrmax){
     3:{min:Math.round(hrmax*0.70)+1,max:Math.round(hrmax*0.80)},4:{min:Math.round(hrmax*0.80)+1,max:Math.round(hrmax*0.90)},
     5:{min:Math.round(hrmax*0.90)+1,max:hrmax}};
 }
+// Zonas por reserva cardíaca (Karvonen): el % se aplica sobre (FC máxima − FC en reposo) y se suma el reposo. Con el pulso en reposo de la persona queda más ajustada que el % de la FC máxima sola
+// (dos personas con la misma FC máxima y reposos distintos no tienen las mismas zonas). Sin pulso en reposo cargado, o con uno que no cierra, se usa el cálculo de siempre.
+function computeZonesKarvonen(hrmax, hrrest){
+  const at = f => Math.round(hrrest + (hrmax - hrrest) * f);
+  return {1:{min:at(0.50),max:at(0.60)},2:{min:at(0.60)+1,max:at(0.70)},3:{min:at(0.70)+1,max:at(0.80)},4:{min:at(0.80)+1,max:at(0.90)},5:{min:at(0.90)+1,max:hrmax}};
+}
+function validHrRest(p, hrmax){
+  const r = p ? Math.round(Number(p.hrRest)) : NaN;
+  return r >= 30 && r <= 100 && r <= hrmax - 20 ? r : null;
+}
+function computeZonesFor(p, hrmax){
+  const rest = validHrRest(p, hrmax);
+  return rest ? computeZonesKarvonen(hrmax, rest) : computeZones(hrmax);
+}
 const OB_STEP_COUNT = 5;
 let obCurrentStep = 1;
 function resetOnboardSteps(){
@@ -6274,6 +6288,47 @@ function eventRaceWeekMultiplier(weekStartDate, p){
   if(p && p.raceDate && state.event && state.event.date === p.raceDate) return 1;
   return 0.75;
 }
+// Puesta a punto corta ANTES de una carrera cargada en "Próximos eventos" de 10 km o más: la semana anterior a la de la carrera baja un 15 %
+// (la semana de la carrera ya baja un 25 %, ver eventRaceWeekMultiplier). Las carreras cortas (menos de 10 km) son casi un entrenamiento más y no lo necesitan.
+// La carrera OBJETIVO de Perfil > Metas ya tiene su propio taper de 3 semanas (taperMultiplier): si es la misma fecha, no se suma.
+const EVENT_PRE_RACE_MIN_KM = 10;
+function eventPreRaceWeekMultiplier(weekStartDate, p){
+  const ev = state.event;
+  if(!ev || !ev.date || !weekStartDate || !(Number(ev.distanceKm) >= EVENT_PRE_RACE_MIN_KM)) return 1;
+  if(p && p.raceDate && ev.date === p.raceDate) return 1;
+  const start = parsePhaseIso(weekStartDate), race = parsePhaseIso(ev.date);
+  if(!start || !race) return 1;
+  const diffDays = Math.round((race - start) / 86400000);
+  return diffDays >= 7 && diffDays <= 13 ? 0.85 : 1;
+}
+// Alrededor de una carrera cargada en "Próximos eventos" (10 km o más): el día ANTERIOR, si traía una sesión fuerte, pasa a un rodaje suave corto, y los días de esa semana DESPUÉS de la carrera
+// también (como ya hace applyGoalRaceDay con la carrera objetivo). El día de la carrera conserva su sesión por debajo, a propósito: la pantalla lo muestra como la carrera y marcar "hecho" sigue funcionando.
+function applyEventRaceNeighbors(days, p, weekStartDate){
+  const ev = state.event;
+  if(!ev || !ev.date || !weekStartDate || !(Number(ev.distanceKm) >= EVENT_PRE_RACE_MIN_KM) || !Array.isArray(days)) return days;
+  if(p && p.raceDate && ev.date === p.raceDate) return days;   // lo hace applyGoalRaceDay
+  const start = parsePhaseIso(weekStartDate), race = parsePhaseIso(ev.date);
+  if(!start || !race) return days;
+  const idx = Math.round((race - start) / 86400000);
+  if(idx < 0 || idx > 6 || !days[idx]) return days;
+  const pace = estimateBasePaceMinPerKm(p);
+  const shortEasy = d => {
+    if(!d || d.typeKey === 'rest' || d.typeKey === 'test' || (d.typeKey !== 'easy' && !GOAL_RACE_HEAVY.includes(d.typeKey))) return d;
+    const o = { day: d.day, typeKey: 'easy', terrain: p.terrain, zone: 2, beginner: !!d.beginner };
+    if(d.timeBased){
+      o.timeBased = true;
+      o.durMin = Math.min(d.durMin || 0, roundMin5(5 * pace, TIME_MIN_BY_TYPE.easy));
+      o.dist = Math.max(0.1, Math.round(o.durMin / pace * 10) / 10);
+    } else {
+      o.dist = Math.min(d.dist || 0, 5);
+    }
+    return o;
+  };
+  const out = days.slice();
+  if(idx > 0 && GOAL_RACE_HEAVY.includes(out[idx - 1].typeKey)) out[idx - 1] = shortEasy(out[idx - 1]);
+  for(let i = idx + 1; i < out.length; i++) out[i] = shortEasy(out[i]);
+  return out;
+}
 function autoSkipPastDays(){
   if(!state.onboarded || !state.weekStart) return;
   const todayIdx = (new Date().getDay()+6)%7;
@@ -7276,7 +7331,8 @@ function generatePlan(p, weekNumber, weekStartDate){
   // que el chequeo de más abajo en eventRaceWeekMultiplier (no descontar la misma carrera dos
   // veces), generalizado a cualquier combinación de estos recortes en vez de solo ese caso
   // puntual.
-  const skipPeriodicCutback = taperMult < 1 || isRecovery || postGoalRaceMult < 1 || isEventRaceWeek(weekStartDate);
+  const preEventMult = eventPreRaceWeekMultiplier(weekStartDate, p);
+  const skipPeriodicCutback = taperMult < 1 || isRecovery || postGoalRaceMult < 1 || isEventRaceWeek(weekStartDate) || preEventMult < 1;
   const beginner = isBeginnerProfile(p);
   // si el corredor puso una meta semanal propia, la usamos como referencia de volumen en vez
   // del cálculo genérico -- pero acotada para no saltar de golpe a algo que podría lesionarlo
@@ -7322,7 +7378,7 @@ function generatePlan(p, weekNumber, weekStartDate){
   const postRaceWeek = phaseInfo.active && phaseInfo.phase === 'post';
   const recoveryFactor = postRaceWeek ? 1 : recoveryMultiplier(weekStartDate);
   const postGoalRaceFactor = postRaceWeek ? 1 : postGoalRaceMult;
-  const mult = weekFactor * taperMult * postGoalRaceFactor * recoveryFactor * eventRaceWeekMultiplier(weekStartDate, p);
+  const mult = weekFactor * taperMult * postGoalRaceFactor * recoveryFactor * eventRaceWeekMultiplier(weekStartDate, p) * preEventMult;
   // Un principiante con base de un deporte de impacto (ver hasRunningImpactBase) ya tolera el
   // golpe de correr aunque nunca haya salido a correr solo -- a ese lo sacamos del "todo zona 1,
   // solo rodaje suave" desde el día 1 (zona 2 + algún fartlek), aunque siga siendo "principiante"
@@ -7355,7 +7411,7 @@ function generatePlan(p, weekNumber, weekStartDate){
   // Entrenar POR TIEMPO ya no es el plan en km convertido a minutos: se arma aparte, directo en minutos
   // (ver buildTimePlanDays) -- con trote/caminata para principiantes, series y cuestas por duración, etc.
   if(p.trainBy === 'time'){
-    return applyLevelTestDay(applyGoalRaceDay(buildTimePlanDays({p, weekNumber, mult, beginner, easyOnly, caution, sessionMap, trainingDays, effectiveWeeklyKm, zoneMap, phaseInfo, goal: p.goal}), p, weekStartDate, phaseInfo), p, weekStartDate, beginner);
+    return applyLevelTestDay(applyEventRaceNeighbors(applyGoalRaceDay(buildTimePlanDays({p, weekNumber, mult, beginner, easyOnly, caution, sessionMap, trainingDays, effectiveWeeklyKm, zoneMap, phaseInfo, goal: p.goal}), p, weekStartDate, phaseInfo), p, weekStartDate), p, weekStartDate, beginner);
   }
   // Reparto del volumen semanal entre las sesiones que de verdad va a tener esta semana, en
   // vez de calcular cada tipo de sesión por separado con una proporción fija (0.85x a 1.5x)
@@ -7481,7 +7537,7 @@ function generatePlan(p, weekNumber, weekStartDate){
     spreadPhaseShortfall(kmDays, weekTargetKm, phaseInfo.longCapKm || LONG_CAP_KM[p.goal] || Infinity, sessionCapKm, p);
   }
   applyPhaseRacePace(kmDays, phaseInfo, p.goal, easyOnly, true);
-  return applyLevelTestDay(applyGoalRaceDay(kmDays, p, weekStartDate, phaseInfo), p, weekStartDate, beginner);
+  return applyLevelTestDay(applyEventRaceNeighbors(applyGoalRaceDay(kmDays, p, weekStartDate, phaseInfo), p, weekStartDate), p, weekStartDate, beginner);
 }
 /* ================= TEST DE NIVEL + PLAN POR TIEMPO PROPIO =================
    Dos cosas que se agregaron juntas porque se apoyan una en la otra:
@@ -7883,7 +7939,7 @@ function applyLevelTestResult(distM, maxHr){
   // Un pulso máximo medido en un esfuerzo así es una referencia real: si supera la FC máxima que teníamos
   // (estimada por edad), pasa a ser la nueva -- salvo que el corredor haya cargado sus zonas a mano.
   if(maxHr && !p.hrZonesCustom && maxHr > (p.hrMax || 0)){
-    p.hrMax = maxHr; p.hrKnown = true; p.hrZones = computeZones(maxHr);
+    p.hrMax = maxHr; p.hrKnown = true; p.hrZones = computeZonesFor(p, maxHr);
   }
   // El día del test queda como hecho (si estaba pendiente en la semana actual) antes de regenerar el plan.
   const td = (state.plan || []).find(d => d && d.typeKey === 'test' && !d.status);
@@ -9647,7 +9703,10 @@ function renderZones(){
   // el texto de acá siempre decía "se calcula según tu edad" aunque ya hubiera una FC
   // máxima real cargada. Las claves perfil_zones_estimated/perfil_zones_tested ya
   // existían traducidas a los 6 idiomas pero nunca se usaban.
-  const statusText = state.profile.hrKnown ? t('perfil_zones_tested') : t('perfil_zones_estimated');
+  const usesRest = !state.profile.hrZonesCustom && !!validHrRest(state.profile, state.profile.hrMax || 0);
+  const statusText = usesRest ? t('zones_karvonen_status') : (state.profile.hrKnown ? t('perfil_zones_tested') : t('perfil_zones_estimated'));
+  const restEl = document.getElementById('zones-rest');
+  if(restEl) restEl.value = state.profile.hrRest || '';
   const statusEl = document.getElementById('zones-status');
   if(statusEl) statusEl.textContent = statusText;
   const zonesSummaryEl = document.getElementById('perfil-zones-summary');
@@ -9661,6 +9720,24 @@ function renderZones(){
         <input type="number" id="zone-${n}-max" class="zone-input" inputmode="numeric" aria-label="${t('zone_word')} ${n} max (bpm)" value="${z[n].max}">
       </div>
     </div>`).join('');
+}
+// Pulso en reposo (opcional): con él las zonas se calculan sobre la reserva cardíaca (Karvonen). Vacío = vuelve al cálculo estándar por FC máxima.
+function applyRestHrZones(){
+  const p = state.profile;
+  const hrmax = p.hrMax || estimateHrMax(ageFromBirth(p.birth) || 30);
+  const raw = String((document.getElementById('zones-rest') || {}).value || '').trim();
+  if(raw === ''){
+    delete p.hrRest;
+    p.hrZones = computeZones(hrmax); p.hrZonesCustom = false;
+    showToast(t('zones_rest_cleared'), 'success');
+  } else {
+    const n = Math.round(Number(raw));
+    if(!(n >= 30 && n <= 100 && n <= hrmax - 20)){ showToast(t('zones_rest_err'), 'error'); return; }
+    p.hrRest = n;
+    p.hrZones = computeZonesKarvonen(hrmax, n); p.hrZonesCustom = false;
+    showToast(t('save_confirmed'), 'success');
+  }
+  renderZones(); renderPlan(); persist();
 }
 function saveCustomZones(){
   const newZones = {};
@@ -11654,7 +11731,7 @@ function refreshEstimatedHrMax(){
   const newEstimate = estimateHrMax(ageFromBirth(p.birth));
   if(newEstimate && newEstimate !== p.hrMax){
     p.hrMax = newEstimate;
-    p.hrZones = computeZones(newEstimate);
+    p.hrZones = computeZonesFor(p, newEstimate);
     persist();
   }
 }
@@ -11676,11 +11753,12 @@ function checkHrMaxFromRuns(){
   // esas zonas custom fueron a propósito, y "más FC máxima" no dice nada de si siguen
   // siendo las zonas correctas para esta persona.
   if(state.profile.hrZonesCustom) return;
-  const observedMax = (state.runs||[]).map(r=>r.maxHr).filter(v=>typeof v==='number' && v<=220).sort((a,b)=>b-a)[1];
+  // solo cuentan carreras de 10 minutos o más: en las muy cortas (o cargadas a mano) un pico del sensor pesa de más
+  const observedMax = (state.runs||[]).filter(r=>(r.durationSec||0) >= 600).map(r=>r.maxHr).filter(v=>typeof v==='number' && v<=220).sort((a,b)=>b-a)[1];
   if(observedMax && observedMax > (state.profile.hrMax||0)){
     state.profile.hrMax = observedMax;
     state.profile.hrKnown = true;
-    state.profile.hrZones = computeZones(observedMax);
+    state.profile.hrZones = computeZonesFor(state.profile, observedMax);
     persist();
     if(document.getElementById('view-perfil') && document.getElementById('view-perfil').classList.contains('active')) renderZones();
     showToast(t('hrmax_auto_update_msg', {bpm: observedMax}), 'success');
@@ -18382,7 +18460,7 @@ function applyProfileChange(input){
     if(input.fc_maxima < 100 || input.fc_maxima > 220){
       rejectedNotes.push(`la FC máxima "${input.fc_maxima}" no parece un valor real (tiene que estar entre 100 y 220bpm) -- no se aplicó`);
     } else {
-      state.profile.hrMax = input.fc_maxima; state.profile.hrKnown = true; state.profile.hrZones = computeZones(input.fc_maxima); state.profile.hrZonesCustom = false; changes.push('FC máxima');
+      state.profile.hrMax = input.fc_maxima; state.profile.hrKnown = true; state.profile.hrZones = computeZonesFor(state.profile, input.fc_maxima); state.profile.hrZonesCustom = false; changes.push('FC máxima');
     }
   }
   // Mismo criterio: un kilometraje semanal alucinado (ej. "300" transcripto de "30") infla
