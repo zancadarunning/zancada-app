@@ -88,7 +88,15 @@ module.exports = withSentry(async (req, res) => {
           if (stop) break;
           throw new Error(`Garmin no programó el entrenamiento (HTTP ${sr.status}) ${sr.text}`);
         }
-        const scheduleId = sr.json && sr.json.scheduleId != null ? String(sr.json.scheduleId) : '';
+        let scheduleId = sr.json && sr.json.scheduleId != null ? String(sr.json.scheduleId) : '';
+        if (!scheduleId) {
+          // Garmin puede responder sin cuerpo: se busca la programación recién creada para poder borrarla/moverla después
+          try {
+            const lr = await garminCall(accessToken, 'GET', `${GARMIN_API}/training-api/schedule?startDate=${day.date}&endDate=${day.date}`);
+            const found = (Array.isArray(lr.json) ? lr.json : []).find(x => x && String(x.workoutId) === workoutId && x.scheduleId != null);
+            if (found) scheduleId = String(found.scheduleId);
+          } catch (e) { /* sin id: al borrar se borra el entrenamiento, que se lleva su programación */ }
+        }
         await saveKnown(base, headers, userId, day.date, { workoutId, scheduleId, hash: dayHash });
         created++; pushedDates.push(day.date);
       } catch (e) { fail(day.date, e); }
