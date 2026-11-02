@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T02:43:03Z';
+const APP_VERSION = '2026-11-02T02:49:01Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2945,7 +2945,8 @@ async function syncPlanToGarmin(force){
   if(garminSyncRunning){ garminSyncAgain = true; return null; }
   garminSyncRunning = true;
   try{
-    const { win, weekStart } = watchWindow();
+    // Garmin recibe ESTA semana y la PRÓXIMA (hasta 14 sesiones): deja programar con anticipación y borrar/mover, y así un lunes sin abrir la app no deja el reloj sin entrenamientos.
+    const { all: win, weekStart } = watchWindow();
     const zones = state.profile.hrZones;
     const labels = { mobility:t('garmin_step_mobility'), jog:t('garmin_step_jog') };
     const ctx = JSON.stringify([zones, labels, 'garmin2']);   // cambiar la versión vuelve a mandar todo

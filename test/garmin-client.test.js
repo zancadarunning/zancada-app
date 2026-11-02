@@ -58,3 +58,9 @@ test('los textos de Garmin existen en los 6 idiomas', () => {
     for (const k of ['garmin_connect', 'perfil_garmin_desc', 'garmin_connect_error', 'garmin_disconnect_error', 'garmin_no_workout_permission', 'garmin_not_for_ai', 'garmin_derived_note']) assert.ok(s.includes(k + ':"'), l + ' ' + k);
   }
 });
+
+test('Garmin recibe esta semana y la próxima (hasta 14 sesiones), no solo la semana en curso', () => {
+  const body = app.slice(app.indexOf('async function syncPlanToGarmin'), app.indexOf('async function connectGarmin'));
+  assert.ok(body.includes('const { all: win, weekStart } = watchWindow();'));
+  assert.match(read('api/garmin-push-plan.js'), /const MAX_DAYS = 14;/);
+});
