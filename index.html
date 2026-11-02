@@ -2668,41 +2668,33 @@ body{overflow-wrap:break-word;}
 .next-session .day-dist{font-size:clamp(30px, 10vw, 44px) !important; white-space:nowrap;}
 </style>
 <style id="ob-glass-css">
-/* ===== Inicio para usuarios nuevos: una pregunta por pantalla, vidrio líquido sobre un fondo suave (2026-11-02) =====
-   El vidrio se arma con relleno translúcido + reflejo en el borde de arriba (siempre); el desenfoque de lo que hay detrás (backdrop-filter) se suma solo donde el navegador lo soporta y no hay "reducir transparencia".
-   Es una pantalla pasajera sobre un fondo fijo: no hay contenido que se desplace debajo, a diferencia de las barras siempre visibles (ver "Rendimiento de scroll"). */
+/* ===== Inicio para usuarios nuevos (una pregunta por pantalla), hoja de sesión, detalle de carrera y consentimientos =====
+   Superficies PLANAS del sistema de diseño (tarjeta sólida + filete fino). El efecto "vidrio líquido" (desenfoque, luces de colores, brillos de borde) se probó el 2026-11-02 y se sacó
+   a pedido del usuario: no volver a agregarlo sin que lo pida. Los --g-* son los colores de estas pantallas; el id del bloque (ob-glass-css) queda por compatibilidad. */
 #onboard, #session-sheet, #consent-modal, #run-detail-content{
-  /* Oscuro: fondo con luz de colores (el vidrio necesita algo detrás para verse como vidrio) + relleno que aclara en diagonal + borde con brillo arriba-izquierda y reflejo abajo-derecha */
-  --g-fill:linear-gradient(158deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,.07) 42%, rgba(255,255,255,.12) 100%);
-  --g-fill-on:linear-gradient(158deg, rgba(214,255,63,.42) 0%, rgba(214,255,63,.16) 55%, rgba(214,255,63,.26) 100%);
-  --g-rim:inset 0 0 0 1px rgba(255,255,255,.14), inset 1.5px 2.5px 1px -1.5px rgba(255,255,255,.8), inset -1.5px -2px 1px -1.5px rgba(255,255,255,.4), inset 0 -10px 14px -10px rgba(255,255,255,.16), inset 0 8px 12px -8px rgba(0,0,0,.28);
-  --g-edge-top:rgba(255,255,255,.2); --g-edge-bot:rgba(255,255,255,.08);
-  --g-shadow:0 1px 2px rgba(0,0,0,.3), 0 14px 30px -12px rgba(0,0,0,.6); --g-ring:var(--hivis); --g-ink:var(--chalk);
-  --g-blur:blur(22px) saturate(1.9) brightness(1.1);
-  --g-cta-top:#E6FF7A; --g-cta-bot:#C4EF1C; --g-cta-text:#101200; --g-sheen:rgba(255,255,255,.55);
-  --g-bg:radial-gradient(46% 24% at 14% 5%, rgba(214,255,63,.42), transparent 70%), radial-gradient(44% 26% at 98% 24%, rgba(104,120,255,.5), transparent 70%), radial-gradient(48% 24% at 2% 52%, rgba(214,70,200,.3), transparent 70%), radial-gradient(46% 24% at 96% 70%, rgba(40,200,220,.28), transparent 70%), radial-gradient(60% 24% at 40% 100%, rgba(214,255,63,.3), transparent 70%), #07080b;
+  /* Superficies planas del sistema de diseño: tarjeta sólida, filete fino, sin desenfoque ni brillos */
+  --g-fill:var(--asphalt-2); --g-fill-on:rgba(214,255,63,.12);
+  --g-rim:inset 0 0 0 1px rgba(255,255,255,.07);
+  --g-edge-top:rgba(255,255,255,.1); --g-edge-bot:rgba(255,255,255,.08);
+  --g-shadow:none; --g-ring:var(--hivis); --g-ink:var(--chalk);
+  --g-cta-top:var(--hivis); --g-cta-bot:var(--hivis); --g-cta-text:#101200; --g-sheen:transparent;
+  --g-bg:var(--asphalt);
 }
 :root[data-theme="light"] #onboard, :root[data-theme="light"] #session-sheet, :root[data-theme="light"] #consent-modal, :root[data-theme="light"] #run-detail-content{
-  /* Claro: base fría con luz de colores y vidrio blanco lechoso con borde muy brillante */
-  --g-fill:linear-gradient(158deg, rgba(255,255,255,.62) 0%, rgba(255,255,255,.22) 48%, rgba(255,255,255,.42) 100%);
-  --g-fill-on:linear-gradient(158deg, rgba(255,255,255,.96) 0%, rgba(255,255,255,.7) 100%);
-  --g-rim:inset 0 0 0 1px rgba(255,255,255,.75), inset 1.5px 2.5px 1px -1.5px #fff, inset -1.5px -2px 1px -1.5px rgba(255,255,255,.95), inset 0 -12px 16px -12px rgba(110,120,200,.25), inset 0 8px 12px -8px rgba(255,255,255,.95);
-  --g-edge-top:rgba(255,255,255,1); --g-edge-bot:rgba(24,28,48,.08);
-  --g-shadow:0 1px 2px rgba(40,50,110,.1), 0 16px 32px -14px rgba(50,60,140,.38); --g-ring:#0A0A0A; --g-ink:#101114;
-  --g-blur:blur(20px) saturate(1.7);
-  --g-cta-top:#2A2A30; --g-cta-bot:#0A0A0A; --g-cta-text:#FFFFFF; --g-sheen:rgba(255,255,255,.28);
-  --g-bg:radial-gradient(58% 28% at 12% 4%, rgba(204,250,40,.85), transparent 72%), radial-gradient(54% 30% at 100% 22%, rgba(120,140,255,.75), transparent 72%), radial-gradient(56% 28% at 0% 46%, rgba(255,120,200,.55), transparent 72%), radial-gradient(52% 26% at 70% 50%, rgba(150,170,255,.42), transparent 72%), radial-gradient(54% 28% at 100% 76%, rgba(70,215,235,.6), transparent 72%), radial-gradient(66% 26% at 30% 100%, rgba(204,250,40,.65), transparent 72%), #E4E9F8;
+  --g-fill:var(--asphalt-2); --g-fill-on:#FFFFFF;
+  --g-rim:inset 0 0 0 1px rgba(24,28,48,.1);
+  --g-edge-top:rgba(24,28,48,.1); --g-edge-bot:rgba(24,28,48,.08);
+  --g-shadow:none; --g-ring:#0A0A0A; --g-ink:#101114;
+  --g-cta-top:#0A0A0A; --g-cta-bot:#0A0A0A; --g-cta-text:#FFFFFF; --g-sheen:transparent;
+  --g-bg:var(--asphalt);
 }
 @media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #onboard, :root:not([data-theme="dark"]) #session-sheet, :root:not([data-theme="dark"]) #consent-modal, :root:not([data-theme="dark"]) #run-detail-content{
-  /* Claro: base fría con luz de colores y vidrio blanco lechoso con borde muy brillante */
-  --g-fill:linear-gradient(158deg, rgba(255,255,255,.62) 0%, rgba(255,255,255,.22) 48%, rgba(255,255,255,.42) 100%);
-  --g-fill-on:linear-gradient(158deg, rgba(255,255,255,.96) 0%, rgba(255,255,255,.7) 100%);
-  --g-rim:inset 0 0 0 1px rgba(255,255,255,.75), inset 1.5px 2.5px 1px -1.5px #fff, inset -1.5px -2px 1px -1.5px rgba(255,255,255,.95), inset 0 -12px 16px -12px rgba(110,120,200,.25), inset 0 8px 12px -8px rgba(255,255,255,.95);
-  --g-edge-top:rgba(255,255,255,1); --g-edge-bot:rgba(24,28,48,.08);
-  --g-shadow:0 1px 2px rgba(40,50,110,.1), 0 16px 32px -14px rgba(50,60,140,.38); --g-ring:#0A0A0A; --g-ink:#101114;
-  --g-blur:blur(20px) saturate(1.7);
-  --g-cta-top:#2A2A30; --g-cta-bot:#0A0A0A; --g-cta-text:#FFFFFF; --g-sheen:rgba(255,255,255,.28);
-  --g-bg:radial-gradient(58% 28% at 12% 4%, rgba(204,250,40,.85), transparent 72%), radial-gradient(54% 30% at 100% 22%, rgba(120,140,255,.75), transparent 72%), radial-gradient(56% 28% at 0% 46%, rgba(255,120,200,.55), transparent 72%), radial-gradient(52% 26% at 70% 50%, rgba(150,170,255,.42), transparent 72%), radial-gradient(54% 28% at 100% 76%, rgba(70,215,235,.6), transparent 72%), radial-gradient(66% 26% at 30% 100%, rgba(204,250,40,.65), transparent 72%), #E4E9F8;
+  --g-fill:var(--asphalt-2); --g-fill-on:#FFFFFF;
+  --g-rim:inset 0 0 0 1px rgba(24,28,48,.1);
+  --g-edge-top:rgba(24,28,48,.1); --g-edge-bot:rgba(24,28,48,.08);
+  --g-shadow:none; --g-ring:#0A0A0A; --g-ink:#101114;
+  --g-cta-top:#0A0A0A; --g-cta-bot:#0A0A0A; --g-cta-text:#FFFFFF; --g-sheen:transparent;
+  --g-bg:var(--asphalt);
 } }
 
 #onboard, #session-sheet, #consent-modal{background:var(--g-bg); padding-left:22px; padding-right:22px;}
@@ -2783,29 +2775,21 @@ body{overflow-wrap:break-word;}
 
 /* botón principal: píldora con reflejo; texto "Omitir" suave debajo */
 #onboard .ob-cta, #consent-modal .ob-cta{width:100%; height:58px; border:0; border-radius:999px; font-size:16.5px; font-weight:700; letter-spacing:.005em; color:var(--g-cta-text); position:relative; overflow:hidden;
-  background:linear-gradient(180deg, var(--g-cta-top), var(--g-cta-bot)); box-shadow:inset 0 1px 0 var(--g-sheen), 0 14px 28px -12px rgba(0,0,0,.55); transition:transform .12s ease, opacity .18s ease;}
+  background:linear-gradient(180deg, var(--g-cta-top), var(--g-cta-bot)); box-shadow:none; transition:transform .12s ease, opacity .18s ease;}
 #onboard .ob-cta::before, #consent-modal .ob-cta::before{content:''; position:absolute; inset:0 0 52% 0; border-radius:inherit; pointer-events:none; background:linear-gradient(180deg, var(--g-sheen), transparent);}
 #onboard .ob-cta:active:not(:disabled), #consent-modal .ob-cta:active:not(:disabled){transform:scale(.98);}
-#onboard .ob-cta:disabled, #consent-modal .ob-cta:disabled{opacity:.34; box-shadow:inset 0 1px 0 var(--g-sheen);}
+#onboard .ob-cta:disabled, #consent-modal .ob-cta:disabled{opacity:.34;}
 #onboard .ob-skip, #consent-modal .ob-skip{background:none; border:0; color:var(--mist); font-size:15px; font-weight:600; padding:13px; align-self:center;}
 #onboard .btn-reason{text-align:center; margin:8px 0 0;}
 
 /* pantalla final */
 #onboard .ob-done{display:flex; flex-direction:column; align-items:center;}
 #onboard .ob-done-mark{width:88px; height:88px; margin:6vh 0 24px; border-radius:50%; display:grid; place-items:center; color:#101200;
-  background:linear-gradient(180deg,#E6FF7A,#C4EF1C); box-shadow:inset 0 1px 0 rgba(255,255,255,.7), 0 18px 36px -14px rgba(196,239,28,.7);}
+  background:var(--hivis); box-shadow:none;}
 #onboard .ob-done-mark svg{width:42px; height:42px;}
 #onboard .ob-callout{margin:26px 0 0; border:0; border-radius:20px; background:var(--g-fill); box-shadow:var(--g-rim); color:var(--g-ink); text-align:left;}
 
 /* desenfoque real, solo donde se banca y sin "reducir transparencia" */
-@supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
-  @media (prefers-reduced-transparency:no-preference){
-    #onboard .cw-row, #onboard #ob-back-btn, #onboard .ob-options .choice, #onboard .ob-field-big input, #onboard .ob-field-big select, #onboard .two-col input, #onboard .ob-date, #onboard .ob-textarea, #onboard .day-pill, #onboard .ob-callout, #onboard .np-list li, .ss-card, .ss-chip, #session-sheet .ss-close, #consent-modal .cs-card, #consent-modal .cs-icon-btn{
-      -webkit-backdrop-filter:var(--g-blur); backdrop-filter:var(--g-blur);}
-  }
-}
-@media (prefers-reduced-transparency:reduce){
-  #onboard{--g-fill:var(--asphalt-2);} :root[data-theme="light"] #onboard{--g-fill:#FFFFFF;}
 }
 
 /* ===== Sesión del Plan en bloques y puntuación de la carrera (2026-11-02) ===== */
@@ -2838,28 +2822,10 @@ body{overflow-wrap:break-word;}
 .rd-score-text{margin:0; font-size:13.5px; line-height:1.5; color:var(--mist);}
 
 /* "Activá las notificaciones" (pantalla 18 del inicio) */
-#onboard .np-bell{margin:6vh 0 24px; width:92px; height:92px; border-radius:50%; display:grid; place-items:center; color:#101200; background:linear-gradient(180deg,#E6FF7A,#C4EF1C); box-shadow:inset 0 1px 0 rgba(255,255,255,.7), 0 18px 36px -14px rgba(196,239,28,.7);}
+#onboard .np-bell{margin:6vh 0 24px; width:92px; height:92px; border-radius:50%; display:grid; place-items:center; color:#101200; background:var(--hivis); box-shadow:none;}
 #onboard .np-list{list-style:none; margin:28px 0 0; padding:0; width:100%; display:flex; flex-direction:column; gap:10px;}
 #onboard .np-list li{padding:16px 18px; border-radius:20px; text-align:left; font-size:15px; font-weight:600; line-height:1.4; color:var(--g-ink); background:var(--g-fill); box-shadow:var(--g-rim), var(--g-shadow);}
 
-/* ===== Vidrio líquido en lo que flota o es pasajero (2026-11-02) =====
-   Barra de abajo: reflejo en el borde de arriba y de abajo, SIN desenfoque (está siempre a la vista y el desenfoque trabó el scroll en celulares de gama baja).
-   Hojas y diálogos: vidrio de verdad (translúcido + desenfoque), porque aparecen un rato sobre una pantalla quieta. */
-:root{--lq-edge:rgba(255,255,255,.16); --lq-edge-low:rgba(0,0,0,.35); --lq-surface:rgba(32,32,36,.66);}
-:root[data-theme="light"]{--lq-edge:rgba(255,255,255,1); --lq-edge-low:rgba(24,28,48,.08); --lq-surface:rgba(255,255,255,.72);}
-@media (prefers-color-scheme:light){ :root:not([data-theme="dark"]){--lq-edge:rgba(255,255,255,1); --lq-edge-low:rgba(24,28,48,.08); --lq-surface:rgba(255,255,255,.72);} }
-:root:root nav.tabbar{box-shadow:inset 0 0 0 1px var(--lq-edge-low), inset 1.5px 2.5px 1px -1.5px var(--lq-edge), inset -1.5px -2px 1px -1.5px var(--lq-edge), 0 14px 32px -12px var(--liq-shadow);}
-:root:root .confirm-card{background:var(--lq-surface); box-shadow:inset 0 1px 0 var(--lq-edge), 0 -24px 50px -22px rgba(0,0,0,.55);}
-@supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
-  @media (prefers-reduced-transparency:no-preference){
-    :root:root .confirm-card{-webkit-backdrop-filter:blur(28px) saturate(1.7); backdrop-filter:blur(28px) saturate(1.7);}
-    .confirm-backdrop{-webkit-backdrop-filter:blur(5px); backdrop-filter:blur(5px);}
-  }
-}
-@supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
-  :root:root .confirm-card{background:var(--asphalt-2);} :root[data-theme="light"] .confirm-card{background:#FFFFFF;}
-}
-@media (prefers-reduced-transparency:reduce){ :root:root .confirm-card{background:var(--asphalt-2);} :root[data-theme="light"] .confirm-card{background:#FFFFFF;} }
 
 /* Consentimientos antes de empezar: todo en una pantalla de vidrio, con "Aceptar todo" y un ⓘ que explica cada uno */
 #consent-modal .cs-panel{display:flex; flex-direction:column; max-width:520px; margin:0 auto; padding:calc(var(--safe-top) + 18px) 0 calc(var(--safe-bottom) + 18px); min-height:100dvh; box-sizing:border-box;}
