@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T02:49:01Z';
+const APP_VERSION = '2026-11-02T03:04:22Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2091,7 +2091,7 @@ async function updateStravaStatusDisplay(){
     deviceConnections.strava = !!data;
     if(data){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
-      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectStrava; }
+      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.setAttribute('data-on-click', 'disconnectStrava()'); }
       // Mismo aviso que el cartel de Historial (ver getStravaSyncIssue), pero acá como
       // nota corta -- este es justo el lugar donde ya está el botón para reconectar.
       const issue = getStravaSyncIssue();
@@ -2101,7 +2101,7 @@ async function updateStravaStatusDisplay(){
       }
     } else {
       el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
-      if(btn){ btn.textContent = t('perfil_strava_connect'); btn.onclick = connectStrava; }
+      if(btn){ btn.textContent = t('perfil_strava_connect'); btn.setAttribute('data-on-click', 'connectStrava()'); }
       if(note) note.style.display = 'none';
     }
     renderPlan();
@@ -2182,10 +2182,10 @@ async function updatePolarStatusDisplay(){
     deviceConnections.polar = !!data;
     if(data){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
-      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectPolar; }
+      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.setAttribute('data-on-click', 'disconnectPolar()'); }
     } else {
       el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
-      if(btn){ btn.textContent = t('perfil_polar_connect'); btn.onclick = connectPolar; }
+      if(btn){ btn.textContent = t('perfil_polar_connect'); btn.setAttribute('data-on-click', 'connectPolar()'); }
     }
     renderPlan();
   }catch(e){}
@@ -2259,10 +2259,10 @@ async function updateWahooStatusDisplay(){
     if(wahooConnected) scheduleWahooSync(); // recién conectada (o al abrir Perfil): deja la semana en Wahoo
     if(wahooConnected){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
-      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectWahoo; }
+      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.setAttribute('data-on-click', 'disconnectWahoo()'); }
     } else {
       el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
-      if(btn){ btn.textContent = t('wahoo_connect'); btn.onclick = connectWahoo; }
+      if(btn){ btn.textContent = t('wahoo_connect'); btn.setAttribute('data-on-click', 'connectWahoo()'); }
     }
     renderPlan();
   }catch(e){}
@@ -2470,10 +2470,10 @@ async function updateSuuntoStatusDisplay(){
 
     if(connected){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
-      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectSuunto; }
+      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.setAttribute('data-on-click', 'disconnectSuunto()'); }
     } else {
       el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
-      if(btn){ btn.textContent = t('suunto_connect'); btn.onclick = connectSuunto; }
+      if(btn){ btn.textContent = t('suunto_connect'); btn.setAttribute('data-on-click', 'connectSuunto()'); }
     }
     renderPlan();
   }catch(e){}
@@ -2888,10 +2888,10 @@ async function updateCorosStatusDisplay(){
     if(data){ scheduleCorosSync(); updateCorosStaleNote(); }   // recién conectada (o al abrir Perfil): deja la semana en COROS
     if(data){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
-      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectCoros; }
+      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.setAttribute('data-on-click', 'disconnectCoros()'); }
     } else {
       el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
-      if(btn){ btn.textContent = t('coros_connect'); btn.onclick = connectCoros; }
+      if(btn){ btn.textContent = t('coros_connect'); btn.setAttribute('data-on-click', 'connectCoros()'); }
     }
     renderPlan();
   }catch(e){}
@@ -3016,13 +3016,13 @@ async function updateGarminStatusDisplay(){
     if(data) scheduleGarminSync();   // recién conectada (o al abrir Perfil): deja la semana en Garmin Connect
     if(data){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
-      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectGarmin; }
+      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.setAttribute('data-on-click', 'disconnectGarmin()'); }
       const perms = Array.isArray(data.permissions) ? data.permissions : [];
       const note = document.getElementById('garmin-perm-note');
       if(note){ const missing = perms.length && !perms.includes('WORKOUT_IMPORT'); note.textContent = missing ? t('garmin_no_workout_permission') : ''; note.style.display = missing ? '' : 'none'; }
     } else {
       el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
-      if(btn){ btn.textContent = t('garmin_connect'); btn.onclick = connectGarmin; }
+      if(btn){ btn.textContent = t('garmin_connect'); btn.setAttribute('data-on-click', 'connectGarmin()'); }
     }
     renderPlan();
   }catch(e){}
@@ -3222,10 +3222,10 @@ function updateHealthConnectStatusDisplay(){
   if(!el) return;
   if(state.healthConnectConnected){
     el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
-    if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.onclick = disconnectHealthConnect; }
+    if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.setAttribute('data-on-click', 'disconnectHealthConnect()'); }
   } else {
     el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
-    if(btn){ btn.textContent = t('healthconnect_connect'); btn.onclick = connectHealthConnect; }
+    if(btn){ btn.textContent = t('healthconnect_connect'); btn.setAttribute('data-on-click', 'connectHealthConnect()'); }
   }
 }
 async function disconnectHealthConnect(){
@@ -15528,6 +15528,174 @@ function renderRDRitmo(panel){
     }).join('')}
   `;
 }
+/* ===== Evaluación por tramos: la carrera hecha contra lo que decía el plan =====
+   Todo es cuenta determinista sobre los datos de la propia carrera (nada va a una IA). Los pasos se arman igual que los que se mandan al reloj (ver buildGarminWorkout):
+   calentamiento, repeticiones (trabajo + recuperación) o parte principal, vuelta a la calma. Se recorren en orden sobre la ruta de la carrera: los pasos por tiempo duran lo que dice el plan
+   y los pasos por distancia terminan cuando la carrera acumuló esa distancia, así un ritmo distinto al del plan no corre los cortes. */
+function runPlannedDay(run){
+  if(!run) return null;
+  const weeks = [{plan:state.plan, weekStart:state.weekStart}].concat(state.planHistory || []);
+  for(const w of weeks){
+    if(!w || !Array.isArray(w.plan) || !w.weekStart) continue;
+    const i = w.plan.findIndex(d => d && d.linkedRunId != null && String(d.linkedRunId) === String(run.id));
+    if(i >= 0) return {d:w.plan[i], date:addDaysToIsoLocal(w.weekStart, i)};
+  }
+  const runDate = localDateISO(run.date);
+  for(const w of weeks){
+    if(!w || !Array.isArray(w.plan) || !w.weekStart) continue;
+    const i = w.plan.findIndex((d, k) => d && !d.linkedRunId && addDaysToIsoLocal(w.weekStart, k) === runDate && runCountsForSession(run, d));
+    if(i >= 0) return {d:w.plan[i], date:runDate};
+  }
+  return null;
+}
+// p: lo que arma watchDayPayload (la misma sesión que ve el reloj). Devuelve { steps, checkFaster } o null si la sesión no tiene estructura que evaluar.
+function planStepsFromPayload(p){
+  if(!p || !(p.distKm > 0) || p.typeKey === 'test') return null;
+  const zone = p.zone >= 1 && p.zone <= 5 ? Math.round(p.zone) : 2;
+  const warm = p.warmupMin > 0 ? p.warmupMin * 60 : 0, cool = p.cooldownMin > 0 ? p.cooldownMin * 60 : 0;
+  const iv = p.interval && Number(p.interval.reps) > 0 ? p.interval : null;
+  const isRepeat = iv && (['intervals','hills','fartlek'].includes(p.typeKey) || iv.workMin);
+  const steps = [];
+  if(warm) steps.push({kind:'warmup', sec:warm, zone:2});
+  if(isRepeat){
+    const reps = Math.max(1, Math.min(50, Math.round(Number(iv.reps))));
+    for(let n = 1; n <= reps; n++){
+      if(p.typeKey === 'fartlek' || (iv.workMin && !iv.repMeters)){
+        steps.push({kind:'work', n, sec:(Number(iv.workMin) || 1) * 60, zone});
+        steps.push({kind:'rest', n, sec:(Number(iv.restMin) || 1) * 60, zone:1});
+      } else {
+        const repMeters = Math.max(20, Math.round(Number(iv.repMeters) || 400));
+        const useTime = Number(p.repSec) > 0;
+        steps.push(useTime ? {kind:'work', n, sec:p.repSec, zone} : {kind:'work', n, meters:repMeters, zone});
+        const restSec = Number(p.restSec) > 0 ? p.restSec : p.repSec;
+        if(p.typeKey === 'hills') steps.push(useTime ? {kind:'rest', n, sec:restSec, zone:1} : {kind:'rest', n, meters:repMeters, zone:1});
+        else steps.push({kind:'rest', n, sec:(Number(iv.recoveryMin) || 1) * 60, zone:1});
+      }
+    }
+  } else {
+    const distM = Math.round(Number(p.distKm) * 1000);
+    if(distM > 0 && !(p.timeBased && Number(p.durMin) > 0)) steps.push({kind:'main', meters:distM, zone});
+    else steps.push({kind:'main', sec:Math.max(300, Math.round(Number(p.durMin) || 30) * 60), zone});
+  }
+  if(cool) steps.push({kind:'cooldown', sec:cool, zone:2});
+  return {steps, checkFaster: isRepeat && p.typeKey !== 'hills'};
+}
+function evaluateRunSteps(run, plan, zones){
+  const pts = ((run && run.points) || []).filter(p => p && typeof p.t === 'number' && isFinite(p.t) && isFinite(p.lat) && isFinite(p.lon));
+  if(!plan || !plan.steps || plan.steps.length < 2 || pts.length < 10 || !(run.distanceKm > 0)) return null;
+  const cum = [0];
+  for(let i = 1; i < pts.length; i++) cum.push(cum[i-1] + haversine(pts[i-1].lat, pts[i-1].lon, pts[i].lat, pts[i].lon) * 1000);
+  const raw = cum[cum.length-1];
+  if(!(raw > 100)) return null;
+  const k = run.distanceKm * 1000 / raw;   // la distancia del reloj manda; la ruta (recortada) solo reparte cuándo se hizo cada tramo
+  const dist = cum.map(x => x * k);
+  const tStart = pts[0].t, tEnd = pts[pts.length-1].t, dEnd = dist[dist.length-1];
+  const distAt = tt => {
+    if(tt <= tStart) return 0;
+    if(tt >= tEnd) return dEnd;
+    let lo = 0, hi = pts.length - 1;
+    while(hi - lo > 1){ const mid = (lo + hi) >> 1; if(pts[mid].t <= tt) lo = mid; else hi = mid; }
+    return dist[lo] + (dist[hi] - dist[lo]) * (tt - pts[lo].t) / ((pts[hi].t - pts[lo].t) || 1);
+  };
+  const timeAtDist = d => {
+    if(d > dEnd + 1) return null;
+    if(d <= 0) return tStart;
+    let lo = 0, hi = pts.length - 1;
+    while(hi - lo > 1){ const mid = (lo + hi) >> 1; if(dist[mid] < d) lo = mid; else hi = mid; }
+    return pts[lo].t + (pts[hi].t - pts[lo].t) * (d - dist[lo]) / ((dist[hi] - dist[lo]) || 1);
+  };
+  const ser = run.series && run.series.hr && run.series.t ? run.series : null;
+  const hrBetween = (a, b) => {
+    if(!ser) return null;
+    let sum = 0, n = 0;
+    for(let i = 0; i < ser.t.length; i++){
+      if(ser.t[i] >= a && ser.t[i] <= b && ser.hr[i] != null){ sum += ser.hr[i]; n++; }
+    }
+    return n ? Math.round(sum / n) : null;
+  };
+  let cursor = tStart;
+  const rows = [];
+  for(const s of plan.steps){
+    let end;
+    if(s.sec != null) end = cursor + s.sec;
+    else end = timeAtDist(distAt(cursor) + s.meters);
+    if(s.kind === 'cooldown'){
+      const left = tEnd - cursor;
+      if(left < 20 || left > Math.max(s.sec * 2, s.sec + 300)) break;   // lo que sobra no parece una vuelta a la calma: no se inventa el tramo
+      end = tEnd;
+    }
+    if(end == null || end > tEnd + 5) return null;   // la carrera terminó antes de completar el plan: los cortes no se pueden asumir
+    end = Math.min(end, tEnd);
+    const sec = end - cursor, meters = distAt(end) - distAt(cursor);
+    const paceMin = meters > 20 && sec > 0 ? (sec / 60) / (meters / 1000) : null;
+    const hr = hrBetween(cursor, end);
+    let hrStatus = null;
+    const z = zones && zones[s.zone];
+    if(z && hr != null && ['warmup','cooldown','main','work'].includes(s.kind)){
+      if(hr > z.max + 3) hrStatus = 'high';
+      else if(hr < z.min - 3 && sec >= 150 && (s.kind === 'main' || s.kind === 'work')) hrStatus = 'low';
+      else hrStatus = 'ok';
+    }
+    rows.push({kind:s.kind, n:s.n || null, sec, meters, paceMin, hr, hrStatus});
+    cursor = end;
+  }
+  if(rows.length < 2) return null;
+  if(plan.checkFaster){
+    // si las repeticiones no salieron más rápidas que las recuperaciones, los cortes están corridos (ej. no se corrió con el entrenamiento cargado): no se muestra
+    const tot = kind => rows.filter(x => x.kind === kind).reduce((a, x) => ({sec:a.sec + x.sec, m:a.m + x.meters}), {sec:0, m:0});
+    const w = tot('work'), rs = tot('rest');
+    if(w.m > 0 && rs.m > 0 && !(w.sec / w.m < rs.sec / rs.m)) return null;
+  }
+  const works = rows.filter(x => x.kind === 'work' && x.paceMin != null);
+  const summary = {};
+  if(works.length >= 3){
+    const paces = works.map(x => x.paceMin);
+    summary.spreadSec = Math.round((Math.max(...paces) - Math.min(...paces)) * 60);
+    summary.deltaSec = Math.round((paces[paces.length-1] - paces[0]) * 60);   // positivo = la última más lenta que la primera
+  }
+  const judged = rows.filter(x => x.hrStatus);
+  summary.judged = judged.length;
+  summary.high = judged.filter(x => x.hrStatus === 'high').length;
+  return {rows, summary};
+}
+function renderRunPlanSteps(r){
+  let ev = null;
+  try{
+    const found = runPlannedDay(r);
+    if(!found || found.d.raceDay) return '';
+    const plan = planStepsFromPayload(watchDayPayload(found.d, found.date));
+    ev = evaluateRunSteps(r, plan, state.profile && state.profile.hrZones);
+  }catch(e){ ev = null; }
+  if(!ev) return '';
+  const unitK = isImperial() ? KM_PER_MI : 1, u = distUnit();
+  const label = x => {
+    const key = {warmup:'seg_step_warmup', cooldown:'seg_step_cooldown', main:'seg_step_main', work:'seg_step_work', rest:'seg_step_rest'}[x.kind];
+    return t(key, {n:x.n || ''});
+  };
+  const anyHr = ev.rows.some(x => x.hr != null);
+  const hrCell = x => {
+    if(x.hr == null) return '–';
+    const tag = x.hrStatus === 'high' ? t('seg_hr_high') : x.hrStatus === 'low' ? t('seg_hr_low') : '';
+    return tag ? `${x.hr} <strong>${tag}</strong>` : String(x.hr);
+  };
+  const body = ev.rows.map(x => `<tr><td>${escapeHtml(label(x))}</td><td>${fmtTime(Math.round(x.sec))}</td><td>${fmtDist(x.meters / 1000)}</td><td>${x.paceMin != null ? fmtPace(x.paceMin) : '–'}</td>${anyHr ? `<td>${hrCell(x)}</td>` : ''}</tr>`).join('');
+  const lines = [];
+  const s = ev.summary;
+  if(s.spreadSec != null){
+    const conv = v => Math.max(1, Math.abs(Math.round(v * unitK)));
+    if(s.spreadSec <= 8) lines.push(t('seg_sum_even', {n:conv(s.spreadSec), u}));
+    else if(s.deltaSec >= 8) lines.push(t('seg_sum_fade', {n:conv(s.deltaSec), u}));
+    else if(s.deltaSec <= -8) lines.push(t('seg_sum_improve', {n:conv(s.deltaSec), u}));
+    else lines.push(t('seg_sum_var', {n:conv(s.spreadSec), u}));
+  }
+  if(s.judged > 0) lines.push(s.high > 0 ? t('seg_sum_hr_high', {n:s.high, m:s.judged}) : t('seg_sum_hr_ok'));
+  return `<div class="card" style="margin-bottom:16px;">
+    <h3 style="font-size:16px; margin-bottom:10px;">${t('seg_plan_title')}</h3>
+    ${lines.length ? `<p style="margin:0 0 12px; font-size:13.5px; line-height:1.5;">${lines.map(escapeHtml).join('<br>')}</p>` : ''}
+    <div style="overflow-x:auto;"><table class="rd-seg-table"><thead><tr><th>${t('seg_col_step')}</th><th>${t('rd_seg_dur')}</th><th>${t('rd_seg_dist')} (${u})</th><th>${t('run_pace_word')} (/${u})</th>${anyHr ? `<th>${t('hist_avg_hr')}</th>` : ''}</tr></thead><tbody>${body}</tbody></table></div>
+    <p class="muted" style="margin:10px 0 0; font-size:12px; line-height:1.45;">${t('seg_plan_note')}</p>
+  </div>`;
+}
 function renderRDSegmentos(panel){
   const {r, paceMin, avgHr} = rdCurrent;
   const splits = getDisplaySplits(r);
@@ -15563,7 +15731,7 @@ function renderRDSegmentos(panel){
       ${anyCad ? `<td>${s.avgCadence!=null ? s.avgCadence : '–'}</td>` : ''}
     </tr>`;
   }).join('');
-  panel.innerHTML = `
+  panel.innerHTML = renderRunPlanSteps(r) + `
     <div style="overflow-x:auto;">
     <table class="rd-seg-table">
       <thead><tr>
