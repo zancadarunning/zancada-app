@@ -24,6 +24,7 @@ const { ensureFreshSuuntoToken } = require('./_lib/suunto-activity-helpers');
 const { syncGuides, localDateParts, addDaysIso, mondayOfIso } = require('./_lib/suunto-guides-sync');
 const { cleanZones, cleanLabels, cleanDay: cleanStoredDay } = require('./_lib/watch-plan-clean');
 const { withSentry, reportError } = require('./_lib/sentry');
+const { isDuplicate, remember } = require('./_lib/plan-dedupe');
 
 const FIRST_HOUR = 2; // hora local (2:00 am) desde la cual se sube la semana nueva
 
@@ -41,6 +42,8 @@ async function processConnection(base, headers, conn, nowMs) {
   if (hour < FIRST_HOUR) return 'early';
   const weekStart = mondayOfIso(localDate);
   if (conn.guides_week === weekStart) return 'done';
+  // un intento que falló hace menos de 24 h para esta misma semana: no se repite cada hora (cuota compartida de Suunto)
+  if (await isDuplicate(base, headers, conn.user_id, 'suunto_guides_fail', weekStart, 24 * 3600 * 1000)) return 'backoff';
 
   const weekEnd = addDaysIso(weekStart, 6);
   const days = (Array.isArray(row.plan.days) ? row.plan.days : [])
@@ -51,7 +54,7 @@ async function processConnection(base, headers, conn, nowMs) {
   if (!accessToken) return 'token';
 
   const out = await syncGuides(accessToken, { days, zones: cleanZones(row.plan.zones), labels: cleanLabels(row.plan.labels), keepDates, today: localDate });
-  if (out.listFailed || out.failed) return 'error';
+  if (out.listFailed || out.failed) { await remember(base, headers, conn.user_id, 'suunto_guides_fail', weekStart); return 'error'; }
 
   await fetch(`${base}/rest/v1/suunto_connections?user_id=eq.${conn.user_id}`, {
     method: 'PATCH', headers, body: JSON.stringify({ guides_week: weekStart })

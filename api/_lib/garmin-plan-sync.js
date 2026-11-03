@@ -81,11 +81,16 @@ async function removeOrphanZancadaWorkouts(base, headers, userId, accessToken, g
 
 // Quita TODO lo que Zancada mandó (al desconectar o al borrar la cuenta). Devuelve cuántos entrenamientos se borraron.
 async function removeAllGarminWorkouts(base, headers, userId, accessToken) {
-  const known = await loadKnown(base, headers, userId, '0000-00-00');
+  // Solo lo que todavía está por venir (desde ayer, por el huso) y en orden de fecha: antes se traían hasta 60 filas SIN orden, con las fechas ya pasadas, y los 40 que se recorrían eran
+  // justo los más viejos, así que los entrenamientos futuros quedaban en el calendario de Garmin Connect de la persona.
+  const from = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const known = await loadKnown(base, headers, userId, from);
   let removed = 0;
-  for (const [date, rec] of Object.entries(known).slice(0, 40)) {
-    try { if (await deleteGarminWorkout(accessToken, rec)) removed++; } catch (e) { /* se sigue con el resto */ }
-    await forgetKnown(base, headers, userId, date);
+  for (const [date, rec] of Object.entries(known).sort(([x], [y]) => x.localeCompare(y)).slice(0, 40)) {
+    let ok = false;
+    try { ok = await deleteGarminWorkout(accessToken, rec); } catch (e) { /* se sigue con el resto */ }
+    // la memoria de esa fecha se borra SOLO si Garmin confirmó el borrado (antes también con un 429 o un 5xx, y el entrenamiento quedaba huérfano para siempre)
+    if (ok) { removed++; await forgetKnown(base, headers, userId, date); }
   }
   return removed;
 }

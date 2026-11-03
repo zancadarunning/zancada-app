@@ -18,7 +18,7 @@ const { syncWahooPlans } = require('./_lib/wahoo-plans-sync');
 const { DATE_RE, cleanZones, cleanLabels, cleanDay, cleanKnown } = require('./_lib/watch-plan-clean');
 const { withSentry, reportError } = require('./_lib/sentry');
 const { payloadHash, isDuplicate, remember } = require('./_lib/plan-dedupe');
-const { withinDailyCap } = require('./_lib/daily-cap');
+const { withinDailyCap, withinHourlyCap } = require('./_lib/daily-cap');
 
 const MAX_DAYS = 7;          // la ventana que manda la app es de una semana; cada dia son ~3 llamadas a Wahoo (cuota compartida por toda la app)
 const MAX_REMOVE = 10;
@@ -59,6 +59,11 @@ module.exports = withSentry(async (req, res) => {
     return;
   }
   if (!(await withinDailyCap(base, headers, 'wahoo-plan', userId, 48, { failClosed: true }))) {
+    res.status(200).json({ pushed: 0, reason: 'rate_limited' });
+    return;
+  }
+  // Tope de TODA la app (la cuota de Wahoo es compartida): por hora y por día.
+  if (!(await withinHourlyCap(base, headers, 'wahoo-plan-global', null, 120)) || !(await withinDailyCap(base, headers, 'wahoo-plan-global', null, 800))) {
     res.status(200).json({ pushed: 0, reason: 'rate_limited' });
     return;
   }

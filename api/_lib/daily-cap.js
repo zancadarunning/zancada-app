@@ -39,4 +39,10 @@ async function withinDailyCap(base, headers, scope, userId, limit, opts) {
   }
 }
 
-module.exports = { withinDailyCap, capId };
+// Igual que withinDailyCap pero por HORA (el id incluye la hora UTC, así el contador diario de cada id es el de esa hora): para cuotas por minuto/hora como la de Garmin (100 llamadas por minuto).
+async function withinHourlyCap(base, headers, scope, userId, limit, opts) {
+  const hour = new Date().toISOString().slice(0, 13);
+  return withinDailyCap(base, headers, scope + ':' + hour, userId, limit, opts);
+}
+
+module.exports = { withinDailyCap, withinHourlyCap, capId };

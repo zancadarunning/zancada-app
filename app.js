@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-03T12:08:45Z';
+const APP_VERSION = '2026-11-03T13:31:08Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1748,7 +1748,7 @@ async function loadUserAndEnter(user, isRetry){
         try{ supabaseClient.auth.updateUser({ data: { lang } }); }catch(e){}
       }
       if(!hasConsent()){
-        if(!(await ensureConsent())){ await supabaseClient.auth.signOut(); location.reload(); return; }
+        if(!(await ensureConsent())){ await supabaseClient.auth.signOut({ scope:'local' }); location.reload(); return; }
         persist();   // queda guardado en la cuenta (versión y fecha)
       }
       if(!state.chat || !state.chat.length) seedCoachGreeting(); else renderChat();
@@ -1765,7 +1765,7 @@ async function loadUserAndEnter(user, isRetry){
       location.reload();
       return;
     }
-    if(!(await ensureConsent())){ await supabaseClient.auth.signOut(); location.reload(); return; }   // el consentimiento viaja en state y se guarda con el onboarding
+    if(!(await ensureConsent())){ await supabaseClient.auth.signOut({ scope:'local' }); location.reload(); return; }   // el consentimiento viaja en state y se guarda con el onboarding
     pendingEmail = user.email;
     stateLoadedFor = user.id;   // la consulta confirmó que no hay datos: cuenta nueva, el estado por defecto es el correcto
     document.getElementById('splash').style.display='none';
@@ -1784,7 +1784,7 @@ async function loadUserAndEnter(user, isRetry){
     if(window.zcBootDone) window.zcBootDone();
     const retry = await showConfirm(t('load_error_text'), {confirmText:t('load_error_retry'), cancelText:t('perfil_logout')});
     if(retry) loadUserAndEnter(user);
-    else { await supabaseClient.auth.signOut(); location.reload(); }
+    else { await supabaseClient.auth.signOut({ scope:'local' }); location.reload(); }
   }
 }
 function isPasswordStrong(pw){
@@ -2171,7 +2171,12 @@ async function updateStravaStatusDisplay(){
   const note = document.getElementById('strava-sync-note');
   if(!el || !currentUserId) return;
   try{
-    const { data } = await supabaseClient.from('strava_connections').select('athlete_id').eq('user_id', currentUserId).maybeSingle();
+    let { data, error: connErr } = await supabaseClient.from('strava_connections').select('athlete_id').eq('user_id', currentUserId).maybeSingle();
+    // La verdad la dice el SERVIDOR (/api/device-status): en el iPhone la consulta directa llegó a devolver vacío SIN error y se mostraba "desconectado" estando conectado (ya lo hacían Wahoo y Suunto).
+    const srvState = await fetchServerConnections();
+    const srvKnown = !!(srvState && typeof srvState.strava === 'boolean');
+    if(srvKnown) data = srvState.strava ? (data || {}) : null;
+    else if(connErr) return;   // sin servidor y con error de la consulta: se deja lo que ya se mostraba en vez de pisarlo con "desconectado"
     deviceConnections.strava = !!data;
     if(data){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
@@ -2262,7 +2267,12 @@ async function updatePolarStatusDisplay(){
   const btn = document.getElementById('polar-connect-btn');
   if(!el || !currentUserId) return;
   try{
-    const { data } = await supabaseClient.from('polar_connections').select('polar_user_id').eq('user_id', currentUserId).maybeSingle();
+    let { data, error: connErr } = await supabaseClient.from('polar_connections').select('polar_user_id').eq('user_id', currentUserId).maybeSingle();
+    // La verdad la dice el SERVIDOR (/api/device-status): en el iPhone la consulta directa llegó a devolver vacío SIN error y se mostraba "desconectado" estando conectado (ya lo hacían Wahoo y Suunto).
+    const srvState = await fetchServerConnections();
+    const srvKnown = !!(srvState && typeof srvState.polar === 'boolean');
+    if(srvKnown) data = srvState.polar ? (data || {}) : null;
+    else if(connErr) return;   // sin servidor y con error de la consulta: se deja lo que ya se mostraba en vez de pisarlo con "desconectado"
     deviceConnections.polar = !!data;
     if(data){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
@@ -2986,7 +2996,12 @@ async function updateCorosStatusDisplay(){
   const btn = document.getElementById('coros-connect-btn');
   if(!el || !currentUserId) return;
   try{
-    const { data } = await supabaseClient.from('coros_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
+    let { data, error: connErr } = await supabaseClient.from('coros_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
+    // La verdad la dice el SERVIDOR (/api/device-status): en el iPhone la consulta directa llegó a devolver vacío SIN error y se mostraba "desconectado" estando conectado (ya lo hacían Wahoo y Suunto).
+    const srvState = await fetchServerConnections();
+    const srvKnown = !!(srvState && typeof srvState.coros === 'boolean');
+    if(srvKnown) data = srvState.coros ? (data || {}) : null;
+    else if(connErr) return;   // sin servidor y con error de la consulta: se deja lo que ya se mostraba en vez de pisarlo con "desconectado"
     deviceConnections.coros = !!data;
     if(data){ scheduleCorosSync(); updateCorosStaleNote(); }   // recién conectada (o al abrir Perfil): deja la semana en COROS
     if(data){
@@ -3116,7 +3131,12 @@ async function updateGarminStatusDisplay(){
   const btn = document.getElementById('garmin-connect-btn');
   if(!el || !currentUserId) return;
   try{
-    const { data } = await supabaseClient.from('garmin_connections').select('user_id,permissions').eq('user_id', currentUserId).maybeSingle();
+    let { data, error: connErr } = await supabaseClient.from('garmin_connections').select('user_id,permissions').eq('user_id', currentUserId).maybeSingle();
+    // La verdad la dice el SERVIDOR (/api/device-status): en el iPhone la consulta directa llegó a devolver vacío SIN error y se mostraba "desconectado" estando conectado (ya lo hacían Wahoo y Suunto).
+    const srvState = await fetchServerConnections();
+    const srvKnown = !!(srvState && typeof srvState.garmin === 'boolean');
+    if(srvKnown) data = srvState.garmin ? (data || {}) : null;
+    else if(connErr) return;   // sin servidor y con error de la consulta: se deja lo que ya se mostraba en vez de pisarlo con "desconectado"
     deviceConnections.garmin = !!data;
     if(data) scheduleGarminSync();   // recién conectada (o al abrir Perfil): deja la semana en Garmin Connect
     if(data){
@@ -5105,7 +5125,7 @@ async function logout(){
   // Se da de baja el push de ESTE dispositivo ANTES de cerrar la sesión (la baja necesita la sesión): sin esto el teléfono seguía recibiendo el plan y las carreras de la cuenta que se fue
   // (pantalla de bloqueo incluida) aunque entrara otra persona. Al volver a iniciar sesión refreshNativePushRegistration() lo registra de nuevo. Tope de 4 s para no trabar el cierre sin conexión.
   try{ await Promise.race([deletePushRowsForThisDevice(), new Promise(r => setTimeout(r, 4000))]); }catch(e){}
-  await supabaseClient.auth.signOut();
+  await supabaseClient.auth.signOut({ scope:'local' });   // solo ESTE dispositivo: el scope por defecto cerraba también la sesión del resto de los dispositivos de la cuenta
   location.reload();
 }
 // Antes de una acción que no se puede deshacer: quien tiene cuenta con contraseña la escribe de nuevo (así una sesión robada no alcanza) y se
@@ -13438,10 +13458,9 @@ function startRun(){
     showRunSummaryUI();
     return;
   }
-  if(saved && saved.startedAt && (Date.now()-saved.startedAt) < 6*3600*1000 && (saved.points||[]).length){
-    // hay una carrera sin terminar de hace menos de 6 horas (por ejemplo, la app
-    // se cerró sola a mitad de un entrenamiento) -> ofrecemos recuperarla en vez
-    // de arrancar una nueva y perder lo ya corrido
+  if(saved && saved.startedAt && ((saved.points||[]).length || Number(saved.distanceKm) > 0.05 || Number(saved.elapsedSec) >= 120)){
+    // hay una carrera sin terminar con algo real corrido (por ejemplo, la app se cerró sola a mitad de un entrenamiento) -> ofrecemos recuperarla en vez de arrancar una nueva y perder lo
+    // ya corrido. Sin límite de horas ni exigir puntos GPS (una cinta no tiene): descartarla es una decisión explícita de la persona, no algo que pase en silencio.
     showConfirm(t('run_recover_text'), {confirmText:t('run_recover_confirm'), cancelText:t('run_recover_discard')}).then(resume=>{
       // La cuenta regresiva (ver startRunWithCountdown() más abajo) es solo para un arranque
       // GENUINAMENTE nuevo -- recuperar una carrera ya en curso no es "empezar", es seguir
@@ -18485,6 +18504,21 @@ function badCoachEnum(field, value, allowed){
 function needsAmountMsg(dia){
   return `Falta distancia_km o duracion_min: ${dia} no tenía ninguna sesión y sin cantidad el día seguiría siendo descanso -- volvé a llamar a modificar_sesion incluyendo uno de los dos.`;
 }
+// Las restricciones de seguridad del plan (principiante, cautela alta por edad/contextura, molestia activa, posparto reciente) hasta ahora solo eran TEXTO del prompt: la herramienta del coach podía
+// armar series, cuestas, tempo o zonas 4-5 igual, y esa sesión queda custom (el generador determinista que sí modera la carga ya no la toca). Ahora la herramienta lo rechaza y le explica el motivo al modelo.
+const COACH_HARD_TYPES = ['intervals', 'hills', 'tempo', 'progression'];
+function coachSafetyRefusal(input){
+  const hard = COACH_HARD_TYPES.includes(input.tipo_categoria) || resolveZone(input.zona) >= 4;
+  if(!hard) return null;
+  const p = state.profile || {};
+  let why = null;
+  if(isBeginnerProfile(p)) why = 'es principiante';
+  else if(pregnancyStillRecent(p)) why = 'está en un posparto reciente';
+  else if((activePainEntries(14) || []).length) why = 'tiene una molestia activa';
+  else if(trainingCaution(p).level >= 2) why = 'tiene un perfil (edad o contextura) que pide cautela alta';
+  if(!why) return null;
+  return 'No armo esa sesión: el corredor ' + why + ', así que no corresponde darle series, cuestas, tempo ni zonas 4-5. Proponé una sesión suave (rodaje o fondo en zonas 1-3) o explicale que el plan se lo irá habilitando.';
+}
 function applyPlanChange(input){
   // El input_schema de la herramienta declara dia como enum:DAY_KEYS, pero eso es solo una
   // guía para el modelo -- la API de tool use no lo hace cumplir de verdad (mismo motivo que
@@ -18502,6 +18536,8 @@ function applyPlanChange(input){
   if(input.terreno && !COACH_TERRAINS.includes(input.terreno)) return badCoachEnum('terreno', input.terreno, COACH_TERRAINS);
   const raceRefusal = raceDayRefusal(input.dia, input.semana);
   if(raceRefusal) return raceRefusal;
+  const safetyRefusal = coachSafetyRefusal(input);
+  if(safetyRefusal) return safetyRefusal;
   // El snapshot de undo se toma DESPUÉS de validar (día encontrado, no bloqueado) -- si
   // se toma antes, un pedido inválido (día ya pasado, por ejemplo) igual pisa el snapshot
   // del cambio real anterior con el estado actual sin cambios, y "deshacer" ya no puede
@@ -19106,7 +19142,7 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
         signal: chatAbortController.signal
       });
       const data = await res.json();
-      if(data.error){ finalText = data.error.message || t('coach_connection_error'); break; }
+      if(data.error){ if(!anyToolApplied) finalText = data.error.message || t('coach_connection_error'); break; }   // con cambios ya aplicados no se muestra un error: se avisa que están (ver más abajo) y no se reintenta
       const blocks = data.content || [];
       const textPart = blocks.filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
       if(textPart) finalText += (finalText? '\n':'') + textPart;

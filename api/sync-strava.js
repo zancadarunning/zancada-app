@@ -9,6 +9,7 @@ const { withSentry, reportError } = require('./_lib/sentry');
 const { mergeAndNotify } = require('./_lib/notify-new-run');
 const { safeConvert } = require('./_lib/safe-convert');
 const { knownRunIds } = require('./_lib/known-run-ids');
+const { isDuplicateOfExisting } = require('./_lib/duplicate-run');
 
 // Cuántas carreras sin parciales reales se completan por cuenta en cada corrida del cron
 // -- ver el comentario grande de backfillStravaSplits.
@@ -130,6 +131,8 @@ module.exports = withSentry(async (req, res) => {
             const newRuns = [];
             for (const act of runActs) {
               if (knownIds.has(act.id)) continue;
+              // la misma actividad ya guardada desde otra fuente: el merge la descartaba SIN guardar su id y se volvía a bajar (con sus streams) cada 15 min durante 30 días
+              if (isDuplicateOfExisting(stateRows[0].data && stateRows[0].data.runs, Date.parse(act.start_date), (act.distance || 0) / 1000, act.moving_time)) continue;
               const run = await safeConvert(() => activityToRun(act, accessToken), 'strava'); if (run) newRuns.push(run);
             }
             await mergeAndNotify(mergeStravaRuns, base, headers, conn.user_id, newRuns, 'skip', 'strava');
