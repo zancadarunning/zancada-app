@@ -55,6 +55,7 @@ module.exports = withSentry(async (req, res) => {
       await purgeWahooRunsForUser(base, headers, userId);
     } catch (e) {
       console.error('wahoo-disconnect: error purging synced runs', e);
+      await reportError(e, { endpoint: 'wahoo-disconnect', step: 'purge' }).catch(() => {});   // antes solo quedaba en el log de Vercel
     }
 
     res.status(200).json({ ok: true });

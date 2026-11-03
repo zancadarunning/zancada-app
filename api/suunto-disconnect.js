@@ -60,6 +60,7 @@ module.exports = withSentry(async (req, res) => {
       await purgeSuuntoRunsForUser(base, headers, userId);
     } catch (e) {
       console.error('suunto-disconnect: error purging synced runs', e);
+      await reportError(e, { endpoint: 'suunto-disconnect', step: 'purge' }).catch(() => {});   // antes solo quedaba en el log de Vercel
     }
 
     res.status(200).json({ ok: true });

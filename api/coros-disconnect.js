@@ -55,6 +55,7 @@ module.exports = withSentry(async (req, res) => {
       await purgeCorosRunsForUser(base, headers, userId);
     } catch (e) {
       console.error('coros-disconnect: error purging synced runs', e);
+      await reportError(e, { endpoint: 'coros-disconnect', step: 'purge' }).catch(() => {});   // antes solo quedaba en el log de Vercel
     }
 
     res.status(200).json({ ok: true });

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-03T12:03:29Z';
+const APP_VERSION = '2026-11-03T12:07:21Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -953,6 +953,7 @@ function fmtDist(km, decimals=2){
 // stepKm/goalKm llegan siempre en km desde el input (lo que el usuario tipeó, en la unidad
 // que está viendo) -- hay que convertirlos a km ANTES de guardarlos en state.profile, si no
 // se guarda el número tal cual como si fuera km aunque el usuario lo haya escrito en millas.
+const MAX_CURRENT_WEEKLY_KM = 200;   // ni los corredores de élite pasan de ~200 km por semana: más que eso es un error de tipeo
 function parseDistInput(val){
   const n = parseFloat(val);
   if(!(n>0) && n!==0) return 0;
@@ -1771,6 +1772,8 @@ async function loadUserAndEnter(user, isRetry){
     document.getElementById('login').style.display='none';
     document.getElementById('onboard').style.display='block';
     resetOnboardSteps();
+    // Volviendo de autorizar un reloj en medio del inicio (web/iPhone): se confirma la conexión AHORA y se repintan las filas (antes recién al terminar todo, cuando el código de un solo uso ya había vencido).
+    finishPendingProviderLink().then(()=>{ if(obCurrentStep === 19) obRefreshConnections(); }).catch(()=>{});
     if(window.zcBootDone) window.zcBootDone();
   }catch(e){
     console.error('load error', e);
@@ -4195,7 +4198,7 @@ function savePersonalData(){
     // "12.4" mi -> 19.956km) en un guardado que ni siquiera cambió este campo.
     const kmUnchanged = (state.profile.currentWeeklyKm===0 || state.profile.currentWeeklyKm)
       && currentKmInput.value === fmtDist(state.profile.currentWeeklyKm, 1);
-    state.profile.currentWeeklyKm = kmUnchanged ? state.profile.currentWeeklyKm : parseDistInput(currentKmInput.value);
+    state.profile.currentWeeklyKm = kmUnchanged ? state.profile.currentWeeklyKm : Math.min(parseDistInput(currentKmInput.value), MAX_CURRENT_WEEKLY_KM);
     state.profile.runnerType = 'active';
   }
   state.profile.weeklyKm = calcWeeklyKm(state.profile);
@@ -4653,7 +4656,7 @@ async function finishOnboard(){
   // principiante igual, pero el número crudo seguía mostrándose así en Perfil/el saludo
   // del coach).
   const currentWeeklyKmRaw = runnerType==='active' ? parseFloat(document.getElementById('ob-currentkm').value) : 0;
-  const currentWeeklyKm = currentWeeklyKmRaw>0 ? currentWeeklyKmRaw : 0;
+  const currentWeeklyKm = currentWeeklyKmRaw>0 ? Math.min(currentWeeklyKmRaw, MAX_CURRENT_WEEKLY_KM) : 0;   // un tipeo (400 por 40) armaba un plan de cientos de km
   const terrain = document.querySelector('#ob-terrain .choice.active')?.dataset.v || 'asfalto';
   const trainBy = document.querySelector('#ob-trainby .choice.active')?.dataset.v || 'distance';
   const trainingDays = DAY_KEYS.filter(d => document.querySelector(`#ob-days .day-pill[data-v="${d}"]`).classList.contains('active'));
@@ -7709,7 +7712,7 @@ function generatePlan(p, weekNumber, weekStartDate){
       tempo como un bloque continuo, tirada larga por minutos. d.durMin es la fuente de verdad en ese modo
       (d.dist queda solo como estimación para estadísticas, calendario y relojes). */
 const LEVEL_TEST_SECONDS = 720;
-const LEVEL_TEST_MIN_M = 800, LEVEL_TEST_MAX_M = 4500;
+const LEVEL_TEST_MIN_M = 1200, LEVEL_TEST_MAX_M = 4500;   // menos de 1200 m en 12 minutos es caminata: no alcanza para estimar ritmos (daba rangos invertidos y 12 a 18 min/km)
 // Fecha (ISO) del test agendado que pasó sin hacerse -- solo si no quedó otro test agendado más adelante.
 function missedLevelTestIso(){
   const plan = state.plan || [];
@@ -7742,7 +7745,7 @@ function trainingPacesFromVdot(vdot){
   const at = f => paceMinPerKmAtVo2(vdot * f);
   const r = x => Math.round(x * 100) / 100;
   return {
-    easy: [r(at(0.74)), r(Math.min(at(0.62), 12.5))],
+    easy: [r(at(0.74)), r(Math.max(at(0.74) + 0.3, Math.min(at(0.62), 12.5)))],   // el extremo lento nunca queda por debajo del rápido
     tempo: [r(at(0.90)), r(at(0.86))],
     interval: [r(at(1.00)), r(at(0.95))]
   };

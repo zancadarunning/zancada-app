@@ -15,6 +15,7 @@ const { encToken, decToken, isEncrypted, keyIsValid } = require('../api/_lib/tok
 
 // Columnas con tokens de cada tabla (Polar no tiene refresh_token: sus tokens no vencen)
 const TABLES = {
+  garmin_connections: ['access_token', 'refresh_token'],
   strava_connections: ['access_token', 'refresh_token'],
   polar_connections: ['access_token'],
   wahoo_connections: ['access_token', 'refresh_token'],
