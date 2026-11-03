@@ -13,7 +13,7 @@ const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { DATE_RE, cleanZones, cleanDay, cleanLabels } = require('./_lib/watch-plan-clean');
 const { payloadHash, isDuplicate, remember } = require('./_lib/plan-dedupe');
-const { withinDailyCap } = require('./_lib/daily-cap');
+const { withinDailyCap, withinHourlyCap } = require('./_lib/daily-cap');
 const { ensureFreshGarminToken, garminCall, refreshGarminPermissions, GARMIN_API } = require('./_lib/garmin-activity-helpers');
 const { buildGarminWorkout, countSteps } = require('./_lib/garmin-workout-builder');
 const { loadKnown, saveKnown, forgetKnown, deleteGarminWorkout, removeOrphanZancadaWorkouts } = require('./_lib/garmin-plan-sync');
@@ -49,6 +49,8 @@ module.exports = withSentry(async (req, res) => {
   }
   if (!(await checkSyncCooldown(base, headers, userId, 'garmin-plan', 300000, { failClosed: true }))) { res.status(200).json({ pushed: 0, reason: 'cooldown' }); return; }
   if (!(await withinDailyCap(base, headers, 'garmin-plan', userId, 12, { failClosed: true }))) { res.status(200).json({ pushed: 0, reason: 'cooldown' }); return; }
+  // Tope de TODA la app (la cuota de Garmin Starter es de 100 llamadas por minuto para todos): por hora y por día, para que unas pocas cuentas no la agoten para el resto.
+  if (!(await withinHourlyCap(base, headers, 'garmin-plan-global', null, 60)) || !(await withinDailyCap(base, headers, 'garmin-plan-global', null, 600))) { res.status(200).json({ pushed: 0, reason: 'cooldown' }); return; }
 
   try {
     const connRes = await fetch(`${base}/rest/v1/garmin_connections?user_id=eq.${userId}&select=user_id,garmin_user_id,access_token,refresh_token,expires_at,refresh_expires_at,permissions`, { headers });

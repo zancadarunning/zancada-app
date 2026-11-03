@@ -9,12 +9,13 @@ const { decToken } = require('./_lib/token-crypto');
 const requireCronSecret = require('./_lib/require-cron-secret');
 const { rotateForFairness } = require('./_lib/cron-rotation');
 const { syncProbe, probeHasNew, probeMayBackfill } = require('./_lib/sync-probe');
-const { exerciseToRun, mergePolarRuns, fetchFitSplits } = require('./_lib/polar-activity-helpers');
+const { exerciseToRun, mergePolarRuns, fetchFitSplits, polarStartIso, parseIsoDurationToSeconds } = require('./_lib/polar-activity-helpers');
 const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { withSentry, reportError } = require('./_lib/sentry');
 const { mergeAndNotify } = require('./_lib/notify-new-run');
 const { safeConvert } = require('./_lib/safe-convert');
 const { knownRunIds } = require('./_lib/known-run-ids');
+const { isDuplicateOfExisting } = require('./_lib/duplicate-run');
 
 // Cuántas carreras sin splits reales se completan por cuenta en cada corrida del cron.
 // Un lote chico en vez de todas de una: la mayoría de las cuentas no van a tener nada
@@ -123,6 +124,8 @@ module.exports = withSentry(async (req, res) => {
             // apuro por responder rápido a un usuario esperando en pantalla.
             const newRuns = [];
             for (const ex of runExercises.filter(ex => !knownIds.has(ex.id))) {
+              // ya guardada desde otra fuente: se salta ANTES de bajar el FIT (ver api/_lib/duplicate-run.js)
+              if (isDuplicateOfExisting(stateRows[0].data && stateRows[0].data.runs, Date.parse(polarStartIso(ex)), (ex.distance || 0) / 1000, parseIsoDurationToSeconds(ex.duration))) continue;
               const run = await safeConvert(() => exerciseToRun(ex, decToken(conn.access_token)), 'polar'); if (run) newRuns.push(run);
             }
             if (newRuns.length) await mergeAndNotify(mergePolarRuns, base, headers, conn.user_id, newRuns, 'skip', 'polar');

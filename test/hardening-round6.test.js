@@ -76,7 +76,8 @@ test('cerrar sesion da de baja el push de este dispositivo ANTES de signOut', ()
   const i = s.indexOf('async function logout(){');
   const body = s.slice(i, s.indexOf('\n}\n', i));
   assert.ok(body.indexOf('deletePushRowsForThisDevice()') > -1);
-  assert.ok(body.indexOf('deletePushRowsForThisDevice()') < body.indexOf('auth.signOut()'));
+  assert.ok(body.indexOf('auth.signOut(') > -1, 'logout llama a signOut');
+  assert.ok(body.indexOf('deletePushRowsForThisDevice()') < body.indexOf('auth.signOut('));
 });
 
 test('wipeLocalUserData solo borra las claves de la cuenta que se va, no el respaldo sin subir de otra', () => {

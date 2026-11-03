@@ -7,13 +7,13 @@
 -- es un numero, o un plan que no es una lista, hacia fallar en cada ciclo las funciones merge_*_runs (que gastan cuota compartida de la marca) y los recordatorios.
 --
 -- Que hace:
---   1) app_state: rechaza data de mas de 30 MB (texto), plan/runs que no sean listas, un plan de mas de 512 KB y carreras con distanceKm/durationSec que no sean numero
+--   1) app_state: rechaza data de mas de 12 MB (texto; auditoria 2026-11-03: antes 30 MB y el uso real mas grande es de ~0,1 MB), un chat de mas de 3 MB, zapatillas de mas de 256 KB, plan/runs que no sean listas, un plan de mas de 512 KB y carreras con distanceKm/durationSec que no sean numero
 --      (null o ausente SI se permite). Una carrera real nunca falla esto; sin el tope normal de cuentas (unos MB con 900 puntos GPS por carrera) nadie lo nota.
 --   2) push_subscriptions: suscripcion de hasta 4 KB, device_id de hasta 64 caracteres, y el tope de 10 dispositivos por cuenta ahora es a prueba de inserts en
 --      paralelo (lock por usuario; antes 50 inserts simultaneos se saltaban el tope).
 --   3) chat_usage: sin cambios (los topes diarios nuevos de la API usan esta misma tabla con ids derivados, ver api/_lib/daily-cap.js).
 --
--- ANTES de correrlo, mira el tamano real mas grande de una cuenta (tiene que dar bastante menos de 30):
+-- ANTES de correrlo, mira el tamano real mas grande de una cuenta (tiene que dar bastante menos de 12):
 --     select round(max(octet_length(data::text)) / 1048576.0, 1) as max_mb from public.app_state;
 --
 -- Es seguro volver a correrlo. Si un guardado legitimo alguna vez fuera rechazado, bajar o subir el numero de aca y volver a correr.
@@ -29,7 +29,7 @@ DECLARE
   v_data jsonb;
 BEGIN
   v_data := NEW.data::jsonb;   -- ::jsonb por si la columna fuera json: funciona igual en los dos casos
-  IF octet_length(v_data::text) > 30 * 1024 * 1024 THEN
+  IF octet_length(v_data::text) > 12 * 1024 * 1024 THEN
     RAISE EXCEPTION 'app_state demasiado grande' USING ERRCODE = '54000';
   END IF;
   IF v_data ? 'plan' AND jsonb_typeof(v_data->'plan') NOT IN ('array', 'null') THEN
@@ -49,6 +49,8 @@ BEGIN
      OR length(coalesce(v_data#>>'{profile,units}', '')) > 16
      OR length(coalesce(v_data#>>'{profile,trainBy}', '')) > 16
      OR octet_length(coalesce((v_data->'profile')::text, '')) > 64 * 1024
+     OR octet_length(coalesce((v_data->'chat')::text, '')) > 3 * 1024 * 1024
+     OR octet_length(coalesce((v_data->'shoes')::text, '')) > 256 * 1024
      OR octet_length(coalesce((v_data->'calendarNextWeek')::text, '')) > 512 * 1024
      OR octet_length(coalesce((v_data->'watchPlan')::text, '')) > 512 * 1024
      OR octet_length(coalesce((v_data->'suuntoPlan')::text, '')) > 512 * 1024 THEN

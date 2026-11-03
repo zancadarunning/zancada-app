@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-03T12:08:45Z';
+const APP_VERSION = '2026-11-03T14:17:54Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1748,7 +1748,7 @@ async function loadUserAndEnter(user, isRetry){
         try{ supabaseClient.auth.updateUser({ data: { lang } }); }catch(e){}
       }
       if(!hasConsent()){
-        if(!(await ensureConsent())){ await supabaseClient.auth.signOut(); location.reload(); return; }
+        if(!(await ensureConsent())){ await supabaseClient.auth.signOut({ scope:'local' }); location.reload(); return; }
         persist();   // queda guardado en la cuenta (versión y fecha)
       }
       if(!state.chat || !state.chat.length) seedCoachGreeting(); else renderChat();
@@ -1765,7 +1765,7 @@ async function loadUserAndEnter(user, isRetry){
       location.reload();
       return;
     }
-    if(!(await ensureConsent())){ await supabaseClient.auth.signOut(); location.reload(); return; }   // el consentimiento viaja en state y se guarda con el onboarding
+    if(!(await ensureConsent())){ await supabaseClient.auth.signOut({ scope:'local' }); location.reload(); return; }   // el consentimiento viaja en state y se guarda con el onboarding
     pendingEmail = user.email;
     stateLoadedFor = user.id;   // la consulta confirmó que no hay datos: cuenta nueva, el estado por defecto es el correcto
     document.getElementById('splash').style.display='none';
@@ -1784,7 +1784,7 @@ async function loadUserAndEnter(user, isRetry){
     if(window.zcBootDone) window.zcBootDone();
     const retry = await showConfirm(t('load_error_text'), {confirmText:t('load_error_retry'), cancelText:t('perfil_logout')});
     if(retry) loadUserAndEnter(user);
-    else { await supabaseClient.auth.signOut(); location.reload(); }
+    else { await supabaseClient.auth.signOut({ scope:'local' }); location.reload(); }
   }
 }
 function isPasswordStrong(pw){
@@ -2171,7 +2171,12 @@ async function updateStravaStatusDisplay(){
   const note = document.getElementById('strava-sync-note');
   if(!el || !currentUserId) return;
   try{
-    const { data } = await supabaseClient.from('strava_connections').select('athlete_id').eq('user_id', currentUserId).maybeSingle();
+    let { data, error: connErr } = await supabaseClient.from('strava_connections').select('athlete_id').eq('user_id', currentUserId).maybeSingle();
+    // La verdad la dice el SERVIDOR (/api/device-status): en el iPhone la consulta directa llegó a devolver vacío SIN error y se mostraba "desconectado" estando conectado (ya lo hacían Wahoo y Suunto).
+    const srvState = await fetchServerConnections();
+    const srvKnown = !!(srvState && typeof srvState.strava === 'boolean');
+    if(srvKnown) data = srvState.strava ? (data || {}) : null;
+    else if(connErr) return;   // sin servidor y con error de la consulta: se deja lo que ya se mostraba en vez de pisarlo con "desconectado"
     deviceConnections.strava = !!data;
     if(data){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
@@ -2262,7 +2267,12 @@ async function updatePolarStatusDisplay(){
   const btn = document.getElementById('polar-connect-btn');
   if(!el || !currentUserId) return;
   try{
-    const { data } = await supabaseClient.from('polar_connections').select('polar_user_id').eq('user_id', currentUserId).maybeSingle();
+    let { data, error: connErr } = await supabaseClient.from('polar_connections').select('polar_user_id').eq('user_id', currentUserId).maybeSingle();
+    // La verdad la dice el SERVIDOR (/api/device-status): en el iPhone la consulta directa llegó a devolver vacío SIN error y se mostraba "desconectado" estando conectado (ya lo hacían Wahoo y Suunto).
+    const srvState = await fetchServerConnections();
+    const srvKnown = !!(srvState && typeof srvState.polar === 'boolean');
+    if(srvKnown) data = srvState.polar ? (data || {}) : null;
+    else if(connErr) return;   // sin servidor y con error de la consulta: se deja lo que ya se mostraba en vez de pisarlo con "desconectado"
     deviceConnections.polar = !!data;
     if(data){
       el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
@@ -2986,7 +2996,12 @@ async function updateCorosStatusDisplay(){
   const btn = document.getElementById('coros-connect-btn');
   if(!el || !currentUserId) return;
   try{
-    const { data } = await supabaseClient.from('coros_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
+    let { data, error: connErr } = await supabaseClient.from('coros_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
+    // La verdad la dice el SERVIDOR (/api/device-status): en el iPhone la consulta directa llegó a devolver vacío SIN error y se mostraba "desconectado" estando conectado (ya lo hacían Wahoo y Suunto).
+    const srvState = await fetchServerConnections();
+    const srvKnown = !!(srvState && typeof srvState.coros === 'boolean');
+    if(srvKnown) data = srvState.coros ? (data || {}) : null;
+    else if(connErr) return;   // sin servidor y con error de la consulta: se deja lo que ya se mostraba en vez de pisarlo con "desconectado"
     deviceConnections.coros = !!data;
     if(data){ scheduleCorosSync(); updateCorosStaleNote(); }   // recién conectada (o al abrir Perfil): deja la semana en COROS
     if(data){
@@ -3116,7 +3131,12 @@ async function updateGarminStatusDisplay(){
   const btn = document.getElementById('garmin-connect-btn');
   if(!el || !currentUserId) return;
   try{
-    const { data } = await supabaseClient.from('garmin_connections').select('user_id,permissions').eq('user_id', currentUserId).maybeSingle();
+    let { data, error: connErr } = await supabaseClient.from('garmin_connections').select('user_id,permissions').eq('user_id', currentUserId).maybeSingle();
+    // La verdad la dice el SERVIDOR (/api/device-status): en el iPhone la consulta directa llegó a devolver vacío SIN error y se mostraba "desconectado" estando conectado (ya lo hacían Wahoo y Suunto).
+    const srvState = await fetchServerConnections();
+    const srvKnown = !!(srvState && typeof srvState.garmin === 'boolean');
+    if(srvKnown) data = srvState.garmin ? (data || {}) : null;
+    else if(connErr) return;   // sin servidor y con error de la consulta: se deja lo que ya se mostraba en vez de pisarlo con "desconectado"
     deviceConnections.garmin = !!data;
     if(data) scheduleGarminSync();   // recién conectada (o al abrir Perfil): deja la semana en Garmin Connect
     if(data){
@@ -5105,7 +5125,7 @@ async function logout(){
   // Se da de baja el push de ESTE dispositivo ANTES de cerrar la sesión (la baja necesita la sesión): sin esto el teléfono seguía recibiendo el plan y las carreras de la cuenta que se fue
   // (pantalla de bloqueo incluida) aunque entrara otra persona. Al volver a iniciar sesión refreshNativePushRegistration() lo registra de nuevo. Tope de 4 s para no trabar el cierre sin conexión.
   try{ await Promise.race([deletePushRowsForThisDevice(), new Promise(r => setTimeout(r, 4000))]); }catch(e){}
-  await supabaseClient.auth.signOut();
+  await supabaseClient.auth.signOut({ scope:'local' });   // solo ESTE dispositivo: el scope por defecto cerraba también la sesión del resto de los dispositivos de la cuenta
   location.reload();
 }
 // Antes de una acción que no se puede deshacer: quien tiene cuenta con contraseña la escribe de nuevo (así una sesión robada no alcanza) y se
@@ -12408,7 +12428,7 @@ function rollingPaceMin(windowSec){
   while(i > 0 && last.t - pts[i].t < windowSec) i--;
   if(last.t - pts[i].t < windowSec * 0.75) return null;
   let km = 0;
-  for(let k = i + 1; k < pts.length; k++) km += haversine(pts[k-1].lat, pts[k-1].lon, pts[k].lat, pts[k].lon);
+  for(let k = i + 1; k < pts.length; k++) km += gpsStepKm(pts[k-1], pts[k]);
   if(km < 0.03) return null;
   return ((last.t - pts[i].t) / 60) / km;
 }
@@ -12730,6 +12750,11 @@ function renderWorkoutGuide(){
   }
 }
 
+// Distancia entre dos puntos CONSECUTIVOS de una ruta: 0 si el segundo viene marcado gap (viene de una pausa o de una recuperación; lo que hay en el medio no se corrió grabando).
+function gpsStepKm(a, b){
+  if(!a || !b || b.gap) return 0;
+  return haversine(a.lat, a.lon, b.lat, b.lon);
+}
 function haversine(lat1,lon1,lat2,lon2){
   const R=6371, toRad=d=>d*Math.PI/180;
   const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
@@ -12772,9 +12797,10 @@ function downsampleRoute(points, max){
   const n = Array.isArray(points) ? points.length : 0;
   const cap = Math.max(2, max || ROUTE_MAX_POINTS);
   if(n <= cap) return points || [];
-  const out = [];
-  for(let i = 0; i < cap; i++) out.push(points[Math.round(i * (n - 1) / (cap - 1))]);   // reparte los índices parejo y siempre conserva el primero y el último
-  return out;
+  const keep = new Set();
+  for(let i = 0; i < cap; i++) keep.add(Math.round(i * (n - 1) / (cap - 1)));   // reparte los índices parejo y siempre conserva el primero y el último
+  for(let i = 1; i < n; i++) if(points[i] && points[i].gap) keep.add(i);   // los puntos que vienen de una pausa se conservan siempre: sin ellos el salto se contaría como distancia
+  return Array.from(keep).sort((a, b) => a - b).map(i => points[i]);
 }
 // Recorta una sola vez las carreras viejas que se guardaron con todos los puntos. Solo toca las que superan el tope por mucho (>1,3x): devuelve true si cambió algo.
 function thinStoredRoutes(){
@@ -12788,7 +12814,7 @@ function computeSplitsFromPoints(points){
   if(!points || points.length < 2) return [];
   const cum = [0];
   for(let i=1;i<points.length;i++){
-    cum.push(cum[i-1] + haversine(points[i-1].lat,points[i-1].lon,points[i].lat,points[i].lon));
+    cum.push(cum[i-1] + gpsStepKm(points[i-1], points[i]));
   }
   const totalKm = cum[cum.length-1];
   const numFullKm = Math.floor(totalKm);
@@ -12854,7 +12880,7 @@ function computePaceSeriesFromPoints(points){
     const t0 = points[i].t||0;
     let j = i, distKm = 0;
     while(j<points.length-1 && (points[j+1].t||0)-t0 < windowSec){
-      distKm += haversine(points[j].lat,points[j].lon,points[j+1].lat,points[j+1].lon);
+      distKm += gpsStepKm(points[j], points[j+1]);
       j++;
     }
     const dt = (points[j].t||0) - t0;
@@ -13438,10 +13464,9 @@ function startRun(){
     showRunSummaryUI();
     return;
   }
-  if(saved && saved.startedAt && (Date.now()-saved.startedAt) < 6*3600*1000 && (saved.points||[]).length){
-    // hay una carrera sin terminar de hace menos de 6 horas (por ejemplo, la app
-    // se cerró sola a mitad de un entrenamiento) -> ofrecemos recuperarla en vez
-    // de arrancar una nueva y perder lo ya corrido
+  if(saved && saved.startedAt && ((saved.points||[]).length || Number(saved.distanceKm) > 0.05 || Number(saved.elapsedSec) >= 120)){
+    // hay una carrera sin terminar con algo real corrido (por ejemplo, la app se cerró sola a mitad de un entrenamiento) -> ofrecemos recuperarla en vez de arrancar una nueva y perder lo
+    // ya corrido. Sin límite de horas ni exigir puntos GPS (una cinta no tiene): descartarla es una decisión explícita de la persona, no algo que pase en silencio.
     showConfirm(t('run_recover_text'), {confirmText:t('run_recover_confirm'), cancelText:t('run_recover_discard')}).then(resume=>{
       // La cuenta regresiva (ver startRunWithCountdown() más abajo) es solo para un arranque
       // GENUINAMENTE nuevo -- recuperar una carrera ya en curso no es "empezar", es seguir
@@ -13532,7 +13557,7 @@ function actuallyStartRun(saved){
   // comportamiento que tenía siempre antes de este cambio.
   const restoredAutoPaused = saved ? !!saved.autoPaused : false;
   tracker = saved
-    ? {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:saved.elapsedSec||0, running:restoredRunning, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt, autoPaused:restoredAutoPaused, lastMoveMs:Date.now(), lastFixMs:null}
+    ? {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:saved.elapsedSec||0, running:restoredRunning, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt, autoPaused:restoredAutoPaused, lastMoveMs:Date.now(), lastFixMs:null, gapPending:true}
     : {watchId:null, timerId:null, points:[], distanceKm:0, elapsedSec:0, running:true, hrLog:[], lastAnnouncedKm:0, startedAt:Date.now(), autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null};
   requestWakeLock();
   startCadence(saved);
@@ -13635,9 +13660,16 @@ function onPosition(pos){
     // Solo se graba el punto (mapa + splits) mientras la carrera está activa -- si no,
     // una pausa manual o automática (semáforo, descanso) seguía dibujando el recorrido
     // y esos puntos quedaban para siempre en la ruta guardada.
-    tracker.points.push({lat, lon, t:tracker.elapsedSec, alt:(typeof altitude==='number' && !isNaN(altitude)) ? altitude : null});
+    const pt = {lat, lon, t:tracker.elapsedSec, alt:(typeof altitude==='number' && !isNaN(altitude)) ? altitude : null};
+    // Primer punto después de una pausa (o de recuperar la carrera tras cerrarse la app): del anterior lo separa todo lo que el corredor se movió SIN grabar. gap:true hace que
+    // los parciales, la curva de ritmo, el ritmo en vivo y el video no cuenten ese salto en línea recta como distancia corrida (la distancia total en vivo ya lo evitaba con lastRawPoint).
+    if(tracker.gapPending && tracker.points.length) pt.gap = true;
+    tracker.gapPending = false;
+    tracker.points.push(pt);
     updateLiveMap(lat,lon);
     maybeAnnounceKm(); maybeAnnounceMilestones(); maybePaceAlert(); tickWorkoutGuide();
+  } else if(!active){
+    tracker.gapPending = true;
   }
   updateLiveStats();
   // Se sacó el saveRunProgress() de acá -- se llamaba en cada fix de GPS (varias veces
@@ -15619,7 +15651,7 @@ function rebucketSplitsByDistance(r, segmentKm){
   const points = r.points||[];
   if(points.length<3 || !(segmentKm>0)) return null;
   const cum=[0];
-  for(let i=1;i<points.length;i++) cum.push(cum[i-1]+haversine(points[i-1].lat,points[i-1].lon,points[i].lat,points[i].lon));
+  for(let i=1;i<points.length;i++) cum.push(cum[i-1]+gpsStepKm(points[i-1], points[i]));
   const totalDistKm = cum[cum.length-1];
   if(!(totalDistKm>0)) return null;
   const hasRealTime = points[0].t!=null && points[points.length-1].t!=null && points[points.length-1].t > points[0].t;
@@ -15692,7 +15724,7 @@ function buildColoredRouteSegments(r){
     return [{latlngs:catmullRomCurve(smoothed).map(p=>[p.lat,p.lon]), color: zoneStrokeVar(3)}];
   }
   const cum=[0];
-  for(let i=1;i<points.length;i++) cum.push(cum[i-1]+haversine(points[i-1].lat,points[i-1].lon,points[i].lat,points[i].lon));
+  for(let i=1;i<points.length;i++) cum.push(cum[i-1]+gpsStepKm(points[i-1], points[i]));
   const avgPace = rdCurrent.paceMin;
   const segs = [];
   let startIdx = 0;
@@ -16014,7 +16046,7 @@ function evaluateRunSteps(run, plan, zones){
   const pts = ((run && run.points) || []).filter(p => p && typeof p.t === 'number' && isFinite(p.t) && isFinite(p.lat) && isFinite(p.lon));
   if(!plan || !plan.steps || plan.steps.length < 2 || pts.length < 10 || !(run.distanceKm > 0)) return null;
   const cum = [0];
-  for(let i = 1; i < pts.length; i++) cum.push(cum[i-1] + haversine(pts[i-1].lat, pts[i-1].lon, pts[i].lat, pts[i].lon) * 1000);
+  for(let i = 1; i < pts.length; i++) cum.push(cum[i-1] + gpsStepKm(pts[i-1], pts[i]) * 1000);
   const raw = cum[cum.length-1];
   if(!(raw > 100)) return null;
   const k = run.distanceKm * 1000 / raw;   // la distancia del reloj manda; la ruta (recortada) solo reparte cuándo se hizo cada tramo
@@ -17097,7 +17129,7 @@ function computeVideoRouteData(r, rectX, rectY, rectW, rectH, pad){
   const followProj = pts.map(p => webMercatorProject(p.lat, p.lon, followZoom));
 
   const cum=[0];
-  for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+haversine(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon));
+  for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+gpsStepKm(pts[i-1], pts[i]));
   const totalDist = cum[cum.length-1];
 
   // Las carreras trackeadas en vivo (después de este cambio) guardan tiempo
@@ -18485,6 +18517,21 @@ function badCoachEnum(field, value, allowed){
 function needsAmountMsg(dia){
   return `Falta distancia_km o duracion_min: ${dia} no tenía ninguna sesión y sin cantidad el día seguiría siendo descanso -- volvé a llamar a modificar_sesion incluyendo uno de los dos.`;
 }
+// Las restricciones de seguridad del plan (principiante, cautela alta por edad/contextura, molestia activa, posparto reciente) hasta ahora solo eran TEXTO del prompt: la herramienta del coach podía
+// armar series, cuestas, tempo o zonas 4-5 igual, y esa sesión queda custom (el generador determinista que sí modera la carga ya no la toca). Ahora la herramienta lo rechaza y le explica el motivo al modelo.
+const COACH_HARD_TYPES = ['intervals', 'hills', 'tempo', 'progression'];
+function coachSafetyRefusal(input){
+  const hard = COACH_HARD_TYPES.includes(input.tipo_categoria) || resolveZone(input.zona) >= 4;
+  if(!hard) return null;
+  const p = state.profile || {};
+  let why = null;
+  if(isBeginnerProfile(p)) why = 'es principiante';
+  else if(pregnancyStillRecent(p)) why = 'está en un posparto reciente';
+  else if((activePainEntries(14) || []).length) why = 'tiene una molestia activa';
+  else if(trainingCaution(p).level >= 2) why = 'tiene un perfil (edad o contextura) que pide cautela alta';
+  if(!why) return null;
+  return 'No armo esa sesión: el corredor ' + why + ', así que no corresponde darle series, cuestas, tempo ni zonas 4-5. Proponé una sesión suave (rodaje o fondo en zonas 1-3) o explicale que el plan se lo irá habilitando.';
+}
 function applyPlanChange(input){
   // El input_schema de la herramienta declara dia como enum:DAY_KEYS, pero eso es solo una
   // guía para el modelo -- la API de tool use no lo hace cumplir de verdad (mismo motivo que
@@ -18502,6 +18549,8 @@ function applyPlanChange(input){
   if(input.terreno && !COACH_TERRAINS.includes(input.terreno)) return badCoachEnum('terreno', input.terreno, COACH_TERRAINS);
   const raceRefusal = raceDayRefusal(input.dia, input.semana);
   if(raceRefusal) return raceRefusal;
+  const safetyRefusal = coachSafetyRefusal(input);
+  if(safetyRefusal) return safetyRefusal;
   // El snapshot de undo se toma DESPUÉS de validar (día encontrado, no bloqueado) -- si
   // se toma antes, un pedido inválido (día ya pasado, por ejemplo) igual pisa el snapshot
   // del cambio real anterior con el estado actual sin cambios, y "deshacer" ya no puede
@@ -19106,7 +19155,7 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
         signal: chatAbortController.signal
       });
       const data = await res.json();
-      if(data.error){ finalText = data.error.message || t('coach_connection_error'); break; }
+      if(data.error){ if(!anyToolApplied) finalText = data.error.message || t('coach_connection_error'); break; }   // con cambios ya aplicados no se muestra un error: se avisa que están (ver más abajo) y no se reintenta
       const blocks = data.content || [];
       const textPart = blocks.filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
       if(textPart) finalText += (finalText? '\n':'') + textPart;

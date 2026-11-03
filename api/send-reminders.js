@@ -77,6 +77,7 @@ const MSGS = {
 
 const { withSentry, reportError, reportSecurityEvent } = require('./_lib/sentry');
 const { alertIfMisconfigured } = require('./_lib/config-check');
+const { checkNewLogins } = require('./_lib/server-login-check');
 
 module.exports = withSentry(async (req, res) => {
   if (!(await requireCronSecret(req))) {
@@ -84,6 +85,8 @@ module.exports = withSentry(async (req, res) => {
   }
   // Avisa (a Sentry, que te llega por mail) si falta o está mal alguna variable de seguridad en Vercel; nunca frena el envío.
   await alertIfMisconfigured(reportSecurityEvent).catch(() => {});
+  // Inicios de sesión desde un tipo de dispositivo que la cuenta nunca usó (los que no pasan por la app: ver api/_lib/server-login-check.js); nunca frena el envío.
+  await checkNewLogins().catch(() => {});
 
   webpush.setVapidDetails(
     'mailto:info@zancada.org',

@@ -15,6 +15,20 @@ const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { ensureFreshSuuntoToken, suuntoApiHeaders, SUUNTO_API_BASE } = require('./_lib/suunto-activity-helpers');
 const { removeAllZancada } = require('./_lib/wahoo-plans-sync');
+const { refreshWahooToken } = require('./_lib/wahoo-activity-helpers');
+const { refreshCorosToken } = require('./_lib/coros-activity-helpers');
+
+// El token guardado de Wahoo/COROS dura ~2 h: si ya venció o está por vencer, revocar con él fallaba en silencio (el permiso de Zancada seguía activo en la cuenta de la marca). Se renueva antes.
+async function freshAccessToken(base, headers, userId, conn, refresh) {
+  let token = decToken(conn.access_token);
+  const exp = Number(conn.expires_at);
+  const refreshToken = decToken(conn.refresh_token);
+  if (refreshToken && Number.isFinite(exp) && exp < Math.floor(Date.now() / 1000) + 60) {
+    const refreshed = await refresh(base, headers, userId, refreshToken);
+    if (refreshed && refreshed.accessToken) token = refreshed.accessToken;
+  }
+  return token;
+}
 const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { issueDeleteCode, consumeDeleteCode } = require('./_lib/delete-code');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
@@ -100,13 +114,14 @@ module.exports = withSentry(async (req, res) => {
     } catch (e) { console.error('delete-account: polar revoke failed', e); await reportError(e, { endpoint: 'delete-account', step: 'polar-revoke' }).catch(() => {}); }
 
     try {
-      const conn = await readConnection('wahoo_connections', 'access_token');
+      const conn = await readConnection('wahoo_connections', 'access_token,refresh_token,expires_at');
       if (conn && decToken(conn.access_token)) {
+        const wahooToken = await freshAccessToken(base, headers, userId, conn, refreshWahooToken);
         // primero los entrenamientos que Zancada subió a su cuenta de Wahoo (igual que wahoo-disconnect.js)
-        try { await removeAllZancada(decToken(conn.access_token), userId); } catch (e) { console.error('delete-account: wahoo plans cleanup failed', e && e.message); }
+        try { await removeAllZancada(wahooToken, userId); } catch (e) { console.error('delete-account: wahoo plans cleanup failed', e && e.message); }
         const wr = await fetchWithTimeout('https://api.wahooligan.com/v1/permissions', {
           method: 'DELETE',
-          headers: { Authorization: `Bearer ${decToken(conn.access_token)}` }
+          headers: { Authorization: `Bearer ${wahooToken}` }
         }, 8000);
         if (!wr.ok && wr.status !== 404 && wr.status !== 401) throw new Error('wahoo revoke HTTP ' + wr.status);
       }
@@ -136,15 +151,17 @@ module.exports = withSentry(async (req, res) => {
     // auth.users) pero nunca le avisaba a COROS, así que el permiso de Zancada seguía
     // apareciendo activo del lado de la cuenta de COROS del usuario para siempre.
     try {
-      const conn = await readConnection('coros_connections', 'access_token');
+      const conn = await readConnection('coros_connections', 'access_token,refresh_token,expires_at');
       if (conn && decToken(conn.access_token)) {
-        await fetch('https://mcpus.coros.com/oauth2/revoke', {
+        const corosToken = await freshAccessToken(base, headers, userId, conn, refreshCorosToken);
+        const cr = await fetchWithTimeout('https://mcpus.coros.com/oauth2/revoke', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ token: decToken(conn.access_token), client_id: process.env.COROS_CLIENT_ID })
-        });
+          body: new URLSearchParams({ token: corosToken, client_id: process.env.COROS_CLIENT_ID })
+        }, 8000);
+        if (!cr.ok && cr.status !== 404 && cr.status !== 401 && cr.status !== 400) throw new Error('coros revoke HTTP ' + cr.status);
       }
-    } catch (e) { console.error('delete-account: coros revoke failed', e); }
+    } catch (e) { console.error('delete-account: coros revoke failed', e); await reportError(e, { endpoint: 'delete-account', step: 'coros-revoke' }).catch(() => {}); }
 
     // Garmin (acuerdo del Garmin Connect Developer Program): al borrar la cuenta o los datos hay que avisarle con DELETE user/registration, y se sacan los entrenamientos que Zancada había mandado.
     try {

@@ -14,6 +14,7 @@ const { withSentry, reportError } = require('./_lib/sentry');
 const { mergeAndNotify } = require('./_lib/notify-new-run');
 const { safeConvert } = require('./_lib/safe-convert');
 const { knownRunIds } = require('./_lib/known-run-ids');
+const { isDuplicateOfExisting } = require('./_lib/duplicate-run');
 
 // Cuántas carreras sin splits reales se completan por cuenta en cada corrida del cron --
 // ver el comentario grande de backfillWahooSplits.
@@ -174,6 +175,9 @@ module.exports = withSentry(async (req, res) => {
             // apuro por responder rápido a un usuario esperando en pantalla.
             const newRuns = [];
             for (const w of runWorkouts.filter(w => !knownIds.has(w.id))) {
+              // ya guardada desde otra fuente: se salta ANTES de bajar el FIT (ver api/_lib/duplicate-run.js)
+              const ws = w.workout_summary || {};
+              if (isDuplicateOfExisting(stateRows[0].data && stateRows[0].data.runs, Date.parse(w.starts), (parseFloat(ws.distance_accum) || 0) / 1000, parseFloat(ws.duration_active_accum) || (Number(w.minutes) || 0) * 60)) continue;
               const run = await safeConvert(() => workoutToRun(w, accessToken), 'wahoo'); if (run) newRuns.push(run);
             }
             if (newRuns.length) await mergeAndNotify(mergeWahooRuns, base, headers, conn.user_id, newRuns, 'skip', 'wahoo');
