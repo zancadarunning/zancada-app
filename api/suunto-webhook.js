@@ -22,6 +22,7 @@ const crypto = require('crypto');
 const { isRunningActivity, workoutToRun, mergeSuuntoRuns } = require('./_lib/suunto-activity-helpers');
 const { withSentry, reportError, reportSecurityEvent, reportDiagnostic } = require('./_lib/sentry');
 const { mergeAndNotify } = require('./_lib/notify-new-run');
+const { withoutDismissed } = require('./_lib/known-run-ids');
 
 function readRawBody(req) {
   return new Promise((resolve, reject) => {
@@ -87,7 +88,9 @@ const handler = withSentry(async (req, res) => {
 
     const run = workoutToRun(workout, null);
     for (const c of conns) {
-      await mergeAndNotify(mergeSuuntoRuns, base, headers, c.user_id, [run], 'skip', 'suunto', 900);
+      const toMerge = await withoutDismissed(base, headers, c.user_id, 'suunto', 'suuntoId', [run]);   // la que la persona borró a mano no vuelve
+      if (!toMerge.length) continue;
+      await mergeAndNotify(mergeSuuntoRuns, base, headers, c.user_id, toMerge, 'skip', 'suunto', 900);
     }
     await diag('saved');
     res.status(200).json({ ok: true });

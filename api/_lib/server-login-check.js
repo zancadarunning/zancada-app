@@ -12,7 +12,7 @@
 // Comparte con el aviso de la app el tope entre avisos de la cuenta (30 min), el tope diario por cuenta (3) y el global (40). Cada sesión avisa una sola vez (sent_notifications,
 // kind 'login_srv', period = id de la sesión). Nunca lanza: si falta la función SQL, la tabla o el mail, no hace nada.
 
-const { claim, release } = require('./sent-registry');
+const { claim, release, fetchSent } = require('./sent-registry');
 const { checkSyncCooldown } = require('./sync-cooldown');
 const { withinDailyCap } = require('./daily-cap');
 const { fetchWithTimeout } = require('./fetch-with-timeout');
@@ -91,6 +91,10 @@ async function checkNewLogins(opts) {
         if (!labels || !labels.length) continue;                       // sin historial (o sin la tabla): no hay con qué comparar
         const label = deviceLabel(s.user_agent, 'en');
         if (labels.includes(label)) continue;                          // el mismo tipo de dispositivo que ya usó: lo cubre el aviso de la app
+
+        // una sesión ya avisada en una corrida anterior (la ventana se solapa con la del cron anterior) no debe gastar el enfriamiento ni los topes: se mira ANTES, solo lectura
+        const already = await fetchSent(base, headers, 'login_srv', String(s.session_id), [userId]);
+        if (already === null || already.has(userId)) continue;
 
         if (!(await checkSyncCooldown(base, headers, userId, 'login-alert', ALERT_COOLDOWN_MS, { failClosed: true }))) continue;
         if (!(await withinDailyCap(base, headers, 'login-alert-user', userId, 3, { failClosed: true }))) continue;

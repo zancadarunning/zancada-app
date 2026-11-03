@@ -23,6 +23,7 @@ function makeFetch(cfg, log) {
     if (u.includes('/known_devices')) return json((cfg.known || []).map(label => ({ label })));
     if (u.includes('/rpc/check_sync_cooldown') || u.includes('/rpc/')) return json(true);
     if (u.includes('/app_state')) return json([{ lang: 'en', tz: 'America/Argentina/Buenos_Aires' }]);
+    if (u.includes('/sent_notifications') && m === 'GET') return json(cfg.sentRows || []);
     if (u.includes('/sent_notifications') && m === 'POST') return json(cfg.claimRows || [{ user_id: U1 }]);
     if (u.includes('/sent_notifications') && m === 'DELETE') return json([]);
     if (u.startsWith('https://api.resend.com/emails')) { log.mail = JSON.parse(opts.body); return json({}, cfg.resendOk !== false, cfg.resendOk === false ? 500 : 200); }
@@ -67,6 +68,14 @@ test('una sesión ya avisada por otra corrida no repite el mail, y si falla Rese
   const r = await run({ sessions: [session(CURL)], known: ['iPhone · app'], resendOk: false });
   assert.equal(r.sent, 0);
   assert.ok(r.log.some(l => l.startsWith('DELETE') && l.includes('/sent_notifications') && l.includes('kind=eq.login_srv')), 'libera el reclamo');
+});
+
+test('una sesión que ya se avisó en una corrida anterior no gasta el enfriamiento ni los topes (se mira antes, solo lectura)', async () => {
+  const r = await run({ sessions: [session(CURL)], known: ['iPhone · app'], sentRows: [{ user_id: U1 }] });
+  assert.equal(r.sent, 0);
+  assert.equal(r.log.mail, undefined);
+  assert.ok(!r.log.some(l => l.includes('/rpc/check_sync_cooldown') || l.includes('/rpc/increment') || (l.startsWith('POST') && l.includes('/sent_notifications'))), 'no tocó cooldown, topes ni reclamo');
+  assert.ok(r.log.some(l => l.startsWith('GET') && l.includes('kind=eq.login_srv')), 'consultó el registro primero');
 });
 
 test('sin la función SQL, sin clave de mail o con la red caída: no hace nada y no lanza', async () => {
