@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-03T13:31:08Z';
+const APP_VERSION = '2026-11-03T14:17:54Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -12428,7 +12428,7 @@ function rollingPaceMin(windowSec){
   while(i > 0 && last.t - pts[i].t < windowSec) i--;
   if(last.t - pts[i].t < windowSec * 0.75) return null;
   let km = 0;
-  for(let k = i + 1; k < pts.length; k++) km += haversine(pts[k-1].lat, pts[k-1].lon, pts[k].lat, pts[k].lon);
+  for(let k = i + 1; k < pts.length; k++) km += gpsStepKm(pts[k-1], pts[k]);
   if(km < 0.03) return null;
   return ((last.t - pts[i].t) / 60) / km;
 }
@@ -12750,6 +12750,11 @@ function renderWorkoutGuide(){
   }
 }
 
+// Distancia entre dos puntos CONSECUTIVOS de una ruta: 0 si el segundo viene marcado gap (viene de una pausa o de una recuperación; lo que hay en el medio no se corrió grabando).
+function gpsStepKm(a, b){
+  if(!a || !b || b.gap) return 0;
+  return haversine(a.lat, a.lon, b.lat, b.lon);
+}
 function haversine(lat1,lon1,lat2,lon2){
   const R=6371, toRad=d=>d*Math.PI/180;
   const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
@@ -12792,9 +12797,10 @@ function downsampleRoute(points, max){
   const n = Array.isArray(points) ? points.length : 0;
   const cap = Math.max(2, max || ROUTE_MAX_POINTS);
   if(n <= cap) return points || [];
-  const out = [];
-  for(let i = 0; i < cap; i++) out.push(points[Math.round(i * (n - 1) / (cap - 1))]);   // reparte los índices parejo y siempre conserva el primero y el último
-  return out;
+  const keep = new Set();
+  for(let i = 0; i < cap; i++) keep.add(Math.round(i * (n - 1) / (cap - 1)));   // reparte los índices parejo y siempre conserva el primero y el último
+  for(let i = 1; i < n; i++) if(points[i] && points[i].gap) keep.add(i);   // los puntos que vienen de una pausa se conservan siempre: sin ellos el salto se contaría como distancia
+  return Array.from(keep).sort((a, b) => a - b).map(i => points[i]);
 }
 // Recorta una sola vez las carreras viejas que se guardaron con todos los puntos. Solo toca las que superan el tope por mucho (>1,3x): devuelve true si cambió algo.
 function thinStoredRoutes(){
@@ -12808,7 +12814,7 @@ function computeSplitsFromPoints(points){
   if(!points || points.length < 2) return [];
   const cum = [0];
   for(let i=1;i<points.length;i++){
-    cum.push(cum[i-1] + haversine(points[i-1].lat,points[i-1].lon,points[i].lat,points[i].lon));
+    cum.push(cum[i-1] + gpsStepKm(points[i-1], points[i]));
   }
   const totalKm = cum[cum.length-1];
   const numFullKm = Math.floor(totalKm);
@@ -12874,7 +12880,7 @@ function computePaceSeriesFromPoints(points){
     const t0 = points[i].t||0;
     let j = i, distKm = 0;
     while(j<points.length-1 && (points[j+1].t||0)-t0 < windowSec){
-      distKm += haversine(points[j].lat,points[j].lon,points[j+1].lat,points[j+1].lon);
+      distKm += gpsStepKm(points[j], points[j+1]);
       j++;
     }
     const dt = (points[j].t||0) - t0;
@@ -13551,7 +13557,7 @@ function actuallyStartRun(saved){
   // comportamiento que tenía siempre antes de este cambio.
   const restoredAutoPaused = saved ? !!saved.autoPaused : false;
   tracker = saved
-    ? {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:saved.elapsedSec||0, running:restoredRunning, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt, autoPaused:restoredAutoPaused, lastMoveMs:Date.now(), lastFixMs:null}
+    ? {watchId:null, timerId:null, points:saved.points||[], distanceKm:saved.distanceKm||0, elapsedSec:saved.elapsedSec||0, running:restoredRunning, hrLog:saved.hrLog||[], lastAnnouncedKm:saved.lastAnnouncedKm||0, startedAt:saved.startedAt, autoPaused:restoredAutoPaused, lastMoveMs:Date.now(), lastFixMs:null, gapPending:true}
     : {watchId:null, timerId:null, points:[], distanceKm:0, elapsedSec:0, running:true, hrLog:[], lastAnnouncedKm:0, startedAt:Date.now(), autoPaused:false, lastMoveMs:Date.now(), lastFixMs:null};
   requestWakeLock();
   startCadence(saved);
@@ -13654,9 +13660,16 @@ function onPosition(pos){
     // Solo se graba el punto (mapa + splits) mientras la carrera está activa -- si no,
     // una pausa manual o automática (semáforo, descanso) seguía dibujando el recorrido
     // y esos puntos quedaban para siempre en la ruta guardada.
-    tracker.points.push({lat, lon, t:tracker.elapsedSec, alt:(typeof altitude==='number' && !isNaN(altitude)) ? altitude : null});
+    const pt = {lat, lon, t:tracker.elapsedSec, alt:(typeof altitude==='number' && !isNaN(altitude)) ? altitude : null};
+    // Primer punto después de una pausa (o de recuperar la carrera tras cerrarse la app): del anterior lo separa todo lo que el corredor se movió SIN grabar. gap:true hace que
+    // los parciales, la curva de ritmo, el ritmo en vivo y el video no cuenten ese salto en línea recta como distancia corrida (la distancia total en vivo ya lo evitaba con lastRawPoint).
+    if(tracker.gapPending && tracker.points.length) pt.gap = true;
+    tracker.gapPending = false;
+    tracker.points.push(pt);
     updateLiveMap(lat,lon);
     maybeAnnounceKm(); maybeAnnounceMilestones(); maybePaceAlert(); tickWorkoutGuide();
+  } else if(!active){
+    tracker.gapPending = true;
   }
   updateLiveStats();
   // Se sacó el saveRunProgress() de acá -- se llamaba en cada fix de GPS (varias veces
@@ -15638,7 +15651,7 @@ function rebucketSplitsByDistance(r, segmentKm){
   const points = r.points||[];
   if(points.length<3 || !(segmentKm>0)) return null;
   const cum=[0];
-  for(let i=1;i<points.length;i++) cum.push(cum[i-1]+haversine(points[i-1].lat,points[i-1].lon,points[i].lat,points[i].lon));
+  for(let i=1;i<points.length;i++) cum.push(cum[i-1]+gpsStepKm(points[i-1], points[i]));
   const totalDistKm = cum[cum.length-1];
   if(!(totalDistKm>0)) return null;
   const hasRealTime = points[0].t!=null && points[points.length-1].t!=null && points[points.length-1].t > points[0].t;
@@ -15711,7 +15724,7 @@ function buildColoredRouteSegments(r){
     return [{latlngs:catmullRomCurve(smoothed).map(p=>[p.lat,p.lon]), color: zoneStrokeVar(3)}];
   }
   const cum=[0];
-  for(let i=1;i<points.length;i++) cum.push(cum[i-1]+haversine(points[i-1].lat,points[i-1].lon,points[i].lat,points[i].lon));
+  for(let i=1;i<points.length;i++) cum.push(cum[i-1]+gpsStepKm(points[i-1], points[i]));
   const avgPace = rdCurrent.paceMin;
   const segs = [];
   let startIdx = 0;
@@ -16033,7 +16046,7 @@ function evaluateRunSteps(run, plan, zones){
   const pts = ((run && run.points) || []).filter(p => p && typeof p.t === 'number' && isFinite(p.t) && isFinite(p.lat) && isFinite(p.lon));
   if(!plan || !plan.steps || plan.steps.length < 2 || pts.length < 10 || !(run.distanceKm > 0)) return null;
   const cum = [0];
-  for(let i = 1; i < pts.length; i++) cum.push(cum[i-1] + haversine(pts[i-1].lat, pts[i-1].lon, pts[i].lat, pts[i].lon) * 1000);
+  for(let i = 1; i < pts.length; i++) cum.push(cum[i-1] + gpsStepKm(pts[i-1], pts[i]) * 1000);
   const raw = cum[cum.length-1];
   if(!(raw > 100)) return null;
   const k = run.distanceKm * 1000 / raw;   // la distancia del reloj manda; la ruta (recortada) solo reparte cuándo se hizo cada tramo
@@ -17116,7 +17129,7 @@ function computeVideoRouteData(r, rectX, rectY, rectW, rectH, pad){
   const followProj = pts.map(p => webMercatorProject(p.lat, p.lon, followZoom));
 
   const cum=[0];
-  for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+haversine(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon));
+  for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+gpsStepKm(pts[i-1], pts[i]));
   const totalDist = cum[cum.length-1];
 
   // Las carreras trackeadas en vivo (después de este cambio) guardan tiempo
