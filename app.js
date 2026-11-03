@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-03T11:54:43Z';
+const APP_VERSION = '2026-11-03T11:59:36Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2090,7 +2090,8 @@ async function confirmKeepDataBeforeDisconnect(brand, sourceKey, idField){
   if(!matching.length) return true;
   const keep = await showConfirm(t('device_disconnect_keep_confirm', {brand, count: matching.length}), {confirmText: t('device_disconnect_keep_btn')});
   if(!keep) return false;
-  matching.forEach(r=>{ delete r.source; delete r[idField]; });
+  // Strava y Garmin prohíben que sus datos lleguen a una IA y Garmin exige la atribución: al convertirlas en manuales NO se pierde esa marca (origin + aiExcluded; aiVisibleRuns y la atribución de Garmin la respetan).
+  matching.forEach(r=>{ if(sourceKey === 'strava' || sourceKey === 'garmin'){ r.origin = sourceKey; r.aiExcluded = true; } delete r.source; delete r[idField]; });
   await persist();
   // persist() devuelve enseguida si ya había un guardado en vuelo (queda encolado): esperamos a que termine TODO, y si no llegó al servidor no desconectamos
   // (el backend borraría las carreras todavía marcadas como de esa marca).
@@ -3204,9 +3205,9 @@ function healthConnectExerciseToRun(ex){
 const SOURCE_LABELS = {strava:'Strava', polar:'Polar', wahoo:'Wahoo', coros:'COROS', suunto:'Suunto', garmin:'Garmin', healthconnect:'Health Connect'};
 // Garmin exige mostrar "Garmin [modelo del reloj]" en TODO lugar donde se vean sus datos (historial, detalle, imágenes y videos compartidos); sin el modelo, solo "Garmin" (guía de marca de la API de Garmin).
 // una actividad cargada a mano en Garmin Connect llega con deviceName "unknown": no es un modelo, se muestra solo "Garmin"
-function garminAttribution(run){ return run && run.source === 'garmin' ? ('Garmin' + (run.device && !/^unknown$/i.test(String(run.device).trim()) ? ' ' + String(run.device).replace(/^garmin\s+/i, '') : '')) : ''; }
+function garminAttribution(run){ return run && (run.source === 'garmin' || run.origin === 'garmin') ? ('Garmin' + (run.device && !/^unknown$/i.test(String(run.device).trim()) ? ' ' + String(run.device).replace(/^garmin\s+/i, '') : '')) : ''; }
 function sourceBadgeHtml(source, withMargin, run){
-  const label = source === 'garmin' ? (garminAttribution(run || { source }) ) : SOURCE_LABELS[source];
+  const label = source === 'garmin' ? (garminAttribution(run || { source }) ) : SOURCE_LABELS[source];   // (la insignia de origen sigue por source; la atribución de una carrera de Garmin ya convertida va por origin)
   if(!label) return '';
   return `<span class="tag tag-asfalto"${withMargin?' style="margin-right:6px;"':''}>${escapeHtml(label)}</span>`;
 }
@@ -6646,7 +6647,7 @@ function weekExecutionSignals(plan, weekStart){
   plan.forEach((d, i) => {
     if(!d || d.status !== 'done' || d.linkedRunId == null || !(d.dist > 0)) return;
     const run = (state.runs || []).find(r => String(r.id) === String(d.linkedRunId));
-    if(!run || run.source === 'strava') return;
+    if(!run || run.source === 'strava' || run.origin === 'strava') return;
     let ev = null;
     try{ ev = evaluateRunSteps(run, planStepsFromPayload(watchDayPayload(d, addDaysToIsoLocal(weekStart, i))), state.profile && state.profile.hrZones); }catch(e){ ev = null; }
     if(!ev) return;
@@ -8088,7 +8089,7 @@ function applyLevelTestResult(distM, maxHr){
   const unit = distUnit();
   const easy = fmtPaceRange(ev.paces.easy), tempo = fmtPaceRange(ev.paces.tempo), interval = fmtPaceRange(ev.paces.interval);
   state.chat = state.chat || [];
-  state.chat.push({role: 'coach', text: t('ltest_coach_msg', {dist: `${fmtDist(distM / 1000, 2)} ${unit}`, easy, tempo, interval, unit}), ts: Date.now()});
+  state.chat.push({role: 'coach', text: t('ltest_coach_msg', {dist: `${fmtDist(distM / 1000, 2)} ${unit}`, easy, tempo, interval, unit}), ts: Date.now(), noAi: true});   // viene de una carrera (puede ser de Strava/Garmin): no se reenvía a la IA
   renderAll(); renderHistory(); renderZones();
   try{ renderChat(); }catch(e){}
   persist();
@@ -8597,7 +8598,9 @@ function askZondaLowerLoad(){
   persist();
   showView('coach');
   const input = document.getElementById('chatInput');
-  if(input){ input.value = t('load_prompt', {pct: sp ? sp.pct : 30}); sendChat(); }
+  // El porcentaje sale de TODAS las carreras: si hay alguna de Strava o Garmin (o convertida de ellas) no se manda a la IA un número calculado con sus datos.
+  const restricted = (state.runs || []).some(r => r.source === 'strava' || r.source === 'garmin' || r.aiExcluded);
+  if(input){ input.value = restricted ? t('load_prompt_generic') : t('load_prompt', {pct: sp ? sp.pct : 30}); sendChat(); }
 }
 // ---- Plan de carrera: tiempo objetivo, ritmo, estrategia y parciales de la próxima carrera ----
 // Distancia de la carrera cargada en Próximos eventos (o, si no la cargó y es la carrera objetivo de
@@ -8764,7 +8767,7 @@ function recordRaceCalibration(ev){
   if(!state.raceCalibration) state.raceCalibration = [];
   state.raceCalibration.push({date: ev.date, km: evKm, predictedSec: ev.predictedSec, actualSec: Math.round(actualSec), ratio: Math.round(ratio * 1000) / 1000});
   state.raceCalibration = state.raceCalibration.slice(-6);
-  state.chat.push({role: 'coach', text: t('rp_calib_msg', {name: ev.name || '', pred: fmtRaceTime(ev.predictedSec), actual: fmtRaceTime(Math.round(actualSec))}), ts: Date.now()});
+  state.chat.push({role: 'coach', text: t('rp_calib_msg', {name: ev.name || '', pred: fmtRaceTime(ev.predictedSec), actual: fmtRaceTime(Math.round(actualSec))}), ts: Date.now(), noAi: true});   // el tiempo real sale de una carrera (puede ser de Strava/Garmin): no se reenvía a la IA
   return true;
 }
 // Parciales con salida controlada: el primer 20% un 1,5% más lento, el último 20% un 1,5% más
@@ -10380,8 +10383,24 @@ async function logReadiness(quality, detail){
 }
 
 let editingShoeId = null;
+// Notas que Zonda guardó de la persona (lesiones, molestias, preferencias): se ven y se borran desde Perfil. Se mandan a la IA en cada pedido, así que la persona tiene que poder controlarlas.
+function renderCoachNotes(){
+  const box = document.getElementById('coach-notes-list');
+  if(!box) return;
+  const notes = (state.profile && Array.isArray(state.profile.coachNotes)) ? state.profile.coachNotes : [];
+  if(!notes.length){ box.innerHTML = '<p class="muted" style="margin:8px 0 0;">' + escapeHtml(t('coach_notes_empty')) + '</p>'; return; }
+  box.innerHTML = notes.map((n, i) => '<div class="set-row" style="align-items:flex-start; gap:10px;"><span style="flex:1; min-width:0; white-space:normal; line-height:1.4;">' + escapeHtml(n) + '</span><button type="button" class="small-link" data-on-click="deleteCoachNote(' + i + ')">' + escapeHtml(t('coach_notes_delete')) + '</button></div>').join('');
+}
+function deleteCoachNote(i){
+  if(!state.profile || !Array.isArray(state.profile.coachNotes)) return;
+  const idx = parseInt(i, 10);
+  if(!(idx >= 0 && idx < state.profile.coachNotes.length)) return;
+  state.profile.coachNotes.splice(idx, 1);
+  renderCoachNotes(); persist();
+}
 function renderPerfil(){
   try{ checkAdminOnce(); }catch(e){}
+  try{ renderCoachNotes(); }catch(e){}
   const p = state.profile;
   document.getElementById('perfil-initial').textContent = (p.name[0]||'?').toUpperCase();
   // Muestra el promedio REAL de las últimas semanas corridas (computeActualWeeklyKmAvg) en vez
@@ -14438,7 +14457,10 @@ function obRestoreDraft(){
   setPills('#ob-sport-days', d.sportDays);
   dateBoxUpdaters['ob-birth'] && dateBoxUpdaters['ob-birth']();
   dateBoxUpdaters['ob-racedate'] && dateBoxUpdaters['ob-racedate']();
-  const step = Number(d.step);
+  let step = Number(d.step);
+  // Embarazo/posparto (paso 13, solo si es mujer) y molestias/lesiones (paso 16) NO se guardan en el borrador (son datos de salud): si ya habías pasado esos pasos se vuelven a preguntar, en vez de seguir con los campos vacíos sin avisar.
+  if(step > 16) step = d.gender === 'f' ? 13 : 16;
+  else if(step > 13 && d.gender === 'f') step = 13;
   if(step >= 1 && step <= OB_STEP_COUNT) obGotoStep(step);
   return true;
 }
@@ -14763,6 +14785,7 @@ function buildPRShareImageBlob(bucketKey, rec){
 
       drawTrackEmblem(ctx, W/2, 1305, 200, 84);
       drawBrandWord(ctx, W/2, 1445, 80);
+      { const src = rec && rec.runId != null ? (state.runs || []).find(x => String(x.id) === String(rec.runId)) : null; if(src) drawShareAttribution(ctx, W, H, garminAttribution(src)); }   // el récord sale de una carrera de Garmin: lleva su atribución
 
       canvas.toBlob((blob)=>resolve(blob||null), 'image/png');
     }catch(e){ resolve(null); }
@@ -15064,7 +15087,7 @@ function runsByDateAsc(list){
 // Carreras que pueden llegar a Zonda (la IA). El acuerdo de desarrollador de Strava (API Policy 2026, sección 5.3) prohíbe usar datos de Strava
 // en cualquier aplicación de IA, incluso como contexto de una conversación: las carreras importadas de Strava (source:'strava') quedan afuera.
 // Garmin (Connect Developer Program) se declara igual en el formulario de acceso: los datos que vienen de dispositivos Garmin (source:'garmin') tampoco llegan a la IA ni se usan para entrenarla.
-function aiVisibleRuns(){ return (state.runs || []).filter(r => r.source !== 'strava' && r.source !== 'garmin'); }
+function aiVisibleRuns(){ return (state.runs || []).filter(r => r.source !== 'strava' && r.source !== 'garmin' && !r.aiExcluded); }
 // Boceto de la ruta (SVG) para las tarjetas del historial: se dibuja con los puntos del GPS, sin depender del mapa de Mapbox.
 // Queda detras de la imagen del mapa: si la imagen carga la tapa, si falla (sin red / sin token) se ve el trazo.
 function routeSketchSvg(points){
@@ -15533,7 +15556,7 @@ function openRunDetail(runId){
   document.getElementById('run-detail-content').innerHTML = `
     <h2 class="subtitle" style="font-size:22px; margin-bottom:2px;">${escapeHtml(r.name) || dateStr}</h2>
     ${r.name ? `<p class="muted" style="margin-bottom:10px;">${dateStr}</p>` : '<div style="margin-bottom:10px;"></div>'}
-    ${r.source === 'garmin' ? `<p class="muted garmin-attr" style="margin:-4px 0 10px; font-weight:700; letter-spacing:.02em;">${escapeHtml(garminAttribution(r))}</p>` : ''}
+    ${(r.source === 'garmin' || r.origin === 'garmin') ? `<p class="muted garmin-attr" style="margin:-4px 0 10px; font-weight:700; letter-spacing:.02em;">${escapeHtml(garminAttribution(r))}</p>` : ''}
     <div class="rd-tabs">${tabs.map(tb=>`<button class="rd-tab-btn" id="rd-tabbtn-${tb}" data-on-click="switchRDTab('${tb}')">${tabLabels[tb]}</button>`).join('')}</div>
     ${tabs.map(tb=>`<div class="rd-panel" id="rd-panel-${tb}"></div>`).join('')}
     ${renderRunPlanScore(r)}
@@ -16763,6 +16786,7 @@ function buildShareImageBlob(r){
       if(r.points && r.points.length>1){
         drawRouteSilhouette(ctx, r.points, 140, 1360, W-280, 420);
       }
+      drawShareAttribution(ctx, W, H, garminAttribution(r));   // Garmin exige "Garmin [modelo]" en toda imagen con datos de sus dispositivos (esta es la plantilla por defecto)
 
       canvas.toBlob((blob)=>resolve(blob||null), 'image/png');
     }catch(e){ resolve(null); }
@@ -17352,7 +17376,7 @@ async function startDynamicVideo(runId){
     ctx.font = '500 22px "Inter", Arial, sans-serif';
     ctx.textAlign = 'right';
     ctx.fillText(dateStr, W-40, 90);
-    if(typeof r !== 'undefined' && r && r.source === 'garmin'){ ctx.fillStyle = '#EDEFEF'; ctx.font = '700 24px "Inter", Arial, sans-serif'; ctx.fillText(garminAttribution(r), W-40, 124); ctx.fillStyle = 'rgba(237,239,239,0.7)'; }
+    if(typeof r !== 'undefined' && r && (r.source === 'garmin' || r.origin === 'garmin')){ ctx.fillStyle = '#EDEFEF'; ctx.font = '700 24px "Inter", Arial, sans-serif'; ctx.fillText(garminAttribution(r), W-40, 124); ctx.fillStyle = 'rgba(237,239,239,0.7)'; }
     ctx.textAlign = 'left';
     if(runName){
       ctx.fillStyle = '#EDEFEF';
