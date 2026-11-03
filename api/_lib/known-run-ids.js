@@ -17,4 +17,19 @@ function knownRunIds(data, field, source) {
   return set;
 }
 
-module.exports = { knownRunIds };
+// Para los webhooks (Strava, Garmin, Suunto), que llegan de a una actividad y no leen el estado de la persona: saca de `runs` las que ella borró a mano (state.dismissedRuns).
+// Sin esto, editar en la marca una actividad ya borrada de Zancada (o un reintento del lote) la volvía a meter y a marcar como sesión hecha. Si la lectura falla, no se filtra nada (como antes).
+async function withoutDismissed(base, headers, userId, source, field, runs) {
+  if (!Array.isArray(runs) || !runs.length) return runs || [];
+  try {
+    const res = await fetch(`${base}/rest/v1/app_state?user_id=eq.${encodeURIComponent(userId)}&select=dismissed:data->dismissedRuns&limit=1`, { headers });
+    if (!res.ok) return runs;
+    const rows = await res.json();
+    const data = { dismissedRuns: rows && rows[0] && Array.isArray(rows[0].dismissed) ? rows[0].dismissed : [] };
+    if (!data.dismissedRuns.length) return runs;
+    const dismissed = knownRunIds(data, field, source);
+    return runs.filter(r => !(r && r[field] != null && dismissed.has(r[field])) && !(r && r[field] != null && dismissed.has(String(r[field]))));
+  } catch (e) { return runs; }
+}
+
+module.exports = { knownRunIds, withoutDismissed };

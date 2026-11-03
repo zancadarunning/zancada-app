@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-03T14:17:54Z';
+const APP_VERSION = '2026-11-03T17:01:41Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1389,17 +1389,19 @@ async function disablePushNotifications(){
 
 /* ---- Respaldo local (para no perder una carrera si se guarda sin conexión) ---- */
 function pendingBackupKey(uid){ return 'zancada_pending_'+uid; }
-function savePendingBackup(){
+// ts: el momento al que corresponde ESTE estado (por omisión, ahora). Con el servidor más nuevo se pasa la versión que la pestaña conocía, para que al volver a abrir el respaldo no pase por más nuevo.
+function savePendingBackup(tsOverride){
   if(!currentUserId) return;
   const key = pendingBackupKey(currentUserId);
-  try{ localStorage.setItem(key, JSON.stringify({data:state, ts:Date.now()})); return; }catch(e){}
+  const ts = Number.isFinite(tsOverride) ? tsOverride : Date.now();
+  try{ localStorage.setItem(key, JSON.stringify({data:state, ts})); return; }catch(e){}
   // No entró (localStorage admite ~5 MB y las rutas GPS de muchas carreras lo pasan): antes el respaldo fallaba EN SILENCIO y un guardado sin conexión quedaba sin copia.
   // Se guarda una versión reducida: sin los puntos GPS ni el chat de las carreras/mensajes más viejos (lo reciente se conserva completo).
   try{
     const slim = Object.assign({}, state);
     slim.runs = (state.runs||[]).map((r, i, a) => (i >= a.length - 3 ? r : Object.assign({}, r, {points: [], series: null})));
     slim.chat = (state.chat||[]).slice(-60);
-    localStorage.setItem(key, JSON.stringify({data:slim, ts:Date.now(), reduced:true}));
+    localStorage.setItem(key, JSON.stringify({data:slim, ts, reduced:true}));
   }catch(e){}
 }
 function clearPendingBackup(){
@@ -1507,7 +1509,9 @@ async function persist(){
       loadedStateVersion = nowIso; // este guardado ya es la versión más nueva que conocemos
       clearPendingBackup();
     } else {
-      savePendingBackup();   // no se escribió (el servidor tiene algo más nuevo): el cambio queda a salvo en el teléfono, como dice el comentario de arriba
+      // No se escribió (el servidor tiene algo más nuevo). Si ya hay un respaldo pendiente se deja como está (como dice el comentario de arriba). Si no, se guarda este estado con la hora de la versión que
+      // la pestaña conocía y NO con la de ahora: con la de ahora, al abrir la app el respaldo (viejo) pasaba por más nuevo que el servidor y lo pisaba, borrando la carrera del reloj o el cambio del otro dispositivo.
+      if(!hasPendingBackup()) savePendingBackup(new Date(loadedStateVersion).getTime());
     }
   }catch(e){
     console.error('persist error', e);

@@ -19,6 +19,7 @@
 const crypto = require('crypto');
 const { isRunningActivity, activityToRun, mergeGarminRuns, purgeGarminRunsForUser } = require('./_lib/garmin-activity-helpers');
 const { mergeAndNotify } = require('./_lib/notify-new-run');
+const { withoutDismissed } = require('./_lib/known-run-ids');
 const { withSentry, reportError, reportSecurityEvent } = require('./_lib/sentry');
 
 function secretMatches(given, expected) {
@@ -92,7 +93,8 @@ module.exports = withSentry(async (req, res) => {
       const run = safeRun(() => activityToRun(a), 'actividad');
       if (!run || !run.garminId || !run.distanceKm) continue;
       for (const row of await connsFor(a.userId)) {
-        await mergeAndNotify(mergeGarminRuns, base, headers, row.user_id, [run], 'skip', 'garmin', 900);
+        const toMerge = await withoutDismissed(base, headers, row.user_id, 'garmin', 'garminId', [run]);   // la que la persona borró a mano no vuelve
+        if (toMerge.length) await mergeAndNotify(mergeGarminRuns, base, headers, row.user_id, toMerge, 'skip', 'garmin', 900);
       }
     }
 
@@ -104,7 +106,8 @@ module.exports = withSentry(async (req, res) => {
       const run = safeRun(() => activityToRun(a), 'actividad');
       if (!run || !run.garminId || !run.distanceKm) continue;
       for (const row of await connsFor(a.userId)) {
-        await mergeGarminRuns(base, headers, row.user_id, [run], 'upsert');
+        const toMerge = await withoutDismissed(base, headers, row.user_id, 'garmin', 'garminId', [run]);
+        if (toMerge.length) await mergeGarminRuns(base, headers, row.user_id, toMerge, 'upsert');
       }
     }
 
@@ -115,7 +118,8 @@ module.exports = withSentry(async (req, res) => {
       const run = safeRun(() => activityToRun(Object.assign({}, summary, { activityId: d.activityId != null ? d.activityId : summary.activityId, summaryId: d.summaryId }), d), 'detalle');
       if (!run || !run.garminId || !run.distanceKm) continue;
       for (const row of await connsFor(d.userId)) {
-        await mergeGarminRuns(base, headers, row.user_id, [run], 'upsert');
+        const toMerge = await withoutDismissed(base, headers, row.user_id, 'garmin', 'garminId', [run]);
+        if (toMerge.length) await mergeGarminRuns(base, headers, row.user_id, toMerge, 'upsert');
       }
     }
 

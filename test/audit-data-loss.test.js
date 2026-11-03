@@ -116,7 +116,7 @@ test('la carrera recién terminada tiene copia local durable ANTES de limpiar el
   const iClear = close.lastIndexOf('clearRunProgress();');
   assert.ok(iBackup > 0 && iClear > iBackup, 'savePendingBackup antes del último clearRunProgress');
   const persistBody = SRC.slice(SRC.indexOf('async function persist()'), SRC.indexOf('function waitForPendingPersist'));
-  assert.ok(/\} else \{\s*savePendingBackup\(\);/.test(persistBody), 'la rama skipWrite deja respaldo');
+  assert.ok(persistBody.includes('if(!hasPendingBackup()) savePendingBackup(new Date(loadedStateVersion).getTime());'), 'la rama skipWrite deja respaldo (con la hora de la versión conocida, no la de ahora)');
 });
 
 test('Health Connect se lee solo: al abrir/volver a la app (visibilitychange) y al tirar para refrescar, con tope de frecuencia', () => {

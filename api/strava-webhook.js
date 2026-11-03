@@ -100,7 +100,10 @@ async function syncActivity(athleteId, activityId) {
   // con los datos nuevos, no saltearla. merge_strava_runs preserva el
   // shoeId que el usuario haya asignado a mano en la app.
   // mergeAndNotify avisa solo si la carrera todavía no estaba guardada (un evento 'update' de una ya sincronizada no avisa)
-  await mergeAndNotify(mergeStravaRuns, base, headers, conn.user_id, [newRun], 'upsert', 'strava', 1500);
+  // la que la persona borró a mano del Historial no vuelve (ni por una edición en Strava)
+  const toMerge = await withoutDismissed(base, headers, conn.user_id, 'strava', 'stravaId', [newRun]);
+  if (!toMerge.length) return;
+  await mergeAndNotify(mergeStravaRuns, base, headers, conn.user_id, toMerge, 'upsert', 'strava', 1500);
 }
 
 // Strava manda este evento cuando el usuario borra una actividad puntual
@@ -174,6 +177,7 @@ async function deauthorizeAthlete(athleteId) {
 
 const { withSentry, reportError, reportSecurityEvent } = require('./_lib/sentry');
 const { mergeAndNotify } = require('./_lib/notify-new-run');
+const { withoutDismissed } = require('./_lib/known-run-ids');
 
 module.exports = withSentry(async (req, res) => {
   if (req.method === 'GET') {
