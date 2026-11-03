@@ -13,6 +13,7 @@ const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 
 const { withSentry, reportError } = require('./_lib/sentry');
 const { safeConvert } = require('./_lib/safe-convert');
+const { knownRunIds } = require('./_lib/known-run-ids');
 
 // Auditoría de costos: ver el mismo comentario en strava-sync-now.js.
 const SYNC_COOLDOWN_MS = 20000;
@@ -69,7 +70,7 @@ module.exports = withSentry(async (req, res) => {
     if (!stateRows || !stateRows.length) {
       return res.status(200).json({ synced: false });
     }
-    const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.wahooId));
+    const knownIds = knownRunIds(stateRows[0].data, 'wahooId', 'wahoo');
     // Sin el FIT acá (accessToken=null en workoutToRun) para que el botón "Sincronizar
     // ahora" responda rápido -- splits/series/potencia se completan solos en el próximo
     // paso del cron de wahoo-sync.js, mismo criterio que ya usa Strava en

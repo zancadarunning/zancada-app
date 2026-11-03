@@ -42,6 +42,7 @@ function verifyState(state) {
 const { withSentry, reportError } = require('./_lib/sentry');
 const { withOAuthLink } = require('./_lib/oauth-link');
 const { safeConvertSync } = require('./_lib/safe-convert');
+const { knownRunIds } = require('./_lib/known-run-ids');
 
 // Ver el comentario igual a este en strava-auth.js: antes cada rama de error de acá abajo
 // dejaba al usuario en una página muerta (texto plano o el JSON crudo del proveedor) sin
@@ -106,7 +107,7 @@ const linkAccount = async (req, res) => {
         const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${userId}&select=data`, { headers: plainHeaders });
         const stateRows = await stateRes.json();
         if (stateRows && stateRows.length) {
-          const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.corosId));
+          const knownIds = knownRunIds(stateRows[0].data, 'corosId', 'coros');
           const newRecs = runRecords.filter(r => !knownIds.has(getCorosRecordId(r)));
           for (const rec of newRecs.slice(0, 5)) await enrichCorosRecord(tokenData.access_token, rec);
           const newRuns = newRecs.map(record => safeConvertSync(() => activityToRun(record), 'coros')).filter(Boolean);

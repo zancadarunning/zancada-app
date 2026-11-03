@@ -8,6 +8,7 @@ const { syncProbe, probeHasNew, probeMayBackfill } = require('./_lib/sync-probe'
 const { withSentry, reportError } = require('./_lib/sentry');
 const { mergeAndNotify } = require('./_lib/notify-new-run');
 const { safeConvert } = require('./_lib/safe-convert');
+const { knownRunIds } = require('./_lib/known-run-ids');
 
 // Cuántas carreras sin parciales reales se completan por cuenta en cada corrida del cron
 // -- ver el comentario grande de backfillStravaSplits.
@@ -125,7 +126,7 @@ module.exports = withSentry(async (req, res) => {
           const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${conn.user_id}&select=data`, { headers });
           const stateRows = await stateRes.json();
           if (stateRows && stateRows.length) {
-            const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.stravaId));
+            const knownIds = knownRunIds(stateRows[0].data, 'stravaId', 'strava');
             const newRuns = [];
             for (const act of runActs) {
               if (knownIds.has(act.id)) continue;

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T18:23:00Z';
+const APP_VERSION = '2026-11-03T11:54:43Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -910,6 +910,10 @@ function showConfirm(message, opts){
 let state = {onboarded:false, profile:{}, plan:[], runs:[], shoes:[], event:null, chat:[], lang:lang, painLog:[], readinessLog:[]};
 // Un estado que llega del servidor o del respaldo local con la forma rota (profile null, plan que no es lista...) hacía fallar el arranque en cada apertura y la app quedaba inutilizable
 // (solo ofrecía cerrar sesión). Se fuerza la forma mínima que el resto del código da por hecha y se descartan las entradas que no son objetos.
+// Un app_state que es solo la cáscara de un inicio sin terminar (sin onboarded, sin perfil, sin carreras): lo dejaba una versión anterior al activar notificaciones o conectar un reloj en el inicio.
+function isOnboardingShell(d){
+  return !!d && typeof d === 'object' && !d.onboarded && (!d.profile || !Object.keys(d.profile).length) && !(Array.isArray(d.runs) && d.runs.length) && !(Array.isArray(d.plan) && d.plan.length);
+}
 function normalizeLoadedState(s){
   // La función de calendario del plan se eliminó: se descarta lo que había quedado guardado en la cuenta (se borra solo en el próximo guardado).
   if(s && typeof s === 'object'){ delete s.calendarToken; delete s.calendarNextWeek; delete s.calendarNative; }
@@ -1404,6 +1408,37 @@ function clearPendingBackup(){
 function readPendingBackup(uid){
   try{ const raw = localStorage.getItem(pendingBackupKey(uid)); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
 }
+// Une el respaldo local con el estado que bajó del servidor sin perder nada (state = lo que bajó del servidor). Devuelve true si hay algo para volver a subir.
+//  - Respaldo MÁS NUEVO y completo: se usa tal cual (como siempre).
+//  - Respaldo MÁS NUEVO pero REDUCIDO (sin GPS ni chat viejo, porque no entró en localStorage): se usa de base, pero se le devuelven los puntos GPS y las series que el servidor ya tenía y
+//    los mensajes viejos del chat; antes se subía recortado y borraba esos datos de las otras carreras.
+//  - Respaldo MÁS VIEJO que el servidor (el servidor escribió después, por ejemplo con el aviso de una carrera del reloj): ya no se descarta sin mirar. Las carreras grabadas en la app
+//    (sin source de proveedor) que solo existen en el respaldo se suman al estado del servidor; antes se perdían para siempre al subir el estado del servidor y borrar el respaldo.
+function applyPendingBackup(pending, remoteTs){
+  const server = state;
+  const backup = normalizeLoadedState(pending.data);
+  if(pending.ts > remoteTs){
+    if(pending.reduced){
+      const byId = new Map((server.runs || []).map(r => [String(r.id), r]));
+      (backup.runs || []).forEach(r => {
+        const s = byId.get(String(r.id));
+        if(!s) return;
+        if(!(r.points && r.points.length) && s.points && s.points.length) r.points = s.points;
+        if(!r.series && s.series) r.series = s.series;
+      });
+      const firstTs = backup.chat && backup.chat.length ? Number(backup.chat[0].ts) : Infinity;
+      const older = (server.chat || []).filter(m => m && Number(m.ts) < firstTs);
+      if(older.length) backup.chat = older.concat(backup.chat || []);
+    }
+    state = backup;
+    return true;
+  }
+  const known = new Set((server.runs || []).map(r => String(r.id)));
+  const lost = (backup.runs || []).filter(r => r && r.id != null && !r.source && !known.has(String(r.id)));
+  if(!lost.length) return false;
+  server.runs = (server.runs || []).concat(lost);
+  return true;
+}
 function hasPendingBackup(){
   if(!currentUserId) return false;
   return !!readPendingBackup(currentUserId);
@@ -1433,6 +1468,9 @@ let persistQueued = false;
 let persistSettledResolvers = [];
 async function persist(){
   if(!currentUserId || stateLoadedFor !== currentUserId) return;
+  // Una cuenta nueva a mitad del inicio (onboarded:false) NO sube nada: activar las notificaciones o conectar un reloj en esas pantallas llamaba a persist() y dejaba en la base un estado
+  // vacío (sin perfil ni plan) que, si la app se cerraba antes de terminar, rompía la cuenta para siempre. finishOnboard() pone onboarded=true ANTES de su persist().
+  if(!state.onboarded) return;
   // El chat no tenía tope y viajaba entero en cada guardado (y en el respaldo local, que además tiene cuota): se conservan los últimos 300 mensajes.
   if(state.chat && state.chat.length > 300) state.chat = state.chat.slice(-300);
   if(persistInFlight){ persistQueued = true; return; }
@@ -1467,6 +1505,8 @@ async function persist(){
       if(saveError) throw saveError;
       loadedStateVersion = nowIso; // este guardado ya es la versión más nueva que conocemos
       clearPendingBackup();
+    } else {
+      savePendingBackup();   // no se escribió (el servidor tiene algo más nuevo): el cambio queda a salvo en el teléfono, como dice el comentario de arriba
     }
   }catch(e){
     console.error('persist error', e);
@@ -1641,7 +1681,7 @@ async function loadUserAndEnter(user, isRetry){
   try{
     const { data, error } = await supabaseClient.from('app_state').select('data, updated_at').eq('user_id', user.id).maybeSingle();
     if(error) throw error;
-    if(data && data.data && Object.keys(data.data).length){
+    if(data && data.data && Object.keys(data.data).length && !isOnboardingShell(data.data)){
       state = normalizeLoadedState(data.data); lang = state.lang || 'es';
       stateLoadedFor = user.id;
       loadedStateVersion = data.updated_at || null;
@@ -1667,10 +1707,9 @@ async function loadUserAndEnter(user, isRetry){
       // servidor acaba de devolver, es porque a esta altura ya venció a lo que había ahí,
       // tenga más, menos o la misma cantidad de carreras.
       const remoteTs = loadedStateVersion ? new Date(loadedStateVersion).getTime() : 0;
-      if(pending && pending.data && pending.ts > remoteTs){
-        // había una carrera guardada en el teléfono que no llegó a subirse la última vez -> la recuperamos
-        state = normalizeLoadedState(pending.data); lang = state.lang || lang;
-        persist();
+      if(pending && pending.data){
+        // había una carrera guardada en el teléfono que no llegó a subirse la última vez -> la recuperamos (ver applyPendingBackup)
+        if(applyPendingBackup(pending, remoteTs)){ lang = state.lang || lang; persist(); }
       }
       // phaseNow guardado puede ser de otra semana (se guardó la semana pasada): se deriva de nuevo
       refreshPhaseNow();
@@ -3225,12 +3264,26 @@ async function connectHealthConnect(){
     showToast(t('healthconnect_error'),'error');
   }
 }
+// Health Connect se lee en el propio teléfono (no hay webhook ni cron): antes solo se leía al tocar "Conectar", así que las carreras nuevas no aparecían nunca más. Ahora también al abrir la app,
+// al volver a ella y al tirar para refrescar (como mucho una vez cada 10 minutos, salvo el tirar para refrescar).
+let hcAutoSyncAt = 0, hcAutoSyncRunning = false;
+async function autoSyncHealthConnect(force){
+  if(hcAutoSyncRunning || !state || !state.onboarded || !state.healthConnectConnected || !getHealthConnectBridge()) return;
+  if(!force && Date.now() - hcAutoSyncAt < 10 * 60 * 1000) return;
+  hcAutoSyncRunning = true; hcAutoSyncAt = Date.now();
+  try{
+    const r = await syncHealthConnectNow();
+    if(r && r.synced){ relinkTodayRun(); persist(); renderAll(); }
+  }catch(e){ console.error('autoSyncHealthConnect', e); }
+  finally{ hcAutoSyncRunning = false; }
+}
 async function syncHealthConnectNow(){
   const HC = getHealthConnectBridge();
   if(!HC) return {synced:false};
   try{
     const { exercises } = await HC.readExercises();
     const knownIds = new Set((state.runs||[]).map(r=>r.healthConnectId));
+    dismissedIdsFor('healthconnect').forEach(id => knownIds.add(id));   // las que la persona borró a mano no se vuelven a importar
     const hcNow = Date.now();
     const newRuns = (exercises||[])
       .filter(ex=>ex && typeof ex.id === 'string' && ex.id.length <= 100)
@@ -4872,6 +4925,7 @@ document.addEventListener('visibilitychange', ()=>{
   checkProactiveCoachNudge();
   checkPainCheckins();
   renderAll(); renderHistory(); renderZones();
+  autoSyncHealthConnect();
 });
 /* ================= BOTÓN FÍSICO DE ATRÁS (Android / gesto "atrás" del navegador) =========
    En una PWA instalada en Android, el botón físico de atrás dispara un evento 'popstate' --
@@ -10947,9 +11001,9 @@ async function refreshStateFromServer(){
     if(data && data.data && Object.keys(data.data).length){
       const incomingRuns = (data.data.runs||[]).length;
       const currentRuns = (state.runs||[]).length;
-      if(incomingRuns < currentRuns){
-        // el servidor tiene menos carreras que las que ya tenemos acá (por ejemplo, una que se guardó sin
-        // conexión y todavía no se sincronizó) -> no pisamos lo que ya tenemos, reintentamos guardarlo
+      if(incomingRuns < currentRuns && hasPendingBackup()){
+        // el servidor tiene menos carreras que las que ya tenemos acá Y hay un respaldo pendiente (una carrera guardada sin conexión que todavía no se subió) -> no pisamos lo que ya tenemos,
+        // reintentamos guardarlo. Sin respaldo pendiente, "menos carreras" es porque el servidor las borró a propósito (se desconectó un reloj, se borró desde otro dispositivo): antes se volvían a subir.
         persist();
       } else if(persistInFlight || persistQueued){
         // Reportado en una auditoría: el único chequeo de esta función era "el servidor
@@ -11661,6 +11715,7 @@ async function doPullRefresh(){
   const updating = await checkForAppUpdate();
   if(updating) return;
   await refreshStateFromServer();
+  await autoSyncHealthConnect(true);
   autoSkipPastDays();
   repairSkippedDaysWithMatchingRuns();
   autoClearPastEvent();
@@ -13916,6 +13971,7 @@ async function closeSummary(){
   checkNewPR(state.runs[state.runs.length-1]);
   checkAchievementUnlocks();
   autoMarkSessionDone(runDate, runId);
+  savePendingBackup();   // copia local DURABLE de la carrera antes de borrar el progreso de la corrida: si la app muere durante el guardado, no queda ni progreso ni carrera (persist() la borra al confirmar)
   clearRunProgress();
   document.getElementById('runSummary').style.display='none';
   document.getElementById('runIdle').style.display='block';
@@ -16321,6 +16377,22 @@ function pacingDetailText(splits){
   const half = abs < 0.5 ? t('pacing_half_same') : t(st.diffPct < 0 ? 'pacing_half_faster' : 'pacing_half_slower', {p: abs.toFixed(1)});
   return t('pacing_detail', {cv: st.cv.toFixed(1), half});
 }
+// Carreras que la persona borró a mano: se anota la clave de proveedor (por ejemplo "strava:123") para que Health Connect y los crons de Strava, Polar, Wahoo, Suunto y COROS no la vuelvan a
+// traer en la próxima pasada (traen los últimos 30 días). Tope de 200 y se vencen a los 45 días.
+const DISMISSED_FIELDS = {stravaId:'strava', polarId:'polar', wahooId:'wahoo', corosId:'coros', suuntoId:'suunto', garminId:'garmin', healthConnectId:'healthconnect'};
+function dismissRun(run){
+  if(!run) return;
+  const now = Date.now(), keep = (state.dismissedRuns || []).filter(d => d && typeof d.k === 'string' && now - Number(d.t) < 45 * 86400000);
+  Object.keys(DISMISSED_FIELDS).forEach(f => {
+    if(run[f] != null && run[f] !== '') keep.push({k: DISMISSED_FIELDS[f] + ':' + String(run[f]), t: now});
+  });
+  state.dismissedRuns = keep.slice(-200);
+}
+function dismissedIdsFor(source){
+  const out = [], prefix = source + ':';
+  (state.dismissedRuns || []).forEach(d => { if(d && typeof d.k === 'string' && d.k.indexOf(prefix) === 0) out.push(d.k.slice(prefix.length)); });
+  return out;
+}
 async function deleteRun(runId){
   if(!(await showConfirm(t('hist_delete_confirm'), {danger:true, confirmText:t('delete_word')}))) return;
   const idx = state.runs.findIndex(r => String(r.id) === String(runId));
@@ -16331,6 +16403,7 @@ async function deleteRun(runId){
   checkShoeWearAlerts();
   const planDay = state.plan.find(d => d.linkedRunId === run.id);
   if(planDay){ planDay.status = null; planDay.linkedRunId = null; }
+  dismissRun(run);
   state.runs.splice(idx,1);
   unmarkLostAchievements();
   closeRunDetail();

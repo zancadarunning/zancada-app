@@ -15,6 +15,7 @@ const {
 const { withSentry, reportError } = require('./_lib/sentry');
 const { mergeAndNotify } = require('./_lib/notify-new-run');
 const { safeConvertSync } = require('./_lib/safe-convert');
+const { knownRunIds } = require('./_lib/known-run-ids');
 
 const FIT_BACKFILL_BATCH = 3;
 const LOOKBACK_DAYS = 7;
@@ -27,7 +28,7 @@ async function syncOneConnection(base, headers, conn) {
   const stateRows = await stateRes.json();
   if (!stateRows || !stateRows.length) return { ok: true, added: 0, backfilled: 0 };
   const runs = (stateRows[0].data && stateRows[0].data.runs) || [];
-  const knownIds = new Set(runs.map(r => r.suuntoId));
+  const knownIds = knownRunIds(stateRows[0].data, 'suuntoId', 'suunto');
 
   // 1) Entrenos que el webhook se pudo haber perdido.
   let added = 0;

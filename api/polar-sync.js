@@ -14,6 +14,7 @@ const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { withSentry, reportError } = require('./_lib/sentry');
 const { mergeAndNotify } = require('./_lib/notify-new-run');
 const { safeConvert } = require('./_lib/safe-convert');
+const { knownRunIds } = require('./_lib/known-run-ids');
 
 // Cuántas carreras sin splits reales se completan por cuenta en cada corrida del cron.
 // Un lote chico en vez de todas de una: la mayoría de las cuentas no van a tener nada
@@ -116,7 +117,7 @@ module.exports = withSentry(async (req, res) => {
           const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${conn.user_id}&select=data`, { headers });
           const stateRows = await stateRes.json();
           if (stateRows && stateRows.length) {
-            const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.polarId));
+            const knownIds = knownRunIds(stateRows[0].data, 'polarId', 'polar');
             // El cron sí busca el FIT de cada ejercicio nuevo (splits/series/potencia) --
             // a diferencia del botón "Sincronizar ahora" (polar-sync-now.js), acá no hay
             // apuro por responder rápido a un usuario esperando en pantalla.

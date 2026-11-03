@@ -30,6 +30,7 @@ test('persist: mientras un guardado sigue en vuelo, uno nuevo no arranca un pedi
     },
   });
   app.setCurrentUserId('user-de-prueba');
+  app.state.onboarded = true;   // persist() no sube nada de una cuenta que no terminó el inicio
   app.state.chat = [{ role: 'user', text: 'cambiame el jueves', ts: 1 }];
 
   const p1 = app.persist(); // arranca el primer pedido -- todavía no resolvió
@@ -75,6 +76,7 @@ test('persist: una pestaña en segundo plano no pisa un guardado más nuevo de o
     },
   });
   app.setCurrentUserId('user-de-prueba');
+  app.state.onboarded = true;   // persist() no sube nada de una cuenta que no terminó el inicio
   app.document.visibilityState = 'visible';
   app.state.chat = [{ role: 'user', text: 'msg 1', ts: 1 }];
 
@@ -102,6 +104,7 @@ test('persist: varios pedidos en el mismo instante que uno está en vuelo se jun
     },
   });
   app.setCurrentUserId('user-de-prueba');
+  app.state.onboarded = true;   // persist() no sube nada de una cuenta que no terminó el inicio
   app.state.chat = [{ role: 'user', text: 'msg 1', ts: 1 }];
 
   const p1 = app.persist();
@@ -129,6 +132,7 @@ test('persist: si Supabase devuelve un error de red (no lanza), el cambio queda 
     onUpsert() { return Promise.resolve(fail ? { data: null, error: { message: 'TypeError: Failed to fetch' } } : { data: null, error: null }); },
   });
   app.setCurrentUserId('user-sin-conexion');
+  app.state.onboarded = true;
   app.state.chat = [{ role: 'user', text: 'un cambio hecho sin conexión', ts: 1 }];
   await app.persist();
   assert.equal(app.hasPendingBackup(), true, 'sin conexión debería quedar un respaldo pendiente');
@@ -142,6 +146,7 @@ test('persist: si la cuenta todavía no se cargó (falló la consulta), NO escri
   const upsertCalls = [];
   const app = loadApp({ onUpsert(payload) { upsertCalls.push(payload); return Promise.resolve({ data: null, error: null }); } });
   app.setCurrentUserId('user-de-prueba');
+  app.state.onboarded = true;   // persist() no sube nada de una cuenta que no terminó el inicio
   app.setStateLoadedFor(null);                       // loadUserAndEnter puso currentUserId pero la carga no terminó
   await app.persist();
   assert.equal(upsertCalls.length, 0, 'sin carga confirmada no se guarda nada (el respaldo pendiente queda para cuando sí cargue)');

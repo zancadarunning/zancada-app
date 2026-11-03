@@ -30,6 +30,7 @@ function verifyState(state) {
 const { withSentry, reportError } = require('./_lib/sentry');
 const { withOAuthLink } = require('./_lib/oauth-link');
 const { safeConvert } = require('./_lib/safe-convert');
+const { knownRunIds } = require('./_lib/known-run-ids');
 
 // Ver el comentario igual a este en strava-auth.js: antes cada rama de error de acá abajo
 // dejaba al usuario en una página muerta (texto plano o el JSON crudo del proveedor) sin
@@ -95,7 +96,7 @@ const linkAccount = async (req, res) => {
       const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${userId}&select=data`, { headers: plainHeaders });
       const stateRows = await stateRes.json();
       if (stateRows && stateRows.length) {
-        const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.wahooId));
+        const knownIds = knownRunIds(stateRows[0].data, 'wahooId', 'wahoo');
         // workoutToRun ahora es async (busca el FIT de cada workout, ver
         // wahoo-activity-helpers.js) -- .map(workoutToRun) se rompía en dos frentes:
         // devolvía un array de Promises sin resolver (mergeWahooRuns las serializaba como

@@ -7,6 +7,7 @@ const { withinDailyCap } = require('./_lib/daily-cap');
 
 const { withSentry, reportError } = require('./_lib/sentry');
 const { safeConvert } = require('./_lib/safe-convert');
+const { knownRunIds } = require('./_lib/known-run-ids');
 
 // Auditoría de costos: sin esto, alguien apretando "Sincronizar ahora" muy seguido (o un
 // script pegándole directo al endpoint) podía disparar muchos intentos por segundo -- el
@@ -83,7 +84,7 @@ module.exports = withSentry(async (req, res) => {
     if (!stateRows || !stateRows.length) {
       return res.status(200).json({ synced: false });
     }
-    const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.stravaId));
+    const knownIds = knownRunIds(stateRows[0].data, 'stravaId', 'strava');
 
     const newRuns = [];
     for (const act of runs) {
