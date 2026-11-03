@@ -61,3 +61,13 @@ test('el script de rotación de la clave de cifrado cubre TODAS las tablas de co
   }
   for (const t of used) assert.ok(tables.includes(t), t + ' se usa con tokens cifrados pero falta en el script de rotación');
 });
+
+test('las herramientas del coach tienen topes: repeticiones, minutos de esfuerzo/recuperación y duración ya no se aceptan sin límite', () => {
+  const app = loadApp();
+  const iv = app.resolveCustomInterval({ repeticiones: 500, esfuerzo_min: 999, recuperacion_min: 99 });
+  assert.deepEqual(JSON.parse(JSON.stringify(iv)), { reps: 40, workMin: 30, restMin: 10 });
+  const ok = app.resolveCustomInterval({ repeticiones: 8, esfuerzo_min: 3, recuperacion_min: 2 });
+  assert.deepEqual(JSON.parse(JSON.stringify(ok)), { reps: 8, workMin: 3, restMin: 2 }, 'los valores normales no cambian');
+  assert.equal(app.resolveCustomInterval({ repeticiones: 0, esfuerzo_min: 3 }), null);
+  assert.equal((SRC.match(/MAX_CUSTOM_DURATION_MIN, Math\.round\(input\.duracion_min\)/g) || []).length, 2, 'duración topeada en la semana actual y en la que viene');
+});

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-03T12:07:21Z';
+const APP_VERSION = '2026-11-03T12:08:45Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -18459,13 +18459,15 @@ function effectiveTipoCategoria(input){
 // en minutos (una unidad fija, sin ambigüedad) y la app arma la oración con la unidad
 // correcta ella misma -- mismo criterio que ya usa fartlekActualKm/repMetersFromMin para las
 // sesiones que arma el algoritmo automático, así que esto no puede volver a pasar.
+const MAX_CUSTOM_REPS = 40, MAX_CUSTOM_WORK_MIN = 30, MAX_CUSTOM_REST_MIN = 10, MAX_CUSTOM_DURATION_MIN = 300;
 function resolveCustomInterval(input){
   const reps = Math.round(Number(input.repeticiones));
   const workMin = Number(input.esfuerzo_min);
   if(!(reps>0) || !(workMin>0)) return null;
   const restMinRaw = Number(input.recuperacion_min);
   const restMin = restMinRaw>0 ? restMinRaw : 1;
-  return { reps, workMin, restMin };
+  // topes: la herramienta del coach aceptaba repeticiones y minutos sin límite y armaba sesiones imposibles (la IA se puede equivocar, y los relojes rechazan más de ~50 pasos)
+  return { reps: Math.min(reps, MAX_CUSTOM_REPS), workMin: Math.min(workMin, MAX_CUSTOM_WORK_MIN), restMin: Math.min(restMin, MAX_CUSTOM_REST_MIN) };
 }
 // Tipos que se describen con repeticiones -- si el modelo arma uno de estos sin
 // repeticiones/esfuerzo_min, applyPlanChange rechaza el cambio en vez de dejarlo pasar con
@@ -18580,7 +18582,7 @@ function applyPlanChange(input){
     const effectiveDistKm = resolvePlanDistKm(input);
     if(effectiveDistKm!==null) override.dist = effectiveDistKm;
     // mismo criterio que la semana actual: duracion_min fija los minutos; solo distancia los recalcula; el trote/caminata del día base no se hereda
-    if(typeof input.duracion_min === 'number' && input.duracion_min > 0) override.durMin = Math.round(input.duracion_min);
+    if(typeof input.duracion_min === 'number' && input.duracion_min > 0) override.durMin = Math.min(MAX_CUSTOM_DURATION_MIN, Math.round(input.duracion_min));
     else if(effectiveDistKm !== null) override.durMin = undefined;
     override.runWalk = undefined;
     const zone = resolveZone(input.zona);
@@ -18623,7 +18625,7 @@ function applyPlanChange(input){
   if(effectiveDistKm!==null) d.dist = effectiveDistKm;
   // Plan por tiempo: planDurationMin lee d.durMin (no d.dist). Con duracion_min se fija; si solo cambia la distancia se descarta durMin para que los minutos
   // se recalculen de la distancia nueva; y el trote/caminata del principiante no vale para una sesión nueva.
-  if(typeof input.duracion_min === 'number' && input.duracion_min > 0) d.durMin = Math.round(input.duracion_min);
+  if(typeof input.duracion_min === 'number' && input.duracion_min > 0) d.durMin = Math.min(MAX_CUSTOM_DURATION_MIN, Math.round(input.duracion_min));
   else if(effectiveDistKm !== null) delete d.durMin;
   delete d.runWalk;
   const zone = resolveZone(input.zona);
