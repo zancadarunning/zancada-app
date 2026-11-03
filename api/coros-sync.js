@@ -16,6 +16,7 @@ const { withSentry, reportError } = require('./_lib/sentry');
 const { mergeAndNotify } = require('./_lib/notify-new-run');
 const { enrichCorosRecord, applyCorosEnrichmentToRun } = require('./_lib/coros-activity-helpers');
 const { safeConvertSync } = require('./_lib/safe-convert');
+const { knownRunIds } = require('./_lib/known-run-ids');
 
 module.exports = withSentry(async (req, res) => {
   if (!(await requireCronSecret(req))) {
@@ -61,7 +62,7 @@ module.exports = withSentry(async (req, res) => {
           const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${conn.user_id}&select=data`, { headers });
           const stateRows = await stateRes.json();
           if (stateRows && stateRows.length) {
-            const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.corosId));
+            const knownIds = knownRunIds(stateRows[0].data, 'corosId', 'coros');
             const newRecs = runRecords.filter(r => !knownIds.has(getCorosRecordId(r)));
             for (const rec of newRecs.slice(0, 3)) await enrichCorosRecord(accessToken, rec);
             const newRuns = newRecs.map(record => safeConvertSync(() => activityToRun(record), 'coros')).filter(Boolean);

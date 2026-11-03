@@ -59,6 +59,7 @@ module.exports = withSentry(async (req, res) => {
       await purgePolarRunsForUser(base, headers, userId);
     } catch (e) {
       console.error('polar-disconnect: error purging synced runs', e);
+      await reportError(e, { endpoint: 'polar-disconnect', step: 'purge' }).catch(() => {});   // antes solo quedaba en el log de Vercel
     }
 
     res.status(200).json({ ok: true });

@@ -12,6 +12,7 @@ const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 const { withinDailyCap } = require('./_lib/daily-cap');
 const { withSentry, reportError } = require('./_lib/sentry');
 const { safeConvertSync } = require('./_lib/safe-convert');
+const { knownRunIds } = require('./_lib/known-run-ids');
 
 const SYNC_COOLDOWN_MS = 300000;   // antes 20 s: la API de Suunto permite ~200 llamadas por semana EN TOTAL para toda la app
 const LOOKBACK_DAYS = 30;
@@ -53,7 +54,7 @@ module.exports = withSentry(async (req, res) => {
     const stateRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${userId}&select=data`, { headers });
     const stateRows = await stateRes.json();
     if (!stateRows || !stateRows.length) return res.status(200).json({ synced: false });
-    const knownIds = new Set((stateRows[0].data && stateRows[0].data.runs || []).map(r => r.suuntoId));
+    const knownIds = knownRunIds(stateRows[0].data, 'suuntoId', 'suunto');
 
     // Se baja el FIT (ruta GPS para el mapa y parciales) solo de las 2 carreras nuevas más recientes: cada FIT es
     // una llamada más de la cuota de la Developer API de Suunto y un pedido más dentro de este request. El

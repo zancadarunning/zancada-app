@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-02T18:23:00Z';
+const APP_VERSION = '2026-11-03T12:08:45Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -910,6 +910,10 @@ function showConfirm(message, opts){
 let state = {onboarded:false, profile:{}, plan:[], runs:[], shoes:[], event:null, chat:[], lang:lang, painLog:[], readinessLog:[]};
 // Un estado que llega del servidor o del respaldo local con la forma rota (profile null, plan que no es lista...) hacía fallar el arranque en cada apertura y la app quedaba inutilizable
 // (solo ofrecía cerrar sesión). Se fuerza la forma mínima que el resto del código da por hecha y se descartan las entradas que no son objetos.
+// Un app_state que es solo la cáscara de un inicio sin terminar (sin onboarded, sin perfil, sin carreras): lo dejaba una versión anterior al activar notificaciones o conectar un reloj en el inicio.
+function isOnboardingShell(d){
+  return !!d && typeof d === 'object' && !d.onboarded && (!d.profile || !Object.keys(d.profile).length) && !(Array.isArray(d.runs) && d.runs.length) && !(Array.isArray(d.plan) && d.plan.length);
+}
 function normalizeLoadedState(s){
   // La función de calendario del plan se eliminó: se descarta lo que había quedado guardado en la cuenta (se borra solo en el próximo guardado).
   if(s && typeof s === 'object'){ delete s.calendarToken; delete s.calendarNextWeek; delete s.calendarNative; }
@@ -949,6 +953,7 @@ function fmtDist(km, decimals=2){
 // stepKm/goalKm llegan siempre en km desde el input (lo que el usuario tipeó, en la unidad
 // que está viendo) -- hay que convertirlos a km ANTES de guardarlos en state.profile, si no
 // se guarda el número tal cual como si fuera km aunque el usuario lo haya escrito en millas.
+const MAX_CURRENT_WEEKLY_KM = 200;   // ni los corredores de élite pasan de ~200 km por semana: más que eso es un error de tipeo
 function parseDistInput(val){
   const n = parseFloat(val);
   if(!(n>0) && n!==0) return 0;
@@ -1404,6 +1409,37 @@ function clearPendingBackup(){
 function readPendingBackup(uid){
   try{ const raw = localStorage.getItem(pendingBackupKey(uid)); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
 }
+// Une el respaldo local con el estado que bajó del servidor sin perder nada (state = lo que bajó del servidor). Devuelve true si hay algo para volver a subir.
+//  - Respaldo MÁS NUEVO y completo: se usa tal cual (como siempre).
+//  - Respaldo MÁS NUEVO pero REDUCIDO (sin GPS ni chat viejo, porque no entró en localStorage): se usa de base, pero se le devuelven los puntos GPS y las series que el servidor ya tenía y
+//    los mensajes viejos del chat; antes se subía recortado y borraba esos datos de las otras carreras.
+//  - Respaldo MÁS VIEJO que el servidor (el servidor escribió después, por ejemplo con el aviso de una carrera del reloj): ya no se descarta sin mirar. Las carreras grabadas en la app
+//    (sin source de proveedor) que solo existen en el respaldo se suman al estado del servidor; antes se perdían para siempre al subir el estado del servidor y borrar el respaldo.
+function applyPendingBackup(pending, remoteTs){
+  const server = state;
+  const backup = normalizeLoadedState(pending.data);
+  if(pending.ts > remoteTs){
+    if(pending.reduced){
+      const byId = new Map((server.runs || []).map(r => [String(r.id), r]));
+      (backup.runs || []).forEach(r => {
+        const s = byId.get(String(r.id));
+        if(!s) return;
+        if(!(r.points && r.points.length) && s.points && s.points.length) r.points = s.points;
+        if(!r.series && s.series) r.series = s.series;
+      });
+      const firstTs = backup.chat && backup.chat.length ? Number(backup.chat[0].ts) : Infinity;
+      const older = (server.chat || []).filter(m => m && Number(m.ts) < firstTs);
+      if(older.length) backup.chat = older.concat(backup.chat || []);
+    }
+    state = backup;
+    return true;
+  }
+  const known = new Set((server.runs || []).map(r => String(r.id)));
+  const lost = (backup.runs || []).filter(r => r && r.id != null && !r.source && !known.has(String(r.id)));
+  if(!lost.length) return false;
+  server.runs = (server.runs || []).concat(lost);
+  return true;
+}
 function hasPendingBackup(){
   if(!currentUserId) return false;
   return !!readPendingBackup(currentUserId);
@@ -1433,6 +1469,9 @@ let persistQueued = false;
 let persistSettledResolvers = [];
 async function persist(){
   if(!currentUserId || stateLoadedFor !== currentUserId) return;
+  // Una cuenta nueva a mitad del inicio (onboarded:false) NO sube nada: activar las notificaciones o conectar un reloj en esas pantallas llamaba a persist() y dejaba en la base un estado
+  // vacío (sin perfil ni plan) que, si la app se cerraba antes de terminar, rompía la cuenta para siempre. finishOnboard() pone onboarded=true ANTES de su persist().
+  if(!state.onboarded) return;
   // El chat no tenía tope y viajaba entero en cada guardado (y en el respaldo local, que además tiene cuota): se conservan los últimos 300 mensajes.
   if(state.chat && state.chat.length > 300) state.chat = state.chat.slice(-300);
   if(persistInFlight){ persistQueued = true; return; }
@@ -1467,6 +1506,8 @@ async function persist(){
       if(saveError) throw saveError;
       loadedStateVersion = nowIso; // este guardado ya es la versión más nueva que conocemos
       clearPendingBackup();
+    } else {
+      savePendingBackup();   // no se escribió (el servidor tiene algo más nuevo): el cambio queda a salvo en el teléfono, como dice el comentario de arriba
     }
   }catch(e){
     console.error('persist error', e);
@@ -1641,7 +1682,7 @@ async function loadUserAndEnter(user, isRetry){
   try{
     const { data, error } = await supabaseClient.from('app_state').select('data, updated_at').eq('user_id', user.id).maybeSingle();
     if(error) throw error;
-    if(data && data.data && Object.keys(data.data).length){
+    if(data && data.data && Object.keys(data.data).length && !isOnboardingShell(data.data)){
       state = normalizeLoadedState(data.data); lang = state.lang || 'es';
       stateLoadedFor = user.id;
       loadedStateVersion = data.updated_at || null;
@@ -1667,10 +1708,9 @@ async function loadUserAndEnter(user, isRetry){
       // servidor acaba de devolver, es porque a esta altura ya venció a lo que había ahí,
       // tenga más, menos o la misma cantidad de carreras.
       const remoteTs = loadedStateVersion ? new Date(loadedStateVersion).getTime() : 0;
-      if(pending && pending.data && pending.ts > remoteTs){
-        // había una carrera guardada en el teléfono que no llegó a subirse la última vez -> la recuperamos
-        state = normalizeLoadedState(pending.data); lang = state.lang || lang;
-        persist();
+      if(pending && pending.data){
+        // había una carrera guardada en el teléfono que no llegó a subirse la última vez -> la recuperamos (ver applyPendingBackup)
+        if(applyPendingBackup(pending, remoteTs)){ lang = state.lang || lang; persist(); }
       }
       // phaseNow guardado puede ser de otra semana (se guardó la semana pasada): se deriva de nuevo
       refreshPhaseNow();
@@ -1732,6 +1772,8 @@ async function loadUserAndEnter(user, isRetry){
     document.getElementById('login').style.display='none';
     document.getElementById('onboard').style.display='block';
     resetOnboardSteps();
+    // Volviendo de autorizar un reloj en medio del inicio (web/iPhone): se confirma la conexión AHORA y se repintan las filas (antes recién al terminar todo, cuando el código de un solo uso ya había vencido).
+    finishPendingProviderLink().then(()=>{ if(obCurrentStep === 19) obRefreshConnections(); }).catch(()=>{});
     if(window.zcBootDone) window.zcBootDone();
   }catch(e){
     console.error('load error', e);
@@ -2051,7 +2093,8 @@ async function confirmKeepDataBeforeDisconnect(brand, sourceKey, idField){
   if(!matching.length) return true;
   const keep = await showConfirm(t('device_disconnect_keep_confirm', {brand, count: matching.length}), {confirmText: t('device_disconnect_keep_btn')});
   if(!keep) return false;
-  matching.forEach(r=>{ delete r.source; delete r[idField]; });
+  // Strava y Garmin prohíben que sus datos lleguen a una IA y Garmin exige la atribución: al convertirlas en manuales NO se pierde esa marca (origin + aiExcluded; aiVisibleRuns y la atribución de Garmin la respetan).
+  matching.forEach(r=>{ if(sourceKey === 'strava' || sourceKey === 'garmin'){ r.origin = sourceKey; r.aiExcluded = true; } delete r.source; delete r[idField]; });
   await persist();
   // persist() devuelve enseguida si ya había un guardado en vuelo (queda encolado): esperamos a que termine TODO, y si no llegó al servidor no desconectamos
   // (el backend borraría las carreras todavía marcadas como de esa marca).
@@ -3165,9 +3208,9 @@ function healthConnectExerciseToRun(ex){
 const SOURCE_LABELS = {strava:'Strava', polar:'Polar', wahoo:'Wahoo', coros:'COROS', suunto:'Suunto', garmin:'Garmin', healthconnect:'Health Connect'};
 // Garmin exige mostrar "Garmin [modelo del reloj]" en TODO lugar donde se vean sus datos (historial, detalle, imágenes y videos compartidos); sin el modelo, solo "Garmin" (guía de marca de la API de Garmin).
 // una actividad cargada a mano en Garmin Connect llega con deviceName "unknown": no es un modelo, se muestra solo "Garmin"
-function garminAttribution(run){ return run && run.source === 'garmin' ? ('Garmin' + (run.device && !/^unknown$/i.test(String(run.device).trim()) ? ' ' + String(run.device).replace(/^garmin\s+/i, '') : '')) : ''; }
+function garminAttribution(run){ return run && (run.source === 'garmin' || run.origin === 'garmin') ? ('Garmin' + (run.device && !/^unknown$/i.test(String(run.device).trim()) ? ' ' + String(run.device).replace(/^garmin\s+/i, '') : '')) : ''; }
 function sourceBadgeHtml(source, withMargin, run){
-  const label = source === 'garmin' ? (garminAttribution(run || { source }) ) : SOURCE_LABELS[source];
+  const label = source === 'garmin' ? (garminAttribution(run || { source }) ) : SOURCE_LABELS[source];   // (la insignia de origen sigue por source; la atribución de una carrera de Garmin ya convertida va por origin)
   if(!label) return '';
   return `<span class="tag tag-asfalto"${withMargin?' style="margin-right:6px;"':''}>${escapeHtml(label)}</span>`;
 }
@@ -3225,12 +3268,26 @@ async function connectHealthConnect(){
     showToast(t('healthconnect_error'),'error');
   }
 }
+// Health Connect se lee en el propio teléfono (no hay webhook ni cron): antes solo se leía al tocar "Conectar", así que las carreras nuevas no aparecían nunca más. Ahora también al abrir la app,
+// al volver a ella y al tirar para refrescar (como mucho una vez cada 10 minutos, salvo el tirar para refrescar).
+let hcAutoSyncAt = 0, hcAutoSyncRunning = false;
+async function autoSyncHealthConnect(force){
+  if(hcAutoSyncRunning || !state || !state.onboarded || !state.healthConnectConnected || !getHealthConnectBridge()) return;
+  if(!force && Date.now() - hcAutoSyncAt < 10 * 60 * 1000) return;
+  hcAutoSyncRunning = true; hcAutoSyncAt = Date.now();
+  try{
+    const r = await syncHealthConnectNow();
+    if(r && r.synced){ relinkTodayRun(); persist(); renderAll(); }
+  }catch(e){ console.error('autoSyncHealthConnect', e); }
+  finally{ hcAutoSyncRunning = false; }
+}
 async function syncHealthConnectNow(){
   const HC = getHealthConnectBridge();
   if(!HC) return {synced:false};
   try{
     const { exercises } = await HC.readExercises();
     const knownIds = new Set((state.runs||[]).map(r=>r.healthConnectId));
+    dismissedIdsFor('healthconnect').forEach(id => knownIds.add(id));   // las que la persona borró a mano no se vuelven a importar
     const hcNow = Date.now();
     const newRuns = (exercises||[])
       .filter(ex=>ex && typeof ex.id === 'string' && ex.id.length <= 100)
@@ -4141,7 +4198,7 @@ function savePersonalData(){
     // "12.4" mi -> 19.956km) en un guardado que ni siquiera cambió este campo.
     const kmUnchanged = (state.profile.currentWeeklyKm===0 || state.profile.currentWeeklyKm)
       && currentKmInput.value === fmtDist(state.profile.currentWeeklyKm, 1);
-    state.profile.currentWeeklyKm = kmUnchanged ? state.profile.currentWeeklyKm : parseDistInput(currentKmInput.value);
+    state.profile.currentWeeklyKm = kmUnchanged ? state.profile.currentWeeklyKm : Math.min(parseDistInput(currentKmInput.value), MAX_CURRENT_WEEKLY_KM);
     state.profile.runnerType = 'active';
   }
   state.profile.weeklyKm = calcWeeklyKm(state.profile);
@@ -4599,7 +4656,7 @@ async function finishOnboard(){
   // principiante igual, pero el número crudo seguía mostrándose así en Perfil/el saludo
   // del coach).
   const currentWeeklyKmRaw = runnerType==='active' ? parseFloat(document.getElementById('ob-currentkm').value) : 0;
-  const currentWeeklyKm = currentWeeklyKmRaw>0 ? currentWeeklyKmRaw : 0;
+  const currentWeeklyKm = currentWeeklyKmRaw>0 ? Math.min(currentWeeklyKmRaw, MAX_CURRENT_WEEKLY_KM) : 0;   // un tipeo (400 por 40) armaba un plan de cientos de km
   const terrain = document.querySelector('#ob-terrain .choice.active')?.dataset.v || 'asfalto';
   const trainBy = document.querySelector('#ob-trainby .choice.active')?.dataset.v || 'distance';
   const trainingDays = DAY_KEYS.filter(d => document.querySelector(`#ob-days .day-pill[data-v="${d}"]`).classList.contains('active'));
@@ -4872,6 +4929,7 @@ document.addEventListener('visibilitychange', ()=>{
   checkProactiveCoachNudge();
   checkPainCheckins();
   renderAll(); renderHistory(); renderZones();
+  autoSyncHealthConnect();
 });
 /* ================= BOTÓN FÍSICO DE ATRÁS (Android / gesto "atrás" del navegador) =========
    En una PWA instalada en Android, el botón físico de atrás dispara un evento 'popstate' --
@@ -4899,7 +4957,7 @@ const openOverlayStack = [];
 let ignoreNextPopstate = false;
 let closingOverlayFromBackButton = false;
 function isBackHandledOverlay(el){
-  if(el instanceof HTMLElement && ['login','signup','onboard','confirm-email','recovery-set-password'].includes(el.id)) return false;   // pantallas de entrada: no son hojas que el atrás cierre
+  if(el instanceof HTMLElement && ['login','signup','onboard','confirm-email','recovery-set-password','consent-modal'].includes(el.id)) return false;   // pantallas de entrada: no son hojas que el atrás cierre
   return el instanceof HTMLElement && (el.classList.contains('overlay') || el.id === 'rd-video-overlay');
 }
 function isOverlayCurrentlyVisible(el){
@@ -6592,7 +6650,7 @@ function weekExecutionSignals(plan, weekStart){
   plan.forEach((d, i) => {
     if(!d || d.status !== 'done' || d.linkedRunId == null || !(d.dist > 0)) return;
     const run = (state.runs || []).find(r => String(r.id) === String(d.linkedRunId));
-    if(!run || run.source === 'strava') return;
+    if(!run || run.source === 'strava' || run.origin === 'strava') return;
     let ev = null;
     try{ ev = evaluateRunSteps(run, planStepsFromPayload(watchDayPayload(d, addDaysToIsoLocal(weekStart, i))), state.profile && state.profile.hrZones); }catch(e){ ev = null; }
     if(!ev) return;
@@ -6632,6 +6690,16 @@ function objectiveAdjustment(sig, baseFactor, apply, cutBlocked){
   res.factor = Math.round(res.factor * 1000) / 1000;
   return res;
 }
+// weeklyKm ajustado por un factor. Hacia arriba nunca pasa del 115 % de lo que la persona corre de verdad (promedio de las últimas semanas): antes el +5 % (y el +3 % por ejecución) se acumulaba
+// semana a semana encima del crecimiento de weekMultiplier y el volumen subía más rápido que el tope de 6 % por semana.
+function adjustedWeeklyKm(current, factor){
+  let next = Math.max(5, current * factor);
+  if(factor > 1){
+    const avg = Number(computeActualWeeklyKmAvg(3));
+    if(avg > 0) next = Math.min(next, Math.max(avg * 1.15, current));
+  }
+  return next;
+}
 function computeWeekAdjustment(plan, opts){
   // Mismo criterio de siempre (antes vivía adentro de checkWeekRollover): si calificaste mal
   // o saltaste 2+ sesiones, baja un poco el volumen; si calificaste excelente sin ningún "mal",
@@ -6639,6 +6707,8 @@ function computeWeekAdjustment(plan, opts){
   // la semana que sigue (getNextWeekPlan), no solo en el momento exacto del cambio de semana
   // -> así lo que ves antes del lunes ya es lo que vas a tener el lunes, sin sorpresas.
   if(!plan || !plan.length) return {factor:1, note:null};
+  // Un perfil principiante arma sus sesiones con beginnerPerSessionKm()*mult (o minutos), que nunca lee weeklyKm: el ajuste no cambiaba nada y aun así el coach decía "bajé el volumen". No se aplica ni se anuncia.
+  if(state.profile && isBeginnerProfile(state.profile)) return {factor:1, note:null};
   const rated = plan.filter(d=>d.rating);
   const badCount = rated.filter(d=>d.rating==='mal').length;
   const excellentCount = rated.filter(d=>d.rating==='excelente').length;
@@ -6667,7 +6737,7 @@ function getNextWeekPlan(){
   const wn = (state.weekNumber||1) + 1;
   const nextStartIso = addDaysToIsoLocal(state.weekStart || getMondayISO(new Date()), 7);
   const adj = computeWeekAdjustment(state.plan);
-  const previewProfile = Object.assign({}, state.profile, {weeklyKm: Math.max(5, (state.profile.weeklyKm||0) * adj.factor)});
+  const previewProfile = Object.assign({}, state.profile, {weeklyKm: adjustedWeeklyKm(state.profile.weeklyKm||0, adj.factor)});
   const base = generatePlan(previewProfile, wn, nextStartIso);
   const overrides = state.nextWeekOverrides || {};
   // Un override de cancelar_sesion (cancelled:true) tiene que verse EXACTAMENTE como un día de
@@ -6922,7 +6992,7 @@ function checkWeekRollover(){
         // por el mensaje de arriba, y aplicar los dos juntos sería redundante
         const adj = computeWeekAdjustment(state.plan);
         if(adj.factor !== 1){
-          state.profile.weeklyKm = Math.max(5, Math.round(state.profile.weeklyKm*adj.factor));
+          state.profile.weeklyKm = Math.round(adjustedWeeklyKm(state.profile.weeklyKm, adj.factor));
           adjustNote = adj.note;
           adjustedDown = adj.factor < 1;
         }
@@ -7642,7 +7712,7 @@ function generatePlan(p, weekNumber, weekStartDate){
       tempo como un bloque continuo, tirada larga por minutos. d.durMin es la fuente de verdad en ese modo
       (d.dist queda solo como estimación para estadísticas, calendario y relojes). */
 const LEVEL_TEST_SECONDS = 720;
-const LEVEL_TEST_MIN_M = 800, LEVEL_TEST_MAX_M = 4500;
+const LEVEL_TEST_MIN_M = 1200, LEVEL_TEST_MAX_M = 4500;   // menos de 1200 m en 12 minutos es caminata: no alcanza para estimar ritmos (daba rangos invertidos y 12 a 18 min/km)
 // Fecha (ISO) del test agendado que pasó sin hacerse -- solo si no quedó otro test agendado más adelante.
 function missedLevelTestIso(){
   const plan = state.plan || [];
@@ -7675,7 +7745,7 @@ function trainingPacesFromVdot(vdot){
   const at = f => paceMinPerKmAtVo2(vdot * f);
   const r = x => Math.round(x * 100) / 100;
   return {
-    easy: [r(at(0.74)), r(Math.min(at(0.62), 12.5))],
+    easy: [r(at(0.74)), r(Math.max(at(0.74) + 0.3, Math.min(at(0.62), 12.5)))],   // el extremo lento nunca queda por debajo del rápido
     tempo: [r(at(0.90)), r(at(0.86))],
     interval: [r(at(1.00)), r(at(0.95))]
   };
@@ -8034,7 +8104,7 @@ function applyLevelTestResult(distM, maxHr){
   const unit = distUnit();
   const easy = fmtPaceRange(ev.paces.easy), tempo = fmtPaceRange(ev.paces.tempo), interval = fmtPaceRange(ev.paces.interval);
   state.chat = state.chat || [];
-  state.chat.push({role: 'coach', text: t('ltest_coach_msg', {dist: `${fmtDist(distM / 1000, 2)} ${unit}`, easy, tempo, interval, unit}), ts: Date.now()});
+  state.chat.push({role: 'coach', text: t('ltest_coach_msg', {dist: `${fmtDist(distM / 1000, 2)} ${unit}`, easy, tempo, interval, unit}), ts: Date.now(), noAi: true});   // viene de una carrera (puede ser de Strava/Garmin): no se reenvía a la IA
   renderAll(); renderHistory(); renderZones();
   try{ renderChat(); }catch(e){}
   persist();
@@ -8543,7 +8613,9 @@ function askZondaLowerLoad(){
   persist();
   showView('coach');
   const input = document.getElementById('chatInput');
-  if(input){ input.value = t('load_prompt', {pct: sp ? sp.pct : 30}); sendChat(); }
+  // El porcentaje sale de TODAS las carreras: si hay alguna de Strava o Garmin (o convertida de ellas) no se manda a la IA un número calculado con sus datos.
+  const restricted = (state.runs || []).some(r => r.source === 'strava' || r.source === 'garmin' || r.aiExcluded);
+  if(input){ input.value = restricted ? t('load_prompt_generic') : t('load_prompt', {pct: sp ? sp.pct : 30}); sendChat(); }
 }
 // ---- Plan de carrera: tiempo objetivo, ritmo, estrategia y parciales de la próxima carrera ----
 // Distancia de la carrera cargada en Próximos eventos (o, si no la cargó y es la carrera objetivo de
@@ -8710,7 +8782,7 @@ function recordRaceCalibration(ev){
   if(!state.raceCalibration) state.raceCalibration = [];
   state.raceCalibration.push({date: ev.date, km: evKm, predictedSec: ev.predictedSec, actualSec: Math.round(actualSec), ratio: Math.round(ratio * 1000) / 1000});
   state.raceCalibration = state.raceCalibration.slice(-6);
-  state.chat.push({role: 'coach', text: t('rp_calib_msg', {name: ev.name || '', pred: fmtRaceTime(ev.predictedSec), actual: fmtRaceTime(Math.round(actualSec))}), ts: Date.now()});
+  state.chat.push({role: 'coach', text: t('rp_calib_msg', {name: ev.name || '', pred: fmtRaceTime(ev.predictedSec), actual: fmtRaceTime(Math.round(actualSec))}), ts: Date.now(), noAi: true});   // el tiempo real sale de una carrera (puede ser de Strava/Garmin): no se reenvía a la IA
   return true;
 }
 // Parciales con salida controlada: el primer 20% un 1,5% más lento, el último 20% un 1,5% más
@@ -10326,8 +10398,24 @@ async function logReadiness(quality, detail){
 }
 
 let editingShoeId = null;
+// Notas que Zonda guardó de la persona (lesiones, molestias, preferencias): se ven y se borran desde Perfil. Se mandan a la IA en cada pedido, así que la persona tiene que poder controlarlas.
+function renderCoachNotes(){
+  const box = document.getElementById('coach-notes-list');
+  if(!box) return;
+  const notes = (state.profile && Array.isArray(state.profile.coachNotes)) ? state.profile.coachNotes : [];
+  if(!notes.length){ box.innerHTML = '<p class="muted" style="margin:8px 0 0;">' + escapeHtml(t('coach_notes_empty')) + '</p>'; return; }
+  box.innerHTML = notes.map((n, i) => '<div class="set-row" style="align-items:flex-start; gap:10px;"><span style="flex:1; min-width:0; white-space:normal; line-height:1.4;">' + escapeHtml(n) + '</span><button type="button" class="small-link" data-on-click="deleteCoachNote(' + i + ')">' + escapeHtml(t('coach_notes_delete')) + '</button></div>').join('');
+}
+function deleteCoachNote(i){
+  if(!state.profile || !Array.isArray(state.profile.coachNotes)) return;
+  const idx = parseInt(i, 10);
+  if(!(idx >= 0 && idx < state.profile.coachNotes.length)) return;
+  state.profile.coachNotes.splice(idx, 1);
+  renderCoachNotes(); persist();
+}
 function renderPerfil(){
   try{ checkAdminOnce(); }catch(e){}
+  try{ renderCoachNotes(); }catch(e){}
   const p = state.profile;
   document.getElementById('perfil-initial').textContent = (p.name[0]||'?').toUpperCase();
   // Muestra el promedio REAL de las últimas semanas corridas (computeActualWeeklyKmAvg) en vez
@@ -10947,9 +11035,9 @@ async function refreshStateFromServer(){
     if(data && data.data && Object.keys(data.data).length){
       const incomingRuns = (data.data.runs||[]).length;
       const currentRuns = (state.runs||[]).length;
-      if(incomingRuns < currentRuns){
-        // el servidor tiene menos carreras que las que ya tenemos acá (por ejemplo, una que se guardó sin
-        // conexión y todavía no se sincronizó) -> no pisamos lo que ya tenemos, reintentamos guardarlo
+      if(incomingRuns < currentRuns && hasPendingBackup()){
+        // el servidor tiene menos carreras que las que ya tenemos acá Y hay un respaldo pendiente (una carrera guardada sin conexión que todavía no se subió) -> no pisamos lo que ya tenemos,
+        // reintentamos guardarlo. Sin respaldo pendiente, "menos carreras" es porque el servidor las borró a propósito (se desconectó un reloj, se borró desde otro dispositivo): antes se volvían a subir.
         persist();
       } else if(persistInFlight || persistQueued){
         // Reportado en una auditoría: el único chequeo de esta función era "el servidor
@@ -11661,6 +11749,7 @@ async function doPullRefresh(){
   const updating = await checkForAppUpdate();
   if(updating) return;
   await refreshStateFromServer();
+  await autoSyncHealthConnect(true);
   autoSkipPastDays();
   repairSkippedDaysWithMatchingRuns();
   autoClearPastEvent();
@@ -13830,6 +13919,8 @@ function scaleDayAmount(d, factor, oneDecimal){
       : fartlekActualKm(d.interval, state.profile);
   } else {
     d.dist = oneDecimal ? Math.max(0.1, Math.round(d.dist*factor*10)/10) : Math.max(1, Math.round(d.dist*factor));
+    // una sesión con repeticiones armada por el coach (custom): cambiaba el número de km pero el texto del plan y lo que se manda al reloj seguían con las repeticiones originales
+    if(d.custom && d.interval && Number(d.interval.reps) > 0) d.interval.reps = Math.max(1, Math.round(d.interval.reps*factor));
   }
   if(d.runWalk && d.runWalk.reps > 0){
     d.runWalk.reps = Math.max(1, Math.round(d.runWalk.reps*factor));
@@ -13916,6 +14007,7 @@ async function closeSummary(){
   checkNewPR(state.runs[state.runs.length-1]);
   checkAchievementUnlocks();
   autoMarkSessionDone(runDate, runId);
+  savePendingBackup();   // copia local DURABLE de la carrera antes de borrar el progreso de la corrida: si la app muere durante el guardado, no queda ni progreso ni carrera (persist() la borra al confirmar)
   clearRunProgress();
   document.getElementById('runSummary').style.display='none';
   document.getElementById('runIdle').style.display='block';
@@ -14382,7 +14474,10 @@ function obRestoreDraft(){
   setPills('#ob-sport-days', d.sportDays);
   dateBoxUpdaters['ob-birth'] && dateBoxUpdaters['ob-birth']();
   dateBoxUpdaters['ob-racedate'] && dateBoxUpdaters['ob-racedate']();
-  const step = Number(d.step);
+  let step = Number(d.step);
+  // Embarazo/posparto (paso 13, solo si es mujer) y molestias/lesiones (paso 16) NO se guardan en el borrador (son datos de salud): si ya habías pasado esos pasos se vuelven a preguntar, en vez de seguir con los campos vacíos sin avisar.
+  if(step > 16) step = d.gender === 'f' ? 13 : 16;
+  else if(step > 13 && d.gender === 'f') step = 13;
   if(step >= 1 && step <= OB_STEP_COUNT) obGotoStep(step);
   return true;
 }
@@ -14707,6 +14802,7 @@ function buildPRShareImageBlob(bucketKey, rec){
 
       drawTrackEmblem(ctx, W/2, 1305, 200, 84);
       drawBrandWord(ctx, W/2, 1445, 80);
+      { const src = rec && rec.runId != null ? (state.runs || []).find(x => String(x.id) === String(rec.runId)) : null; if(src) drawShareAttribution(ctx, W, H, garminAttribution(src)); }   // el récord sale de una carrera de Garmin: lleva su atribución
 
       canvas.toBlob((blob)=>resolve(blob||null), 'image/png');
     }catch(e){ resolve(null); }
@@ -15008,7 +15104,7 @@ function runsByDateAsc(list){
 // Carreras que pueden llegar a Zonda (la IA). El acuerdo de desarrollador de Strava (API Policy 2026, sección 5.3) prohíbe usar datos de Strava
 // en cualquier aplicación de IA, incluso como contexto de una conversación: las carreras importadas de Strava (source:'strava') quedan afuera.
 // Garmin (Connect Developer Program) se declara igual en el formulario de acceso: los datos que vienen de dispositivos Garmin (source:'garmin') tampoco llegan a la IA ni se usan para entrenarla.
-function aiVisibleRuns(){ return (state.runs || []).filter(r => r.source !== 'strava' && r.source !== 'garmin'); }
+function aiVisibleRuns(){ return (state.runs || []).filter(r => r.source !== 'strava' && r.source !== 'garmin' && !r.aiExcluded); }
 // Boceto de la ruta (SVG) para las tarjetas del historial: se dibuja con los puntos del GPS, sin depender del mapa de Mapbox.
 // Queda detras de la imagen del mapa: si la imagen carga la tapa, si falla (sin red / sin token) se ve el trazo.
 function routeSketchSvg(points){
@@ -15477,7 +15573,7 @@ function openRunDetail(runId){
   document.getElementById('run-detail-content').innerHTML = `
     <h2 class="subtitle" style="font-size:22px; margin-bottom:2px;">${escapeHtml(r.name) || dateStr}</h2>
     ${r.name ? `<p class="muted" style="margin-bottom:10px;">${dateStr}</p>` : '<div style="margin-bottom:10px;"></div>'}
-    ${r.source === 'garmin' ? `<p class="muted garmin-attr" style="margin:-4px 0 10px; font-weight:700; letter-spacing:.02em;">${escapeHtml(garminAttribution(r))}</p>` : ''}
+    ${(r.source === 'garmin' || r.origin === 'garmin') ? `<p class="muted garmin-attr" style="margin:-4px 0 10px; font-weight:700; letter-spacing:.02em;">${escapeHtml(garminAttribution(r))}</p>` : ''}
     <div class="rd-tabs">${tabs.map(tb=>`<button class="rd-tab-btn" id="rd-tabbtn-${tb}" data-on-click="switchRDTab('${tb}')">${tabLabels[tb]}</button>`).join('')}</div>
     ${tabs.map(tb=>`<div class="rd-panel" id="rd-panel-${tb}"></div>`).join('')}
     ${renderRunPlanScore(r)}
@@ -16321,6 +16417,22 @@ function pacingDetailText(splits){
   const half = abs < 0.5 ? t('pacing_half_same') : t(st.diffPct < 0 ? 'pacing_half_faster' : 'pacing_half_slower', {p: abs.toFixed(1)});
   return t('pacing_detail', {cv: st.cv.toFixed(1), half});
 }
+// Carreras que la persona borró a mano: se anota la clave de proveedor (por ejemplo "strava:123") para que Health Connect y los crons de Strava, Polar, Wahoo, Suunto y COROS no la vuelvan a
+// traer en la próxima pasada (traen los últimos 30 días). Tope de 200 y se vencen a los 45 días.
+const DISMISSED_FIELDS = {stravaId:'strava', polarId:'polar', wahooId:'wahoo', corosId:'coros', suuntoId:'suunto', garminId:'garmin', healthConnectId:'healthconnect'};
+function dismissRun(run){
+  if(!run) return;
+  const now = Date.now(), keep = (state.dismissedRuns || []).filter(d => d && typeof d.k === 'string' && now - Number(d.t) < 45 * 86400000);
+  Object.keys(DISMISSED_FIELDS).forEach(f => {
+    if(run[f] != null && run[f] !== '') keep.push({k: DISMISSED_FIELDS[f] + ':' + String(run[f]), t: now});
+  });
+  state.dismissedRuns = keep.slice(-200);
+}
+function dismissedIdsFor(source){
+  const out = [], prefix = source + ':';
+  (state.dismissedRuns || []).forEach(d => { if(d && typeof d.k === 'string' && d.k.indexOf(prefix) === 0) out.push(d.k.slice(prefix.length)); });
+  return out;
+}
 async function deleteRun(runId){
   if(!(await showConfirm(t('hist_delete_confirm'), {danger:true, confirmText:t('delete_word')}))) return;
   const idx = state.runs.findIndex(r => String(r.id) === String(runId));
@@ -16331,6 +16443,7 @@ async function deleteRun(runId){
   checkShoeWearAlerts();
   const planDay = state.plan.find(d => d.linkedRunId === run.id);
   if(planDay){ planDay.status = null; planDay.linkedRunId = null; }
+  dismissRun(run);
   state.runs.splice(idx,1);
   unmarkLostAchievements();
   closeRunDetail();
@@ -16690,6 +16803,7 @@ function buildShareImageBlob(r){
       if(r.points && r.points.length>1){
         drawRouteSilhouette(ctx, r.points, 140, 1360, W-280, 420);
       }
+      drawShareAttribution(ctx, W, H, garminAttribution(r));   // Garmin exige "Garmin [modelo]" en toda imagen con datos de sus dispositivos (esta es la plantilla por defecto)
 
       canvas.toBlob((blob)=>resolve(blob||null), 'image/png');
     }catch(e){ resolve(null); }
@@ -17279,7 +17393,7 @@ async function startDynamicVideo(runId){
     ctx.font = '500 22px "Inter", Arial, sans-serif';
     ctx.textAlign = 'right';
     ctx.fillText(dateStr, W-40, 90);
-    if(typeof r !== 'undefined' && r && r.source === 'garmin'){ ctx.fillStyle = '#EDEFEF'; ctx.font = '700 24px "Inter", Arial, sans-serif'; ctx.fillText(garminAttribution(r), W-40, 124); ctx.fillStyle = 'rgba(237,239,239,0.7)'; }
+    if(typeof r !== 'undefined' && r && (r.source === 'garmin' || r.origin === 'garmin')){ ctx.fillStyle = '#EDEFEF'; ctx.font = '700 24px "Inter", Arial, sans-serif'; ctx.fillText(garminAttribution(r), W-40, 124); ctx.fillStyle = 'rgba(237,239,239,0.7)'; }
     ctx.textAlign = 'left';
     if(runName){
       ctx.fillStyle = '#EDEFEF';
@@ -18345,13 +18459,15 @@ function effectiveTipoCategoria(input){
 // en minutos (una unidad fija, sin ambigüedad) y la app arma la oración con la unidad
 // correcta ella misma -- mismo criterio que ya usa fartlekActualKm/repMetersFromMin para las
 // sesiones que arma el algoritmo automático, así que esto no puede volver a pasar.
+const MAX_CUSTOM_REPS = 40, MAX_CUSTOM_WORK_MIN = 30, MAX_CUSTOM_REST_MIN = 10, MAX_CUSTOM_DURATION_MIN = 300;
 function resolveCustomInterval(input){
   const reps = Math.round(Number(input.repeticiones));
   const workMin = Number(input.esfuerzo_min);
   if(!(reps>0) || !(workMin>0)) return null;
   const restMinRaw = Number(input.recuperacion_min);
   const restMin = restMinRaw>0 ? restMinRaw : 1;
-  return { reps, workMin, restMin };
+  // topes: la herramienta del coach aceptaba repeticiones y minutos sin límite y armaba sesiones imposibles (la IA se puede equivocar, y los relojes rechazan más de ~50 pasos)
+  return { reps: Math.min(reps, MAX_CUSTOM_REPS), workMin: Math.min(workMin, MAX_CUSTOM_WORK_MIN), restMin: Math.min(restMin, MAX_CUSTOM_REST_MIN) };
 }
 // Tipos que se describen con repeticiones -- si el modelo arma uno de estos sin
 // repeticiones/esfuerzo_min, applyPlanChange rechaza el cambio en vez de dejarlo pasar con
@@ -18466,7 +18582,7 @@ function applyPlanChange(input){
     const effectiveDistKm = resolvePlanDistKm(input);
     if(effectiveDistKm!==null) override.dist = effectiveDistKm;
     // mismo criterio que la semana actual: duracion_min fija los minutos; solo distancia los recalcula; el trote/caminata del día base no se hereda
-    if(typeof input.duracion_min === 'number' && input.duracion_min > 0) override.durMin = Math.round(input.duracion_min);
+    if(typeof input.duracion_min === 'number' && input.duracion_min > 0) override.durMin = Math.min(MAX_CUSTOM_DURATION_MIN, Math.round(input.duracion_min));
     else if(effectiveDistKm !== null) override.durMin = undefined;
     override.runWalk = undefined;
     const zone = resolveZone(input.zona);
@@ -18509,7 +18625,7 @@ function applyPlanChange(input){
   if(effectiveDistKm!==null) d.dist = effectiveDistKm;
   // Plan por tiempo: planDurationMin lee d.durMin (no d.dist). Con duracion_min se fija; si solo cambia la distancia se descarta durMin para que los minutos
   // se recalculen de la distancia nueva; y el trote/caminata del principiante no vale para una sesión nueva.
-  if(typeof input.duracion_min === 'number' && input.duracion_min > 0) d.durMin = Math.round(input.duracion_min);
+  if(typeof input.duracion_min === 'number' && input.duracion_min > 0) d.durMin = Math.min(MAX_CUSTOM_DURATION_MIN, Math.round(input.duracion_min));
   else if(effectiveDistKm !== null) delete d.durMin;
   delete d.runWalk;
   const zone = resolveZone(input.zona);

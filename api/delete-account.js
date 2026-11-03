@@ -91,24 +91,26 @@ module.exports = withSentry(async (req, res) => {
     try {
       const conn = await readConnection('polar_connections', 'access_token,polar_user_id');
       if (conn && decToken(conn.access_token)) {
-        await fetch(`https://www.polaraccesslink.com/v3/users/${conn.polar_user_id}`, {
+        const pr = await fetchWithTimeout(`https://www.polaraccesslink.com/v3/users/${conn.polar_user_id}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${decToken(conn.access_token)}` }
-        });
+        }, 8000);
+        if (!pr.ok && pr.status !== 404 && pr.status !== 401) throw new Error('polar revoke HTTP ' + pr.status);
       }
-    } catch (e) { console.error('delete-account: polar revoke failed', e); }
+    } catch (e) { console.error('delete-account: polar revoke failed', e); await reportError(e, { endpoint: 'delete-account', step: 'polar-revoke' }).catch(() => {}); }
 
     try {
       const conn = await readConnection('wahoo_connections', 'access_token');
       if (conn && decToken(conn.access_token)) {
         // primero los entrenamientos que Zancada subió a su cuenta de Wahoo (igual que wahoo-disconnect.js)
         try { await removeAllZancada(decToken(conn.access_token), userId); } catch (e) { console.error('delete-account: wahoo plans cleanup failed', e && e.message); }
-        await fetch('https://api.wahooligan.com/v1/permissions', {
+        const wr = await fetchWithTimeout('https://api.wahooligan.com/v1/permissions', {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${decToken(conn.access_token)}` }
-        });
+        }, 8000);
+        if (!wr.ok && wr.status !== 404 && wr.status !== 401) throw new Error('wahoo revoke HTTP ' + wr.status);
       }
-    } catch (e) { console.error('delete-account: wahoo revoke failed', e); }
+    } catch (e) { console.error('delete-account: wahoo revoke failed', e); await reportError(e, { endpoint: 'delete-account', step: 'wahoo-revoke' }).catch(() => {}); }
 
     // Suunto: no documenta un endpoint público para revocar el permiso, pero sí se pueden borrar las guías que Zancada subió a su cuenta
     // (igual que suunto-disconnect.js). Antes el borrado de cuenta no tocaba Suunto en absoluto.

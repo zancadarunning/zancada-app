@@ -46,7 +46,13 @@ module.exports = withSentry(async (req, res) => {
       return;
     }
     await fetch(`${base}/rest/v1/sent_notifications?user_id=eq.${userId}&kind=in.(garmin_wk,garmin_plan)`, { method: 'DELETE', headers }).catch(() => {});
-    try { await purgeGarminRunsForUser(base, headers, userId); } catch (e) { console.error('garmin-disconnect: error purgando las carreras', e && e.message); }
+    try { await purgeGarminRunsForUser(base, headers, userId); } catch (e) {
+      // Garmin exige borrar sus datos al desconectar: si falla NO se responde ok (la conexión ya no existe y reintentar vuelve a purgar) y se avisa a Sentry.
+      console.error('garmin-disconnect: error purgando las carreras', e && e.message);
+      await reportError(e, { endpoint: 'garmin-disconnect', step: 'purge' }).catch(() => {});
+      res.status(502).json({ error: 'Could not delete imported runs' });
+      return;
+    }
 
     res.status(200).json({ ok: true });
   } catch (err) {
