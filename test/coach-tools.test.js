@@ -266,17 +266,11 @@ test('checkWeekRollover: invalida el snapshot de deshacer -- no puede cruzar un 
   assert.equal(app.applyUndoLastChange(), 'No hay ningún cambio reciente para deshacer.');
 });
 
-test('checkWeekRollover: no sugiere un objetivo más difícil en la misma ráfaga en que bajó el volumen', () => {
-  // Una semana puede cumplirse casi entera (la racha sigue en pie -- buildWeeklyRecapMessage
-  // solo mira cuántas sesiones se HICIERON) y aun así tener 2+ calificadas "mal", disparando
-  // un recorte de volumen (computeWeekAdjustment). Sin este chequeo, checkGoalUpsell() podía
-  // sugerir en la MISMA ráfaga "animate a un objetivo más difícil" justo después de "bajé el
-  // volumen porque la costó esta semana" -- dos mensajes que se contradicen entre sí.
+test('checkWeekRollover: un principiante no recibe "bajé el volumen" (su plan no lee weeklyKm, el ajuste no cambiaba nada) y tampoco se le sugiere un objetivo más difícil en esa ráfaga', () => {
+  // Auditoría 2026-11-03: el plan de un principiante sale de beginnerPerSessionKm()*mult, nunca de weeklyKm; el ajuste semanal le bajaba weeklyKm y el coach decía "bajé el volumen" sin que nada cambiara.
   const app = loadApp();
   app.state.profile = baseProfile(app, { goal: 'start' });
   app.state.weekNumber = 1;
-  // Exactamente el lunes pasado (diffWeeks=1) -- si no, brokeStreak en buildWeeklyRecapMessage
-  // corta la racha por "salto de calendario" antes de que este test llegue a probar nada.
   app.state.weekStart = app.addDaysToIsoLocal(app.getMondayISO(new Date()), -7);
   app.state.plan = app.DAY_KEYS.map(day => ({ day, typeKey: 'easy', dist: 5, status: 'done', rating: 'mal' }));
   app.state.nextWeekOverrides = {};
@@ -284,15 +278,33 @@ test('checkWeekRollover: no sugiere un objetivo más difícil en la misma ráfag
   app.state.onboarded = true;
   app.state.runs = [];
   app.state.planHistory = [];
-  app.state.streakWeeks = 3; // esta semana, si se cuenta, sería la 4ta -- justo el umbral de checkGoalUpsell
+  app.state.streakWeeks = 3;
   app.state.goalUpsellShown = false;
-
+  const before = app.state.profile.weeklyKm;
   app.checkWeekRollover();
-
   const texts = app.state.chat.map(m => m.text).join(' | ');
-  assert.match(texts, /coach_week_adjusted_down|bajé|recorté|costó/i, `debería haber bajado el volumen esta semana, chat: ${texts}`);
-  assert.doesNotMatch(texts, /objetivo más difícil|preparar una carrera concreta/i, `no debería sugerir un objetivo más difícil en la misma ráfaga que bajó el volumen, chat: ${texts}`);
-  assert.equal(app.state.goalUpsellShown, false, 'no debería marcarse como "ya mostrado" -- se pospone, no se pierde');
+  assert.doesNotMatch(texts, /coach_week_adjusted_down/, 'no se anuncia un recorte que no existe: ' + texts);
+  assert.equal(app.state.profile.weeklyKm, before, 'weeklyKm no se toca');
+});
+
+test('checkWeekRollover: un corredor activo con 2+ semanas "mal" sí baja el volumen, y ahí no se sugiere un objetivo más difícil en la misma ráfaga', () => {
+  const app = loadApp();
+  app.state.profile = baseProfile(app, { goal: '10k', runnerType: 'active', currentWeeklyKm: 30 });
+  app.state.weekNumber = 1;
+  app.state.weekStart = app.addDaysToIsoLocal(app.getMondayISO(new Date()), -7);
+  app.state.plan = app.DAY_KEYS.map(day => ({ day, typeKey: 'easy', dist: 5, status: 'done', rating: 'mal' }));
+  app.state.nextWeekOverrides = {};
+  app.state.chat = [];
+  app.state.onboarded = true;
+  app.state.runs = [];
+  app.state.planHistory = [];
+  app.state.streakWeeks = 3;
+  app.state.goalUpsellShown = false;
+  app.checkWeekRollover();
+  const texts = app.state.chat.map(m => m.text).join(' | ');
+  assert.match(texts, /coach_week_adjusted_down|bajé|recorté|costó/i, 'debería haber bajado el volumen: ' + texts);
+  assert.ok(app.state.profile.weeklyKm < 30, 'weeklyKm bajó');
+  assert.doesNotMatch(texts, /objetivo más difícil|preparar una carrera concreta/i);
 });
 
 test('cancelar_sesion (semana siguiente): getNextWeekPlan muestra el día como descanso normal, no personalizado', () => {

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-03T11:59:36Z';
+const APP_VERSION = '2026-11-03T12:03:29Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4954,7 +4954,7 @@ const openOverlayStack = [];
 let ignoreNextPopstate = false;
 let closingOverlayFromBackButton = false;
 function isBackHandledOverlay(el){
-  if(el instanceof HTMLElement && ['login','signup','onboard','confirm-email','recovery-set-password'].includes(el.id)) return false;   // pantallas de entrada: no son hojas que el atrás cierre
+  if(el instanceof HTMLElement && ['login','signup','onboard','confirm-email','recovery-set-password','consent-modal'].includes(el.id)) return false;   // pantallas de entrada: no son hojas que el atrás cierre
   return el instanceof HTMLElement && (el.classList.contains('overlay') || el.id === 'rd-video-overlay');
 }
 function isOverlayCurrentlyVisible(el){
@@ -6687,6 +6687,16 @@ function objectiveAdjustment(sig, baseFactor, apply, cutBlocked){
   res.factor = Math.round(res.factor * 1000) / 1000;
   return res;
 }
+// weeklyKm ajustado por un factor. Hacia arriba nunca pasa del 115 % de lo que la persona corre de verdad (promedio de las últimas semanas): antes el +5 % (y el +3 % por ejecución) se acumulaba
+// semana a semana encima del crecimiento de weekMultiplier y el volumen subía más rápido que el tope de 6 % por semana.
+function adjustedWeeklyKm(current, factor){
+  let next = Math.max(5, current * factor);
+  if(factor > 1){
+    const avg = Number(computeActualWeeklyKmAvg(3));
+    if(avg > 0) next = Math.min(next, Math.max(avg * 1.15, current));
+  }
+  return next;
+}
 function computeWeekAdjustment(plan, opts){
   // Mismo criterio de siempre (antes vivía adentro de checkWeekRollover): si calificaste mal
   // o saltaste 2+ sesiones, baja un poco el volumen; si calificaste excelente sin ningún "mal",
@@ -6694,6 +6704,8 @@ function computeWeekAdjustment(plan, opts){
   // la semana que sigue (getNextWeekPlan), no solo en el momento exacto del cambio de semana
   // -> así lo que ves antes del lunes ya es lo que vas a tener el lunes, sin sorpresas.
   if(!plan || !plan.length) return {factor:1, note:null};
+  // Un perfil principiante arma sus sesiones con beginnerPerSessionKm()*mult (o minutos), que nunca lee weeklyKm: el ajuste no cambiaba nada y aun así el coach decía "bajé el volumen". No se aplica ni se anuncia.
+  if(state.profile && isBeginnerProfile(state.profile)) return {factor:1, note:null};
   const rated = plan.filter(d=>d.rating);
   const badCount = rated.filter(d=>d.rating==='mal').length;
   const excellentCount = rated.filter(d=>d.rating==='excelente').length;
@@ -6722,7 +6734,7 @@ function getNextWeekPlan(){
   const wn = (state.weekNumber||1) + 1;
   const nextStartIso = addDaysToIsoLocal(state.weekStart || getMondayISO(new Date()), 7);
   const adj = computeWeekAdjustment(state.plan);
-  const previewProfile = Object.assign({}, state.profile, {weeklyKm: Math.max(5, (state.profile.weeklyKm||0) * adj.factor)});
+  const previewProfile = Object.assign({}, state.profile, {weeklyKm: adjustedWeeklyKm(state.profile.weeklyKm||0, adj.factor)});
   const base = generatePlan(previewProfile, wn, nextStartIso);
   const overrides = state.nextWeekOverrides || {};
   // Un override de cancelar_sesion (cancelled:true) tiene que verse EXACTAMENTE como un día de
@@ -6977,7 +6989,7 @@ function checkWeekRollover(){
         // por el mensaje de arriba, y aplicar los dos juntos sería redundante
         const adj = computeWeekAdjustment(state.plan);
         if(adj.factor !== 1){
-          state.profile.weeklyKm = Math.max(5, Math.round(state.profile.weeklyKm*adj.factor));
+          state.profile.weeklyKm = Math.round(adjustedWeeklyKm(state.profile.weeklyKm, adj.factor));
           adjustNote = adj.note;
           adjustedDown = adj.factor < 1;
         }
@@ -13904,6 +13916,8 @@ function scaleDayAmount(d, factor, oneDecimal){
       : fartlekActualKm(d.interval, state.profile);
   } else {
     d.dist = oneDecimal ? Math.max(0.1, Math.round(d.dist*factor*10)/10) : Math.max(1, Math.round(d.dist*factor));
+    // una sesión con repeticiones armada por el coach (custom): cambiaba el número de km pero el texto del plan y lo que se manda al reloj seguían con las repeticiones originales
+    if(d.custom && d.interval && Number(d.interval.reps) > 0) d.interval.reps = Math.max(1, Math.round(d.interval.reps*factor));
   }
   if(d.runWalk && d.runWalk.reps > 0){
     d.runWalk.reps = Math.max(1, Math.round(d.runWalk.reps*factor));

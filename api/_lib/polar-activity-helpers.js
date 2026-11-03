@@ -87,6 +87,17 @@ async function fetchFitSplits(exerciseId, accessToken) {
 // = no busca el FIT, más rápido -- mismo criterio que accessToken en activityToRun de
 // strava-activity-helpers.js: los sync "ahora" lo omiten para responder rápido, y el cron
 // periódico sí lo pasa para completar splits/series/potencia).
+// start_time de Polar AccessLink es la hora LOCAL sin huso ("2026-10-20T21:30:00") y el huso viene aparte en start_time_utc_offset (minutos). Guardada tal cual, la base la leía como UTC y el dedupe contra
+// las otras fuentes (±10 min) fallaba con corridas de la noche. Se convierte a un instante UTC real; sin huso se deja como venía.
+function polarStartIso(exercise) {
+  const raw = exercise && exercise.start_time;
+  const off = Number(exercise && exercise.start_time_utc_offset);
+  if (typeof raw !== 'string' || !Number.isFinite(off) || Math.abs(off) > 24 * 60) return raw;
+  if (/(Z|[+-]\d{2}:?\d{2})$/.test(raw)) return raw;   // ya trae huso
+  const ms = Date.parse(raw + 'Z');
+  if (!Number.isFinite(ms)) return raw;
+  return new Date(ms - off * 60000).toISOString();
+}
 async function exerciseToRun(exercise, accessToken) {
   const fit = accessToken ? await fetchFitSplits(exercise.id, accessToken) : emptyFitResult();
   const localDate = localDatePartFromIso(exercise.start_time);
@@ -94,7 +105,7 @@ async function exerciseToRun(exercise, accessToken) {
   return sanitizeActivityNumbers({
     id: 'polar_' + safeId(exercise.id),
     polarId: exercise.id,
-    date: exercise.start_time,
+    date: polarStartIso(exercise),
     name: null,
     distanceKm: (exercise.distance || 0) / 1000,
     durationSec: parseIsoDurationToSeconds(exercise.duration),
@@ -166,4 +177,4 @@ async function purgePolarRunsForUser(base, headers, userId) {
   }
 }
 
-module.exports = { isRunningSport, parseIsoDurationToSeconds, exerciseToRun, mergePolarRuns, purgePolarRunsForUser, fetchFitSplits };
+module.exports = { polarStartIso, isRunningSport, parseIsoDurationToSeconds, exerciseToRun, mergePolarRuns, purgePolarRunsForUser, fetchFitSplits };
