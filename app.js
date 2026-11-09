@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T13:24:00Z';
+const APP_VERSION = '2026-11-09T13:48:13Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1311,7 +1311,7 @@ async function updatePushStatusDisplay(){
     }catch(e){ el.textContent = t('push_disabled'); if(toggle) toggle.checked = false; }
     return;
   }
-  if(!('serviceWorker' in navigator) || !('PushManager' in window)){ el.textContent = t('push_not_supported'); if(toggle) toggle.disabled = true; return; }
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)){ el.textContent = pushUnsupportedMsg(); if(toggle) toggle.disabled = true; return; }
   try{
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
@@ -1361,7 +1361,7 @@ async function enablePushNotifications(opts){
   const nativePush = nativePushPlugin();
   if(nativePush){ await enableNativePushNotifications(nativePush, opts); return; }
   try{
-    if(!('serviceWorker' in navigator) || !('PushManager' in window)){ showToast(t('push_not_supported'),'error'); await updatePushStatusDisplay(); return; }
+    if(!('serviceWorker' in navigator) || !('PushManager' in window)){ showToast(pushUnsupportedMsg(),'error'); await updatePushStatusDisplay(); return; }
     if(Notification.permission === 'default' && !(opts && opts.skipSoftAsk)){
       const proceed = await showConfirm(t('push_soft_ask'), { confirmText: t('push_soft_ask_confirm'), cancelText: t('push_soft_ask_cancel') });
       if(!proceed){ await updatePushStatusDisplay(); return; }
@@ -1520,7 +1520,22 @@ async function persist(){
       scheduleWatchSync();
       // supabase-js NO lanza una excepción cuando falla la red: devuelve { error }. Sin revisarlo, un guardado sin conexión
       // se daba por bueno (se borraba el respaldo local y se avanzaba la versión conocida) y el cambio se perdía.
-      const { error: saveError } = await supabaseClient.from('app_state').upsert({ user_id: currentUserId, data: state, updated_at: nowIso });
+      let saveError;
+      if(loadedStateVersion){
+        // Ya había una fila cuando se cargó esta sesión: se guarda con UPDATE y se mira cuántas filas cambió. Si no cambió ninguna, la fila se borró desde otro dispositivo ("Borrar mis datos" o borrado de la cuenta):
+        // con upsert se recreaba con todo el estado que esta pestaña todavía tenía en memoria (perfil, carreras, chat), deshaciendo el borrado. Solo el primer guardado de una cuenta nueva (sin versión) usa upsert.
+        const res = await supabaseClient.from('app_state').update({ data: state, updated_at: nowIso }).eq('user_id', currentUserId).select('user_id');
+        saveError = res.error;
+        if(!saveError && Array.isArray(res.data) && res.data.length === 0){
+          clearPendingBackup();
+          try{ wipeLocalUserData(currentUserId); }catch(e){}
+          try{ await supabaseClient.auth.signOut({ scope:'local' }); }catch(e){}
+          location.reload();
+          return;
+        }
+      } else {
+        saveError = (await supabaseClient.from('app_state').upsert({ user_id: currentUserId, data: state, updated_at: nowIso })).error;
+      }
       if(saveError) throw saveError;
       loadedStateVersion = nowIso; // este guardado ya es la versión más nueva que conocemos
       clearPendingBackup();
@@ -1697,6 +1712,13 @@ async function ensureConsent(){
   if(hasConsent()) return true;
   return await showConsentScreen();
 }
+// Rechazar los consentimientos cierra la sesión de este dispositivo. Antes solo se cerraba la sesión: el aviso push de este dispositivo seguía registrado y la cuenta seguía recibiendo avisos con distancia y ritmo de las
+// carreras. Ahora también se da de baja el push (con tope de 4 s: no puede colgar la salida). Los datos de la cuenta se conservan hasta que la persona la borre desde Perfil.
+async function declineConsentSignOut(){
+  try{ await Promise.race([deletePushRowsForThisDevice(), new Promise(r => setTimeout(r, 4000))]); }catch(e){}
+  try{ await supabaseClient.auth.signOut({ scope:'local' }); }catch(e){}
+  location.reload();
+}
 async function loadUserAndEnter(user, isRetry){
   currentUserId = user.id;
   try{
@@ -1768,7 +1790,7 @@ async function loadUserAndEnter(user, isRetry){
         try{ supabaseClient.auth.updateUser({ data: { lang } }); }catch(e){}
       }
       if(!hasConsent()){
-        if(!(await ensureConsent())){ await supabaseClient.auth.signOut({ scope:'local' }); location.reload(); return; }
+        if(!(await ensureConsent())){ await declineConsentSignOut(); return; }
         persist();   // queda guardado en la cuenta (versión y fecha)
       }
       if(!state.chat || !state.chat.length) seedCoachGreeting(); else renderChat();
@@ -1785,7 +1807,7 @@ async function loadUserAndEnter(user, isRetry){
       location.reload();
       return;
     }
-    if(!(await ensureConsent())){ await supabaseClient.auth.signOut({ scope:'local' }); location.reload(); return; }   // el consentimiento viaja en state y se guarda con el onboarding
+    if(!(await ensureConsent())){ await declineConsentSignOut(); return; }   // el consentimiento viaja en state y se guarda con el onboarding
     pendingEmail = user.email;
     stateLoadedFor = user.id;   // la consulta confirmó que no hay datos: cuenta nueva, el estado por defecto es el correcto
     document.getElementById('splash').style.display='none';
@@ -6417,10 +6439,16 @@ function isRecoveryWeek(weekStartDate){
   return candidates.some(eventDateStr=>{
     const raceDate = new Date(eventDateStr+'T00:00:00');
     if(isNaN(raceDate.getTime())) return false;
-    if(raceDate.getDay() !== 0) return false; // 0 = domingo
-    const daysSinceRace = Math.round((start - raceDate) / 86400000);
-    return daysSinceRace === 1;
+    return isWeekAfterRaceWeek(raceDate, start);
   });
+}
+// ¿La semana que empieza en weekStart es la que sigue a la semana de esa carrera? Aplica si la carrera cayó de jueves a domingo (así "la que sigue" es una semana completa de lunes a domingo, sin ambigüedad). Antes solo valía si cayó en
+// domingo: una carrera el sábado pasaba derecho a la semana siguiente a volumen completo. Para una carrera de lunes a miércoles, el resto de esa misma semana ya queda en rodajes cortos (applyGoalRaceDay).
+function isWeekAfterRaceWeek(raceDate, start){
+  const dow = raceDate.getDay();   // 0 = domingo
+  if(!(dow === 0 || dow >= 4)) return false;
+  const raceMonday = new Date(raceDate.getTime()); raceMonday.setDate(raceMonday.getDate() - ((dow + 6) % 7));
+  return Math.round((start - raceMonday) / 86400000) === 7;
 }
 function recoveryMultiplier(weekStartDate){
   return isRecoveryWeek(weekStartDate) ? 0.6 : 1;
@@ -6443,9 +6471,7 @@ function postGoalRaceRecoveryMultiplier(p, weekStartDate){
   const start = new Date(weekStartDate+'T00:00:00');
   const raceDate = new Date(p.raceDate+'T00:00:00');
   if(isNaN(start.getTime()) || isNaN(raceDate.getTime())) return 1;
-  if(raceDate.getDay() !== 0) return 1; // 0 = domingo
-  const daysSinceRace = Math.round((start - raceDate) / 86400000);
-  return daysSinceRace === 1 ? 0.6 : 1;
+  return isWeekAfterRaceWeek(raceDate, start) ? 0.6 : 1;
 }
 function isEventRaceWeek(weekStartDate){
   // La carrera cargada en "Próximos eventos" es informativa (nombre, cuenta regresiva,
@@ -7003,7 +7029,17 @@ function checkWeekRollover(){
     const diffWeeks = Math.max(1, Math.round((new Date(currentMonday) - prevMonday)/(7*86400000)));
     let adjustNote = null, objNote = null, recapMsg = null, goalUpsellMsg = null, breakMsg = null, breakReset = false;
     let promotedPlan = null, promotedWeekNumber = (state.weekNumber||1) + diffWeeks, promotedWeekStart = currentMonday;
-    const breakAdj = (state.breakAdjLastRunMs && state.breakAdjLastRunMs === lastRunTimeMs()) ? null : computeReturnFromBreakAdjustment(detectTrainingGapWeeks(state.weekStart));
+    // La pausa se descuenta por ESCALÓN, no una sola vez: con la misma última carrera, cada lunes sin correr puede pasar a un escalón más grave (2-3 semanas x0,8; 4-6 x0,65 y semana 2; 7+ x0,5 y semana 1),
+    // y se aplica solo la diferencia con lo ya descontado. Antes el primer escalón bloqueaba los siguientes: quien abría la app cada semana sin correr volvía a los 7-8 semanas a un plan de 53 km con series.
+    // breakAdjFactor solo lo escribe este camino; si otro (plan de regreso, regreso por molestia) marcó la carrera sin factor, la pausa ya está manejada y no se toca.
+    const lastRunMsNow = lastRunTimeMs();
+    const breakSameRun = !!(state.breakAdjLastRunMs && state.breakAdjLastRunMs === lastRunMsNow);
+    const breakPrevFactor = breakSameRun ? (Number(state.breakAdjFactor) > 0 ? Number(state.breakAdjFactor) : 0) : 1;
+    let breakAdj = null;
+    if(breakPrevFactor > 0){
+      const cand = computeReturnFromBreakAdjustment(detectTrainingGapWeeks(state.weekStart));
+      if(cand && cand.kmFactor < breakPrevFactor - 1e-9) breakAdj = Object.assign({}, cand, {step: cand.kmFactor / breakPrevFactor});
+    }
     // techo de v4 vencido: pasa al corrimiento de la curva antes de armar la semana nueva (ver expireLegacyCurveCap)
     expireLegacyCurveCap(currentMonday, (state.weekNumber || 1) + diffWeeks);
     if(state.weekStart && state.plan && state.plan.length){
@@ -7019,11 +7055,12 @@ function checkWeekRollover(){
         promotedPlan = nw.plan; promotedWeekNumber = nw.weekNumber; promotedWeekStart = nw.weekStart;
       }
       if(breakAdj){
-        state.profile.weeklyKm = Math.max(5, Math.round(state.profile.weeklyKm * breakAdj.kmFactor));
+        state.profile.weeklyKm = Math.max(5, Math.round(state.profile.weeklyKm * breakAdj.step));
         if(breakAdj.weekNumberReset){ promotedWeekNumber = breakAdj.weekNumberReset; breakReset = true; state.curveWeekOffset = 0; state.curveCap = null; }
         breakMsg = t('coach_return_from_break', {weeks: breakAdj.gapWeeks});
         // Una pausa se descuenta UNA vez: sin recordar de qué última carrera salió, cada lunes siguiente sin correr volvía a aplicar el factor (30 -> 24 -> 19 -> ... -> 5 km).
-        state.breakAdjLastRunMs = lastRunTimeMs();
+        state.breakAdjLastRunMs = lastRunMsNow;
+        state.breakAdjFactor = breakAdj.kmFactor;   // lo ya descontado para esta carrera: el próximo escalón aplica solo la diferencia
         // checkWeekRollover() solo corre una vez por transición real de semana (no en cada
         // render), así que esto es un "che, tanto tiempo" genuino, no algo que se repita cada
         // vez que se abre la app -- reusa la expresión "happy" (contento, sin la intensidad
@@ -7841,7 +7878,9 @@ function paceHintFor(d){
 // taper); sin fases (v4) o en cualquier otra semana devuelve los días tal cual.
 const GOAL_RACE_HEAVY = ['intervals', 'tempo', 'fartlek', 'hills', 'progression', 'long'];
 function applyGoalRaceDay(days, p, weekStartDate, phaseInfo){
-  if(!phaseInfo || !phaseInfo.active || isPostRacePhase(phaseInfo.phase) || !p || !weekStartDate) return days;
+  // Sin fases (carrera a menos de ~7 semanas, principiante o semana sin fase activa) el día de la carrera se marca igual con la fecha de p.raceDate: antes salía como un entrenamiento normal, con las sesiones fuertes
+  // pegadas a la carrera. Solo se deja de aplicar en la fase de recuperación posterior.
+  if((phaseInfo && phaseInfo.active && isPostRacePhase(phaseInfo.phase)) || !p || !p.raceDate || !weekStartDate) return days;
   const race = parsePhaseIso(p.raceDate), start = parsePhaseIso(weekStartDate);
   if(!race || !start) return days;
   const idx = Math.round((race - start) / 86400000);
@@ -7876,6 +7915,9 @@ function applyLevelTestDay(days, p, weekStartDate, beginner){
   const curMonday = getMondayISO(new Date());
   const ws = weekStartDate || state.weekStart;
   if(!ws || ws < curMonday) return days;
+  // Solo la semana actual y la que viene pueden recibir el test pendiente: la vista previa del Plan de las semanas +2 en adelante mostraba un "Test de nivel" en todas (y una sesión de calidad menos), con
+  // volumen y tipos falsos hasta el primer cambio de semana.
+  if(ws > addDaysToIsoLocal(curMonday, 7)) return days;
   let startIdx = 0;
   if(ws === curMonday){
     startIdx = (new Date().getDay() + 6) % 7;
@@ -8313,10 +8355,19 @@ function autoReadLevelTest(){
 function isTimeMode(){ return state.profile.trainBy === 'time'; }
 function estimateBasePaceMinPerKm(profile){
   profile = profile || state.profile;
-  const recent = runsByDateAsc().filter(r=>r.distanceKm>0.5 && r.durationSec>0).slice(-10);
+  // Un promedio simple de los ritmos dejaba que UNA salida registrada por error (0,9 km en 30 min: el cronómetro quedó andando, una caminata) moviera todo el plan (sesiones recortadas un 40 %, minutos por
+  // sesión inflados). Ahora: solo salidas de 1 km o más con un ritmo plausible (3 a 15 min/km), se descartan las que se alejan mucho de la mediana y el ritmo es el ponderado por distancia.
+  const recent = runsByDateAsc().filter(r=>r.distanceKm>=1 && r.durationSec>0).slice(-10)
+    .map(r => ({km:r.distanceKm, min:r.durationSec/60, pace:(r.durationSec/60)/r.distanceKm}))
+    .filter(r => r.pace >= 3 && r.pace <= 15);
   if(recent.length>=3){
-    const paces = recent.map(r=>(r.durationSec/60)/r.distanceKm);
-    return paces.reduce((a,b)=>a+b,0)/paces.length;
+    const sorted = recent.map(r=>r.pace).sort((a,b)=>a-b);
+    const mid = sorted.length % 2 ? sorted[(sorted.length-1)/2] : (sorted[sorted.length/2-1] + sorted[sorted.length/2]) / 2;
+    const kept = recent.filter(r => r.pace <= mid*1.5 && r.pace >= mid*0.67);
+    if(kept.length>=3){
+      const km = kept.reduce((a,r)=>a+r.km,0), min = kept.reduce((a,r)=>a+r.min,0);
+      return min/km;
+    }
   }
   // Con el test de nivel hecho, el ritmo suave medio sale de ahí (mejor dato que cualquier estimación genérica)
   const lt = profile.levelTest;
@@ -12272,6 +12323,9 @@ let wakeLockSentinel = null;
 async function requestWakeLock(){
   try{
     if(!('wakeLock' in navigator)) return;
+    // Ya hay uno vigente (cada reanudación de una pausa vuelve a pedirlo): no se pide otro. Antes se pisaba la referencia sin soltar el anterior, y al terminar la carrera solo se soltaba el último:
+    // el otro dejaba la pantalla encendida para siempre.
+    if(wakeLockSentinel && !wakeLockSentinel.released) return;
     const sentinel = await navigator.wakeLock.request('screen');
     wakeLockSentinel = sentinel;
     // El navegador libera el lock solo al pasar a segundo plano: sin este aviso la variable seguía apuntando al sentinel liberado y nunca se volvía a pedir.
@@ -12311,6 +12365,9 @@ function saveRunProgress(finished){
       // pero sin guardar ESTE campo, actuallyStartRun() no tenía forma de saber que la carrera
       // estaba pausada al cerrarse la app, y la recuperaba siempre como si estuviera corriendo.
       running: !!tracker.running,
+      // La guía de la sesión (en qué repetición y fase va): sin esto, retomar una carrera recuperada reiniciaba las series desde 0 y repetía el aviso de arranque.
+      workout: tracker.workout && tracker.workout.structure ? {typeKey: tracker.workout.structure.typeKey, planTypeKey: tracker.workout.structure.planTypeKey || null, phase: tracker.workout.phase, currentRep: tracker.workout.currentRep || 0,
+        phaseStartDistanceKm: tracker.workout.phaseStartDistanceKm || 0, phaseStartElapsedSec: tracker.workout.phaseStartElapsedSec || 0, autoPausedSec: tracker.workout.autoPausedSec || 0} : null,
       // autoPaused: sin esto, cerrar la app mientras la auto-pausa por quietud estaba activa
       // (semáforo, agua) y reabrirla la recuperaba como si estuviera corriendo de verdad --
       // isTrackingActive() (running && !autoPaused) volvía a dar true de golpe, así que el
@@ -12658,13 +12715,19 @@ function getTodayWorkoutStructure(){
   if(today.dist>0 || today.zone) return {typeKey:'continuous', label:planLabelBody(today), targetDist:today.dist, targetDurMin:today.durMin, zone:today.zone, planTypeKey:today.typeKey};
   return null;
 }
-function setupWorkoutGuide(){
+// restore: el estado de la guía guardado con la carrera (ver saveRunProgress). Solo se aplica si la sesión de hoy sigue siendo la misma (mismo tipo); si cambió el plan, se arma de cero como siempre.
+function setupWorkoutGuide(restore){
   // selectedRunMode (ver selectRunMode() y el selector en #runIdle) -- "correr libre" nunca
   // arma guía ni aviso de voz, aunque hoy el plan tenga algo programado.
   const structure = selectedRunMode==='free' ? null : getTodayWorkoutStructure();
   tracker.workout = structure ? {structure, phase: structure.typeKey==='continuous' ? 'continuous' : 'pending', currentRep:0, phaseStartDistanceKm:0, phaseStartElapsedSec:0} : null;
+  let resumed = false;
+  if(structure && restore && restore.typeKey === structure.typeKey && (restore.planTypeKey || null) === (structure.planTypeKey || null) && ['pending', 'effort', 'recovery', 'done', 'continuous'].includes(restore.phase)){
+    Object.assign(tracker.workout, {phase: restore.phase, currentRep: Number(restore.currentRep) || 0, phaseStartDistanceKm: Number(restore.phaseStartDistanceKm) || 0, phaseStartElapsedSec: Number(restore.phaseStartElapsedSec) || 0, autoPausedSec: Number(restore.autoPausedSec) || 0});
+    resumed = true;
+  }
   renderWorkoutGuide();
-  if(structure && structure.typeKey==='continuous') announceContinuousWorkoutStart(structure);
+  if(structure && structure.typeKey==='continuous' && !resumed) announceContinuousWorkoutStart(structure);   // retomando no se vuelve a decir "¡A correr!"
 }
 function announceContinuousWorkoutStart(s){
   const type = t('type_'+s.planTypeKey);
@@ -12679,7 +12742,7 @@ function beginWorkoutReps(){
   w.phase = 'effort';
   w.currentRep = 1;
   w.phaseStartDistanceKm = tracker.distanceKm;
-  w.phaseStartElapsedSec = tracker.elapsedSec;
+  w.phaseStartElapsedSec = tracker.elapsedSec; w.autoPausedSec = 0;
   announceWorkoutPhase();
   renderWorkoutGuide();
 }
@@ -12720,7 +12783,7 @@ function advanceWorkoutPhase(){
       w.phase = 'done';
     } else {
       w.phase = 'recovery';
-      w.phaseStartElapsedSec = tracker.elapsedSec;
+      w.phaseStartElapsedSec = tracker.elapsedSec; w.autoPausedSec = 0;
       // Para cuestas la recuperación (bajada) también se mide por distancia -- ver
       // tickWorkoutGuide() -- así que hay que reiniciar el punto de partida acá
       // también, no solo al arrancar el esfuerzo. Para series (intervals) este valor
@@ -12732,7 +12795,7 @@ function advanceWorkoutPhase(){
     w.currentRep++;
     w.phase = 'effort';
     w.phaseStartDistanceKm = tracker.distanceKm;
-    w.phaseStartElapsedSec = tracker.elapsedSec;
+    w.phaseStartElapsedSec = tracker.elapsedSec; w.autoPausedSec = 0;
   }
   announceWorkoutPhase();
 }
@@ -12757,6 +12820,11 @@ function fmtCountdown(sec){
   sec = Math.max(0, Math.round(sec));
   return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
 }
+// Segundos que lleva la fase actual. En la recuperación el corredor suele quedarse quieto, y entonces salta la auto-pausa y el reloj de la carrera (elapsedSec) se congela: la recuperación por tiempo nunca terminaba
+// y la repetición siguiente no arrancaba mientras siguiera parado. Por eso se suma el tiempo que estuvo en auto-pausa durante esa fase (autoPausedSec, lo cuenta tickRunTimer). La pausa MANUAL sí congela todo.
+function phaseSpentSec(w){
+  return (tracker.elapsedSec - w.phaseStartElapsedSec) + (w.phase === 'recovery' ? (w.autoPausedSec || 0) : 0);
+}
 function tickWorkoutGuide(){
   const w = tracker.workout;
   // 'continuous' (rodaje/tempo/tirada larga/progresivo, ver getTodayWorkoutStructure()) no
@@ -12764,7 +12832,7 @@ function tickWorkoutGuide(){
   if(!w || w.phase==='pending' || w.phase==='done' || w.phase==='continuous') return;
   const target = getWorkoutPhaseTarget(w);
   const complete = target.sec!=null
-    ? (tracker.elapsedSec - w.phaseStartElapsedSec) >= target.sec
+    ? phaseSpentSec(w) >= target.sec
     : (tracker.distanceKm - w.phaseStartDistanceKm)*1000 >= target.meters;
   if(complete) advanceWorkoutPhase();
   renderWorkoutGuide();
@@ -12810,7 +12878,7 @@ function renderWorkoutGuide(){
     const target = getWorkoutPhaseTarget(w);
     let pct, targetLabel, remainingLabel;
     if(target.sec!=null){
-      const elapsedInPhase = tracker.elapsedSec - w.phaseStartElapsedSec;
+      const elapsedInPhase = phaseSpentSec(w);
       pct = (elapsedInPhase / target.sec) * 100;
       targetLabel = fmtCountdown(target.sec);
       remainingLabel = fmtCountdown(target.sec - elapsedInPhase);
@@ -13499,10 +13567,20 @@ function tickRunTimer(){
   const now = Date.now();
   const deltaSec = Math.round((now - tracker.lastTickAt) / 1000);
   tracker.lastTickAt = now;
+  // En el iPhone (PWA) con la pantalla bloqueada el sistema suspende la página: el GPS y el cronómetro se cortan y al volver el tiempo se pone al día de golpe, con la distancia medida en línea recta desde el último punto.
+  // Si pasaron más de 45 s entre dos pasadas del cronómetro con la carrera activa, se marca el siguiente punto como corte (los parciales no cuentan ese salto) y se le avisa a la persona, una vez por corte.
+  if(isTrackingActive() && deltaSec > 45 && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())){
+    tracker.gapPending = true;
+    try{ showToast(t('run_gap_notice'), 'info'); }catch(e){}
+  }
   if(isTrackingActive() && deltaSec > 0){
     tracker.elapsedSec += deltaSec;
     updateLiveStats(); tickWorkoutGuide(); if(isTimeMode()) maybeAnnounceMilestones();
     if(tracker.elapsedSec - (tracker.lastSavedSec||0) >= 15){ tracker.lastSavedSec = tracker.elapsedSec; saveRunProgress(); }
+  } else if(deltaSec > 0 && tracker.running && tracker.autoPaused && tracker.workout && tracker.workout.phase === 'recovery'){
+    // quieto en la recuperación (auto-pausa): el reloj de la carrera no avanza, pero la recuperación sí (ver phaseSpentSec)
+    tracker.workout.autoPausedSec = (tracker.workout.autoPausedSec || 0) + deltaSec;
+    tickWorkoutGuide();
   }
 }
 function startRun(){
@@ -13650,7 +13728,7 @@ function actuallyStartRun(saved){
   updateCoachFabVisibility();
   initLiveMap();
   updateLiveStats();
-  setupWorkoutGuide();
+  setupWorkoutGuide(saved && saved.workout);
   saveRunProgress();
   // Sentinel string (no null) apenas arranca la carrera: el guard de doble-tap de startRun()
   // (if(tracker && tracker.watchId !== null) return;) tiene que ver ALGO no-null desde este
@@ -16601,6 +16679,11 @@ function closeZonesInfo(){ document.getElementById('zones-info-modal').style.dis
 /* ================= INSTALL PROMPT (PWA) ================= */
 let deferredInstallPrompt = null;
 const INSTALL_DISMISS_KEY = 'zancada_install_dismissed';
+// En Safari del iPhone SIN instalar no existe PushManager: decir "tu dispositivo no soporta notificaciones" era falso. Lo que falta es agregar la app a la pantalla de inicio.
+function pushUnsupportedMsg(){
+  try{ if(isIOSDevice() && !isRunningStandalone()) return t('push_needs_install'); }catch(e){}
+  return t('push_not_supported');
+}
 function isRunningStandalone(){
   // Reportado por el usuario: en la app nativa de Android (Capacitor) seguía apareciendo
   // la tarjeta/banner de "cómo instalar la app en tu pantalla de inicio" -- no tenía ningún
@@ -18502,6 +18585,12 @@ function applyUndoLastChange(){
   state.plan = snap.plan.map((d, i) => (lived(state.plan[i]) ? state.plan[i] : d));
   state.nextWeekOverrides = snap.nextWeekOverrides;
   COACH_PROFILE_FIELDS.forEach(k => { if(snap.profile[k] === undefined) delete state.profile[k]; else state.profile[k] = snap.profile[k]; });
+  // las notas guardadas DESPUÉS del turno que se deshace se conservan
+  if(Array.isArray(snap.laterNotes) && snap.laterNotes.length){
+    const notes = (state.profile.coachNotes || []).slice();
+    snap.laterNotes.forEach(n => { if(!notes.includes(n)) notes.push(n); });
+    state.profile.coachNotes = notes.slice(-20);
+  }
   // primero el cronograma original; refreshPhaseSchedule lo conserva si sigue coincidiendo con el perfil restaurado
   if('phaseSchedule' in state.coachUndoSnapshot) state.phaseSchedule = state.coachUndoSnapshot.phaseSchedule;
   if(state.coachUndoSnapshot.weekNumber > 0) state.weekNumber = state.coachUndoSnapshot.weekNumber;
@@ -19084,6 +19173,8 @@ function applyCoachNote(input){
   state.profile.coachNotes = state.profile.coachNotes.filter(n => n !== noteText);
   state.profile.coachNotes.push(noteText);
   if(state.profile.coachNotes.length > 20) state.profile.coachNotes = state.profile.coachNotes.slice(-20);
+  // Una nota guardada en un turno POSTERIOR al del snapshot de "deshacer" no es parte de lo que se deshace: se anota para conservarla (antes restaurar las notas del snapshot la borraba en silencio).
+  if(state.coachUndoSnapshot && !coachUndoTurnSnapshotTaken){ (state.coachUndoSnapshot.laterNotes = state.coachUndoSnapshot.laterNotes || []).push(noteText); }
   showToast(t('coach_note_saved', {nota: noteText}), 'info');
   // Antes, una lesión mencionada por chat quedaba SOLO en coachNotes -- una nota que el coach
   // podía mencionar en la charla, pero invisible para trainingCaution/generatePlan (que sí
@@ -19251,7 +19342,9 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
   // con lo que el chat decía. CLAIM_PATTERN es deliberadamente amplio (mejor una vuelta extra
   // de más en un caso ambiguo que dejar pasar una confirmación falsa) -- ver el chequeo más
   // abajo, junto al break del loop.
-  const CLAIM_PATTERN = /\b(ya\s+(est[aá]|qued[oó]|lo\s+(cambi[eé]|actualic[eé]|apliqu[eé]|hice)|se\s+aplic[oó])|listo,|actualizad[oa]\s|cargad[oa]\s|already\s+(updated|changed|applied|done)|all\s+set|it'?s\s+(done|updated)|c'est\s+(fait|mis\s+à\s+jour)|gi[àa]\s+(aggiornat|fatt)|(bereits|schon)\s+(aktualisiert|erledigt)|j[aá]\s+atualizad)/i;
+  // Solo respuestas que AFIRMAN haber hecho un cambio (verbo de acción en pasado: cambié, actualicé, apliqué, moví...). Antes también saltaba con 'ya está/estás', 'cargada', 'actualizado' o 'Listo, ¿querés...?',
+  // y una respuesta informativa buena se descartaba, se gastaba otro pedido y se empujaba al modelo a llamar herramientas que nadie pidió.
+  const CLAIM_PATTERN = /(\b(cambié|actualicé|apliqué|ajusté|moví|cancelé|guardé|armé|modifiqué|eliminé)(?![a-záéíóúñ])|\bya\s+(lo\s+|los\s+|las\s+)?(cambié|actualicé|apliqué|hice|moví|cancelé|ajusté|guardé|armé)(?![a-záéíóúñ])|\b(se\s+)?(aplicó|cambió|actualizó|guardó|canceló)\s+(el|la|los|las|tu|tus)\b|\blisto,\s*(ya\b|lo\s+(cambié|actualicé|apliqué|hice)|apliqué|cambié|actualicé)|\balready\s+(updated|changed|applied|done)|\ball\s+set\b|\bit'?s\s+(done|updated)|\bc'est\s+(fait|mis\s+à\s+jour)|\bgi[àa]\s+(aggiornat|fatt)|\b(bereits|schon)\s+(aktualisiert|erledigt)|\bj[aá]\s+atualizad)/i;
   let correctionAttempted = false;
   chatAbortController = new AbortController();
   try{

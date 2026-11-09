@@ -3870,10 +3870,14 @@ test('W5-L4: con fases, el día de la carrera objetivo es la carrera (no una ses
   }));
 });
 
-test('W5-L4: sin fases (v4) o en otra semana, el día de la carrera sigue como siempre', () => {
+test('W5-L4: sin fases (v4) el día de la carrera se marca igual; en otra semana no', () => {
   const p = racingProfile();
   const v4 = phasedApp(p, null).app;
-  assert.ok(!plain(v4.generatePlan(p, 19, '2027-03-08')).some(d => d.raceDay));
+  const v4Week = plain(v4.generatePlan(p, 19, '2027-03-08'));
+  assert.ok(v4Week.some(d => d.raceDay), 'sin fases (carrera cercana o principiante) el día de la carrera también es "Carrera", no un entrenamiento');
+  const ri = v4Week.findIndex(d => d.raceDay);
+  assert.equal(v4Week[ri].dist, 0);
+  assert.ok(ri === 0 || !['intervals', 'tempo', 'fartlek', 'hills', 'progression', 'long'].includes(v4Week[ri - 1].typeKey), 'el día anterior no queda con una sesión fuerte');
   const { app } = phasedApp(p);
   assert.ok(!plain(app.generatePlan(p, 18, '2027-03-01')).some(d => d.raceDay));
 });
@@ -4245,8 +4249,8 @@ test('W7: carrera un lunes: el domingo anterior (semana de antes) pasa a rodaje 
     if (trainBy === 'time') assert.ok(sun.durMin <= Math.max(20, Math.round(5 * pace / 5) * 5), `${label}: ${sun.durMin}`);
     else assert.ok(sun.dist <= 5, `${label}: ${sun.dist}`);
     assert.ok(!plan.some(d => d.raceDay), label + ': la carrera es la semana que viene');
-    // sin fases: el domingo sigue siendo la tirada
+    // sin fases pasa lo mismo: el día anterior a la carrera ya no queda con la tirada larga
     const v4 = phasedApp(Object.assign({}, p), null).app;
-    assert.equal(plain(v4.generatePlan(p, 19, '2027-03-08'))[6].typeKey, 'long', label + ' v4');
+    assert.equal(plain(v4.generatePlan(p, 19, '2027-03-08'))[6].typeKey, 'easy', label + ' v4');
   }));
 });
