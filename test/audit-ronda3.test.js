@@ -272,3 +272,72 @@ test('el aviso de carga de Inicio dice "últimos 7 días" en los 6 idiomas (la v
     }
   }
 });
+
+// ---------- grabación en vivo y deshacer ----------
+test('la recuperación por tiempo sigue corriendo aunque la auto-pausa congele el reloj de la carrera (parado en el lugar), y la pausa manual la congela', () => {
+  const app = loadApp();
+  ready(app);
+  const tr = app.getTracker();
+  tr.running = true; tr.autoPaused = true; tr.elapsedSec = 100;
+  tr.workout = { phase: 'recovery', currentRep: 1, phaseStartElapsedSec: 100, autoPausedSec: 0, structure: { typeKey: 'intervals', reps: 6, repSec: 60, restSec: 90 } };
+  tr.lastTickAt = Date.now() - 10000;
+  app.tickRunTimer();
+  assert.equal(tr.elapsedSec, 100, 'el reloj de la carrera sigue congelado');
+  assert.ok(tr.workout.autoPausedSec >= 9 && tr.workout.autoPausedSec <= 11, 'pero la recuperación sumó ~10 s: ' + tr.workout.autoPausedSec);
+  assert.ok(app.phaseSpentSec(tr.workout) >= 9);
+  tr.workout.phase = 'effort';
+  assert.equal(app.phaseSpentSec(tr.workout), 0, 'en el esfuerzo no se suma la auto-pausa');
+  tr.workout.phase = 'recovery'; tr.autoPaused = false; tr.running = false;   // pausa manual
+  const before = tr.workout.autoPausedSec;
+  tr.lastTickAt = Date.now() - 10000;
+  app.tickRunTimer();
+  assert.equal(tr.workout.autoPausedSec, before, 'la pausa manual congela todo');
+});
+
+test('si iOS suspende la página con la pantalla bloqueada (hueco de más de 45 s) el siguiente punto se marca como corte y se avisa', () => {
+  const app = loadApp();
+  ready(app);
+  const tr = app.getTracker();
+  tr.running = true; tr.autoPaused = false; tr.elapsedSec = 300; tr.gapPending = false;
+  tr.lastTickAt = Date.now() - 2000;
+  app.tickRunTimer();
+  assert.ok(!tr.gapPending, 'una pasada normal no marca nada');
+  tr.lastTickAt = Date.now() - 120000;
+  app.tickRunTimer();
+  assert.equal(tr.gapPending, true, 'un hueco de 2 min sí');
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.ok(/run_gap_notice:"[^"]{20,}"/.test(read('locales/' + l + '.js')), l);
+});
+
+test('cada reanudación de una pausa NO deja un wake lock colgado: no se pide otro si ya hay uno vigente', () => {
+  assert.ok(SRC.includes('if(wakeLockSentinel && !wakeLockSentinel.released) return;'));
+  const i = SRC.indexOf('async function requestWakeLock(){');
+  assert.ok(SRC.indexOf('if(wakeLockSentinel && !wakeLockSentinel.released) return;', i) < SRC.indexOf('navigator.wakeLock.request', i), 'la guarda va antes de pedir');
+});
+
+test('deshacer un cambio del coach conserva las notas guardadas DESPUÉS de ese turno', () => {
+  const app = loadApp();
+  ready(app);
+  app.state.profile.coachNotes = ['prefiere mañanas', 'no puede correr los domingos'];
+  app.state.coachUndoSnapshot = {
+    plan: JSON.parse(JSON.stringify(app.state.plan)), nextWeekOverrides: {}, profile: Object.assign(JSON.parse(JSON.stringify(app.state.profile)), { coachNotes: ['prefiere mañanas'] }), phaseSchedule: null, weekNumber: 3, curveWeekOffset: 0, curveCap: null,
+    laterNotes: ['no puede correr los domingos'],
+  };
+  app.applyUndoLastChange();
+  assert.deepEqual(app.state.profile.coachNotes, ['prefiere mañanas', 'no puede correr los domingos'], 'la nota posterior sigue');
+  assert.ok(SRC.includes('if(state.coachUndoSnapshot && !coachUndoTurnSnapshotTaken){ (state.coachUndoSnapshot.laterNotes ='));
+});
+
+test('retomar una carrera recuperada conserva la repetición y la fase de las series y no repite el "¡A correr!"', () => {
+  assert.ok(SRC.includes('workout: tracker.workout && tracker.workout.structure ? {typeKey: tracker.workout.structure.typeKey'), 'la guía se guarda junto con el progreso');
+  assert.ok(SRC.includes('function setupWorkoutGuide(restore){'));
+  assert.ok(SRC.includes('restore.typeKey === structure.typeKey && (restore.planTypeKey || null) === (structure.planTypeKey || null)'), 'solo si la sesión de hoy sigue siendo la misma');
+  assert.ok(SRC.includes("if(structure && structure.typeKey==='continuous' && !resumed) announceContinuousWorkoutStart(structure);"));
+  assert.ok(SRC.includes('setupWorkoutGuide(saved && saved.workout);'));
+  // funcional: sin sesión programada (carrera libre) la guía sigue sin armarse, también al retomar
+  const app = loadApp();
+  ready(app);
+  app.getTracker().workout = null;
+  app.setupWorkoutGuide({ typeKey: 'intervals', planTypeKey: 'intervals', phase: 'effort', currentRep: 4, phaseStartDistanceKm: 1, phaseStartElapsedSec: 300 });
+  const w = app.getTracker().workout;
+  assert.ok(!w || (w.structure && (w.structure.typeKey !== 'intervals' || w.currentRep === 4)), 'o no arma guía, o restaura la repetición 4');
+});

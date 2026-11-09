@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T13:43:00Z';
+const APP_VERSION = '2026-11-09T13:48:13Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -12323,6 +12323,9 @@ let wakeLockSentinel = null;
 async function requestWakeLock(){
   try{
     if(!('wakeLock' in navigator)) return;
+    // Ya hay uno vigente (cada reanudación de una pausa vuelve a pedirlo): no se pide otro. Antes se pisaba la referencia sin soltar el anterior, y al terminar la carrera solo se soltaba el último:
+    // el otro dejaba la pantalla encendida para siempre.
+    if(wakeLockSentinel && !wakeLockSentinel.released) return;
     const sentinel = await navigator.wakeLock.request('screen');
     wakeLockSentinel = sentinel;
     // El navegador libera el lock solo al pasar a segundo plano: sin este aviso la variable seguía apuntando al sentinel liberado y nunca se volvía a pedir.
@@ -12362,6 +12365,9 @@ function saveRunProgress(finished){
       // pero sin guardar ESTE campo, actuallyStartRun() no tenía forma de saber que la carrera
       // estaba pausada al cerrarse la app, y la recuperaba siempre como si estuviera corriendo.
       running: !!tracker.running,
+      // La guía de la sesión (en qué repetición y fase va): sin esto, retomar una carrera recuperada reiniciaba las series desde 0 y repetía el aviso de arranque.
+      workout: tracker.workout && tracker.workout.structure ? {typeKey: tracker.workout.structure.typeKey, planTypeKey: tracker.workout.structure.planTypeKey || null, phase: tracker.workout.phase, currentRep: tracker.workout.currentRep || 0,
+        phaseStartDistanceKm: tracker.workout.phaseStartDistanceKm || 0, phaseStartElapsedSec: tracker.workout.phaseStartElapsedSec || 0, autoPausedSec: tracker.workout.autoPausedSec || 0} : null,
       // autoPaused: sin esto, cerrar la app mientras la auto-pausa por quietud estaba activa
       // (semáforo, agua) y reabrirla la recuperaba como si estuviera corriendo de verdad --
       // isTrackingActive() (running && !autoPaused) volvía a dar true de golpe, así que el
@@ -12709,13 +12715,19 @@ function getTodayWorkoutStructure(){
   if(today.dist>0 || today.zone) return {typeKey:'continuous', label:planLabelBody(today), targetDist:today.dist, targetDurMin:today.durMin, zone:today.zone, planTypeKey:today.typeKey};
   return null;
 }
-function setupWorkoutGuide(){
+// restore: el estado de la guía guardado con la carrera (ver saveRunProgress). Solo se aplica si la sesión de hoy sigue siendo la misma (mismo tipo); si cambió el plan, se arma de cero como siempre.
+function setupWorkoutGuide(restore){
   // selectedRunMode (ver selectRunMode() y el selector en #runIdle) -- "correr libre" nunca
   // arma guía ni aviso de voz, aunque hoy el plan tenga algo programado.
   const structure = selectedRunMode==='free' ? null : getTodayWorkoutStructure();
   tracker.workout = structure ? {structure, phase: structure.typeKey==='continuous' ? 'continuous' : 'pending', currentRep:0, phaseStartDistanceKm:0, phaseStartElapsedSec:0} : null;
+  let resumed = false;
+  if(structure && restore && restore.typeKey === structure.typeKey && (restore.planTypeKey || null) === (structure.planTypeKey || null) && ['pending', 'effort', 'recovery', 'done', 'continuous'].includes(restore.phase)){
+    Object.assign(tracker.workout, {phase: restore.phase, currentRep: Number(restore.currentRep) || 0, phaseStartDistanceKm: Number(restore.phaseStartDistanceKm) || 0, phaseStartElapsedSec: Number(restore.phaseStartElapsedSec) || 0, autoPausedSec: Number(restore.autoPausedSec) || 0});
+    resumed = true;
+  }
   renderWorkoutGuide();
-  if(structure && structure.typeKey==='continuous') announceContinuousWorkoutStart(structure);
+  if(structure && structure.typeKey==='continuous' && !resumed) announceContinuousWorkoutStart(structure);   // retomando no se vuelve a decir "¡A correr!"
 }
 function announceContinuousWorkoutStart(s){
   const type = t('type_'+s.planTypeKey);
@@ -12730,7 +12742,7 @@ function beginWorkoutReps(){
   w.phase = 'effort';
   w.currentRep = 1;
   w.phaseStartDistanceKm = tracker.distanceKm;
-  w.phaseStartElapsedSec = tracker.elapsedSec;
+  w.phaseStartElapsedSec = tracker.elapsedSec; w.autoPausedSec = 0;
   announceWorkoutPhase();
   renderWorkoutGuide();
 }
@@ -12771,7 +12783,7 @@ function advanceWorkoutPhase(){
       w.phase = 'done';
     } else {
       w.phase = 'recovery';
-      w.phaseStartElapsedSec = tracker.elapsedSec;
+      w.phaseStartElapsedSec = tracker.elapsedSec; w.autoPausedSec = 0;
       // Para cuestas la recuperación (bajada) también se mide por distancia -- ver
       // tickWorkoutGuide() -- así que hay que reiniciar el punto de partida acá
       // también, no solo al arrancar el esfuerzo. Para series (intervals) este valor
@@ -12783,7 +12795,7 @@ function advanceWorkoutPhase(){
     w.currentRep++;
     w.phase = 'effort';
     w.phaseStartDistanceKm = tracker.distanceKm;
-    w.phaseStartElapsedSec = tracker.elapsedSec;
+    w.phaseStartElapsedSec = tracker.elapsedSec; w.autoPausedSec = 0;
   }
   announceWorkoutPhase();
 }
@@ -12808,6 +12820,11 @@ function fmtCountdown(sec){
   sec = Math.max(0, Math.round(sec));
   return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
 }
+// Segundos que lleva la fase actual. En la recuperación el corredor suele quedarse quieto, y entonces salta la auto-pausa y el reloj de la carrera (elapsedSec) se congela: la recuperación por tiempo nunca terminaba
+// y la repetición siguiente no arrancaba mientras siguiera parado. Por eso se suma el tiempo que estuvo en auto-pausa durante esa fase (autoPausedSec, lo cuenta tickRunTimer). La pausa MANUAL sí congela todo.
+function phaseSpentSec(w){
+  return (tracker.elapsedSec - w.phaseStartElapsedSec) + (w.phase === 'recovery' ? (w.autoPausedSec || 0) : 0);
+}
 function tickWorkoutGuide(){
   const w = tracker.workout;
   // 'continuous' (rodaje/tempo/tirada larga/progresivo, ver getTodayWorkoutStructure()) no
@@ -12815,7 +12832,7 @@ function tickWorkoutGuide(){
   if(!w || w.phase==='pending' || w.phase==='done' || w.phase==='continuous') return;
   const target = getWorkoutPhaseTarget(w);
   const complete = target.sec!=null
-    ? (tracker.elapsedSec - w.phaseStartElapsedSec) >= target.sec
+    ? phaseSpentSec(w) >= target.sec
     : (tracker.distanceKm - w.phaseStartDistanceKm)*1000 >= target.meters;
   if(complete) advanceWorkoutPhase();
   renderWorkoutGuide();
@@ -12861,7 +12878,7 @@ function renderWorkoutGuide(){
     const target = getWorkoutPhaseTarget(w);
     let pct, targetLabel, remainingLabel;
     if(target.sec!=null){
-      const elapsedInPhase = tracker.elapsedSec - w.phaseStartElapsedSec;
+      const elapsedInPhase = phaseSpentSec(w);
       pct = (elapsedInPhase / target.sec) * 100;
       targetLabel = fmtCountdown(target.sec);
       remainingLabel = fmtCountdown(target.sec - elapsedInPhase);
@@ -13550,10 +13567,20 @@ function tickRunTimer(){
   const now = Date.now();
   const deltaSec = Math.round((now - tracker.lastTickAt) / 1000);
   tracker.lastTickAt = now;
+  // En el iPhone (PWA) con la pantalla bloqueada el sistema suspende la página: el GPS y el cronómetro se cortan y al volver el tiempo se pone al día de golpe, con la distancia medida en línea recta desde el último punto.
+  // Si pasaron más de 45 s entre dos pasadas del cronómetro con la carrera activa, se marca el siguiente punto como corte (los parciales no cuentan ese salto) y se le avisa a la persona, una vez por corte.
+  if(isTrackingActive() && deltaSec > 45 && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())){
+    tracker.gapPending = true;
+    try{ showToast(t('run_gap_notice'), 'info'); }catch(e){}
+  }
   if(isTrackingActive() && deltaSec > 0){
     tracker.elapsedSec += deltaSec;
     updateLiveStats(); tickWorkoutGuide(); if(isTimeMode()) maybeAnnounceMilestones();
     if(tracker.elapsedSec - (tracker.lastSavedSec||0) >= 15){ tracker.lastSavedSec = tracker.elapsedSec; saveRunProgress(); }
+  } else if(deltaSec > 0 && tracker.running && tracker.autoPaused && tracker.workout && tracker.workout.phase === 'recovery'){
+    // quieto en la recuperación (auto-pausa): el reloj de la carrera no avanza, pero la recuperación sí (ver phaseSpentSec)
+    tracker.workout.autoPausedSec = (tracker.workout.autoPausedSec || 0) + deltaSec;
+    tickWorkoutGuide();
   }
 }
 function startRun(){
@@ -13701,7 +13728,7 @@ function actuallyStartRun(saved){
   updateCoachFabVisibility();
   initLiveMap();
   updateLiveStats();
-  setupWorkoutGuide();
+  setupWorkoutGuide(saved && saved.workout);
   saveRunProgress();
   // Sentinel string (no null) apenas arranca la carrera: el guard de doble-tap de startRun()
   // (if(tracker && tracker.watchId !== null) return;) tiene que ver ALGO no-null desde este
@@ -18558,6 +18585,12 @@ function applyUndoLastChange(){
   state.plan = snap.plan.map((d, i) => (lived(state.plan[i]) ? state.plan[i] : d));
   state.nextWeekOverrides = snap.nextWeekOverrides;
   COACH_PROFILE_FIELDS.forEach(k => { if(snap.profile[k] === undefined) delete state.profile[k]; else state.profile[k] = snap.profile[k]; });
+  // las notas guardadas DESPUÉS del turno que se deshace se conservan
+  if(Array.isArray(snap.laterNotes) && snap.laterNotes.length){
+    const notes = (state.profile.coachNotes || []).slice();
+    snap.laterNotes.forEach(n => { if(!notes.includes(n)) notes.push(n); });
+    state.profile.coachNotes = notes.slice(-20);
+  }
   // primero el cronograma original; refreshPhaseSchedule lo conserva si sigue coincidiendo con el perfil restaurado
   if('phaseSchedule' in state.coachUndoSnapshot) state.phaseSchedule = state.coachUndoSnapshot.phaseSchedule;
   if(state.coachUndoSnapshot.weekNumber > 0) state.weekNumber = state.coachUndoSnapshot.weekNumber;
@@ -19140,6 +19173,8 @@ function applyCoachNote(input){
   state.profile.coachNotes = state.profile.coachNotes.filter(n => n !== noteText);
   state.profile.coachNotes.push(noteText);
   if(state.profile.coachNotes.length > 20) state.profile.coachNotes = state.profile.coachNotes.slice(-20);
+  // Una nota guardada en un turno POSTERIOR al del snapshot de "deshacer" no es parte de lo que se deshace: se anota para conservarla (antes restaurar las notas del snapshot la borraba en silencio).
+  if(state.coachUndoSnapshot && !coachUndoTurnSnapshotTaken){ (state.coachUndoSnapshot.laterNotes = state.coachUndoSnapshot.laterNotes || []).push(noteText); }
   showToast(t('coach_note_saved', {nota: noteText}), 'info');
   // Antes, una lesión mencionada por chat quedaba SOLO en coachNotes -- una nota que el coach
   // podía mencionar en la charla, pero invisible para trainingCaution/generatePlan (que sí
