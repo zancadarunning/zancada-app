@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T21:10:36Z';
+const APP_VERSION = '2026-11-09T21:19:08Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -19262,7 +19262,7 @@ function applyPlanChange(input){
   if(!DAY_KEYS.includes(input.dia)) return 'Día no encontrado.';
   if(!COACH_TYPE_KEYS.includes(input.tipo_categoria)) return badCoachEnum('tipo_categoria', input.tipo_categoria, COACH_TYPE_KEYS);
   if(input.terreno && !COACH_TERRAINS.includes(input.terreno)) return badCoachEnum('terreno', input.terreno, COACH_TERRAINS);
-  const raceRefusal = raceDayRefusal(input.dia, input.semana);
+  const raceRefusal = raceDayRefusal(input.dia, input.semana) || nextWeekDaysRefusal(input.dia, input.semana);
   if(raceRefusal) return raceRefusal;
   const safetyRefusal = coachSafetyRefusal(input);
   if(safetyRefusal) return safetyRefusal;
@@ -19432,6 +19432,8 @@ function applyMoveSession(input){
   if(isDayLocked(input.dia_destino)) return `No puedo mover la sesión a ${input.dia_destino}: ese día ya pasó (o ya se corrió/salteó) esta semana.`;
   if(origDay.raceDay) return `No puedo mover ${input.dia_origen}: ese día es la carrera objetivo del corredor, no una sesión de entrenamiento.`;
   if(destDay.raceDay) return `No puedo mover la sesión a ${input.dia_destino}: ese día es la carrera objetivo del corredor (ahí no va ninguna otra sesión).`;
+  const evRefusal = eventDayRefusal(input.dia_origen, 'actual') || eventDayRefusal(input.dia_destino, 'actual');
+  if(evRefusal) return evRefusal;
   // El snapshot de undo se toma recién acá, después de todas las validaciones -- ver el
   // comentario equivalente en applyPlanChange.
   captureUndoSnapshot();
@@ -19476,10 +19478,24 @@ function applyMoveSession(input){
 // El día de la carrera objetivo (plan por fases, ver applyGoalRaceDay) no se modifica ni se cancela por el
 // coach: escribir una sesión ahí la dejaba escondida detrás del cartel "Carrera" y sumando en el total.
 // Devuelve el motivo para que el coach se lo explique al corredor, o null si el día no es la carrera.
+// Día de una carrera cargada en "Próximos eventos": la pantalla lo muestra como la carrera, así que una sesión escrita ahí quedaría escondida detrás del cartel. Devuelve el motivo o null.
+function eventDayRefusal(dia, semana){
+  const ev = state.event;
+  if(!ev || !ev.date || !state.weekStart || !DAY_KEYS.includes(dia)) return null;
+  const ws = semana === 'siguiente' ? addDaysToIsoLocal(state.weekStart, 7) : state.weekStart;
+  if(addDaysToIsoLocal(ws, DAY_KEYS.indexOf(dia)) !== ev.date) return null;
+  return `No puedo cambiar ${dia}${semana === 'siguiente' ? ' de la semana que viene' : ''}: ese día es la carrera que el corredor cargó en Próximos eventos (${ev.name}), no una sesión de entrenamiento. Si quiere cambiarla, tiene que editar o borrar la carrera desde Próximos eventos.`;
+}
+// Días que el corredor eligió para la semana que viene (tarjeta de Inicio): una sesión nueva en un día que dijo que no corre se lo contradice.
+function nextWeekDaysRefusal(dia, semana){
+  const nd = state.nextWeekDays;
+  if(semana !== 'siguiente' || !nd || !state.weekStart || nd.weekStart !== addDaysToIsoLocal(state.weekStart, 7) || !Array.isArray(nd.days) || nd.days.includes(dia)) return null;
+  return `No puedo agregar una sesión el ${dia} de la semana que viene: el corredor eligió correr SOLO ${nd.days.join(', ')} esa semana. Si quiere sumar ese día, que lo cambie en la tarjeta de Inicio o decímelo y te explico cómo.`;
+}
 function raceDayRefusal(dia, semana){
   const plan = semana === 'siguiente' ? getNextWeekPlan().plan : (state.plan || []);
   const d = plan.find(x => x && x.day === dia);
-  if(!d || !d.raceDay) return null;
+  if(!d || !d.raceDay) return eventDayRefusal(dia, semana);
   return `No puedo cambiar ${dia}${semana === 'siguiente' ? ' de la semana que viene' : ''}: ese día es la carrera objetivo del corredor, no una sesión de entrenamiento. Si quiere cambiar la fecha de la carrera, eso se hace con modificar_perfil (fecha_carrera).`;
 }
 function applyCancelSession(input){
@@ -19816,7 +19832,8 @@ async function sendChat(){
   const nowClock = nowDate.toLocaleTimeString(LOCALE_MAP[lang], {hour:'2-digit', minute:'2-digit', hour12:false});
   messages.push({role:'user', content: text + `\n\n[Dato automático de la app, no lo escribió el corredor: ahora es ${nowLabelFull}, ${nowClock} hs. HOY es ${nowDate.toLocaleDateString(LOCALE_MAP[lang], {weekday:'long'})}.]`});
 
-  const system = `Sos "Zonda", el entrenador virtual dentro de la app Zancada (el nombre viene del viento cálido y seco típico del oeste argentino -- podés mencionar el origen del nombre si el corredor pregunta, pero no hace falta explicarlo de entrada). Hablás con calidez y honestidad, como un entrenador real de running (no un chatbot genérico). Respondé siempre en ${LANG_NAMES[lang]}. Datos del corredor: ${safeBuildContext()}. Ayudás a definir ejercicios, responder dudas de entrenamiento en calle y trail, y personalizar el plan según los gustos del corredor.
+  const ctxAtStart = safeBuildContext();
+  const system = `Sos "Zonda", el entrenador virtual dentro de la app Zancada (el nombre viene del viento cálido y seco típico del oeste argentino -- podés mencionar el origen del nombre si el corredor pregunta, pero no hace falta explicarlo de entrada). Hablás con calidez y honestidad, como un entrenador real de running (no un chatbot genérico). Respondé siempre en ${LANG_NAMES[lang]}. Datos del corredor: ${ctxAtStart}. Ayudás a definir ejercicios, responder dudas de entrenamiento en calle y trail, y personalizar el plan según los gustos del corredor.
 
 Si el corredor cargó una meta de km semanales o un objetivo personal en sus propias palabras, tenelos presentes: orientá tus sugerencias hacia ese objetivo, y si el plan actual no está bien encaminado para lograrlo, decilo con honestidad y proponé un ajuste concreto (usando las herramientas).
 
@@ -19852,6 +19869,9 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
   let networkFailed = false;
   let cancelled = false;
   let anyToolApplied = false;
+  // Después de cada cambio real (plan o perfil) las vueltas siguientes del mismo mensaje reciben el contexto ACTUALIZADO: con el viejo, el modelo seguía viendo el plan de antes
+  // (un día ya movido o cancelado) y encadenaba mal el pedido siguiente ("pasá el martes al miércoles y después cambiame el miércoles").
+  let systemNow = system;
   const toolBudget = {total: 0, vol: 0, notes: 0};
   // Salvaguarda contra el modelo afirmando en TEXTO que ya aplicó un cambio (plan o perfil)
   // sin haber llamado ninguna herramienta -- el prompt de arriba ya se lo pide explícitamente
@@ -19876,7 +19896,7 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
     for(let loop=0; loop<4; loop++){
       const res = await fetch(apiUrl('/api/chat'), {
         method:'POST', headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session?.access_token || ''}`},
-        body: JSON.stringify({system, tools:TOOLS, messages, lang}),
+        body: JSON.stringify({system: systemNow, tools:TOOLS, messages, lang}),
         signal: chatAbortController.signal
       });
       const data = await res.json();
@@ -19921,7 +19941,11 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
         else result = 'Herramienta no reconocida.';
         return {type:'tool_result', tool_use_id:tu.id, content: result};
       });
-      if(coachStateFingerprint() !== stateBefore) anyToolApplied = true;
+      if(coachStateFingerprint() !== stateBefore){
+        anyToolApplied = true;
+        const ctxFresh = safeBuildContext();
+        if(ctxFresh && ctxAtStart) systemNow = system.split(ctxAtStart).join(ctxFresh);
+      }
       messages.push({role:'assistant', content: blocks});
       messages.push({role:'user', content: toolResults});
     }
