@@ -2783,6 +2783,7 @@ body{overflow-wrap:break-word;}
 #onboard .ob-skip, #consent-modal .btn.is-busy::before{content:""; display:inline-block; width:12px; height:12px; margin-right:8px; vertical-align:-2px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:btn-busy-spin .7s linear infinite;}
   @keyframes btn-busy-spin{to{transform:rotate(360deg);}}
   @media (prefers-reduced-motion:reduce){ .btn.is-busy::before{animation:none; border-right-color:currentColor; opacity:.5;} }
+  body.strava-sunset .conn-strava{display:none;}
   .watch-card h3{margin:0 0 6px;}
   .watch-row{padding:12px 0; border-top:1px solid var(--overlay-hairline);}
   .watch-row:first-of-type{border-top:0; padding-top:4px;}
@@ -4030,7 +4031,7 @@ body{overflow-wrap:break-word;}
         <span id="devices-hint-text" data-i18n="perfil_connectivity_hint"></span>
       </div>
 
-      <div class="conn-row conn-row-featured">
+      <div class="conn-row conn-row-featured conn-strava">
         <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" data-on-click="toggleConnRow(this)">
           <span class="brand-logo-chip"><img src="img/brand-logos/strava.svg" alt="Strava"></span>
           <span id="strava-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>

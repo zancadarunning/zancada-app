@@ -111,3 +111,6 @@ const linkAccount = async (req, res) => {
 };
 
 module.exports = withSentry(withOAuthLink(linkAccount, { provider: 'strava', verifyState }));
+
+// Al sacar Strava (STRAVA_SUNSET=1) este endpoint deja de hacer nada: ver api/_lib/strava-sunset.js
+module.exports = require('./_lib/strava-sunset').guardStravaSunset(module.exports, 'gone');
