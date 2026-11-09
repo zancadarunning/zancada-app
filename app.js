@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T19:07:00Z';
+const APP_VERSION = '2026-11-09T19:18:37Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8472,13 +8472,21 @@ function warmCoolMinutes(d){
   if(!d || !(d.dist > 0) || d.raceDay || d.typeKey === 'rest') return null;
   return { warm: ['intervals','tempo','fartlek','hills','progression','test'].includes(d.typeKey) ? 10 : 5, cool: 5 };
 }
-// "Más 5 min de calentamiento y 5 min de vuelta a la calma · 35 min en total" (el total solo en el plan por tiempo, donde el número principal ya está en minutos).
+// Minutos del tramo principal de una sesión (el test de nivel son siempre 12).
+function planMainMinutes(d){ return d.typeKey === 'test' ? 12 : planDurationMin(d); }
+// Lo que se MUESTRA como cantidad de la sesión. Plan por tiempo: el total, con el calentamiento y la vuelta a la calma adentro (25 min de zona 2 se ven como 35 min). Plan por distancia: la distancia del tramo principal, igual que siempre
+// (el calentamiento y la vuelta a la calma van en una línea aparte, ver planWarmCoolText). planAmountText() sigue siendo SOLO el tramo principal.
+function planShownAmountText(d){
+  if(!(d.dist>0)) return '';
+  const w = isTimeMode() ? warmCoolMinutes(d) : null;
+  return w ? `${planMainMinutes(d) + w.warm + w.cool} ${t('time_unit_min')}` : planAmountText(d);
+}
+// Línea chica de la tarjeta de Hoy. Por tiempo: de qué se compone el total ("Incluye 5 min de calentamiento, 25 min de tramo principal y 5 min de vuelta a la calma"). Por distancia: "Más 5 min de calentamiento y 5 min de vuelta a la calma".
 function planWarmCoolText(d){
   const w = warmCoolMinutes(d);
   if(!w) return '';
-  let s = t('plan_warmcool_line', {warm: w.warm, cool: w.cool});
-  if(isTimeMode()) s += ' · ' + t('plan_warmcool_total', {total: planDurationMin(d) + w.warm + w.cool});
-  return s;
+  if(isTimeMode()) return t('plan_warmcool_breakdown', {warm: w.warm, main: planMainMinutes(d), cool: w.cool});
+  return t('plan_warmcool_line', {warm: w.warm, cool: w.cool});
 }
 function planAmountText(d){
   if(!(d.dist>0)) return '';
@@ -9403,7 +9411,7 @@ function renderHome(){
   // escapa antes de insertarlo como HTML -- mismo criterio que ya usa renderPlan().
   const nextDescLines = ((today.custom && !raceToday) ? escapeHtml(lbl.desc) : lbl.desc).split('\n').filter(Boolean);
   document.getElementById('home-next-desc').innerHTML = nextDescLines.map(line=>`<div class="next-session-bullet">${line}</div>`).join('');
-  document.getElementById('home-next-dist').textContent = raceToday ? `${fmtDist(raceToday.distKm, 1)} ${distUnit()}` : planAmountText(today);
+  document.getElementById('home-next-dist').textContent = raceToday ? `${fmtDist(raceToday.distKm, 1)} ${distUnit()}` : planShownAmountText(today);
   const nextTotalEl = document.getElementById('home-next-total');
   if(nextTotalEl) nextTotalEl.textContent = raceToday ? '' : planWarmCoolText(today);
   document.getElementById('home-next-zone').innerHTML = (!raceToday && today.dist>0 && today.zone) ? `<span class="zone-chip zone-${today.zone}">${t('zone_word')} ${today.zone}</span>` : '';
@@ -9547,7 +9555,7 @@ function renderHome(){
     // la altura y el color de un <div> -- un lector de pantalla no tenía forma de saber qué
     // entrenamiento había cada día. dayLabel repite en texto exactamente lo que el ojo ya ve.
     const dayName = t('day_'+d.day);
-    const dayLabel = isRest ? `${dayName}: ${planLabel(d).type}` : `${dayName}: ${planAmountText(d)}${d.zone ? ', '+t('zone_word')+' '+d.zone : ''}`;
+    const dayLabel = isRest ? `${dayName}: ${planLabel(d).type}` : `${dayName}: ${planShownAmountText(d)}${d.zone ? ', '+t('zone_word')+' '+d.zone : ''}`;
     return `<div class="wd-col ${isRest?'rest':'training'} ${isToday?'today':''}" role="listitem" aria-label="${escapeHtml(dayLabel)}">
       <div class="wd-bar-wrap" aria-hidden="true"><div class="wd-bar" style="height:${h}px; ${zc}"></div></div>
       <div class="wd-lbl" aria-hidden="true">${t('day_'+d.day).slice(0,2)}</div>
@@ -9895,7 +9903,7 @@ function buildDayListHtml(wd){
     // Sin botón "Sincronizar" en el ejercicio del día (pedido del usuario): las carreras llegan solas desde el reloj conectado.
     if(d.typeKey==='test' && !d.testRead && d.status!=='skipped') statusBlock += `<div style="margin-top:12px;"><button class="btn btn-primary btn-sm" data-on-click="event.stopPropagation(); openLevelTest()">${t('ltest_load_btn')}</button></div>`;
     planSheetData[i] = buildSessionSheetHtml({d, date:dayIso, title:lblType, lblDesc, statusBlock, isEventDay});
-    const kmHtml = isEventDay ? (eventAmountText ? `<span class="day-km-inline">${eventAmountText}</span>` : '') : (d.dist>0 ? `<span class="day-km-inline">${planAmountText(d)}</span>` : (extraRunAmountText ? `<span class="day-km-inline">${extraRunAmountText}</span>` : ''));
+    const kmHtml = isEventDay ? (eventAmountText ? `<span class="day-km-inline">${eventAmountText}</span>` : '') : (d.dist>0 ? `<span class="day-km-inline">${planShownAmountText(d)}</span>` : (extraRunAmountText ? `<span class="day-km-inline">${extraRunAmountText}</span>` : ''));
     return `<div>
       <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" data-idx="${i}"${(wd.mode==='current' && canEdit && !isEventDay && !d.status && !d.raceDay) ? (d.dist>0 ? ' data-src="1" data-drop="1"' : ' data-drop="1"') : ''} data-zone="${(d.dist>0 && d.zone && !isEventDay)?d.zone:''}" data-on-click="toggleDay(${i})">
         <div class="day-badge"><div class="d">${t('day_'+d.day).slice(0,3)}</div>${dateLbl?`<div class="mono muted" style="font-size:10px; margin-top:2px;">${dateLbl}</div>`:''}</div>
@@ -14304,7 +14312,7 @@ function checkPendingRating(){
   const raceDay = state.weekStart ? raceInfoForDate(addDaysToIsoLocal(state.weekStart, idx)) : null;
   document.getElementById('rating-session-desc').textContent = raceDay
     ? `${t('day_'+d.day)}: ${t('plan_race_day_type')}${raceDay.name ? ' · ' + raceDay.name : ''}`
-    : `${t('day_'+d.day)}: ${lbl.type}${d.dist>0?' · '+planAmountText(d):''}`;
+    : `${t('day_'+d.day)}: ${lbl.type}${d.dist>0?' · '+planShownAmountText(d):''}`;
   ratingTargetIdx = idx;
   document.getElementById('rating-modal').style.display = 'block';
 }
@@ -14354,7 +14362,7 @@ function buildSessionFeedbackMessage(d, run, rating){
   if(d.dist>0){
     const typeLabel = t('type_'+d.typeKey);
     vars.type = typeLabel.charAt(0).toLowerCase() + typeLabel.slice(1);
-    vars.planned = planAmountText(d);
+    vars.planned = planShownAmountText(d);
     return t('coach_feedback_'+rating, vars);
   }
   return t('coach_feedback_'+rating+'_extra', vars);
