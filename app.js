@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T20:31:16Z';
+const APP_VERSION = '2026-11-09T20:36:31Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3279,6 +3279,41 @@ async function disconnectGarminNow(){
    que todo esto queda inerte -- mismo patrón que haptic(). */
 // Los datos de Health Connect los puede escribir CUALQUIER app del teléfono con permiso: se acotan a rangos humanos antes de guardarlos (el servidor hace lo mismo con los relojes con API propia).
 function hcNum(v, min, max){ const n = Number(v); return Number.isFinite(n) && n >= min && n <= max ? n : null; }
+/* Series de Health Connect (pulso y distancia acumulada, tiempo en segundos desde el inicio). Los datos los puede escribir CUALQUIER app: se acotan a rangos humanos y se descarta todo lo que no cierre.
+   Sale series = {t, hr, paceMin, distM}: la misma forma que las de los relojes con API propia (curva de pulso y de ritmo en el detalle) más distM, que permite leer la carrera por tramos sin ruta GPS (evaluateRunSteps). */
+function hcSeriesFromExercise(ex, durationSec){
+  if(!ex) return null;
+  const nums = (a, lo, hi) => Array.isArray(a) && a.length >= 10 && a.length <= 1000 && a.every(v => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi);
+  const maxT = Math.max(60, (durationSec || 0) + 120);
+  const incr = a => a.every((v, i) => i === 0 || v >= a[i - 1]);
+  const hasD = nums(ex.distT, 0, maxT) && nums(ex.distM, 0, 500000) && ex.distT.length === ex.distM.length && incr(ex.distT) && incr(ex.distM);
+  const hasH = nums(ex.hrT, 0, maxT) && nums(ex.hrBpm, 30, 250) && ex.hrT.length === ex.hrBpm.length && incr(ex.hrT);
+  if(!hasD && !hasH) return null;
+  const t = hasD ? ex.distT.slice() : ex.hrT.slice();
+  let hr = null;
+  if(hasH){
+    hr = new Array(t.length).fill(null);
+    let j = 0;
+    for(let i = 0; i < t.length; i++){
+      while(j + 1 < ex.hrT.length && Math.abs(ex.hrT[j + 1] - t[i]) <= Math.abs(ex.hrT[j] - t[i])) j++;
+      if(Math.abs(ex.hrT[j] - t[i]) <= 30) hr[i] = Math.round(ex.hrBpm[j]);
+    }
+    if(hr.filter(v => v != null).length < 10) hr = null;
+  }
+  let paceMin = null, distM = null;
+  if(hasD){
+    distM = ex.distM.slice();
+    paceMin = new Array(t.length).fill(null);
+    let j = 0;
+    for(let i = 1; i < t.length; i++){
+      while(j < i && t[i] - t[j] > 45) j++;   // ventana de ~30-45 s para suavizar
+      const dt = t[i] - t[j], dm = distM[i] - distM[j];
+      if(dt >= 15 && dm > 5){ const p = (dt / 60) / (dm / 1000); if(p >= 2 && p <= 20) paceMin[i] = Math.round(p * 100) / 100; }
+    }
+    if(paceMin.filter(v => v != null).length < 10) paceMin = null;
+  }
+  return {t, hr, paceMin, distM};
+}
 function healthConnectExerciseToRun(ex){
   const hcDistKm = hcNum((ex.distanceMeters || 0) / 1000, 0, 500) || 0;
   const hcDur = hcNum(ex.durationSec || 0, 0, 48 * 3600) || 0;
@@ -3300,7 +3335,7 @@ function healthConnectExerciseToRun(ex){
     points: [],
     splits: [],
     splitsV: 3,
-    series: null,
+    series: hcSeriesFromExercise(ex, hcDur),
     shoeId: null,
     source: 'healthconnect'
   };
@@ -3392,6 +3427,12 @@ async function syncHealthConnectNow(){
     const knownIds = new Set((state.runs||[]).map(r=>r.healthConnectId));
     dismissedIdsFor('healthconnect').forEach(id => knownIds.add(id));   // las que la persona borró a mano no se vuelven a importar
     const hcNow = Date.now();
+    let hcEnriched = false;
+    (exercises||[]).forEach(ex => {
+      if(!ex || typeof ex.id !== 'string') return;
+      const known = (state.runs||[]).find(r => r.healthConnectId === ex.id);
+      if(known && !known.series){ const ser = hcSeriesFromExercise(ex, known.durationSec); if(ser){ known.series = ser; hcEnriched = true; } }
+    });
     const newRuns = (exercises||[])
       .filter(ex=>ex && typeof ex.id === 'string' && ex.id.length <= 100)
       .filter(ex=>{ const t0 = Date.parse(ex.startTime); return Number.isFinite(t0) && t0 > Date.UTC(2000,0,1) && t0 < hcNow + 24*3600*1000; })   // fecha creíble: ni de antes del 2000 ni del futuro
@@ -3420,7 +3461,7 @@ async function syncHealthConnectNow(){
       showToast(t('hc_new_runs_toast', {n: newRuns.length}), 'success');
       renderHistory(); renderHome(); renderPerfil();
     }
-    return {synced:newRuns.length>0};
+    return {synced:newRuns.length>0 || hcEnriched};
   }catch(e){
     console.error(e);
     return {synced:false, error:e.message};
@@ -16640,10 +16681,16 @@ function planStepsFromPayload(p){
   return {steps, checkFaster: isRepeat && p.typeKey !== 'hills'};
 }
 function evaluateRunSteps(run, plan, zones){
-  const pts = ((run && run.points) || []).filter(p => p && typeof p.t === 'number' && isFinite(p.t) && isFinite(p.lat) && isFinite(p.lon));
+  let pts = ((run && run.points) || []).filter(p => p && typeof p.t === 'number' && isFinite(p.t) && isFinite(p.lat) && isFinite(p.lon));
+  let cum = null;
+  // sin ruta GPS (Health Connect): la distancia acumulada en el tiempo alcanza para cortar los tramos
+  const sd = run && run.series && Array.isArray(run.series.t) && Array.isArray(run.series.distM) && run.series.t.length === run.series.distM.length ? run.series : null;
+  if(pts.length < 10 && sd && sd.t.length >= 10){ pts = sd.t.map(tt => ({t: tt})); cum = sd.distM.map(x => x - sd.distM[0]); }
   if(!plan || !plan.steps || plan.steps.length < 2 || pts.length < 10 || !(run.distanceKm > 0)) return null;
-  const cum = [0];
-  for(let i = 1; i < pts.length; i++) cum.push(cum[i-1] + gpsStepKm(pts[i-1], pts[i]) * 1000);
+  if(!cum){
+    cum = [0];
+    for(let i = 1; i < pts.length; i++) cum.push(cum[i-1] + gpsStepKm(pts[i-1], pts[i]) * 1000);
+  }
   const raw = cum[cum.length-1];
   if(!(raw > 100)) return null;
   const k = run.distanceKm * 1000 / raw;   // la distancia del reloj manda; la ruta (recortada) solo reparte cuándo se hizo cada tramo
