@@ -1291,3 +1291,19 @@ test('chat: Zonda sabe qué hace la app por su cuenta (recorte tras dos faltazos
   assert.ok(SRC.includes('le ofrece al corredor actualizar sus ritmos'));
   assert.ok(SRC.includes('le pregunta qué días corre la semana que viene'));
 });
+
+test('chat: las descripciones de las herramientas dicen lo que de verdad hacen (volumen sin tocar carrera/test, minutos por tiempo, rechazo en día de carrera) y el pedido real entra en los topes del servidor', () => {
+  const start = SRC.indexOf('const TOOLS = [');
+  const end = SRC.indexOf('\n];', start) + 3;
+  assert.ok(start > 0 && end > start);
+  const tools = new Function('DAY_KEYS', SRC.slice(start, end).replace('const TOOLS = ', 'return '))(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
+  const byName = n => tools.find(t => t.name === n);
+  assert.match(byName('ajustar_volumen_semana').description, /minutos si el corredor entrena por tiempo/);
+  assert.match(byName('ajustar_volumen_semana').description, /No toca la carrera objetivo, el test de nivel ni el día de una carrera cargada/);
+  assert.match(byName('modificar_sesion').description, /No sirve para el día de una carrera/);
+  // el pedido REAL (herramientas de la app + un contexto de tamaño normal) tiene que pasar el filtro del servidor: la copia vieja de las herramientas en test/support no lo prueba
+  const { sanitizeChatRequest } = require('../api/_lib/chat-guard');
+  const system = 'Sos "Zonda", el entrenador virtual dentro de la app Zancada. ' + 'x'.repeat(15000);
+  const r = sanitizeChatRequest({ system, tools: JSON.parse(JSON.stringify(tools)), messages: [{ role: 'user', content: 'hola' }] });
+  assert.equal(r.ok, true, r.error || JSON.stringify(r));
+});
