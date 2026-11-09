@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T18:17:40Z';
+const APP_VERSION = '2026-11-09T18:34:09Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -14159,7 +14159,10 @@ function checkPendingRating(){
   if(idx < 0) return;
   const d = state.plan[idx];
   const lbl = planLabel(d);
-  document.getElementById('rating-session-desc').textContent = `${t('day_'+d.day)}: ${lbl.type}${d.dist>0?' · '+planAmountText(d):''}`;
+  const raceDay = raceInfoForDate(addDaysToIsoLocal(state.weekStart, idx));
+  document.getElementById('rating-session-desc').textContent = raceDay
+    ? `${t('day_'+d.day)}: ${t('plan_race_day_type')}${raceDay.name ? ' · ' + raceDay.name : ''}`
+    : `${t('day_'+d.day)}: ${lbl.type}${d.dist>0?' · '+planAmountText(d):''}`;
   ratingTargetIdx = idx;
   document.getElementById('rating-modal').style.display = 'block';
 }
@@ -14181,6 +14184,19 @@ function dismissRating(){
 // dato real de la sesión. Sin d.linkedRunId (no debería pasar -- un día 'done' siempre lo
 // tiene, ver autoMarkSessionDone/relinkTodayRun) no hay número real que mostrar, así que no
 // se manda nada en vez de inventar una devolución sin datos.
+// Una carrera cargada en "Próximos eventos" (o la meta del perfil) deja guardada por debajo la sesión normal de ese día (solo se ve distinta en pantalla). Sin esto, la devolución de Zonda comparaba la carrera
+// contra esa sesión ("corriste 172 min, tenías 30 min planeados") aunque el reloj había recibido la carrera de 21 km. Para ese día la devolución es la de una carrera y nunca se compara con el plan.
+function localIsoOfTimestamp(v){
+  const dt = new Date(v);
+  if(isNaN(dt.getTime())) return null;
+  return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+}
+function raceInfoForDate(dateIso){
+  if(!dateIso) return null;
+  const ev = state.event && state.event.date === dateIso ? state.event : null;
+  const isRace = !!ev || state.lastEventDate === dateIso || !!(state.profile && state.profile.raceDate === dateIso);
+  return isRace ? { name: ev ? String(ev.name || '') : '' } : null;
+}
 function buildSessionFeedbackMessage(d, run, rating){
   if(!run || !(run.distanceKm>0) || !(run.durationSec>0)) return null;
   const pace = (run.durationSec/60)/run.distanceKm;
@@ -14189,6 +14205,7 @@ function buildSessionFeedbackMessage(d, run, rating){
     actual: isTimeMode() ? `${Math.max(1, Math.round(run.durationSec/60))} ${t('time_unit_min')}` : `${fmtDist(run.distanceKm,2)} ${distUnit()}`,
     pace: `${fmtPace(pace)}/${distUnit()}`
   };
+  if(raceInfoForDate(localIsoOfTimestamp(run.date))) return t('coach_feedback_race', vars);
   // d.dist>0 es el mismo criterio que ya usa renderPlan para distinguir un día CON sesión
   // planeada de uno sin ella (descanso, o una carrera espontánea sin nada armado ese día) --
   // ahí la devolución no tiene con qué comparar, así que usa la variante "_extra".
@@ -14211,7 +14228,8 @@ async function submitRating(value){
   const run = d.linkedRunId ? (state.runs||[]).find(r=>r.id===d.linkedRunId) : null;
   const feedbackMsg = buildSessionFeedbackMessage(d, run, value);
   if(feedbackMsg){ state.chat.push({role:'coach', text: feedbackMsg, ts:Date.now(), noAi:true}); renderChat(); }
-  if(value === 'mal'){
+  const wasRace = !!(run && raceInfoForDate(localIsoOfTimestamp(run.date)));
+  if(value === 'mal' && !wasRace){
     if(await showConfirm(t('rating_lower_intensity_confirm'))){
       lowerRemainingIntensity(-15);
       state.chat.push({role:'coach', text: t('rating_lowered_msg'), ts:Date.now()});

@@ -93,11 +93,14 @@ function buildMessage(runs, source, lang, imperial, planInfo) {
 const QUALITY_TYPES = new Set(['intervals', 'tempo', 'fartlek', 'hills', 'progression', 'test']);
 function warmCoolMin(d) { return typeof d.typeKey === 'string' && d.typeKey !== 'rest' ? (QUALITY_TYPES.has(d.typeKey) ? 10 : 5) + 5 : 0; }
 
-function planFor(run, plan, weekStart, tz, timeMode) {
+function planFor(run, plan, weekStart, tz, timeMode, raceDates) {
   if (!Array.isArray(plan) || !/^\d{4}-\d{2}-\d{2}$/.test(String(weekStart || ''))) return null;
   const runMs = new Date(run && run.date).getTime();
   if (!Number.isFinite(runMs)) return null;
-  const idx = dayNum(localDateKey(runMs, tz || DEFAULT_TZ)) - dayNum(String(weekStart));
+  const runKey = localDateKey(runMs, tz || DEFAULT_TZ);
+  // un día de carrera (evento cargado, el último que pasó o la meta del perfil) no se compara con la sesión normal que queda guardada por debajo
+  if (Array.isArray(raceDates) && raceDates.includes(runKey)) return null;
+  const idx = dayNum(runKey) - dayNum(String(weekStart));
   if (!(idx >= 0 && idx <= 6)) return null;
   const d = plan[idx];
   if (!d || typeof d !== 'object') return null;
@@ -167,10 +170,10 @@ async function mergeAndNotify(mergeFn, base, headers, userId, runs, mode, source
     const added = [];
     for (const r of fresh) { if (await runExists(base, headers, userId, r.id)) added.push(r); }
     if (!added.length) return;
-    const stRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${encodeURIComponent(userId)}&select=lang:data->>lang,units:data->profile->>units,tz:data->profile->>tz,trainBy:data->profile->>trainBy,weekStart:data->>weekStart,plan:data->plan`, { headers });
+    const stRes = await fetch(`${base}/rest/v1/app_state?user_id=eq.${encodeURIComponent(userId)}&select=lang:data->>lang,units:data->profile->>units,tz:data->profile->>tz,trainBy:data->profile->>trainBy,weekStart:data->>weekStart,plan:data->plan,eventDate:data->event->>date,lastEventDate:data->>lastEventDate,goalRaceDate:data->profile->>raceDate`, { headers });
     const st = stRes.ok ? await stRes.json() : [];
     const lang = st && st[0] && st[0].lang, imperial = !!(st && st[0] && st[0].units === 'imperial');
-    const planInfo = added.length === 1 && st && st[0] ? planFor(added[0], st[0].plan, st[0].weekStart, st[0].tz, st[0].trainBy === 'time') : null;
+    const planInfo = added.length === 1 && st && st[0] ? planFor(added[0], st[0].plan, st[0].weekStart, st[0].tz, st[0].trainBy === 'time', [st[0].eventDate, st[0].lastEventDate, st[0].goalRaceDate].filter(Boolean)) : null;
     const msg = buildMessage(added, source, lang, imperial, planInfo);
     // misma "etiqueta" para todo entreno nuevo del usuario: si llega por dos marcas a la vez (Suunto y Strava), la segunda reemplaza
     // a la primera en vez de apilarse
