@@ -2784,6 +2784,8 @@ body{overflow-wrap:break-word;}
   @keyframes btn-busy-spin{to{transform:rotate(360deg);}}
   @media (prefers-reduced-motion:reduce){ .btn.is-busy::before{animation:none; border-right-color:currentColor; opacity:.5;} }
   body.strava-sunset .conn-strava{display:none;}
+  .next-session-total{margin:8px 2px 0; font-size:12.5px; line-height:1.4; color:var(--mist);}
+  .next-session-total:empty{display:none;}
   .watch-card h3{margin:0 0 6px;}
   .watch-row{padding:12px 0; border-top:1px solid var(--overlay-hairline);}
   .watch-row:first-of-type{border-top:0; padding-top:4px;}
@@ -3465,6 +3467,7 @@ body{overflow-wrap:break-word;}
         <div style="min-width:0;"><div class="big display" id="home-next-title">—</div></div>
         <div style="text-align:right; flex-shrink:0;"><div class="day-dist" id="home-next-dist"></div><div id="home-next-zone" style="margin-top:6px;"></div></div>
       </div>
+      <div class="next-session-total" id="home-next-total"></div>
       <div class="next-session-detail" id="home-next-detail">
         <div>
           <div class="next-session-bullets" id="home-next-desc"></div>
@@ -3784,6 +3787,19 @@ body{overflow-wrap:break-word;}
               <div id="workout-guide-progress-bar" style="height:100%; background:var(--hivis); width:100%; transform:scaleX(0); transform-origin:left; transition:transform .25s linear;"></div>
             </div>
             <p class="muted" id="workout-guide-remaining" style="margin:6px 0 0; font-size:12.5px;"></p>
+          </div>
+          <!-- Calentamiento y vuelta a la calma (siempre por tiempo, también en el plan por distancia). Los maneja wcTick() en app.js. -->
+          <div id="workout-guide-warmcool" style="display:none;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span class="tag" id="workout-guide-wc-tag"></span>
+            </div>
+            <div class="mono" id="workout-guide-wc-time" style="font-size:30px; font-weight:800; margin-top:10px;"></div>
+            <div style="height:8px; background:var(--asphalt-3); border-radius:4px; overflow:hidden; margin-top:10px;">
+              <div id="workout-guide-wc-bar" style="height:100%; background:var(--hivis); width:100%; transform:scaleX(0); transform-origin:left; transition:transform .25s linear;"></div>
+            </div>
+            <p class="muted" id="workout-guide-wc-hint" style="margin:8px 0 0; font-size:12.5px; line-height:1.5;"></p>
+            <p class="muted" id="workout-guide-wc-next" style="margin:4px 0 0; font-size:12.5px; line-height:1.5;"></p>
+            <button class="btn btn-outline btn-sm" id="workout-guide-wc-skip" data-on-click="skipWarmCool()" style="margin-top:12px;"></button>
           </div>
           <div id="workout-guide-done" style="display:none;">
             <span class="icon-sq" style="width:20px; height:20px; color:var(--hivis-text); margin-bottom:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6.5 9 17.5l-5-5"/></svg></span>
