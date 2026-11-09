@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T14:36:52Z';
+const APP_VERSION = '2026-11-09T18:17:40Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2130,7 +2130,36 @@ async function confirmMultiDeviceConnect(newBrand){
 // backend hace el borrado, esas carreras ya no están marcadas como de esa marca y no las
 // toca. persist() tiene que terminar ANTES de llamar al endpoint de desconexión, si no el
 // backend puede leer los datos viejos todavía.
+/* ---- Desconectar un reloj: el botón se bloquea y dice "Desconectando…" mientras se borra la conexión (antes no mostraba nada y parecía que no pasaba nada), y al terminar avisa. ---- */
+const disconnectingNow = {};
+const DISCONNECT_REFRESH = { strava:'updateStravaStatusDisplay', polar:'updatePolarStatusDisplay', wahoo:'updateWahooStatusDisplay', suunto:'updateSuuntoStatusDisplay', coros:'updateCorosStatusDisplay', garmin:'updateGarminStatusDisplay', healthconnect:'updateHealthConnectStatusDisplay' };
+function setDisconnecting(key, on){
+  const btn = document.getElementById(key + '-connect-btn');
+  if(!btn) return;
+  btn.disabled = !!on;
+  btn.classList.toggle('is-busy', !!on);
+  btn.setAttribute('aria-busy', on ? 'true' : 'false');
+  if(on) btn.textContent = t('disconnecting');
+}
+async function runDisconnect(key, brand, fn){
+  if(disconnectingNow[key]) return;
+  disconnectingNow[key] = true;
+  const wasConnected = !!(deviceConnections && deviceConnections[key]);
+  try{ await fn(); }
+  finally{
+    disconnectingNow[key] = false;
+    setDisconnecting(key, false);
+    // vuelve a pintar el botón según el estado real (si no se pudo desconectar sigue diciendo "Desconectar")
+    try{ const f = DISCONNECT_REFRESH[key]; if(f && typeof globalThis[f] === 'function') await globalThis[f](); }catch(e){}
+    if(wasConnected && deviceConnections && !deviceConnections[key]) showToast(t('disconnect_done', {brand}), 'success');
+  }
+}
 async function confirmKeepDataBeforeDisconnect(brand, sourceKey, idField){
+  const ok = await confirmKeepDataInner(brand, sourceKey, idField);
+  if(ok) setDisconnecting(sourceKey, true);   // ya confirmó: de acá en adelante se está desconectando de verdad
+  return ok;
+}
+async function confirmKeepDataInner(brand, sourceKey, idField){
   const matching = (state.runs||[]).filter(r=>r.source===sourceKey);
   if(!matching.length) return true;
   const keep = await showConfirm(t('device_disconnect_keep_confirm', {brand, count: matching.length}), {confirmText: t('device_disconnect_keep_btn')});
@@ -2204,6 +2233,7 @@ async function refreshDeviceConnections(){
     scheduleWatchSync();
   }catch(e){ console.error(e); }
   deviceConnectionsLoaded = true;
+  try{ renderWatchCard(); }catch(e){}
   renderPlan();
   if(document.getElementById('perfil-devices-summary')) renderPerfil();
 }
@@ -2238,7 +2268,8 @@ async function updateStravaStatusDisplay(){
     renderPlan();
   }catch(e){}
 }
-async function disconnectStrava(){
+async function disconnectStrava(){ return runDisconnect('strava', 'Strava', disconnectStravaNow); }
+async function disconnectStravaNow(){
   if(!currentUserId) return;
   if(!(await confirmKeepDataBeforeDisconnect('Strava', 'strava', 'stravaId'))) return;
   try{
@@ -2326,7 +2357,8 @@ async function updatePolarStatusDisplay(){
     renderPlan();
   }catch(e){}
 }
-async function disconnectPolar(){
+async function disconnectPolar(){ return runDisconnect('polar', 'Polar', disconnectPolarNow); }
+async function disconnectPolarNow(){
   if(!currentUserId) return;
   if(!(await confirmKeepDataBeforeDisconnect('Polar', 'polar', 'polarId'))) return;
   try{
@@ -2405,7 +2437,8 @@ async function updateWahooStatusDisplay(){
     renderPlan();
   }catch(e){}
 }
-async function disconnectWahoo(){
+async function disconnectWahoo(){ return runDisconnect('wahoo', 'Wahoo', disconnectWahooNow); }
+async function disconnectWahooNow(){
   if(!currentUserId) return;
   if(!(await confirmKeepDataBeforeDisconnect('Wahoo', 'wahoo', 'wahooId'))) return;
   try{
@@ -2618,7 +2651,8 @@ async function updateSuuntoStatusDisplay(){
     renderPlan();
   }catch(e){}
 }
-async function disconnectSuunto(){
+async function disconnectSuunto(){ return runDisconnect('suunto', 'Suunto', disconnectSuuntoNow); }
+async function disconnectSuuntoNow(){
   if(!currentUserId) return;
   if(!(await confirmKeepDataBeforeDisconnect('Suunto', 'suunto', 'suuntoId'))) return;
   try{
@@ -2844,6 +2878,7 @@ async function syncPlanToSuunto(force){
         if(result){
           if(result.reason === 'not_connected'){ deviceConnections.suunto = false; }
           const ok = res.ok && !result.error && !result.reason && !result.failed;
+          if(ok){ markWatchSent('suunto'); dirty = true; }
           // Cualquier respuesta que no sea un éxito (token vencido, guides_forbidden, error del servidor...) frena los reintentos un rato: sin esto, el guardado
           // que sigue a cada intento fallido (persist -> scheduleSuuntoSync) volvía a disparar el envío cada 4 segundos, gastando la cuota compartida de Suunto.
           if(result.reason === 'rate_limited'){ suuntoBlockedUntil = Date.now() + 60*60*1000; }
@@ -2906,6 +2941,7 @@ async function syncPlanToWahoo(force){
           // 'unchanged': el servidor ya tenía este mismo plan (lo mandó otro teléfono): cuenta como éxito, sin ids nuevos
           const unchanged = result.reason === 'unchanged';
           const ok = res.ok && !result.error && (!result.reason || unchanged) && !result.failed;
+          if(ok){ markWatchSent('wahoo'); dirty = true; }
           if(result.reason === 'rate_limited') wahooBlockedUntil = Date.now() + 5.5*60*1000;
           else if(!ok) wahooBlockedUntil = Date.now() + 15*60*1000;
           const next = {};
@@ -2979,6 +3015,7 @@ async function syncPlanToCoros(force){
         if(result){
           if(result.reason === 'not_connected'){ deviceConnections.coros = false; }
           const ok = res.ok && !result.error && !result.reason && !result.failed;
+          if(ok){ markWatchSent('coros'); dirty = true; }
           if(result.reason === 'not_enabled') corosBlockedUntil = Date.now() + 24*3600*1000;      // todavía no está habilitado para esta cuenta: no insistir
           else if(result.reason === 'cooldown' || result.reason === 'rate_limited'){
             // el servidor deja un envío cada 5 minutos: un cambio del plan que cae en esa espera se reintenta solo apenas termina (antes quedaba sin enviar hasta el próximo cambio)
@@ -3056,7 +3093,8 @@ async function updateCorosStatusDisplay(){
     renderPlan();
   }catch(e){}
 }
-async function disconnectCoros(){
+async function disconnectCoros(){ return runDisconnect('coros', 'COROS', disconnectCorosNow); }
+async function disconnectCorosNow(){
   if(!currentUserId) return;
   if(!(await confirmKeepDataBeforeDisconnect('COROS', 'coros', 'corosId'))) return;
   try{
@@ -3132,6 +3170,7 @@ async function syncPlanToGarmin(force){
         if(result){
           if(result.reason === 'not_connected'){ deviceConnections.garmin = false; }
           const ok = res.ok && !result.error && !result.reason && !result.failed;
+          if(ok){ markWatchSent('garmin'); dirty = true; }
           if(result.reason === 'cooldown' || result.reason === 'rate_limited'){
             garminBlockedUntil = Date.now() + 6*60*1000;
             scheduleGarminSync(6*60*1000 + 2000);   // el servidor deja un envío cada 5 minutos: lo que cae en esa espera se reintenta solo
@@ -3194,7 +3233,8 @@ async function updateGarminStatusDisplay(){
     renderPlan();
   }catch(e){}
 }
-async function disconnectGarmin(){
+async function disconnectGarmin(){ return runDisconnect('garmin', 'Garmin', disconnectGarminNow); }
+async function disconnectGarminNow(){
   if(!currentUserId) return;
   if(!(await confirmKeepDataBeforeDisconnect('Garmin', 'garmin', 'garminId'))) return;
   try{
@@ -3410,7 +3450,8 @@ function updateHealthConnectStatusDisplay(){
     if(btn){ btn.textContent = t('healthconnect_connect'); btn.setAttribute('data-on-click', 'connectHealthConnect()'); }
   }
 }
-async function disconnectHealthConnect(){
+async function disconnectHealthConnect(){ return runDisconnect('healthconnect', 'Health Connect', disconnectHealthConnectNow); }
+async function disconnectHealthConnectNow(){
   // Le faltaba el mismo chequeo que ya tienen los otros 4 (confirmMultiDeviceConnect):
   // borraba las carreras de Health Connect directo, sin ofrecer convertirlas a manuales
   // primero -- reportado en una auditoría.
@@ -9141,8 +9182,87 @@ function refreshHomeAlerts(){
   try{ renderLevelTestUI(); }catch(e){}   // dibuja el aviso de test salteado y aplica el tope
   limitHomeAlerts(2);
 }
+/* ---- Hoy en tu reloj ----
+   Ningún reloj arranca solo la sesión de la app de terceros al tocar "Correr": cada marca la deja en su cuenta, el reloj la baja al sincronizarse y hay que elegirla desde el reloj. Esta tarjeta hace ese camino corto y
+   visible: dice si la sesión de hoy YA está en el reloj, deja enviarla con un toque si no, y muestra los 2 pasos para empezarla en cada marca. */
+const WATCH_PLAN_BRANDS = [
+  {key:'garmin', name:'Garmin', sent:'garminSent', sync:f => syncPlanToGarmin(f)},
+  {key:'suunto', name:'Suunto', sent:'suuntoSent', sync:f => syncPlanToSuunto(f)},
+  {key:'wahoo',  name:'Wahoo',  sent:'wahooSent',  sync:f => syncPlanToWahoo(f)},
+  {key:'coros',  name:'COROS',  sent:'corosSent',  sync:f => syncPlanToCoros(f)},
+];
+let watchHowOpen = false;
+const watchSending = {}, watchLastPress = {};
+const WATCH_PRESS_COOLDOWN_MS = 5 * 60 * 1000;   // el servidor deja un envío cada 5 minutos por marca (y Suunto tiene una cuota semanal compartida): el botón no se puede machacar
+function markWatchSent(brand){
+  if(!state) return;
+  if(!state.watchSentAt || typeof state.watchSentAt !== 'object') state.watchSentAt = {};
+  state.watchSentAt[brand] = Date.now();
+}
+// La sesión de hoy, solo si todavía hay algo para llevar al reloj (con distancia, sin hacer, sin saltear y que no sea la carrera).
+function watchTodayDay(){
+  const d = (state && state.plan || [])[(new Date().getDay() + 6) % 7];
+  if(!d || !(d.dist > 0) || d.typeKey === 'rest' || d.raceDay || d.status === 'done' || d.status === 'skipped') return null;
+  return d;
+}
+function watchAgoText(ts){
+  const min = Math.max(0, Math.round((Date.now() - ts) / 60000));
+  try{
+    const rtf = new Intl.RelativeTimeFormat(LOCALE_MAP[lang] || lang, {numeric:'auto'});
+    if(min < 60) return rtf.format(-min, 'minute');
+    if(min < 60 * 24) return rtf.format(-Math.round(min / 60), 'hour');
+    return rtf.format(-Math.round(min / 1440), 'day');
+  }catch(e){ return ''; }
+}
+function renderWatchCard(){
+  const el = document.getElementById('home-watch-card');
+  if(!el) return;
+  const brands = WATCH_PLAN_BRANDS.filter(b => deviceConnections && deviceConnections[b.key]);
+  if(!state || !state.onboarded || !brands.length || !watchTodayDay()){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  const today = todayLocalISO();
+  const rows = brands.map(b => {
+    const sentToday = !!(state[b.sent] && state[b.sent][today]);
+    const at = state.watchSentAt && Number(state.watchSentAt[b.key]);
+    const status = sentToday
+      ? (at ? t('watch_card_sent_ago', {brand:b.name, ago:watchAgoText(at)}) : t('watch_card_sent', {brand:b.name}))
+      : t('watch_card_pending', {brand:b.name});
+    const sending = !!watchSending[b.key];
+    const btnLabel = sending ? t('watch_card_btn_sending') : (sentToday ? t('watch_card_btn_again') : t('watch_card_btn'));
+    const btnClass = sentToday ? 'btn btn-outline btn-sm' : 'btn btn-primary btn-sm';
+    const steps = watchHowOpen
+      ? '<ol class="watch-steps"><li>' + escapeHtml(t('watch_steps_' + b.key + '_1')) + '</li><li>' + escapeHtml(t('watch_steps_' + b.key + '_2')) + '</li></ol>'
+      : '';
+    return '<div class="watch-row">'
+      + '<div class="watch-status"><span class="watch-dot' + (sentToday ? ' sent' : '') + '"></span><span>' + escapeHtml(status) + '</span></div>'
+      + '<div class="watch-actions"><button type="button" class="' + btnClass + '" id="watch-send-' + b.key + '" data-on-click="sendPlanToWatchNow(\'' + b.key + '\')"' + (sending ? ' disabled' : '') + '>' + escapeHtml(btnLabel) + '</button>'
+      + '<button type="button" class="btn btn-outline btn-sm" data-on-click="toggleWatchHow()" aria-expanded="' + (watchHowOpen ? 'true' : 'false') + '">' + escapeHtml(t(watchHowOpen ? 'watch_card_how_hide' : 'watch_card_how')) + '</button></div>'
+      + steps + '</div>';
+  }).join('');
+  el.innerHTML = '<h3>' + escapeHtml(t('watch_card_title')) + '</h3>' + rows + (watchHowOpen ? '<p class="watch-note">' + escapeHtml(t('watch_card_note')) + '</p>' : '');
+  el.style.display = '';
+}
+function toggleWatchHow(){ watchHowOpen = !watchHowOpen; renderWatchCard(); }
+async function sendPlanToWatchNow(key){
+  const b = WATCH_PLAN_BRANDS.find(x => x.key === key);
+  if(!b || watchSending[key]) return;
+  if(Date.now() - (watchLastPress[key] || 0) < WATCH_PRESS_COOLDOWN_MS){ showToast(t('watch_card_toast_wait'), 'info'); return; }
+  watchLastPress[key] = Date.now();
+  watchSending[key] = true;
+  renderWatchCard();
+  let result = null;
+  try{ result = await b.sync(true); }catch(e){ result = null; }
+  watchSending[key] = false;
+  let msg, type = 'error';
+  if(result && !result.error && !result.failed && (!result.reason || result.reason === 'unchanged')){ msg = t('watch_card_toast_ok', {brand:b.name}); type = 'success'; }
+  else if(result && (result.reason === 'cooldown' || result.reason === 'rate_limited')) msg = t('watch_card_toast_wait');
+  else if(result && result.reason === 'not_connected') msg = t('watch_card_toast_reconnect', {brand:b.name});
+  else { msg = t('watch_card_toast_error'); watchLastPress[key] = 0; }   // un fallo no gasta el enfriamiento: se puede reintentar enseguida
+  showToast(msg, type);
+  renderWatchCard();
+}
 function renderHome(){
   scheduleMapPreload();
+  try{ renderWatchCard(); }catch(e){}
   renderHomePain();
   renderHomeRecap();
   renderHomeRecal();

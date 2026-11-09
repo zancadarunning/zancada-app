@@ -454,3 +454,142 @@ test('la política de privacidad dice la verdad de los push (Firebase en Android
   assert.equal((p.match(/Apple/g) || []).length >= 12, true, 'Apple aparece en las dos secciones de los 6 idiomas');
   assert.ok(!/navegador|browser|navigateur|Browser|navegador|PWA|Safari/.test(p.replace(/Apple’s|Apple's/g, '')), 'sigue hablando solo de la app (hay otro test que lo exige)');
 });
+
+// ---------- Hoy en tu reloj ----------
+function mkWatchEnv(opts) {
+  const app = loadApp();
+  ready(app);
+  app.state.onboarded = true;
+  const idx = (new Date().getDay() + 6) % 7;
+  app.state.plan = app.state.plan.map((d, i) => (i === idx ? Object.assign({}, d, { typeKey: 'easy', dist: 6, status: undefined, raceDay: false }) : d));
+  const el = { style: {}, innerHTML: 'x' };
+  const realGet = app.document ? null : null;
+  return { app, el, idx };
+}
+
+test('la tarjeta "Hoy en tu reloj": solo aparece con un reloj con envío de plan conectado y una sesión de hoy por hacer', () => {
+  const { app } = mkWatchEnv();
+  assert.ok(app.watchTodayDay(), 'hay sesión de hoy');
+  const idx = (new Date().getDay() + 6) % 7;
+  for (const patch of [{ status: 'done' }, { status: 'skipped' }, { typeKey: 'rest', dist: 0 }, { raceDay: true }, { dist: 0 }]) {
+    const a2 = mkWatchEnv().app;
+    a2.state.plan[idx] = Object.assign({}, a2.state.plan[idx], patch);
+    assert.equal(a2.watchTodayDay(), null, JSON.stringify(patch));
+  }
+});
+
+test('markWatchSent guarda el momento del último envío por marca', () => {
+  const { app } = mkWatchEnv();
+  const t0 = Date.now();
+  app.markWatchSent('garmin');
+  assert.ok(app.state.watchSentAt.garmin >= t0 && app.state.watchSentAt.garmin <= Date.now());
+  app.state.watchSentAt = 'roto';
+  app.markWatchSent('suunto');
+  assert.equal(typeof app.state.watchSentAt, 'object');
+  assert.ok(app.state.watchSentAt.suunto > 0);
+});
+
+test('la tarjeta explica el camino por marca (2 pasos en los 6 idiomas) y usa los textos de la app, escapados', () => {
+  const brands = ['garmin', 'suunto', 'wahoo', 'coros'];
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
+    const src = read('locales/' + l + '.js');
+    for (const k of ['watch_card_title', 'watch_card_sent', 'watch_card_sent_ago', 'watch_card_pending', 'watch_card_btn', 'watch_card_btn_again', 'watch_card_btn_sending', 'watch_card_how', 'watch_card_how_hide', 'watch_card_toast_ok', 'watch_card_toast_wait', 'watch_card_toast_reconnect', 'watch_card_toast_error', 'watch_card_note']) assert.ok(new RegExp(k + ':"[^"]{3,}"').test(src), l + ' ' + k);
+    for (const b of brands) for (const n of [1, 2]) assert.ok(new RegExp('watch_steps_' + b + '_' + n + ':"[^"]{15,}"').test(src), l + ' pasos ' + b + n);
+    assert.ok(/watch_card_sent_ago:"[^"]*\{brand\}[^"]*\{ago\}/.test(src) && /watch_card_toast_ok:"[^"]*\{brand\}/.test(src), l + ' placeholders');
+  }
+  const fn = SRC.slice(SRC.indexOf('function renderWatchCard(){'), SRC.indexOf('function toggleWatchHow()'));
+  assert.ok(fn.includes('escapeHtml(status)') && fn.includes("escapeHtml(t('watch_card_title'))") && !/innerHTML\s*=[^;]*\bb\.name\b(?!\))/.test(fn.replace(/t\('[^']+', \{brand:b\.name[^}]*\}\)/g, '')), 'todo texto pasa por escapeHtml');
+  assert.ok(fn.includes('data-on-click="sendPlanToWatchNow('), 'sin handlers inline: se usa data-on-click');
+});
+
+test('el botón de la tarjeta no machaca la API de la marca: enfriamiento de 5 min, mensajes claros, y un fallo no gasta el enfriamiento', () => {
+  assert.ok(SRC.includes('const WATCH_PRESS_COOLDOWN_MS = 5 * 60 * 1000;'));
+  const fn = SRC.slice(SRC.indexOf('async function sendPlanToWatchNow(key){'), SRC.indexOf('function renderHome(){'));
+  assert.ok(fn.includes('watchLastPress[key] = Date.now();') && fn.includes("showToast(t('watch_card_toast_wait'), 'info')"));
+  assert.ok(fn.includes("result.reason === 'not_connected'") && fn.includes("result.reason === 'cooldown' || result.reason === 'rate_limited'"));
+  assert.ok(fn.includes('watchLastPress[key] = 0;'), 'un error permite reintentar enseguida');
+  assert.ok(fn.includes('b.sync(true)'), 'usa el envío forzado de cada marca (el que ya respeta enfriamientos y topes del servidor)');
+  // los cuatro envíos automáticos marcan el momento del último envío exitoso
+  for (const b of ['garmin', 'suunto', 'wahoo', 'coros']) assert.ok(SRC.includes("if(ok){ markWatchSent('" + b + "'); dirty = true; }"), b);
+  assert.ok(SRC.includes('try{ renderWatchCard(); }catch(e){}\n  renderHomePain();') || SRC.includes('try{ renderWatchCard(); }catch(e){}'), 'se pinta con Inicio');
+});
+
+test('renderWatchCard: oculta la tarjeta sin conexiones, y con la marca conectada muestra el estado, el botón y los pasos', () => {
+  const card = { style: { display: 'none' }, innerHTML: '' };
+  const app = loadApp({ elements: { 'home-watch-card': card } });
+  ready(app);
+  app.state.onboarded = true;
+  const idx = (new Date().getDay() + 6) % 7;
+  app.state.plan[idx] = Object.assign({}, app.state.plan[idx], { typeKey: 'easy', dist: 6, status: undefined, raceDay: false });
+  app.setDeviceConnections({ strava: true, polar: true, garmin: false, suunto: false, wahoo: false, coros: false });
+  app.renderWatchCard();
+  assert.equal(card.style.display, 'none', 'Strava y Polar solo importan carreras: no hay nada que llevar al reloj');
+  assert.equal(card.innerHTML, '');
+  app.setDeviceConnections({ strava: false, polar: false, garmin: true, suunto: false, wahoo: false, coros: false });
+  app.renderWatchCard();
+  assert.equal(card.style.display, '', 'con Garmin conectado se muestra');
+  assert.match(card.innerHTML, /Hoy en tu reloj/);
+  assert.match(card.innerHTML, /todavía no se envió a tu Garmin/, 'pendiente: todavía no se mandó');
+  assert.match(card.innerHTML, /Enviar al reloj ahora/);
+  assert.ok(card.innerHTML.includes("data-on-click=\"sendPlanToWatchNow('garmin')\""));
+  assert.ok(!card.innerHTML.includes('watch-steps'), 'los pasos arrancan ocultos');
+  app.toggleWatchHow();
+  assert.match(card.innerHTML, /Entrenamiento → Entrenamiento de hoy → Iniciar/, 'paso a paso de Garmin');
+  assert.match(card.innerHTML, /Ocultar los pasos/);
+  app.toggleWatchHow();
+  // una vez enviada: lo dice y el botón pasa a "Volver a enviar"
+  app.state.garminSent = { [app.todayLocalISO()]: 'sig' };
+  app.markWatchSent('garmin');
+  app.renderWatchCard();
+  assert.match(card.innerHTML, /ya está en tu Garmin · enviada/);
+  assert.match(card.innerHTML, /Volver a enviar/);
+  // dos marcas: una fila por marca
+  app.setDeviceConnections({ garmin: true, suunto: true, wahoo: false, coros: true, strava: false, polar: false });
+  app.renderWatchCard();
+  assert.equal((card.innerHTML.match(/class="watch-row"/g) || []).length, 3);
+  // sin sesión hoy: se oculta
+  app.state.plan[idx] = Object.assign({}, app.state.plan[idx], { typeKey: 'rest', dist: 0 });
+  app.renderWatchCard();
+  assert.equal(card.style.display, 'none');
+});
+
+
+// ---------- botón de desconectar ----------
+test('desconectar un reloj: el botón se bloquea y dice "Desconectando…", no se puede tocar dos veces, y al terminar avisa', async () => {
+  const btn = { disabled: false, textContent: 'Desconectar', classList: { toggle(c, on) { this[c] = !!on; } }, setAttribute(k, v) { this[k] = v; } };
+  const app = loadApp({ elements: { 'garmin-connect-btn': btn } });
+  ready(app);
+  app.setDeviceConnections({ strava: false, polar: false, garmin: true, suunto: false, wahoo: false, coros: false });
+  app.setDisconnecting('garmin', true);
+  assert.equal(btn.textContent, 'Desconectando…');
+  assert.equal(btn.disabled, true);
+  assert.equal(btn.classList['is-busy'], true);
+  assert.equal(btn['aria-busy'], 'true');
+  app.setDisconnecting('garmin', false);
+  assert.equal(btn.disabled, false);
+  assert.equal(btn.classList['is-busy'], false);
+  // runDisconnect: ejecuta la desconexión una sola vez aunque se toque dos veces seguidas
+  let runs = 0, release;
+  const gate = new Promise(r => { release = r; });
+  const p1 = app.runDisconnect('garmin', 'Garmin', async () => { runs++; await gate; });
+  const p2 = app.runDisconnect('garmin', 'Garmin', async () => { runs++; });
+  release();
+  await Promise.all([p1, p2]);
+  assert.equal(runs, 1, 'el segundo toque no repite la desconexión');
+  assert.equal(btn.disabled, false, 'al terminar el botón vuelve a estar disponible');
+  // si la desconexión lanza un error, el botón igual se libera
+  await assert.rejects(() => app.runDisconnect('garmin', 'Garmin', async () => { throw new Error('fallo'); }));
+  assert.equal(btn.disabled, false);
+});
+
+test('las siete desconexiones pasan por runDisconnect, y la confirmación arranca el estado "Desconectando…"', () => {
+  for (const [fn, key, brand] of [['Strava', 'strava', 'Strava'], ['Polar', 'polar', 'Polar'], ['Wahoo', 'wahoo', 'Wahoo'], ['Suunto', 'suunto', 'Suunto'], ['Coros', 'coros', 'COROS'], ['Garmin', 'garmin', 'Garmin'], ['HealthConnect', 'healthconnect', 'Health Connect']]) {
+    assert.ok(SRC.includes(`async function disconnect${fn}(){ return runDisconnect('${key}', '${brand}', disconnect${fn}Now); }`), fn);
+  }
+  assert.ok(SRC.includes('if(ok) setDisconnecting(sourceKey, true);'), 'tras confirmar (no mientras se muestra el diálogo)');
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
+    const src = read('locales/' + l + '.js');
+    assert.ok(/disconnecting:"[^"]{5,}"/.test(src) && /disconnect_done:"[^"]*\{brand\}[^"]*"/.test(src), l);
+  }
+  assert.ok(read('index.html').includes('.btn.is-busy::before{'), 'indicador visual (con reduced-motion)');
+});
