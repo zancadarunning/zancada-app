@@ -76,10 +76,11 @@ function makeFakeLocalStorage() {
   };
 }
 
-function makeFakeDocument() {
+// elements: { id: elemento } permite a un test leer lo que la app pinta en un elemento concreto (por defecto cada getElementById devuelve uno nuevo)
+function makeFakeDocument(elements) {
   const fakeEl = makeFakeElement();
   return {
-    getElementById: () => makeFakeElement(),
+    getElementById: (id) => (elements && elements[id]) || makeFakeElement(),
     querySelector: () => makeFakeElement(),
     querySelectorAll: () => [],
     createElement: () => makeFakeElement(),
@@ -110,7 +111,7 @@ function loadApp(opts) {
   // quedaría corriendo de fondo y no dejaría terminar el proceso de tests.
   sandbox.setInterval = () => 0;
   sandbox.clearInterval = () => {};
-  sandbox.document = makeFakeDocument();
+  sandbox.document = makeFakeDocument(opts.elements);
   sandbox.localStorage = makeFakeLocalStorage();
   sandbox.sessionStorage = makeFakeLocalStorage();
   sandbox.navigator = { language: 'es-AR', onLine: true, vibrate: undefined, geolocation: undefined };
@@ -189,7 +190,7 @@ function loadApp(opts) {
   // actuallyStartRun de verdad (que necesita geolocalización, mapa de Leaflet, etc. -- nada de
   // eso existe en este sandbox mínimo).
   vm.runInContext(
-    'this.__exposed = { state, DAY_KEYS, lang, setCurrentUserId(v){ currentUserId = v; stateLoadedFor = v; }, setStateLoadedFor(v){ stateLoadedFor = v; }, getState(){ return state; }, setState(v){ state = v; }, getTracker(){ return tracker; }, setTracker(v){ tracker = v; }, tickRunTimer };',
+    'this.__exposed = { state, DAY_KEYS, lang, setCurrentUserId(v){ currentUserId = v; stateLoadedFor = v; }, setStateLoadedFor(v){ stateLoadedFor = v; }, getState(){ return state; }, setState(v){ state = v; }, getTracker(){ return tracker; }, setTracker(v){ tracker = v; }, setDeviceConnections(v){ deviceConnections = v; }, tickRunTimer };',
     sandbox,
     { filename: 'expose-internals.js' }
   );
