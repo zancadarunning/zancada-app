@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T18:35:39Z';
+const APP_VERSION = '2026-11-09T18:43:23Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2234,6 +2234,7 @@ async function refreshDeviceConnections(){
   }catch(e){ console.error(e); }
   deviceConnectionsLoaded = true;
   try{ renderWatchCard(); }catch(e){}
+  try{ stravaSunsetDisconnect(); }catch(e){}
   renderPlan();
   if(document.getElementById('perfil-devices-summary')) renderPerfil();
 }
@@ -4963,6 +4964,7 @@ async function registerLoginDevice(){
   }catch(e){ /* sin conexión o sin respuesta: se reintenta la próxima vez que se abra la app */ loginDeviceSent = false; }
 }
 function enterApp(){
+  sunsetStrava();
   setTimeout(()=>{ try{ refreshNativePushRegistration(); }catch(e){} }, 1500);
   setTimeout(()=>{ try{ refreshWebPushRegistration(); }catch(e){} }, 2500);
   setTimeout(()=>{ try{ registerLoginDevice(); }catch(e){} }, 4000);   // aviso por mail si es un dispositivo nuevo (no frena la entrada)
@@ -9181,6 +9183,35 @@ function refreshHomeAlerts(){
   renderHomeAdjust();
   try{ renderLevelTestUI(); }catch(e){}   // dibuja el aviso de test salteado y aplica el tope
   limitHomeAlerts(2);
+}
+/* ---- Sacar Strava al lanzar ----
+   Interruptor (ver docs/strava-sunset.md): con STRAVA_SUNSET en true la app oculta Strava, pasa sus carreras a carga manual (origin strava + aiExcluded: nunca llegan a Zonda, igual que "Conservar mis carreras" al desconectar)
+   y desconecta la cuenta de Strava (revoca el permiso). Para quien no vuelva a abrir la app lo hace sql/strava_sunset.sql. Hoy está apagado. */
+let STRAVA_SUNSET = false;
+let stravaSunsetBusy = false;
+function sunsetStrava(){
+  if(!STRAVA_SUNSET) return;
+  try{ document.body.classList.add('strava-sunset'); }catch(e){}
+  if(!state || !Array.isArray(state.runs)) return;
+  let changed = false;
+  state.runs.forEach(r => {
+    if(r && r.source === 'strava'){ r.origin = 'strava'; r.aiExcluded = true; delete r.source; delete r.stravaId; changed = true; }
+  });
+  if(changed){ persist(); try{ renderHistory(); renderHome(); }catch(e){} }
+}
+// Revoca el permiso de Strava de esta cuenta, DESPUÉS de que las carreras convertidas estén guardadas (el borrado por revocación quita las que sigan con source strava).
+async function stravaSunsetDisconnect(){
+  if(!STRAVA_SUNSET || stravaSunsetBusy || !deviceConnections || !deviceConnections.strava || !currentUserId) return;
+  stravaSunsetBusy = true;
+  try{
+    await waitForPendingPersist();
+    if(hasPendingBackup()) return;
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session) return;
+    const res = await fetch(apiUrl('/api/strava-disconnect'), { method:'POST', headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`} });
+    if(res.ok) deviceConnections.strava = false;
+  }catch(e){ console.error('strava sunset', e); }
+  finally{ stravaSunsetBusy = false; }
 }
 /* ---- Hoy en tu reloj ----
    Ningún reloj arranca solo la sesión de la app de terceros al tocar "Correr": cada marca la deja en su cuenta, el reloj la baja al sincronizarse y hay que elegirla desde el reloj. Esta tarjeta hace ese camino corto y

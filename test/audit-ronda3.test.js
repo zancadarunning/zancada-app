@@ -634,3 +634,62 @@ test('aviso push de carga: un día de carrera no se compara con la sesión norma
   assert.ok(planFor(run, plan, '2026-11-02', 'UTC', true, ['2026-11-15']), 'otra fecha de carrera: sigue comparando');
   assert.ok(read('api/_lib/notify-new-run.js').includes('eventDate:data->event->>date,lastEventDate:data->>lastEventDate,goalRaceDate:data->profile->>raceDate'));
 });
+// ---------- sacar Strava al lanzar (interruptor) ----------
+test('interruptor de Strava (servidor): con STRAVA_SUNSET=1 los endpoints dejan de hacer algo; sin la variable pasan tal cual', () => {
+  const { guardStravaSunset, stravaSunset } = require('../api/_lib/strava-sunset');
+  let called = 0;
+  const h = (req, res) => { called++; res.status(200).json({ real: true }); };
+  const mkRes = () => { const r = { code: null, body: null, status(c) { r.code = c; return r; }, json(b) { r.body = b; return r; } }; return r; };
+  delete process.env.STRAVA_SUNSET;
+  assert.equal(stravaSunset(), false);
+  let r = mkRes(); guardStravaSunset(h, 'gone')({}, r);
+  assert.equal(called, 1); assert.equal(r.body.real, true);
+  process.env.STRAVA_SUNSET = '1';
+  try {
+    r = mkRes(); guardStravaSunset(h, 'gone')({}, r);
+    assert.equal(r.code, 410); assert.equal(r.body.error, 'strava_sunset');
+    r = mkRes(); guardStravaSunset(h, 'ok')({}, r);
+    assert.equal(r.code, 200); assert.equal(r.body.skipped, 'strava_sunset');
+    assert.equal(called, 1, 'el endpoint real no se llamó');
+  } finally { delete process.env.STRAVA_SUNSET; }
+  const gone = ['strava-init', 'strava-auth', 'strava-sync-now'], ok = ['strava-resync', 'sync-strava', 'strava-webhook'];
+  for (const f of gone) assert.ok(read('api/' + f + '.js').includes("guardStravaSunset(module.exports, 'gone');"), f);
+  for (const f of ok) assert.ok(read('api/' + f + '.js').includes("guardStravaSunset(module.exports, 'ok');"), f);
+  assert.ok(!/strava-sunset/.test(read('api/strava-disconnect.js')) && !/strava-sunset/.test(read('api/delete-account.js')), 'desconectar y borrar la cuenta siguen funcionando');
+});
+
+test('interruptor de Strava (app): apagado no cambia nada; encendido pasa las carreras a manuales sin source ni stravaId, marcadas origin strava + aiExcluded, y no toca las demás', () => {
+  const app = loadApp();
+  ready(app);
+  app.state.runs = [
+    { id: 1, date: '2026-10-01T10:00:00Z', distanceKm: 5, durationSec: 1800, source: 'strava', stravaId: 77 },
+    { id: 2, date: '2026-10-02T10:00:00Z', distanceKm: 3, durationSec: 1000 },
+    { id: 3, date: '2026-10-03T10:00:00Z', distanceKm: 8, durationSec: 2900, source: 'garmin', garminId: 'g1' },
+  ];
+  app.sunsetStrava();
+  assert.equal(app.state.runs[0].source, 'strava', 'apagado: no pasa nada');
+  app.setStravaSunset(true);
+  app.sunsetStrava();
+  const [a, b, c] = app.state.runs;
+  assert.equal(a.source, undefined); assert.equal(a.stravaId, undefined);
+  assert.equal(a.origin, 'strava'); assert.equal(a.aiExcluded, true);
+  assert.equal(a.distanceKm, 5, 'conserva la carrera');
+  assert.deepEqual(b, { id: 2, date: '2026-10-02T10:00:00Z', distanceKm: 3, durationSec: 1000 });
+  assert.equal(c.source, 'garmin'); assert.equal(c.garminId, 'g1');
+  assert.ok(!app.aiVisibleRuns().some(r => r.id === 1), 'sigue fuera de la IA');
+  assert.ok(app.isRestrictedRun(a));
+  // la desconexión espera a que lo convertido esté guardado
+  assert.ok(SRC.includes('await waitForPendingPersist();\n    if(hasPendingBackup()) return;'));
+  assert.ok(SRC.includes("fetch(apiUrl('/api/strava-disconnect')"));
+});
+
+test('interruptor de Strava: el SQL de lanzamiento convierte sin tocar lo demás, y la guía del lanzamiento existe', () => {
+  const sql = read('sql/strava_sunset.sql');
+  assert.ok(sql.includes("(r - 'source' - 'stravaId') || '{\"origin\":\"strava\",\"aiExcluded\":true}'::jsonb"));
+  assert.ok(sql.includes('ORDER BY ord') && sql.includes("r->>'source' = 'strava'"), 'conserva el orden y solo toca las de Strava');
+  assert.ok(sql.indexOf('SELECT count(*)') < sql.indexOf('UPDATE public.app_state'), 'primero el control, después el UPDATE');
+  const doc = read('docs/strava-sunset.md');
+  assert.ok(doc.includes('STRAVA_SUNSET=1') && doc.includes('sql/strava_sunset.sql') && doc.includes('strava_connections'));
+  assert.ok(read('index.html').includes('conn-row conn-row-featured conn-strava') && read('index.html').includes('body.strava-sunset .conn-strava{display:none;}'));
+  assert.ok(SRC.includes('let STRAVA_SUNSET = false;'), 'el interruptor viene apagado');
+});
