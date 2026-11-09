@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T20:47:23Z';
+const APP_VERSION = '2026-11-09T21:05:15Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8606,6 +8606,19 @@ function warmCoolMinutes(d){
 }
 // Minutos del tramo principal de una sesión (el test de nivel son siempre 12).
 function planMainMinutes(d){ return d.typeKey === 'test' ? 12 : planDurationMin(d); }
+// Minutos de la sesión CON el calentamiento y la vuelta a la calma: lo que la persona de verdad corre (y lo que ve en el plan por tiempo).
+function planTotalMinutes(d){
+  const w = warmCoolMinutes(d);
+  return planMainMinutes(d) + (w ? w.warm + w.cool : 0);
+}
+// Lo que dice duracion_min en las herramientas del chat. En el plan por tiempo el corredor ve el TOTAL (con calentamiento y vuelta a la calma), así que ese es el número que va a pedir o citar: acá se pasa a los minutos del tramo principal,
+// que es lo que guarda el plan (durMin). Mismos 5/10 min que warmCoolMinutes; piso de 5 min de principal.
+function toolMainMinutes(input){
+  const shown = Number(input.duracion_min);
+  if(!isTimeMode() || !(shown > 0)) return shown;
+  const w = warmCoolMinutes({dist: 1, typeKey: effectiveTipoCategoria(input)});
+  return w ? Math.max(5, shown - w.warm - w.cool) : shown;
+}
 // Lo que se MUESTRA como cantidad de la sesión. Plan por tiempo: el total, con el calentamiento y la vuelta a la calma adentro (25 min de zona 2 se ven como 35 min). Plan por distancia: la distancia del tramo principal, igual que siempre
 // (el calentamiento y la vuelta a la calma van en una línea aparte, ver planWarmCoolText). planAmountText() sigue siendo SOLO el tramo principal.
 function planShownAmountText(d){
@@ -9333,6 +9346,8 @@ function confirmNextWeekDays(){
   const usual = DAY_KEYS.filter(k => state.profile.trainingDays.includes(k));
   state.nextWeekDays = weekdaysDraft.join() === usual.join() ? null : {weekStart: iso, days: weekdaysDraft.slice()};
   state.nextWeekDaysAsked = iso;
+  // una edición de sesión que el chat dejó para un día que ahora NO corre volvería a armar ese día: se descarta (las cancelaciones se conservan)
+  if(state.nextWeekDays && state.nextWeekOverrides) Object.keys(state.nextWeekOverrides).forEach(k => { const o = state.nextWeekOverrides[k]; if(o && !o.cancelled && !state.nextWeekDays.days.includes(k)) delete state.nextWeekOverrides[k]; });
   weekdaysDraft = null;
   persist();
   showToast(t('weekdays_saved'), 'success');
@@ -9657,7 +9672,7 @@ function renderHome(){
   let ringRatio = weekKm > 0 ? doneKm / weekKm : 0;
   if(isTimeMode()){
     const doneMin = weekRuns.reduce((a,r)=>a+(r.durationSec||0),0)/60;
-    const plannedMin = state.plan.reduce((a,d)=>a+planDurationMin(d),0);
+    const plannedMin = state.plan.reduce((a,d)=>a+planTotalMinutes(d),0);   // lo corrido incluye calentamiento y vuelta a la calma
     ringRatio = plannedMin > 0 ? doneMin / plannedMin : 0;
     document.querySelectorAll('.week-unit').forEach(u => u.textContent = t('time_unit_min'));
     animateCountUp(document.getElementById('home-week-done-km'), doneMin, 0);
@@ -9964,7 +9979,7 @@ function buildSessionSheetHtml(c){
   if(d.dist > 0 && !isEventDay){
     const z = state.profile.hrZones;
     if(d.zone) chips += `<span class="zone-chip zone-${d.zone}">${t('zone_word')} ${d.zone}</span>`;
-    chips += `<span class="ss-chip">${planDurationMin(d)} ${t('time_unit_min')}</span><span class="ss-chip">${fmtDist(d.dist, 1)} ${distUnit()}</span>`;
+    chips += `<span class="ss-chip">${isTimeMode() ? planTotalMinutes(d) : planDurationMin(d)} ${t('time_unit_min')}</span><span class="ss-chip">${fmtDist(d.dist, 1)} ${distUnit()}</span>`;
     if(d.zone && z && z[d.zone]) chips += `<span class="ss-chip mono">${z[d.zone].min}-${z[d.zone].max} bpm</span>`;
   }
   let blocks = '';
@@ -10286,7 +10301,7 @@ function renderPastWeeks(){
     // el denominador -- "5 de 3 sesiones" en una semana con extras.
     const doneCount = w.plan.filter(d=>d.dist>0 && d.status==='done').length;
     const totalSessions = w.plan.filter(d=>d.dist>0).length;
-    const plannedAmount = isTimeMode() ? `${w.plan.reduce((a,d)=>a+planDurationMin(d),0)} ${t('time_unit_min')}` : `${fmtDist(w.plan.reduce((a,d)=>a+d.dist,0),1)}${distUnit()}`;
+    const plannedAmount = isTimeMode() ? `${w.plan.reduce((a,d)=>a+planTotalMinutes(d),0)} ${t('time_unit_min')}` : `${fmtDist(w.plan.reduce((a,d)=>a+d.dist,0),1)}${distUnit()}`;
     // Antes esto hacía un manejador inline con "viewingWeekOffset = offset; renderPlan();", que pisaba la
     // semana que el usuario tenía abierta en la pestaña Plan -- pedido explícito del usuario:
     // tocar una semana pasada debe abrir una pantalla aparte (ver openWeekDetail), sin tocar
@@ -16822,12 +16837,17 @@ function renderRunPlanSteps(r){
 function scoreRunAgainstPlan(run, d, date){
   if(!run || !d || !(d.dist > 0)) return null;
   const byTime = !!(d.timeBased && isTimeMode()) || !!(d.durMin > 0 && isTimeMode());
+  const wcMin = warmCoolMinutes(d);
+  const plannedKmTotal = Number(d.dist) + (wcMin ? (wcMin.warm + wcMin.cool) / Math.max(4, estimateBasePaceMinPerKm(state.profile) * 1.1) : 0);   // los km de calentamiento y vuelta a la calma, a ritmo suave
+  // "Cuánto se hizo" se mide contra el tramo principal (correr solo eso, o eso más el calentamiento y la vuelta a la calma, es 100 %); pasarse se mide contra el total con el calentamiento y la vuelta a la calma: si no, 35 min contra 25 "se pasaba".
   const planned = byTime ? planDurationMin(d) : Number(d.dist);
+  const plannedTotal = byTime ? planTotalMinutes(d) : plannedKmTotal;
   const actual = byTime ? (run.durationSec || 0) / 60 : (run.distanceKm || 0);
   if(!(planned > 0) || !(actual >= 0)) return null;
   const ratio = actual / planned;
   const completion = Math.min(1, ratio);
-  const overPenalty = ratio > 1.25 ? Math.min(15, (ratio - 1.25) * 30) : 0;
+  const overRatio = actual / plannedTotal;
+  const overPenalty = overRatio > 1.25 ? Math.min(15, (overRatio - 1.25) * 30) : 0;
   let quality = null, fade = false, hrHigh = false, hrOk = false;
   try{
     const ev = date ? evaluateRunSteps(run, planStepsFromPayload(watchDayPayload(d, date)), state.profile && state.profile.hrZones) : null;
@@ -16861,7 +16881,7 @@ function renderRunPlanScore(r){
   if(sc.hrHigh) lines.push(t('score_hr_high'));
   else if(sc.hrOk) lines.push(t('score_hr_ok'));
   const C = 2 * Math.PI * 44, off = (C * (1 - sc.score / 100)).toFixed(1);
-  const chips = `${found.d.zone ? `<span class="zone-chip zone-${found.d.zone}">${t('zone_word')} ${found.d.zone}</span>` : ''}<span class="ss-chip">${planDurationMin(found.d)} ${t('time_unit_min')}</span>`;
+  const chips = `${found.d.zone ? `<span class="zone-chip zone-${found.d.zone}">${t('zone_word')} ${found.d.zone}</span>` : ''}<span class="ss-chip">${isTimeMode() ? planTotalMinutes(found.d) : planDurationMin(found.d)} ${t('time_unit_min')}</span>`;
   return `<div class="ss-card rd-score-card">
     <div class="rd-score-head"><span class="rd-score-check" aria-hidden="true">${ICONS.check}</span><span>${t('score_plan')}</span></div>
     <p class="rd-score-title">${title}</p>
@@ -18808,14 +18828,14 @@ function buildContext(){
   // ni cruzar nada -- mismo criterio que el aviso de "citá el número exacto" más abajo:
   // cuanto menos tenga que inferir el modelo, menos margen para que se equivoque.
   // Cantidad de cada sesión en los bloques del plan: en plan por tiempo va SOLO en minutos (con los km al lado, el modelo cita los km).
-  const planCtxAmount = d => isTimeMode() ? `${planDurationMin(d)}min` : `${d.dist}km(~${planDurationMin(d)}min)`;
+  const planCtxAmount = d => isTimeMode() ? `${planTotalMinutes(d)}min` : `${d.dist}km(~${planDurationMin(d)}min)`;
   const describePlanDayForCtx = d=>{
     if(!d) return 'sin datos';
     // el día de la carrera objetivo (plan por fases, ver applyGoalRaceDay) no es "descanso"
     if(d.raceDay) return 'el día de tu carrera objetivo' + (d.raceEventName ? ' (' + d.raceEventName + ')' : '');
     if(!(d.dist>0)) return 'descanso';
     const label = d.custom ? d.type : t('type_'+d.typeKey);
-    let s = isTimeMode() ? `${label}, ${planDurationMin(d)} minutos` : `${label}, ${d.dist}km`;
+    let s = isTimeMode() ? `${label}, ${planTotalMinutes(d)} minutos` : `${label}, ${d.dist}km`;
     if(d.status==='done') s += ' (ya hecho' + (d.rating?', calificó: '+d.rating:'') + ')';
     else if(d.status==='skipped') s += ' (salteado)';
     return s;
@@ -18913,7 +18933,7 @@ function buildContext(){
       // el test salió de una carrera de Strava/Garmin: ni su distancia ni los ritmos que salen de ella viajan a la IA
       ctx += ' Ya hizo el test de nivel (Cooper de 12 minutos), pero sus ritmos de referencia no están disponibles para vos: no menciones ni inventes ritmos concretos; si los pide, decile que los ve en la pantalla del plan.';
     } else if(lt && lt.done && lt.paces){
-      ctx += ` Test de nivel (Cooper de 12 minutos) hecho el ${lt.date}: ${lt.distanceM} m. Sus ritmos de referencia por ${unit}: suave ${fmtPaceRange(lt.paces.easy)}, tempo ${fmtPaceRange(lt.paces.tempo)}, series ${fmtPaceRange(lt.paces.interval)}. Si habla de ritmos usá estos, no inventes otros.`;
+      ctx += ` Test de nivel (Cooper de 12 minutos) hecho el ${lt.date}: ${lt.distanceM} m.${lt.recalibratedAt ? ` Sus ritmos se actualizaron el ${lt.recalibratedAt} según cómo vino corriendo (los de abajo son los vigentes).` : ''} Sus ritmos de referencia por ${unit}: suave ${fmtPaceRange(lt.paces.easy)}, tempo ${fmtPaceRange(lt.paces.tempo)}, series ${fmtPaceRange(lt.paces.interval)}. Si habla de ritmos usá estos, no inventes otros.`;
     } else if(levelTestPending(p)){
       ctx += ' Todavía NO hizo el test de nivel obligatorio (Cooper de 12 minutos, es la primera sesión de su plan): sin ese dato los ritmos son estimados. Recordáselo si pregunta por ritmos o zonas.';
     }
@@ -18943,6 +18963,11 @@ function buildContext(){
   // con un número (7km) distinto al que estos mismos bloques ya traían (8km) -- no un dato
   // mal cargado, el bloque de arriba siempre tiene el número real, solo hacía falta pedirle
   // explícitamente que lo cite tal cual en vez de recordarlo/redondearlo de memoria.
+  // calentamiento y vuelta a la calma: la app los suma sola y la persona los ve; el modelo tiene que hablar en el mismo número que ella
+  ctx += isTimeMode()
+    ? `\n\nIMPORTANTE sobre los minutos de cada sesión: los números de los bloques del plan YA INCLUYEN el calentamiento (5 min; 10 min en series, tempo, fartlek, cuestas y progresivo) y la vuelta a la calma (5 min). Es el mismo total que ve el corredor en la app. El tramo principal es ese total menos 10-15 min. Cuando uses duracion_min en las herramientas, mandá el TOTAL que el corredor ve (la app descuenta el calentamiento y la vuelta a la calma sola). Nunca le sumes ni le restes esos minutos a lo que dice el plan.`
+    : `\n\nIMPORTANTE sobre las distancias de cada sesión: los km de los bloques del plan son los del tramo PRINCIPAL. Además, cada sesión lleva un calentamiento (5 min; 10 min en series, tempo, fartlek, cuestas y progresivo) y una vuelta a la calma (5 min) por tiempo que la app muestra aparte y que NO están en esos km: por eso una carrera cargada puede tener más km que los del plan. Nunca se los sumes ni se los restes a lo que dice el plan.`;
+  if(state.nextWeekDays && state.nextWeekDays.weekStart === nw.weekStart && Array.isArray(state.nextWeekDays.days)) ctx += ` Para la semana que viene el corredor eligió correr SOLO estos días (por esa semana nada más, después vuelve a sus días de siempre): ${state.nextWeekDays.days.map(d => t('day_' + d)).join(', ')}.`;
   ctx += `\n\nCuando cites la ${isTimeMode() ? 'duración (en minutos)' : 'distancia'}, zona o tipo de una sesión de estos dos bloques, copiá el número EXACTO tal como está ahí -- nunca lo redondees ni lo digas de memoria.` + (isTimeMode() ? ` Este corredor entrena por tiempo: no le hables de kilómetros ni para sus sesiones ni para el volumen de la semana (esta semana son ${state.plan.reduce((a,d)=>a+planDurationMin(d),0)} minutos en total); decile todo en minutos.` : '');
   return ctx;
 }
@@ -18956,7 +18981,7 @@ const TOOLS = [
       tipo:{type:"string", description:"Nombre del tipo de sesión en el idioma de la conversación, ej. 'Rodaje suave', 'Easy run'"},
       tipo_categoria:{type:"string", enum:["easy","intervals","tempo","long","fartlek","hills","progression"], description:"Categoría técnica de la sesión en estos códigos fijos, SIN traducir (independiente de 'tipo', que va en el idioma de la charla). Se usa para las estadísticas de variedad de entrenamientos y para relacionar la carrera registrada con el tipo de sesión que tocaba -- elegí la que mejor corresponda a la sesión nueva."},
       distancia_km:{type:"number", description:"Distancia total de la sesión, SOLO si NO incluís repeticiones/esfuerzo_min -- si la sesión tiene repeticiones, la app calcula la distancia real sumando reps*esfuerzo_min sola e IGNORA este campo, así que no tiene sentido mandar acá un número que no coincida con esa cuenta (ej. no pongas '7' acá si tus 6 repeticiones de 3min a este ritmo dan 2.4km reales -- mejor subí la cantidad de repeticiones o los minutos de esfuerzo hasta llegar a los 7km que querés, y dejá que la app calcule el total)."},
-      duracion_min:{type:"number", description:"Duración de la sesión en minutos. Usalo en vez de distancia_km si el corredor entrena por tiempo (fijate en el contexto) o si pide la sesión directamente en minutos -- se convierte sola a km internamente."},
+      duracion_min:{type:"number", description:"Duración de la sesión en minutos, TAL COMO LA VE EL CORREDOR: en el plan por tiempo es el total con el calentamiento y la vuelta a la calma incluidos (la app los descuenta sola). Usalo en vez de distancia_km si el corredor entrena por tiempo (fijate en el contexto) o si pide la sesión directamente en minutos -- se convierte sola a km internamente."},
       zona:{type:"integer", minimum:1, maximum:5, description:"Zona de frecuencia cardíaca objetivo para la sesión NUEVA, no un dato libre: 1-2 para rodaje suave y tirada larga, 3 para tempo/progresivo/fartlek, 4-5 para series/cuestas. No le pongas una zona alta a una sesión suave ni una zona baja a una sesión fuerte -- tiene que ser coherente con tipo_categoria."},
       terreno:{type:"string", enum:["asfalto","trail","mixto"]},
       repeticiones:{type:"integer", description:"SOLO si la sesión tiene estructura de repeticiones (series, cuestas, fartlek): cantidad de repeticiones. Junto con esfuerzo_min, hace que la app le muestre al corredor el número SIEMPRE en la unidad correcta (metros o minutos, según cómo entrena) -- vos no tenés que elegir la unidad, la app convierte sola. No lo incluyas para sesiones sin repeticiones (rodaje suave, tirada larga, ritmo medio, progresivo). IMPORTANTE: elegí vos estos valores con tu criterio de entrenador, NUNCA se los preguntes al corredor -- mismo criterio que ya usa el generador automático del plan (6 a 10 repeticiones de 2 a 4 minutos de esfuerzo, con 1 a 2 minutos de recuperación, es un fartlek típico). Si el corredor te pidió un cambio de distancia/tiempo total, ajustá la cantidad de repeticiones o los minutos de esfuerzo para llegar a eso, no le pidas que te arme la sesión él."},
@@ -19126,7 +19151,7 @@ function resolvePlanDistKm(input){
   }
   const distKm = Number(input.distancia_km);
   if(Number.isFinite(distKm) && distKm>0) return Math.min(MAX_SESSION_KM, Math.round(distKm*10)/10);
-  const durMin = Number(input.duracion_min);
+  const durMin = toolMainMinutes(input);
   if(Number.isFinite(durMin) && durMin>0){
     const km = Math.max(0.5, Math.round((durMin / estimateBasePaceMinPerKm(state.profile))*10)/10);
     return Math.min(MAX_SESSION_KM, km);
@@ -19317,7 +19342,7 @@ function applyPlanChange(input){
     const effectiveDistKm = resolvePlanDistKm(input);
     if(effectiveDistKm!==null) override.dist = effectiveDistKm;
     // mismo criterio que la semana actual: duracion_min fija los minutos; solo distancia los recalcula; el trote/caminata del día base no se hereda
-    if(typeof input.duracion_min === 'number' && input.duracion_min > 0) override.durMin = Math.min(MAX_CUSTOM_DURATION_MIN, Math.round(input.duracion_min));
+    if(typeof input.duracion_min === 'number' && input.duracion_min > 0) override.durMin = Math.min(MAX_CUSTOM_DURATION_MIN, Math.round(toolMainMinutes(input)));
     else if(effectiveDistKm !== null) override.durMin = undefined;
     override.runWalk = undefined;
     const zone = resolveZone(input.zona);
@@ -19360,7 +19385,7 @@ function applyPlanChange(input){
   if(effectiveDistKm!==null) d.dist = effectiveDistKm;
   // Plan por tiempo: planDurationMin lee d.durMin (no d.dist). Con duracion_min se fija; si solo cambia la distancia se descarta durMin para que los minutos
   // se recalculen de la distancia nueva; y el trote/caminata del principiante no vale para una sesión nueva.
-  if(typeof input.duracion_min === 'number' && input.duracion_min > 0) d.durMin = Math.min(MAX_CUSTOM_DURATION_MIN, Math.round(input.duracion_min));
+  if(typeof input.duracion_min === 'number' && input.duracion_min > 0) d.durMin = Math.min(MAX_CUSTOM_DURATION_MIN, Math.round(toolMainMinutes(input)));
   else if(effectiveDistKm !== null) delete d.durMin;
   delete d.runWalk;
   const zone = resolveZone(input.zona);
