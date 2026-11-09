@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T21:05:15Z';
+const APP_VERSION = '2026-11-09T21:10:36Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -14632,8 +14632,8 @@ function lowerRemainingIntensity(pct){
   // aviso de que el recorte no hizo nada. Un decimal (mismo criterio que intervalActualKm/
   // hillActualKm/fartlekActualKm en el resto del generador) alcanza para que el cambio se
   // note incluso en sesiones de pocos km.
-  state.plan.forEach(d=>{
-    if(!(d.dist>0) || d.status) return;
+  state.plan.forEach((d, di)=>{
+    if(!(d.dist>0) || d.status || isFixedSessionDay(d, state.weekStart, di)) return;
     // Reportado en una auditoría, dos problemas separados en este mismo recorte:
     //
     // 1. Nunca marcaba d.custom=true -- preserveLivedDays() (el único guardia contra que
@@ -18828,20 +18828,22 @@ function buildContext(){
   // ni cruzar nada -- mismo criterio que el aviso de "citá el número exacto" más abajo:
   // cuanto menos tenga que inferir el modelo, menos margen para que se equivoque.
   // Cantidad de cada sesión en los bloques del plan: en plan por tiempo va SOLO en minutos (con los km al lado, el modelo cita los km).
-  const planCtxAmount = d => isTimeMode() ? `${planTotalMinutes(d)}min` : `${d.dist}km(~${planDurationMin(d)}min)`;
+  const miTag = d => isImperial() ? `(${fmtDist(d.dist,1)}mi)` : '';   // quien usa millas las ve en la app: el chat cita las dos
+  const planCtxAmount = d => isTimeMode() ? `${planTotalMinutes(d)}min` : `${d.dist}km${miTag(d)}(~${planDurationMin(d)}min)`;
   const describePlanDayForCtx = d=>{
     if(!d) return 'sin datos';
     // el día de la carrera objetivo (plan por fases, ver applyGoalRaceDay) no es "descanso"
     if(d.raceDay) return 'el día de tu carrera objetivo' + (d.raceEventName ? ' (' + d.raceEventName + ')' : '');
     if(!(d.dist>0)) return 'descanso';
     const label = d.custom ? d.type : t('type_'+d.typeKey);
-    let s = isTimeMode() ? `${label}, ${planTotalMinutes(d)} minutos` : `${label}, ${d.dist}km`;
+    let s = isTimeMode() ? `${label}, ${planTotalMinutes(d)} minutos` : `${label}, ${d.dist}km${miTag(d)}`;
     if(d.status==='done') s += ' (ya hecho' + (d.rating?', calificó: '+d.rating:'') + ')';
     else if(d.status==='skipped') s += ' (salteado)';
     return s;
   };
   // el día de la carrera cargada en "Próximos eventos" es la carrera, no la sesión normal que queda guardada por debajo
   const raceDayDesc = iso => (state.event && state.event.date === iso && Number(state.event.distanceKm) > 0) ? `el día de tu carrera cargada (${state.event.name}, ${state.event.distanceKm}km)` : null;
+  const evTag = (weekStartIso, i) => (state.event && Number(state.event.distanceKm) > 0 && state.event.date === addDaysToIsoLocal(weekStartIso, i)) ? `carrera cargada (${state.event.name}, ${state.event.distanceKm}km)` : null;
   const todaySessionDesc = raceDayDesc(todayLocalISO()) || describePlanDayForCtx(state.plan[todayIdx]);
   const tomorrowSessionDesc = raceDayDesc(addDaysToIsoLocal(todayLocalISO(), 1)) || describePlanDayForCtx(tomorrowIsNextWeek ? nw.plan[tomorrowIdx] : state.plan[tomorrowIdx]);
   let ctx = `HOY es ${todayLabel}, ${nowTimeLabel} hs (código de día: ${DAY_KEYS[todayIdx]}). Mañana es ${t('day_'+DAY_KEYS[tomorrowIdx])} (código: ${DAY_KEYS[tomorrowIdx]})${tomorrowNote}. Usá esto como la referencia exacta para cualquier pedido con "hoy", "mañana", "ayer" u otro día relativo, y para saber si es de mañana/tarde/noche -- nunca lo adivines mirando el estado del plan NI un "hoy es..." que vos mismo hayas dicho en un mensaje anterior de esta charla: los mensajes viejos pueden ser de otro día, así que este dato (el de ESTE mensaje) manda siempre, incluso si contradice algo que dijiste antes. Los mensajes anteriores de esta charla que empiezan con una fecha entre corchetes, como [lunes 5 de octubre], son de ESE día, no de hoy: nunca copies de ellos qué día es, y jamás escribas esos corchetes en tus respuestas. La sesión de HOY es: ${todaySessionDesc}. La sesión de MAÑANA es: ${tomorrowSessionDesc}. Estos dos datos ya están resueltos -- no hace falta que los recalcules ni los cruces contra el resto del plan más abajo, y si contradicen algo que vos mismo dijiste antes en esta charla, estos mandan siempre.${yesterdayNote}${p.tz ? ` Zona horaria del corredor: ${p.tz} (usala para inferir de qué país/región es -- por ejemplo para saber si está en el hemisferio sur o norte a la hora de hablar de estaciones del año, clima o época de carreras).` : ''} `;
@@ -18890,6 +18892,7 @@ function buildContext(){
   if(recoveryMultiplier(state.weekStart) < 1) ctx += ` Esta semana es de recuperación, la que sigue a la carrera que corrió (cargada en "Próximos eventos") -- el volumen bajó a propósito por eso.`;
   if(postGoalRaceRecoveryMultiplier(p, state.weekStart) < 1) ctx += ` Esta semana es de recuperación, la que sigue a la carrera OBJETIVO del ${p.raceDate} que el corredor ya corrió -- el volumen bajó a propósito por eso.`;
   if(eventRaceWeekMultiplier(state.weekStart, p) < 1) ctx += ` Esta semana cae la carrera cargada en "Próximos eventos" -- el volumen de esta semana bajó a propósito, como una semana de descarga más, para no llegar reventado a correrla.`;
+  if(state.softenedWeek && state.softenedWeek === state.weekStart) ctx += ` Esta semana la app bajó sola un 15 % la próxima sesión de calidad porque las dos últimas sesiones planeadas no se hicieron (para volver sin apuro). Si el corredor pregunta por qué esa sesión quedó más corta, explicale eso.`;
   if(p.coachNotes && p.coachNotes.length) ctx += ` Notas permanentes guardadas sobre el corredor (lesiones, preferencias u otros datos a tener en cuenta siempre): ${p.coachNotes.map(n=>`"${n}"`).join('; ')}.`;
   if(pregnancyStillRecent(p)) ctx += ` El corredor indicó en el onboarding que está embarazada o dio a luz en los últimos 6 meses -- el plan ya se generó con volumen e intensidad reducidos por precaución. Si pregunta por esto, recordale que consulte con su médico/a antes de cualquier cambio de intensidad; no le des indicaciones médicas específicas vos.`;
   if(p.availableMinPerSession) ctx += ` Dispone de unos ${p.availableMinPerSession} minutos en promedio por sesión -- el plan ya limita las sesiones entre semana a ese tiempo (la tirada larga del fin de semana queda afuera de ese límite a propósito). Si igual pregunta por el tiempo de una sesión, tené esto en cuenta.`;
@@ -18957,12 +18960,13 @@ function buildContext(){
   // contra DST que usa el resto del archivo para esto.
   const datesForWeek = weekStartIso => DAY_KEYS.map((d,i)=>`${d}=${addDaysToIsoLocal(weekStartIso, i)}`).join(', ');
   ctx += `\n\nFechas de calendario de cada día de esta semana: ${datesForWeek(state.weekStart)}. Fechas de calendario de cada día de la semana que viene: ${datesForWeek(nw.weekStart)}. Si te preguntan qué fecha del mes cae tal día, usá estos datos directo -- nunca calcules vos cuántos días faltan ni a qué fecha corresponde un día, aunque te parezca un cálculo simple.`;
-  ctx += `\n\n=== PLAN DE ESTA SEMANA (semana ${state.weekNumber}, la semana ACTUAL -- usá SIEMPRE este bloque para responder sobre "hoy", "mañana", "ayer" o "esta semana") ===\n${state.plan.map(d=>`${d.day}=${d.raceDay?'carrera objetivo ('+(d.raceEventName||'')+')':d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${planCtxAmount(d)}${d.status?'/'+d.status:''}${d.rating?'/calificó:'+d.rating:''}`).join(', ')}.\n=== FIN plan de esta semana ===`;
-  ctx += `\n\n=== PLAN DE LA SEMANA QUE VIENE (semana ${nw.weekNumber}, todavía NO empezó -- es DISTINTA a la de arriba, ya calculada pero puede ajustarse según cómo termine esta semana. NUNCA uses estos km para responder sobre "hoy" o "mañana", esos están en el bloque de arriba) ===\n${nw.plan.map(d=>`${d.day}=${d.raceDay?'carrera objetivo ('+(d.raceEventName||'')+')':d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${planCtxAmount(d)}`).join(', ')}.\n=== FIN plan de la semana que viene ===\n`;
+  ctx += `\n\n=== PLAN DE ESTA SEMANA (semana ${state.weekNumber}, la semana ACTUAL -- usá SIEMPRE este bloque para responder sobre "hoy", "mañana", "ayer" o "esta semana") ===\n${state.plan.map((d,i)=>evTag(state.weekStart,i) ? `${d.day}=${evTag(state.weekStart,i)}` : `${d.day}=${d.raceDay?'carrera objetivo ('+(d.raceEventName||'')+')':d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${planCtxAmount(d)}${d.status?'/'+d.status:''}${d.rating?'/calificó:'+d.rating:''}`).join(', ')}.\n=== FIN plan de esta semana ===`;
+  ctx += `\n\n=== PLAN DE LA SEMANA QUE VIENE (semana ${nw.weekNumber}, todavía NO empezó -- es DISTINTA a la de arriba, ya calculada pero puede ajustarse según cómo termine esta semana. NUNCA uses estos km para responder sobre "hoy" o "mañana", esos están en el bloque de arriba) ===\n${nw.plan.map((d,i)=>evTag(nw.weekStart,i) ? `${d.day}=${evTag(nw.weekStart,i)}` : `${d.day}=${d.raceDay?'carrera objetivo ('+(d.raceEventName||'')+')':d.custom?d.type:d.typeKey}${d.zone?'/Z'+d.zone:''}/${planCtxAmount(d)}`).join(', ')}.\n=== FIN plan de la semana que viene ===\n`;
   // Reportado por un usuario: le preguntó al coach cuánto tocaba un día puntual y respondió
   // con un número (7km) distinto al que estos mismos bloques ya traían (8km) -- no un dato
   // mal cargado, el bloque de arriba siempre tiene el número real, solo hacía falta pedirle
   // explícitamente que lo cite tal cual en vez de recordarlo/redondearlo de memoria.
+  if(isImperial()) ctx += ` Este corredor usa MILLAS en la app: ve las distancias en millas (1 mi = 1,609 km) y los ritmos en min/mi. Cuando hables de distancias o ritmos usá millas y min/mi; los bloques del plan traen los km con las millas entre paréntesis. Las herramientas siguen recibiendo distancia_km en KILÓMETROS.`;
   // calentamiento y vuelta a la calma: la app los suma sola y la persona los ve; el modelo tiene que hablar en el mismo número que ella
   ctx += isTimeMode()
     ? `\n\nIMPORTANTE sobre los minutos de cada sesión: los números de los bloques del plan YA INCLUYEN el calentamiento (5 min; 10 min en series, tempo, fartlek, cuestas y progresivo) y la vuelta a la calma (5 min). Es el mismo total que ve el corredor en la app. El tramo principal es ese total menos 10-15 min. Cuando uses duracion_min en las herramientas, mandá el TOTAL que el corredor ve (la app descuenta el calentamiento y la vuelta a la calma sola). Nunca le sumes ni le restes esos minutos a lo que dice el plan.`
@@ -19528,6 +19532,12 @@ function applyCancelSession(input){
 // weekMultiplier, que sube gradualmente semana a semana con un techo propio) -- ±60% ya es
 // generoso para un pedido puntual real ("quiero sumar más", "bajale bastante esta semana").
 const MAX_VOLUME_ADJUST_PCT = 60;
+// La carrera objetivo, el test de nivel (12 min exactos) y el día de una carrera cargada no se escalan con un porcentaje: una carrera de 42 km no pasa a 33 (ni el test a 10 min) porque se pidió "bajale un 20 %".
+function isFixedSessionDay(d, weekStartIso, i){
+  if(!d) return false;
+  if(d.raceDay || d.typeKey === 'test') return true;
+  return !!(state.event && state.event.date && weekStartIso && state.event.date === addDaysToIsoLocal(weekStartIso, i));
+}
 function applyVolumeAdjust(input){
   const rawPct = Number(input.porcentaje);
   if(!Number.isFinite(rawPct)) return 'Falta el porcentaje.';
@@ -19537,8 +19547,8 @@ function applyVolumeAdjust(input){
   if(input.semana === 'siguiente'){
     const nw = getNextWeekPlan();
     if(!state.nextWeekOverrides) state.nextWeekOverrides = {};
-    nw.plan.forEach(d=>{
-      if(d.dist>0){
+    nw.plan.forEach((d, di)=>{
+      if(d.dist>0 && !isFixedSessionDay(d, nw.weekStart, di)){
         // planLabelBody (no planLabel) para el caso no-custom -- ver el comentario grande
         // junto a planLabel(): guardar acá el texto YA envuelto con entrada en calor/vuelta a
         // la calma duplicaría esa envoltura la próxima vez que algo (Plan, Inicio, etc.)
@@ -19572,8 +19582,8 @@ function applyVolumeAdjust(input){
   // que no había nada para ajustar en vez de confirmar un cambio que nunca pasó. Encontrado
   // con pruebas adversariales.
   let touchedCount = 0;
-  state.plan.forEach(d=>{
-    if(d.dist>0 && !isDayLocked(d.day)){
+  state.plan.forEach((d, di)=>{
+    if(d.dist>0 && !isDayLocked(d.day) && !isFixedSessionDay(d, state.weekStart, di)){
       touchedCount++;
       // escalar primero y recién después congelar el texto: así la descripción lleva las repeticiones y los minutos YA reducidos
       scaleDayAmount(d, factor, false);
