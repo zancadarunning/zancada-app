@@ -843,6 +843,21 @@ test('el test de nivel (Cooper) y la carrera libre no llevan calentamiento guiad
   assert.ok(read('index.html').includes('id="workout-guide-warmcool"') && read('index.html').includes('data-on-click="skipWarmCool()"'));
 });
 
+test('la devolución de Zonda por distancia aclara que los km del plan no cuentan el calentamiento ni la vuelta a la calma; por tiempo usa el total', () => {
+  const app = loadApp();
+  ready(app);
+  const easy = app.state.plan.find(x => x.typeKey === 'easy');
+  easy.dist = 4; easy.durMin = 25; easy.timeBased = true;
+  const run = { id: 'r1', distanceKm: 5, durationSec: 2100, date: Date.now() };
+  app.state.profile.trainBy = 'distance';
+  const dist = app.buildSessionFeedbackMessage(easy, run, 'bien');
+  assert.match(dist, /4(\.0)? km más el calentamiento y la vuelta a la calma/, dist);
+  app.state.profile.trainBy = 'time';
+  const time = app.buildSessionFeedbackMessage(easy, run, 'bien');
+  assert.match(time, /35 min planeados/, time);
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.ok(/plan_feedback_planned_dist:"\{main\}[^"]{8,}"/.test(read('locales/' + l + '.js')), l);
+});
+
 // ---------- plan adaptativo ----------
 test('dos sesiones seguidas sin hacer: la próxima sesión de calidad baja 15 %, una vez por semana, con aviso; con una sola no pasa nada', () => {
   const app = loadApp();

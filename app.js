@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T20:14:38Z';
+const APP_VERSION = '2026-11-09T20:31:16Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -14507,7 +14507,8 @@ function buildSessionFeedbackMessage(d, run, rating){
   if(d.dist>0){
     const typeLabel = t('type_'+d.typeKey);
     vars.type = typeLabel.charAt(0).toLowerCase() + typeLabel.slice(1);
-    vars.planned = planShownAmountText(d);
+    // Por distancia, lo que se carga (5 km) trae el calentamiento y la vuelta a la calma, que no están en los 4 km del plan: se aclara en vez de parecer que se pasó.
+    vars.planned = (!isTimeMode() && d.typeKey !== 'test' && warmCoolMinutes(d)) ? t('plan_feedback_planned_dist', {main: planAmountText(d)}) : planShownAmountText(d);
     return t('coach_feedback_'+rating, vars);
   }
   return t('coach_feedback_'+rating+'_extra', vars);
