@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T20:36:31Z';
+const APP_VERSION = '2026-11-09T20:47:23Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10088,12 +10088,14 @@ function buildDayListHtml(wd){
     // Sin botón "Sincronizar" en el ejercicio del día (pedido del usuario): las carreras llegan solas desde el reloj conectado.
     if(d.typeKey==='test' && !d.testRead && d.status!=='skipped') statusBlock += `<div style="margin-top:12px;"><button class="btn btn-primary btn-sm" data-on-click="event.stopPropagation(); openLevelTest()">${t('ltest_load_btn')}</button></div>`;
     planSheetData[i] = buildSessionSheetHtml({d, date:dayIso, title:lblType, lblDesc, statusBlock, isEventDay});
+    const wcLine = (!isEventDay && !isTimeMode() && d.dist>0 && !d.raceDay) ? planWarmCoolText(d) : '';
     const kmHtml = isEventDay ? (eventAmountText ? `<span class="day-km-inline">${eventAmountText}</span>` : '') : (d.dist>0 ? `<span class="day-km-inline">${planShownAmountText(d)}</span>` : (extraRunAmountText ? `<span class="day-km-inline">${extraRunAmountText}</span>` : ''));
     return `<div>
       <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" data-idx="${i}"${(wd.mode==='current' && canEdit && !isEventDay && !d.status && !d.raceDay) ? (d.dist>0 ? ' data-src="1" data-drop="1"' : ' data-drop="1"') : ''} data-zone="${(d.dist>0 && d.zone && !isEventDay)?d.zone:''}" data-on-click="toggleDay(${i})">
         <div class="day-badge"><div class="d">${t('day_'+d.day).slice(0,3)}</div>${dateLbl?`<div class="mono muted" style="font-size:10px; margin-top:2px;">${dateLbl}</div>`:''}</div>
         <div class="day-info">
           <div class="day-info-title-row"><span class="t">${lblType}</span></div>
+          ${wcLine ? `<div class="day-row-wc">${escapeHtml(wcLine)}</div>` : ''}
           ${meta?`<div class="day-row-chips">${meta}</div>`:''}
         </div>
         <div class="day-row-end">${kmHtml}<span class="day-end-slot">${statusIcon}</span></div>

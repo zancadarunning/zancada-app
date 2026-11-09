@@ -1068,3 +1068,16 @@ test('Health Connect: el plugin de Android lee las series con paginación y no r
   assert.equal((a.match(/catch \(e: Exception\) \{ \/\* sin serie/g) || []).length, 2, 'cada serie falla por separado sin romper la carrera');
   assert.ok(!/READ_EXERCISE_ROUTE|ExerciseRoute/.test(a), 'no pide ruta GPS: no se agregaron permisos nuevos');
 });
+
+test('pestaña Plan: por distancia cada día con sesión suma la línea de calentamiento y vuelta a la calma; por tiempo no (la cantidad ya trae el total); descanso y carrera no la llevan', () => {
+  assert.ok(SRC.includes("const wcLine = (!isEventDay && !isTimeMode() && d.dist>0 && !d.raceDay) ? planWarmCoolText(d) : '';"));
+  assert.ok(SRC.includes("${wcLine ? `<div class=\"day-row-wc\">${escapeHtml(wcLine)}</div>` : ''}"), 'va escapada');
+  assert.ok(read('index.html').includes('.day-row-wc{'));
+  const app = loadApp();
+  ready(app);
+  const easy = app.state.plan.find(x => x.typeKey === 'easy');
+  app.state.profile.trainBy = 'distance';
+  assert.match(app.planWarmCoolText(easy), /^Más 5 min de calentamiento y 5 min de vuelta a la calma$/);
+  assert.equal(app.planWarmCoolText({ typeKey: 'rest', dist: 0 }), '');
+  assert.equal(app.planWarmCoolText(Object.assign({}, easy, { raceDay: true })), '');
+});
