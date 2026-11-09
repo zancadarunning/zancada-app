@@ -1244,3 +1244,50 @@ test('chat: después de un cambio real el siguiente pedido del mismo mensaje rec
   const end = SRC.indexOf('no intentes diagnosticar vos la causa.`;', start);
   assert.equal((SRC.slice(start, end).match(/\$\{ctxAtStart\}/g) || []).length, 1);
 });
+
+test('mensajes automáticos del coach: quien entrena por tiempo ve minutos (no "tus 30 km semanales"); por distancia, su unidad', () => {
+  const app = loadApp();
+  ready(app);
+  app.state.profile.trainBy = 'time';
+  const t = app.weeklyKmAsShown(30);
+  assert.equal(t.unit, 'min');
+  assert.ok(Number(t.km) >= 100 && Number(t.km) % 5 === 0, 'minutos redondeados de a 5: ' + t.km);
+  app.state.profile.trainBy = 'distance';
+  app.state.profile.units = 'metric';
+  const d = app.weeklyKmAsShown(30);
+  assert.equal(d.unit, 'km');
+  assert.equal(String(d.km), '30.0');
+  app.state.profile.units = 'imperial';
+  assert.equal(app.weeklyKmAsShown(30).unit, 'mi');
+  assert.ok(SRC.includes('t(\'calib_coach_msg\', weeklyKmAsShown(wk))') && SRC.includes('km:weeklyKmAsShown(state.profile.weeklyKm).km'));
+});
+
+test('chat: lo que Zonda cree sobre la progresión coincide con lo que hace el plan (6 % por semana, descarga cada cuarta semana al 75 %)', () => {
+  assert.ok(SRC.includes('el plan de la app sube alrededor de un 6% por semana'));
+  assert.ok(SRC.includes('descarga sola cada cuarta semana, al 75% del volumen'));
+  const app = loadApp();
+  assert.equal(app.isCutbackWeek(4), true);
+  assert.equal(app.isCutbackWeek(8), true);
+  assert.equal(app.isCutbackWeek(5), false);
+  assert.ok(/1\.06/.test(SRC) && /mult \*= 0\.75/.test(SRC), 'las cifras del prompt siguen siendo las del plan');
+});
+
+test('chat: lo que Zonda cree de una carrera cargada coincide con lo que hace el plan (-25 % la semana, -15 % la anterior si es de 10 km o más, el día se muestra como la carrera)', () => {
+  assert.ok(SRC.includes('bajar el volumen un 25% la semana en la que cae'));
+  assert.ok(SRC.includes('si la carrera es de 10 km o más, además bajar un 15% la semana anterior'));
+  assert.ok(!SRC.includes('El día exacto de esa carrera SÍ recibe una sesión de entrenamiento normal en el plan'), 'ya no dice que el día de la carrera lleva una sesión normal');
+  const app = loadApp();
+  ready(app);
+  const mon = app.getMondayISO(new Date());
+  app.state.event = { name: 'Diez', type: 'road', date: app.addDaysToIsoLocal(mon, 3), distanceKm: 10 };
+  assert.equal(app.eventRaceWeekMultiplier(mon, app.state.profile), 0.75, 'semana de la carrera: -25 %');
+  assert.equal(app.eventPreRaceWeekMultiplier(app.addDaysToIsoLocal(mon, -7), app.state.profile), 0.85, 'semana anterior: -15 %');
+  app.state.event.distanceKm = 5;
+  assert.equal(app.eventPreRaceWeekMultiplier(app.addDaysToIsoLocal(mon, -7), app.state.profile), 1, 'menos de 10 km: sin puesta a punto previa');
+});
+
+test('chat: Zonda sabe qué hace la app por su cuenta (recorte tras dos faltazos, ritmos, días de la semana que viene) y no lo contradice', () => {
+  assert.ok(SRC.includes('baja un 15% la próxima sesión de calidad si las dos últimas sesiones planeadas no se hicieron'));
+  assert.ok(SRC.includes('le ofrece al corredor actualizar sus ritmos'));
+  assert.ok(SRC.includes('le pregunta qué días corre la semana que viene'));
+});

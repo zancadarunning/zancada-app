@@ -185,7 +185,7 @@ test('el proyecto nativo de Android versiona el manifest, los plugins y file_pat
 
 test('mensajes automaticos con numeros de carreras (pueden ser de Strava) no se reenvian a la IA como historial', () => {
   const s = read('app.js');
-  for (const frag of ["text: recapMsg, ts:Date.now(), noAi:true", "text: feedbackMsg, ts:Date.now(), noAi:true", "{time: fmtTime(run.durationSec)}), ts:Date.now(), noAi:true", "t(a.key, a.vars), ts:Date.now(), noAi:true", "t('calib_coach_msg', {km: fmtDist(wk, 1), unit: distUnit()}), ts: Date.now(), noAi:true"]) assert.ok(s.includes(frag), frag);
+  for (const frag of ["text: recapMsg, ts:Date.now(), noAi:true", "text: feedbackMsg, ts:Date.now(), noAi:true", "{time: fmtTime(run.durationSec)}), ts:Date.now(), noAi:true", "t(a.key, a.vars), ts:Date.now(), noAi:true", "t('calib_coach_msg', weeklyKmAsShown(wk)), ts: Date.now(), noAi:true"]) assert.ok(s.includes(frag), frag);
   assert.match(s, /state\.chat\.filter\(m=>\(m\.role==='user'\|\|m\.role==='coach'\) && !m\.noAi\)/);
 });
 
