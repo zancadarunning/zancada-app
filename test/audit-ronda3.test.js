@@ -1317,3 +1317,52 @@ test('chat: Zonda usa los mismos nombres que la pantalla (fase "puesta a punto";
   assert.ok(!SRC.slice(promptStart, promptEnd).includes('Perfil > Metas'), 'el prompt no manda a una pantalla que no existe');
   assert.match(read('locales/es.js'), /plan_phase_taper:"Puesta a punto"/);
 });
+
+// ---------- barridos de coherencia (quedan como pruebas de regresión) ----------
+function sweepProfile(app, over) {
+  return Object.assign({ name: 'Ana', weight: 60, height: 165, birth: '1990-05-01', gender: 'f', weeklyKm: 40, currentWeeklyKm: 35, goal: 'half', runnerType: 'active', trainingDays: ['mon', 'tue', 'thu', 'sat', 'sun'], units: 'metric', trainBy: 'distance', terrain: 'asfalto', hrZones: app.computeZones(190), hrMax: 190 }, over || {});
+}
+
+test('barrido: el contexto de Zonda no trae undefined/NaN/null en ninguna combinación de modo, unidades, perfil y estado', () => {
+  const issues = [];
+  const variants = { distancia: {}, tiempo: { trainBy: 'time' }, millas: { units: 'imperial' }, principiante: { runnerType: 'beginner', currentWeeklyKm: 0, weeklyKm: 10 }, carreraProxima: { raceDate: new Date(Date.now() + 9 * 864e5).toISOString().slice(0, 10) } };
+  for (const [name, over] of Object.entries(variants)) for (const extra of ['nada', 'evento', 'dias', 'recorte']) {
+    const app = loadApp();
+    const p = sweepProfile(app, over);
+    app.state.profile = p; app.state.onboarded = true; app.state.weekNumber = 6; app.state.weekStart = app.getMondayISO(new Date());
+    app.state.plan = app.generatePlan(p, 6); app.state.runs = []; app.state.shoes = []; app.state.painLog = []; app.state.chat = [];
+    if (extra === 'evento') app.state.event = { name: 'Corrida', type: 'road', date: app.addDaysToIsoLocal(app.state.weekStart, 5), distanceKm: 10 };
+    if (extra === 'dias') app.state.nextWeekDays = { weekStart: app.addDaysToIsoLocal(app.state.weekStart, 7), days: ['tue', 'thu'] };
+    if (extra === 'recorte') app.state.softenedWeek = app.state.weekStart;
+    const ctx = app.buildContext();
+    for (const bad of ['undefined', 'NaN', 'null', 'Infinity']) if (new RegExp('(?<![A-Za-zñ])' + bad + '(?![A-Za-zñ])').test(ctx)) issues.push(name + '/' + extra + ': ' + bad);
+    if (name === 'tiempo' && /\bkm\(~/.test(ctx)) issues.push(name + '/' + extra + ': plan por tiempo con bloques en km');
+    if (name === 'distancia' && extra === 'nada' && /\/\d+min,/.test(ctx)) issues.push('distancia: bloques solo en minutos');
+  }
+  assert.equal(issues.length, 0, issues.join(' | '));
+});
+
+test('barrido: modificar_sesion deja el plan sano y coherente con lo pedido (modo, unidades, semana, tipo) y el contexto posterior sigue sano', () => {
+  const issues = [];
+  const realDay = Date.prototype.getDay;
+  Date.prototype.getDay = function () { return 1; };
+  try {
+    for (const trainBy of ['distance', 'time']) for (const units of ['metric', 'imperial']) for (const semana of ['actual', 'siguiente'])
+      for (const [cat, qty] of [['easy', { distancia_km: 8 }], ['long', { duracion_min: 70 }], ['tempo', { duracion_min: 45 }], ['intervals', { repeticiones: 6, esfuerzo_min: 3, recuperacion_min: 2 }]]) {
+        const app = loadApp();
+        const p = sweepProfile(app, { trainBy, units });
+        app.state.profile = p; app.state.onboarded = true; app.state.weekNumber = 7; app.state.weekStart = app.getMondayISO(new Date());
+        app.state.plan = app.generatePlan(p, 7); app.state.runs = []; app.state.shoes = []; app.state.chat = []; app.state.painLog = [];
+        const tag = [trainBy, units, semana, cat].join('/');
+        const r = app.applyPlanChange(Object.assign({ semana, dia: 'thu', tipo: 'Sesión', tipo_categoria: cat, descripcion: 'x', zona: cat === 'easy' || cat === 'long' ? 2 : 4 }, qty));
+        if (!/^OK/.test(String(r)) || /undefined|NaN/.test(String(r))) { issues.push(tag + ': ' + String(r).slice(0, 80)); continue; }
+        const d = (semana === 'siguiente' ? app.getNextWeekPlan().plan : app.state.plan).find(x => x.day === 'thu');
+        const l = app.planLabel(d);
+        for (const tx of [l.type, l.desc, app.planShownAmountText(d), app.planWarmCoolText(d)]) if (/undefined|NaN|\bnull\b|\{[a-z_]+\}/.test(String(tx))) issues.push(tag + ': texto roto ' + String(tx).slice(0, 80));
+        if (qty.duracion_min && trainBy === 'time' && Math.abs(app.planTotalMinutes(d) - qty.duracion_min) > 1) issues.push(tag + ': pidió ' + qty.duracion_min + ' y se ve ' + app.planTotalMinutes(d));
+        if (!(d.dist > 0)) issues.push(tag + ': sin distancia');
+        if (/undefined|NaN/.test(app.buildContext())) issues.push(tag + ': contexto posterior roto');
+      }
+  } finally { Date.prototype.getDay = realDay; }
+  assert.equal(issues.length, 0, issues.join(' | '));
+});
