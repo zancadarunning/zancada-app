@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T18:34:09Z';
+const APP_VERSION = '2026-11-09T18:35:39Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -14159,7 +14159,7 @@ function checkPendingRating(){
   if(idx < 0) return;
   const d = state.plan[idx];
   const lbl = planLabel(d);
-  const raceDay = raceInfoForDate(addDaysToIsoLocal(state.weekStart, idx));
+  const raceDay = state.weekStart ? raceInfoForDate(addDaysToIsoLocal(state.weekStart, idx)) : null;
   document.getElementById('rating-session-desc').textContent = raceDay
     ? `${t('day_'+d.day)}: ${t('plan_race_day_type')}${raceDay.name ? ' · ' + raceDay.name : ''}`
     : `${t('day_'+d.day)}: ${lbl.type}${d.dist>0?' · '+planAmountText(d):''}`;

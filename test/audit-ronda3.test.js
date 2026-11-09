@@ -621,7 +621,7 @@ test('una carrera cargada en Próximos eventos: Zonda comenta la carrera, no "17
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.ok(/coach_feedback_race:"[^"]*\{actual\}[^"]*\{pace\}[^"]*"/.test(read('locales/' + l + '.js')), l);
   // calificar una carrera: no se ofrece "bajar la intensidad" por la sesión normal de abajo
   assert.ok(SRC.includes("if(value === 'mal' && !wasRace){"));
-  assert.ok(SRC.includes("const raceDay = raceInfoForDate(addDaysToIsoLocal(state.weekStart, idx));"));
+  assert.ok(SRC.includes("const raceDay = state.weekStart ? raceInfoForDate(addDaysToIsoLocal(state.weekStart, idx)) : null;"));
 });
 
 test('aviso push de carga: un día de carrera no se compara con la sesión normal de ese día', () => {
