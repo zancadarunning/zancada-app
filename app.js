@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T13:34:29Z';
+const APP_VERSION = '2026-11-09T13:43:00Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1311,7 +1311,7 @@ async function updatePushStatusDisplay(){
     }catch(e){ el.textContent = t('push_disabled'); if(toggle) toggle.checked = false; }
     return;
   }
-  if(!('serviceWorker' in navigator) || !('PushManager' in window)){ el.textContent = t('push_not_supported'); if(toggle) toggle.disabled = true; return; }
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)){ el.textContent = pushUnsupportedMsg(); if(toggle) toggle.disabled = true; return; }
   try{
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
@@ -1361,7 +1361,7 @@ async function enablePushNotifications(opts){
   const nativePush = nativePushPlugin();
   if(nativePush){ await enableNativePushNotifications(nativePush, opts); return; }
   try{
-    if(!('serviceWorker' in navigator) || !('PushManager' in window)){ showToast(t('push_not_supported'),'error'); await updatePushStatusDisplay(); return; }
+    if(!('serviceWorker' in navigator) || !('PushManager' in window)){ showToast(pushUnsupportedMsg(),'error'); await updatePushStatusDisplay(); return; }
     if(Notification.permission === 'default' && !(opts && opts.skipSoftAsk)){
       const proceed = await showConfirm(t('push_soft_ask'), { confirmText: t('push_soft_ask_confirm'), cancelText: t('push_soft_ask_cancel') });
       if(!proceed){ await updatePushStatusDisplay(); return; }
@@ -1520,7 +1520,22 @@ async function persist(){
       scheduleWatchSync();
       // supabase-js NO lanza una excepción cuando falla la red: devuelve { error }. Sin revisarlo, un guardado sin conexión
       // se daba por bueno (se borraba el respaldo local y se avanzaba la versión conocida) y el cambio se perdía.
-      const { error: saveError } = await supabaseClient.from('app_state').upsert({ user_id: currentUserId, data: state, updated_at: nowIso });
+      let saveError;
+      if(loadedStateVersion){
+        // Ya había una fila cuando se cargó esta sesión: se guarda con UPDATE y se mira cuántas filas cambió. Si no cambió ninguna, la fila se borró desde otro dispositivo ("Borrar mis datos" o borrado de la cuenta):
+        // con upsert se recreaba con todo el estado que esta pestaña todavía tenía en memoria (perfil, carreras, chat), deshaciendo el borrado. Solo el primer guardado de una cuenta nueva (sin versión) usa upsert.
+        const res = await supabaseClient.from('app_state').update({ data: state, updated_at: nowIso }).eq('user_id', currentUserId).select('user_id');
+        saveError = res.error;
+        if(!saveError && Array.isArray(res.data) && res.data.length === 0){
+          clearPendingBackup();
+          try{ wipeLocalUserData(currentUserId); }catch(e){}
+          try{ await supabaseClient.auth.signOut({ scope:'local' }); }catch(e){}
+          location.reload();
+          return;
+        }
+      } else {
+        saveError = (await supabaseClient.from('app_state').upsert({ user_id: currentUserId, data: state, updated_at: nowIso })).error;
+      }
       if(saveError) throw saveError;
       loadedStateVersion = nowIso; // este guardado ya es la versión más nueva que conocemos
       clearPendingBackup();
@@ -1697,6 +1712,13 @@ async function ensureConsent(){
   if(hasConsent()) return true;
   return await showConsentScreen();
 }
+// Rechazar los consentimientos cierra la sesión de este dispositivo. Antes solo se cerraba la sesión: el aviso push de este dispositivo seguía registrado y la cuenta seguía recibiendo avisos con distancia y ritmo de las
+// carreras. Ahora también se da de baja el push (con tope de 4 s: no puede colgar la salida). Los datos de la cuenta se conservan hasta que la persona la borre desde Perfil.
+async function declineConsentSignOut(){
+  try{ await Promise.race([deletePushRowsForThisDevice(), new Promise(r => setTimeout(r, 4000))]); }catch(e){}
+  try{ await supabaseClient.auth.signOut({ scope:'local' }); }catch(e){}
+  location.reload();
+}
 async function loadUserAndEnter(user, isRetry){
   currentUserId = user.id;
   try{
@@ -1768,7 +1790,7 @@ async function loadUserAndEnter(user, isRetry){
         try{ supabaseClient.auth.updateUser({ data: { lang } }); }catch(e){}
       }
       if(!hasConsent()){
-        if(!(await ensureConsent())){ await supabaseClient.auth.signOut({ scope:'local' }); location.reload(); return; }
+        if(!(await ensureConsent())){ await declineConsentSignOut(); return; }
         persist();   // queda guardado en la cuenta (versión y fecha)
       }
       if(!state.chat || !state.chat.length) seedCoachGreeting(); else renderChat();
@@ -1785,7 +1807,7 @@ async function loadUserAndEnter(user, isRetry){
       location.reload();
       return;
     }
-    if(!(await ensureConsent())){ await supabaseClient.auth.signOut({ scope:'local' }); location.reload(); return; }   // el consentimiento viaja en state y se guarda con el onboarding
+    if(!(await ensureConsent())){ await declineConsentSignOut(); return; }   // el consentimiento viaja en state y se guarda con el onboarding
     pendingEmail = user.email;
     stateLoadedFor = user.id;   // la consulta confirmó que no hay datos: cuenta nueva, el estado por defecto es el correcto
     document.getElementById('splash').style.display='none';
@@ -16630,6 +16652,11 @@ function closeZonesInfo(){ document.getElementById('zones-info-modal').style.dis
 /* ================= INSTALL PROMPT (PWA) ================= */
 let deferredInstallPrompt = null;
 const INSTALL_DISMISS_KEY = 'zancada_install_dismissed';
+// En Safari del iPhone SIN instalar no existe PushManager: decir "tu dispositivo no soporta notificaciones" era falso. Lo que falta es agregar la app a la pantalla de inicio.
+function pushUnsupportedMsg(){
+  try{ if(isIOSDevice() && !isRunningStandalone()) return t('push_needs_install'); }catch(e){}
+  return t('push_not_supported');
+}
 function isRunningStandalone(){
   // Reportado por el usuario: en la app nativa de Android (Capacitor) seguía apareciendo
   // la tarjeta/banner de "cómo instalar la app en tu pantalla de inicio" -- no tenía ningún
@@ -19280,7 +19307,9 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
   // con lo que el chat decía. CLAIM_PATTERN es deliberadamente amplio (mejor una vuelta extra
   // de más en un caso ambiguo que dejar pasar una confirmación falsa) -- ver el chequeo más
   // abajo, junto al break del loop.
-  const CLAIM_PATTERN = /\b(ya\s+(est[aá]|qued[oó]|lo\s+(cambi[eé]|actualic[eé]|apliqu[eé]|hice)|se\s+aplic[oó])|listo,|actualizad[oa]\s|cargad[oa]\s|already\s+(updated|changed|applied|done)|all\s+set|it'?s\s+(done|updated)|c'est\s+(fait|mis\s+à\s+jour)|gi[àa]\s+(aggiornat|fatt)|(bereits|schon)\s+(aktualisiert|erledigt)|j[aá]\s+atualizad)/i;
+  // Solo respuestas que AFIRMAN haber hecho un cambio (verbo de acción en pasado: cambié, actualicé, apliqué, moví...). Antes también saltaba con 'ya está/estás', 'cargada', 'actualizado' o 'Listo, ¿querés...?',
+  // y una respuesta informativa buena se descartaba, se gastaba otro pedido y se empujaba al modelo a llamar herramientas que nadie pidió.
+  const CLAIM_PATTERN = /(\b(cambié|actualicé|apliqué|ajusté|moví|cancelé|guardé|armé|modifiqué|eliminé)(?![a-záéíóúñ])|\bya\s+(lo\s+|los\s+|las\s+)?(cambié|actualicé|apliqué|hice|moví|cancelé|ajusté|guardé|armé)(?![a-záéíóúñ])|\b(se\s+)?(aplicó|cambió|actualizó|guardó|canceló)\s+(el|la|los|las|tu|tus)\b|\blisto,\s*(ya\b|lo\s+(cambié|actualicé|apliqué|hice)|apliqué|cambié|actualicé)|\balready\s+(updated|changed|applied|done)|\ball\s+set\b|\bit'?s\s+(done|updated)|\bc'est\s+(fait|mis\s+à\s+jour)|\bgi[àa]\s+(aggiornat|fatt)|\b(bereits|schon)\s+(aktualisiert|erledigt)|\bj[aá]\s+atualizad)/i;
   let correctionAttempted = false;
   chatAbortController = new AbortController();
   try{

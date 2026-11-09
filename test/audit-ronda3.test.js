@@ -221,3 +221,54 @@ test('la pausa larga se descuenta por escalón (no una sola vez): el código apl
   for (const f of [0.8, 0.8, 0.65, 0.65, 0.5, 0.5]) { if (f < applied - 1e-9) { km = km * (f / applied); applied = f; } }
   assert.equal(Math.round(km), 20);
 });
+
+// ---------- resto de la ronda ----------
+test('el chequeo de "dijo que aplicó un cambio" solo salta con respuestas que lo afirman, no con las informativas', () => {
+  const m = SRC.match(/const CLAIM_PATTERN = (\/.*\/i);/);
+  assert.ok(m, 'CLAIM_PATTERN existe');
+  const re = eval(m[1]);
+  for (const t of ['Listo, ya apliqué los cambios en tu plan.', 'Cambié el martes a un rodaje suave.', 'Ya lo actualicé: el jueves queda en descanso.', 'Moví la tirada al domingo.', 'I already updated your plan.', 'Se actualizó la semana.']) assert.ok(re.test(t), t);
+  for (const t of ['Ya estás corriendo 30 km por semana, eso es una buena base.', 'Tu carrera cargada en Próximos eventos es el 15 de noviembre.', 'Tenés el plan actualizado con los 3 rodajes.', 'Ya está bien así: 3 sesiones suaves y una tirada larga.', 'Con esa carga ya estarías en zona 2.', 'Listo, ¿querés que te arme una sesión de series?', 'El ajuste de volumen es del 10%.']) assert.ok(!re.test(t), t);
+});
+
+test('rechazar los consentimientos también da de baja el aviso push de ese dispositivo (con tope de tiempo)', () => {
+  assert.equal((SRC.match(/if\(!\(await ensureConsent\(\)\)\)\{ await declineConsentSignOut\(\); return; \}/g) || []).length, 2, 'las dos rutas (cuenta existente y nueva)');
+  const fn = SRC.slice(SRC.indexOf('async function declineConsentSignOut(){'), SRC.indexOf('async function declineConsentSignOut(){') + 500);
+  assert.ok(fn.includes('deletePushRowsForThisDevice()') && fn.includes('setTimeout(r, 4000)') && fn.includes("signOut({ scope:'local' })"));
+});
+
+test('persist: con una fila ya cargada guarda con UPDATE y, si la fila ya no existe (borrada desde otro dispositivo), NO la recrea: cierra la sesión local', () => {
+  const body = SRC.slice(SRC.indexOf('async function persist()'), SRC.indexOf('function waitForPendingPersist'));
+  assert.ok(body.includes("if(loadedStateVersion){") && body.includes(".update({ data: state, updated_at: nowIso }).eq('user_id', currentUserId).select('user_id')"));
+  assert.ok(body.includes('Array.isArray(res.data) && res.data.length === 0'), 'solo una lista vacía cuenta como fila borrada (no un null)');
+  assert.ok(body.includes('location.reload();\n          return;'), 'cierra y recarga en vez de recrear');
+  assert.ok(/else \{\s*saveError = \(await supabaseClient\.from\('app_state'\)\.upsert\(/.test(body), 'el primer guardado de una cuenta nueva sigue siendo upsert');
+});
+
+test('Strava revocado: el aviso concuerda en número en español, portugués y alemán (antes "3 Lauf läufe")', () => {
+  const src = read('api/strava-webhook.js');
+  assert.ok(!src.includes("Lauf${n===1?'':' läufe'}"), 'la forma rota ya no existe');
+  assert.ok(src.includes("n===1 ? '1 Lauf, der' : n + ' Läufe, die'"));
+  assert.ok(src.includes("n===1?'había llegado':'habían llegado'") && src.includes("n===1?'tinha vindo':'tinham vindo'"));
+});
+
+test('iPhone: las filas tocables vuelven a tener cursor y animación de toque (los selectores quedaron en [onclick] al migrar a data-on-click), y Safari sin instalar explica cómo activar los avisos', () => {
+  const html = read('index.html');
+  assert.ok(html.includes('.card[data-on-click]{cursor:pointer;') && html.includes('.card[data-on-click]:active{transform:scale(.98);}') && html.includes('[data-on-click]:not(:disabled){cursor:pointer;}'));
+  assert.ok(!html.includes('.card[onclick]'), 'ya no quedan selectores muertos');
+  assert.ok(SRC.includes('function pushUnsupportedMsg(){') && SRC.includes("el.textContent = pushUnsupportedMsg();") && SRC.includes("showToast(pushUnsupportedMsg(),'error')"));
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.ok(/push_needs_install:"[^"]{20,}"/.test(read('locales/' + l + '.js')), l);
+});
+
+test('el aviso de carga de Inicio dice "últimos 7 días" en los 6 idiomas (la ventana real), no "esta semana"', () => {
+  const bad = { pt: /esta semana/, fr: /cette semaine/, it: /questa settimana|di questa settimana/, de: /diese Woche/ };
+  for (const l of ['pt', 'fr', 'it', 'de']) {
+    const src = read('locales/' + l + '.js');
+    for (const k of ['optimal', 'low', 'caution', 'risk']) {
+      const m = src.match(new RegExp('home_load_hint_' + k + ':"([^"]*)"'));
+      assert.ok(m, l + ' ' + k);
+      assert.ok(/7/.test(m[1]), l + ' ' + k + ' menciona los 7 días: ' + m[1]);
+      if (k === 'optimal' || k === 'low') assert.ok(!bad[l].test(m[1]), l + ' ' + k + ' no dice "esta semana"');
+    }
+  }
+});
