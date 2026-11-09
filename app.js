@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T19:23:26Z';
+const APP_VERSION = '2026-11-09T20:31:16Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4983,8 +4983,10 @@ function enterApp(){
   checkReturningBreakGraduation();
   autoSkipPastDays();
   repairSkippedDaysWithMatchingRuns();
+  softenQualityAfterMisses();
   autoClearPastEvent();
   repairCorruptedCustomDays();
+  setTimeout(maybeSuggestPaceRecalibration, 5000);
   checkProactiveCoachNudge();
   checkInactivityCheckin();
   checkPainCheckins();
@@ -5034,6 +5036,7 @@ document.addEventListener('visibilitychange', ()=>{
   checkReturningBreakGraduation();
   autoSkipPastDays();
   repairSkippedDaysWithMatchingRuns();
+  softenQualityAfterMisses();
   autoClearPastEvent();
   checkProactiveCoachNudge();
   checkPainCheckins();
@@ -6629,6 +6632,28 @@ function repairSkippedDaysWithMatchingRuns(){
   });
   if(changed) persist();
 }
+/* Dos sesiones seguidas sin hacer (salteadas o calificadas "mal"): la próxima sesión de calidad de la semana baja un 15 % (una vez por semana, con aviso). Es el mismo recorte que ya usa lowerRemainingIntensity,
+   pero solo sobre esa sesión: volver de dos faltazos con series completas es cuando más se lesiona la gente. Las sesiones de hoy y de los días que quedan; nunca el test de nivel ni una carrera. */
+const SOFTEN_QUALITY_KEYS = ['intervals', 'tempo', 'hills', 'fartlek', 'progression'];
+function softenQualityAfterMisses(todayIdxForTest){
+  if(!state.onboarded || !state.weekStart || !Array.isArray(state.plan) || state.softenedWeek === state.weekStart) return;
+  if(state.profile && isBeginnerProfile(state.profile)) return;   // el principiante ya arma sus sesiones con otra progresión
+  const todayIdx = todayIdxForTest != null ? todayIdxForTest : (new Date().getDay()+6)%7;
+  const past = [];
+  for(let i = 0; i < todayIdx; i++){ const d = state.plan[i]; if(d && d.dist > 0 && !d.raceDay) past.push(d); }
+  if(past.length < 2) return;
+  if(!past.slice(-2).every(d => d.status === 'skipped' || d.rating === 'mal')) return;
+  const idx = state.plan.findIndex((d, i) => i >= todayIdx && d && d.dist > 0 && !d.status && !d.raceDay && SOFTEN_QUALITY_KEYS.includes(d.typeKey));
+  if(idx < 0) return;
+  const d = state.plan[idx];
+  const typeLabel = planLabelBody(d).type;
+  scaleDayAmount(d, 0.85, true);
+  freezeDayText(d);
+  state.softenedWeek = state.weekStart;
+  if(Array.isArray(state.chat)) state.chat.push({role:'coach', text: t('coach_softened_after_misses', {type: typeLabel.charAt(0).toLowerCase() + typeLabel.slice(1), day: t('day_'+d.day)}), ts: Date.now(), noAi: true});
+  persist();
+  try{ renderPlan(); renderHome(); renderChat(); }catch(e){}
+}
 function autoClearPastEvent(){
   // el evento cargado en "Próximos eventos" es justamente eso, PRÓXIMO -> una vez que pasó
   // el día de la carrera, se saca solo de esa tarjeta (no tiene sentido seguir mostrando una
@@ -6851,6 +6876,8 @@ function getNextWeekPlan(){
   const nextStartIso = addDaysToIsoLocal(state.weekStart || getMondayISO(new Date()), 7);
   const adj = computeWeekAdjustment(state.plan);
   const previewProfile = Object.assign({}, state.profile, {weeklyKm: adjustedWeeklyKm(state.profile.weeklyKm||0, adj.factor)});
+  // los días elegidos solo para la semana que viene (ver renderHomeWeekdays); el perfil queda con los de siempre
+  if(state.nextWeekDays && state.nextWeekDays.weekStart === nextStartIso && Array.isArray(state.nextWeekDays.days) && state.nextWeekDays.days.length >= 2) previewProfile.trainingDays = state.nextWeekDays.days.filter(k => DAY_KEYS.includes(k));
   const base = generatePlan(previewProfile, wn, nextStartIso);
   const overrides = state.nextWeekOverrides || {};
   // Un override de cancelar_sesion (cancelled:true) tiene que verse EXACTAMENTE como un día de
@@ -7884,6 +7911,70 @@ function evaluateLevelTest(distanceM){
     // a ratos y conviene seguir con trote-caminata en las primeras semanas
     continuousOk: distanceM >= 1700
   };
+}
+/* ---- Recalibrar los ritmos con lo que la persona de verdad corre ----
+   Los ritmos salen del test de 12 minutos y la gente mejora (o se cansa). Se miran los rodajes suaves y tiradas de las últimas 6 semanas (ruta GPS, sin Strava) en los que el pulso estuvo dentro de la zona: si el ritmo mediano
+   se aleja del rango suave actual, se propone actualizar. Código determinista, nada va a la IA. Se mueve SOLO la mitad de la diferencia (máx. 5 % del VDOT), una vez cada 21 días, y siempre con confirmación. */
+const RECAL_WINDOW_DAYS = 42, RECAL_MIN_RUNS = 4, RECAL_MIN_GAP_DAYS = 21, RECAL_TRIGGER_PCT = 0.04, RECAL_MAX_STEP_PCT = 0.05;
+function vo2AtPaceMinPerKm(paceMin){
+  const v = 1000 / paceMin;   // m/min
+  return -4.60 + 0.182258 * v + 0.000104 * v * v;
+}
+function medianOf(xs){
+  const a = xs.slice().sort((x, y) => x - y), m = a.length >> 1;
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+}
+// Devuelve {dir:'up'|'down', n, medianPace, newVdot} o null si no hay evidencia suficiente. nowMs solo para los tests.
+function paceRecalibrationSuggestion(nowMs){
+  const p = state.profile, lt = p && p.levelTest;
+  if(!lt || !lt.done || !lt.paces || !lt.paces.easy || !(lt.vdot > 0) || p.hrZones == null) return null;
+  const now = nowMs != null ? nowMs : Date.now();
+  if(lt.recalibratedAt && (now - new Date(lt.recalibratedAt + 'T12:00:00').getTime()) < RECAL_MIN_GAP_DAYS * 864e5) return null;
+  if(state.paceRecalDeclinedAt && (now - new Date(state.paceRecalDeclinedAt + 'T12:00:00').getTime()) < RECAL_MIN_GAP_DAYS * 864e5) return null;
+  const paces = [];
+  (state.runs || []).forEach(r => {
+    if(!r || r.source === 'strava' || r.origin === 'strava') return;
+    const ts = typeof r.date === 'number' ? r.date : new Date(r.date).getTime();
+    if(!(now - ts <= RECAL_WINDOW_DAYS * 864e5) || ts > now + 864e5) return;
+    if(lt.date && localDateISO(r.date) <= lt.date) return;   // solo carreras posteriores al test que fijó los ritmos
+    const found = runPlannedDay(r);
+    if(!found || found.d.raceDay || found.d.custom || !['easy', 'long'].includes(found.d.typeKey)) return;
+    let ev = null;
+    try{ ev = evaluateRunSteps(r, planStepsFromPayload(watchDayPayload(found.d, found.date)), p.hrZones); }catch(e){ ev = null; }
+    const main = ev && ev.rows.find(x => x.kind === 'main');
+    if(main && main.hrStatus === 'ok' && main.paceMin > 3 && main.paceMin < 13 && main.sec >= 600) paces.push(main.paceMin);
+  });
+  if(paces.length < RECAL_MIN_RUNS) return null;
+  const med = medianOf(paces);
+  const estVdot = vo2AtPaceMinPerKm(med) / 0.68;   // el rango suave del plan es 62-74 % del VDOT: el centro es ~68 %
+  const diff = (estVdot - lt.vdot) / lt.vdot;
+  if(Math.abs(diff) < RECAL_TRIGGER_PCT) return null;
+  const step = Math.max(-RECAL_MAX_STEP_PCT, Math.min(RECAL_MAX_STEP_PCT, diff / 2));
+  return {dir: diff > 0 ? 'up' : 'down', n: paces.length, medianPace: med, newVdot: Math.round(lt.vdot * (1 + step) * 10) / 10};
+}
+function applyPaceRecalibration(sug){
+  const p = state.profile, lt = p.levelTest;
+  p.levelTest = Object.assign({}, lt, {prevVdot: lt.vdot, vdot: sug.newVdot, paces: trainingPacesFromVdot(sug.newVdot), recalibratedAt: todayLocalISO()});
+  state.plan = preserveLivedDays(state.plan, generatePlan(p, state.weekNumber || 1));
+  const P = p.levelTest.paces, unit = distUnit();
+  state.chat = state.chat || [];
+  state.chat.push({role:'coach', text: t('pace_recal_done', {easy: fmtPaceRange(P.easy), tempo: fmtPaceRange(P.tempo), interval: fmtPaceRange(P.interval), unit}), ts: Date.now(), noAi: true});
+  persist();
+}
+let paceRecalAsking = false;
+async function maybeSuggestPaceRecalibration(){
+  if(paceRecalAsking || !state.onboarded || tracker.running || document.visibilityState !== 'visible') return;
+  const sug = paceRecalibrationSuggestion();
+  if(!sug) return;
+  paceRecalAsking = true;
+  try{
+    const unit = distUnit();
+    const msg = t('pace_recal_' + sug.dir, {n: sug.n, pace: fmtPace(sug.medianPace), unit, easy: fmtPaceRange(state.profile.levelTest.paces.easy)});
+    const yes = await showConfirm(msg, {confirmText: t('pace_recal_yes'), cancelText: t('pace_recal_no')});
+    if(yes){ applyPaceRecalibration(sug); try{ renderPlan(); renderHome(); renderZones(); renderChat(); }catch(e){} }
+    else { state.paceRecalDeclinedAt = todayLocalISO(); persist(); }
+  }catch(e){ console.error('recalibración de ritmos', e); }
+  finally{ paceRecalAsking = false; }
 }
 function fmtPaceRange(range){
   return fmtPace(range[0]) + '–' + fmtPace(range[1]);
@@ -9163,6 +9254,57 @@ function recalInfo(){
   if(weeks >= 12) return {reason: 'old', weeks};
   return null;
 }
+/* ---- Días de la semana que viene ----
+   Viernes a domingo, una pregunta: ¿qué días corrés la semana que viene? Los días de siempre vienen marcados; si se cambian, SOLO la semana que sigue se arma con esos días (state.nextWeekDays, ver getNextWeekPlan) y después
+   vuelve a los de siempre. Se pregunta una vez por semana (nextWeekDaysAsked). */
+let weekdaysDraft = null;
+function nextWeekMondayIso(){ return state.weekStart ? addDaysToIsoLocal(state.weekStart, 7) : null; }
+function weekdaysCardVisible(){
+  if(!state.onboarded || !state.weekStart || !state.profile || !(state.profile.trainingDays && state.profile.trainingDays.length)) return false;
+  const todayIdx = (new Date().getDay()+6)%7;
+  return todayIdx >= 4 && state.nextWeekDaysAsked !== nextWeekMondayIso();
+}
+function drawWeekdaysPicker(){
+  const box = document.getElementById('home-weekdays-picker');
+  if(!box || !weekdaysDraft) return;
+  box.innerHTML = DAY_KEYS.map(k => `<button type="button" class="day-pill${weekdaysDraft.includes(k) ? ' active' : ''}" aria-pressed="${weekdaysDraft.includes(k)}" data-on-click="toggleNextWeekDay('${k}')">${escapeHtml(t('day_'+k).slice(0,3))}</button>`).join('');
+}
+function renderHomeWeekdays(){
+  const el = document.getElementById('home-weekdays-card');
+  if(!el) return;
+  if(state.nextWeekDays && state.weekStart && state.nextWeekDays.weekStart <= state.weekStart) state.nextWeekDays = null;   // la semana para la que era ya empezó
+  if(!weekdaysCardVisible()){ el.style.display = 'none'; return; }
+  if(!weekdaysDraft){
+    const nd = state.nextWeekDays && state.nextWeekDays.weekStart === nextWeekMondayIso() ? state.nextWeekDays.days : null;
+    weekdaysDraft = DAY_KEYS.filter(k => (nd || state.profile.trainingDays).includes(k));
+  }
+  drawWeekdaysPicker();
+  el.style.display = 'block';
+}
+function toggleNextWeekDay(k){
+  if(!weekdaysDraft || !DAY_KEYS.includes(k)) return;
+  weekdaysDraft = weekdaysDraft.includes(k) ? weekdaysDraft.filter(x => x !== k) : DAY_KEYS.filter(x => x === k || weekdaysDraft.includes(x));
+  drawWeekdaysPicker();
+}
+function confirmNextWeekDays(){
+  if(!weekdaysDraft || weekdaysDraft.length < 2 || weekdaysDraft.length > 6){ showToast(t('weekdays_range'), 'error'); return; }
+  const iso = nextWeekMondayIso();
+  const usual = DAY_KEYS.filter(k => state.profile.trainingDays.includes(k));
+  state.nextWeekDays = weekdaysDraft.join() === usual.join() ? null : {weekStart: iso, days: weekdaysDraft.slice()};
+  state.nextWeekDaysAsked = iso;
+  weekdaysDraft = null;
+  persist();
+  showToast(t('weekdays_saved'), 'success');
+  refreshHomeAlerts();
+  try{ renderPlan(); }catch(e){}
+}
+function dismissNextWeekDays(){
+  state.nextWeekDaysAsked = nextWeekMondayIso();
+  state.nextWeekDays = null;
+  weekdaysDraft = null;
+  persist();
+  refreshHomeAlerts();
+}
 function renderHomeRecal(){
   const el = document.getElementById('home-recal-card');
   if(!el) return;
@@ -9185,7 +9327,7 @@ function startRecalibration(){
 }
 // Tarjetas de aviso de Inicio, de más a menos importante. Para que no se apilen arriba, se muestran como mucho dos a la vez: las
 // otras esperan su turno (reaparecen apenas se resuelve o se descarta una).
-var HOME_ALERT_IDS = ['home-test-missed', 'home-pain-card', 'home-return-card', 'home-adjust-card', 'home-load-card', 'home-recal-card', 'home-recap-card'];
+var HOME_ALERT_IDS = ['home-test-missed', 'home-pain-card', 'home-return-card', 'home-adjust-card', 'home-load-card', 'home-recal-card', 'home-recap-card', 'home-weekdays-card'];
 function limitHomeAlerts(max){
   let shown = 0;
   HOME_ALERT_IDS.forEach(id => {
@@ -9200,6 +9342,7 @@ function refreshHomeAlerts(){
   renderHomePain();
   renderHomeRecap();
   renderHomeRecal();
+  renderHomeWeekdays();
   renderHomeReturn();
   renderHomeLoad();
   renderHomeAdjust();
@@ -9319,6 +9462,7 @@ function renderHome(){
   renderHomePain();
   renderHomeRecap();
   renderHomeRecal();
+  renderHomeWeekdays();
   renderHomeReturn();
   renderRacePlanEntry();
   renderHomeLoad();
@@ -12035,6 +12179,7 @@ async function doPullRefresh(){
   await autoSyncHealthConnect(true);
   autoSkipPastDays();
   repairSkippedDaysWithMatchingRuns();
+  softenQualityAfterMisses();
   autoClearPastEvent();
   renderAll(); renderHistory();
   if(indicator) setTimeout(()=>{ indicator.style.display='none'; }, 500);
