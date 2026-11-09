@@ -594,6 +594,46 @@ test('las siete desconexiones pasan por runDisconnect, y la confirmación arranc
   assert.ok(read('index.html').includes('.btn.is-busy::before{'), 'indicador visual (con reduced-motion)');
 });
 
+// ---------- día de carrera: la devolución no compara contra la sesión de abajo ----------
+test('una carrera cargada en Próximos eventos: Zonda comenta la carrera, no "172 min vs 30 min planeados"; un día normal sigue igual', () => {
+  const app = loadApp();
+  ready(app);
+  app.state.profile.trainBy = 'time';
+  const raceDay = '2026-11-08';
+  const d = { day: 'sun', typeKey: 'long', dist: 4, durMin: 30, timeBased: true, status: 'done' };
+  const run = { id: 9, date: new Date(2026, 10, 8, 9, 0, 0).toISOString(), distanceKm: 20.8, durationSec: 172 * 60 };
+  // sin carrera ese día: la comparación de siempre (para que el test pruebe el cambio)
+  app.state.event = null; app.state.lastEventDate = null; app.state.profile.raceDate = null;
+  assert.match(app.buildSessionFeedbackMessage(d, run, 'mal'), /172 min.*planeado|172 min.*30 min/s);
+  // con la carrera cargada ese día
+  app.state.event = { date: raceDay, name: 'Media maratón', distanceKm: 21 };
+  let msg = app.buildSessionFeedbackMessage(d, run, 'mal');
+  assert.match(msg, /Vi tu carrera: 172 min a /);
+  assert.doesNotMatch(msg, /planeado|tenías/, 'no compara con el plan');
+  // ya pasó y el evento se archivó en lastEventDate
+  app.state.event = null; app.state.lastEventDate = raceDay;
+  assert.match(app.buildSessionFeedbackMessage(d, run, 'excelente'), /Vi tu carrera/);
+  // la meta del perfil también cuenta
+  app.state.lastEventDate = null; app.state.profile.raceDate = raceDay;
+  assert.match(app.buildSessionFeedbackMessage(d, run, 'bien'), /Vi tu carrera/);
+  assert.equal(app.raceInfoForDate('2026-11-09'), null, 'otro día: no es carrera');
+  assert.equal(app.localIsoOfTimestamp('no es fecha'), null);
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.ok(/coach_feedback_race:"[^"]*\{actual\}[^"]*\{pace\}[^"]*"/.test(read('locales/' + l + '.js')), l);
+  // calificar una carrera: no se ofrece "bajar la intensidad" por la sesión normal de abajo
+  assert.ok(SRC.includes("if(value === 'mal' && !wasRace){"));
+  assert.ok(SRC.includes("const raceDay = state.weekStart ? raceInfoForDate(addDaysToIsoLocal(state.weekStart, idx)) : null;"));
+});
+
+test('aviso push de carga: un día de carrera no se compara con la sesión normal de ese día', () => {
+  const { planFor } = require('../api/_lib/notify-new-run');
+  const plan = [0, 1, 2, 3, 4, 5, 6].map(i => ({ day: i, typeKey: 'long', dist: 4, durMin: 30 }));
+  const run = { date: '2026-11-08T14:00:00Z', distanceKm: 20.8, durationSec: 172 * 60 };
+  assert.ok(planFor(run, plan, '2026-11-02', 'UTC', true), 'sin carrera: compara con el plan');
+  assert.equal(planFor(run, plan, '2026-11-02', 'UTC', true, ['2026-11-08']), null, 'el día de la carrera: no compara');
+  assert.equal(planFor(run, plan, '2026-11-02', 'UTC', false, ['2026-11-01', '2026-11-08']), null);
+  assert.ok(planFor(run, plan, '2026-11-02', 'UTC', true, ['2026-11-15']), 'otra fecha de carrera: sigue comparando');
+  assert.ok(read('api/_lib/notify-new-run.js').includes('eventDate:data->event->>date,lastEventDate:data->>lastEventDate,goalRaceDate:data->profile->>raceDate'));
+});
 // ---------- sacar Strava al lanzar (interruptor) ----------
 test('interruptor de Strava (servidor): con STRAVA_SUNSET=1 los endpoints dejan de hacer algo; sin la variable pasan tal cual', () => {
   const { guardStravaSunset, stravaSunset } = require('../api/_lib/strava-sunset');
