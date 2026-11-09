@@ -1307,3 +1307,13 @@ test('chat: las descripciones de las herramientas dicen lo que de verdad hacen (
   const r = sanitizeChatRequest({ system, tools: JSON.parse(JSON.stringify(tools)), messages: [{ role: 'user', content: 'hola' }] });
   assert.equal(r.ok, true, r.error || JSON.stringify(r));
 });
+
+test('chat: Zonda usa los mismos nombres que la pantalla (fase "puesta a punto"; la fecha objetivo se carga en Perfil > Datos personales, no en un "Metas" que no existe)', () => {
+  assert.ok(SRC.includes("taper:'puesta a punto'"));
+  assert.ok(!SRC.includes("taper:'reducción final'"));
+  assert.ok(SRC.includes('(la fecha objetivo cargada en Perfil > Datos personales)'));
+  const promptStart = SRC.indexOf('const system = `Sos "Zonda"');
+  const promptEnd = SRC.indexOf('no intentes diagnosticar vos la causa.`;', promptStart);
+  assert.ok(!SRC.slice(promptStart, promptEnd).includes('Perfil > Metas'), 'el prompt no manda a una pantalla que no existe');
+  assert.match(read('locales/es.js'), /plan_phase_taper:"Puesta a punto"/);
+});

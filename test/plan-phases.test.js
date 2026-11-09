@@ -3299,7 +3299,7 @@ test('I5: en la rampa (20-50 km, 4-6 días) ninguna semana impresa completa pasa
 // ---- Fix wave: menores ----
 
 test('M2: el contexto de Zonda nombra la fase sin un segundo conteo de semanas (el de la carrera ya está)', () => {
-  [['base', 'base'], ['build', 'desarrollo'], ['specific', 'específica'], ['peak', 'pico'], ['taper', 'reducción final']].forEach(([phase, label]) => {
+  [['base', 'base'], ['build', 'desarrollo'], ['specific', 'específica'], ['peak', 'pico'], ['taper', 'puesta a punto']].forEach(([phase, label]) => {
     const { app } = planScreenApp(null);
     const before = app.buildContext();
     app.state.phaseNow = { phase, weeksToRace: 7, limited: false, peakKm: 50 };
