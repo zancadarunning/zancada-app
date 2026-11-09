@@ -703,17 +703,20 @@ test('la tarjeta de hoy suma la entrada en calor y la vuelta a la calma (plan po
   const easy = app.state.plan.find(x => x.typeKey === 'easy');
   easy.durMin = 25; easy.timeBased = true;
   assert.equal(JSON.stringify(app.warmCoolMinutes(easy)), '{"warm":5,"cool":5}');
-  assert.equal(app.planWarmCoolText(easy), 'Más 5 min de calentamiento y 5 min de vuelta a la calma · 35 min en total');
+  assert.equal(app.planWarmCoolText(easy), 'Incluye 5 min de calentamiento, 25 min de tramo principal y 5 min de vuelta a la calma');
+  assert.equal(app.planShownAmountText(easy), '35 min', 'por tiempo la cantidad que se ve ya trae el calentamiento y la vuelta a la calma');
+  assert.equal(app.planAmountText(easy), '25 min', 'el tramo principal sigue siendo 25');
   const quality = app.state.plan.find(x => ['tempo', 'intervals', 'hills', 'fartlek', 'progression'].includes(x.typeKey));
   if (quality) assert.equal(JSON.stringify(app.warmCoolMinutes(quality)), '{"warm":10,"cool":5}', 'las sesiones de calidad: 10 de calentamiento');
   p.trainBy = 'distance';
   assert.equal(app.planWarmCoolText(easy), 'Más 5 min de calentamiento y 5 min de vuelta a la calma', 'por distancia no hay total en minutos');
+  assert.equal(app.planShownAmountText(easy), app.planAmountText(easy), 'por distancia la cantidad que se ve es la del tramo principal');
   for (const d of [null, { dist: 0 }, { typeKey: 'rest', dist: 0 }, { typeKey: 'easy', dist: 5, raceDay: true }]) assert.equal(app.warmCoolMinutes(d), null);
   assert.equal(app.planWarmCoolText({ typeKey: 'rest', dist: 0 }), '');
   // la misma regla que el texto de la sesión y el envío al reloj
   assert.equal(app.watchDayPayload(easy, '2026-11-10').warmupMin, 5);
   assert.equal(app.watchDayPayload(easy, '2026-11-10').cooldownMin, 5);
-  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.ok(/plan_warmcool_line:"[^"]*\{warm\}[^"]*\{cool\}[^"]*"/.test(read('locales/' + l + '.js')) && /plan_warmcool_total:"[^"]*\{total\}[^"]*"/.test(read('locales/' + l + '.js')), l);
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.ok(/plan_warmcool_line:"[^"]*\{warm\}[^"]*\{cool\}[^"]*"/.test(read('locales/' + l + '.js')) && /plan_warmcool_breakdown:"[^"]*\{main\}[^"]*"/.test(read('locales/' + l + '.js')), l);
   assert.ok(read('index.html').includes('id="home-next-total"'));
   assert.ok(SRC.includes("nextTotalEl.textContent = raceToday ? '' : planWarmCoolText(today);"));
 });
