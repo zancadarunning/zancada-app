@@ -97,7 +97,7 @@ test('el contexto de Zonda dice cuántos días faltan en la semana de la carrera
 
 test('"Listo, ya apliqué los cambios" solo se dice si algo cambió de verdad (no si la herramienta se rechazó)', () => {
   assert.ok(SRC.includes('const stateBefore = coachStateFingerprint();'));
-  assert.ok(SRC.includes('if(coachStateFingerprint() !== stateBefore) anyToolApplied = true;'));
+  assert.ok(/if\(coachStateFingerprint\(\) !== stateBefore\)\{\s*anyToolApplied = true;/.test(SRC), 'se marca solo si algo cambió de verdad');
   assert.ok(!/\n\s*anyToolApplied = true;\s*\n\s*const toolResults/.test(SRC), 'ya no se marca antes de ejecutar las herramientas');
   const app = loadApp();
   ready(app);
@@ -1201,4 +1201,46 @@ test('chat: si la app bajó sola una sesión de calidad por dos faltazos, Zonda 
   assert.match(app.buildContext(), /bajó sola un 15 % la próxima sesión de calidad/);
   app.state.softenedWeek = '2000-01-03';
   assert.ok(!app.buildContext().includes('bajó sola un 15 %'), 'una semana vieja no cuenta');
+});
+
+test('chat: modificar, cancelar y mover no escriben sobre el día de una carrera cargada; y no agregan sesiones en días que el corredor sacó de la semana que viene', () => {
+  const app = loadApp();
+  ready(app);
+  app.state.onboarded = true;
+  app.state.weekStart = app.getMondayISO(new Date());
+  const rest = d => ({ day: d, typeKey: 'rest', dist: 0 });
+  app.state.plan = [rest('mon'), { day: 'tue', typeKey: 'easy', dist: 5, zone: 2 }, rest('wed'), { day: 'thu', typeKey: 'easy', dist: 6, zone: 2 }, rest('fri'), { day: 'sat', typeKey: 'long', dist: 12, zone: 2 }, rest('sun')];
+  app.state.event = { name: 'Carrera del barrio', type: 'road', date: app.addDaysToIsoLocal(app.state.weekStart, 5), distanceKm: 10 };
+  const realDay = Date.prototype.getDay;
+  Date.prototype.getDay = function () { return 1; };   // hoy = lunes
+  try {
+    const mod = app.applyPlanChange({ dia: 'sat', tipo: 'Rodaje', tipo_categoria: 'easy', descripcion: 'x', distancia_km: 5, zona: 2 });
+    assert.match(mod, /carrera que el corredor cargó/, mod);
+    assert.equal(app.state.plan[5].dist, 12, 'no se tocó');
+    assert.match(app.applyCancelSession({ dia: 'sat' }), /carrera que el corredor cargó/);
+    assert.equal(app.state.plan[5].dist, 12);
+    assert.match(app.applyMoveSession({ dia_origen: 'tue', dia_destino: 'sat' }), /carrera que el corredor cargó/);
+    assert.match(app.applyMoveSession({ dia_origen: 'sat', dia_destino: 'wed' }), /carrera que el corredor cargó/);
+    assert.equal(app.state.plan[1].dist, 5);
+    assert.match(app.applyMoveSession({ dia_origen: 'tue', dia_destino: 'wed' }), /^OK/, 'mover entre días normales sigue andando');
+    // semana que viene: el corredor eligió solo martes y jueves
+    const nextIso = app.addDaysToIsoLocal(app.state.weekStart, 7);
+    app.state.nextWeekDays = { weekStart: nextIso, days: ['tue', 'thu'] };
+    const sun = app.applyPlanChange({ semana: 'siguiente', dia: 'sun', tipo: 'Rodaje', tipo_categoria: 'easy', descripcion: 'x', distancia_km: 6, zona: 2 });
+    assert.match(sun, /eligió correr SOLO tue, thu/, sun);
+    assert.ok(!(app.state.nextWeekOverrides || {}).sun, 'no se guardó nada');
+    const ok = app.applyPlanChange({ semana: 'siguiente', dia: 'tue', tipo: 'Rodaje', tipo_categoria: 'easy', descripcion: 'x', distancia_km: 6, zona: 2 });
+    assert.match(ok, /^OK/, 'en un día elegido sí');
+    assert.match(app.applyCancelSession({ semana: 'siguiente', dia: 'sun' }), /^OK/, 'cancelar un día no elegido no es un problema');
+  } finally { Date.prototype.getDay = realDay; }
+});
+
+test('chat: después de un cambio real el siguiente pedido del mismo mensaje recibe el contexto actualizado, no el plan de antes', () => {
+  assert.ok(SRC.includes('const ctxAtStart = safeBuildContext();') && SRC.includes('${ctxAtStart}'), 'el contexto se arma una vez al principio');
+  assert.ok(SRC.includes('body: JSON.stringify({system: systemNow, tools:TOOLS, messages, lang}),'), 'cada vuelta manda el sistema vigente');
+  assert.ok(SRC.includes('if(ctxFresh && ctxAtStart) systemNow = system.split(ctxAtStart).join(ctxFresh);'), 'se reemplaza el contexto tras un cambio');
+  // el reemplazo es exacto: el contexto aparece una sola vez dentro del prompt
+  const start = SRC.indexOf('const system = `Sos "Zonda"');
+  const end = SRC.indexOf('no intentes diagnosticar vos la causa.`;', start);
+  assert.equal((SRC.slice(start, end).match(/\$\{ctxAtStart\}/g) || []).length, 1);
 });
