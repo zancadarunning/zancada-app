@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T21:34:09Z';
+const APP_VERSION = '2026-11-09T22:05:52Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -18983,7 +18983,7 @@ function buildContext(){
 const TOOLS = [
   {
     name:"modificar_sesion",
-    description:"Modifica UNA sesión puntual del plan semanal: tipo, distancia, zona de frecuencia cardíaca objetivo, terreno y descripción. Usala cuando el corredor pida un cambio en un día específico, de esta semana o de la que sigue. Si semana es 'actual' y el día pedido ya pasó (o ya se corrió/salteó), la herramienta va a rechazar el cambio -- avisale al corredor que ese día ya cerró y ofrecele ajustar desde hoy en adelante, o la semana que viene. IMPORTANTE: incluí siempre distancia_km (o duracion_min) con un valor apropiado para el tipo de sesión NUEVA -- si lo omitís, la sesión se queda con la distancia que tenía ese día ANTES del cambio, que casi nunca tiene sentido para un tipo distinto (ej. no dejes una sesión de 'series' con los 20km que tenía la tirada larga que reemplaza).",
+    description:"Modifica UNA sesión puntual del plan semanal: tipo, distancia, zona de frecuencia cardíaca objetivo, terreno y descripción. Usala cuando el corredor pida un cambio en un día específico, de esta semana o de la que sigue. No sirve para el día de una carrera (ni la objetivo ni una cargada en Próximos eventos): la herramienta lo rechaza. Para la semana que viene tampoco agrega sesiones en días que el corredor sacó con la tarjeta de días. Si semana es 'actual' y el día pedido ya pasó (o ya se corrió/salteó), la herramienta va a rechazar el cambio -- avisale al corredor que ese día ya cerró y ofrecele ajustar desde hoy en adelante, o la semana que viene. IMPORTANTE: incluí siempre distancia_km (o duracion_min) con un valor apropiado para el tipo de sesión NUEVA -- si lo omitís, la sesión se queda con la distancia que tenía ese día ANTES del cambio, que casi nunca tiene sentido para un tipo distinto (ej. no dejes una sesión de 'series' con los 20km que tenía la tirada larga que reemplaza).",
     input_schema:{type:"object", properties:{
       semana:{type:"string", enum:["actual","siguiente"], description:"Si el cambio es para la semana en curso o para la que sigue. Por defecto 'actual'. Ya tenés el plan de ambas semanas en el contexto."},
       dia:{type:"string", enum:DAY_KEYS, description:"Código del día: mon,tue,wed,thu,fri,sat,sun (siempre en estos códigos, sin importar el idioma de la charla)"},
@@ -19018,7 +19018,7 @@ const TOOLS = [
   },
   {
     name:"ajustar_volumen_semana",
-    description:"Sube o baja el volumen (distancia) de TODAS las sesiones de running de una semana, aplicando un mismo porcentaje. Usala para pedidos generales como 'quiero correr más', 'esta semana quiero sumar kilómetros' o 'bajale un poco', sin que el corredor especifique un día puntual. Por defecto aplica a la semana ACTUAL; si el corredor habla de la semana que sigue, usá semana:'siguiente'.",
+    description:"Sube o baja el volumen (distancia, o minutos si el corredor entrena por tiempo) de TODAS las sesiones normales de running de una semana, aplicando un mismo porcentaje. No toca la carrera objetivo, el test de nivel ni el día de una carrera cargada en Próximos eventos. Usala para pedidos generales como 'quiero correr más', 'esta semana quiero sumar kilómetros' o 'bajale un poco', sin que el corredor especifique un día puntual. Por defecto aplica a la semana ACTUAL; si el corredor habla de la semana que sigue, usá semana:'siguiente'.",
     input_schema:{type:"object", properties:{
       semana:{type:"string", enum:["actual","siguiente"], description:"Por defecto 'actual'."},
       porcentaje:{type:"number", description:"Cambio porcentual a aplicar a la distancia de cada sesión. Ejemplo: 15 para +15%, -10 para -10%."}
