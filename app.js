@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T18:43:23Z';
+const APP_VERSION = '2026-11-09T18:56:08Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8466,6 +8466,20 @@ function weeklyGoalAmount(){
   if(isTimeMode()) return {km: Math.max(5, Math.round((g * estimateBasePaceMinPerKm()) / 5) * 5), unit: t('time_unit_min')};
   return {km: fmtDist(g, 1), unit: distUnit()};
 }
+// La entrada en calor y la vuelta a la calma NO están dentro del número de la sesión (25 min de zona 2 son el tramo principal): el texto de la sesión y los relojes las traen como pasos aparte.
+// Misma regla que el texto de la sesión (planLabel) y que lo que se manda al reloj (watchDayPayload): 10 min de calentamiento en las de calidad, 5 en rodajes y tiradas, y 5 de vuelta a la calma.
+function warmCoolMinutes(d){
+  if(!d || !(d.dist > 0) || d.raceDay || d.typeKey === 'rest') return null;
+  return { warm: ['intervals','tempo','fartlek','hills','progression','test'].includes(d.typeKey) ? 10 : 5, cool: 5 };
+}
+// "Más 5 min de calentamiento y 5 min de vuelta a la calma · 35 min en total" (el total solo en el plan por tiempo, donde el número principal ya está en minutos).
+function planWarmCoolText(d){
+  const w = warmCoolMinutes(d);
+  if(!w) return '';
+  let s = t('plan_warmcool_line', {warm: w.warm, cool: w.cool});
+  if(isTimeMode()) s += ' · ' + t('plan_warmcool_total', {total: planDurationMin(d) + w.warm + w.cool});
+  return s;
+}
 function planAmountText(d){
   if(!(d.dist>0)) return '';
   if(d.typeKey==='test') return `12 ${t('time_unit_min')}`;
@@ -9390,6 +9404,8 @@ function renderHome(){
   const nextDescLines = ((today.custom && !raceToday) ? escapeHtml(lbl.desc) : lbl.desc).split('\n').filter(Boolean);
   document.getElementById('home-next-desc').innerHTML = nextDescLines.map(line=>`<div class="next-session-bullet">${line}</div>`).join('');
   document.getElementById('home-next-dist').textContent = raceToday ? `${fmtDist(raceToday.distKm, 1)} ${distUnit()}` : planAmountText(today);
+  const nextTotalEl = document.getElementById('home-next-total');
+  if(nextTotalEl) nextTotalEl.textContent = raceToday ? '' : planWarmCoolText(today);
   document.getElementById('home-next-zone').innerHTML = (!raceToday && today.dist>0 && today.zone) ? `<span class="zone-chip zone-${today.zone}">${t('zone_word')} ${today.zone}</span>` : '';
   // Colapsado de nuevo en cada render (cambiar de pestaña y volver, o cualquier otro cambio
   // de estado) -- no tiene sentido arrastrar "abierto" de una sesión anterior del día de hoy.

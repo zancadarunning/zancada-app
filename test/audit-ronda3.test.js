@@ -693,3 +693,45 @@ test('interruptor de Strava: el SQL de lanzamiento convierte sin tocar lo demás
   assert.ok(read('index.html').includes('conn-row conn-row-featured conn-strava') && read('index.html').includes('body.strava-sunset .conn-strava{display:none;}'));
   assert.ok(SRC.includes('let STRAVA_SUNSET = false;'), 'el interruptor viene apagado');
 });
+
+// ---------- entrada en calor y vuelta a la calma: se ven en la tarjeta y los relojes las traen ----------
+test('la tarjeta de hoy suma la entrada en calor y la vuelta a la calma (plan por tiempo: con el total; por distancia: sin el total)', () => {
+  const app = loadApp();
+  const p = { name: 'x', weeklyKm: 20, currentWeeklyKm: 20, goal: '10k', runnerType: 'active', trainingDays: ['mon', 'thu', 'sat'], units: 'metric', trainBy: 'time', terrain: 'asfalto', hrZones: app.computeZones(190), hrMax: 190 };
+  app.state.profile = p;
+  app.state.plan = app.generatePlan(p, 3);
+  const easy = app.state.plan.find(x => x.typeKey === 'easy');
+  easy.durMin = 25; easy.timeBased = true;
+  assert.equal(JSON.stringify(app.warmCoolMinutes(easy)), '{"warm":5,"cool":5}');
+  assert.equal(app.planWarmCoolText(easy), 'Más 5 min de calentamiento y 5 min de vuelta a la calma · 35 min en total');
+  const quality = app.state.plan.find(x => ['tempo', 'intervals', 'hills', 'fartlek', 'progression'].includes(x.typeKey));
+  if (quality) assert.equal(JSON.stringify(app.warmCoolMinutes(quality)), '{"warm":10,"cool":5}', 'las sesiones de calidad: 10 de calentamiento');
+  p.trainBy = 'distance';
+  assert.equal(app.planWarmCoolText(easy), 'Más 5 min de calentamiento y 5 min de vuelta a la calma', 'por distancia no hay total en minutos');
+  for (const d of [null, { dist: 0 }, { typeKey: 'rest', dist: 0 }, { typeKey: 'easy', dist: 5, raceDay: true }]) assert.equal(app.warmCoolMinutes(d), null);
+  assert.equal(app.planWarmCoolText({ typeKey: 'rest', dist: 0 }), '');
+  // la misma regla que el texto de la sesión y el envío al reloj
+  assert.equal(app.watchDayPayload(easy, '2026-11-10').warmupMin, 5);
+  assert.equal(app.watchDayPayload(easy, '2026-11-10').cooldownMin, 5);
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.ok(/plan_warmcool_line:"[^"]*\{warm\}[^"]*\{cool\}[^"]*"/.test(read('locales/' + l + '.js')) && /plan_warmcool_total:"[^"]*\{total\}[^"]*"/.test(read('locales/' + l + '.js')), l);
+  assert.ok(read('index.html').includes('id="home-next-total"'));
+  assert.ok(SRC.includes("nextTotalEl.textContent = raceToday ? '' : planWarmCoolText(today);"));
+});
+
+test('los cuatro relojes reciben la entrada en calor y la vuelta a la calma como pasos propios (una sesión de 25 min de zona 2 son 3 pasos)', () => {
+  const { buildGarminWorkout } = require('../api/_lib/garmin-workout-builder');
+  const { buildCorosCourse } = require('../api/_lib/coros-workout-builder');
+  const { buildWahooPlan } = require('../api/_lib/wahoo-plan-builder');
+  const { buildGuide } = require('../api/_lib/suunto-guide-builder');
+  const Z = [[100, 120], [120, 140], [140, 155], [155, 170], [170, 190]];
+  const day = { date: '2026-11-10', name: 'Rodaje', typeKey: 'easy', zone: 2, timeBased: true, durMin: 25, distKm: 6.5, warmupMin: 5, cooldownMin: 5 };
+  const g = buildGarminWorkout(day, Z).segments[0].steps;
+  assert.deepEqual(g.map(s => s.intensity), ['WARMUP', 'ACTIVE', 'COOLDOWN']);
+  assert.deepEqual(g.map(s => s.durationValue).slice(0, 3), [300, 1500, 300], 'Garmin: 5 + 25 + 5 minutos');
+  const c = buildCorosCourse(day, Z, {}).sections;
+  assert.deepEqual(c.map(s => s.targetValue), [300, 1500, 300], 'COROS: 5 + 25 + 5 minutos');
+  const w = JSON.stringify(buildWahooPlan(day, Z, {}));
+  assert.ok(w.includes('Warm up') && w.includes('Cool down'), 'Wahoo');
+  const s = JSON.stringify(buildGuide(day, Z, {}));
+  assert.ok(/Warm/.test(s) && /Cool/.test(s), 'Suunto');
+});
