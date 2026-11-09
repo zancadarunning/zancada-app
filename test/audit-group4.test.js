@@ -69,5 +69,5 @@ test('las herramientas del coach tienen topes: repeticiones, minutos de esfuerzo
   const ok = app.resolveCustomInterval({ repeticiones: 8, esfuerzo_min: 3, recuperacion_min: 2 });
   assert.deepEqual(JSON.parse(JSON.stringify(ok)), { reps: 8, workMin: 3, restMin: 2 }, 'los valores normales no cambian');
   assert.equal(app.resolveCustomInterval({ repeticiones: 0, esfuerzo_min: 3 }), null);
-  assert.equal((SRC.match(/MAX_CUSTOM_DURATION_MIN, Math\.round\(input\.duracion_min\)/g) || []).length, 2, 'duración topeada en la semana actual y en la que viene');
+  assert.equal((SRC.match(/MAX_CUSTOM_DURATION_MIN, Math\.round\(toolMainMinutes\(input\)\)/g) || []).length, 2, 'duración topeada en la semana actual y en la que viene');
 });

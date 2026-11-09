@@ -1081,3 +1081,63 @@ test('pestaña Plan: por distancia cada día con sesión suma la línea de calen
   assert.equal(app.planWarmCoolText({ typeKey: 'rest', dist: 0 }), '');
   assert.equal(app.planWarmCoolText(Object.assign({}, easy, { raceDay: true })), '');
 });
+
+// ---------- coherencia entre el chat y la app ----------
+function coachTimeSetup(app, trainBy) {
+  ready(app);
+  app.state.onboarded = true;
+  app.state.profile.trainBy = trainBy;
+  const idx = (new Date().getDay() + 6) % 7;
+  const base = app.state.plan.find(x => x.typeKey === 'easy');
+  app.state.plan[idx] = Object.assign({}, base, { day: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][idx], typeKey: 'easy', dist: 5, durMin: 25, timeBased: true, status: undefined, custom: false, raceDay: false });
+  return app.state.plan[idx];
+}
+
+test('chat: en el plan por tiempo el contexto le da a Zonda el MISMO total que ve el corredor (25 de principal = 35 con calentamiento y vuelta a la calma) y se lo aclara', () => {
+  const app = loadApp();
+  const d = coachTimeSetup(app, 'time');
+  assert.equal(app.planShownAmountText(d), '35 min');
+  const ctx = app.buildContext();
+  assert.ok(ctx.includes('35 minutos') || ctx.includes('/35min'), 'el total en el contexto');
+  assert.ok(!/easy\/Z2\/25min/.test(ctx), 'ya no el tramo principal suelto');
+  assert.match(ctx, /YA INCLUYEN el calentamiento/);
+  assert.match(ctx, /mandá el TOTAL que el corredor ve/);
+});
+
+test('chat: por distancia el contexto aclara que los km son del tramo principal y que el calentamiento y la vuelta a la calma van aparte', () => {
+  const app = loadApp();
+  coachTimeSetup(app, 'distance');
+  const ctx = app.buildContext();
+  assert.match(ctx, /km de los bloques del plan son los del tramo PRINCIPAL/);
+  assert.match(ctx, /NO están en esos km/);
+  assert.ok(!/YA INCLUYEN el calentamiento/.test(ctx));
+});
+
+test('chat: duracion_min en un plan por tiempo es el total que ve el corredor; la app guarda el tramo principal y la pantalla vuelve a mostrar lo pedido', () => {
+  const app = loadApp();
+  ready(app);
+  app.state.onboarded = true;
+  app.state.profile.trainBy = 'time';
+  assert.equal(app.toolMainMinutes({ duracion_min: 35, tipo_categoria: 'easy' }), 25, 'rodaje: 35 - 5 - 5');
+  assert.equal(app.toolMainMinutes({ duracion_min: 45, tipo_categoria: 'intervals' }), 30, 'series: 45 - 10 - 5');
+  assert.equal(app.toolMainMinutes({ duracion_min: 12, tipo_categoria: 'easy' }), 5, 'piso de 5 min de principal');
+  app.state.profile.trainBy = 'distance';
+  assert.equal(app.toolMainMinutes({ duracion_min: 35, tipo_categoria: 'easy' }), 35, 'por distancia no se toca');
+});
+
+test('puntuación: correr solo el tramo principal o el principal más el calentamiento y la vuelta a la calma da 100; pasarse mucho del total sí resta', () => {
+  const app = loadApp();
+  ready(app);
+  app.state.profile.trainBy = 'time';
+  const d = { day: 'tue', typeKey: 'easy', zone: 2, dist: 4, durMin: 25, timeBased: true };
+  const score = min => app.scoreRunAgainstPlan({ durationSec: min * 60, distanceKm: 5 }, d, null).score;
+  assert.equal(score(25), 100, 'solo el principal');
+  assert.equal(score(35), 100, 'con calentamiento y vuelta a la calma: ya no se castiga como "pasarse"');
+  assert.ok(score(70) < 100, 'pasarse mucho del total resta');
+});
+
+test('semana que viene: al elegir los días se descartan las ediciones del chat en los días que se sacaron (las cancelaciones se conservan)', () => {
+  assert.ok(SRC.includes("if(state.nextWeekDays && state.nextWeekOverrides) Object.keys(state.nextWeekOverrides).forEach(k => { const o = state.nextWeekOverrides[k]; if(o && !o.cancelled && !state.nextWeekDays.days.includes(k)) delete state.nextWeekOverrides[k]; });"));
+  assert.ok(SRC.includes('Para la semana que viene el corredor eligió correr SOLO estos días'), 'el chat sabe de la elección');
+  assert.ok(SRC.includes('Sus ritmos se actualizaron el'), 'y de los ritmos recalibrados');
+});

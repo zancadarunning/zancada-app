@@ -103,7 +103,8 @@ test('coach: ajustar el volumen en un plan por tiempo cambia durMin; y modificar
     assert.doesNotMatch(shown(app, app.state.plan[6]), /undefined|NaN/);
     const r = app.applyPlanChange({ dia: 'sun', tipo: 'Rodaje', tipo_categoria: 'easy', descripcion: 'suave', duracion_min: 45, zona: 2 });
     assert.match(r, /^OK/);
-    assert.equal(app.state.plan[6].durMin, 45);
+    assert.equal(app.state.plan[6].durMin, 35, 'en el plan por tiempo duracion_min es el TOTAL que ve el corredor (45): el tramo principal es 45 menos 5 de calentamiento y 5 de vuelta a la calma');
+    assert.equal(app.planTotalMinutes(app.state.plan[6]), 45, 'y lo que se ve vuelve a dar 45');
   } finally { Date.prototype.getDay = realDay; }
 });
 
