@@ -347,3 +347,110 @@ test('los Términos listan Garmin como integración en los 6 idiomas (antes lo o
   assert.equal((t.match(/Strava, Garmin, Polar, Wahoo, COROS/g) || []).length, 12, 'las dos listas (resumen y servicios) × 6 idiomas');
   assert.equal(/Strava, Polar, Wahoo/.test(t), false);
 });
+
+// ---------- datos de Strava/Garmin hacia terceros ----------
+test('los avisos de carga y el resumen semanal de Strava/Garmin no llevan distancia, tiempo, ritmo ni comparación con el plan', () => {
+  const { buildMessage } = require('../api/_lib/notify-new-run');
+  const { buildWeeklySummary } = require('../api/_lib/weekly-summary');
+  const run = { id: 'a', distanceKm: 8.2, durationSec: 2928 };
+  for (const src of ['garmin', 'strava']) for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
+    const one = buildMessage([run], src, l, false, { timeMode: false, planned: 8, actual: 8.2 }).body;
+    const many = buildMessage([run, run], src, l, false, null).body;
+    assert.ok(!/\d+[.,]\d+ ?(km|mi)|\d{1,2}:\d{2}|\d+%|\d+ %/.test(one + ' ' + many), src + ' ' + l + ': ' + one + ' | ' + many);
+  }
+  // una marca sin esa restricción sigue con los números de siempre
+  assert.match(buildMessage([run], 'suunto', 'es', false).body, /8\.20 km · 48:48/);
+  const now = Date.parse('2026-11-08T22:00:00Z');
+  const base = { plan: null, weekStart: '2026-11-02', streak: 2, tz: 'UTC', imperial: false, now };
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
+    const b = buildWeeklySummary(Object.assign({ lang: l, runs: [{ date: '2026-11-05T10:00:00Z', distanceKm: 8, source: 'garmin' }] }, base)).body;
+    assert.ok(!/\d/.test(b), l + ': ' + b);
+  }
+  assert.match(buildWeeklySummary(Object.assign({ lang: 'es', runs: [{ date: '2026-11-05T10:00:00Z', distanceKm: 8 }] }, base)).body, /8\.0 km en 1 salida/);
+});
+
+test('la miniatura del recorrido de una carrera de Strava/Garmin no se pide a Mapbox (su recorrido iría en la dirección)', () => {
+  const app = loadApp();
+  const pts = [{ lat: -34.6, lon: -58.4 }, { lat: -34.61, lon: -58.41 }, { lat: -34.62, lon: -58.42 }, { lat: -34.63, lon: -58.43 }, { lat: -34.64, lon: -58.44 }];
+  assert.ok(app.buildHistMapStaticUrl({ points: pts }, 300, 100).startsWith('https://api.mapbox.com/styles/v1/mapbox/'), 'una carrera propia sí');
+  for (const r of [{ source: 'garmin' }, { source: 'strava' }, { aiExcluded: true }, { origin: 'garmin', aiExcluded: true }]) {
+    const u = app.buildHistMapStaticUrl(Object.assign({ points: pts }, r), 300, 100);
+    assert.ok(u.startsWith('data:image/gif;base64,'), JSON.stringify(r));
+    assert.ok(!u.includes('mapbox') && !u.includes('-34.6'));
+  }
+});
+
+// ---------- app sin conexión (service worker) ----------
+function loadSw() {
+  const vm = require('node:vm');
+  const listeners = {};
+  const store = new Map();
+  const cacheApi = {
+    open: async () => ({
+      match: async k => store.get(String(k.url || k)),
+      put: async (k, v) => { store.set(String(k.url || k), v); },
+      add: async () => {},
+    }),
+    keys: async () => [], delete: async () => true,
+  };
+  const sb = {
+    self: { location: { origin: 'https://zancada.org' }, addEventListener: (n, f) => { listeners[n] = f; }, skipWaiting() {}, clients: { claim() {} }, registration: {} },
+    caches: cacheApi, Request: class { constructor(u) { this.url = String(u); } }, URL, console,
+    setTimeout: (f, ms) => setTimeout(f, ms > 1000 ? 20 : ms),   // el tope de 4 s corre en 20 ms
+    fetch: async () => { throw new Error('sin red'); },
+  };
+  sb.self.Request = sb.Request;
+  vm.createContext(sb);
+  vm.runInContext(read('sw.js'), sb);
+  const run = async (url, opts) => {
+    let responded = null;
+    const ev = { request: Object.assign({ url, method: 'GET', headers: { has: h => !!(opts && opts.range && h === 'range') } }, {}), respondWith: p => { responded = p; } };
+    listeners.fetch(ev);
+    return responded ? await responded : undefined;
+  };
+  return { sb, run, store };
+}
+
+test('service worker: red primero, copia guardada sin señal o con red muy lenta, y NUNCA toca la API, otros orígenes ni los pedidos con Range', async () => {
+  const { sb, run, store } = loadSw();
+  // rutas que no pasan por el SW
+  assert.equal(await run('https://api.mapbox.com/x'), undefined, 'otro origen');
+  assert.equal(await run('https://zancada.org/api/chat'), undefined, 'API');
+  assert.equal(await run('https://zancada.org/app.js?_v=123'), undefined, 'chequeo de versión');
+  assert.equal(await run('https://zancada.org/app.js', { range: true }), undefined, 'Range');
+  // con red: devuelve la respuesta nueva y la guarda
+  sb.fetch = async () => ({ status: 200, type: 'basic', body: 'nuevo', clone() { return this; } });
+  const fresh = await run('https://zancada.org/app.js');
+  assert.equal(fresh.body, 'nuevo');
+  assert.ok(store.has('https://zancada.org/app.js'));
+  // sin red: usa la copia
+  sb.fetch = async () => { throw new Error('sin red'); };
+  assert.equal((await run('https://zancada.org/app.js')).body, 'nuevo', 'sin red sirve la última copia');
+  // "/?source=pwa" y "/" comparten copia
+  sb.fetch = async () => ({ status: 200, type: 'basic', body: 'inicio', clone() { return this; } });
+  await run('https://zancada.org/');
+  sb.fetch = async () => { throw new Error('sin red'); };
+  assert.equal((await run('https://zancada.org/?source=pwa')).body, 'inicio');
+  // red colgada (lenta): tras el tope se usa la copia
+  sb.fetch = () => new Promise(() => {});
+  assert.equal((await run('https://zancada.org/app.js')).body, 'nuevo', 'red lenta -> copia');
+  // error del servidor con copia disponible: se prefiere la copia; sin copia, se devuelve el error tal cual
+  sb.fetch = async () => ({ status: 503, type: 'basic', body: 'caído', clone() { return this; } });
+  assert.equal((await run('https://zancada.org/app.js')).body, 'nuevo');
+  assert.equal((await run('https://zancada.org/privacy.html')).status, 503, 'sin copia: el error real');
+  // los avisos push siguen igual
+  assert.ok(read('sw.js').includes("self.addEventListener('push'") && read('sw.js').includes("self.addEventListener('notificationclick'"));
+});
+
+test('rechazar los consentimientos: la pantalla avisa en los 6 idiomas que los datos se conservan hasta borrar la cuenta', () => {
+  assert.ok(read('index.html').includes('id="consent-decline-note"'));
+  assert.ok(SRC.includes("set('consent-decline-note', 'consent_decline_note');"));
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.ok(/consent_decline_note:"[^"]*info@zancada\.org[^"]*"/.test(read('locales/' + l + '.js')), l);
+});
+
+test('la política de privacidad dice la verdad de los push (Firebase en Android, Apple en iPhone) sin hablar de la web', () => {
+  const p = read('js/legal-privacy.js');
+  assert.ok(!p.includes('<strong>Firebase Cloud Messaging (Google)'), 'ya no atribuye todos los push a Firebase');
+  assert.equal((p.match(/Apple/g) || []).length >= 12, true, 'Apple aparece en las dos secciones de los 6 idiomas');
+  assert.ok(!/navegador|browser|navigateur|Browser|navegador|PWA|Safari/.test(p.replace(/Apple’s|Apple's/g, '')), 'sigue hablando solo de la app (hay otro test que lo exige)');
+});

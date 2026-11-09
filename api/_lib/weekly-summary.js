@@ -67,6 +67,18 @@ const L = {
   de: { title: 'Deine Woche in Zancada', idle: `Diese Woche hast du keinen Lauf aufgezeichnet. Wollen wir morgen wieder starten?`, runs: n => n === 1 ? '1 Lauf' : `${n} Läufe`, head: (d, r, delta) => `${d} in ${r}${delta ? ` (${delta} ggü. Vorwoche)` : ''}.`, sessions: (a, b) => `Planeinheiten: ${a} von ${b}.`, streak: n => `Serie: ${n} Wochen in Folge.` }
 };
 
+// Semanas con carreras de Strava o Garmin (o convertidas en manuales conservando su origen): sus datos no se comparten con terceros más allá de Supabase/Vercel, y esta notificación viaja por el servicio de notificaciones
+// del sistema (Firebase/Apple). Para esas semanas el resumen avisa que está listo en la app, SIN kilómetros, salidas ni comparaciones.
+const GENERIC_WEEK = {
+  es: 'Tu resumen de la semana ya está en Zancada. Entrá a verlo.',
+  en: 'Your weekly summary is ready in Zancada. Open the app to see it.',
+  pt: 'Seu resumo da semana já está no Zancada. Abra o app para ver.',
+  fr: 'Ton résumé de la semaine est prêt dans Zancada. Ouvre l’appli pour le voir.',
+  it: 'Il riepilogo della tua settimana è pronto su Zancada. Apri l’app per vederlo.',
+  de: 'Deine Wochenübersicht ist in Zancada bereit. Öffne die App, um sie zu sehen.',
+};
+const isRestrictedRun = r => !!r && (r.source === 'strava' || r.source === 'garmin' || r.origin === 'garmin' || r.origin === 'strava' || !!r.aiExcluded);
+
 // Fecha local (YYYY-MM-DD) de un instante en un huso horario
 const dateFormatters = new Map();
 function localDateKey(ms, tz) {
@@ -95,17 +107,18 @@ function fmtKm(km, imperial) {
 function buildWeeklySummary({ runs, plan, weekStart, streak, tz, lang, imperial, now }) {
   const T = pick(L, lang, 'es');
   const today = dayNum(localDateKey(now, tz));
-  let km = 0, n = 0, prevKm = 0, ranRecently = false;
+  let km = 0, n = 0, prevKm = 0, ranRecently = false, restrictedInWeek = false;
   for (const r of runs || []) {
     if (!r || !r.date) continue;
     const rms = new Date(r.date).getTime();
     if (!Number.isFinite(rms)) continue;   // fecha invalida (la escribe la propia cuenta): se ignora en vez de romper el resumen
     const d = dayNum(localDateKey(rms, tz));
     const dist = Number(r.distanceKm) || 0;
-    if (d > today - 7 && d <= today) { km += dist; n++; }
+    if (d > today - 7 && d <= today) { km += dist; n++; if (isRestrictedRun(r)) restrictedInWeek = true; }
     else if (d > today - 14 && d <= today - 7) prevKm += dist;
     if (d > today - IDLE_NUDGE_DAYS && d <= today) ranRecently = true;
   }
+  if (restrictedInWeek) return { title: T.title, body: pick(GENERIC_WEEK, lang, 'es') };
   if (!n) {
     // Sin salidas esta semana: en vez de callar, un empujón corto para retomar ("0 km" no se muestra). Solo a quien corrió en las últimas
     // 4 semanas: quien lleva meses sin abrir la app no recibe un reproche cada domingo, y a una cuenta nueva sin carreras no le decimos "retomamos".

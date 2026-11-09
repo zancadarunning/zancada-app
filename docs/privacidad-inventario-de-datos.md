@@ -32,6 +32,9 @@ Lo que **no** se guarda: contraseñas en claro, datos de tarjetas, documentos de
 | **Mapbox** | Mapas de las rutas | **La ruta** (hasta 200 puntos) de cada carrera cuyo mapa se dibuja, y las coordenadas de los cuadros de mapa que se ven (zona donde corre la persona) | EE. UU. |
 | **Open-Meteo** | Clima en la pantalla de inicio | Las coordenadas **redondeadas a 2 decimales** (aprox. 1 km) | Europa |
 | **Google (Firebase)** | Notificaciones en Android; ingreso con Google | Token de dispositivo; datos de la cuenta si elige Google | EE. UU. |
+| **Apple (notificaciones)** | Notificaciones en iPhone (web instalada hoy; app cuando exista) | Identificador de la suscripción y el aviso (cifrado en las suscripciones web) | EE. UU. |
+
+Los avisos de "entrenamiento cargado" y el resumen semanal de las carreras de **Strava y Garmin** no llevan distancia, tiempo, ritmo ni comparación con el plan (solo dicen que se cargó): esas marcas no permiten compartir sus datos con terceros más allá de Supabase y Vercel. Tampoco se pide a Mapbox la miniatura del recorrido de esas carreras (la imagen estática lleva el recorrido en la dirección); se usa el boceto local.
 | **Apple** | Ingreso con Apple (cuando exista la app de iPhone) | Datos de la cuenta si elige Apple | EE. UU. |
 | **Strava, Suunto, Wahoo, Polar, COROS** | Importar carreras y enviar el plan al reloj | Tokens de acceso; carreras; plan semanal (a Suunto y Wahoo) | Según cada marca; **Strava prohíbe usar sus datos con IA y exige borrarlos a los 7 días**: ver `docs/` y la memoria del proyecto |
 
