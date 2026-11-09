@@ -163,3 +163,61 @@ test('la página pública de borrado de cuenta lista Garmin en los 6 idiomas', (
   assert.equal(h.split('Strava, Garmin, Suunto, Wahoo, Polar, COROS').length - 1, 6);
   assert.equal(h.split('Strava, Garmin, Polar, Wahoo, COROS').length - 1, 6);
 });
+
+// ---------- motor del plan ----------
+test('ritmo base: una salida registrada por error (0,9 km en 30 min) no mueve el plan; con salidas normales queda cerca de 6:00', () => {
+  const app = loadApp();
+  app.state.profile = baseProfile(app, { currentWeeklyKm: 30 });
+  const day = n => new Date(Date.now() - n * 86400000).toISOString();
+  app.state.runs = [
+    { id: 1, date: day(9), distanceKm: 5, durationSec: 1800 },      // 6:00
+    { id: 2, date: day(7), distanceKm: 8, durationSec: 2900 },      // 6:02
+    { id: 3, date: day(5), distanceKm: 5, durationSec: 1750 },      // 5:50
+    { id: 4, date: day(3), distanceKm: 10, durationSec: 3600 },     // 6:00
+    { id: 5, date: day(1), distanceKm: 0.9, durationSec: 1800 },    // error: cronómetro andando
+  ];
+  const pace = app.estimateBasePaceMinPerKm(app.state.profile);
+  assert.ok(pace > 5.7 && pace < 6.3, 'ritmo base ' + pace);
+  // 3 salidas iguales a 6:00 siguen dando 6:00 (comportamiento de siempre)
+  app.state.runs = [1, 2, 3].map(i => ({ id: i, date: day(i), distanceKm: 5, durationSec: 1800 }));
+  assert.equal(Math.round(app.estimateBasePaceMinPerKm(app.state.profile) * 100) / 100, 6);
+  // solo salidas absurdas (menos de 1 km): cae al respaldo, no a un ritmo de 30 min/km
+  app.state.runs = [1, 2, 3].map(i => ({ id: i, date: day(i), distanceKm: 0.6, durationSec: 2400 }));
+  assert.ok(app.estimateBasePaceMinPerKm(app.state.profile) < 8);
+});
+
+test('el test de nivel pendiente solo aparece en la semana actual y la que viene, no en toda la vista previa del Plan', () => {
+  const app = loadApp();
+  ready(app, { levelTest: { required: true, done: false } });
+  const types = n => (app.getWeekData(n).plan || []).map(d => d.typeKey);
+  for (const n of [3, 4, 5, 6]) assert.ok(!types(n).includes('test'), 'semana +' + n + ' no muestra un test');
+});
+
+test('la carrera objetivo cercana (menos de 7 semanas) o de un principiante también se marca como "Carrera", y la semana siguiente es de recuperación', () => {
+  const app = loadApp();
+  ready(app, { goal: '10k', weeklyKm: 35, currentWeeklyKm: 35, trainingDays: ['tue', 'thu', 'fri', 'sat', 'sun'] });
+  const mon = app.getMondayISO(new Date());
+  const add = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  const raceSat = add(mon, 5 + 21);                  // un sábado, dentro de 3 semanas y media
+  app.state.profile.raceDate = raceSat;
+  const raceWeek = add(mon, 21);
+  const plan = app.generatePlan(app.state.profile, 4, raceWeek);
+  assert.equal(plan[5].raceDay, true, 'el sábado de la carrera está marcado');
+  assert.equal(plan[5].dist, 0);
+  assert.ok(!['intervals', 'tempo', 'fartlek', 'hills', 'progression', 'long'].includes(plan[4].typeKey), 'el viernes no tiene una sesión fuerte');
+  assert.ok(['rest', 'easy'].includes(plan[6].typeKey), 'el domingo después de la carrera es descanso o rodaje suave');
+  assert.equal(app.postGoalRaceRecoveryMultiplier(app.state.profile, add(raceWeek, 7)), 0.6, 'la semana siguiente a una carrera de sábado es de recuperación (antes solo si caía domingo)');
+  assert.equal(app.postGoalRaceRecoveryMultiplier(app.state.profile, add(raceWeek, 14)), 1, 'y la otra ya no');
+  assert.equal(app.postGoalRaceRecoveryMultiplier(app.state.profile, raceWeek), 1, 'la semana de la carrera la maneja el taper');
+});
+
+test('la pausa larga se descuenta por escalón (no una sola vez): el código aplica solo la diferencia con lo ya descontado', () => {
+  assert.ok(SRC.includes('const breakPrevFactor = breakSameRun ?'));
+  assert.ok(SRC.includes('Object.assign({}, cand, {step: cand.kmFactor / breakPrevFactor})'));
+  assert.ok(SRC.includes('state.breakAdjFactor = breakAdj.kmFactor;'));
+  assert.ok(SRC.includes('Math.max(5, Math.round(state.profile.weeklyKm * breakAdj.step))'));
+  // pura aritmética de los escalones: 0,8 -> 0,65 -> 0,5 acumulan exactamente 0,5 y nunca vuelven a descontar el mismo escalón
+  let applied = 1, km = 40;
+  for (const f of [0.8, 0.8, 0.65, 0.65, 0.5, 0.5]) { if (f < applied - 1e-9) { km = km * (f / applied); applied = f; } }
+  assert.equal(Math.round(km), 20);
+});
