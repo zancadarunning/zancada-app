@@ -341,3 +341,9 @@ test('retomar una carrera recuperada conserva la repetición y la fase de las se
   const w = app.getTracker().workout;
   assert.ok(!w || (w.structure && (w.structure.typeKey !== 'intervals' || w.currentRep === 4)), 'o no arma guía, o restaura la repetición 4');
 });
+
+test('los Términos listan Garmin como integración en los 6 idiomas (antes lo omitían aunque la app y la política lo tratan)', () => {
+  const t = read('js/legal-terms.js');
+  assert.equal((t.match(/Strava, Garmin, Polar, Wahoo, COROS/g) || []).length, 12, 'las dos listas (resumen y servicios) × 6 idiomas');
+  assert.equal(/Strava, Polar, Wahoo/.test(t), false);
+});
