@@ -1244,3 +1244,20 @@ test('chat: después de un cambio real el siguiente pedido del mismo mensaje rec
   const end = SRC.indexOf('no intentes diagnosticar vos la causa.`;', start);
   assert.equal((SRC.slice(start, end).match(/\$\{ctxAtStart\}/g) || []).length, 1);
 });
+
+test('mensajes automáticos del coach: quien entrena por tiempo ve minutos (no "tus 30 km semanales"); por distancia, su unidad', () => {
+  const app = loadApp();
+  ready(app);
+  app.state.profile.trainBy = 'time';
+  const t = app.weeklyKmAsShown(30);
+  assert.equal(t.unit, 'min');
+  assert.ok(Number(t.km) >= 100 && Number(t.km) % 5 === 0, 'minutos redondeados de a 5: ' + t.km);
+  app.state.profile.trainBy = 'distance';
+  app.state.profile.units = 'metric';
+  const d = app.weeklyKmAsShown(30);
+  assert.equal(d.unit, 'km');
+  assert.equal(String(d.km), '30.0');
+  app.state.profile.units = 'imperial';
+  assert.equal(app.weeklyKmAsShown(30).unit, 'mi');
+  assert.ok(SRC.includes('t(\'calib_coach_msg\', weeklyKmAsShown(wk))') && SRC.includes('km:weeklyKmAsShown(state.profile.weeklyKm).km'));
+});

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T21:19:08Z';
+const APP_VERSION = '2026-11-09T21:24:38Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8593,6 +8593,11 @@ function repMetersFromMin(min, profile){
 }
 // Meta semanal para los mensajes del coach ({km} y {unit} de los textos). La meta se carga en km; a quien entrena por tiempo se le muestra en
 // minutos, con el mismo ritmo base y el mismo redondeo a 5 que usa planDurationMin.
+// Un volumen semanal en km, dicho en lo que ve el corredor: minutos si entrena por tiempo (redondeados de a 5), distancia en su unidad si no. Para los mensajes automáticos del coach ("tus 30 km semanales" a quien ve minutos no le cierra).
+function weeklyKmAsShown(km){
+  if(isTimeMode()) return {km: Math.max(5, Math.round(((Number(km) || 0) * estimateBasePaceMinPerKm()) / 5) * 5), unit: t('time_unit_min')};
+  return {km: fmtDist(km, 1), unit: distUnit()};
+}
 function weeklyGoalAmount(){
   const g = state.profile.weeklyGoalKm || 0;
   if(isTimeMode()) return {km: Math.max(5, Math.round((g * estimateBasePaceMinPerKm()) / 5) * 5), unit: t('time_unit_min')};
@@ -15093,7 +15098,7 @@ function renderHistoryCalibCard(){
   if(!shouldOfferHistoryCalibration()){ el.style.display = 'none'; return; }
   const s = getImportedHistoryStats();
   const txt = document.getElementById('history-calib-text');
-  if(txt) txt.textContent = t('calib_text', {n: s.count, km: fmtDist(s.weeklyKm, 1), unit: distUnit()});
+  if(txt) txt.textContent = t('calib_text', Object.assign({n: s.count}, weeklyKmAsShown(s.weeklyKm)));
   el.style.display = 'block';
 }
 function applyHistoryCalibration(){
@@ -15106,7 +15111,7 @@ function applyHistoryCalibration(){
   p.historyCalibrated = 'done';
   state.plan = preserveLivedDays(state.plan, generatePlan(p, state.weekNumber || 1));
   state.nextWeekOverrides = {};
-  state.chat.push({role:'coach', text: t('calib_coach_msg', {km: fmtDist(wk, 1), unit: distUnit()}), ts: Date.now(), noAi:true});
+  state.chat.push({role:'coach', text: t('calib_coach_msg', weeklyKmAsShown(wk)), ts: Date.now(), noAi:true});
   renderAll(); renderChat(); persist();
   showToast(t('calib_done_toast'), 'success');
 }
@@ -18608,7 +18613,7 @@ function seedCoachGreeting(){
   // Mismo bug que había en buildWeeklyRecapMessage: faltaba pasar {unit} (quedaba literal
   // en el primer mensaje que ve un usuario nuevo) y el km no se convertía a millas para
   // quien entrena en imperial.
-  state.chat = [{role:'coach', text: t('coach_greeting', {name:state.profile.name, km:fmtDist(state.profile.weeklyKm,1), unit:distUnit(), goal:t('ob_goal_'+state.profile.goal)}), ts:Date.now()}];
+  state.chat = [{role:'coach', text: t('coach_greeting', {name:state.profile.name, km:weeklyKmAsShown(state.profile.weeklyKm).km, unit:weeklyKmAsShown(state.profile.weeklyKm).unit, goal:t('ob_goal_'+state.profile.goal)}), ts:Date.now()}];
   renderChat();
 }
 // Etiqueta del separador de dia del chat: "Hoy", "Ayer" o "Lunes 5 de octubre".
