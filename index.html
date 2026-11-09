@@ -193,7 +193,7 @@
      formulario ya tenian su propio tratamiento (borde + glow lima); esto lo extiende a
      todo lo demas que ahora es focuseable. */
   button:focus-visible, .choice:focus-visible, .day-pill:focus-visible, [role="button"]:focus-visible,
-  .card[onclick]:focus-visible, a:focus-visible{
+  .card[data-on-click]:focus-visible, a:focus-visible{
     outline:2px solid var(--hivis); outline-offset:2px; border-radius:inherit;
   }
 
@@ -680,8 +680,9 @@
      parte de la misma atmósfera en vez de un rectángulo neutro cualquiera. */
   .card{background:var(--asphalt-2); border-radius:var(--radius); padding:22px; margin-bottom:20px; border:1px solid var(--overlay-hairline);
     box-shadow:none;}
-  .card[onclick]{cursor:pointer; transition:transform .13s var(--ease-out);}
-  .card[onclick]:active{transform:scale(.98);}
+  .card[data-on-click]{cursor:pointer; transition:transform .13s var(--ease-out);}
+  .card[data-on-click]:active{transform:scale(.98);}
+  [data-on-click]:not(:disabled){cursor:pointer;}
   /* El ícono principal de cada fila-botón (Datos personales, Objetivos, Zapatillas...
      en Perfil) flotaba solo contra el fondo -- una ficha circular chica detrás (vía
      ::before, no toca el tamaño real del ícono) le da un lugar propio, mismo radio

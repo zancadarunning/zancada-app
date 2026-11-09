@@ -897,12 +897,13 @@ test('weekMultiplier/generatePlan: la descarga periódica no se suma al taper cu
   app.state.event = null;
   // semana 12, lunes 2026-09-07 -- 6 días antes de la carrera (dentro del taper Y semana de descarga)
   const plan12 = app.generatePlan(profile, 12, '2026-09-07');
-  const total12 = plan12.reduce((a, d) => a + d.dist, 0);
+  // sin el domingo: el 13/09 es la carrera (se marca como día de carrera, ya no cuenta como sesión) y se compara lo mismo en las dos semanas
+  const total12 = plan12.filter(d => d.day !== 'sun').reduce((a, d) => a + d.dist, 0);
   // semana 11, lunes 2026-08-31 -- 13 días antes (dentro del taper, sin descarga) -- debería
   // ser MÁS volumen que la 12 (más lejos de la carrera), no menos, a pesar de que la 12 "en
   // papel" también sería semana de descarga.
   const plan11 = app.generatePlan(profile, 11, '2026-08-31');
-  const total11 = plan11.reduce((a, d) => a + d.dist, 0);
+  const total11 = plan11.filter(d => d.day !== 'sun').reduce((a, d) => a + d.dist, 0);
   assert.ok(total12 < total11, 'la semana 12 (más cerca de la carrera) debería seguir bajando gradualmente...');
   assert.ok(total12 / total11 > 0.7, `...pero no desplomarse por el doble descuento -- semana 12 (${total12}) vs semana 11 (${total11})`);
 });

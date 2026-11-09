@@ -139,6 +139,8 @@ function loadApp(opts) {
     const q = {
       select(){ return q; }, eq(){ return q; },
       upsert(payload){ return opts.onUpsert ? opts.onUpsert(payload) : Promise.resolve({ data: null, error: null }); },
+      // persist() guarda con update(...).eq(...).select(...) cuando la sesión ya cargó una fila: cuenta igual que un upsert (mismo payload) y devuelve algo "encadenable"
+      update(payload){ const r = opts.onUpsert ? opts.onUpsert(payload) : Promise.resolve({ data: null, error: null }); const c = Object.assign(r, { eq(){ return c; }, select(){ return c; } }); return c; },
       maybeSingle(){ return opts.onMaybeSingle ? opts.onMaybeSingle() : Promise.resolve({ data: null, error: null }); }, delete(){ return q; },
       order(){ return q; }, limit(){ return q; }, then(resolve){ resolve({ data: null, error: null }); },
     };
