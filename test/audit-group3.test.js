@@ -32,7 +32,9 @@ test('el ajuste de volumen hacia arriba nunca pasa del 115 % de lo que la person
   const app = loadApp();
   const mon = app.getMondayISO(new Date());
   app.state.weekStart = mon;
-  app.state.runs = [8, 15, 22].map((d, i) => ({ id: i + 1, date: new Date(Date.now() - d * 86400000).toISOString(), distanceKm: 20, durationSec: 7200 }));
+  // una carrera en cada una de las 3 semanas ANTERIORES a la actual, ubicadas respecto del lunes (con "hace N días" el resultado dependía del día de la semana en que corrían los tests)
+  const monMs = new Date(mon + 'T12:00:00').getTime();
+  app.state.runs = [4, 11, 18].map((d, i) => ({ id: i + 1, date: new Date(monMs - d * 86400000).toISOString(), distanceKm: 20, durationSec: 7200 }));
   assert.equal(app.adjustedWeeklyKm(30, 1.05), 30, 'corre ~20 km/semana: no se sube un plan de 30 por encima de lo que ya tiene');
   assert.equal(Math.round(app.adjustedWeeklyKm(18, 1.05) * 10) / 10, 18.9, 'si está por debajo de su promedio sube normal');
   assert.equal(app.adjustedWeeklyKm(30, 0.9), 27, 'hacia abajo no se limita');

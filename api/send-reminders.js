@@ -67,12 +67,12 @@ function makeLocalClock(){
 
 // Mensajes cortos por idioma — no necesita el diccionario completo de la app.
 const MSGS = {
-  es: { types:{easy:'Rodaje suave',intervals:'Series',tempo:'Ritmo medio',long:'Tirada larga',test:'Test de nivel'}, body:what=>`Hoy toca: ${what}` },
-  en: { types:{easy:'Easy run',intervals:'Intervals',tempo:'Tempo run',long:'Long run',test:'Fitness test'}, body:what=>`Today: ${what}` },
-  pt: { types:{easy:'Corrida leve',intervals:'Tiros',tempo:'Ritmo médio',long:'Longão',test:'Teste de nível'}, body:what=>`Hoje: ${what}` },
-  fr: { types:{easy:'Footing',intervals:'Fractionné',tempo:'Allure soutenue',long:'Sortie longue',test:'Test de niveau'}, body:what=>`Aujourd'hui : ${what}` },
-  it: { types:{easy:'Corsa lenta',intervals:'Ripetute',tempo:'Ritmo medio',long:'Lungo',test:'Test di livello'}, body:what=>`Oggi: ${what}` },
-  de: { types:{easy:'Lockerer Lauf',intervals:'Intervalle',tempo:'Tempolauf',long:'Langer Lauf',test:'Leistungstest'}, body:what=>`Heute: ${what}` }
+  es: { types:{fartlek:'Fartlek',hills:'Cuestas',progression:'Progresivo',easy:'Rodaje suave',intervals:'Series',tempo:'Ritmo medio',long:'Tirada larga',test:'Test de nivel'}, body:what=>`Hoy toca: ${what}` },
+  en: { types:{fartlek:'Fartlek',hills:'Hill repeats',progression:'Progression run',easy:'Easy run',intervals:'Intervals',tempo:'Tempo run',long:'Long run',test:'Fitness test'}, body:what=>`Today: ${what}` },
+  pt: { types:{fartlek:'Fartlek',hills:'Tiros de subida',progression:'Progressivo',easy:'Corrida leve',intervals:'Tiros',tempo:'Ritmo médio',long:'Longão',test:'Teste de nível'}, body:what=>`Hoje: ${what}` },
+  fr: { types:{fartlek:'Fartlek',hills:'Côtes',progression:'Progressif',easy:'Footing',intervals:'Fractionné',tempo:'Allure soutenue',long:'Sortie longue',test:'Test de niveau'}, body:what=>`Aujourd'hui : ${what}` },
+  it: { types:{fartlek:'Fartlek',hills:'Ripetute in salita',progression:'Progressivo',easy:'Corsa lenta',intervals:'Ripetute',tempo:'Ritmo medio',long:'Lungo',test:'Test di livello'}, body:what=>`Oggi: ${what}` },
+  de: { types:{fartlek:'Fartlek',hills:'Bergsprints',progression:'Steigerungslauf',easy:'Lockerer Lauf',intervals:'Intervalle',tempo:'Tempolauf',long:'Langer Lauf',test:'Leistungstest'}, body:what=>`Heute: ${what}` }
 };
 
 const { withSentry, reportError, reportSecurityEvent } = require('./_lib/sentry');

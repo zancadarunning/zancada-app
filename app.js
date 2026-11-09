@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-03T17:01:41Z';
+const APP_VERSION = '2026-11-09T13:24:00Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1223,6 +1223,22 @@ async function refreshNativePushRegistration(){
     nativePushRefreshed = true;
     await nativePush.register();
   }catch(e){ nativePushRefreshed = false; console.error('push nativo: no se pudo renovar el registro', e); }
+}
+// Web/PWA (iPhone incluido): al cerrar sesión se borra la fila de ESTE dispositivo en push_subscriptions, pero el navegador sigue suscripto con el permiso concedido. Al volver a entrar, Perfil lo muestra como
+// "activado" y el servidor no tiene a quién avisarle. Acá se vuelve a guardar la suscripción que el navegador ya tiene (no se crea una nueva ni se pide permiso: quien apagó el interruptor a propósito hizo
+// unsubscribe(), así que no hay suscripción y no se registra nada).
+let webPushRefreshed = false;
+async function refreshWebPushRegistration(){
+  if(webPushRefreshed || !currentUserId) return;
+  try{
+    if(nativePushPlugin()) return;
+    if(!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    webPushRefreshed = true;
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if(!sub){ return; }
+    await savePushSubscription(sub.toJSON(), 'web');
+  }catch(e){ webPushRefreshed = false; console.error('push web: no se pudo renovar el registro', e); }
 }
 async function enableNativePushNotifications(nativePush, opts){
   try{
@@ -3759,8 +3775,11 @@ document.addEventListener('keydown', e=>{
   const backBtn = openOverlay.querySelector('[data-i18n-aria="aria_back"], .share-close');
   if(backBtn) backBtn.click();
 });
+// "Solo vibración" no existe donde el dispositivo no puede vibrar (iPhone web/PWA): se oculta la opción. (Quien ya la tenía elegida recibe los avisos importantes en voz alta: ver voiceAllowed.)
+setTimeout(() => { try{ if(!vibrationSupported()){ const v = document.querySelector('#voice-toggle .choice[data-v="vibe"]'); if(v) v.style.display = 'none'; } }catch(e){} }, 0);
 document.getElementById('voice-toggle').addEventListener('click', e=>{
   const c=e.target.closest('.choice'); if(!c) return;
+  unlockSpeech();
   [...document.getElementById('voice-toggle').children].forEach(x=>x.classList.remove('active')); c.classList.add('active');
   state.voiceEnabled = c.dataset.v !== 'off';
   if(c.dataset.v !== 'off') state.voiceMode = c.dataset.v === 'key' ? 'key' : (c.dataset.v === 'vibe' ? 'vibe' : 'all');
@@ -4882,6 +4901,7 @@ async function registerLoginDevice(){
 }
 function enterApp(){
   setTimeout(()=>{ try{ refreshNativePushRegistration(); }catch(e){} }, 1500);
+  setTimeout(()=>{ try{ refreshWebPushRegistration(); }catch(e){} }, 2500);
   setTimeout(()=>{ try{ registerLoginDevice(); }catch(e){} }, 4000);   // aviso por mail si es un dispositivo nuevo (no frena la entrada)
   document.getElementById('splash').style.display='none';
   document.getElementById('login').style.display='none';
@@ -8066,6 +8086,7 @@ function findLevelTestCandidateRun(){
 function fillLevelTestFromRun(runId){
   const r = (state.runs || []).find(x => String(x.id) === String(runId));
   if(!r) return;
+  levelTestPrefillRunId = r.id;
   const v = isImperial() ? r.distanceKm / KM_PER_MI : r.distanceKm;
   document.getElementById('ltest-dist').value = v.toFixed(2);
   const maxHr = r.maxHr || (r.hrLog && r.hrLog.length ? Math.max.apply(null, r.hrLog.map(h => (h && typeof h === 'object') ? (h.bpm || h.hr || 0) : (Number(h) || 0))) : 0);
@@ -8087,6 +8108,7 @@ function openLevelTest(prefillRunId){
   document.getElementById('ltest-dist-label').textContent = t('ltest_dist_label', {unit: distUnit()});
   document.getElementById('ltest-dist').value = '';
   document.getElementById('ltest-hr').value = '';
+  levelTestPrefillRunId = null;
   renderLevelTestSuggestion();
   if(prefillRunId) fillLevelTestFromRun(prefillRunId);
   openOverlaySheetEl(modal);
@@ -8107,16 +8129,21 @@ function submitLevelTest(){
     return;
   }
   const hrRaw = parseInt(document.getElementById('ltest-hr').value);
-  applyLevelTestResult(distM, (hrRaw >= 100 && hrRaw <= 230) ? hrRaw : null);
+  // Si se cargó desde una carrera de Strava/Garmin y la distancia sigue siendo la suya (±10 %: la edita a mano o se escala a 12:00), el resultado queda marcado como restringido.
+  const src = levelTestPrefillRunId != null ? (state.runs || []).find(x => String(x.id) === String(levelTestPrefillRunId)) : null;
+  const restricted = !!src && isRestrictedRun(src) && Math.abs(distM - src.distanceKm * 1000) <= src.distanceKm * 100;
+  applyLevelTestResult(distM, (hrRaw >= 100 && hrRaw <= 230) ? hrRaw : null, restricted);
   closeLevelTest();
 }
-function applyLevelTestResult(distM, maxHr){
+// restricted: el test salió de una carrera de Strava/Garmin. Sus datos (distancia, ritmos, pulso) se usan para la persona pero NO viajan a la IA: levelTest.restricted lo marca para buildContext,
+// y el pulso máximo de esa carrera no toca hrMax/zonas (esas sí se mandan siempre a la IA).
+function applyLevelTestResult(distM, maxHr, restricted){
   const p = state.profile;
   const ev = evaluateLevelTest(distM);
-  p.levelTest = Object.assign({}, ev, {required: !!(p.levelTest && p.levelTest.required), done: true, date: todayLocalISO(), maxHr: maxHr || null});
+  p.levelTest = Object.assign({}, ev, {required: !!(p.levelTest && p.levelTest.required), done: true, date: todayLocalISO(), maxHr: maxHr || null, restricted: !!restricted});
   // Un pulso máximo medido en un esfuerzo así es una referencia real: si supera la FC máxima que teníamos
   // (estimada por edad), pasa a ser la nueva -- salvo que el corredor haya cargado sus zonas a mano.
-  if(maxHr && !p.hrZonesCustom && maxHr > (p.hrMax || 0)){
+  if(maxHr && !restricted && !p.hrZonesCustom && maxHr > (p.hrMax || 0)){
     p.hrMax = maxHr; p.hrKnown = true; p.hrZones = computeZonesFor(p, maxHr);
   }
   // El día del test queda como hecho (si estaba pendiente en la semana actual) antes de regenerar el plan.
@@ -8254,6 +8281,7 @@ function scheduleLevelTestOn(week, idx){
 }
 // Busca la sesión del test (hecha, con carrera vinculada) que todavía no se leyó y calcula el resultado.
 let levelTestReading = false;
+let levelTestPrefillRunId = null;   // la carrera con la que se precargó la hoja del test (para saber si el resultado viene de Strava/Garmin)
 function autoReadLevelTest(){
   if(levelTestReading || !state || !state.onboarded || !state.profile || !Array.isArray(state.plan)) return;
   const d = state.plan.find(x => x && x.typeKey === 'test' && x.status === 'done' && x.linkedRunId && !x.testRead);
@@ -8267,7 +8295,7 @@ function autoReadLevelTest(){
     if(sec >= 660 && sec <= 810 && km * 1000 >= LEVEL_TEST_MIN_M && km * 1000 <= LEVEL_TEST_MAX_M){
       // la carrera dura ~12 min: se escala a 12:00 exactos (11:30 -> 12:00 suma ese tramo a la distancia)
       const maxHr = run.maxHr || ((run.hrLog && run.hrLog.length) ? Math.max.apply(null, run.hrLog.map(h => (h && typeof h === 'object') ? (h.bpm || h.hr || 0) : (Number(h) || 0))) : 0);
-      applyLevelTestResult(km * 1000 * 720 / sec, (maxHr >= 100 && maxHr <= 230) ? Math.round(maxHr) : null);
+      applyLevelTestResult(km * 1000 * 720 / sec, (maxHr >= 100 && maxHr <= 230) ? Math.round(maxHr) : null, isRestrictedRun(run));
     } else {
       persist();
       showToast(t('ltest_run_mismatch', {min: Math.round(sec / 60)}), 'error');
@@ -11713,6 +11741,8 @@ if(window.visualViewport){
 /* ---- detectar version nueva y recargar la app sola (sin tener que cerrarla) ---- */
 let appUpdateChecking = false;
 let appUpdateFound = false;
+// ¿Hay una carrera grabándose (corriendo o en pausa)? watchId vuelve a null en stopRun: un resumen ya terminado se puede recargar sin perder nada (se guardó como finished).
+function runInProgress(){ return typeof tracker !== 'undefined' && !!tracker && tracker.watchId !== null && tracker.watchId !== undefined; }
 async function checkForAppUpdate(){
   // Adentro del wrapper nativo no hay nada que "detectar" -- app.js viene empaquetado
   // en el binario y las actualizaciones llegan por la tienda, no recargando la página.
@@ -11741,12 +11771,15 @@ async function checkForAppUpdate(){
     const text = await res.text();
     const m = text.match(/const APP_VERSION\s*=\s*'([^']+)'/);
     if(m && m[1] && m[1] !== APP_VERSION){
+      // Con una carrera en curso (o pausada) NO se recarga: se destruye la página, se corta el GPS y los metros hasta recuperar la carrera no se graban (y en el iPhone se vuelve a
+      // pedir el permiso de ubicación con las manos ocupadas). Se deja pendiente: el próximo chequeo (al volver a la app, cada 10 minutos o al cerrar el resumen) la aplica cuando ya no haya carrera.
+      if(runInProgress()) return false;
       appUpdateFound = true;
       haptic([10,30,10]);
       showToast(t('update_found_msg'), 'success');
       /* location.reload() puede volver a servir una copia vieja de la caché del navegador —
          navegar a una URL con un parámetro único fuerza a pedirla de nuevo al servidor. */
-      setTimeout(()=>{ location.href = location.pathname + '?_r=' + Date.now(); }, 700);
+      setTimeout(()=>{ if(runInProgress()){ appUpdateFound = false; return; } location.href = location.pathname + '?_r=' + Date.now(); }, 700);   // revalida: pudo empezar una carrera en esa ventana
       return true;
     }
     return false;
@@ -12337,9 +12370,34 @@ async function getBestVoiceIndex(targetLang){
 // speechSynthesis de siempre, que ahí sí funciona.
 // Modo de voz: 'all' (todo) o 'key' (solo lo importante: hitos, alertas de ritmo y cadencia y la guía de series; sin el aviso de cada km).
 function voiceChoice(){ return state.voiceEnabled===false ? 'off' : (state.voiceMode==='key' ? 'key' : (state.voiceMode==='vibe' ? 'vibe' : 'on')); }
+// ¿Este dispositivo puede vibrar? Android (API de vibración) o la app nativa con el plugin Haptics. En el iPhone web/PWA no existe ninguna de las dos.
+function vibrationSupported(){
+  try{
+    if(typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') return true;
+    return !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics);
+  }catch(e){ return false; }
+}
+// iOS exige que el PRIMER speechSynthesis.speak() salga dentro de un gesto del usuario: los avisos de una carrera salen de un timer o del GPS, así que sin este "desbloqueo" no sonaba ninguno en toda la carrera.
+// Se hace una sola vez con un aviso vacío y mudo, dentro del primer toque de la app (y de nuevo al tocar Comenzar). No hace nada en la app nativa (usa su propio TTS).
+let speechUnlocked = false;
+function unlockSpeech(){
+  if(speechUnlocked) return;
+  try{
+    if(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return;
+    if(!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') return;
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    window.speechSynthesis.speak(u);
+    speechUnlocked = true;
+  }catch(e){}
+}
+if(typeof document !== 'undefined'){
+  ['pointerup', 'touchend', 'click'].forEach(ev => document.addEventListener(ev, unlockSpeech, {capture:true, passive:true}));
+}
 function voiceAllowed(isKey){
   if(state.voiceEnabled===false) return false;
-  if(state.voiceMode==='vibe') return false;        // "solo vibración": no habla nada
+  // "solo vibración": no habla nada... salvo donde no se puede vibrar (iPhone web): ahí se dicen los avisos importantes en voz alta, para no quedar sin ningún aviso
+  if(state.voiceMode==='vibe') return !vibrationSupported() && !!isKey;
   if(state.voiceMode==='key' && !isKey) return false;
   return true;
 }
@@ -12417,10 +12475,23 @@ function livePaceTarget(){
   if(w.phase === 'continuous'){
     const k = w.structure.planTypeKey;
     if(k === 'easy' || k === 'long') return ranges.easy ? {kind:'easy', range: ranges.easy} : null;
-    if(k === 'tempo') return ranges.tempo ? {kind:'tempo', range: ranges.tempo} : null;
+    if(k === 'tempo'){
+      // El tempo del plan viene con 10 min de calentamiento al principio y 5 de vuelta a la calma al final, a trote suave: ahí el ritmo de tempo no corresponde y avisar "vas más lento, acelerá" era un regaño constante.
+      if(tracker.elapsedSec < 600) return null;
+      const sp = sessionProgress();
+      if(sp){
+        const remainingSec = sp.mode === 'time' ? sp.remaining : sp.remaining * estimateBasePaceMinPerKm(state.profile) * 60;
+        if(remainingSec <= 300) return null;
+      }
+      return ranges.tempo ? {kind:'tempo', range: ranges.tempo} : null;
+    }
     return null;
   }
-  if(w.phase === 'effort' && w.structure.typeKey === 'intervals' && ranges.interval) return {kind:'interval', range: ranges.interval};
+  if(w.phase === 'effort' && w.structure.typeKey === 'intervals' && ranges.interval){
+    // el ritmo móvil mira los últimos 30 s: en los primeros 30 s de cada repetición todavía incluye la recuperación anterior y salía "vas más lento" en cada arranque
+    if(tracker.elapsedSec - (w.phaseStartElapsedSec || 0) < 30) return null;
+    return {kind:'interval', range: ranges.interval};
+  }
   return null;
 }
 // Ritmo (min/km) de los últimos windowSec segundos, o null si todavía no hay datos suficientes.
@@ -12472,6 +12543,9 @@ function sessionProgress(){
   const w = tracker.workout;
   if(!w || w.phase !== 'continuous' || !w.structure) return null;
   const s = w.structure;
+  // El test de nivel (Cooper) son SIEMPRE 12 minutos exactos, aunque el plan sea por distancia: su "distancia objetivo" es solo una estimación con el ritmo base, y avisar "completaste" al llegar a
+  // ella (antes o después de los 12:00) dejaba la calibración de ritmos mal hecha.
+  if(s.planTypeKey === 'test') return {mode: 'time', frac: tracker.elapsedSec / 720, remaining: 720 - tracker.elapsedSec, total: 720, test: true};
   if(isTimeMode()){
     const total = planDurationMin({dist: s.targetDist, durMin: s.targetDurMin}) * 60;
     if(!(total > 0)) return null;
@@ -12496,7 +12570,7 @@ function maybeAnnounceMilestones(){
   }
   if(!ms.half && bigEnough && p.frac >= 0.5 && p.frac < 0.95){ ms.half = true; announceKey('half', t('voice_half')); }
   if(!ms.last && lastEnough && p.frac < 1 && (p.mode === 'dist' ? remUnits <= 1 : remUnits <= 60)){ ms.last = true; announceKey('last', t(p.mode === 'dist' ? (isImperial() ? 'voice_last_mi' : 'voice_last_km') : 'voice_last_min')); }
-  if(!ms.done && p.frac >= 1){ ms.done = true; announceKey('done', t('voice_target_done')); }
+  if(!ms.done && p.frac >= 1){ ms.done = true; announceKey('done', t(p.test ? 'voice_test_done' : 'voice_target_done')); }
 }
 function maybeAnnounceKm(){
   // Antes esto anunciaba siempre en km ("Kilómetro 1... Kilómetro 2...") y el ritmo en
@@ -12594,8 +12668,8 @@ function setupWorkoutGuide(){
 }
 function announceContinuousWorkoutStart(s){
   const type = t('type_'+s.planTypeKey);
-  const target = isTimeMode()
-    ? fmtDurationShort(planDurationMin({dist:s.targetDist, durMin:s.targetDurMin})*60)
+  const target = (isTimeMode() || s.planTypeKey === 'test')   // el test de nivel se dice siempre en minutos: son 12:00 exactos, no una distancia
+    ? fmtDurationShort((s.planTypeKey === 'test' ? 720 : planDurationMin({dist:s.targetDist, durMin:s.targetDurMin})*60))
     : `${fmtDist(s.targetDist)} ${distUnit()}`;
   announceKey('start', s.zone ? t('voice_continuous_start_zone', {type, target, zone:s.zone}) : t('voice_continuous_start', {type, target}));
 }
@@ -13432,6 +13506,7 @@ function tickRunTimer(){
   }
 }
 function startRun(){
+  unlockSpeech();   // dentro del toque de "Comenzar": iOS solo deja hablar después de un gesto del usuario
   // Evita un doble-tap en "Comenzar a correr": actuallyStartRun() más abajo siempre arma un
   // tracker NUEVO y pide un watchPosition nuevo -- el watchId del anterior, que solo vivía en
   // el objeto tracker recién descartado, se perdía sin llamar nunca a clearWatch(). Ese primer
@@ -14051,6 +14126,7 @@ async function closeSummary(){
   await persist();
   showView('inicio');
   showToast(t('run_completed_toast'), 'success');
+  setTimeout(() => { try{ checkForAppUpdate(); }catch(e){} }, 4000);   // si salió una versión nueva durante la carrera, se aplica ahora que ya está guardada
   // Prioridad 1: si checkNewPR() de arriba ya disparó celebrate() (prioridad 2, marca
   // personal nueva), esta expresión genérica de "terminaste una carrera" no la corta antes
   // de tiempo -- ver el comentario de setMascotExpression.
@@ -15140,6 +15216,8 @@ function runsByDateAsc(list){
 // Carreras que pueden llegar a Zonda (la IA). El acuerdo de desarrollador de Strava (API Policy 2026, sección 5.3) prohíbe usar datos de Strava
 // en cualquier aplicación de IA, incluso como contexto de una conversación: las carreras importadas de Strava (source:'strava') quedan afuera.
 // Garmin (Connect Developer Program) se declara igual en el formulario de acceso: los datos que vienen de dispositivos Garmin (source:'garmin') tampoco llegan a la IA ni se usan para entrenarla.
+// Las carreras de Strava y Garmin (y las que la persona convirtió en manuales o desconectó conservándolas: aiExcluded) NUNCA llegan a la IA: lo exigen sus licencias.
+function isRestrictedRun(r){ return !!r && (r.source === 'strava' || r.source === 'garmin' || r.origin === 'garmin' || r.origin === 'strava' || !!r.aiExcluded); }
 function aiVisibleRuns(){ return (state.runs || []).filter(r => r.source !== 'strava' && r.source !== 'garmin' && !r.aiExcluded); }
 // Boceto de la ruta (SVG) para las tarjetas del historial: se dibuja con los puntos del GPS, sin depender del mapa de Mapbox.
 // Queda detras de la imagen del mapa: si la imagen carga la tapa, si falla (sin red / sin token) se ve el trazo.
@@ -18198,8 +18276,11 @@ function buildContext(){
     // parsea como medianoche UTC, no local (mismo bug ya encontrado en earliestMonday). En
     // husos negativos (Argentina) eso corre la cuenta regresiva: una carrera de hoy o mañana
     // a la tarde podía aparecer como "ya pasó" en el contexto que lee el coach del chat.
-    const weeksLeft = Math.round((new Date(p.raceDate+'T00:00:00') - new Date()) / (7*86400000));
-    ctx += ` Fecha objetivo del plan (la fecha para la que se entrena la distancia del objetivo): ${p.raceDate} (${weeksLeft>0?`faltan ${weeksLeft} semanas`:'ya pasó'}).`;
+    // Días hasta la fecha, contra la medianoche local de HOY (no contra la hora actual: dividir entre semanas redondeaba a 0 durante toda la semana de la carrera y el coach leía "ya pasó" a 4 días del 10K).
+    // Math.round absorbe el cambio de horario de verano (días de 23 o 25 h).
+    const daysLeft = Math.round((new Date(p.raceDate+'T00:00:00') - new Date(todayLocalISO()+'T00:00:00')) / 86400000);
+    const when = daysLeft < 0 ? 'ya pasó' : (daysLeft === 0 ? 'es HOY' : (daysLeft === 1 ? 'es MAÑANA' : (daysLeft < 14 ? `faltan ${daysLeft} días` : `faltan ${Math.round(daysLeft/7)} semanas`)));
+    ctx += ` Fecha objetivo del plan (la fecha para la que se entrena la distancia del objetivo): ${p.raceDate} (${when}).`;
   }
   // Fase del plan por fases (solo si está activa, ver refreshPhaseNow): le damos la fase y cuánto falta,
   // no el pico semanal -- el volumen real ya está en los bloques del plan de más abajo.
@@ -18259,7 +18340,10 @@ function buildContext(){
   {
     const lt = p.levelTest;
     const unit = distUnit();
-    if(lt && lt.done && lt.paces){
+    if(lt && lt.done && lt.paces && lt.restricted){
+      // el test salió de una carrera de Strava/Garmin: ni su distancia ni los ritmos que salen de ella viajan a la IA
+      ctx += ' Ya hizo el test de nivel (Cooper de 12 minutos), pero sus ritmos de referencia no están disponibles para vos: no menciones ni inventes ritmos concretos; si los pide, decile que los ve en la pantalla del plan.';
+    } else if(lt && lt.done && lt.paces){
       ctx += ` Test de nivel (Cooper de 12 minutos) hecho el ${lt.date}: ${lt.distanceM} m. Sus ritmos de referencia por ${unit}: suave ${fmtPaceRange(lt.paces.easy)}, tempo ${fmtPaceRange(lt.paces.tempo)}, series ${fmtPaceRange(lt.paces.interval)}. Si habla de ritmos usá estos, no inventes otros.`;
     } else if(levelTestPending(p)){
       ctx += ' Todavía NO hizo el test de nivel obligatorio (Cooper de 12 minutos, es la primera sesión de su plan): sin ese dato los ritmos son estimados. Recordáselo si pregunta por ritmos o zonas.';
@@ -18525,16 +18609,39 @@ function needsAmountMsg(dia){
 // armar series, cuestas, tempo o zonas 4-5 igual, y esa sesión queda custom (el generador determinista que sí modera la carga ya no la toca). Ahora la herramienta lo rechaza y le explica el motivo al modelo.
 const COACH_HARD_TYPES = ['intervals', 'hills', 'tempo', 'progression'];
 function coachSafetyRefusal(input){
-  const hard = COACH_HARD_TYPES.includes(input.tipo_categoria) || resolveZone(input.zona) >= 4;
-  if(!hard) return null;
   const p = state.profile || {};
+  // Se mira la categoría EFECTIVA (un "Fartlek" puesto en tipo/descripcion con otra categoría no esquiva el filtro). El fartlek solo se bloquea al principiante TOTAL (sin base de impacto) y en el posparto reciente:
+  // para molestia activa o cautela alta se deja pasar, como hace el generador.
+  const cat = effectiveTipoCategoria(input);
+  const fartlekBlocked = cat === 'fartlek' && ((isBeginnerProfile(p) && !hasRunningImpactBase(p)) || pregnancyStillRecent(p));
+  const hard = COACH_HARD_TYPES.includes(cat) || resolveZone(input.zona) >= 4 || fartlekBlocked;
+  if(!hard) return coachDistanceRefusal(input);
   let why = null;
   if(isBeginnerProfile(p)) why = 'es principiante';
   else if(pregnancyStillRecent(p)) why = 'está en un posparto reciente';
   else if((activePainEntries(14) || []).length) why = 'tiene una molestia activa';
   else if(trainingCaution(p).level >= 2) why = 'tiene un perfil (edad o contextura) que pide cautela alta';
-  if(!why) return null;
+  if(!why) return coachDistanceRefusal(input);
   return 'No armo esa sesión: el corredor ' + why + ', así que no corresponde darle series, cuestas, tempo ni zonas 4-5. Proponé una sesión suave (rodaje o fondo en zonas 1-3) o explicale que el plan se lo irá habilitando.';
+}
+// Tope de distancia para quien tiene alguna restricción (principiante, posparto, molestia activa, cautela por edad/contextura): una tirada de 40 km "suave" no pasaba por ningún filtro y quedaba como sesión custom
+// que ninguna regeneración vuelve a moderar. El máximo es 1,3 veces lo más largo que el plan tiene esa semana o que corrió en las últimas 4 semanas (la IA no ve las de Strava/Garmin), y nunca menos de 5 km.
+function coachDistanceRefusal(input){
+  const p = state.profile || {};
+  const restricted = isBeginnerProfile(p) || pregnancyStillRecent(p) || (activePainEntries(14) || []).length > 0 || trainingCaution(p).level >= 1;
+  if(!restricted) return null;
+  const km = resolvePlanDistKm(input);
+  if(!(km > 0)) return null;
+  const planMax = Math.max(0, ...(state.plan || []).map(d => (d && d.dist > 0) ? d.dist : 0));
+  const since = Date.now() - 28 * 86400000;
+  const recentMax = Math.max(0, ...aiVisibleRuns().filter(r => Date.parse(r.date) >= since).map(r => r.distanceKm || 0));
+  const cap = Math.max(5, 1.3 * planMax, 1.3 * recentMax);
+  if(km <= cap) return null;
+  return 'No armo esa sesión: ' + km.toFixed(1) + ' km es demasiado para este corredor (con sus restricciones el máximo razonable ahora es ' + cap.toFixed(1) + ' km). Proponé una distancia menor o explicale que el plan se la irá habilitando.';
+}
+// Huella de lo que pueden cambiar las herramientas del coach (plan, semana próxima, perfil, molestias, notas): sirve para saber si una ronda de herramientas cambió algo de verdad.
+function coachStateFingerprint(){
+  try{ return JSON.stringify([state.plan, state.nextWeekOverrides, state.profile, state.painLog, state.coachNotes]); }catch(e){ return String(Math.random()); }
 }
 function applyPlanChange(input){
   // El input_schema de la herramienta declara dia como enum:DAY_KEYS, pero eso es solo una
@@ -19179,7 +19286,9 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
         }
         break;
       }
-      anyToolApplied = true;
+      // "Se aplicó algo" se decide por lo que CAMBIÓ de verdad en el plan, el perfil o las molestias, no por haber llamado una herramienta: una herramienta rechazada (coachSafetyRefusal, topes, argumentos inválidos)
+      // no cambia nada, y si el pedido siguiente fallaba el chat decía "Listo, ya apliqué los cambios" sobre un cambio que nunca ocurrió.
+      const stateBefore = coachStateFingerprint();
       const toolResults = toolUses.map(tu=>{
         let result;
         // Topes por mensaje del corredor: el tope de ±60% de ajustar_volumen_semana es POR LLAMADA, así que llamadas repetidas se acumulaban (dos de +60% = +156%), y varias
@@ -19198,6 +19307,7 @@ Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, 
         else result = 'Herramienta no reconocida.';
         return {type:'tool_result', tool_use_id:tu.id, content: result};
       });
+      if(coachStateFingerprint() !== stateBefore) anyToolApplied = true;
       messages.push({role:'assistant', content: blocks});
       messages.push({role:'user', content: toolResults});
     }
