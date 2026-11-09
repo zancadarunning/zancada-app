@@ -108,12 +108,23 @@ test('guía de ritmo en vivo: tempo usa el ritmo de tempo y las series solo en l
   const tr = app.getTracker();
   tr.workout = { phase: 'continuous', structure: { typeKey: 'continuous', planTypeKey: 'tempo' } };
   tr.points = pointsAt(2.38, 120);          // 7:00 /km: lento para tempo
+  tr.elapsedSec = 300;
+  assert.equal(app.livePaceStatus(), null, 'en los 10 min de calentamiento del tempo no hay objetivo de ritmo (antes regañaba "vas más lento" todo el calentamiento)');
+  tr.elapsedSec = 900;
   assert.equal(app.livePaceStatus().kind, 'tempo');
   assert.equal(app.livePaceStatus().status, 'slow');
+  tr.workout = { phase: 'continuous', structure: { typeKey: 'continuous', planTypeKey: 'tempo', targetDurMin: 30, targetDist: 4 } };
+  app.state.profile.trainBy = 'time';
+  tr.elapsedSec = 30 * 60 - 200;            // faltan 200 s: vuelta a la calma
+  assert.equal(app.livePaceStatus(), null, 'en los últimos 5 min (vuelta a la calma) tampoco');
+  app.state.profile.trainBy = 'distance';
   tr.workout = { phase: 'recovery', structure: { typeKey: 'intervals' } };
   assert.equal(app.livePaceStatus(), null, 'en la recuperación de series no hay objetivo');
-  tr.workout = { phase: 'effort', structure: { typeKey: 'intervals' } };
+  tr.workout = { phase: 'effort', phaseStartElapsedSec: 100, structure: { typeKey: 'intervals' } };
   tr.points = pointsAt(3.4, 60);            // ~4:54 /km dentro del rango de series
+  tr.elapsedSec = 110;
+  assert.equal(app.livePaceStatus(), null, 'en los primeros 30 s de cada repetición la ventana de ritmo todavía incluye la recuperación');
+  tr.elapsedSec = 140;
   assert.equal(app.livePaceStatus().kind, 'interval');
   assert.equal(app.livePaceStatus().status, 'ok');
 });
