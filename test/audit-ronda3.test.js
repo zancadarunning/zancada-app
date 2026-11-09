@@ -842,3 +842,150 @@ test('el test de nivel (Cooper) y la carrera libre no llevan calentamiento guiad
   }
   assert.ok(read('index.html').includes('id="workout-guide-warmcool"') && read('index.html').includes('data-on-click="skipWarmCool()"'));
 });
+
+// ---------- plan adaptativo ----------
+test('dos sesiones seguidas sin hacer: la próxima sesión de calidad baja 15 %, una vez por semana, con aviso; con una sola no pasa nada', () => {
+  const app = loadApp();
+  ready(app);
+  app.state.onboarded = true;
+  app.state.profile = { name: 'x', weeklyKm: 30, currentWeeklyKm: 30, goal: '10k', runnerType: 'active', trainingDays: ['mon', 'tue', 'thu', 'sat', 'sun'], units: 'metric', trainBy: 'distance', terrain: 'asfalto', hrZones: app.computeZones(190), hrMax: 190 };
+  const gen = app.generatePlan({ name: 'x', weeklyKm: 30, currentWeeklyKm: 30, goal: '10k', runnerType: 'active', trainingDays: ['mon', 'tue', 'thu', 'sat', 'sun'], units: 'metric', trainBy: 'distance', terrain: 'asfalto', hrZones: app.computeZones(190), hrMax: 190 }, 6);
+  const q = gen.find(d => d.dist > 0 && ['intervals', 'tempo', 'hills', 'fartlek', 'progression'].includes(d.typeKey));
+  const easy = gen.find(d => d.dist > 0 && d.typeKey === 'easy');
+  assert.ok(q && easy, 'el plan de prueba trae una sesión de calidad y una suave');
+  const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  const rest = i => ({ day: days[i], dist: 0, typeKey: 'rest' });
+  const plan = days.map((_, i) => rest(i));
+  plan[0] = Object.assign({}, easy, { day: 'mon', status: undefined });
+  plan[1] = Object.assign({}, easy, { day: 'tue', status: undefined });
+  plan[4] = Object.assign({}, q, { day: 'fri', status: undefined });
+  app.state.plan = plan;
+  const before = plan[4].dist;
+  plan[0].status = 'skipped';
+  app.softenQualityAfterMisses(4);
+  assert.equal(plan[4].dist, before, 'con una sola sin hacer no se toca nada');
+  plan[1].status = 'skipped';
+  app.softenQualityAfterMisses(4);
+  assert.ok(plan[4].dist < before, 'dos seguidas: baja la próxima sesión de calidad: ' + before + ' -> ' + plan[4].dist);
+  assert.equal(app.state.softenedWeek, app.state.weekStart);
+  const msg = app.state.chat[app.state.chat.length - 1];
+  assert.ok(msg && msg.noAi === true && /15/.test(msg.text), 'avisa, sin IA');
+  const after = plan[4].dist;
+  app.softenQualityAfterMisses(4);
+  assert.equal(plan[4].dist, after, 'una sola vez por semana');
+});
+
+test('dos faltazos NO tocan una sesión suave, un día de carrera ni el test de nivel (solo la de calidad)', () => {
+  const app = loadApp();
+  ready(app);
+  app.state.onboarded = true;
+  const plan = [0, 1, 2, 3, 4, 5, 6].map(i => ({ day: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][i], dist: 0, typeKey: 'rest' }));
+  plan[0] = { day: 'mon', dist: 5, typeKey: 'easy', status: 'skipped' };
+  plan[1] = { day: 'tue', dist: 5, typeKey: 'easy', rating: 'mal', status: 'done' };
+  plan[3] = { day: 'thu', dist: 8, typeKey: 'long' };
+  plan[4] = { day: 'fri', dist: 3, typeKey: 'test' };
+  app.state.plan = plan;
+  app.softenQualityAfterMisses(3);
+  assert.equal(plan[3].dist, 8);
+  assert.equal(plan[4].dist, 3);
+  assert.ok(!app.state.softenedWeek);
+});
+
+// ---------- recalibrar los ritmos ----------
+function recalSetup(app, paceMin, nRuns, opts) {
+  opts = opts || {};
+  const p = { name: 'x', weeklyKm: 30, currentWeeklyKm: 30, goal: '10k', runnerType: 'active', trainingDays: ['mon', 'tue', 'thu', 'sat', 'sun'], units: 'metric', trainBy: 'distance', terrain: 'asfalto', hrZones: app.computeZones(190), hrMax: 190 };
+  p.levelTest = { done: true, date: '2026-08-01', vdot: 40, paces: app.trainingPacesFromVdot(40) };
+  Object.assign(p.levelTest, opts.lt || {});
+  app.state.profile = p;
+  app.state.onboarded = true;
+  const gen = app.generatePlan(p, 6);
+  const easy = gen.find(d => d.dist > 0 && d.typeKey === 'easy');
+  const z2 = p.hrZones[2], hr = Math.round((z2.min + z2.max) / 2);
+  const now = Date.now();
+  app.state.runs = []; app.state.planHistory = [];
+  for (let k = 0; k < nRuns; k++) {
+    const runDate = now - (k + 1) * 6 * 864e5;
+    const dKm = 1.4 * easy.dist + 2, secs = Math.round(dKm * paceMin * 60);
+    const pts = [], ts = [], hrs = [];
+    for (let s = 0; s <= secs; s += 10) { pts.push({ t: s, lat: 40 + (s / 60 / paceMin) / 111.19, lon: -3 }); ts.push(s); hrs.push(hr); }
+    const id = 'rr' + k;
+    app.state.runs.push({ id, date: runDate, distanceKm: dKm, durationSec: secs, points: pts, series: { t: ts, hr: hrs } });
+    const plan = [0, 1, 2, 3, 4, 5, 6].map(i => ({ day: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][i], dist: 0, typeKey: 'rest' }));
+    plan[0] = Object.assign({}, easy, { status: 'done', linkedRunId: id });
+    app.state.planHistory.push({ weekStart: '2026-10-' + String(5 + k).padStart(2, '0'), plan });
+  }
+  return { now };
+}
+
+test('recalibrar ritmos: 4 rodajes suaves con el pulso en zona y bastante más rápidos que el rango proponen subir, moviendo solo la mitad (tope 5 %)', () => {
+  const app = loadApp();
+  ready(app);
+  const { now } = recalSetup(app, 5.0, 4);
+  const sug = app.paceRecalibrationSuggestion(now);
+  assert.ok(sug, 'hay sugerencia');
+  assert.equal(sug.dir, 'up');
+  assert.equal(sug.n, 4);
+  assert.equal(sug.newVdot, 42, 'el tope de 5 % sobre 40');
+  app.state.chat = [];
+  app.applyPaceRecalibration(sug);
+  assert.equal(app.state.profile.levelTest.vdot, 42);
+  assert.equal(app.state.profile.levelTest.prevVdot, 40);
+  assert.ok(app.state.profile.levelTest.recalibratedAt);
+  assert.equal(JSON.stringify(app.state.profile.levelTest.paces), JSON.stringify(app.trainingPacesFromVdot(42)));
+  assert.ok(app.state.chat[app.state.chat.length - 1].noAi === true);
+  assert.equal(app.paceRecalibrationSuggestion(now), null, 'no vuelve a proponer durante 21 días');
+});
+
+test('recalibrar ritmos: con 3 rodajes, con pulso fuera de zona, de Strava, o con ritmos dentro del rango no se propone nada; más lento propone bajar', () => {
+  const app = loadApp();
+  ready(app);
+  let c = recalSetup(app, 5.0, 3);
+  assert.equal(app.paceRecalibrationSuggestion(c.now), null, 'poca evidencia');
+  c = recalSetup(app, 5.0, 4);
+  app.state.runs.forEach(r => { r.source = 'strava'; });
+  assert.equal(app.paceRecalibrationSuggestion(c.now), null, 'Strava no cuenta');
+  c = recalSetup(app, 5.0, 4);
+  app.state.runs.forEach(r => { r.series.hr = r.series.hr.map(() => 185); });
+  assert.equal(app.paceRecalibrationSuggestion(c.now), null, 'pulso fuera de la zona: el ritmo no dice nada');
+  const lt = app.trainingPacesFromVdot(40);
+  c = recalSetup(app, (lt.easy[0] + lt.easy[1]) / 2, 4);
+  assert.equal(app.paceRecalibrationSuggestion(c.now), null, 'ritmo dentro del rango suave: nada que corregir');
+  c = recalSetup(app, 8.0, 4);
+  const down = app.paceRecalibrationSuggestion(c.now);
+  assert.ok(down && down.dir === 'down' && down.newVdot < 40 && down.newVdot >= 38, JSON.stringify(down));
+  c = recalSetup(app, 5.0, 4, { lt: { recalibratedAt: new Date(c.now - 5 * 864e5).toISOString().slice(0, 10) } });
+  assert.equal(app.paceRecalibrationSuggestion(c.now), null, 'ya se recalibró hace menos de 21 días');
+  c = recalSetup(app, 5.0, 4);
+  app.state.paceRecalDeclinedAt = new Date(c.now - 3 * 864e5).toISOString().slice(0, 10);
+  assert.equal(app.paceRecalibrationSuggestion(c.now), null, 'dijo que no hace poco');
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) for (const k of ['pace_recal_up', 'pace_recal_down', 'pace_recal_yes', 'pace_recal_no', 'pace_recal_done']) assert.ok(new RegExp(k + ':"[^"]{3,}"').test(read('locales/' + l + '.js')), l + ' ' + k);
+});
+
+// ---------- días de la semana que viene ----------
+test('los días elegidos para la semana que viene arman SOLO esa semana; el perfil conserva los de siempre; una elección vieja se ignora', () => {
+  const app = loadApp();
+  ready(app);
+  const p = { name: 'x', weeklyKm: 30, currentWeeklyKm: 30, goal: '10k', runnerType: 'active', trainingDays: ['mon', 'wed', 'fri'], units: 'metric', trainBy: 'distance', terrain: 'asfalto', hrZones: app.computeZones(190), hrMax: 190 };
+  app.state.profile = p;
+  app.state.onboarded = true;
+  app.state.weekNumber = 6;
+  app.state.weekStart = app.getMondayISO(new Date());
+  app.state.plan = app.generatePlan(p, 6);
+  const sessionDays = plan => plan.filter(d => d.dist > 0 && !d.raceDay).map(d => d.day).join();
+  assert.equal(sessionDays(app.getNextWeekPlan().plan), 'mon,wed,fri', 'sin elección: los de siempre');
+  const nextIso = app.addDaysToIsoLocal(app.state.weekStart, 7);
+  app.state.nextWeekDays = { weekStart: nextIso, days: ['tue', 'thu', 'sat', 'sun'] };
+  const nxt = app.getNextWeekPlan();
+  assert.equal(sessionDays(nxt.plan), 'tue,thu,sat,sun', 'con elección: esos días');
+  assert.equal(p.trainingDays.join(), 'mon,wed,fri', 'el perfil no se toca');
+  app.state.nextWeekDays = { weekStart: '2000-01-03', days: ['tue', 'thu'] };
+  assert.equal(sessionDays(app.getNextWeekPlan().plan), 'mon,wed,fri', 'una elección de otra semana no cuenta');
+  app.state.nextWeekDays = { weekStart: nextIso, days: ['tue'] };
+  assert.equal(sessionDays(app.getNextWeekPlan().plan), 'mon,wed,fri', 'menos de 2 días no se aplica');
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) for (const k of ['weekdays_title', 'weekdays_desc', 'weekdays_confirm', 'weekdays_keep', 'weekdays_saved', 'weekdays_range']) assert.ok(new RegExp(k + ':"[^"]{3,}"').test(read('locales/' + l + '.js')), l + ' ' + k);
+  const html = read('index.html');
+  assert.ok(html.includes('id="home-weekdays-card"') && html.includes('data-on-click="confirmNextWeekDays()"') && html.includes('data-on-click="dismissNextWeekDays()"'));
+  assert.ok(SRC.includes("'home-recap-card', 'home-weekdays-card'"), 'entra en el tope de dos avisos');
+  assert.ok(SRC.includes('data-on-click="toggleNextWeekDay('), 'sin handlers inline: usa data-on-click');
+});

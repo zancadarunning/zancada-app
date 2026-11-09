@@ -3415,6 +3415,14 @@ body{overflow-wrap:break-word;}
       <button class="btn btn-primary" style="width:100%;" data-on-click="openLevelTestSchedule()" data-i18n="ltest_missed_btn"></button>
     </div>
 
+    <div class="card" id="home-weekdays-card" style="display:none;">
+      <h3 id="home-weekdays-title" style="margin:0 0 6px;" data-i18n="weekdays_title"></h3>
+      <p class="muted" style="margin:0 0 12px; font-size:13px; line-height:1.5;" data-i18n="weekdays_desc"></p>
+      <div class="day-picker" id="home-weekdays-picker" role="group" aria-labelledby="home-weekdays-title" style="margin-bottom:12px;"></div>
+      <button class="btn btn-primary" style="width:100%;" data-on-click="confirmNextWeekDays()" data-i18n="weekdays_confirm"></button>
+      <button class="small-link" style="display:block; margin:10px auto 0;" data-on-click="dismissNextWeekDays()" data-i18n="weekdays_keep"></button>
+    </div>
+
     <div class="card" id="home-adjust-card" style="display:none;">
       <h3 style="margin:0 0 6px;" data-i18n="adjust_title"></h3>
       <p class="muted" id="home-adjust-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
