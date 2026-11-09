@@ -60,6 +60,7 @@ import com.getcapacitor.annotation.CapacitorPlugin
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import java.time.Duration
 
 // Deportes de Health Connect que contamos como "carrera" -- mismo criterio de
 // substring que ya usa isRunningSport() del lado de Polar (api/_lib/polar-activity-helpers.js),
@@ -191,6 +192,28 @@ class HealthConnectBridgePlugin : Plugin() {
                     // cadencia = pasos por minuto de la sesión (solo si el reloj registró pasos en ese rango)
                     val steps = if (canSteps) agg[StepsRecord.COUNT_TOTAL] else null
                     if (steps != null && steps > 0 && durationMin > 0) item.put("avgCadence", steps / durationMin)
+                    try {
+                        val (hrT, hrB) = readHrSeries(hc, session.startTime, session.endTime)
+                        if (hrT.size >= 10) {
+                            val st = strideFor(hrT.size, 360)
+                            val a = JSArray(); val b = JSArray()
+                            var i = 0
+                            while (i < hrT.size) { a.put(hrT[i]); b.put(hrB[i]); i += st }
+                            item.put("hrT", a); item.put("hrBpm", b)
+                        }
+                    } catch (e: Exception) { /* sin serie de pulso: se importa igual */ }
+                    try {
+                        val (dT, dM) = readDistanceSeries(hc, session.startTime, session.endTime)
+                        if (dT.size >= 10) {
+                            val st = strideFor(dT.size, 360)
+                            val a = JSArray(); val b = JSArray()
+                            var i = 0
+                            while (i < dT.size) { a.put(dT[i]); b.put(dM[i]); i += st }
+                            // el último punto (distancia total) siempre entra, aunque el salto lo salte
+                            if ((dT.size - 1) % st != 0) { a.put(dT[dT.size - 1]); b.put(dM[dM.size - 1]) }
+                            item.put("distT", a); item.put("distM", b)
+                        }
+                    } catch (e: Exception) { /* sin serie de distancia: se importa igual */ }
                     out.put(item)
                 }
                 val result = JSObject()
@@ -200,6 +223,64 @@ class HealthConnectBridgePlugin : Plugin() {
                 call.reject("Error leyendo Health Connect: ${e.message}", e)
             }
         }
+    }
+
+    // Series por sesión (pulso y distancia acumulada en el tiempo), para que la app pueda mostrar la curva de pulso y de ritmo y leer la carrera por tramos (calentamiento / principal / vuelta a la calma)
+    // aunque el reloj no escriba la ruta GPS. Todo es opcional: si algo falla o el reloj no escribió esos registros, la carrera se importa igual con el resumen de siempre.
+    // Se achican a ~360 puntos por serie (tiempo en segundos desde el inicio de la sesión) para no inflar lo que se guarda.
+    private fun strideFor(n: Int, max: Int): Int = if (n <= max) 1 else (n + max - 1) / max
+
+    private suspend fun readHrSeries(hc: HealthConnectClient, start: Instant, end: Instant): Pair<List<Long>, List<Long>> {
+        val ts = ArrayList<Long>()
+        val bpm = ArrayList<Long>()
+        var token: String? = null
+        var pages = 0
+        do {
+            val resp = hc.readRecords(
+                ReadRecordsRequest(
+                    recordType = HeartRateRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(start, end),
+                    pageToken = token
+                )
+            )
+            for (rec in resp.records) {
+                for (s in rec.samples) {
+                    val t = Duration.between(start, s.time).seconds
+                    if (t >= 0) { ts.add(t); bpm.add(s.beatsPerMinute) }
+                }
+            }
+            token = resp.pageToken
+            pages++
+        } while (!token.isNullOrEmpty() && pages < 20)
+        return Pair(ts, bpm)
+    }
+
+    private suspend fun readDistanceSeries(hc: HealthConnectClient, start: Instant, end: Instant): Pair<List<Long>, List<Double>> {
+        val recs = ArrayList<DistanceRecord>()
+        var token: String? = null
+        var pages = 0
+        do {
+            val resp = hc.readRecords(
+                ReadRecordsRequest(
+                    recordType = DistanceRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(start, end),
+                    pageToken = token
+                )
+            )
+            recs.addAll(resp.records)
+            token = resp.pageToken
+            pages++
+        } while (!token.isNullOrEmpty() && pages < 20)
+        recs.sortBy { it.endTime }
+        val ts = ArrayList<Long>()
+        val cum = ArrayList<Double>()
+        var total = 0.0
+        for (r in recs) {
+            total += r.distance.inMeters
+            val t = Duration.between(start, r.endTime).seconds
+            if (t >= 0) { ts.add(t); cum.add(total) }
+        }
+        return Pair(ts, cum)
     }
 
     // "Desconectar" del lado de Health Connect es revocar el permiso que le dimos a

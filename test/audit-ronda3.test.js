@@ -1004,3 +1004,67 @@ test('los días elegidos para la semana que viene arman SOLO esa semana; el perf
   assert.ok(SRC.includes("'home-recap-card', 'home-weekdays-card'"), 'entra en el tope de dos avisos');
   assert.ok(SRC.includes('data-on-click="toggleNextWeekDay('), 'sin handlers inline: usa data-on-click');
 });
+
+// ---------- Health Connect: series de pulso y distancia ----------
+function hcExercise(paceMin, minutes, withHr) {
+  const secs = Math.round(minutes * 60), distT = [], distM = [], hrT = [], hrBpm = [];
+  for (let s = 10; s <= secs; s += 10) { distT.push(s); distM.push(Math.round(s / 60 / paceMin * 1000)); hrT.push(s - 3); hrBpm.push(140); }
+  const ex = { id: 'abc', startTime: new Date(Date.now() - 3600e3).toISOString(), durationSec: secs, distanceMeters: distM[distM.length - 1], distT, distM };
+  if (withHr) { ex.hrT = hrT; ex.hrBpm = hrBpm; }
+  return ex;
+}
+
+test('Health Connect: las series de pulso y distancia dan la curva de pulso y de ritmo; lo que no cierra se descarta', () => {
+  const app = loadApp();
+  const run = app.healthConnectExerciseToRun(hcExercise(5, 35, true));
+  assert.ok(run.series && run.series.t.length >= 100, 'hay serie');
+  assert.equal(run.series.t.length, run.series.hr.length);
+  assert.equal(run.series.t.length, run.series.paceMin.length);
+  assert.equal(run.series.t.length, run.series.distM.length);
+  assert.ok(run.series.hr.filter(v => v != null).every(v => v === 140));
+  const paces = run.series.paceMin.filter(v => v != null);
+  assert.ok(paces.length > 100 && paces.every(p => Math.abs(p - 5) < 0.1), 'ritmo ~5:00/km');
+  // sin pulso: solo distancia (ritmo), hr null
+  const noHr = app.healthConnectExerciseToRun(hcExercise(5, 35, false));
+  assert.equal(noHr.series.hr, null);
+  assert.ok(noHr.series.paceMin);
+  // datos basura de otra app: se descartan
+  const bad = hcExercise(5, 35, true);
+  bad.hrBpm[3] = 900; bad.distM[5] = 1e9;
+  assert.equal(app.healthConnectExerciseToRun(bad).series, null, 'valores fuera de rango');
+  const unsorted = hcExercise(5, 35, false); unsorted.distT.reverse();
+  assert.equal(app.healthConnectExerciseToRun(unsorted).series, null, 'tiempos desordenados');
+  const short = hcExercise(5, 1, false);
+  assert.equal(app.healthConnectExerciseToRun(short).series, null, 'muy pocas muestras');
+  assert.equal(app.healthConnectExerciseToRun({ id: 'x', startTime: new Date().toISOString(), durationSec: 600, distanceMeters: 1000 }).series, null, 'sin series: como siempre');
+});
+
+test('Health Connect: una carrera SIN ruta GPS se lee por tramos (calentamiento, principal, vuelta a la calma) con la distancia acumulada', () => {
+  const app = loadApp();
+  ready(app);
+  const p = { name: 'x', weeklyKm: 30, currentWeeklyKm: 30, goal: '10k', runnerType: 'active', trainingDays: ['mon', 'tue', 'thu', 'sat', 'sun'], units: 'metric', trainBy: 'time', terrain: 'asfalto', hrZones: app.computeZones(190), hrMax: 190 };
+  app.state.profile = p;
+  const easy = app.generatePlan(p, 6).find(d => d.typeKey === 'easy');
+  easy.timeBased = true; easy.durMin = 25;
+  const run = app.healthConnectExerciseToRun(hcExercise(5, 35, true));
+  assert.equal((run.points || []).length, 0, 'sin ruta GPS');
+  const ev = app.evaluateRunSteps(run, app.planStepsFromPayload(app.watchDayPayload(easy, '2026-11-10')), p.hrZones);
+  assert.ok(ev, 'se puede leer por tramos');
+  assert.equal(JSON.stringify(ev.rows.map(r => r.kind)), '["warmup","main","cooldown"]');
+  assert.ok(Math.abs(ev.rows[0].sec - 300) <= 12 && Math.abs(ev.rows[1].sec - 1500) <= 12, JSON.stringify(ev.rows.map(r => r.sec)));
+  ev.rows.forEach(r => assert.ok(Math.abs(r.paceMin - 5) < 0.15, 'ritmo ' + r.paceMin));
+  assert.equal(ev.rows[1].hr, 140);
+  // sin distancia en la serie (solo pulso) no hay forma de cortar por tramos
+  const hrOnly = hcExercise(5, 35, true); delete hrOnly.distT; delete hrOnly.distM;
+  const run2 = app.healthConnectExerciseToRun(hrOnly);
+  assert.equal(app.evaluateRunSteps(run2, app.planStepsFromPayload(app.watchDayPayload(easy, '2026-11-10')), p.hrZones), null);
+});
+
+test('Health Connect: el plugin de Android lee las series con paginación y no rompe la importación si algo falla (las dos copias son iguales)', () => {
+  const a = read('mobile/android/app/src/main/java/org/zancada/app/HealthConnectBridgePlugin.kt').replace(/\r\n/g, '\n');
+  const b = read('mobile/healthconnect-setup/android/HealthConnectBridgePlugin.kt').replace(/\r\n/g, '\n');
+  assert.equal(a, b, 'copias iguales');
+  assert.ok(a.includes('readHrSeries(') && a.includes('readDistanceSeries(') && a.includes('pageToken'));
+  assert.equal((a.match(/catch \(e: Exception\) \{ \/\* sin serie/g) || []).length, 2, 'cada serie falla por separado sin romper la carrera');
+  assert.ok(!/READ_EXERCISE_ROUTE|ExerciseRoute/.test(a), 'no pide ruta GPS: no se agregaron permisos nuevos');
+});
