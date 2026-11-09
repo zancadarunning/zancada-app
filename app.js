@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T22:12:28Z';
+const APP_VERSION = '2026-11-09T23:19:00Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6681,7 +6681,9 @@ function softenQualityAfterMisses(todayIdxForTest){
   if(state.profile && isBeginnerProfile(state.profile)) return;   // el principiante ya arma sus sesiones con otra progresión
   const todayIdx = todayIdxForTest != null ? todayIdxForTest : (new Date().getDay()+6)%7;
   const past = [];
-  for(let i = 0; i < todayIdx; i++){ const d = state.plan[i]; if(d && d.dist > 0 && !d.raceDay) past.push(d); }
+  // Se cuentan solo las sesiones de hace 2 días o más: la de AYER puede figurar "salteada" solo porque el reloj todavía no sincronizó la carrera (Garmin, COROS, Health Connect llegan horas después),
+  // y recortar por eso sería un error que no se deshace cuando la carrera aparece.
+  for(let i = 0; i < todayIdx - 1; i++){ const d = state.plan[i]; if(d && d.dist > 0 && !d.raceDay) past.push(d); }
   if(past.length < 2) return;
   if(!past.slice(-2).every(d => d.status === 'skipped' || d.rating === 'mal')) return;
   const idx = state.plan.findIndex((d, i) => i >= todayIdx && d && d.dist > 0 && !d.status && !d.raceDay && SOFTEN_QUALITY_KEYS.includes(d.typeKey));

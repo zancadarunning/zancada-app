@@ -1366,3 +1366,24 @@ test('barrido: modificar_sesion deja el plan sano y coherente con lo pedido (mod
   } finally { Date.prototype.getDay = realDay; }
   assert.equal(issues.length, 0, issues.join(' | '));
 });
+
+test('recorte tras dos faltazos: la sesión de AYER no cuenta (puede figurar salteada solo porque el reloj no sincronizó todavía); la de anteayer sí', () => {
+  const app = loadApp();
+  ready(app);
+  app.state.onboarded = true;
+  app.state.profile = sweepProfile(app, {});
+  const gen = app.generatePlan(app.state.profile, 6);
+  const q = gen.find(d => d.dist > 0 && ['intervals', 'tempo', 'hills', 'fartlek', 'progression'].includes(d.typeKey));
+  const easy = gen.find(d => d.dist > 0 && d.typeKey === 'easy');
+  const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  const plan = days.map(d => ({ day: d, dist: 0, typeKey: 'rest' }));
+  plan[1] = Object.assign({}, easy, { day: 'tue', status: 'skipped' });
+  plan[2] = Object.assign({}, easy, { day: 'wed', status: 'skipped' });   // ayer: puede ser un reloj sin sincronizar
+  plan[4] = Object.assign({}, q, { day: 'fri', status: undefined });
+  app.state.plan = plan;
+  const before = plan[4].dist;
+  app.softenQualityAfterMisses(3);   // hoy = jueves: ayer (miércoles) no cuenta, y con solo el martes no alcanza
+  assert.equal(plan[4].dist, before, 'ayer no cuenta');
+  app.softenQualityAfterMisses(4);   // hoy = viernes: martes y miércoles ya tienen 2 días o más
+  assert.ok(plan[4].dist < before, 'dos días atrás sí cuentan');
+});
