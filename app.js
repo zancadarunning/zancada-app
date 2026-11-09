@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T13:48:13Z';
+const APP_VERSION = '2026-11-09T14:36:52Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1667,7 +1667,7 @@ function showConsentScreen(){
     const set = (id, key) => { const e = document.getElementById(id); if(e) e.textContent = t(key); };
     set('consent-title', 'consent_title'); set('consent-body', 'consent_lead'); set('consent-all-label', 'consent_all');
     set('consent-health-label', 'consent_health'); set('consent-ai-label', 'consent_ai'); set('consent-age-label', 'consent_age');
-    set('consent-accept-btn', 'consent_accept'); set('consent-decline-btn', 'consent_decline');
+    set('consent-accept-btn', 'consent_accept'); set('consent-decline-btn', 'consent_decline'); set('consent-decline-note', 'consent_decline_note');
     fillConsentTerms();
     set('consent-info-title', 'consent_info_title'); set('consent-info-h-health', 'consent_info_h_health'); set('consent-info-p-health', 'consent_info_p_health');
     ['hl1', 'hl2', 'hl3', 'hl4'].forEach(k => set('consent-info-' + k, 'consent_info_' + k));
@@ -13239,7 +13239,10 @@ function histMapCssWidth(){ return Math.max(280, Math.min(640, Math.round((windo
 // Miniatura del recorrido (API de imágenes estáticas de Mapbox). Mejoras de calidad: se pide al tamaño real de la tarjeta y en retina (@2x, así no se estira),
 // con el mismo estilo de siempre (mapa claro, trazo verde oscuro), 200 puntos del
 // recorrido (antes 120) y un margen para que la ruta no toque los bordes.
+// Una carrera de Strava/Garmin no se manda a Mapbox (su recorrido iría codificado en la dirección): se devuelve una imagen transparente de 1 px y queda a la vista el boceto local del recorrido.
+const TRANSPARENT_PX = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 function buildHistMapStaticUrl(r, width, height){
+  if(isRestrictedRun(r)) return TRANSPARENT_PX;
   // Suavizado ANTES de muestrear -- muestrear primero y suavizar después perdería la forma real del ruido.
   const pts = smoothRouteForDisplay(r.points);
   const maxPoints = 200;

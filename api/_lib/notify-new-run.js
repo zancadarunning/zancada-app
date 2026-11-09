@@ -31,6 +31,18 @@ const TEXTS = {
   de: { plan: (p, pct) => `Plan für heute: ${p} (du hast ${pct} % geschafft).`, title: 'Training geladen', one: (b, d, t, p) => `Wir haben deinen Lauf von ${b} geladen: ${d} · ${t} · ${p}. Er ist in deinem Verlauf.`, many: (n, b, d) => `Wir haben ${n} Trainings von ${b} geladen (${d} insgesamt). Sie sind in deinem Verlauf.` }
 };
 
+// Las carreras de Strava y Garmin NO se comparten con terceros más allá de Supabase/Vercel (lo exigen sus acuerdos y lo dice la política): el aviso viaja por el servicio de notificaciones del sistema (Firebase/Apple),
+// así que para esas marcas solo dice que se cargó, SIN distancia, tiempo, ritmo ni comparación con el plan.
+const RESTRICTED_SOURCES = new Set(['strava', 'garmin']);
+const GENERIC = {
+  es: { one: b => `Cargamos tu carrera de ${b}. Ya está en tu Historial.`, many: (n, b) => `Cargamos ${n} entrenamientos de ${b}. Ya están en tu Historial.` },
+  en: { one: b => `We loaded your ${b} run. It's in your History.`, many: (n, b) => `We loaded ${n} workouts from ${b}. They're in your History.` },
+  pt: { one: b => `Carregamos sua corrida do ${b}. Já está no seu Histórico.`, many: (n, b) => `Carregamos ${n} treinos do ${b}. Já estão no seu Histórico.` },
+  fr: { one: b => `Nous avons chargé ta course ${b}. Elle est dans ton Historique.`, many: (n, b) => `Nous avons chargé ${n} séances de ${b}. Elles sont dans ton Historique.` },
+  it: { one: b => `Abbiamo caricato la tua corsa da ${b}. È nel tuo Storico.`, many: (n, b) => `Abbiamo caricato ${n} allenamenti da ${b}. Sono nel tuo Storico.` },
+  de: { one: b => `Wir haben deinen Lauf von ${b} geladen. Er ist in deinem Verlauf.`, many: (n, b) => `Wir haben ${n} Trainings von ${b} geladen. Sie sind in deinem Verlauf.` },
+};
+
 function fmtDist(km, imperial) {
   const v = imperial ? km * MI_PER_KM : km;
   return v.toFixed(2) + (imperial ? ' mi' : ' km');
@@ -55,6 +67,10 @@ function fmtPace(durationSec, km, imperial) {
 function buildMessage(runs, source, lang, imperial, planInfo) {
   const T = pick(TEXTS, lang, 'es');
   const brand = BRANDS[source] || 'tu reloj';
+  if (RESTRICTED_SOURCES.has(source)) {
+    const G = pick(GENERIC, lang, 'es');
+    return { title: T.title, body: runs.length === 1 ? G.one(brand) : G.many(runs.length, brand) };
+  }
   if (runs.length === 1) {
     const r = runs[0];
     let body = T.one(brand, fmtDist(r.distanceKm || 0, imperial), fmtTime(r.durationSec || 0), fmtPace(r.durationSec, r.distanceKm, imperial));

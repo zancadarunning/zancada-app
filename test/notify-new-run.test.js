@@ -31,8 +31,8 @@ test('mensaje de una carrera: distancia, tiempo y ritmo, en el idioma y la unida
   const es = buildMessage([mkRun('suunto_1')], 'suunto', 'es', false);
   assert.equal(es.title, 'Entrenamiento cargado');
   assert.match(es.body, /Suunto: 8\.00 km · 48:48 · 6:06\/km/);
-  const en = buildMessage([mkRun('x')], 'strava', 'en', true);
-  assert.match(en.body, /Strava/);
+  const en = buildMessage([mkRun('x')], 'polar', 'en', true);
+  assert.match(en.body, /Polar/);
   assert.match(en.body, /4\.97 mi/);
   assert.match(en.body, /\/mi/);
   assert.equal(fmtPace(0, 5, false), '--:--');

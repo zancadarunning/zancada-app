@@ -78,14 +78,14 @@ test('planFor: compara con el día del plan; descanso, plan viejo o datos raros 
 
 test('"Entrenamiento cargado" suma la comparación con el plan (una carrera), no en varias', () => {
   const run = { id: 'a', distanceKm: 8.2, durationSec: 2928 };
-  const withPlan = buildMessage([run], 'strava', 'es', false, { timeMode: false, planned: 8, actual: 8.2 });
+  const withPlan = buildMessage([run], 'polar', 'es', false, { timeMode: false, planned: 8, actual: 8.2 });
   assert.match(withPlan.body, /Plan del día: 8\.00 km \(hiciste el 102%\)\./);
-  assert.match(buildMessage([run], 'strava', 'en', true, { timeMode: false, planned: 8, actual: 8.2 }).body, /Today's plan: 4\.97 mi \(you did 102%\)\./);
-  assert.match(buildMessage([run], 'strava', 'es', false, { timeMode: true, planned: 50, actual: 48.8 }).body, /Plan del día: 50 min \(hiciste el 98%\)\./);
-  assert.doesNotMatch(buildMessage([run], 'strava', 'es', false).body, /Plan del día/);
-  assert.doesNotMatch(buildMessage([run, run], 'strava', 'es', false, { timeMode: false, planned: 8, actual: 8 }).body, /Plan del día/);
-  assert.match(buildMessage([run], 'strava', 'es', false, { timeMode: false, planned: 0.5, actual: 99999 }).body, /999%/, 'tope');
-  for (const l of ['pt', 'fr', 'it', 'de']) assert.match(buildMessage([run], 'strava', l, false, { timeMode: false, planned: 8, actual: 8 }).body, /100/, l);
+  assert.match(buildMessage([run], 'polar', 'en', true, { timeMode: false, planned: 8, actual: 8.2 }).body, /Today's plan: 4\.97 mi \(you did 102%\)\./);
+  assert.match(buildMessage([run], 'polar', 'es', false, { timeMode: true, planned: 50, actual: 48.8 }).body, /Plan del día: 50 min \(hiciste el 98%\)\./);
+  assert.doesNotMatch(buildMessage([run], 'polar', 'es', false).body, /Plan del día/);
+  assert.doesNotMatch(buildMessage([run, run], 'polar', 'es', false, { timeMode: false, planned: 8, actual: 8 }).body, /Plan del día/);
+  assert.match(buildMessage([run], 'polar', 'es', false, { timeMode: false, planned: 0.5, actual: 99999 }).body, /999%/, 'tope');
+  for (const l of ['pt', 'fr', 'it', 'de']) assert.match(buildMessage([run], 'polar', l, false, { timeMode: false, planned: 8, actual: 8 }).body, /100/, l);
 });
 
 // ---- el cron completo ----
