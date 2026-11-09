@@ -735,3 +735,107 @@ test('los cuatro relojes reciben la entrada en calor y la vuelta a la calma como
   const s = JSON.stringify(buildGuide(day, Z, {}));
   assert.ok(/Warm/.test(s) && /Cool/.test(s), 'Suunto');
 });
+
+// ---------- la app guía el calentamiento y la vuelta a la calma (por distancia y por tiempo) ----------
+function planToday(app, patch) {
+  const idx = (new Date().getDay() + 6) % 7;
+  const base = app.state.plan.find(x => x.typeKey === 'easy') || app.state.plan.find(x => x.dist > 0);
+  app.state.plan[idx] = Object.assign({}, base, { raceDay: false, interval: undefined }, patch);
+  return app.state.plan[idx];
+}
+
+test('plan por DISTANCIA: calentamiento y vuelta a la calma por tiempo, y los 5 km se miden desde que termina el calentamiento', () => {
+  const app = loadApp();
+  ready(app);
+  app.state.profile.trainBy = 'distance';
+  planToday(app, { typeKey: 'easy', dist: 5, zone: 2, timeBased: false, durMin: undefined });
+  app.setSelectedRunMode && app.setSelectedRunMode('plan');
+  const tr = app.getTracker();
+  tr.elapsedSec = 0; tr.distanceKm = 0; tr.running = true;
+  app.setupWorkoutGuide();
+  const w = tr.workout;
+  assert.equal(w.wc.stage, 'warm');
+  assert.equal(w.wc.warmSec, 300, 'rodaje: 5 min de calentamiento');
+  assert.equal(w.wc.coolSec, 300);
+  assert.equal(app.sessionProgress(), null, 'durante el calentamiento no hay progreso del tramo principal');
+  tr.elapsedSec = 240; tr.distanceKm = 0.6; app.tickWorkoutGuide();
+  assert.equal(w.wc.stage, 'warm', 'a los 4 min todavía calienta');
+  tr.elapsedSec = 300; tr.distanceKm = 0.7; app.tickWorkoutGuide();
+  assert.equal(w.wc.stage, 'main');
+  assert.equal(w.wc.mainStartDistanceKm, 0.7);
+  assert.equal(app.sessionProgress().frac, 0, 'el principal arranca en 0 aunque ya haya 0,7 km corridos');
+  tr.distanceKm = 0.7 + 2.5; tr.elapsedSec = 900;
+  assert.ok(Math.abs(app.sessionProgress().frac - 0.5) < 1e-9, 'a los 2,5 km del principal es la mitad');
+  tr.distanceKm = 0.7 + 4.99; app.tickWorkoutGuide();
+  assert.equal(w.wc.stage, 'main', 'faltan 10 m: todavía no termina');
+  tr.distanceKm = 0.7 + 5; tr.elapsedSec = 1700; app.tickWorkoutGuide();
+  assert.equal(w.wc.stage, 'cool', 'cumplidos los 5 km del principal arranca la vuelta a la calma');
+  tr.elapsedSec = 1700 + 299; app.tickWorkoutGuide();
+  assert.equal(w.wc.stage, 'cool');
+  tr.elapsedSec = 1700 + 300; app.tickWorkoutGuide();
+  assert.equal(w.wc.stage, 'end');
+});
+
+test('plan por TIEMPO: 25 min de zona 2 son 25 min de principal después de 5 de calentamiento, y los 5 de vuelta a la calma van aparte', () => {
+  const app = loadApp();
+  ready(app);
+  app.state.profile.trainBy = 'time';
+  planToday(app, { typeKey: 'easy', dist: 6.5, zone: 2, timeBased: true, durMin: 25 });
+  const tr = app.getTracker();
+  tr.elapsedSec = 0; tr.distanceKm = 0; tr.running = true;
+  app.setupWorkoutGuide();
+  const w = tr.workout;
+  tr.elapsedSec = 300; app.tickWorkoutGuide();
+  assert.equal(w.wc.stage, 'main');
+  tr.elapsedSec = 300 + 1499; app.tickWorkoutGuide();
+  assert.equal(w.wc.stage, 'main');
+  tr.elapsedSec = 300 + 1500; app.tickWorkoutGuide();
+  assert.equal(w.wc.stage, 'cool', '25 min después de calentar empieza la vuelta a la calma');
+});
+
+test('series: "Ya calenté" salta el calentamiento y arranca las repeticiones; la vuelta a la calma empieza al terminar la última', () => {
+  const app = loadApp();
+  ready(app);
+  const tr = app.getTracker();
+  tr.elapsedSec = 200; tr.distanceKm = 0.5; tr.running = true;
+  tr.workout = { phase: 'pending', currentRep: 0, phaseStartDistanceKm: 0, phaseStartElapsedSec: 0, structure: { typeKey: 'intervals', planTypeKey: 'intervals', reps: 2, repMeters: 400, recoveryMin: 1, warmMin: 10, coolMin: 5 },
+    wc: { stage: 'warm', warmSec: 600, coolSec: 300, stageStartElapsedSec: 0, mainStartElapsedSec: 0, mainStartDistanceKm: 0 } };
+  app.skipWarmCool();
+  assert.equal(tr.workout.wc.stage, 'main');
+  assert.equal(tr.workout.phase, 'effort', 'en las series, saltar el calentamiento arranca la repetición 1');
+  assert.equal(tr.workout.currentRep, 1);
+  tr.workout.phase = 'done'; tr.elapsedSec = 900; app.tickWorkoutGuide();
+  assert.equal(tr.workout.wc.stage, 'cool');
+  app.skipWarmCool();
+  assert.equal(tr.workout.wc.stage, 'end', '"Terminar ahora" cierra la vuelta a la calma');
+});
+
+test('al retomar una carrera recuperada se conservan las etapas; si venía de antes de esta función no se inventa un calentamiento a mitad de carrera', () => {
+  const app = loadApp();
+  ready(app);
+  planToday(app, { typeKey: 'easy', dist: 5, zone: 2, timeBased: false });
+  const tr = app.getTracker();
+  tr.elapsedSec = 1500; tr.distanceKm = 4;
+  app.setupWorkoutGuide({ typeKey: 'continuous', planTypeKey: 'easy', phase: 'continuous', currentRep: 0, phaseStartDistanceKm: 0, phaseStartElapsedSec: 0, wc: { stage: 'cool', stageStartElapsedSec: 1400, mainStartElapsedSec: 300, mainStartDistanceKm: 0.7 } });
+  assert.equal(tr.workout.wc.stage, 'cool');
+  assert.equal(tr.workout.wc.mainStartDistanceKm, 0.7);
+  app.setupWorkoutGuide({ typeKey: 'continuous', planTypeKey: 'easy', phase: 'continuous', currentRep: 0, phaseStartDistanceKm: 0, phaseStartElapsedSec: 0 });
+  assert.equal(tr.workout.wc, null, 'sin etapas guardadas no hay calentamiento ni vuelta a la calma');
+  assert.ok(SRC.includes('wc: tracker.workout.wc || null'), 'las etapas se guardan junto con el progreso');
+});
+
+test('el test de nivel (Cooper) y la carrera libre no llevan calentamiento guiado; las 6 lenguas traen los textos nuevos', () => {
+  const app = loadApp();
+  ready(app);
+  planToday(app, { typeKey: 'test', dist: 3, zone: undefined });
+  const tr = app.getTracker();
+  tr.elapsedSec = 0; tr.distanceKm = 0;
+  app.setupWorkoutGuide();
+  assert.ok(!tr.workout || !tr.workout.wc, 'el test son 12 minutos exactos desde que arranca');
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
+    const src = read('locales/' + l + '.js');
+    for (const k of ['run_guide_tag_warm', 'run_guide_tag_cool', 'run_guide_warm_hint', 'run_guide_cool_hint', 'run_guide_warm_next', 'run_guide_skip_warm', 'run_guide_skip_warm_reps', 'run_guide_skip_cool', 'voice_warm_start', 'voice_warm_done_reps', 'voice_cool_start', 'voice_cool_done']) assert.ok(new RegExp(k + ':"[^"]{3,}"').test(src), l + ' ' + k);
+    assert.ok(/voice_warm_start:"[^"]*\{dur\}/.test(src) && /voice_cool_start:"[^"]*\{dur\}/.test(src) && /run_guide_warm_next:"[^"]*\{what\}/.test(src), l + ' placeholders');
+  }
+  assert.ok(read('index.html').includes('id="workout-guide-warmcool"') && read('index.html').includes('data-on-click="skipWarmCool()"'));
+});

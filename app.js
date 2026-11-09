@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-09T18:56:08Z';
+const APP_VERSION = '2026-11-09T19:07:00Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -12534,7 +12534,7 @@ function saveRunProgress(finished){
       running: !!tracker.running,
       // La guía de la sesión (en qué repetición y fase va): sin esto, retomar una carrera recuperada reiniciaba las series desde 0 y repetía el aviso de arranque.
       workout: tracker.workout && tracker.workout.structure ? {typeKey: tracker.workout.structure.typeKey, planTypeKey: tracker.workout.structure.planTypeKey || null, phase: tracker.workout.phase, currentRep: tracker.workout.currentRep || 0,
-        phaseStartDistanceKm: tracker.workout.phaseStartDistanceKm || 0, phaseStartElapsedSec: tracker.workout.phaseStartElapsedSec || 0, autoPausedSec: tracker.workout.autoPausedSec || 0} : null,
+        phaseStartDistanceKm: tracker.workout.phaseStartDistanceKm || 0, phaseStartElapsedSec: tracker.workout.phaseStartElapsedSec || 0, autoPausedSec: tracker.workout.autoPausedSec || 0, wc: tracker.workout.wc || null} : null,
       // autoPaused: sin esto, cerrar la app mientras la auto-pausa por quietud estaba activa
       // (semáforo, agua) y reabrirla la recuperaba como si estuviera corriendo de verdad --
       // isTrackingActive() (running && !autoPaused) volvía a dar true de golpe, así que el
@@ -12767,16 +12767,21 @@ function sessionProgress(){
   const w = tracker.workout;
   if(!w || w.phase !== 'continuous' || !w.structure) return null;
   const s = w.structure;
+  // Con calentamiento guiado (w.wc) el tramo principal cuenta desde que terminó de calentar: antes de eso no hay progreso que anunciar, y los km/min del calentamiento no se descuentan de la sesión.
+  const wc = w.wc;
+  if(wc && wc.stage === 'warm') return null;
+  const baseSec = wc ? (wc.mainStartElapsedSec || 0) : 0, baseKm = wc ? (wc.mainStartDistanceKm || 0) : 0;
+  const mainSec = tracker.elapsedSec - baseSec, mainKm = tracker.distanceKm - baseKm;
   // El test de nivel (Cooper) son SIEMPRE 12 minutos exactos, aunque el plan sea por distancia: su "distancia objetivo" es solo una estimación con el ritmo base, y avisar "completaste" al llegar a
   // ella (antes o después de los 12:00) dejaba la calibración de ritmos mal hecha.
   if(s.planTypeKey === 'test') return {mode: 'time', frac: tracker.elapsedSec / 720, remaining: 720 - tracker.elapsedSec, total: 720, test: true};
   if(isTimeMode()){
     const total = planDurationMin({dist: s.targetDist, durMin: s.targetDurMin}) * 60;
     if(!(total > 0)) return null;
-    return {mode: 'time', frac: tracker.elapsedSec / total, remaining: total - tracker.elapsedSec, total};
+    return {mode: 'time', frac: mainSec / total, remaining: total - mainSec, total};
   }
   if(!(s.targetDist > 0)) return null;
-  return {mode: 'dist', frac: tracker.distanceKm / s.targetDist, remaining: s.targetDist - tracker.distanceKm, total: s.targetDist};
+  return {mode: 'dist', frac: mainKm / s.targetDist, remaining: s.targetDist - mainKm, total: s.targetDist};
 }
 function maybeAnnounceMilestones(){
   const p = sessionProgress();
@@ -12794,7 +12799,7 @@ function maybeAnnounceMilestones(){
   }
   if(!ms.half && bigEnough && p.frac >= 0.5 && p.frac < 0.95){ ms.half = true; announceKey('half', t('voice_half')); }
   if(!ms.last && lastEnough && p.frac < 1 && (p.mode === 'dist' ? remUnits <= 1 : remUnits <= 60)){ ms.last = true; announceKey('last', t(p.mode === 'dist' ? (isImperial() ? 'voice_last_mi' : 'voice_last_km') : 'voice_last_min')); }
-  if(!ms.done && p.frac >= 1){ ms.done = true; announceKey('done', t(p.test ? 'voice_test_done' : 'voice_target_done')); }
+  if(!ms.done && p.frac >= 1){ ms.done = true; if(!(tracker.workout && tracker.workout.wc)) announceKey('done', t(p.test ? 'voice_test_done' : 'voice_target_done')); }
 }
 function maybeAnnounceKm(){
   // Antes esto anunciaba siempre en km ("Kilómetro 1... Kilómetro 2...") y el ritmo en
@@ -12854,6 +12859,15 @@ function maybeAnnounceKm(){
    plan desconectado de la descripción real del ejercicio; ver buildHillStructure()
    para el detalle.) */
 function getTodayWorkoutStructure(){
+  const st = getTodayWorkoutStructureBase();
+  if(!st) return st;
+  const idx = (new Date().getDay()+6)%7;
+  const wcMin = warmCoolMinutes(state.plan[idx]);
+  // el test de nivel (Cooper) son 12 minutos exactos desde que arranca: no lleva calentamiento ni vuelta a la calma guiados
+  if(wcMin && st.planTypeKey !== 'test'){ st.warmMin = wcMin.warm; st.coolMin = wcMin.cool; }
+  return st;
+}
+function getTodayWorkoutStructureBase(){
   const idx = (new Date().getDay()+6)%7;
   const today = state.plan[idx];
   if(!today || today.typeKey==='rest') return null;
@@ -12888,13 +12902,67 @@ function setupWorkoutGuide(restore){
   // arma guía ni aviso de voz, aunque hoy el plan tenga algo programado.
   const structure = selectedRunMode==='free' ? null : getTodayWorkoutStructure();
   tracker.workout = structure ? {structure, phase: structure.typeKey==='continuous' ? 'continuous' : 'pending', currentRep:0, phaseStartDistanceKm:0, phaseStartElapsedSec:0} : null;
+  // Calentamiento y vuelta a la calma guiados: etapas warm -> main -> cool -> end (ver wcTick). Una carrera retomada de una versión sin esto no los inventa a mitad de camino.
+  if(tracker.workout && structure.warmMin > 0) tracker.workout.wc = {stage:'warm', warmSec: structure.warmMin*60, coolSec: (structure.coolMin || 0)*60, stageStartElapsedSec: tracker.elapsedSec || 0, mainStartElapsedSec: 0, mainStartDistanceKm: 0};
   let resumed = false;
   if(structure && restore && restore.typeKey === structure.typeKey && (restore.planTypeKey || null) === (structure.planTypeKey || null) && ['pending', 'effort', 'recovery', 'done', 'continuous'].includes(restore.phase)){
     Object.assign(tracker.workout, {phase: restore.phase, currentRep: Number(restore.currentRep) || 0, phaseStartDistanceKm: Number(restore.phaseStartDistanceKm) || 0, phaseStartElapsedSec: Number(restore.phaseStartElapsedSec) || 0, autoPausedSec: Number(restore.autoPausedSec) || 0});
     resumed = true;
+    const rw = restore.wc;
+    if(tracker.workout.wc){
+      if(rw && ['warm', 'main', 'cool', 'end'].includes(rw.stage)) Object.assign(tracker.workout.wc, {stage: rw.stage, stageStartElapsedSec: Number(rw.stageStartElapsedSec) || 0, mainStartElapsedSec: Number(rw.mainStartElapsedSec) || 0, mainStartDistanceKm: Number(rw.mainStartDistanceKm) || 0});
+      else tracker.workout.wc = null;
+    }
   }
   renderWorkoutGuide();
+  if(tracker.workout && tracker.workout.wc && !resumed){ announceWarmStart(tracker.workout); return; }
   if(structure && structure.typeKey==='continuous' && !resumed) announceContinuousWorkoutStart(structure);   // retomando no se vuelve a decir "¡A correr!"
+}
+/* ---- Calentamiento y vuelta a la calma guiados ----
+   Son pasos aparte del tramo principal y siempre POR TIEMPO (también en el plan por distancia, como en el reloj). El principal se mide desde que termina el calentamiento (ver sessionProgress), y la vuelta a la calma
+   arranca sola cuando se cumple el principal (continuas: objetivo cumplido; series/cuestas/fartlek: terminó la última repetición). Se pueden saltar. La carrera se pausa y se retoma igual: cuentan los segundos de carrera. */
+function wcStageSec(w){ return tracker.elapsedSec - (w.wc.stageStartElapsedSec || 0); }
+function announceWarmStart(w){
+  announceKey('start', t('voice_warm_start', {dur: fmtDurationSpoken(w.wc.warmSec)}));
+}
+function wcEndWarm(w, silent){
+  w.wc.stage = 'main';
+  w.wc.mainStartElapsedSec = tracker.elapsedSec;
+  w.wc.mainStartDistanceKm = tracker.distanceKm;
+  if(silent) return;
+  if(w.structure.typeKey === 'continuous') announceContinuousWorkoutStart(w.structure);
+  else announceKey('rep', t('voice_warm_done_reps'));
+}
+function wcStartCool(w){
+  w.wc.stage = 'cool';
+  w.wc.stageStartElapsedSec = tracker.elapsedSec;
+  if(!(w.wc.coolSec > 0)){ w.wc.stage = 'end'; return; }
+  announceKey('done', t('voice_cool_start', {dur: fmtDurationSpoken(w.wc.coolSec)}));
+}
+function wcEndCool(w, silent){
+  w.wc.stage = 'end';
+  if(!silent) announceKey('done', t('voice_cool_done'));
+}
+// Devuelve true si la tarjeta tiene que redibujarse (hay cuenta regresiva a la vista o cambió la etapa).
+function wcTick(w){
+  const wc = w.wc;
+  if(!wc || wc.stage === 'end') return false;
+  const before = wc.stage;
+  if(wc.stage === 'warm' && wcStageSec(w) >= wc.warmSec) wcEndWarm(w);
+  else if(wc.stage === 'main'){
+    const done = w.structure.typeKey === 'continuous' ? (() => { const p = sessionProgress(); return !!p && p.frac >= 1; })() : w.phase === 'done';
+    if(done) wcStartCool(w);
+  } else if(wc.stage === 'cool' && wcStageSec(w) >= wc.coolSec) wcEndCool(w);
+  return wc.stage === 'warm' || wc.stage === 'cool' || wc.stage !== before;
+}
+function skipWarmCool(){
+  const w = tracker && tracker.workout; if(!w || !w.wc) return;
+  if(w.wc.stage === 'warm'){
+    if(w.phase === 'pending') beginWorkoutReps(); else wcEndWarm(w, true);
+  } else if(w.wc.stage === 'cool') wcEndCool(w, true);
+  haptic(15);
+  renderWorkoutGuide();
+  saveRunProgress();
 }
 function announceContinuousWorkoutStart(s){
   const type = t('type_'+s.planTypeKey);
@@ -12906,6 +12974,7 @@ function announceContinuousWorkoutStart(s){
 function beginWorkoutReps(){
   if(!tracker.workout) return;
   const w = tracker.workout;
+  if(w.wc && w.wc.stage === 'warm') wcEndWarm(w, true);
   w.phase = 'effort';
   w.currentRep = 1;
   w.phaseStartDistanceKm = tracker.distanceKm;
@@ -12940,7 +13009,7 @@ function announceWorkoutPhase(){
   } else if(w.phase==='recovery'){
     announceKey('recovery', s.typeKey==='hills' ? t('voice_hill_recovery',{cur:w.currentRep, target:targetSpoken}) : t('voice_rep_recovery',{cur:w.currentRep, target:targetSpoken}));
   } else if(w.phase==='done'){
-    announceKey('done', t('voice_workout_done'));
+    if(!w.wc) announceKey('done', t('voice_workout_done'));
   }
 }
 function advanceWorkoutPhase(){
@@ -12994,6 +13063,7 @@ function phaseSpentSec(w){
 }
 function tickWorkoutGuide(){
   const w = tracker.workout;
+  if(w && w.wc && wcTick(w)) renderWorkoutGuide();
   // 'continuous' (rodaje/tempo/tirada larga/progresivo, ver getTodayWorkoutStructure()) no
   // tiene fases que avanzar -- es un objetivo único mostrado fijo toda la carrera.
   if(!w || w.phase==='pending' || w.phase==='done' || w.phase==='continuous') return;
@@ -13003,6 +13073,24 @@ function tickWorkoutGuide(){
     : (tracker.distanceKm - w.phaseStartDistanceKm)*1000 >= target.meters;
   if(complete) advanceWorkoutPhase();
   renderWorkoutGuide();
+}
+function renderWarmCoolCard(w){
+  const warm = w.wc.stage === 'warm';
+  const total = warm ? w.wc.warmSec : w.wc.coolSec;
+  const spent = Math.min(total, Math.max(0, wcStageSec(w)));
+  const tag = document.getElementById('workout-guide-wc-tag');
+  tag.textContent = t(warm ? 'run_guide_tag_warm' : 'run_guide_tag_cool');
+  tag.className = 'tag ' + (warm ? 'tag-mixto' : 'tag-asfalto');
+  document.getElementById('workout-guide-wc-time').textContent = fmtCountdown(total - spent);
+  document.getElementById('workout-guide-wc-bar').style.transform = `scaleX(${total > 0 ? spent / total : 0})`;
+  document.getElementById('workout-guide-wc-hint').textContent = t(warm ? 'run_guide_warm_hint' : 'run_guide_cool_hint');
+  const nextEl = document.getElementById('workout-guide-wc-next');
+  if(warm){
+    const idx = (new Date().getDay()+6)%7;
+    const today = state.plan[idx];
+    nextEl.textContent = today ? t('run_guide_warm_next', {what: `${planLabel(today).type}${today.dist > 0 ? ' · ' + planAmountText(today) : ''}`}) : '';
+  } else nextEl.textContent = '';
+  document.getElementById('workout-guide-wc-skip').textContent = t(!warm ? 'run_guide_skip_cool' : (w.phase === 'pending' ? 'run_guide_skip_warm_reps' : 'run_guide_skip_warm'));
 }
 function renderWorkoutGuide(){
   const card = document.getElementById('workout-guide-card');
@@ -13014,10 +13102,17 @@ function renderWorkoutGuide(){
   const activeEl = document.getElementById('workout-guide-active');
   const doneEl = document.getElementById('workout-guide-done');
   const continuousEl = document.getElementById('workout-guide-continuous');
-  pendingEl.style.display = w.phase==='pending' ? 'block' : 'none';
-  activeEl.style.display = (w.phase==='effort' || w.phase==='recovery') ? 'block' : 'none';
-  doneEl.style.display = w.phase==='done' ? 'block' : 'none';
-  continuousEl.style.display = w.phase==='continuous' ? 'block' : 'none';
+  const wcEl = document.getElementById('workout-guide-warmcool');
+  const wcShown = !!(w.wc && (w.wc.stage === 'warm' || w.wc.stage === 'cool'));
+  if(wcEl) wcEl.style.display = wcShown ? 'block' : 'none';
+  pendingEl.style.display = (w.phase==='pending' && !wcShown) ? 'block' : 'none';
+  activeEl.style.display = ((w.phase==='effort' || w.phase==='recovery') && !wcShown) ? 'block' : 'none';
+  doneEl.style.display = (w.phase==='done' && !wcShown) ? 'block' : 'none';
+  continuousEl.style.display = (w.phase==='continuous' && !wcShown) ? 'block' : 'none';
+  if(wcShown){
+    renderWarmCoolCard(w);
+    return;
+  }
   if(w.phase==='continuous'){
     // Objetivo fijo (tipo + detalle) toda la carrera -- sin barra de progreso ni fases,
     // a diferencia de series/cuestas/fartlek: acá no hay reps que avanzar, es una sola
