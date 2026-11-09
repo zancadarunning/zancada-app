@@ -1141,3 +1141,64 @@ test('semana que viene: al elegir los días se descartan las ediciones del chat 
   assert.ok(SRC.includes('Para la semana que viene el corredor eligió correr SOLO estos días'), 'el chat sabe de la elección');
   assert.ok(SRC.includes('Sus ritmos se actualizaron el'), 'y de los ritmos recalibrados');
 });
+
+test('chat: "bajale el volumen" no escala la carrera objetivo, el test de nivel ni el día de una carrera cargada (antes un 42 K pasaba a 34 K)', () => {
+  const app = loadApp();
+  ready(app);
+  app.state.onboarded = true;
+  app.state.weekStart = app.getMondayISO(new Date());
+  const sat = app.addDaysToIsoLocal(app.state.weekStart, 5);
+  app.state.event = { name: 'Maratón', type: 'road', date: sat, distanceKm: 42 };
+  const rest = d => ({ day: d, typeKey: 'rest', dist: 0 });
+  app.state.plan = [rest('mon'), rest('tue'),
+    { day: 'wed', typeKey: 'easy', dist: 42, raceDay: true, raceEventName: 'Objetivo' },
+    { day: 'thu', typeKey: 'test', dist: 3 },
+    { day: 'fri', typeKey: 'easy', dist: 8, zone: 2 },
+    { day: 'sat', typeKey: 'easy', dist: 6, zone: 2 },
+    { day: 'sun', typeKey: 'long', dist: 12, zone: 2 }];
+  const realDay = Date.prototype.getDay;
+  Date.prototype.getDay = function () { return 0 + 1; };   // hoy = lunes: todos los días quedan editables
+  try {
+    app.applyVolumeAdjust({ porcentaje: -20 });
+    const p = app.state.plan;
+    assert.equal(p[2].dist, 42, 'carrera objetivo intacta');
+    assert.equal(p[3].dist, 3, 'test de nivel intacto');
+    assert.equal(p[5].dist, 6, 'día de la carrera cargada intacto');
+    assert.ok(p[4].dist < 8 && p[6].dist < 12, 'las sesiones normales sí bajan');
+    app.lowerRemainingIntensity(-15);
+    assert.equal(p[2].dist, 42);
+    assert.equal(p[3].dist, 3);
+    assert.equal(p[5].dist, 6);
+  } finally { Date.prototype.getDay = realDay; }
+});
+
+test('chat: el contexto marca el día de la carrera cargada en los bloques del plan y avisa a quien usa millas (con las millas entre paréntesis)', () => {
+  const app = loadApp();
+  ready(app);
+  app.state.onboarded = true;
+  app.state.weekStart = app.getMondayISO(new Date());
+  app.state.profile.trainBy = 'distance';
+  const idx = 3;
+  app.state.event = { name: 'Media de prueba', type: 'road', date: app.addDaysToIsoLocal(app.state.weekStart, idx), distanceKm: 21 };
+  app.state.plan[idx] = Object.assign({}, app.state.plan.find(x => x.dist > 0), { day: 'thu', dist: 6, status: undefined });
+  let ctx = app.buildContext();
+  assert.match(ctx, /thu=carrera cargada \(Media de prueba, 21km\)/, 'el día de la carrera se ve como la carrera');
+  assert.ok(!/IMPORTANTE.*MILLAS|usa MILLAS/.test(ctx), 'métrico: sin aviso de millas');
+  app.state.profile.units = 'imperial';
+  ctx = app.buildContext();
+  assert.match(ctx, /usa MILLAS/);
+  assert.match(ctx, /\d+(\.\d+)?km\(\d+(\.\d+)?mi\)/, 'km con las millas al lado');
+  assert.match(ctx, /distancia_km en KILÓMETROS/);
+});
+
+test('chat: si la app bajó sola una sesión de calidad por dos faltazos, Zonda lo sabe para poder explicarlo (y solo esa semana)', () => {
+  const app = loadApp();
+  ready(app);
+  app.state.onboarded = true;
+  app.state.weekStart = app.getMondayISO(new Date());
+  assert.ok(!app.buildContext().includes('bajó sola un 15 %'));
+  app.state.softenedWeek = app.state.weekStart;
+  assert.match(app.buildContext(), /bajó sola un 15 % la próxima sesión de calidad/);
+  app.state.softenedWeek = '2000-01-03';
+  assert.ok(!app.buildContext().includes('bajó sola un 15 %'), 'una semana vieja no cuenta');
+});
