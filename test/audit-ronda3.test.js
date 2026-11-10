@@ -1443,3 +1443,13 @@ test('Zonda: ante un pedido claro con número aplica directo, sin preguntar lo q
   // el prompt sigue siendo uno solo y entra holgado en el tope del servidor
   assert.ok(prompt.length < 20000, 'largo del texto de instrucciones: ' + prompt.length);
 });
+
+test('Zonda: el prompt trae ejemplos de pedidos claros que se aplican sin preguntar (el modelo chico seguía preguntando "¿querés que lo cambie a 40?")', () => {
+  const start = SRC.indexOf('function buildCoachSystem(ctx){');
+  const end = SRC.indexOf('no intentes diagnosticar vos la causa.`;', start);
+  const prompt = SRC.slice(start, end);
+  assert.ok(prompt.includes('"Poné el jueves de 40 minutos" -> modificar_sesion'));
+  assert.ok(prompt.includes('"Cambiame el viernes a 4 km" -> modificar_sesion'));
+  assert.ok(prompt.includes('Si tu respuesta empieza con "¿querés que...?" para algo que el corredor ya pidió con claridad, es un error'));
+  assert.ok(prompt.length < 20000);
+});

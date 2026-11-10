@@ -18,7 +18,7 @@
     "descripcion": "Plan por tiempo: pide un total de minutos y la herramienta recibe ESE total (la app descuenta el calentamiento)",
     "setup": { "hoy": "mon", "trainBy": "time", "plan": { "thu": { "typeKey": "easy", "dist": 5, "zone": 2, "timeBased": true, "durMin": 25 } } },
     "mensaje": "Poné el jueves de 40 minutos",
-    "esperado": { "herramientas": [{ "name": "modificar_sesion", "args": { "dia": "thu", "duracion_min": 40 } }], "textoNoCoincide": ["\\b30 min", "\\b35 min"] }
+    "esperado": { "herramientas": [{ "name": "modificar_sesion", "args": { "dia": "thu", "duracion_min": 40 } }], "textoNoCoincide": ["\\b(confirm[aá]|confirmame|¿quer[ée]s que (lo|te lo) cambie)"] }
   },
   {
     "id": "cuanto-toca-hoy-tiempo",
