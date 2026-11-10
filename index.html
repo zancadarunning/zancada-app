@@ -249,7 +249,7 @@
 
   #offline-banner{position:fixed; top:0; left:0; right:0; z-index:90; display:flex; align-items:center; justify-content:center; gap:7px;
     background:var(--clay); color:var(--ink); font-size:12px; font-weight:700; padding:calc(8px + var(--safe-top)) 16px 8px;
-    transform:translateY(-100%); transition:transform .25s ease; pointer-events:none;}
+    transform:translateY(-100%); transition:transform .2s ease; pointer-events:none;}
   #offline-banner.show{transform:translateY(0); pointer-events:auto;}
 
   /* #splash es un panel fijo a pantalla completa que se ve SOLO en el arranque en frío
@@ -332,7 +332,7 @@
   #splash .pulse-strip{margin:28px 0; max-width:280px;}
   /* Pantalla de inicio (#splash): marca arriba al centro y las formas de entrar pegadas abajo. Google/Apple son botones claros (el "chalk" del tema: claro en oscuro, tinta en claro), el correo es el borde. */
   .auth-actions{width:100%; max-width:340px; flex-shrink:0; display:flex; flex-direction:column; gap:10px; padding-bottom:max(26px, env(safe-area-inset-bottom));}
-  .auth-actions .btn{min-height:52px; font-size:15.5px;}
+  .auth-actions .btn{min-height:52px; font-size:16px;}
   .btn-social{background:var(--chalk); color:var(--asphalt); box-shadow:none; transition:transform .13s var(--ease-out), opacity .13s ease;}
   .btn-social:active{transform:scale(.97); opacity:.88;}
   .btn-social:disabled{cursor:not-allowed;}
@@ -352,7 +352,7 @@
     #splash{padding:20px 32px;}
     #splash .word{font-size:44px;}
     #splash .pulse-strip{margin:14px 0;}
-    #splash .tag{margin-top:6px; font-size:13.5px;}
+    #splash .tag{margin-top:6px; font-size:14px;}
     #splash .splash-mid{padding-bottom:12px;}
     .auth-actions{gap:8px;}
     .auth-actions .btn{min-height:48px;}
@@ -393,7 +393,7 @@
      app.js (ver el comentario grande ahí) se encargan de mostrarlos/ocultarlos de verdad
      ahora, así que ya no hace falta que la regla base los deje pintados "por si acaso". */
   .overlay-sheet{display:none; opacity:0; pointer-events:none; transform:translateY(22px);
-    transition:opacity .18s var(--ease-out), transform .18s var(--ease-out);}
+    transition:opacity .2s var(--ease-out), transform .2s var(--ease-out);}
   .overlay-sheet.overlay-open{opacity:1; pointer-events:auto; transform:translateY(0);
     transition:opacity .3s var(--ease-spring), transform .3s var(--ease-spring);}
 
@@ -427,7 +427,7 @@
   .confirm-email-icon svg{width:32px; height:32px;}
   #confirm-email h2,#confirm-email .lead{text-align:center;}
   #confirm-email .lead strong{color:var(--hivis-text); font-weight:700;}
-  .confirm-email-waiting{display:flex; align-items:center; justify-content:center; gap:8px; margin-top:24px; color:var(--mist); font-size:13.5px;}
+  .confirm-email-waiting{display:flex; align-items:center; justify-content:center; gap:8px; margin-top:24px; color:var(--mist); font-size:14px;}
 
   .ob-progress-wrap{display:flex; align-items:center; gap:10px; margin-bottom:22px;}
   .ob-progress{flex:1; height:5px; background:var(--asphalt-3); border-radius:999px; overflow:hidden;}
@@ -440,11 +440,11 @@
   .ob-step{display:none;}
   .ob-step.active{display:block; animation:viewFadeIn .22s ease;}
 
-  .toast-wrap{position:fixed; left:0; right:0; bottom:calc(92px + var(--safe-bottom)); display:flex; justify-content:center; z-index:85; pointer-events:none; padding:0 24px; transition:bottom .15s ease;}
+  .toast-wrap{position:fixed; left:0; right:0; bottom:calc(92px + var(--safe-bottom)); display:flex; justify-content:center; z-index:85; pointer-events:none; padding:0 24px; transition:bottom .13s ease;}
   body.chat-kb-open .toast-wrap{bottom:calc(85px + (var(--safe-bottom) * 2));}
-  .toast{background:var(--asphalt-4); color:var(--chalk); padding:13px 18px; border-radius:999px; font-size:13.5px; font-weight:600;
+  .toast{background:var(--asphalt-4); color:var(--chalk); padding:13px 18px; border-radius:999px; font-size:14px; font-weight:600;
     box-shadow:0 2px 5px rgba(0,0,0,.4); display:flex; align-items:center; gap:8px; max-width:360px; text-align:center;
-    opacity:0; transform:translateY(10px) scale(.96); transition:opacity .22s var(--ease-out), transform .22s var(--ease-out); pointer-events:auto;}
+    opacity:0; transform:translateY(10px) scale(.96); transition:opacity .2s var(--ease-out), transform .2s var(--ease-out); pointer-events:auto;}
   .toast.show{opacity:1; transform:translateY(0) scale(1);}
   .toast.error{background:var(--toast-error-bg); color:var(--toast-error-fg); border:1px solid rgba(255,107,93,.3);}
   .toast.success{background:var(--hivis-dim); color:var(--hivis-text); border:1px solid rgba(214,255,63,.3);}
@@ -455,7 +455,7 @@
     -webkit-backdrop-filter:blur(24px) saturate(1.3); backdrop-filter:blur(24px) saturate(1.3);
     border-radius:var(--radius); padding:22px; max-width:320px; width:100%;
     box-shadow:var(--shadow-lg); border:1px solid var(--overlay-hairline); animation:confirmPop .32s var(--ease-spring);}
-  .confirm-card p{margin:0 0 20px; font-size:14.5px; line-height:1.5; color:var(--chalk); font-weight:600;}
+  .confirm-card p{margin:0 0 20px; font-size:15px; line-height:1.5; color:var(--chalk); font-weight:600;}
   .confirm-actions{display:flex; gap:10px;}
   .confirm-actions .btn{flex:1; width:auto;}
   @keyframes confirmPop{from{opacity:0; transform:scale(.9) translateY(6px);} to{opacity:1; transform:scale(1) translateY(0);}}
@@ -465,7 +465,7 @@
   .field input[type=text],.field input[type=number],.field input[type=date],.field input[type=email],.field input[type=password],.field select{
     width:100%; max-width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk);
     padding:13px 15px; border-radius:var(--radius-sm); font-size:16px; outline:none; color-scheme:var(--cs);
-    transition:border-color .15s ease, box-shadow .15s ease;}
+    transition:border-color .13s ease, box-shadow .13s ease;}
   .field input[type=date]{padding-top:9px; padding-bottom:9px; padding-right:6px; height:48px; box-sizing:border-box; overflow:hidden; font-size:15px;}
   .date-box{width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk);
     padding:13px 15px; border-radius:var(--radius-sm); font-size:16px; cursor:pointer;
@@ -480,12 +480,12 @@
   .cal-day.selected{background:var(--hivis); color:var(--ink); font-weight:800;}
   .cal-months-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
   .cal-years-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:8px;}
-  .cal-cell{padding:16px 4px; border-radius:14px; text-align:center; font-size:14.5px; cursor:pointer; color:var(--chalk); text-transform:capitalize;}
+  .cal-cell{padding:16px 4px; border-radius:var(--radius-sm); text-align:center; font-size:15px; cursor:pointer; color:var(--chalk); text-transform:capitalize;}
   .cal-cell.current{border:1.5px solid var(--mist-dim);}
   .cal-cell.selected{background:var(--hivis); color:var(--ink); font-weight:800;}
   #cal-month-label{background:none; border:none; cursor:pointer; padding:6px 10px; color:var(--hivis-text);}
   .field input:focus,.field select:focus{border-color:var(--hivis); box-shadow:0 0 0 3px var(--hivis-dim);}
-  .date-box{transition:border-color .15s ease, box-shadow .15s ease;}
+  .date-box{transition:border-color .13s ease, box-shadow .13s ease;}
   .date-box:focus-within,.date-box.focused{border-color:var(--hivis); box-shadow:0 0 0 3px var(--hivis-dim);}
   .choice-row{display:flex; gap:8px; flex-wrap:wrap;}
   /* color:var(--chalk) en vez de --mist (el gris apagado, pensado para texto secundario,
@@ -500,7 +500,7 @@
      quede mucho más baja que la fila de al lado con alguna de 2 líneas. */
   .choice{flex:1; min-width:84px; min-height:40px; text-align:center; padding:11px 6px; border-radius:var(--radius-sm);
     border:1.5px solid var(--asphalt-4); background:var(--asphalt-2); color:var(--chalk);
-    font-size:12.5px; font-weight:600; line-height:1.25; cursor:pointer; user-select:none;
+    font-size:13px; font-weight:600; line-height:1.25; cursor:pointer; user-select:none;
     display:flex; align-items:center; justify-content:center; word-break:break-word;}
   .choice.active{border-color:var(--hivis); color:var(--hivis-text); background:var(--hivis-dim); box-shadow:0 1px 3px var(--hivis-glow);}
   /* Control segmentado de una sola pieza (borde redondeado continuo, sin que cada
@@ -513,13 +513,13 @@
   /* Avisos de voz: cuatro opciones con texto largo ("Solo lo importante") no entran en una fila de 360px sin cortar palabras a la mitad */
   #voice-toggle{display:grid; grid-template-columns:1fr 1fr;}
   /* Texto que explica por que el boton esta deshabilitado (registro y paso 2 del onboarding): la clase existia en el HTML pero sin ningun estilo */
-  .btn-reason{margin:10px 0 0; font-size:12.5px; line-height:1.45; color:var(--mist); text-align:center;}
+  .btn-reason{margin:10px 0 0; font-size:13px; line-height:1.45; color:var(--mist); text-align:center;}
   .btn-reason:empty{display:none;}
   /* Lista con buscador del picker de deportes (#sport-picker-overlay) -- filas apiladas en
      vez de chips en grilla, porque con ~24 deportes un grid de .choice no entra ni se lee. */
   .sport-row{display:flex; align-items:center; justify-content:space-between; padding:13px 16px;
     background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); border-radius:var(--radius-sm);
-    font-size:14.5px; font-weight:600; color:var(--chalk); cursor:pointer; user-select:none;
+    font-size:15px; font-weight:600; color:var(--chalk); cursor:pointer; user-select:none;
     transition:border-color .13s var(--ease-out), background .13s var(--ease-out);}
   .sport-row.active{border-color:var(--hivis); background:var(--hivis-dim); color:var(--hivis-text);}
   .sport-row .check-dot{width:22px; height:22px; border-radius:50%; border:1.5px solid var(--asphalt-4);
@@ -543,11 +543,11 @@
   .switch input:checked + .switch-slider:before{transform:translateX(20px);}
   .two-col{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
   .divider-or{display:flex; align-items:center; gap:10px; margin:20px 0; color:var(--mist-dim);
-    font-size:11.5px; text-transform:uppercase; letter-spacing:.08em;}
+    font-size:12px; text-transform:uppercase; letter-spacing:.08em;}
   .divider-or::before,.divider-or::after{content:''; flex:1; height:1px; background:var(--asphalt-3);}
   .legal-checkbox-row{display:flex; align-items:flex-start; gap:10px; margin-top:16px; cursor:pointer;}
   .legal-checkbox-row input[type="checkbox"]{margin-top:2px; width:17px; height:17px; flex-shrink:0; accent-color:var(--hivis); cursor:pointer;}
-  .legal-checkbox-row span{font-size:11.5px; line-height:1.5; color:var(--mist);}
+  .legal-checkbox-row span{font-size:12px; line-height:1.5; color:var(--mist);}
 
   .btn{border:none; border-radius:999px; padding:15px 22px; font-weight:600; font-size:15px; cursor:pointer;
     width:100%; display:flex; align-items:center; justify-content:center; gap:8px;}
@@ -572,7 +572,7 @@
   .btn-gray{background:var(--asphalt-3); color:var(--chalk); border:none; box-shadow:none; transition:transform .13s var(--ease-out), background .13s var(--ease-out);}
   .btn-gray:active{transform:scale(.97); background:var(--asphalt-4);}
   .btn-gray:disabled{opacity:.6; cursor:not-allowed;}
-  .btn-saved-flash{background:var(--hivis) !important; border-color:var(--hivis) !important; color:var(--ink) !important; transition:background .15s ease, color .15s ease;}
+  .btn-saved-flash{background:var(--hivis) !important; border-color:var(--hivis) !important; color:var(--ink) !important; transition:background .13s ease, color .13s ease;}
   /* Los botones "Guardar" de Perfil quedan ocultos hasta que el usuario modifica algo en
      esa sección -- antes estaban siempre visibles y generaban dudas sobre si un cambio ya
      estaba guardado o no. Ver PERFIL_SAVE_SECTIONS / confirmAndSave en app.js. */
@@ -594,15 +594,15 @@
   .plan-secondary-actions{display:flex; flex-direction:column; align-items:center; gap:8px; margin:18px 0 30px;}
   .plan-secondary-btn{background:none; border:none; color:var(--mist); font-size:13px; font-weight:600;
     padding:10px 18px; border-radius:999px; display:flex; align-items:center; gap:7px; cursor:pointer;
-    transition:background .12s ease, color .12s ease;}
+    transition:background .13s ease, color .13s ease;}
   .plan-secondary-btn:active{background:var(--press); color:var(--chalk);}
-  .btn-sm{padding:10px 16px; font-size:13.5px; width:auto;}
+  .btn-sm{padding:10px 16px; font-size:14px; width:auto;}
   .btn-disabled{background:var(--asphalt-2); color:var(--mist-dim); border:1.5px solid var(--asphalt-4);
     cursor:not-allowed; position:relative; margin-top:10px;}
   .soon-tag{position:absolute; right:14px; top:50%; transform:translateY(-50%); font-size:9px;
     text-transform:uppercase; letter-spacing:.05em; background:var(--asphalt-3); padding:3px 7px; border-radius:6px;}
   .soon-note{font-size:12px; color:var(--mist-dim); text-align:center; margin-top:10px; line-height:1.5;}
-  .err-text{color:var(--danger); font-size:12.5px; margin-top:8px; display:none;}
+  .err-text{color:var(--danger); font-size:13px; margin-top:8px; display:none;}
 
   /* isolation:isolate acá también -- ver el comentario junto a .idle-map-wrap. Subimos
      z-index de 5 a 50 de paso, para tener margen de sobra contra cualquier otro contenido
@@ -691,10 +691,10 @@
   .card[role="button"] > div:first-child > .icon-sq:first-child{position:relative;}
   .card[role="button"] > div:first-child > .icon-sq:first-child::before{
     content:''; position:absolute; inset:-9px; border-radius:50%; background:var(--asphalt-3); z-index:-1;}
-  .card[role="button"] > .icon-sq:last-child{transition:transform .15s var(--ease-out);}
+  .card[role="button"] > .icon-sq:last-child{transition:transform .13s var(--ease-out);}
   .card[role="button"]:active > .icon-sq:last-child{transform:translateX(2px);}
   .card h3{font-size:15px; letter-spacing:-0.016em; color:var(--chalk); font-weight:600; margin-bottom:10px;}
-  .muted{color:var(--mist); font-size:13.5px; line-height:1.5; white-space:pre-line;}
+  .muted{color:var(--mist); font-size:14px; line-height:1.5; white-space:pre-line;}
 
   /* Encabezados de zona en Inicio (Hoy / Esta semana / Más) -- separan visualmente lo
      accionable de hoy de lo informativo/pasivo, en vez de una sola fila de cards del
@@ -708,10 +708,10 @@
      la falta de sombra es justamente la señal de que es contenido secundario/pasivo. */
   .card-quiet{padding:16px; box-shadow:none; border-color:transparent;}
 
-  .streak-badge{display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:800; padding:6px 12px; border-radius:999px;
+  .streak-badge{display:inline-flex; align-items:center; gap:5px; font-size:13px; font-weight:800; padding:6px 12px; border-radius:999px;
     background:var(--asphalt-3); color:var(--chalk); white-space:nowrap; flex-shrink:0;}
 
-  .tag{display:inline-block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:5px 10px; border-radius:999px;}
+  .tag{display:inline-block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:5px 10px; border-radius:999px;}
   .tag-asfalto{background:var(--asphalt-4); color:var(--chalk);}
   .tag-trail{background:var(--clay-dim); color:var(--clay);}
   .tag-mixto{background:var(--hivis-dim); color:var(--hivis-text);}
@@ -770,7 +770,7 @@
      se separa con un divisor fino en vez de su propia card -- un solo bloque, no
      cuatro decisiones distintas. */
   .conn-hint{display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border-radius:var(--radius-sm);
-    background:var(--clay-dim); color:var(--clay); font-size:12.5px; line-height:1.5; margin-bottom:18px; font-weight:600;}
+    background:var(--clay-dim); color:var(--clay); font-size:13px; line-height:1.5; margin-bottom:18px; font-weight:600;}
   .conn-hint .icon-sq{width:16px; height:16px; flex-shrink:0; margin-top:1px;}
   .conn-row{padding-top:18px; margin-top:18px; border-top:1px solid var(--asphalt-3);}
   .conn-row-featured{padding-top:0; margin-top:0; border-top:none;}
@@ -792,7 +792,7 @@
      vuelta a la calma vienen como líneas separadas por \n desde planLabel()) -- se
      listan una debajo de otra con una marca chica, en vez de un párrafo corrido. */
   .next-session-bullets{margin-top:2px;}
-  .next-session-bullet{display:flex; gap:7px; align-items:flex-start; color:var(--mist); font-size:13.5px; line-height:1.45; margin-top:5px;}
+  .next-session-bullet{display:flex; gap:7px; align-items:flex-start; color:var(--mist); font-size:14px; line-height:1.45; margin-top:5px;}
   .next-session-bullet::before{content:''; width:5px; height:5px; margin-top:7px; border-radius:50%; background:var(--hivis); flex-shrink:0;}
   .stat-row{display:flex; gap:10px;}
   .stat-box{flex:1; background:var(--asphalt-3); border-radius:var(--radius-sm); padding:13px 10px; text-align:center; border:1px solid var(--overlay-hairline); box-shadow:0 1px 2px rgba(0,0,0,.14);}
@@ -829,17 +829,17 @@
      botones circulares chicos de la app (.week-nav-btn, .info-btn). */
   .hist-add-btn{width:34px; height:34px; border-radius:50%; background:var(--asphalt-3); border:1px solid var(--overlay-hairline);
     color:var(--hivis-text); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; padding:0;
-    transition:transform .12s ease, background .12s ease;}
+    transition:transform .13s ease, background .13s ease;}
   .hist-add-btn:active{transform:scale(.88); background:var(--asphalt-4);}
   .hist-add-btn svg{width:16px; height:16px;}
   /* Check-in de 3 toques (sueño / piernas / ánimo) */
   .rd3-row{display:flex; align-items:center; gap:10px; margin-bottom:8px;}
   .rd3-row:last-child{margin-bottom:0;}
-  .rd3-lbl{flex:0 0 62px; font-size:12.5px; font-weight:700; color:var(--mist);}
+  .rd3-lbl{flex:0 0 62px; font-size:13px; font-weight:700; color:var(--mist);}
   .rd3-row .choice-row{flex:1; min-width:0;}
   .rd3-row .choice{padding-left:4px; padding-right:4px; font-size:13px;}
   /* seguimiento de molestias */
-  .pain-evo{font-size:11.5px; color:var(--mist); margin-top:3px; line-height:1.45;}
+  .pain-evo{font-size:12px; color:var(--mist); margin-top:3px; line-height:1.45;}
   .pain-evo b.better{color:var(--hivis-text);} .pain-evo b.worse{color:#E5736A;}
   /* Mapa de calor (todas las carreras con GPS superpuestas) */
   .heat-overlay{position:fixed; inset:0; z-index:60; background:#0e1114; display:none; flex-direction:column;}
@@ -847,8 +847,8 @@
   .heat-overlay .leaflet-container{background:#0e1114;}
   .heat-top{position:absolute; top:0; left:0; right:0; z-index:500; padding:calc(14px + var(--safe-top)) 16px 36px; background:linear-gradient(to bottom, rgba(14,17,20,.94), rgba(14,17,20,0)); pointer-events:none;}
   .heat-top > *{pointer-events:auto;}
-  .heat-top h2{margin:0; font-size:24px; color:#EDEFEF;}
-  .heat-top p{margin:4px 0 0; font-size:12.5px; line-height:1.45; color:rgba(237,239,239,.68); max-width:30em;}
+  .heat-top h2{margin:0; font-size:22px; color:#EDEFEF;}
+  .heat-top p{margin:4px 0 0; font-size:13px; line-height:1.45; color:rgba(237,239,239,.68); max-width:30em;}
   .heat-close{position:absolute; z-index:600; top:calc(12px + var(--safe-top)); right:14px; width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,.14); border:none; color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer;}
   .heat-bottom{position:absolute; left:0; right:0; bottom:0; z-index:500; padding:44px 16px calc(34px + var(--safe-bottom)); background:linear-gradient(to top, rgba(14,17,20,.96), rgba(14,17,20,0)); pointer-events:none;}
   .heat-bottom > *{pointer-events:auto;}
@@ -864,26 +864,26 @@
      una línea fina en vez de una barra, así el ojo va directo a los días con volumen. */
   .trend-bars{display:flex; align-items:flex-end; justify-content:space-between; height:70px; gap:3px;}
   .trend-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:6px; min-width:0;}
-  .trend-stroke{width:5px; border-radius:99px; background:var(--chalk); transition:height .4s cubic-bezier(.22,1,.36,1);}
+  .trend-stroke{width:5px; border-radius:999px; background:var(--chalk); transition:height .4s cubic-bezier(.22,1,.36,1);}
   .trend-stroke.trend-planned{background:var(--mist-dim);}
   .trend-stroke.trend-rest{width:1.5px; background:var(--asphalt-4);}
   .trend-stroke.trend-today{background:var(--hivis); box-shadow:0 0 2px var(--hivis-glow);}
-  .trend-lbl{font-size:9.5px; color:var(--mist); text-transform:uppercase; letter-spacing:.04em; flex-shrink:0;}
+  .trend-lbl{font-size:10px; color:var(--mist); text-transform:uppercase; letter-spacing:.04em; flex-shrink:0;}
   /* Insignia "STRAVA" + duración sobre la vista previa del mapa, en vez de una fila de
      texto aparte encima de la tarjeta -- libera espacio y agrupa el origen del dato
      (Strava) con el mapa que ya lo representa visualmente. */
   .hist-map-badge{position:absolute; top:8px; right:8px; z-index:1000; display:flex; align-items:center; gap:6px;}
   .hist-map-badge .tag{margin:0;}
-  .hist-map-badge .hist-map-duration{background:rgba(10,10,10,.62); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px); color:var(--chalk); font-size:11.5px; font-weight:700; font-family:'JetBrains Mono',monospace; padding:4px 8px; border-radius:99px;}
+  .hist-map-badge .hist-map-duration{background:rgba(10,10,10,.62); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px); color:var(--chalk); font-size:12px; font-weight:700; font-family:'JetBrains Mono',monospace; padding:4px 8px; border-radius:999px;}
   /* Peso/Altura (Perfil): en vez de dos inputs numéricos encajonados, un valor grande
      centrado con la etiqueta arriba y un divisor fino abajo -- se ve y se edita como un
      dato destacado, no como un formulario. */
   .metric-input-row{display:flex; gap:20px; margin-top:16px;}
   .metric-input-cell{flex:1; display:flex; flex-direction:column; align-items:center; gap:8px; min-width:0;}
-  .metric-input-cell label{margin:0; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--mist); font-weight:600;}
+  .metric-input-cell label{margin:0; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--mist); font-weight:600;}
   .metric-input{width:100%; max-width:130px; background:none; border:none; border-bottom:1.5px solid var(--asphalt-4);
     color:var(--chalk); font-size:26px; font-weight:800; font-family:'JetBrains Mono',monospace; text-align:center;
-    padding:2px 0 9px; -moz-appearance:textfield; transition:border-color .15s ease;}
+    padding:2px 0 9px; -moz-appearance:textfield; transition:border-color .13s ease;}
   .metric-input::-webkit-outer-spin-button,.metric-input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
   .metric-input:focus{outline:none; border-bottom-color:var(--hivis);}
   /* Selector de tiempo (horas:minutos:segundos) para la calculadora de ritmo -- 3
@@ -904,7 +904,7 @@
   .week-days .wd-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:8px; height:100%; min-width:0;}
   .week-days .wd-lbl{font-size:10px; color:var(--mist); text-transform:uppercase; letter-spacing:.04em;}
   .week-days .wd-bar-wrap{flex:1; display:flex; align-items:flex-end;}
-  .week-days .wd-bar{width:8px; border-radius:99px; background:var(--asphalt-4); transition:height .3s cubic-bezier(.22,1,.36,1), transform .15s var(--ease-out);}
+  .week-days .wd-bar{width:8px; border-radius:999px; background:var(--asphalt-4); transition:height .3s cubic-bezier(.22,1,.36,1), transform .13s var(--ease-out);}
   /* Color por zona de esfuerzo (--zc, seteado inline por renderHome en app.js) en vez de
      un blanco plano para todo entrenamiento -- convierte la tira semanal en un dato real
      (de un vistazo se ve qué días son suaves vs. exigentes), no solo una barra decorativa. */
@@ -913,20 +913,20 @@
   .week-days .wd-col:active .wd-bar{transform:scaleX(1.4);}
   .week-days .wd-col.today .wd-lbl{color:var(--chalk); font-weight:700;}
   .coach-snippet{display:flex; gap:12px; align-items:flex-start;}
-  .coach-avatar{width:40px; height:40px; border-radius:14px; background:var(--hivis-dim); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .coach-avatar{width:40px; height:40px; border-radius:var(--radius-sm); background:var(--hivis-dim); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
 
   /* min-height + align-items:center -- sin esto, un día de descanso (una sola línea,
      "Descanso") queda visiblemente más bajo que un día con chip de zona (dos líneas),
      así que la fila completa cambia de alto según el contenido y el ritmo vertical de
      la semana se ve disparejo. Con las 7 filas a la misma altura, el contenido corto
      se centra en vez de pegarse arriba. */
-  .day-row{display:flex; align-items:center; gap:12px; padding:8px 0; min-height:44px; border-bottom:1px solid var(--asphalt-3); cursor:pointer; transition:background .12s ease, opacity .12s ease;}
+  .day-row{display:flex; align-items:center; gap:12px; padding:8px 0; min-height:44px; border-bottom:1px solid var(--asphalt-3); cursor:pointer; transition:background .13s ease, opacity .13s ease;}
   .day-row:active{background:var(--press);}
   .day-row:last-child{border-bottom:none;}
-  .day-badge{width:42px; text-align:center; flex-shrink:0; padding:5px 0; border-radius:12px; transition:background .15s var(--ease-out);}
+  .day-badge{width:42px; text-align:center; flex-shrink:0; padding:5px 0; border-radius:12px; transition:background .13s var(--ease-out);}
   .day-badge .d{font-size:11px; color:var(--mist); text-transform:uppercase;}
   .day-info{flex:1; min-width:0;}
-  .day-info .t{font-weight:700; font-size:15.5px;}
+  .day-info .t{font-weight:700; font-size:16px;}
   .day-info .m{font-size:12px; color:var(--mist); margin-top:4px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
   .day-info-title-row{display:flex; align-items:baseline; gap:9px; flex-wrap:wrap;}
   /* Kilometraje integrado en la misma fila del tipo de sesión, con un divisor fino en
@@ -937,14 +937,14 @@
      color al texto -- es la única fila de las 7 que importa de verdad hoy mismo. */
   .day-row.day-row-today .day-badge{background:var(--hivis-dim);}
   .day-row.day-row-today .day-badge .d{color:var(--hivis-text); font-weight:800;}
-  .day-km-inline{font-family:'JetBrains Mono',monospace; font-size:12.5px; font-weight:700; color:var(--chalk); flex-shrink:0;
+  .day-km-inline{font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700; color:var(--chalk); flex-shrink:0;
     padding-left:9px; border-left:1px solid var(--asphalt-4);}
-  .day-dist{font-family:'JetBrains Mono',monospace; font-size:14.5px; font-weight:700; color:var(--hivis-text); flex-shrink:0;}
+  .day-dist{font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:700; color:var(--hivis-text); flex-shrink:0;}
   /* Ícono de estado (check/x) solo, siempre al final de la fila. Los chips de
      terreno/zona viven debajo del título (ver .day-row-chips), no acá. */
   .day-row-end{display:flex; align-items:center; flex-shrink:0; padding-top:2px;}
   .day-row-chips{display:flex; gap:5px; flex-wrap:wrap; margin-top:6px;}
-  .day-row-wc{margin-top:3px; font-size:11.5px; line-height:1.4; color:var(--mist);}
+  .day-row-wc{margin-top:3px; font-size:12px; line-height:1.4; color:var(--mist);}
   /* Día de descanso: toda la fila baja de opacidad para que los días CON entrenamiento
      salten a la vista de entrada, sin tener que leer cada renglón. */
   .day-row.day-row-rest{opacity:.5;}
@@ -954,20 +954,20 @@
      el que de verdad lleva el padding/tipografía; .day-detail en sí es solo el
      mecanismo de animación. */
   .day-detail{display:grid; grid-template-rows:0fr; opacity:0; overflow:hidden;
-    transition:grid-template-rows .32s var(--ease-out), opacity .22s ease;}
+    transition:grid-template-rows .3s var(--ease-out), opacity .2s ease;}
   .day-detail > div{min-height:0; padding:0 0 14px 54px; font-size:13px; color:var(--mist); line-height:1.7; white-space:pre-line;}
   .day-detail.open{grid-template-rows:1fr; opacity:1;}
-  @media (prefers-reduced-motion:reduce){ .day-detail{transition:opacity .15s ease;} }
+  @media (prefers-reduced-motion:reduce){ .day-detail{transition:opacity .13s ease;} }
 
   /* Mismo mecanismo de expandido que .day-detail (grid-template-rows), acá sin el
      sangrado de 54px (no hay day-badge al costado en esta tarjeta). */
   .next-session-detail{display:grid; grid-template-rows:0fr; opacity:0; overflow:hidden;
-    transition:grid-template-rows .32s var(--ease-out), opacity .22s ease;}
+    transition:grid-template-rows .3s var(--ease-out), opacity .2s ease;}
   .next-session-detail > div{min-height:0; padding-top:14px;}
   .next-session-detail.open{grid-template-rows:1fr; opacity:1;}
-  @media (prefers-reduced-motion:reduce){ .next-session-detail{transition:opacity .15s ease;} }
+  @media (prefers-reduced-motion:reduce){ .next-session-detail{transition:opacity .13s ease;} }
   .next-session-hint{display:flex; align-items:center; justify-content:center; gap:4px; margin-top:10px; padding-top:10px;
-    border-top:1px solid var(--overlay-hairline); font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+    border-top:1px solid var(--overlay-hairline); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
     color:var(--mist); cursor:pointer;}
   .next-session-hint .icon-sq{transition:transform .2s var(--ease-out);}
   .next-session-hint.open .icon-sq{transform:rotate(180deg);}
@@ -978,7 +978,7 @@
      que .next-session-bullet en Inicio, para que se sienta parte del mismo sistema). */
   .gps-status-card{display:flex; gap:12px; align-items:flex-start; background:var(--asphalt-2); border:1px solid var(--overlay-hairline);
     border-radius:var(--radius-sm); padding:16px; margin-top:14px; text-align:left; box-shadow:var(--shadow-card);}
-  .gps-status-title{margin:0 0 6px; font-weight:700; font-size:13.5px; color:var(--chalk);}
+  .gps-status-title{margin:0 0 6px; font-weight:700; font-size:14px; color:var(--chalk);}
   .gps-status-bullet{margin:5px 0 0; font-size:12px; line-height:1.4; color:var(--mist); display:flex; gap:6px;}
   .gps-status-bullet::before{content:'—'; color:var(--mist-dim); flex-shrink:0;}
   /* Elegir entre el ejercicio programado de hoy y correr libre -- ver el comentario largo
@@ -989,14 +989,14 @@
   .run-mode-choice{display:flex; flex-direction:column; gap:10px; margin-top:14px;}
   .run-mode-card{display:flex; flex-direction:column; align-items:flex-start; gap:3px; text-align:left;
     width:100%; padding:14px 16px; border-radius:var(--radius-sm); background:var(--asphalt-3);
-    border:1.5px solid var(--asphalt-4); box-shadow:var(--shadow-card); cursor:pointer; transition:border-color .15s ease, background-color .15s ease, box-shadow .15s ease;}
+    border:1.5px solid var(--asphalt-4); box-shadow:var(--shadow-card); cursor:pointer; transition:border-color .13s ease, background-color .13s ease, box-shadow .13s ease;}
   .run-mode-card strong{font-size:15px; font-weight:800; color:var(--chalk);}
   /* Recortada a 2 líneas -- una sesión custom (escrita por el coach) puede traer la
      descripción entera de entrada en calor + tramo principal + vuelta a la calma en el campo
      "desc", que en una tarjeta de elección chica empujaba el botón de EMPEZAR fuera de
      pantalla. Acá solo hace falta reconocer la sesión de un vistazo -- el detalle completo
      ya se ve en la guía durante la carrera (renderWorkoutGuide()). */
-  .run-mode-card .muted{font-size:12.5px; line-height:1.4; white-space:pre-line;
+  .run-mode-card .muted{font-size:13px; line-height:1.4; white-space:pre-line;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
   .run-mode-card .tag{margin-bottom:2px;}
   /* --hivis-dim es translúcido a propósito (rgba, .14 de opacidad) -- pensado para pintarse
@@ -1028,7 +1028,7 @@
      encima de hermanos de afuera sin importar qué transform/z-index tenga Leaflet. */
   .idle-map-wrap{position:relative; z-index:0; isolation:isolate; height:180px; border-radius:var(--radius); overflow:hidden; margin-top:10px; border:1px solid var(--overlay-hairline); background:var(--asphalt-3);}
   .idle-map{height:100%; width:100%;}
-  .idle-map .leaflet-control-attribution{font-size:8.5px; background:rgba(10,10,10,.5); color:var(--mist-dim);}
+  .idle-map .leaflet-control-attribution{font-size:9px; background:rgba(10,10,10,.5); color:var(--mist-dim);}
   .idle-map .leaflet-control-attribution a{color:var(--mist);}
   /* Punto "estás acá" estilo Google Maps: círculo sólido con borde + un anillo translúcido
      alrededor que respira despacio (la variación real de precisión del GPS, no un adorno
@@ -1059,7 +1059,7 @@
   .run-bg-route .rbr-finish-dim{opacity:.3;}
   .go-circle{position:relative; z-index:1; width:100%; max-width:220px; height:88px; border-radius:999px; margin:0 auto; background:var(--hivis);
     display:flex; align-items:center; justify-content:center; flex-direction:column; color:var(--ink); border:none; cursor:pointer;
-    box-shadow:var(--neon); transition:transform .12s ease, box-shadow .12s ease; animation:goCirclePulse 2.6s ease-in-out infinite;}
+    box-shadow:var(--neon); transition:transform .13s ease, box-shadow .13s ease; animation:goCirclePulse 2.6s ease-in-out infinite;}
   .go-circle .display{font-size:25px; letter-spacing:.03em;}
   .go-circle:active{transform:scale(.96); box-shadow:var(--neon-press); animation-play-state:paused;}
   /* Blur chico (no solo offset/opacidad) también en la animación -- una sombra grande
@@ -1123,7 +1123,7 @@
   .track-topstats{display:flex; justify-content:center; gap:34px; margin:6px 0 2px;}
   .track-topstat{text-align:center; width:108px;}
   .track-topstat .n{font-size:27px; font-weight:800;}
-  .track-topstat .l{font-size:12.5px; text-transform:uppercase; letter-spacing:.05em; margin-top:3px; color:var(--mist);}
+  .track-topstat .l{font-size:13px; text-transform:uppercase; letter-spacing:.05em; margin-top:3px; color:var(--mist);}
   /* El número protagonista: distancia. clamp (no un tamaño fijo) para que una carrera de
      "12.47" no se desborde en un celular angosto de verdad igual que "0.00" -- ver el mismo
      criterio ya usado para .go-circle/otros elementos grandes de esta pantalla. */
@@ -1139,7 +1139,7 @@
      pause-circle más abajo), para no agrandar también al de reanudar y desparejarlo del de
      terminar al lado. */
   .track-pause-circle{display:flex; align-items:center; justify-content:center; width:72px; height:72px; border-radius:50%; margin:30px auto 14px; background:var(--hivis); color:var(--ink);
-    border:none; cursor:pointer; box-shadow:var(--neon); transition:transform .12s ease, box-shadow .12s ease;}
+    border:none; cursor:pointer; box-shadow:var(--neon); transition:transform .13s ease, box-shadow .13s ease;}
   .track-pause-circle svg{width:28px; height:28px;}
   .track-pause-circle:active{transform:scale(.94);}
   /* Más grande y pegado contra el borde de abajo, pedido del usuario ("como el de nike" / "casi
@@ -1163,7 +1163,7 @@
   .map-wrap .leaflet-control-attribution{background:rgba(10,10,10,.75); color:var(--mist-dim); font-size:9px; padding:1px 5px;}
   .map-wrap .leaflet-control-attribution a{color:var(--mist);}
   .map-recenter-btn{position:absolute; bottom:12px; right:12px; z-index:1500; width:40px; height:40px; border-radius:50%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--hivis-text); font-size:17px; cursor:pointer; display:flex; align-items:center; justify-content:center;
-    opacity:0; pointer-events:none; transform:scale(.85); transition:opacity .18s ease, transform .18s ease;}
+    opacity:0; pointer-events:none; transform:scale(.85); transition:opacity .2s ease, transform .2s ease;}
   .map-recenter-btn.visible{opacity:1; pointer-events:auto; transform:scale(1);}
   /* Grilla de stats mientras está pausado -- reusa .stat-row/.stat-box tal cual (el mismo
      componente que ya usa el resumen final), no un sistema de grilla nuevo: ya probado, ya
@@ -1177,7 +1177,7 @@
   .track-paused-actions{display:flex; align-items:center; justify-content:center; gap:22px; margin:4px 0 4px;}
   .track-paused-actions .track-pause-circle{margin:0;}
   .track-stop-circle{display:flex; align-items:center; justify-content:center; width:72px; height:72px; border-radius:50%; background:var(--danger); color:#fff;
-    border:none; cursor:pointer; box-shadow:0 3px 10px rgba(255,59,48,.35); transition:transform .12s ease;}
+    border:none; cursor:pointer; box-shadow:0 3px 10px rgba(255,59,48,.35); transition:transform .13s ease;}
   .track-stop-circle svg{width:26px; height:26px;}
   .track-stop-circle:active{transform:scale(.94);}
   /* Cuenta regresiva de 3 segundos al arrancar (pedido del usuario: "crea una cinemática de 3
@@ -1222,13 +1222,13 @@
   .rd-map-full .leaflet-control-attribution{background:rgba(10,10,10,.75); color:var(--mist-dim); font-size:9px; padding:1px 5px;}
   .rd-map-full .leaflet-control-attribution a{color:var(--mist);}
   /* mientras carga el mapa vectorial: el dibujo de la ruta sobre el fondo, que se va con un fundido */
-  .rd-map-ph{position:absolute; inset:0; z-index:5; background:var(--asphalt-3); transition:opacity .35s ease; pointer-events:none;}
+  .rd-map-ph{position:absolute; inset:0; z-index:5; background:var(--asphalt-3); transition:opacity .3s ease; pointer-events:none;}
   .rd-map-ph .hist-map-sketch{padding:44px 24px;}
   .rd-map-ph-img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .3s ease;}
   .rd-map-ph-img.loaded{opacity:1;}
   .rd-map-controls{position:absolute; top:12px; right:12px; z-index:1500; display:flex; flex-direction:column; gap:8px;}
   .rd-map-controls button{width:38px; height:38px; border-radius:50%; background:rgba(10,10,10,.82); border:1.5px solid var(--asphalt-4); color:var(--chalk); cursor:pointer; display:flex; align-items:center; justify-content:center;
-    opacity:0; pointer-events:none; transform:scale(.85); transition:opacity .18s ease, transform .18s ease;}
+    opacity:0; pointer-events:none; transform:scale(.85); transition:opacity .2s ease, transform .2s ease;}
   .rd-map-controls button.visible{opacity:1; pointer-events:auto; transform:scale(1);}
   /* Degradado gris arriba del mapa (como en la foto de referencia) -- además de
      prolijo, sirve para que el botón de recentrar de arriba se siga viendo bien
@@ -1242,15 +1242,15 @@
      mientras el dedo está sobre la agarradera. */
   .rd-map-handle{position:absolute; left:50%; bottom:10px; transform:translateX(-50%); width:42px; height:5px; border-radius:999px;
     background:rgba(255,255,255,.55); z-index:11; box-shadow:0 1px 2px rgba(0,0,0,.35); touch-action:none; cursor:grab;}
-  .rd-ruta-below{transition:opacity .26s ease, max-height .3s ease, margin .3s ease; max-height:600px; opacity:1;}
+  .rd-ruta-below{transition:opacity .2s ease, max-height .3s ease, margin .3s ease; max-height:600px; opacity:1;}
   .rd-ruta-below.rd-collapsed{opacity:0; max-height:0; margin:0; overflow:hidden; pointer-events:none;}
   .rd-big-dist{font-size:44px; font-weight:800; line-height:1;}
   .rd-legend-bar{height:6px; border-radius:999px; margin:14px 0 6px; background:linear-gradient(90deg, var(--zone2-fill), var(--zone3-fill), var(--zone5-fill));}
-  .rd-legend-labels{display:flex; justify-content:space-between; font-size:11.5px; color:var(--mist);}
+  .rd-legend-labels{display:flex; justify-content:space-between; font-size:12px; color:var(--mist);}
   .rd-stat-row{display:flex; justify-content:space-around; text-align:center; margin-top:18px; padding-top:16px; border-top:1px solid var(--asphalt-3);}
   .rd-stat-row div span{display:block; font-size:19px; font-weight:800; margin-bottom:2px;}
   .pace-bar-row{display:flex; align-items:center; gap:10px; margin-bottom:8px;}
-  .pace-bar-row .pace-bar-label{width:18px; font-size:12.5px; color:var(--mist); flex-shrink:0;}
+  .pace-bar-row .pace-bar-label{width:18px; font-size:13px; color:var(--mist); flex-shrink:0;}
   .pace-bar-track{flex:1; height:26px; border-radius:8px; background:var(--asphalt-3); overflow:hidden; position:relative;}
   /* A pedido del usuario, las barras de ritmo de la pestaña Ritmo se ven más
      intensas/vivas que el resto de los usos de --zoneN (mapa de la ruta,
@@ -1263,7 +1263,7 @@
   .rd-stat-tile .rd-tile-ico{width:26px; height:26px; flex-shrink:0; margin-top:2px; color:var(--hivis-text);}
   .rd-stat-tile .rd-tile-val{font-size:17px; font-weight:800;}
   .rd-stat-tile .rd-tile-lbl{font-size:12px; color:var(--mist);}
-  .rd-seg-table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  .rd-seg-table{width:100%; border-collapse:collapse; font-size:13px;}
   .rd-seg-table th{text-align:right; color:var(--mist); font-weight:600; font-size:11px; padding:0 0 8px; white-space:nowrap;}
   .rd-seg-table th:first-child, .rd-seg-table td:first-child{text-align:left;}
   .rd-seg-table td{text-align:right; padding:8px 0; border-top:1px solid var(--asphalt-3); font-weight:700; white-space:nowrap;}
@@ -1272,13 +1272,13 @@
   .rd-chart-svg{width:100%; height:110px; display:block;}
   .rd-donut-row{display:flex; align-items:center; gap:18px; margin-top:10px;}
   .rd-donut-legend{flex:1; display:flex; flex-direction:column; gap:6px;}
-  .rd-donut-legend-row{display:flex; align-items:center; justify-content:space-between; font-size:12.5px;}
+  .rd-donut-legend-row{display:flex; align-items:center; justify-content:space-between; font-size:13px;}
   .rd-donut-legend-row .dot{width:9px; height:9px; border-radius:50%; margin-right:7px; display:inline-block; flex-shrink:0;}
   .rd-donut-legend-name{display:flex; align-items:center; color:var(--chalk);}
   .rd-donut-legend-val{color:var(--mist); flex-shrink:0;}
-  .rd-video-btn{background:var(--hivis-dim); color:var(--hivis-text); border:none; border-radius:999px; padding:11px 18px; font-weight:700; font-size:13.5px; display:inline-flex; align-items:center; gap:7px; cursor:pointer; white-space:nowrap;}
+  .rd-video-btn{background:var(--hivis-dim); color:var(--hivis-text); border:none; border-radius:999px; padding:11px 18px; font-weight:700; font-size:14px; display:inline-flex; align-items:center; gap:7px; cursor:pointer; white-space:nowrap;}
   .rd-video-overlay{position:fixed; inset:0; z-index:70; background:#000; display:none; flex-direction:column; align-items:center; justify-content:center;}
-  .rd-video-overlay canvas{max-width:100%; max-height:70vh; border-radius:14px;}
+  .rd-video-overlay canvas{max-width:100%; max-height:70vh; border-radius:var(--radius-sm);}
   .rd-video-overlay .rd-video-actions .btn-outline{color:#fff; border-color:rgba(255,255,255,.45); background:rgba(255,255,255,.08);}
   .rd-video-overlay .rd-video-actions .btn-outline:active{background:rgba(255,255,255,.18);}
   .rd-video-overlay .rd-video-actions{display:flex; gap:10px; margin-top:20px; padding:0 20px; width:100%; max-width:460px;}
@@ -1307,12 +1307,12 @@
   .msg.first,.msg.mid{margin-bottom:2px;}
   .msg.coach{background:var(--asphalt-2); align-self:flex-start; border-bottom-left-radius:4px; white-space:pre-wrap;}
   .msg.user{background:var(--hivis); color:var(--ink); align-self:flex-end; border-bottom-right-radius:4px; font-weight:600;}
-  .msg.system{align-self:center; background:none; color:var(--hivis-text); font-size:11.5px; text-align:center; max-width:100%; font-weight:700; margin-bottom:10px;}
+  .msg.system{align-self:center; background:none; color:var(--hivis-text); font-size:12px; text-align:center; max-width:100%; font-weight:700; margin-bottom:10px;}
   .msg.coach.mid,.msg.coach.last{border-top-left-radius:6px;}
   .msg.coach.first,.msg.coach.mid{border-bottom-left-radius:6px;}
   .msg.user.mid,.msg.user.last{border-top-right-radius:6px;}
   .msg.user.first,.msg.user.mid{border-bottom-right-radius:6px;}
-  .msg-time{display:flex; font-size:10.5px; color:var(--mist-dim); margin:-4px 0 10px; padding:0 4px;}
+  .msg-time{display:flex; font-size:11px; color:var(--mist-dim); margin:-4px 0 10px; padding:0 4px;}
   .msg-time.left{justify-content:flex-start; padding-left:14px;}
   .msg-time.right{justify-content:flex-end; padding-right:14px;}
   .typing span{display:inline-block; width:6px; height:6px; background:var(--mist); border-radius:50%; margin-right:3px; animation:blink 1s infinite;}
@@ -1333,7 +1333,7 @@
      sobra (ahí igual ocupa todo el flex:1 disponible). */
   .chat-input-bar input{flex:1; min-width:0; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:13px 16px; border-radius:999px; font-size:15px; outline:none;}
   .chat-input-bar input:focus{border-color:var(--hivis);}
-  .chat-send{background:var(--hivis); color:var(--ink); border:none; box-shadow:var(--neon-press); width:44px; height:44px; border-radius:50%; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .12s ease, background .15s ease;}
+  .chat-send{background:var(--hivis); color:var(--ink); border:none; box-shadow:var(--neon-press); width:44px; height:44px; border-radius:50%; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .13s ease, background .13s ease;}
   .chat-send:active{transform:scale(.92);}
   .chat-send[data-busy="1"]{background:var(--asphalt-4); color:var(--chalk);}
   /* margin-bottom chico (no 16px, como antes) -- el chat-chips es siempre lo ÚLTIMO dentro
@@ -1343,14 +1343,14 @@
      .msg). Reportado por el usuario: los chips ("Bajame el volumen", "Me duele algo") se
      veían "muy separados" de la barra de escribir. */
   .chat-chips{display:flex; flex-wrap:wrap; gap:8px; margin:2px 0;}
-  .chat-chip{background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); font-size:12.5px; font-weight:600; padding:8px 13px; border-radius:999px; cursor:pointer; transition:border-color .12s ease, color .12s ease, transform .1s ease;}
+  .chat-chip{background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); font-size:13px; font-weight:600; padding:8px 13px; border-radius:999px; cursor:pointer; transition:border-color .13s ease, color .13s ease, transform .1s ease;}
   .chat-chip:active{transform:scale(.95); border-color:var(--hivis); color:var(--hivis-text);}
   .msg .msg-list{margin:6px 0; padding-left:18px;}
   .msg .msg-list li{margin-bottom:3px;}
   /* position:absolute relativo a #coachChatWrap (que es el positioning context) --
      JS ajusta "bottom" según el alto real de la barra de escribir. */
   .chat-scroll-btn-wrap{position:absolute; left:0; right:0; bottom:86px; pointer-events:none; z-index:2;}
-  .chat-scroll-btn{position:absolute; right:20px; bottom:0; width:38px; height:38px; border-radius:50%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--hivis-text); display:flex; align-items:center; justify-content:center; cursor:pointer; pointer-events:auto; box-shadow:0 1px 3px rgba(0,0,0,.35); transition:transform .12s ease;}
+  .chat-scroll-btn{position:absolute; right:20px; bottom:0; width:38px; height:38px; border-radius:50%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--hivis-text); display:flex; align-items:center; justify-content:center; cursor:pointer; pointer-events:auto; box-shadow:0 1px 3px rgba(0,0,0,.35); transition:transform .13s ease;}
   .chat-scroll-btn:active{transform:scale(.9);}
 
   .day-picker{display:flex; flex-wrap:wrap; gap:8px;}
@@ -1388,7 +1388,7 @@
     justify-content:flex-end; padding-right:38px;
     border-radius:0 calc(var(--radius) + 2px) calc(var(--radius) + 2px) 0;}
   .swipe-content{position:relative; touch-action:pan-y; will-change:transform; backface-visibility:hidden;}
-  .swipe-content.swipe-anim{transition:transform .25s cubic-bezier(.22,1,.36,1);}
+  .swipe-content.swipe-anim{transition:transform .2s cubic-bezier(.22,1,.36,1);}
   .shoe-row{display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--asphalt-3);}
   .shoe-row:last-child, #shoe-list > .shoe-item:last-child{border-bottom:none;}
   .shoe-row .swipe-item{flex:1; min-width:0;}
@@ -1415,7 +1415,7 @@
   .avatar-big img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover;}
   .avatar-edit-badge{position:absolute; bottom:-4px; right:-4px; width:22px; height:22px; border-radius:50%; background:var(--hivis); color:var(--ink); display:flex; align-items:center; justify-content:center; border:2.5px solid var(--asphalt); pointer-events:none;}
   .pr-medal-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-top:4px;}
-  .pr-medal{position:relative; display:flex; flex-direction:column; align-items:center; gap:5px; padding:14px 6px; border-radius:var(--radius-sm); background:var(--asphalt-3); text-align:center; transition:background .15s ease, transform .15s var(--ease-out);}
+  .pr-medal{position:relative; display:flex; flex-direction:column; align-items:center; gap:5px; padding:14px 6px; border-radius:var(--radius-sm); background:var(--asphalt-3); text-align:center; transition:background .13s ease, transform .13s var(--ease-out);}
   /* Ícono chico de compartir en la esquina de cada medalla ya ganada -- solo ahí, porque
      compartir necesita una carrera real de referencia (km, tiempo, recorrido) que una
      medalla todavía bloqueada no tiene. */
@@ -1433,35 +1433,35 @@
      (botón primario, tab activo) -- el vitrina de trofeos no puede sentirse como
      cualquier otro chip. */
   .pr-medal.achieved{background:var(--hivis-dim); box-shadow:0 0 0 1px rgba(214,255,63,.18), 0 2px 4px -1px var(--hivis-glow);}
-  .pr-medal .icon-sq{width:24px; height:24px; color:var(--mist-dim); transition:transform .15s var(--ease-spring);}
+  .pr-medal .icon-sq{width:24px; height:24px; color:var(--mist-dim); transition:transform .13s var(--ease-spring);}
   .pr-medal.achieved .icon-sq{color:var(--hivis-text);}
-  .pr-medal-label{font-size:11.5px; font-weight:800; color:var(--mist);}
+  .pr-medal-label{font-size:12px; font-weight:800; color:var(--mist);}
   .pr-medal.achieved .pr-medal-label{color:var(--chalk);}
   .pr-medal-time{font-size:12px; font-weight:800; font-family:'JetBrains Mono',monospace; color:var(--hivis-text);}
   .pr-medal-locked{font-size:11px; color:var(--mist-dim);}
-  .shoe-item{display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--asphalt-3); transition:background .12s ease;}
+  .shoe-item{display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--asphalt-3); transition:background .13s ease;}
   .shoe-item:active{background:var(--press);}
   .shoe-icon{width:36px; height:36px; border-radius:11px; background:var(--asphalt-3); display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--mist);}
   .shoe-icon svg{width:19px; height:19px;}
   .shoe-info{flex:1;}
-  .shoe-info .n{font-weight:700; font-size:13.5px;}
-  .wearbar{height:6px; background:var(--asphalt-3); border-radius:99px; margin-top:6px; overflow:hidden;}
+  .shoe-info .n{font-weight:700; font-size:14px;}
+  .wearbar{height:6px; background:var(--asphalt-3); border-radius:999px; margin-top:6px; overflow:hidden;}
   .wearbar > div{height:100%; background:var(--hivis);}
   .wearbar.warn > div{background:var(--danger);}
-  .conn-item{display:flex; align-items:center; justify-content:space-between; padding:11px 0; border-bottom:1px solid var(--asphalt-3); transition:background .12s ease;}
+  .conn-item{display:flex; align-items:center; justify-content:space-between; padding:11px 0; border-bottom:1px solid var(--asphalt-3); transition:background .13s ease;}
   .conn-item:active{background:var(--press);}
   .conn-item:last-child{border-bottom:none;}
-  .conn-item .n{font-size:13.5px; font-weight:600;}
+  .conn-item .n{font-size:14px; font-weight:600;}
   .zone-row{display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--asphalt-3);}
   .zone-row:last-child{border-bottom:none;}
   .zone-row .zd{font-size:11px; color:var(--mist-dim); margin-top:2px;}
-  .small-link{color:var(--mist); font-size:12.5px; text-decoration:underline; background:none; border:none; cursor:pointer; padding:0; transition:opacity .12s ease;}
-  .info-btn{background:none; border:none; color:var(--mist-dim); cursor:pointer; padding:4px; margin:-4px; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:color .12s ease, transform .12s ease;}
+  .small-link{color:var(--mist); font-size:13px; text-decoration:underline; background:none; border:none; cursor:pointer; padding:0; transition:opacity .13s ease;}
+  .info-btn{background:none; border:none; color:var(--mist-dim); cursor:pointer; padding:4px; margin:-4px; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:color .13s ease, transform .13s ease;}
   .info-btn:active{transform:scale(.85); color:var(--hivis-text);}
   /* Requisitos de la contraseña: cada uno arranca con un círculo vacío y se pone verde con tilde al cumplirse */
   .pw-checklist{list-style:none; margin:10px 0 0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:6px 12px;}
-  .pw-checklist li{display:flex; align-items:center; gap:7px; font-size:12px; line-height:16px; color:var(--mist); transition:color .15s ease;}
-  .pw-checklist .pw-dot{flex:0 0 auto; width:16px; height:16px; border-radius:50%; box-shadow:inset 0 0 0 1.5px var(--mist-dim); display:inline-flex; align-items:center; justify-content:center; transition:background-color .15s ease, box-shadow .15s ease;}
+  .pw-checklist li{display:flex; align-items:center; gap:7px; font-size:12px; line-height:16px; color:var(--mist); transition:color .13s ease;}
+  .pw-checklist .pw-dot{flex:0 0 auto; width:16px; height:16px; border-radius:50%; box-shadow:inset 0 0 0 1.5px var(--mist-dim); display:inline-flex; align-items:center; justify-content:center; transition:background-color .13s ease, box-shadow .13s ease;}
   .pw-checklist .pw-dot svg{display:block; width:10px; height:10px; stroke-width:3; color:var(--ink);}
   .pw-checklist li.ok{color:var(--chalk);}
   .pw-checklist li.ok .pw-dot{background:var(--zone2); box-shadow:none;}
@@ -1502,7 +1502,7 @@
   .plan-week-tags{display:flex; flex-wrap:wrap; justify-content:center; gap:6px; margin:0 0 14px;}
   .week-nav-btn{width:32px; height:32px; border-radius:50%; background:var(--asphalt-3); border:none; color:var(--chalk);
     display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; padding:0;
-    transition:transform .12s ease, background .12s ease, opacity .15s ease;}
+    transition:transform .13s ease, background .13s ease, opacity .13s ease;}
   .week-nav-btn:active{transform:scale(.85); background:var(--asphalt-4);}
   .week-nav-btn:disabled{opacity:.25; pointer-events:none;}
   /* Zona táctil de 44px sin cambiar el tamaño visible del botón. */
@@ -1570,8 +1570,8 @@
   nav.tabbar{position:sticky; bottom:var(--safe-bottom); width:calc(100% - 28px); max-width:452px; margin:14px auto 0; background:var(--asphalt-2);
     display:flex; padding:9px 6px; flex-shrink:0;
     border-radius:26px; border:1px solid var(--overlay-hairline); box-shadow:var(--shadow-lg); z-index:20;}
-  nav.tabbar button{flex:1; background:none; border:none; color:var(--mist); display:flex; flex-direction:column; align-items:center; gap:4px; font-size:10.5px; font-weight:600; cursor:pointer; padding:4px 2px; transition:transform .13s var(--ease-out), color .13s var(--ease-out);}
-  nav.tabbar button svg{width:22px; height:22px; padding:3px; box-sizing:content-box; border-radius:10px; transition:background .15s var(--ease-out);}
+  nav.tabbar button{flex:1; background:none; border:none; color:var(--mist); display:flex; flex-direction:column; align-items:center; gap:4px; font-size:11px; font-weight:600; cursor:pointer; padding:4px 2px; transition:transform .13s var(--ease-out), color .13s var(--ease-out);}
+  nav.tabbar button svg{width:22px; height:22px; padding:3px; box-sizing:content-box; border-radius:10px; transition:background .13s var(--ease-out);}
   nav.tabbar button.active{color:var(--hivis-text);}
   nav.tabbar button.active svg{background:var(--hivis-dim);}
   nav.tabbar button:active{transform:scale(.9);}
@@ -1615,7 +1615,7 @@
      drop-shadow (filter, no box-shadow) sigue la silueta real del círculo en vez de la caja
      rectangular del botón. */
   .coach-fab{position:absolute; right:12px; bottom:0; width:var(--fab-size); height:var(--fab-size); background:none; border:none; pointer-events:auto;
-    display:flex; align-items:center; justify-content:center; cursor:pointer; transition:transform .12s ease, opacity .15s ease;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; transition:transform .2s var(--ease-out), opacity .2s ease;
     transform-origin:bottom right;}
   .coach-fab:active{transform:scale(.92);}
   /* Encontrado en una auditoría: al ser position:fixed, este personaje tapa lo que sea que
@@ -1625,7 +1625,8 @@
      ahí), se achica y atenúa SOLO mientras se está scrolleando -- el único momento en que de
      verdad tapa algo que el usuario está mirando o por tocar -- y vuelve a su tamaño
      normal en cuanto el scroll se detiene (ver el listener de scroll en app.js). */
-  .coach-fab-wrap.coach-fab-scrolling .coach-fab{opacity:.3; transform:scale(.8);}
+  .coach-fab-wrap.coach-fab-away .coach-fab, .coach-fab-wrap.coach-fab-away .coach-fab-thinking{opacity:0; transform:translateY(18px) scale(.7); pointer-events:none;}
+  .coach-fab-thinking{transition:opacity .2s ease, transform .2s var(--ease-out);}
   /* "Pop" cuando llega un mensaje nuevo del coach (ver updateChatBadge en app.js) -- en el
      propio botón HTML, no en el SVG de adentro, porque acá SÍ hace falta una transición CSS
      de verdad (a diferencia del seguimiento de mirada/parpadeo, que usa el atributo SVG
@@ -1656,7 +1657,7 @@
      arriba) + 10px de aire hasta la burbuja. */
   .coach-fab-thinking{position:absolute; right:12px; bottom:calc(var(--fab-size) + 8px); width:var(--fab-size);
     display:flex; justify-content:center; opacity:0; transform:scale(.9); pointer-events:none;
-    transition:opacity .15s ease, transform .15s ease;}
+    transition:opacity .13s ease, transform .13s ease;}
   .coach-fab-thinking.show{opacity:1; transform:scale(1);}
   /* Borde lima + sombra con glow (no el borde/sombra genéricos de tarjeta de antes) --
      reportado por el usuario: la burbuja "se camuflaba" flotando sobre fondos oscuros
@@ -1664,7 +1665,7 @@
      El acento lima la liga visualmente al personaje (también lima) y la hace leer como
      "algo pasa acá" de un vistazo, en vez de un rectángulo gris más perdido en el fondo. */
   .coach-fab-thinking-bubble{position:relative; background:var(--asphalt-2); border:1.5px solid var(--hivis);
-    border-radius:14px; padding:9px 13px; display:flex; align-items:center; gap:3px;
+    border-radius:var(--radius-sm); padding:9px 13px; display:flex; align-items:center; gap:3px;
     box-shadow:0 2px 10px rgba(214,255,63,.22), 0 1px 3px rgba(0,0,0,.4);}
   .coach-fab-thinking-bubble span{width:6px; height:6px; border-radius:50%; background:var(--hivis-text); animation:blink 1s infinite;}
   .coach-fab-thinking-bubble span:nth-child(2){animation-delay:.15s;}
@@ -1707,7 +1708,7 @@
   .settile .icon-sq{width:34px; height:34px; border-radius:50%; background:var(--asphalt-3);
     display:flex; align-items:center; justify-content:center; margin-bottom:10px;}
   .settile .icon-sq svg{width:16px; height:16px;}
-  .settile h3{font-size:12.5px; text-transform:none; letter-spacing:0; color:var(--chalk); margin:0 0 2px;}
+  .settile h3{font-size:13px; text-transform:none; letter-spacing:0; color:var(--chalk); margin:0 0 2px;}
   .settile p{margin:0; font-size:11px; line-height:1.35;}
   /* Estas reglas van al final de la hoja para ganarle a las de arriba con la misma especificidad. */
   /* ===== Pasada de diseño 2026-10-08 ===== */
@@ -1735,7 +1736,7 @@
   .ws-row{display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--asphalt-4);}
   .ws-row:last-child{border-bottom:none;}
   .ws-row .n{font-family:'JetBrains Mono',monospace; font-size:19px; font-weight:800;}
-  .ws-row .l{font-size:10.5px; color:var(--mist); text-transform:uppercase; letter-spacing:.05em; text-align:right;}
+  .ws-row .l{font-size:11px; color:var(--mist); text-transform:uppercase; letter-spacing:.05em; text-align:right;}
   @media (prefers-reduced-motion:reduce){ .week-ring-fig .wr-fill{transition:none;} }
 
   /* ===== Segunda pasada de diseño 2026-10-08 ===== */
@@ -1789,9 +1790,9 @@
   .coach-head-text{min-width:0; flex:1;}
   #coachChatTitle{font-size:26px; line-height:1; padding:0; margin:0;}
   .coach-head-sub{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',Inter,system-ui,sans-serif; font-size:12px; letter-spacing:0; color:var(--mist); margin-left:4px; vertical-align:middle;}
-  .coach-disclaimer{padding:4px 0 0; border:none; font-size:11.5px;}
+  .coach-disclaimer{padding:4px 0 0; border:none; font-size:12px;}
   #chatLog{padding:16px 16px 10px;}
-  .msg{max-width:84%; padding:12px 15px; border-radius:20px; font-size:15px; line-height:1.5; margin-bottom:8px;}
+  .msg{max-width:84%; padding:12px 15px; border-radius:var(--radius); font-size:15px; line-height:1.5; margin-bottom:8px;}
   .msg.coach{background:var(--asphalt-2); border:1px solid var(--overlay-hairline); white-space:normal; border-bottom-left-radius:6px;}
   .msg.user{border-bottom-right-radius:6px; box-shadow:0 0 18px -4px var(--glow-b);}
   .msg.coach.mid,.msg.coach.last{border-top-left-radius:6px;} .msg.coach.first,.msg.coach.mid{border-bottom-left-radius:6px;}
@@ -1832,7 +1833,7 @@
   .day-detail > div{padding:0 0 0 54px; transition:padding .3s var(--ease-out);}
   .day-detail.open > div{padding:0 0 14px 54px;}
   .day-badge{padding:4px 0;}
-  .day-info .t{font-size:15.5px;}
+  .day-info .t{font-size:16px;}
   .day-badge{width:46px;}
   .day-info{display:flex; flex-direction:column; justify-content:center; gap:6px; min-height:44px;}
   .day-info .t{line-height:1.2;}
@@ -1870,12 +1871,12 @@
   .trend-col{cursor:pointer;}
   .trend-col.sel .trend-stroke{box-shadow:0 0 10px var(--glow-a);}
   .trend-stroke.trend-today{box-shadow:0 0 9px var(--glow-a), 0 0 2px var(--hivis);}
-  .trend-tip{position:absolute; top:-46px; transform:translateX(-50%) translateY(4px); opacity:0; pointer-events:none; z-index:2; display:flex; flex-direction:row; align-items:baseline; gap:7px; padding:5px 11px; border-radius:14px; white-space:nowrap; background:var(--asphalt-4); color:var(--chalk); box-shadow:0 8px 20px -8px var(--liq-shadow); transition:opacity .15s var(--ease-out), transform .15s var(--ease-out);}
+  .trend-tip{position:absolute; top:-46px; transform:translateX(-50%) translateY(4px); opacity:0; pointer-events:none; z-index:2; display:flex; flex-direction:row; align-items:baseline; gap:7px; padding:5px 11px; border-radius:var(--radius-sm); white-space:nowrap; background:var(--asphalt-4); color:var(--chalk); box-shadow:0 8px 20px -8px var(--liq-shadow); transition:opacity .13s var(--ease-out), transform .13s var(--ease-out);}
   .trend-tip strong{font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--hivis-text);} .trend-tip span{font-size:11px; color:var(--mist);}
   .trend-tip.show{opacity:1; transform:translateX(-50%) translateY(0);}
   /* (3) Separadores de día en el chat */
   .msg-day{align-self:center; margin:6px 0 14px;}
-  .msg-day span{display:inline-block; padding:5px 13px; border-radius:999px; font-size:11.5px; font-weight:700; color:var(--mist); background:var(--asphalt-2);}
+  .msg-day span{display:inline-block; padding:5px 13px; border-radius:999px; font-size:12px; font-weight:700; color:var(--mist); background:var(--asphalt-2);}
   /* (4) Respuestas rápidas de Sí / No */
   .chat-chip-yes{border-color:var(--hivis); color:var(--hivis-text); background:var(--hivis-dim);}
   /* (5) La pista como marca: se dibuja de abajo hacia arriba en la bienvenida y es la imagen del Historial vacío */
@@ -1911,7 +1912,7 @@
   .hist-map-badge .hist-map-duration{-webkit-backdrop-filter:none; backdrop-filter:none; background:rgba(10,10,10,.7);}
 
   /* ===== Cuarta pasada 2026-10-08: chat (copiar / escribiendo), sin conexión, contador de onboarding ===== */
-  .msg{-webkit-user-select:none; user-select:none; -webkit-touch-callout:none; transition:opacity .15s ease;}
+  .msg{-webkit-user-select:none; user-select:none; -webkit-touch-callout:none; transition:opacity .13s ease;}
   .msg.copied{opacity:.55;}
   .msg.typing{display:flex; align-items:center; gap:10px; width:max-content; padding:10px 16px 10px 12px;}
   .msg.typing::before{content:''; width:24px; height:24px; flex-shrink:0; border-radius:50%; background:radial-gradient(circle at 36% 47%, var(--ink) 0 2px, transparent 2.6px), radial-gradient(circle at 64% 47%, var(--ink) 0 2px, transparent 2.6px), var(--hivis); box-shadow:var(--neon-press);}
@@ -1931,10 +1932,10 @@
 
   /* ===== Quinta pasada 2026-10-08: chat liviano, primera conversación, deslizar para actualizar ===== */
   .chat-more{align-self:center; margin:0 0 14px;}
-  .chat-more button{background:var(--asphalt-2); color:var(--hivis-text); border:none; border-radius:999px; padding:8px 16px; font-size:12.5px; font-weight:700; cursor:pointer;}
+  .chat-more button{background:var(--asphalt-2); color:var(--hivis-text); border:none; border-radius:999px; padding:8px 16px; font-size:13px; font-weight:700; cursor:pointer;}
   .chat-chips.big{flex-direction:column; flex-wrap:nowrap; overflow:visible; -webkit-mask-image:none; mask-image:none; margin:12px 0 4px; padding:0; gap:10px;}
-  .chat-chips.big .chat-chip{width:100%; text-align:left; padding:14px 18px; font-size:14.5px; border-radius:18px; white-space:normal;}
-  #pull-ring{position:fixed; left:50%; top:calc(var(--safe-top) + 62px); width:36px; height:36px; z-index:75; pointer-events:none; opacity:0; transform:translateX(-50%); transition:opacity .12s ease;}
+  .chat-chips.big .chat-chip{width:100%; text-align:left; padding:14px 18px; font-size:15px; border-radius:18px; white-space:normal;}
+  #pull-ring{position:fixed; left:50%; top:calc(var(--safe-top) + 62px); width:36px; height:36px; z-index:75; pointer-events:none; opacity:0; transform:translateX(-50%); transition:opacity .13s ease;}
   #pull-ring.show{opacity:1;}
   #pull-ring svg{width:100%; height:100%; transform:rotate(-90deg); background:var(--asphalt-2); border-radius:50%; padding:3px; box-sizing:border-box;}
   #pull-ring .pr-track{fill:none; stroke:var(--asphalt-4); stroke-width:3;}
@@ -1949,20 +1950,20 @@
   /* ===== Marcas estimadas e importar historial ===== */
   .pred-row{display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:11px 0; border-bottom:1px solid var(--asphalt-4);}
   .pred-row:last-of-type{border-bottom:none;}
-  .pred-label{font-weight:700; font-size:14.5px;}
+  .pred-label{font-weight:700; font-size:15px;}
   .pred-time{font-family:'JetBrains Mono',monospace; font-weight:800; font-size:17px; color:var(--hivis-text);}
-  .pred-pace{font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--mist); margin-left:8px;}
+  .pred-pace{font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--mist); margin-left:8px;}
   .pred-need{font-size:12px; color:var(--mist-dim); text-align:right;}
   .pred-note{margin:10px 0 0; font-size:12px; line-height:1.45;}
   #history-calib-card{border-color:var(--hivis);}
-  .hi-row{display:flex; align-items:center; justify-content:space-between; width:100%; min-height:62px; padding:0 18px; margin-bottom:10px; background:var(--asphalt-2); border:none; border-radius:var(--radius-sm); color:var(--chalk); cursor:pointer; font:inherit; transition:background .12s ease, transform .12s ease;}
+  .hi-row{display:flex; align-items:center; justify-content:space-between; width:100%; min-height:62px; padding:0 18px; margin-bottom:10px; background:var(--asphalt-2); border:none; border-radius:var(--radius-sm); color:var(--chalk); cursor:pointer; font:inherit; transition:background .13s ease, transform .13s ease;}
   .hi-row:active{background:var(--press); transform:scale(.985);}
   .hi-row svg{color:var(--mist-dim); flex-shrink:0;}
 
   /* ===== Relojes y conectividad: cada marca es una fila-botón (como "Traé tu historial") que se despliega ===== */
   .conn-row, .conn-row-featured{padding:0; margin:0 0 10px; border-top:none; background:var(--asphalt-3); border-radius:var(--radius-sm); overflow:hidden;}
   .conn-row:last-child{margin-bottom:0;}
-  .conn-row-head{margin:0; min-height:62px; padding:0 16px; cursor:pointer; -webkit-user-select:none; user-select:none; transition:background .12s ease;}
+  .conn-row-head{margin:0; min-height:62px; padding:0 16px; cursor:pointer; -webkit-user-select:none; user-select:none; transition:background .13s ease;}
   .conn-row-head:active{background:var(--press);}
   .conn-chev{width:14px; height:14px; color:var(--mist-dim); flex-shrink:0; transition:transform .2s var(--ease-out);}
   .conn-row.open .conn-chev{transform:rotate(90deg);}
@@ -1996,7 +1997,7 @@
   @media (prefers-reduced-motion:reduce){ :root:root .confirm-card{animation:none;} }
 
   /* ===== Test de nivel: lista de días como filas-botón ===== */
-  .lt-opt{display:flex; align-items:center; gap:14px; width:100%; margin-top:10px; padding:10px 16px 10px 10px; background:var(--asphalt-2); border:none; border-radius:var(--radius-sm); color:var(--chalk); text-align:left; cursor:pointer; font:inherit; transition:background .12s ease, transform .12s ease;}
+  .lt-opt{display:flex; align-items:center; gap:14px; width:100%; margin-top:10px; padding:10px 16px 10px 10px; background:var(--asphalt-2); border:none; border-radius:var(--radius-sm); color:var(--chalk); text-align:left; cursor:pointer; font:inherit; transition:background .13s ease, transform .13s ease;}
   .lt-opt:active{background:var(--press); transform:scale(.985);}
   .lt-opt:disabled{opacity:.45; cursor:not-allowed; transform:none;}
   .lt-opt.current{box-shadow:inset 0 0 0 1.5px var(--hivis);}
@@ -2004,7 +2005,7 @@
   .lt-badge b{font-family:'JetBrains Mono',monospace; font-size:17px; line-height:1;}
   .lt-badge i{font-style:normal; font-size:10px; text-transform:uppercase; color:var(--mist); margin-top:4px;}
   .lt-opt.today .lt-badge{background:var(--hivis-dim);} .lt-opt.today .lt-badge i{color:var(--hivis-text);}
-  .lt-info{flex:1; min-width:0;} .lt-info strong{display:block; font-size:15px; font-weight:700; text-transform:capitalize;} .lt-info small{display:block; font-size:12.5px; color:var(--mist); margin-top:3px;}
+  .lt-info{flex:1; min-width:0;} .lt-info strong{display:block; font-size:15px; font-weight:700; text-transform:capitalize;} .lt-info small{display:block; font-size:13px; color:var(--mist); margin-top:3px;}
   .lt-tail{display:flex; width:16px; height:16px; color:var(--mist-dim); flex-shrink:0;} .lt-tail svg{width:100%; height:100%;} .lt-opt.current .lt-tail{color:var(--hivis-text);}
 
   /* ===== Test de nivel (pasos numerados) y calendario ===== */
@@ -2012,7 +2013,7 @@
   .lt-step:last-child{margin-bottom:0;}
   .lt-step p{margin:0; font-size:14px; line-height:1.5;}
   .lt-n{width:26px; height:26px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:var(--hivis); color:var(--ink); font-family:'JetBrains Mono',monospace; font-weight:800; font-size:13px; box-shadow:var(--neon-press);}
-  .cal-day{transition:background .12s ease, transform .12s ease;}
+  .cal-day{transition:background .13s ease, transform .13s ease;}
   .cal-day:active{background:var(--press); transform:scale(.92);}
   .cal-day.today{border:1.5px solid var(--hivis); color:var(--hivis-text); font-weight:800;}
   .cal-day.selected{box-shadow:var(--neon-press);}
@@ -2032,7 +2033,7 @@
   .pg-val{font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; fill:var(--mist);} .pg-val.cur{fill:var(--hivis-text);}
   .pg-line{fill:none; stroke:var(--hivis); stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round;}
   .pg-dot{fill:var(--asphalt-2); stroke:var(--hivis); stroke-width:2;} .pg-dot.cur{fill:var(--hivis);}
-  .pg-delta{margin:2px 0 0; font-size:12.5px; font-weight:700;} .pg-delta.good{color:var(--hivis-text);} .pg-delta.bad{color:var(--clay);}
+  .pg-delta{margin:2px 0 0; font-size:13px; font-weight:700;} .pg-delta.good{color:var(--hivis-text);} .pg-delta.bad{color:var(--clay);}
   .pg-zbar{display:flex; height:14px; border-radius:7px; overflow:hidden; gap:2px;}
   .pg-seg.z1,.pg-dotz.z1{background:var(--zone1-fill);} .pg-seg.z2,.pg-dotz.z2{background:var(--zone2-fill);} .pg-seg.z3,.pg-dotz.z3{background:var(--zone3-fill);} .pg-seg.z4,.pg-dotz.z4{background:var(--zone4-fill);} .pg-seg.z5,.pg-dotz.z5{background:var(--zone5-fill);}
   .pg-legend{display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:10px; font-size:12px; color:var(--mist);} .pg-legend b{color:var(--chalk); font-family:'JetBrains Mono',monospace;}
@@ -2040,8 +2041,8 @@
 
   /* ===== Recorrido guiado ===== */
   #tour{position:fixed; inset:0; z-index:95; overflow:hidden;}
-  #tour-spot{position:absolute; box-shadow:0 0 0 9999px rgba(0,0,0,.68), 0 0 0 2px var(--hivis), 0 0 22px var(--glow-a); transition:left .28s var(--ease-out), top .28s var(--ease-out), width .28s var(--ease-out), height .28s var(--ease-out), border-radius .2s ease;}
-  #tour-tip{position:absolute; background:var(--asphalt-2); border-radius:20px; padding:16px 16px 14px; box-shadow:0 18px 40px -12px rgba(0,0,0,.65); animation:skFade .25s ease-out both;}
+  #tour-spot{position:absolute; box-shadow:0 0 0 9999px rgba(0,0,0,.68), 0 0 0 2px var(--hivis), 0 0 22px var(--glow-a); transition:left .3s var(--ease-out), top .3s var(--ease-out), width .3s var(--ease-out), height .3s var(--ease-out), border-radius .2s ease;}
+  #tour-tip{position:absolute; background:var(--asphalt-2); border-radius:var(--radius); padding:16px 16px 14px; box-shadow:0 18px 40px -12px rgba(0,0,0,.65); animation:skFade .25s ease-out both;}
   #tour-text{margin:0; font-size:15px; line-height:1.45; font-weight:600; color:var(--chalk);}
   .tour-actions{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:14px;}
   .tour-actions .btn{width:auto; min-width:104px; padding-left:20px; padding-right:20px;}
@@ -2050,7 +2051,7 @@
 
   /* ===== Íconos de la barra: más grandes, con relleno suave al estar activos ===== */
   nav.tabbar button svg{width:24px; height:24px;}
-  nav.tabbar button svg .fl{fill:none; transition:fill .15s var(--ease-out);}
+  nav.tabbar button svg .fl{fill:none; transition:fill .13s var(--ease-out);}
   nav.tabbar button.active svg .fl{fill:currentColor; fill-opacity:.2;}
 
   /* ===== Medallas, resumen semanal y estado vacío ===== */
@@ -2063,7 +2064,7 @@
   .recap-stats{display:flex; gap:8px; margin-top:10px;}
   .recap-stat{flex:1; min-width:0; background:var(--asphalt-3); border-radius:12px; padding:12px 4px 10px; text-align:center;}
   .recap-stat b{display:block; font-family:'Bebas Neue',sans-serif; font-weight:400; font-size:30px; line-height:1;}
-  .recap-stat span{display:block; margin-top:4px; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--mist);}
+  .recap-stat span{display:block; margin-top:4px; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--mist);}
   .recap-delta{margin:12px 0 0; font-size:13px; font-weight:700; color:var(--hivis-text);} .recap-delta.down{color:var(--mist);}
   .recap-actions{display:flex; align-items:center; gap:14px; margin-top:14px;} .recap-actions .btn{flex:1;}
   .empty-card{text-align:center; padding:30px 18px 24px;} .empty-card .empty-track{margin-bottom:10px;}
@@ -2072,7 +2073,7 @@
   /* ===== Resumen de carrera, frase del día y personaje más grande ===== */
   .sum-hero{padding:14px 14px 16px;}
   .sum-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
-  .sum-kicker{font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; color:var(--mist);} .sum-date{font-size:11.5px; color:var(--mist); text-transform:capitalize;}
+  .sum-kicker{font-size:11px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; color:var(--mist);} .sum-date{font-size:12px; color:var(--mist); text-transform:capitalize;}
   .sum-map{height:150px; margin-bottom:6px;}
   .sum-pr-badge{position:absolute; left:10px; top:10px; z-index:2; background:rgba(11,11,12,.82); color:#D6FF3F; border-radius:10px; padding:4px 10px; font-size:11px; font-weight:700;}
   .sum-big{text-align:center; margin:12px 0 14px;}
@@ -2080,19 +2081,19 @@
   .sum-big .l{margin-top:4px; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--mist); font-weight:700;}
   /* Frase de Zonda con lo más destacado de una carrera (resumen al terminar y detalle de la carrera) */
   .hl-card{border-left:3px solid var(--hivis); padding:14px 16px;}
-  .hl-card .hl-kicker, .rd-hl .hl-kicker{display:block; font-size:10.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--hivis-text); margin-bottom:4px;}
-  .hl-card p{margin:0; font-size:14.5px; line-height:1.45; font-weight:600;}
+  .hl-card .hl-kicker, .rd-hl .hl-kicker{display:block; font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--hivis-text); margin-bottom:4px;}
+  .hl-card p{margin:0; font-size:15px; line-height:1.45; font-weight:600;}
   .rd-hl{border-left:3px solid var(--hivis); padding:2px 0 2px 12px; margin:0 0 14px;}
-  .rd-hl p{margin:0; font-size:13.5px; line-height:1.45; font-weight:600;}
+  .rd-hl p{margin:0; font-size:14px; line-height:1.45; font-weight:600;}
   .sum-pr{display:flex; align-items:center; gap:12px; border:1px solid var(--hivis); background:var(--hivis-dim);}
-  .sum-pr b{display:block; font-size:14.5px;} .sum-pr span:not(.sum-pr-medal){display:block; margin-top:2px; font-size:12.5px; color:var(--mist);}
+  .sum-pr b{display:block; font-size:15px;} .sum-pr span:not(.sum-pr-medal){display:block; margin-top:2px; font-size:13px; color:var(--mist);}
   .sum-pr-medal{width:30px; height:36px; flex:none;} .sum-pr-medal svg{width:100%; height:100%; display:block;}
   .sum-pr .mdl-rib{fill:var(--hivis-text); fill-opacity:.5;} .sum-pr .mdl-rib.b{fill-opacity:.32;} .sum-pr .mdl-disc{fill:var(--hivis); stroke:none; stroke-dasharray:none;}
   .sum-pr .mdl-ring{stroke:var(--ink); stroke-opacity:.3; stroke-width:1.4;} .sum-pr .mdl-star{fill:var(--ink); fill-opacity:1;}
   .quote-card{position:relative; padding:18px 20px 18px 56px; background:var(--asphalt-2);}
   .quote-mark{position:absolute; left:16px; top:10px; font-family:'Bebas Neue',sans-serif; font-size:68px; line-height:1; color:var(--hivis-text);}
-  .quote-card p{margin:0; font-size:15.5px; line-height:1.5; font-weight:600; color:var(--chalk);}
-  .coach-fab-wrap{--fab-size:70px;}
+  .quote-card p{margin:0; font-size:16px; line-height:1.5; font-weight:600; color:var(--chalk);}
+  .coach-fab-wrap{--fab-size:60px;}
   .coach-head-avatar{width:52px; height:52px;}
 
   /* Frase del día: insignia con comillas dibujadas, centrada con el texto */
@@ -2102,7 +2103,7 @@
 
   /* Frase del día: etiqueta chica en lima, sin comillas */
   .quote-card{display:block; padding:14px 18px 16px;}
-  .quote-card .quote-label{margin:0 0 6px; font-size:10.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--hivis-text);}
+  .quote-card .quote-label{margin:0 0 6px; font-size:11px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--hivis-text);}
   .quote-card p{font-size:15px;}
 
   /* Marcas estimadas: tarjeta desplegable */
@@ -2119,7 +2120,7 @@
   .pr-row.achieved{background:var(--hivis-dim); box-shadow:0 0 0 1px rgba(214,255,63,.18);}
   .pr-cup{width:42px; height:46px; flex:none;} .pr-cup svg{width:100%; height:100%; display:block;}
   .pr-info{flex:1; min-width:0;} .pr-info b{display:block; font-size:15px; font-weight:800;}
-  .pr-info small{display:block; margin-top:2px; font-size:11.5px; color:var(--mist); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .pr-info small{display:block; margin-top:2px; font-size:12px; color:var(--mist); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .pr-time{font-family:'Bebas Neue',sans-serif; font-size:28px; line-height:1; color:var(--hivis-text); letter-spacing:.01em;}
   .pr-share{width:36px; height:36px; padding:9px; border:none; border-radius:50%; background:rgba(0,0,0,.28); color:var(--hivis-text); cursor:pointer; flex:none; transition:transform .13s var(--ease-out);}
   .pr-share:active{transform:scale(.88);} .pr-share svg{width:100%; height:100%; display:block;}
@@ -2134,7 +2135,7 @@
 
   /* Hora del recordatorio diario */
   .reminder-row{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--asphalt-4);}
-  .reminder-row label{font-size:13.5px; font-weight:700;}
+  .reminder-row label{font-size:14px; font-weight:700;}
   .reminder-row select{background:var(--asphalt-3); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:8px 12px; border-radius:10px; font-size:15px; font-family:'JetBrains Mono',monospace; font-weight:700;}
 
   /* Plan: mover una sesión arrastrándola (mantener apretado) */
@@ -2162,13 +2163,13 @@
   .rp-entry{display:flex; align-items:center; gap:12px; cursor:pointer; background:var(--hivis-dim); border:1px solid rgba(214,255,63,.35);}
   .rp-entry:active{transform:scale(.99);}
   .rp-entry-ic{width:32px; height:32px; border-radius:50%; background:var(--hivis); color:var(--ink); display:flex; align-items:center; justify-content:center; flex:none;} .rp-entry-ic svg{width:17px; height:17px;}
-  .rp-entry-txt{flex:1; min-width:0;} .rp-entry-txt b{display:block; font-size:14px;} .rp-entry-txt span{display:block; margin-top:2px; font-size:12.5px; color:var(--mist);}
+  .rp-entry-txt{flex:1; min-width:0;} .rp-entry-txt b{display:block; font-size:14px;} .rp-entry-txt span{display:block; margin-top:2px; font-size:13px; color:var(--mist);}
   .rp-entry-chev{width:16px; height:16px; color:var(--mist); flex:none;} .rp-entry-chev svg{width:100%; height:100%; display:block;}
   .rp-head{font-family:'Bebas Neue',sans-serif; font-weight:400; font-size:36px; line-height:.95; margin:0 0 4px;}
-  .rp-when{font-size:12.5px; color:var(--mist); margin:0 0 14px;}
+  .rp-when{font-size:13px; color:var(--mist); margin:0 0 14px;}
   .rp-target{border:1.5px solid var(--hivis);}
   .rp-target-row{display:flex; justify-content:space-between; align-items:flex-end; gap:12px;}
-  .rp-lbl{font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; color:var(--mist);}
+  .rp-lbl{font-size:11px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; color:var(--mist);}
   .rp-big{font-family:'Bebas Neue',sans-serif; font-size:60px; line-height:.9; color:var(--hivis-text); margin-top:6px;}
   .rp-pace{font-family:'Bebas Neue',sans-serif; font-size:36px; line-height:.9; margin-top:6px; text-align:right;} .rp-pace small{font-size:13px; color:var(--mist); font-family:inherit;}
   .rp-note{margin:10px 0 0; font-size:12px; line-height:1.45; color:var(--mist);}
@@ -2292,10 +2293,10 @@
   #devices-overlay .card-shell-clay{background:none; border:none; padding:0; margin-top:16px;}
   /* Semana de Inicio: unidad junto al número */
   .ws-row .u{font-size:11px; color:var(--mist); margin-left:3px; margin-right:auto;}
-  .zone-chip{text-transform:uppercase; letter-spacing:.04em; font-size:10.5px;}
+  .zone-chip{text-transform:uppercase; letter-spacing:.04em; font-size:11px;}
   /* Detalle de carrera */
-  .pace-bar-row .pace-bar-label{width:32px; text-align:right; font-family:'JetBrains Mono',monospace; font-size:11.5px;}
-  .pace-bar-fill{font-family:'JetBrains Mono',monospace; font-size:11.5px;}
+  .pace-bar-row .pace-bar-label{width:32px; text-align:right; font-family:'JetBrains Mono',monospace; font-size:12px;}
+  .pace-bar-fill{font-family:'JetBrains Mono',monospace; font-size:12px;}
   .rd-big-dist{font-family:'Bebas Neue',sans-serif; font-size:56px; font-weight:400; line-height:.9; letter-spacing:.02em;}
   .rd-chart-wrap{position:relative;}
   .rd-ax{position:absolute; left:2px; font:9.5px 'JetBrains Mono',monospace; color:var(--mist-dim); pointer-events:none;}
@@ -2310,7 +2311,7 @@
   #geo-warning{background:var(--danger-dim); color:var(--danger-text); padding:12px 14px; border-radius:var(--radius-sm); font-size:13px; line-height:1.4; margin:10px 0 0; text-align:left;}
   #onboard .field label{text-transform:none; letter-spacing:0; font-size:14px; line-height:1.4; color:var(--chalk); font-weight:600;}
   #onboard .two-col .field label{text-transform:uppercase; letter-spacing:.07em; font-size:12px; color:var(--mist); font-weight:700;}
-  .ob-callout{background:var(--asphalt-2); border-left:3px solid var(--hivis); border-radius:var(--radius-sm); padding:12px 14px; color:var(--chalk); font-size:13.5px; line-height:1.5;}
+  .ob-callout{background:var(--asphalt-2); border-left:3px solid var(--hivis); border-radius:var(--radius-sm); padding:12px 14px; color:var(--chalk); font-size:14px; line-height:1.5;}
   .field textarea, #pain-note, #pain-update-note, #ob-healthnotes{width:100%; background:var(--asphalt-2) !important; border:1.5px solid var(--asphalt-4) !important; color:var(--chalk); padding:13px 15px !important; border-radius:var(--radius-sm); font:16px/1.4 inherit !important; resize:none !important; outline:none;}
   .field textarea:focus, #pain-note:focus, #pain-update-note:focus, #ob-healthnotes:focus{border-color:var(--hivis) !important; box-shadow:0 0 0 3px var(--hivis-dim);}
   /* selector de sesión programada / carrera libre: indicador de selección tipo radio */
@@ -2371,14 +2372,14 @@
   .adm-bars{display:flex; align-items:flex-end; gap:5px; height:84px; margin-top:14px;}
   .adm-bars .b{flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:4px;}
   .adm-bars .b i{display:block; width:100%; max-width:18px; border-radius:5px 5px 2px 2px; background:var(--hivis-text); min-height:2px;}
-  .adm-bars .b span{font-size:9.5px; color:var(--mist);}
+  .adm-bars .b span{font-size:10px; color:var(--mist);}
   .adm-bars .b em{font-style:normal; font-size:10px; font-weight:700; color:var(--chalk);}
-  .adm-row{display:grid; grid-template-columns:112px 1fr auto; gap:10px; align-items:center; margin-top:10px; font-size:13.5px;}
-  .adm-row .track{height:8px; border-radius:99px; background:var(--asphalt-3); overflow:hidden;}
-  .adm-row .track i{display:block; height:100%; border-radius:99px; background:var(--hivis-text);}
+  .adm-row{display:grid; grid-template-columns:112px 1fr auto; gap:10px; align-items:center; margin-top:10px; font-size:14px;}
+  .adm-row .track{height:8px; border-radius:999px; background:var(--asphalt-3); overflow:hidden;}
+  .adm-row .track i{display:block; height:100%; border-radius:999px; background:var(--hivis-text);}
   .adm-row .v{font-weight:800; font-variant-numeric:tabular-nums; min-width:34px; text-align:right;}
-  .adm-note{margin:10px 0 0; font-size:11.5px; line-height:1.45; color:var(--mist);}
-  .adm-err{padding:14px; border-radius:var(--radius-sm); background:var(--danger-dim); color:var(--danger-text); font-size:13.5px; line-height:1.45;}
+  .adm-note{margin:10px 0 0; font-size:12px; line-height:1.45; color:var(--mist);}
+  .adm-err{padding:14px; border-radius:var(--radius-sm); background:var(--danger-dim); color:var(--danger-text); font-size:14px; line-height:1.45;}
 
   /* Panel de administración: ⓘ, límites y definiciones */
   .adm-head{display:flex; align-items:center; justify-content:space-between; gap:8px;}
@@ -2386,19 +2387,19 @@
   .adm-info{width:var(--tap, 44px); height:var(--tap, 44px); margin:-10px -10px -10px 0; display:flex; align-items:center; justify-content:center; background:none; border:none; color:var(--mist); cursor:pointer; border-radius:50%;}
   .adm-info svg{width:20px; height:20px;}
   .adm-info.on{color:var(--hivis-text);}
-  .adm-help{margin:6px 0 4px; padding:12px 14px; border-radius:var(--radius-sm); background:var(--asphalt-3); font-size:12.5px; line-height:1.45; color:var(--mist);}
+  .adm-help{margin:6px 0 4px; padding:12px 14px; border-radius:var(--radius-sm); background:var(--asphalt-3); font-size:13px; line-height:1.45; color:var(--mist);}
   .adm-help[hidden]{display:none;}
   .adm-help dt{margin-top:8px; font-weight:800; color:var(--chalk);}
   .adm-help dt:first-child{margin-top:0;}
   .adm-help dd{margin:2px 0 0;}
   .adm-limit{margin-top:12px;}
-  .adm-limit .top{display:flex; justify-content:space-between; gap:10px; font-size:13.5px;}
+  .adm-limit .top{display:flex; justify-content:space-between; gap:10px; font-size:14px;}
   .adm-limit .top b{font-variant-numeric:tabular-nums; white-space:nowrap;}
-  .adm-limit .track{height:9px; border-radius:99px; background:var(--asphalt-3); overflow:hidden; margin-top:6px;}
-  .adm-limit .track i{display:block; height:100%; border-radius:99px; background:var(--zone2-fill);}
+  .adm-limit .track{height:9px; border-radius:999px; background:var(--asphalt-3); overflow:hidden; margin-top:6px;}
+  .adm-limit .track i{display:block; height:100%; border-radius:999px; background:var(--zone2-fill);}
   .adm-limit.mid .track i{background:var(--zone4-fill);}
   .adm-limit.hi .track i{background:var(--zone5-fill);}
-  .adm-limit .pct{margin-top:4px; font-size:11.5px; color:var(--mist);}
+  .adm-limit .pct{margin-top:4px; font-size:12px; color:var(--mist);}
   .adm-limit.mid .pct{color:var(--zone4); font-weight:700;}
   .adm-limit.hi .pct{color:var(--zone5-text); font-weight:800;}
 
@@ -2438,7 +2439,7 @@
   .rd-ax{font-size:11px; left:4px; padding:1px 5px; border-radius:6px; background:var(--asphalt-2); opacity:.92;}
   .rd-ax-top{top:2px;} .rd-ax-bot{bottom:2px;}
   /* Cambio de tema con un fundido corto (solo durante el cambio) */
-  html.theme-fade, html.theme-fade *, html.theme-fade *::before, html.theme-fade *::after{transition:background-color .26s ease, color .26s ease, border-color .26s ease, fill .26s ease, stroke .26s ease, box-shadow .26s ease !important;}
+  html.theme-fade, html.theme-fade *, html.theme-fade *::before, html.theme-fade *::after{transition:background-color .2s ease, color .2s ease, border-color .2s ease, fill .2s ease, stroke .2s ease, box-shadow .2s ease !important;}
   @media (prefers-reduced-motion:reduce){ html.theme-fade, html.theme-fade *, html.theme-fade *::before, html.theme-fade *::after{transition:none !important;} }
 
   /* =====================================================================================================================
@@ -2698,10 +2699,15 @@
   .swipe-item:not(:has(.swipe-content[style*="translate3d(-"])) .swipe-action-delete{visibility:hidden;}
   /* Al cambiar de pestana la vista entra deslizandose 18 px: sin esto la pagina se ensanchaba un instante y asomaba el scroll horizontal. clip no crea un contenedor de scroll, asi que lo fijo y lo pegajoso siguen igual */
   html, body{overflow-x:clip;}
+  :root:not([data-theme="light"]) .day-badge .muted, :root:not([data-theme="light"]) .pr-row.achieved small, :root:not([data-theme="light"]) .rp-range-cell.on span, :root:not([data-theme="light"]) .run-mode-card.active .muted{color:#A6ACAF;}
+  @media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) .day-badge .muted, :root:not([data-theme="dark"]) .pr-row.achieved small, :root:not([data-theme="dark"]) .rp-range-cell.on span, :root:not([data-theme="dark"]) .run-mode-card.active .muted{color:var(--mist);} }
   /* Respuesta al toque: lo que se podia tocar y no cambiaba al presionarlo (mismo gesto que el resto de la app: achicarse un poco o atenuarse) */
   .next-session, .pred-head, .trend-col, .avatar-big-wrap, .rd-tab-btn, #session-sheet .ss-close, .day-pill, .tap-pad,
-  #history-list [data-on-click*="shareRunImage"], [data-on-click="openRaceTipsInfo()"]{transition:transform .13s var(--ease-out), opacity .13s ease;}
-  .next-session:active, .avatar-big-wrap:active, .day-pill:active, #history-list [data-on-click*="shareRunImage"]:active{transform:scale(.96);}
+   [data-on-click="openRaceTipsInfo()"]{transition:transform .13s var(--ease-out), opacity .13s ease;}
+  .hist-share-btn{width:var(--tap); height:var(--tap); flex:none; display:flex; align-items:center; justify-content:center; border-radius:50%; border:none; background:var(--asphalt-3); color:var(--mist); cursor:pointer; transition:transform .13s var(--ease-out), background .13s ease;}
+  .hist-share-btn svg{width:18px; height:18px;}
+  .hist-share-btn:active{transform:scale(.92); background:var(--asphalt-4);}
+  .next-session:active, .avatar-big-wrap:active, .day-pill:active{transform:scale(.96);}
   .pred-head:active, .trend-col:active, .rd-tab-btn:active, #session-sheet .ss-close:active, .tap-pad:active, [data-on-click="openRaceTipsInfo()"]:active{opacity:.6;}
   .run-mode-card:active, .date-box:active, .choice:active{background:var(--press);}
   /* Medallas de Logros: las 3 columnas pueden achicarse (antes cada una pedia el ancho de su texto "Te faltan X km" y la tercera se salia de la tarjeta) */
@@ -2724,7 +2730,7 @@
     :lang(de) .rd3-row .choice-row{flex:1 0 100%;}
   }
   @media (max-width:340px){
-    .choice, .choice-row.segmented .choice{font-size:12.5px; padding-left:3px; padding-right:3px;}
+    .choice, .choice-row.segmented .choice{font-size:13px; padding-left:3px; padding-right:3px;}
     #perfil-gender-choice{flex-wrap:wrap; border-radius:18px;}
     #perfil-gender-choice .choice{flex:1 1 45%;}
   }
@@ -2779,12 +2785,12 @@ body{overflow-wrap:break-word;}
 #onboard .cw-section{margin:30px 4px 10px; font-size:13px; font-weight:700; color:var(--mist); letter-spacing:.01em;}
 #onboard .cw-list{display:flex; flex-direction:column; gap:10px; flex:1;}
 #onboard .cw-row{display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; min-height:68px; padding:12px 18px; border:0; border-radius:22px; text-align:left; font:inherit; color:var(--g-ink); cursor:pointer;
-  background:var(--g-fill); box-shadow:var(--g-rim), var(--g-shadow); transition:transform .12s ease, background .18s ease;}
+  background:var(--g-fill); box-shadow:var(--g-rim), var(--g-shadow); transition:transform .13s ease, background .2s ease;}
 #onboard .cw-row:active:not(:disabled){transform:scale(.985);}
 #onboard .cw-left{display:flex; flex-direction:column; align-items:flex-start; gap:4px; min-width:0;}
-#onboard .cw-name{font-size:14.5px; font-weight:700; color:var(--g-ink);}
+#onboard .cw-name{font-size:15px; font-weight:700; color:var(--g-ink);}
 #onboard .cw-sub{font-size:12px; color:var(--mist);}
-#onboard .cw-action{flex-shrink:0; font-size:14.5px; font-weight:700; color:var(--hivis-text);}
+#onboard .cw-action{flex-shrink:0; font-size:15px; font-weight:700; color:var(--hivis-text);}
 :root[data-theme="light"] #onboard .cw-action{color:#0A5BD8;}
 @media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #onboard .cw-action{color:#0A5BD8;} }
 #onboard .cw-row.on{background:var(--g-fill-on); box-shadow:inset 0 0 0 1.5px var(--g-ring), inset 0 1px 0 var(--g-edge-top);}
@@ -2814,9 +2820,9 @@ body{overflow-wrap:break-word;}
 /* opciones: tarjetas de vidrio apiladas con círculo de selección */
 #onboard .ob-options{display:flex; flex-direction:column; gap:10px; margin-top:30px; flex-wrap:nowrap; background:none; padding:0;}
 #onboard .ob-options .choice{position:relative; display:flex; align-items:center; justify-content:flex-start; text-align:left; min-height:60px; padding:0 58px 0 20px; border:0; border-radius:22px; flex:none;
-  font-size:16.5px; font-weight:600; color:var(--g-ink); background:var(--g-fill);
-  box-shadow:var(--g-rim), var(--g-shadow); transition:background .18s ease, transform .12s ease;}
-#onboard .ob-options .choice::after{content:''; position:absolute; right:20px; top:50%; width:24px; height:24px; margin-top:-12px; border-radius:50%; box-sizing:border-box; border:2px solid var(--mist); opacity:.55; transition:all .18s ease;}
+  font-size:17px; font-weight:600; color:var(--g-ink); background:var(--g-fill);
+  box-shadow:var(--g-rim), var(--g-shadow); transition:background .2s ease, transform .13s ease;}
+#onboard .ob-options .choice::after{content:''; position:absolute; right:20px; top:50%; width:24px; height:24px; margin-top:-12px; border-radius:50%; box-sizing:border-box; border:2px solid var(--mist); opacity:.55; transition:all .2s ease;}
 #onboard .ob-options .choice.active{background:var(--g-fill-on); box-shadow:inset 0 0 0 1.5px var(--g-ring), inset 0 1px 0 var(--g-edge-top), var(--g-shadow);}
 #onboard .ob-options .choice.active::after{opacity:1; border-color:var(--g-ring); background:var(--g-ring) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5.5 12.5l4.2 4.2L18.5 8'/%3E%3C/svg%3E") center/70% no-repeat;}
 :root:not([data-theme="light"]) #onboard .ob-options .choice.active::after{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23101200' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5.5 12.5l4.2 4.2L18.5 8'/%3E%3C/svg%3E");}
@@ -2825,7 +2831,7 @@ body{overflow-wrap:break-word;}
 #onboard .ob-options.ob-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
 #onboard .ob-options.ob-grid .choice{min-height:54px; padding:0 14px; justify-content:center; text-align:center; font-size:15px;}
 #onboard .ob-options.ob-grid .choice::after{display:none;}
-#onboard #ob-referral .choice{justify-content:flex-start; gap:10px; text-align:left; font-size:14.5px; padding:0 12px;}
+#onboard #ob-referral .choice{justify-content:flex-start; gap:10px; text-align:left; font-size:15px; padding:0 12px;}
 #onboard #ob-referral .ob-ref-ic{width:21px; height:21px; flex:none;}
 
 /* campos: vidrio, texto grande centrado */
@@ -2850,8 +2856,8 @@ body{overflow-wrap:break-word;}
 @media (prefers-color-scheme:light){ :root:not([data-theme="dark"]) #onboard .day-pill.active{color:#fff;} }
 
 /* botón principal: píldora con reflejo; texto "Omitir" suave debajo */
-#onboard .ob-cta, #consent-modal .ob-cta{width:100%; height:58px; border:0; border-radius:999px; font-size:16.5px; font-weight:700; letter-spacing:.005em; color:var(--g-cta-text); position:relative; overflow:hidden;
-  background:linear-gradient(180deg, var(--g-cta-top), var(--g-cta-bot)); box-shadow:none; transition:transform .12s ease, opacity .18s ease;}
+#onboard .ob-cta, #consent-modal .ob-cta{width:100%; height:58px; border:0; border-radius:999px; font-size:17px; font-weight:700; letter-spacing:.005em; color:var(--g-cta-text); position:relative; overflow:hidden;
+  background:linear-gradient(180deg, var(--g-cta-top), var(--g-cta-bot)); box-shadow:none; transition:transform .13s ease, opacity .2s ease;}
 #onboard .ob-cta::before, #consent-modal .ob-cta::before{content:''; position:absolute; inset:0 0 52% 0; border-radius:inherit; pointer-events:none; background:linear-gradient(180deg, var(--g-sheen), transparent);}
 #onboard .ob-cta:active:not(:disabled), #consent-modal .ob-cta:active:not(:disabled){transform:scale(.98);}
 #onboard .ob-cta:disabled, #consent-modal .ob-cta:disabled{opacity:.34;}
@@ -2859,7 +2865,7 @@ body{overflow-wrap:break-word;}
   @keyframes btn-busy-spin{to{transform:rotate(360deg);}}
   @media (prefers-reduced-motion:reduce){ .btn.is-busy::before{animation:none; border-right-color:currentColor; opacity:.5;} }
   body.strava-sunset .conn-strava{display:none;}
-  .next-session-total{margin:8px 2px 0; font-size:12.5px; line-height:1.4; color:var(--mist);}
+  .next-session-total{margin:8px 2px 0; font-size:13px; line-height:1.4; color:var(--mist);}
   .next-session-total:empty{display:none;}
   .watch-card h3{margin:0 0 6px;}
   .watch-row{padding:12px 0; border-top:1px solid var(--overlay-hairline);}
@@ -2869,7 +2875,7 @@ body{overflow-wrap:break-word;}
   .watch-dot.sent{background:var(--hivis-text);}
   .watch-actions{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;}
   .watch-actions .btn{flex:1 1 150px;}   /* los dos botones del mismo ancho (cada uno ocupa toda la fila cuando no entran juntos) */
-  .watch-steps{margin:12px 0 0; padding-left:20px; font-size:13.5px; line-height:1.5; color:var(--mist);}
+  .watch-steps{margin:12px 0 0; padding-left:20px; font-size:14px; line-height:1.5; color:var(--mist);}
   .watch-steps li{margin:0 0 6px;}
   .watch-note{margin:8px 0 0; font-size:12px; line-height:1.4; color:var(--mist);}
   .cs-decline-note{margin:2px 6px 0; text-align:center; font-size:12px; line-height:1.4; color:var(--mist);}
@@ -2881,7 +2887,7 @@ body{overflow-wrap:break-word;}
 #onboard .ob-done-mark{width:88px; height:88px; margin:6vh 0 24px; border-radius:50%; display:grid; place-items:center; color:#101200;
   background:var(--hivis); box-shadow:none;}
 #onboard .ob-done-mark svg{width:42px; height:42px;}
-#onboard .ob-callout{margin:26px 0 0; border:0; border-radius:20px; background:var(--g-fill); box-shadow:var(--g-rim); color:var(--g-ink); text-align:left;}
+#onboard .ob-callout{margin:26px 0 0; border:0; border-radius:var(--radius); background:var(--g-fill); box-shadow:var(--g-rim); color:var(--g-ink); text-align:left;}
 
 /* desenfoque real, solo donde se banca y sin "reducir transparencia" */
 }
@@ -2891,10 +2897,10 @@ body{overflow-wrap:break-word;}
 #session-sheet .ss-top{display:flex; justify-content:space-between; align-items:center;}
 #session-sheet .ss-close{width:44px; height:44px; flex:0 0 44px; border:0; border-radius:50%; display:grid; place-items:center; color:var(--g-ink); cursor:pointer;
   background:var(--g-fill); box-shadow:var(--g-rim), var(--g-shadow);}
-.ss-title{margin:20px 0 12px; font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text',Inter,system-ui,sans-serif; font-size:clamp(22px,6.2vw,27px); font-weight:700; line-height:1.2; letter-spacing:-.02em; color:var(--g-ink); text-transform:none;}
+.ss-title{margin:20px 0 12px; font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text',Inter,system-ui,sans-serif; font-size:22px; font-weight:700; line-height:1.2; letter-spacing:-.02em; color:var(--g-ink); text-transform:none;}
 .ss-chips{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 16px;}
 .ss-chip{font-size:13px; font-weight:700; padding:6px 12px; border-radius:999px; color:var(--g-ink); background:var(--g-fill); box-shadow:var(--g-rim);}
-.ss-card{margin:0 0 14px; padding:18px; border-radius:22px; background:var(--g-fill); box-shadow:var(--g-rim), var(--g-shadow);}
+.ss-card{margin:0 0 14px; padding:18px; border-radius:var(--radius); background:var(--g-fill); box-shadow:var(--g-rim), var(--g-shadow);}
 .ss-bars{display:flex; gap:3px; height:64px; margin-bottom:18px;}
 .ss-bar{display:block; min-width:4px; border-radius:8px;}
 .ss-block h4{margin:16px 0 4px; font-size:16px; font-weight:700; color:var(--g-ink); text-transform:none; letter-spacing:0;}
@@ -2913,12 +2919,12 @@ body{overflow-wrap:break-word;}
 .rd-score-ring{width:96px; height:96px; flex:0 0 96px;}
 .rd-score-num{font:800 34px/1 -apple-system,BlinkMacSystemFont,'SF Pro Display',Inter,system-ui,sans-serif;}
 .rd-score-label{margin:0 0 4px; font-size:20px; font-weight:700; color:var(--g-ink); text-transform:none; letter-spacing:0;}
-.rd-score-text{margin:0; font-size:13.5px; line-height:1.5; color:var(--mist);}
+.rd-score-text{margin:0; font-size:14px; line-height:1.5; color:var(--mist);}
 
 /* "Activá las notificaciones" (pantalla 18 del inicio) */
 #onboard .np-bell{margin:6vh 0 24px; width:92px; height:92px; border-radius:50%; display:grid; place-items:center; color:#101200; background:var(--hivis); box-shadow:none;}
 #onboard .np-list{list-style:none; margin:28px 0 0; padding:0; width:100%; display:flex; flex-direction:column; gap:10px;}
-#onboard .np-list li{padding:16px 18px; border-radius:20px; text-align:left; font-size:15px; font-weight:600; line-height:1.4; color:var(--g-ink); background:var(--g-fill); box-shadow:var(--g-rim), var(--g-shadow);}
+#onboard .np-list li{padding:16px 18px; border-radius:var(--radius); text-align:left; font-size:15px; font-weight:600; line-height:1.4; color:var(--g-ink); background:var(--g-fill); box-shadow:var(--g-rim), var(--g-shadow);}
 
 
 /* Consentimientos antes de empezar: todo en una pantalla de vidrio, con "Aceptar todo" y un ⓘ que explica cada uno */
@@ -2930,14 +2936,14 @@ body{overflow-wrap:break-word;}
 #consent-modal .cs-lead{margin:8px 0 18px; font-size:15px; line-height:1.5; color:var(--mist);}
 #consent-modal .cs-card{background:var(--g-fill); border-radius:22px; padding:6px 16px 14px; box-shadow:var(--g-rim), var(--g-shadow);}
 #consent-modal .cs-row{margin-top:14px; align-items:flex-start;}
-#consent-modal .cs-row span{font-size:14.5px; line-height:1.45; color:var(--g-ink);}
+#consent-modal .cs-row span{font-size:15px; line-height:1.45; color:var(--g-ink);}
 #consent-modal .cs-row a{color:var(--g-ink); text-decoration:underline;}
 #consent-modal .cs-all{padding-bottom:14px; border-bottom:1px solid var(--g-edge-bot);}
 #consent-modal .cs-all span{font-size:17px; font-weight:700;}
 #consent-modal .ob-cta{margin-top:auto; flex:none;}
 #consent-modal .cs-card + .ob-cta{margin-top:24px;}
-#consent-modal .cs-info{padding-top:14px; font-size:14.5px; line-height:1.55; color:var(--g-ink);}
-#consent-modal .cs-info h3{margin:0 0 6px; font-size:16.5px; font-weight:800;}
+#consent-modal .cs-info{padding-top:14px; font-size:15px; line-height:1.55; color:var(--g-ink);}
+#consent-modal .cs-info h3{margin:0 0 6px; font-size:17px; font-weight:800;}
 #consent-modal .cs-info p{margin:0 0 10px; color:var(--g-ink);}
 #consent-modal .cs-info ul{margin:0 0 10px; padding-left:20px;}
 #consent-modal .cs-info li{margin:4px 0;}
@@ -2948,7 +2954,7 @@ body{overflow-wrap:break-word;}
    -- igual que el splash nativo de Android, para que el paso de uno al otro no se note. La marca ocupa
    exactamente la misma posicion y tamano (150px de ancho, centrada). Se retira desde zcBootDone(). */
 #boot{position:fixed;inset:0;z-index:2147483000;background:#0A0A0A;display:flex;align-items:center;justify-content:center;
-  opacity:1;transition:opacity .34s cubic-bezier(.23,1,.32,1);}
+  opacity:1;transition:opacity .3s cubic-bezier(.23,1,.32,1);}
 #boot.zc-boot-out{opacity:0;pointer-events:none;}
 /* Arranque en claro: fondo crema y barra en oliva (el atributo de tema ya se puso en el <head>, antes de pintar) */
 :root[data-theme="light"] #boot{background:#F2F4EC;}
@@ -2961,7 +2967,7 @@ body{overflow-wrap:break-word;}
   :root:not([data-theme="dark"]) #boot .boot-bar{background:rgba(111,143,0,.18);}
   :root:not([data-theme="dark"]) #boot .boot-bar::after{background:#8DB600;}
 }
-#boot .boot-mark{width:150px;height:auto;display:block;transition:transform .34s cubic-bezier(.23,1,.32,1);}
+#boot .boot-mark{width:150px;height:auto;display:block;transition:transform .3s cubic-bezier(.23,1,.32,1);}
 #boot.zc-boot-out .boot-mark{transform:scale(1.035);}
 #boot .boot-bar{position:absolute;left:50%;top:calc(50% + 74px);width:56px;height:2px;margin-left:-28px;border-radius:2px;
   background:rgba(214,255,63,.14);overflow:hidden;opacity:0;animation:boot-bar-in .3s ease-out .55s forwards;}
@@ -2979,9 +2985,9 @@ body{overflow-wrap:break-word;}
 #boot .bs-row{display:flex;justify-content:space-between;align-items:center;}
 #boot .bs-brand{width:112px;height:18px;} #boot .bs-date{width:72px;height:12px;}
 #boot .bs-hello{width:200px;height:32px;margin-top:28px;border-radius:12px;}
-#boot .bs-chip{width:150px;height:28px;margin-top:14px;border-radius:14px;}
+#boot .bs-chip{width:150px;height:28px;margin-top:14px;border-radius:var(--radius-sm);}
 #boot .bs-label{width:56px;height:10px;margin-top:30px;}
-#boot .bs-card{margin-top:12px;border-radius:20px;background:var(--asphalt-2,#18181B);}
+#boot .bs-card{margin-top:12px;border-radius:var(--radius);background:var(--asphalt-2,#18181B);}
 #boot .bs-hero{height:176px;} #boot .bs-mid{height:112px;margin-top:16px;} #boot .bs-tall{height:190px;}
 #boot .bs-tabbar{position:fixed;left:14px;right:14px;bottom:calc(14px + env(safe-area-inset-bottom,0px));max-width:452px;margin:0 auto;height:66px;border-radius:30px;background:var(--asphalt-2,#18181B);display:flex;align-items:center;justify-content:space-around;padding:0 10px;}
 #boot .bs-tabbar .sk{width:30px;height:30px;border-radius:50%;} #boot .bs-tabbar .bs-run{width:52px;height:52px;margin-top:-22px;}
@@ -3050,7 +3056,7 @@ body{overflow-wrap:break-word;}
     </div>
     <label class="legal-checkbox-row" for="login-remember-me" style="margin-top:0; margin-bottom:18px; align-items:center;">
       <input type="checkbox" id="login-remember-me" checked>
-      <span style="font-size:13.5px; color:var(--chalk);" data-i18n="login_remember_me"></span>
+      <span style="font-size:14px; color:var(--chalk);" data-i18n="login_remember_me"></span>
     </label>
     <div class="field"><button type="submit" class="btn btn-primary" id="login-submit-btn" data-i18n="login_continue"></button></div>
     </form>
@@ -3467,79 +3473,9 @@ body{overflow-wrap:break-word;}
 
   <section class="view" id="view-inicio">
     <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:14px 0 4px;">
-      <p class="greeting" style="margin:0;"><span id="home-hi"></span> <span id="home-name" style="font-weight:800;">—</span> 👋</p>
+      <p class="greeting" style="margin:0;"><span id="home-hi"></span> <span id="home-name" style="font-weight:800;">—</span></p>
       <div class="streak-badge" id="home-streak-badge" style="display:none; cursor:pointer;" data-on-click="openPreferencesOverlay()"></div>
       <div class="wx-chip" id="home-wx" style="display:none;"></div>
-    </div>
-
-    <div class="card" id="history-calib-card" style="display:none;">
-      <h3 data-i18n="calib_title"></h3>
-      <p class="muted" id="history-calib-text" style="margin:2px 0 14px;"></p>
-      <button class="btn btn-primary" data-on-click="applyHistoryCalibration()" data-i18n="calib_apply"></button>
-      <button class="small-link" style="display:block; margin:12px auto 0;" data-on-click="dismissHistoryCalibration()" data-i18n="hist_import_skip"></button>
-    </div>
-
-    <div class="card" id="home-test-banner" style="display:none; border-color:var(--hivis);">
-      <h3 style="margin:0 0 6px;" data-i18n="ltest_banner_title"></h3>
-      <p class="muted" style="margin:0 0 12px; font-size:13px; line-height:1.5;" data-i18n="ltest_banner_desc"></p>
-      <button class="btn btn-primary" style="width:100%;" data-on-click="openLevelTest()" data-i18n="ltest_banner_btn"></button>
-    </div>
-
-    <div class="card" id="home-test-missed" style="display:none; border-color:var(--hivis);">
-      <h3 style="margin:0 0 6px;" data-i18n="ltest_missed_title"></h3>
-      <p class="muted" id="home-test-missed-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
-      <button class="btn btn-primary" style="width:100%;" data-on-click="openLevelTestSchedule()" data-i18n="ltest_missed_btn"></button>
-    </div>
-
-    <div class="card" id="home-weekdays-card" style="display:none;">
-      <h3 id="home-weekdays-title" style="margin:0 0 6px;" data-i18n="weekdays_title"></h3>
-      <p class="muted" style="margin:0 0 12px; font-size:13px; line-height:1.5;" data-i18n="weekdays_desc"></p>
-      <div class="day-picker" id="home-weekdays-picker" role="group" aria-labelledby="home-weekdays-title" style="margin-bottom:12px;"></div>
-      <button class="btn btn-primary" style="width:100%;" data-on-click="confirmNextWeekDays()" data-i18n="weekdays_confirm"></button>
-      <button class="small-link" style="display:block; margin:10px auto 0;" data-on-click="dismissNextWeekDays()" data-i18n="weekdays_keep"></button>
-    </div>
-
-    <div class="card" id="home-adjust-card" style="display:none;">
-      <h3 style="margin:0 0 6px;" data-i18n="adjust_title"></h3>
-      <p class="muted" id="home-adjust-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
-      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-primary" data-on-click="askZondaAdjustWeek()" data-i18n="adjust_btn"></button><button class="small-link" data-on-click="dismissAdjustWeek()" data-i18n="adjust_later"></button></div>
-    </div>
-
-    <div class="card" id="home-load-card" style="display:none; border-color:var(--hivis);">
-      <h3 style="margin:0 0 6px;" data-i18n="load_title"></h3>
-      <p class="muted" id="home-load-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
-      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-primary" data-on-click="askZondaLowerLoad()" data-i18n="load_btn"></button><button class="small-link" data-on-click="dismissLoadCard()" data-i18n="load_ok"></button></div>
-    </div>
-
-    <div class="card" id="home-return-card" style="display:none; border-color:var(--hivis);">
-      <h3 style="margin:0 0 6px;" id="home-return-title"></h3>
-      <p class="muted" id="home-return-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
-      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-primary" data-on-click="applyReturnPlan()" data-i18n="return_btn"></button><button class="small-link" data-on-click="dismissReturnCard()" data-i18n="return_later"></button></div>
-    </div>
-
-    <div class="card" id="home-pain-card" style="display:none; border-color:var(--hivis);">
-      <h3 style="margin:0 0 12px;" id="home-pain-title"></h3>
-      <div class="choice-row segmented" id="home-pain-choice">
-        <div class="choice" data-v="better" data-i18n="pain_trend_better"></div>
-        <div class="choice" data-v="same" data-i18n="pain_trend_same"></div>
-        <div class="choice" data-v="worse" data-i18n="pain_trend_worse"></div>
-      </div>
-      <div class="recap-actions" style="margin-top:10px;"><button class="small-link" data-on-click="dismissHomePain()" data-i18n="pain_home_later"></button></div>
-    </div>
-
-    <div class="card" id="home-recal-card" style="display:none; border-color:var(--hivis);">
-      <h3 style="margin:0 0 6px;" id="home-recal-title"></h3>
-      <p class="muted" id="home-recal-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
-      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-primary" data-on-click="startRecalibration()" data-i18n="recal_btn"></button><button class="small-link" data-on-click="dismissRecal()" data-i18n="recal_later"></button></div>
-    </div>
-
-    <div class="card recap-card" id="home-recap-card" style="display:none;"></div>
-
-    <div class="card" id="install-banner" style="display:none; align-items:center; gap:12px;">
-      <span class="icon-sq" style="width:22px; height:22px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
-      <p id="install-banner-text" style="flex:1; min-width:0; margin:0; font-size:13px; line-height:1.4; color:var(--mist);"></p>
-      <button class="btn btn-primary btn-sm" id="install-banner-btn" style="flex-shrink:0; display:none;" data-on-click="triggerInstallPrompt()"></button>
-      <button class="info-btn" data-on-click="dismissInstallBanner()" style="flex-shrink:0;" data-i18n-aria="aria_close"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span></button>
     </div>
 
     <div class="home-section-label" data-i18n="home_section_today"></div>
@@ -3575,6 +3511,76 @@ body{overflow-wrap:break-word;}
     </div>
     </div>
 
+    <div class="card" id="history-calib-card" style="display:none;">
+      <h3 data-i18n="calib_title"></h3>
+      <p class="muted" id="history-calib-text" style="margin:2px 0 14px;"></p>
+      <button class="btn btn-outline" data-on-click="applyHistoryCalibration()" data-i18n="calib_apply"></button>
+      <button class="small-link" style="display:block; margin:12px auto 0;" data-on-click="dismissHistoryCalibration()" data-i18n="hist_import_skip"></button>
+    </div>
+
+    <div class="card" id="home-test-banner" style="display:none; border-color:var(--hivis);">
+      <h3 style="margin:0 0 6px;" data-i18n="ltest_banner_title"></h3>
+      <p class="muted" style="margin:0 0 12px; font-size:13px; line-height:1.5;" data-i18n="ltest_banner_desc"></p>
+      <button class="btn btn-primary" style="width:100%;" data-on-click="openLevelTest()" data-i18n="ltest_banner_btn"></button>
+    </div>
+
+    <div class="card" id="home-test-missed" style="display:none;">
+      <h3 style="margin:0 0 6px;" data-i18n="ltest_missed_title"></h3>
+      <p class="muted" id="home-test-missed-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
+      <button class="btn btn-outline" style="width:100%;" data-on-click="openLevelTestSchedule()" data-i18n="ltest_missed_btn"></button>
+    </div>
+
+    <div class="card" id="home-weekdays-card" style="display:none;">
+      <h3 id="home-weekdays-title" style="margin:0 0 6px;" data-i18n="weekdays_title"></h3>
+      <p class="muted" style="margin:0 0 12px; font-size:13px; line-height:1.5;" data-i18n="weekdays_desc"></p>
+      <div class="day-picker" id="home-weekdays-picker" role="group" aria-labelledby="home-weekdays-title" style="margin-bottom:12px;"></div>
+      <button class="btn btn-outline" style="width:100%;" data-on-click="confirmNextWeekDays()" data-i18n="weekdays_confirm"></button>
+      <button class="small-link" style="display:block; margin:10px auto 0;" data-on-click="dismissNextWeekDays()" data-i18n="weekdays_keep"></button>
+    </div>
+
+    <div class="card" id="home-adjust-card" style="display:none;">
+      <h3 style="margin:0 0 6px;" data-i18n="adjust_title"></h3>
+      <p class="muted" id="home-adjust-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
+      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-outline" data-on-click="askZondaAdjustWeek()" data-i18n="adjust_btn"></button><button class="small-link" data-on-click="dismissAdjustWeek()" data-i18n="adjust_later"></button></div>
+    </div>
+
+    <div class="card" id="home-load-card" style="display:none; border-color:var(--clay);">
+      <h3 style="margin:0 0 6px;" data-i18n="load_title"></h3>
+      <p class="muted" id="home-load-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
+      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-outline" data-on-click="askZondaLowerLoad()" data-i18n="load_btn"></button><button class="small-link" data-on-click="dismissLoadCard()" data-i18n="load_ok"></button></div>
+    </div>
+
+    <div class="card" id="home-return-card" style="display:none;">
+      <h3 style="margin:0 0 6px;" id="home-return-title"></h3>
+      <p class="muted" id="home-return-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
+      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-outline" data-on-click="applyReturnPlan()" data-i18n="return_btn"></button><button class="small-link" data-on-click="dismissReturnCard()" data-i18n="return_later"></button></div>
+    </div>
+
+    <div class="card" id="home-pain-card" style="display:none;">
+      <h3 style="margin:0 0 12px;" id="home-pain-title"></h3>
+      <div class="choice-row segmented" id="home-pain-choice">
+        <div class="choice" data-v="better" data-i18n="pain_trend_better"></div>
+        <div class="choice" data-v="same" data-i18n="pain_trend_same"></div>
+        <div class="choice" data-v="worse" data-i18n="pain_trend_worse"></div>
+      </div>
+      <div class="recap-actions" style="margin-top:10px;"><button class="small-link" data-on-click="dismissHomePain()" data-i18n="pain_home_later"></button></div>
+    </div>
+
+    <div class="card" id="home-recal-card" style="display:none;">
+      <h3 style="margin:0 0 6px;" id="home-recal-title"></h3>
+      <p class="muted" id="home-recal-desc" style="margin:0 0 12px; font-size:13px; line-height:1.5;"></p>
+      <div class="recap-actions" style="margin-top:0;"><button class="btn btn-outline" data-on-click="startRecalibration()" data-i18n="recal_btn"></button><button class="small-link" data-on-click="dismissRecal()" data-i18n="recal_later"></button></div>
+    </div>
+
+    <div class="card recap-card" id="home-recap-card" style="display:none;"></div>
+
+    <div class="card" id="install-banner" style="display:none; align-items:center; gap:12px;">
+      <span class="icon-sq" style="width:22px; height:22px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+      <p id="install-banner-text" style="flex:1; min-width:0; margin:0; font-size:13px; line-height:1.4; color:var(--mist);"></p>
+      <button class="btn btn-outline btn-sm" id="install-banner-btn" style="flex-shrink:0; display:none;" data-on-click="triggerInstallPrompt()"></button>
+      <button class="info-btn" data-on-click="dismissInstallBanner()" style="flex-shrink:0;" data-i18n-aria="aria_close"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span></button>
+    </div>
+
     <div class="card" id="readiness-card" style="display:none;">
       <h3 style="margin:0 0 12px;" data-i18n="readiness_title3"></h3>
       <div class="rd3-row"><span class="rd3-lbl" data-i18n="readiness_q_sleep"></span>
@@ -3601,7 +3607,7 @@ body{overflow-wrap:break-word;}
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
         <div style="min-width:0;">
           <h3 style="margin:0 0 6px;" data-i18n="home_race_card_title"></h3>
-          <p style="margin:0; font-size:14.5px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" id="home-race-name">—</p>
+          <p style="margin:0; font-size:15px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" id="home-race-name">—</p>
           <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
             <span class="tag" id="home-race-type-tag" style="display:inline-block;"></span>
             <span class="tag tag-asfalto" id="home-race-phase-tag" style="display:none;"></span>
@@ -3612,7 +3618,7 @@ body{overflow-wrap:break-word;}
           <div class="muted" style="font-size:11px; margin-top:2px;" data-i18n="perfil_event_days"></div>
         </div>
       </div>
-      <p class="muted" id="home-race-phase-note" style="font-size:12.5px; margin:10px 0 0; display:none; line-height:1.4;"></p>
+      <p class="muted" id="home-race-phase-note" style="font-size:13px; margin:10px 0 0; display:none; line-height:1.4;"></p>
     </div>
 
     <div class="card rp-entry" id="home-raceplan-entry" role="button" tabindex="0" data-on-click="openRacePlan()" style="display:none;">
@@ -3643,7 +3649,7 @@ body{overflow-wrap:break-word;}
         <h3 style="margin:0;" data-i18n="home_load_title"></h3>
         <span class="tag" id="load-tag"></span>
       </div>
-      <p class="muted" id="load-hint" style="margin:0; font-size:12.5px;"></p>
+      <p class="muted" id="load-hint" style="margin:0; font-size:13px;"></p>
     </div>
 
     <div class="card" id="goal-progress-wrap" style="display:none;">
@@ -3670,7 +3676,7 @@ body{overflow-wrap:break-word;}
       </div>
       <div style="display:flex; gap:12px; align-items:flex-start; margin-top:10px;">
         <span class="icon-sq" style="width:20px; height:20px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4.5s2-1.3 4.5-1.3 3.5 1.5 6 1.5 3.5-1 3.5-1v9s-1.5 1-3.5 1-3.5-1.5-6-1.5-4.5 1.3-4.5 1.3z"/></svg></span>
-        <p id="race-tip-text" style="margin:0; font-size:14.5px; line-height:1.5; color:var(--mist);"></p>
+        <p id="race-tip-text" style="margin:0; font-size:15px; line-height:1.5; color:var(--mist);"></p>
       </div>
     </div>
 
@@ -3724,7 +3730,7 @@ body{overflow-wrap:break-word;}
       <h3 data-i18n="ltest_perfil_title"></h3>
       <p class="muted" id="perfil-ltest-text" style="margin-top:8px; font-size:13px; line-height:1.5;"></p>
       <p id="perfil-ltest-sched" style="display:none; margin-top:8px; font-size:13px; font-weight:700; color:var(--hivis-text);"></p>
-      <button class="btn btn-primary" style="width:100%; margin-top:12px;" data-on-click="openLevelTestSchedule()" data-i18n="ltest_perfil_btn"></button>
+      <button class="btn btn-outline" style="width:100%; margin-top:12px;" data-on-click="openLevelTestSchedule()" data-i18n="ltest_perfil_btn"></button>
     </div>
     <div id="past-weeks-card" style="display:none; margin-top:14px;">
       <button type="button" class="btn btn-gray" id="past-weeks-toggle" aria-expanded="false" aria-controls="past-weeks-list-wrap" data-on-click="togglePastWeeks()" style="justify-content:space-between;">
@@ -3800,7 +3806,7 @@ body{overflow-wrap:break-word;}
           <line class="rbr-finish" x1="90" y1="262" x2="145" y2="262"/>
           <line class="rbr-finish rbr-finish-dim" x1="90" y1="254" x2="145" y2="254"/>
         </svg></div>
-        <button class="go-circle" data-on-click="startRun()"><span class="display" data-i18n="run_start"></span><span style="font-size:12.5px; opacity:.7; margin-top:2px;" data-i18n="run_start_hint"></span></button>
+        <button class="go-circle" data-on-click="startRun()"><span class="display" data-i18n="run_start"></span><span style="font-size:13px; opacity:.7; margin-top:2px;" data-i18n="run_start_hint"></span></button>
       </div>
     </div>
 
@@ -3868,9 +3874,9 @@ body{overflow-wrap:break-word;}
             </div>
             <div class="mono" id="workout-guide-target" style="font-size:30px; font-weight:800; margin-top:10px;"></div>
             <div style="height:8px; background:var(--asphalt-3); border-radius:4px; overflow:hidden; margin-top:10px;">
-              <div id="workout-guide-progress-bar" style="height:100%; background:var(--hivis); width:100%; transform:scaleX(0); transform-origin:left; transition:transform .25s linear;"></div>
+              <div id="workout-guide-progress-bar" style="height:100%; background:var(--hivis); width:100%; transform:scaleX(0); transform-origin:left; transition:transform .2s linear;"></div>
             </div>
-            <p class="muted" id="workout-guide-remaining" style="margin:6px 0 0; font-size:12.5px;"></p>
+            <p class="muted" id="workout-guide-remaining" style="margin:6px 0 0; font-size:13px;"></p>
           </div>
           <!-- Calentamiento y vuelta a la calma (siempre por tiempo, también en el plan por distancia). Los maneja wcTick() en app.js. -->
           <div id="workout-guide-warmcool" style="display:none;">
@@ -3879,10 +3885,10 @@ body{overflow-wrap:break-word;}
             </div>
             <div class="mono" id="workout-guide-wc-time" style="font-size:30px; font-weight:800; margin-top:10px;"></div>
             <div style="height:8px; background:var(--asphalt-3); border-radius:4px; overflow:hidden; margin-top:10px;">
-              <div id="workout-guide-wc-bar" style="height:100%; background:var(--hivis); width:100%; transform:scaleX(0); transform-origin:left; transition:transform .25s linear;"></div>
+              <div id="workout-guide-wc-bar" style="height:100%; background:var(--hivis); width:100%; transform:scaleX(0); transform-origin:left; transition:transform .2s linear;"></div>
             </div>
-            <p class="muted" id="workout-guide-wc-hint" style="margin:8px 0 0; font-size:12.5px; line-height:1.5;"></p>
-            <p class="muted" id="workout-guide-wc-next" style="margin:4px 0 0; font-size:12.5px; line-height:1.5;"></p>
+            <p class="muted" id="workout-guide-wc-hint" style="margin:8px 0 0; font-size:13px; line-height:1.5;"></p>
+            <p class="muted" id="workout-guide-wc-next" style="margin:4px 0 0; font-size:13px; line-height:1.5;"></p>
             <button class="btn btn-outline btn-sm" id="workout-guide-wc-skip" data-on-click="skipWarmCool()" style="margin-top:12px;"></button>
           </div>
           <div id="workout-guide-done" style="display:none;">
@@ -4061,7 +4067,7 @@ body{overflow-wrap:break-word;}
         <input type="hidden" id="perfil-racedate">
         <p class="muted" style="margin-top:6px;" data-i18n="ob_racedate_hint"></p>
       </div>
-      <p class="muted" style="margin-top:10px; font-size:12.5px;" data-i18n="perfil_weeklykm_auto_note"></p>
+      <p class="muted" style="margin-top:10px; font-size:13px;" data-i18n="perfil_weeklykm_auto_note"></p>
       <button class="btn btn-primary btn-sm perfil-save-btn" id="save-personal-btn" style="margin-top:16px; width:100%;" data-i18n="save_word" data-on-click="confirmAndSave('personal')"></button>
     </div>
   </div>
@@ -4183,7 +4189,7 @@ body{overflow-wrap:break-word;}
 
       <div class="conn-row">
         <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" data-on-click="toggleConnRow(this)">
-          <span class="brand-logo-chip" style="gap:10px;"><img class="brand-logo-color" src="img/brand-logos/garmin.png" alt="" width="26" height="26" style="height:26px; width:26px; max-width:26px; border-radius:7px;"><span style="font-size:14.5px; font-weight:700; color:var(--chalk);">Garmin Connect</span></span>
+          <span class="brand-logo-chip" style="gap:10px;"><img class="brand-logo-color" src="img/brand-logos/garmin.png" alt="" width="26" height="26" style="height:26px; width:26px; max-width:26px; border-radius:7px;"><span style="font-size:15px; font-weight:700; color:var(--chalk);">Garmin Connect</span></span>
           <span id="garmin-status" class="tag tag-asfalto" data-i18n="perfil_native" style="margin-left:auto;"></span>
         <span class="icon-sq conn-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></div>
         <div class="conn-body">
@@ -4272,7 +4278,7 @@ body{overflow-wrap:break-word;}
            necesitar una conexión propia por marca. -->
       <div class="conn-row" id="healthconnect-card" style="display:none;">
         <div class="conn-row-head" role="button" tabindex="0" aria-expanded="false" data-on-click="toggleConnRow(this)">
-          <span class="brand-logo-chip" style="gap:8px; flex:1;"><img class="brand-logo-color" src="img/brand-logos/healthconnect.png" alt="" style="height:26px; max-width:26px; border-radius:7px;"><span class="n" style="font-size:14.5px; font-weight:700;" data-i18n="healthconnect_title"></span></span>
+          <span class="brand-logo-chip" style="gap:8px; flex:1;"><img class="brand-logo-color" src="img/brand-logos/healthconnect.png" alt="" style="height:26px; max-width:26px; border-radius:7px;"><span class="n" style="font-size:15px; font-weight:700;" data-i18n="healthconnect_title"></span></span>
           <span id="healthconnect-status" class="tag tag-asfalto" data-i18n="perfil_native"></span>
         <span class="icon-sq conn-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></div>
         <div class="conn-body">
@@ -4334,13 +4340,13 @@ body{overflow-wrap:break-word;}
         <div class="choice active" data-v="distance" data-i18n="ob_trainby_distance"></div>
         <div class="choice" data-v="time" data-i18n="ob_trainby_time"></div>
       </div>
-      <p class="muted" style="margin-top:10px; font-size:12.5px; line-height:1.5;" data-i18n="trainby_tip"></p>
+      <p class="muted" style="margin-top:10px; font-size:13px; line-height:1.5;" data-i18n="trainby_tip"></p>
     </div>
     <div class="card" id="streak-pause-card" style="display:none;">
       <h3 data-i18n="streak_pause_title"></h3>
-      <p class="muted" style="margin:0 0 12px; font-size:12.5px; line-height:1.5;" data-i18n="streak_pause_hint"></p>
+      <p class="muted" style="margin:0 0 12px; font-size:13px; line-height:1.5;" data-i18n="streak_pause_hint"></p>
       <button class="btn btn-outline btn-sm" id="streak-pause-btn" style="width:100%;" data-on-click="toggleStreakPause()"></button>
-      <p class="muted" id="streak-pause-status" style="margin:10px 0 0; font-size:12.5px; line-height:1.5; display:none;"></p>
+      <p class="muted" id="streak-pause-status" style="margin:10px 0 0; font-size:13px; line-height:1.5; display:none;"></p>
     </div>
     <div class="card" id="text-size-card" style="display:none;">
       <h3 data-i18n="perfil_textsize_title"></h3>
@@ -4350,7 +4356,7 @@ body{overflow-wrap:break-word;}
         <div class="choice" data-v="large" data-i18n="ts_large"></div>
         <div class="choice" data-v="xlarge" data-i18n="ts_xlarge"></div>
       </div>
-      <p class="muted" style="margin-top:10px; font-size:12.5px; line-height:1.5;" data-i18n="ts_hint"></p>
+      <p class="muted" style="margin-top:10px; font-size:13px; line-height:1.5;" data-i18n="ts_hint"></p>
     </div>
     <div class="card">
       <h3 data-i18n="perfil_voice_label"></h3>
@@ -4360,8 +4366,8 @@ body{overflow-wrap:break-word;}
         <div class="choice" data-v="vibe" data-i18n="voice_opt_vibe"></div>
         <div class="choice" data-v="off" data-i18n="word_no"></div>
       </div>
-      <p class="muted" style="margin-top:10px; font-size:12.5px; line-height:1.5;" data-i18n="voice_key_hint"></p>
-      <p class="muted" style="margin-top:8px; font-size:12.5px; line-height:1.5;" data-i18n="voice_vibe_hint"></p>
+      <p class="muted" style="margin-top:10px; font-size:13px; line-height:1.5;" data-i18n="voice_key_hint"></p>
+      <p class="muted" style="margin-top:8px; font-size:13px; line-height:1.5;" data-i18n="voice_vibe_hint"></p>
     </div>
   </div>
 
@@ -4400,7 +4406,7 @@ body{overflow-wrap:break-word;}
       <div class="lt-step"><span class="lt-n">2</span><p data-i18n="ltest_step2"></p></div>
       <div class="lt-step"><span class="lt-n">3</span><p data-i18n="ltest_step3"></p></div>
     </div>
-    <p class="muted" style="margin-top:12px; font-size:12.5px; line-height:1.5;" data-i18n="ltest_safety"></p>
+    <p class="muted" style="margin-top:12px; font-size:13px; line-height:1.5;" data-i18n="ltest_safety"></p>
     <div class="card" id="ltest-suggest" style="display:none; margin-top:16px;">
       <p id="ltest-suggest-text" style="margin:0 0 10px; font-size:14px; line-height:1.5;"></p>
       <button class="btn btn-outline btn-sm" id="ltest-suggest-btn" data-i18n="ltest_suggest_use"></button>
@@ -4459,7 +4465,7 @@ body{overflow-wrap:break-word;}
       <h2 class="subtitle" style="font-size:22px;">Panel de administración</h2>
       <button class="btn btn-outline btn-sm" id="admin-refresh" data-on-click="loadAdminStats()">Actualizar</button>
     </div>
-    <p class="muted" id="admin-updated" style="margin:6px 0 0; font-size:12.5px;"></p>
+    <p class="muted" id="admin-updated" style="margin:6px 0 0; font-size:13px;"></p>
     <div id="admin-body" style="margin-top:14px;"></div>
   </div>
 
@@ -4500,7 +4506,7 @@ body{overflow-wrap:break-word;}
   <div class="heat-overlay" id="heatmap-overlay">
     <div id="heatmap-map"></div>
     <div class="heat-top">
-      <h2 class="display" data-i18n="heat_title"></h2>
+      <h2 class="subtitle" data-i18n="heat_title"></h2>
       <p data-i18n="heat_sub"></p>
     </div>
     <button class="heat-close" data-on-click="closeHeatmap()" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span></button>
@@ -4519,7 +4525,7 @@ body{overflow-wrap:break-word;}
   <div class="rd-video-overlay" id="rd-video-overlay">
     <button data-on-click="closeDynamicVideo()" data-i18n-aria="aria_back" style="position:absolute; top:calc(16px + var(--safe-top)); right:20px; width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.12); border:none; color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:2;"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span></button>
     <canvas id="rd-video-canvas" width="720" height="1280" style="display:none;"></canvas>
-    <video id="rd-video-preview" playsinline controls style="display:none; max-width:100%; max-height:70vh; border-radius:14px;"></video>
+    <video id="rd-video-preview" playsinline controls style="display:none; max-width:100%; max-height:70vh; border-radius:var(--radius-sm);"></video>
     <div class="rd-video-progress" id="rd-video-progress"></div>
     <div class="rd-video-actions" id="rd-video-actions" style="display:none;">
       <button class="btn btn-outline" id="rd-video-save" style="width:auto; flex:1;" data-on-click="saveDynamicVideo()" data-i18n="rd_video_save"></button>
@@ -4676,7 +4682,7 @@ body{overflow-wrap:break-word;}
 
   <div class="overlay" id="whats-new-modal" style="display:none; z-index:60;">
     <h2 class="subtitle" style="font-size:22px;" data-i18n="whats_new_title"></h2>
-    <ul id="whats-new-list" style="margin-top:18px; padding-left:20px; display:flex; flex-direction:column; gap:12px; font-size:14.5px; line-height:1.5; color:var(--chalk);"></ul>
+    <ul id="whats-new-list" style="margin-top:18px; padding-left:20px; display:flex; flex-direction:column; gap:12px; font-size:15px; line-height:1.5; color:var(--chalk);"></ul>
     <button class="btn btn-primary" style="width:100%; margin-top:24px;" data-on-click="closeWhatsNew()" data-i18n="whats_new_close"></button>
   </div>
 
@@ -4878,7 +4884,7 @@ body{overflow-wrap:break-word;}
       <div style="display:flex; align-items:center; justify-content:space-between;">
         <div style="flex:1; padding-right:12px;">
           <h3 id="push-title" style="margin-bottom:2px;" data-i18n="perfil_push_title"></h3>
-          <p class="muted" id="push-status" style="font-size:12.5px;" data-i18n="push_disabled"></p>
+          <p class="muted" id="push-status" style="font-size:13px;" data-i18n="push_disabled"></p>
         </div>
         <label class="switch">
           <input type="checkbox" id="push-toggle" aria-labelledby="push-title" data-on-change="handlePushToggle(this.checked)">
@@ -4927,7 +4933,7 @@ body{overflow-wrap:break-word;}
 
     <div class="card">
       <h3 data-i18n="perfil_about"></h3>
-      <p class="muted mono" id="app-version-text" style="margin-top:6px; font-size:10.5px; opacity:.55;"></p>
+      <p class="muted mono" id="app-version-text" style="margin-top:6px; font-size:11px; opacity:.55;"></p>
       <p class="muted" style="margin-top:8px;" data-i18n="perfil_data_note"></p>
       <div class="set-list">
         <a class="set-row" href="/privacy.html" target="_blank" rel="noopener"><span data-i18n="legal_privacy_link"></span><span class="icon-sq set-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></a>

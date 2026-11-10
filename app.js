@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-10T15:26:52Z';
+const APP_VERSION = '2026-11-10T19:13:14Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8881,7 +8881,7 @@ function openRaceTipsInfo(){
   document.getElementById('race-tips-info-body').innerHTML = pool.map(tip=>`
     <div style="display:flex; gap:10px; align-items:flex-start;">
       <span class="icon-sq" style="width:15px; height:15px; color:var(--hivis-text); flex-shrink:0; margin-top:3px;">${ICONS.check}</span>
-      <p class="muted" style="margin:0; font-size:13.5px; line-height:1.5;">${tip}</p>
+      <p class="muted" style="margin:0; font-size:14px; line-height:1.5;">${tip}</p>
     </div>`).join('');
   document.getElementById('race-tips-info-modal').style.display = 'block';
 }
@@ -9212,9 +9212,9 @@ function openRacePlan(keepScenario){
     '<p class="rp-when">' + (days <= 0 ? t('rp_when_today', {date: when}) : t('rp_when', {date: when, n: days})) + '</p>';
   const est = km ? estimateRaceTime(km) : null;
   if(!km){
-    html += '<div class="card"><p class="muted" style="margin:0; font-size:13.5px; line-height:1.5;">' + t('rp_nodist') + '</p></div>';
+    html += '<div class="card"><p class="muted" style="margin:0; font-size:14px; line-height:1.5;">' + t('rp_nodist') + '</p></div>';
   } else if(!est){
-    html += '<div class="card"><p class="muted" style="margin:0; font-size:13.5px; line-height:1.5;">' + t('rp_none') + '</p></div>';
+    html += '<div class="card"><p class="muted" style="margin:0; font-size:14px; line-height:1.5;">' + t('rp_none') + '</p></div>';
   } else {
     const info = {source: est.source, endurance: est.endurance, calib: est.calib, basis: est.basis, km: km};
     const targetSec = racePlanScenarioSec(est.sec, info);
@@ -10372,8 +10372,8 @@ function renderPastWeeks(){
     // tocar una semana pasada debe abrir una pantalla aparte (ver openWeekDetail), sin tocar
     // el navegador de semana de arriba.
     return `<div style="padding:10px 0; border-bottom:1px solid var(--asphalt-3); cursor:pointer;" data-on-click="openWeekDetail(${w.weekNumber})">
-      <div style="display:flex; justify-content:space-between;"><span style="font-weight:700;">${t('plan_week_label',{n:w.weekNumber})}</span><span class="muted mono" style="font-size:11.5px;">${w.weekStart}</span></div>
-      <p class="muted" style="margin-top:4px; font-size:12.5px;">${doneCount}/${totalSessions} ${t('home_sessions').toLowerCase()} · ${plannedAmount} ${t('home_km_planned').toLowerCase()}</p>
+      <div style="display:flex; justify-content:space-between;"><span style="font-weight:700;">${t('plan_week_label',{n:w.weekNumber})}</span><span class="muted mono" style="font-size:12px;">${w.weekStart}</span></div>
+      <p class="muted" style="margin-top:4px; font-size:13px;">${doneCount}/${totalSessions} ${t('home_sessions').toLowerCase()} · ${plannedAmount} ${t('home_km_planned').toLowerCase()}</p>
     </div>`;
   }).join('');
 }
@@ -10403,7 +10403,7 @@ function buildWeekDoneListHtml(wd){
     const pMin = run && run.distanceKm>0.02 ? (run.durationSec/60)/run.distanceKm : 0;
     const summary = run ? `${fmtDist(run.distanceKm)}${distUnit()} · ${fmtPace(pMin)}/${distUnit()}` : t('plan_status_done');
     return `<div style="padding:12px 0; border-bottom:1px solid var(--asphalt-3);${run?' cursor:pointer;':''}"${run?` data-on-click="openRunDetail('${run.id}')"`:''}>
-      <div style="display:flex; justify-content:space-between; align-items:baseline;"><span style="font-weight:700;">${lblType}</span><span class="muted mono" style="font-size:11.5px;">${t('day_'+d.day).slice(0,3)} ${dateLbl}</span></div>
+      <div style="display:flex; justify-content:space-between; align-items:baseline;"><span style="font-weight:700;">${lblType}</span><span class="muted mono" style="font-size:12px;">${t('day_'+d.day).slice(0,3)} ${dateLbl}</span></div>
       <p class="muted mono" style="margin-top:4px; font-size:13px;">${summary}</p>
     </div>`;
   }).join('');
@@ -10836,14 +10836,14 @@ function renderPainLog(){
     return `<div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; padding:10px 0; border-bottom:1px solid var(--asphalt-3);">
       <div style="min-width:0; flex:1 1 100%;">
         <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-          <span style="font-weight:700; font-size:13.5px;">${t('pain_body_'+p.bodyPart)}</span>
+          <span style="font-weight:700; font-size:14px;">${t('pain_body_'+p.bodyPart)}</span>
           <span class="tag tag-${p.active?'load-caution':'asfalto'}">${p.active ? t('pain_active_tag') : t('pain_resolved_tag')}</span>
         </div>
         <div class="muted" style="font-size:12px; margin-top:2px;">${dateStr}${p.note?' · '+escapeHtml(p.note):''}</div>
         ${painEvolutionHtml(p)}
       </div>
       <div style="display:flex; align-items:center; gap:14px; flex:1 1 100%;">
-        ${p.active ? `<button class="small-link" data-on-click="openPainUpdate(${p.id})" style="font-size:11.5px; padding:4px 2px;">${t('pain_update_btn')}</button><button class="small-link" data-on-click="resolvePainLog(${p.id})" style="font-size:11.5px; padding:4px 2px;">${t('pain_resolve_btn')}</button>` : ''}
+        ${p.active ? `<button class="small-link" data-on-click="openPainUpdate(${p.id})" style="font-size:12px; padding:4px 2px;">${t('pain_update_btn')}</button><button class="small-link" data-on-click="resolvePainLog(${p.id})" style="font-size:12px; padding:4px 2px;">${t('pain_resolve_btn')}</button>` : ''}
         <button data-on-click="deletePainLog(${p.id})" aria-label="${t('aria_delete')}" style="margin-left:auto; background:none; border:none; color:var(--mist-dim); cursor:pointer; padding:4px; display:flex;"><span class="icon-sq" style="width:16px; height:16px;">${ICONS.trash}</span></button>
       </div>
     </div>`;
@@ -11022,8 +11022,8 @@ function renderPerfil(){
       return `<div class="shoe-item">
         <div class="shoe-icon">${ICONS.shoe}</div>
         <div class="shoe-info" style="display:flex; flex-direction:column; gap:6px;">
-          <input type="text" id="edit-shoe-name-${s.id}" value="${escapeHtml(s.name)}" style="background:var(--asphalt-3); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:9px; border-radius:8px; font-size:13.5px;">
-          <select id="edit-shoe-terrain-${s.id}" style="background:var(--asphalt-3); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:9px; border-radius:8px; font-size:13.5px;">
+          <input type="text" id="edit-shoe-name-${s.id}" value="${escapeHtml(s.name)}" style="background:var(--asphalt-3); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:9px; border-radius:8px; font-size:14px;">
+          <select id="edit-shoe-terrain-${s.id}" style="background:var(--asphalt-3); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:9px; border-radius:8px; font-size:14px;">
             <option value="asfalto" ${s.terrain==='asfalto'?'selected':''}>${t('ob_terrain_asfalto')}</option>
             <option value="trail" ${s.terrain==='trail'?'selected':''}>${t('ob_terrain_trail')}</option>
             <option value="mixto" ${s.terrain==='mixto'?'selected':''}>${t('ob_terrain_mixto')}</option>
@@ -11043,7 +11043,7 @@ function renderPerfil(){
         <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" data-on-click="deleteShoe(${s.id})"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
         <div class="swipe-content"><div class="shoe-info">
           <div class="n"><span class="shoe-name">${escapeHtml(s.name)}</span> <span class="tag tag-${s.terrain}">${t('ob_terrain_'+s.terrain)}</span></div>
-          <div class="muted mono" style="font-size:11.5px; margin-top:2px;">${fmtDist(s.km,0)} / ${fmtDist(threshold,0)} ${distUnit()}</div>
+          <div class="muted mono" style="font-size:12px; margin-top:2px;">${fmtDist(s.km,0)} / ${fmtDist(threshold,0)} ${distUnit()}</div>
           <div class="wearbar ${pct>80?'warn':''}"><div style="width:${pct}%;"></div></div></div>
           <button class="small-link" style="display:inline-flex;" aria-label="${t('aria_edit')}" data-on-click="startEditShoe(${s.id})"><span class="icon-sq" style="width:15px; height:15px;">${ICONS.edit}</span></button>
         </div>
@@ -11064,9 +11064,9 @@ function renderPerfil(){
     const paceBlock = prediction ? `<div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--asphalt-3);">
       <p class="muted" style="margin:0 0 6px; font-size:12px;">${t('perfil_predicted_pace_label')} · ${fmtDist(goalKm,1)} ${distUnit()}</p>
       <p class="mono" style="font-size:20px; font-weight:800; color:var(--hivis-text); margin:0;">${fmtPace((prediction.predictedSec/60)/goalKm)} /${distUnit()}</p>
-      <p class="muted" style="margin:6px 0 0; font-size:11.5px;">${t('perfil_predicted_pace_note', {ref: fmtDist(prediction.refDistanceKm,1)+' '+distUnit(), time: fmtTime(Math.round(prediction.predictedSec))})}</p>
+      <p class="muted" style="margin:6px 0 0; font-size:12px;">${t('perfil_predicted_pace_note', {ref: fmtDist(prediction.refDistanceKm,1)+' '+distUnit(), time: fmtTime(Math.round(prediction.predictedSec))})}</p>
     </div>` : '';
-    evBox.innerHTML = `<p style="font-size:14.5px; font-weight:700;">${escapeHtml(state.event.name)} <span class="tag tag-${state.event.type==='ruta'?'asfalto':state.event.type==='trail'?'trail':'mixto'}">${t('ev_type_'+state.event.type)}</span></p>
+    evBox.innerHTML = `<p style="font-size:15px; font-weight:700;">${escapeHtml(state.event.name)} <span class="tag tag-${state.event.type==='ruta'?'asfalto':state.event.type==='trail'?'trail':'mixto'}">${t('ev_type_'+state.event.type)}</span></p>
       <p class="display" style="font-size:34px; color:var(--hivis-text); margin-top:4px;">${Math.max(0,days)} <span style="font-size:13px; font-family:Inter; color:var(--mist);">${t('perfil_event_days')}</span></p>
       ${paceBlock}
       <button class="btn btn-danger event-delete-btn" data-on-click="deleteEvent()">${t('delete_event')}</button>`;
@@ -11196,7 +11196,7 @@ function admPct(n, total){ return total > 0 ? Math.round((n / total) * 100) : 0;
 function admStat(n, label){ return '<div class="adm-stat"><div class="n">' + escapeHtml(String(n == null ? '—' : n)) + '</div><div class="l">' + escapeHtml(label) + '</div></div>'; }
 function admBarRows(entries, total){
   const max = Math.max(1, ...entries.map(e => e[1]));
-  return entries.map(([k, n]) => '<div class="adm-row"><span>' + escapeHtml(String(k)) + '</span><div class="track"><i style="width:' + Math.round((n / max) * 100) + '%;"></i></div><span class="v">' + n + (total ? ' <span style="font-weight:600; color:var(--mist); font-size:11.5px;">' + admPct(n, total) + '%</span>' : '') + '</span></div>').join('');
+  return entries.map(([k, n]) => '<div class="adm-row"><span>' + escapeHtml(String(k)) + '</span><div class="track"><i style="width:' + Math.round((n / max) * 100) + '%;"></i></div><span class="v">' + n + (total ? ' <span style="font-weight:600; color:var(--mist); font-size:12px;">' + admPct(n, total) + '%</span>' : '') + '</span></div>').join('');
 }
 function admFmtBytes(b){
   b = Number(b) || 0;
@@ -11299,7 +11299,7 @@ function renderAdminStats(s){
   const goals = Object.entries(s.goals || {}).sort((x, y) => y[1] - x[1]);
   const plats = Object.entries(p.by_platform || {}).sort((x, y) => y[1] - x[1]);
   const funnelSteps = [['Se registraron', f.registered], ['Confirmaron mail', f.confirmed], ['Onboarding listo', f.onboarded], ['Tienen carrera', f.with_runs], ['Conectaron reloj', w.users_with_any]];
-  const funnel = funnelSteps.map(([k, n]) => '<div class="adm-row"><span style="grid-column:auto;">' + escapeHtml(k) + '</span><div class="track"><i style="width:' + admPct(n || 0, f.registered || 0) + '%;"></i></div><span class="v">' + (n || 0) + ' <span style="font-weight:600; color:var(--mist); font-size:11.5px;">' + admPct(n || 0, f.registered || 0) + '%</span></span></div>').join('');
+  const funnel = funnelSteps.map(([k, n]) => '<div class="adm-row"><span style="grid-column:auto;">' + escapeHtml(k) + '</span><div class="track"><i style="width:' + admPct(n || 0, f.registered || 0) + '%;"></i></div><span class="v">' + (n || 0) + ' <span style="font-weight:600; color:var(--mist); font-size:12px;">' + admPct(n || 0, f.registered || 0) + '%</span></span></div>').join('');
   const limits = (s.limits || []).map(admLimitRow).join('') || '<p class="muted">Sin datos.</p>';
   const avg = db.app_state_avg_bytes || 0;
   document.getElementById('admin-body').innerHTML =
@@ -11557,7 +11557,7 @@ function updateCredits(){
   // nueva o todavía una vieja cacheada, lo que hizo perder tiempo varias veces
   // diagnosticando bugs ya arreglados en una versión que el celular no había tomado.
   const versionEl = document.getElementById('app-version-text');
-  if(versionEl) versionEl.textContent = 'v' + APP_VERSION;
+  if(versionEl) versionEl.textContent = appVersionLabel();
 }
 document.getElementById('perfil-name').addEventListener('input', ()=>{ updateCredits(); });
 document.getElementById('perfil-name').addEventListener('change', ()=>{
@@ -12318,6 +12318,11 @@ async function doPullRefresh(){
 // actuallyStartRun()/showRunSummaryUI() directamente, porque arrancar o terminar una carrera
 // no siempre pasa por showView() -- el corredor se queda en la misma pestaña "Correr" todo el
 // tiempo en el caso normal.
+// "v2026.11.10 (1525)": la fecha y la hora (UTC) de la versión, que es lo que hace falta para saber qué versión tiene alguien, sin mostrar la marca de tiempo cruda.
+function appVersionLabel(){
+  const m = String(APP_VERSION).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  return m ? 'v' + m[1] + '.' + m[2] + '.' + m[3] + ' (' + m[4] + m[5] + ')' : 'v' + APP_VERSION;
+}
 function updateCoachFabVisibility(){
   // view-coach.active (no un .nav-btn) porque el chat se abre también desde el FAB mismo
   // (openCoachWithWink()) y otros atajos sin pasar por un tab propio en la tabbar -- esta
@@ -12329,20 +12334,23 @@ function updateCoachFabVisibility(){
   const inExercise = document.getElementById('runActive').style.display !== 'none' && document.getElementById('runActive').style.display !== '';
   const sumEl = document.getElementById('runSummary');
   const inSummary = !!sumEl && sumEl.style.display === 'block';
-  document.getElementById('coach-fab-wrap').style.display = (inCoach || inExercise || inSummary) ? 'none' : 'block';
+  const fabWrapEl = document.getElementById('coach-fab-wrap');
+  fabWrapEl.style.display = (inCoach || inExercise || inSummary) ? 'none' : 'block';
+  fabWrapEl.classList.remove('coach-fab-away');   // cada pantalla arranca con Zonda a la vista
 }
-// Ver el comentario junto a .coach-fab-scrolling en el CSS: el personaje se achica y
-// atenúa mientras la página se mueve, y vuelve a su tamaño normal 300ms después del
-// último evento de scroll (no instantáneo, para no parpadear entre scrolleos cortos
-// seguidos).
+// Ver el comentario junto a .coach-fab-away en el CSS.
 (function(){
   const fabWrap = document.getElementById('coach-fab-wrap');
   if(!fabWrap) return;
-  let scrollEndTimer = null;
+  // Antes solo se atenuaba mientras la página se movía y al frenar volvía a tapar lo que quedara debajo (la etiqueta de zona, la columna derecha del plan, las calorías del historial).
+  // Ahora se retira al bajar y vuelve al subir o al llegar arriba; con un mensaje sin leer (o Zonda pensando) se queda a la vista.
+  let lastY = window.scrollY || 0;
   window.addEventListener('scroll', ()=>{
-    fabWrap.classList.add('coach-fab-scrolling');
-    clearTimeout(scrollEndTimer);
-    scrollEndTimer = setTimeout(()=>fabWrap.classList.remove('coach-fab-scrolling'), 300);
+    const y = window.scrollY || 0, bubble = document.getElementById('coach-fab-thinking');
+    const pinned = !!bubble && bubble.classList.contains('show');
+    if(y < 48 || pinned || y < lastY - 6) fabWrap.classList.remove('coach-fab-away');
+    else if(y > lastY + 6) fabWrap.classList.add('coach-fab-away');
+    lastY = y;
   }, {passive:true});
 })();
 // Titulo de la pantalla (TU SEMANA, TU HISTORIAL, CORRER) que sube a la barra de arriba cuando el grande sale de la vista.
@@ -15566,7 +15574,7 @@ function openAchievements(){
   // desbloqueados"; de un vistazo ahora se ve además cuánto falta.
   const pct = totalCount ? Math.round((unlockedCount/totalCount)*100) : 0;
   document.getElementById('achievements-content').innerHTML = `
-    <h2 class="display" style="font-size:20px; margin-bottom:2px;">${t('ach_title')}</h2>
+    <h2 class="subtitle" style="font-size:22px; margin-bottom:2px;">${t('ach_title')}</h2>
     <p class="muted" style="margin:0 0 4px;">${t('ach_subtitle')}</p>
     <p style="margin:0 0 8px; font-weight:800; color:var(--hivis-text); font-size:13px;">${t('ach_unlocked_count', {unlocked:unlockedCount, total:totalCount})}</p>
     <div class="ob-progress" style="margin-bottom:16px;"><div class="ob-progress-fill" style="width:100%; transform:scaleX(${pct/100}); transform-origin:left;"></div></div>
@@ -15831,12 +15839,12 @@ function buildStravaSyncBanner(){
   if(!issue) return '';
   const color = issue.severity==='error' ? 'var(--danger)' : 'var(--clay)';
   const bg = issue.severity==='error' ? 'var(--danger-dim)' : 'var(--clay-dim)';
-  const detailHtml = issue.detail ? `<p class="muted" style="margin:4px 0 10px; font-size:12.5px;">${escapeHtml(issue.detail)}</p>` : '';
+  const detailHtml = issue.detail ? `<p class="muted" style="margin:4px 0 10px; font-size:13px;">${escapeHtml(issue.detail)}</p>` : '';
   return `<div class="card" style="border-color:${color}; background:${bg};">
     <div style="display:flex; align-items:flex-start; gap:10px;">
       <span class="icon-sq" style="width:20px; height:20px; color:${color}; flex-shrink:0; margin-top:1px;">${ICONS.warn}</span>
       <div style="min-width:0; flex:1;">
-        <p style="margin:0; font-size:13.5px; font-weight:700; color:${color};">${issue.title}</p>
+        <p style="margin:0; font-size:14px; font-weight:700; color:${color};">${issue.title}</p>
         ${detailHtml}
         <button class="btn btn-outline btn-sm" style="margin-top:${issue.detail?'0':'10px'};" data-on-click="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>
       </div>
@@ -16187,7 +16195,7 @@ function renderHistory(){
     const monthKey = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {month:'long', year:'numeric'});
     let monthHeader = '';
     if(monthKey !== lastMonthKey){
-      monthHeader = `<div class="hist-month-header" style="margin:${lastMonthKey?'22px':'2px'} 2px 8px; font-size:12.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--mist-dim);">${monthKey}</div>`;
+      monthHeader = `<div class="hist-month-header" style="margin:${lastMonthKey?'22px':'2px'} 2px 8px; font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--mist-dim);">${monthKey}</div>`;
       lastMonthKey = monthKey;
     }
     return `${monthHeader}<div class="swipe-item" data-swipe-id="${r.id}">
@@ -16202,8 +16210,8 @@ function renderHistory(){
           <div class="stat-cell"><div class="n">${cal}</div><div class="l">${t('run_calories')}</div></div>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; gap:8px;">
-          ${shoe ? `<p class="muted" style="margin:0; font-size:12.5px;">${t('hist_shoe')}: ${escapeHtml(shoe.name)}</p>` : '<span></span>'}
-          <button data-on-click="event.stopPropagation(); shareRunImage('${r.id}')" style="background:none; border:1px solid var(--asphalt-4); color:var(--mist); font-size:12.5px; cursor:pointer; min-height:var(--tap); padding:0 14px; border-radius:var(--radius-sm); display:flex; align-items:center; gap:5px; font-weight:700; flex-shrink:0;">${t('hist_share')}</button>
+          ${shoe ? `<p class="muted" style="margin:0; font-size:13px;">${t('hist_shoe')}: ${escapeHtml(shoe.name)}</p>` : '<span></span>'}
+          <button class="hist-share-btn" aria-label="${t('hist_share')}" title="${t('hist_share')}" data-on-click="event.stopPropagation(); shareRunImage('${r.id}')">${ICONS.share}</button>
         </div>
       </div>
     </div>`;
@@ -16486,7 +16494,7 @@ function renderRDRuta(panel){
     </div>
     <div class="rd-ruta-below" id="rd-ruta-below">
       <div class="rd-big-dist">${fmtDist(r.distanceKm)} <span style="font-size:19px; font-weight:700; color:var(--mist);">${distUnit()}</span></div>
-      <p class="muted" style="margin-top:2px;">${dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}, ${timeStr}</p>
+      <p class="muted" style="margin-top:2px;">${r.name ? dateStr.charAt(0).toUpperCase() + dateStr.slice(1) + ', ' + timeStr : timeStr}</p>
       <!-- Botón "Video del recorrido" sacado a pedido del usuario: en la web (PWA)
            nunca se pudo lograr que el video se guarde/comparta de forma confiable
            en iPhone (ver el historial de intentos alrededor de rdRemuxVideoIfNeeded
@@ -16689,8 +16697,8 @@ function renderRDRitmo(panel){
       <div><span class="mono" style="font-size:22px; font-weight:800; display:block;">${fmtPace(paceMin)}</span><span class="muted" style="font-size:12px;">${t('rd_avg_pace')}</span></div>
       <div><span class="mono" style="font-size:22px; font-weight:800; display:block;">${fmtPace(fastest)}</span><span class="muted" style="font-size:12px;">${t('rd_fastest_pace')}</span></div>
     </div>
-    ${pacingAnalysis ? `<p style="font-weight:700; margin-bottom:${pacingDetailText(splits) ? 4 : 14}px; font-size:13.5px;">${(pacingStats(splits) && pacingStats(splits).cv > 12) ? t('rd_irregular') : t('hist_split_'+pacingAnalysis.kind)}</p>` : ''}
-    ${pacingAnalysis && pacingDetailText(splits) ? `<p class="muted" style="margin:0 0 14px; font-size:12.5px;">${pacingDetailText(splits)}</p>` : ''}
+    ${pacingAnalysis ? `<p style="font-weight:700; margin-bottom:${pacingDetailText(splits) ? 4 : 14}px; font-size:14px;">${(pacingStats(splits) && pacingStats(splits).cv > 12) ? t('rd_irregular') : t('hist_split_'+pacingAnalysis.kind)}</p>` : ''}
+    ${pacingAnalysis && pacingDetailText(splits) ? `<p class="muted" style="margin:0 0 14px; font-size:13px;">${pacingDetailText(splits)}</p>` : ''}
     <div class="muted" style="font-size:11px; margin-bottom:8px; display:flex; justify-content:space-between;"><span>${unitLabel}</span><span>${t('run_pace_word')} (/${distUnit()})</span></div>
     ${splits.map(s=>{
       const zone = classifyPaceRelative(s.paceMin, paceMin);
@@ -16896,7 +16904,7 @@ function renderRunPlanSteps(r){
   if(s.judged > 0) lines.push(s.high > 0 ? t('seg_sum_hr_high', {n:s.high, m:s.judged}) : t('seg_sum_hr_ok'));
   return `<div class="card" style="margin-bottom:16px;">
     <h3 style="font-size:16px; margin-bottom:10px;">${t('seg_plan_title')}</h3>
-    ${lines.length ? `<p style="margin:0 0 12px; font-size:13.5px; line-height:1.5;">${lines.map(escapeHtml).join('<br>')}</p>` : ''}
+    ${lines.length ? `<p style="margin:0 0 12px; font-size:14px; line-height:1.5;">${lines.map(escapeHtml).join('<br>')}</p>` : ''}
     <div style="overflow-x:auto;"><table class="rd-seg-table"><thead><tr><th>${t('seg_col_step')}</th><th>${t('rd_seg_dur')}</th><th>${t('rd_seg_dist')} (${u})</th><th>${t('run_pace_word')} (/${u})</th>${anyHr ? `<th>${t('hist_avg_hr')}</th>` : ''}</tr></thead><tbody>${body}</tbody></table></div>
     <p class="muted" style="margin:10px 0 0; font-size:12px; line-height:1.45;">${t('seg_plan_note')}</p>
   </div>`;
@@ -17092,8 +17100,8 @@ function renderRDGraficos(panel){
     html += `<div class="card rd-chart-card">
       <h3 style="font-size:16px; margin-bottom:14px;">${t('rd_chart_hr')}</h3>
       <div style="display:flex; justify-content:space-around; text-align:center; margin-bottom:12px;">
-        <div><span class="mono" style="font-size:20px; font-weight:800; display:block;">${avgHr||'–'}</span><span class="muted" style="font-size:11.5px;">${t('rd_avg_hr_full')}</span></div>
-        <div><span class="mono" style="font-size:20px; font-weight:800; display:block;">${maxHr||'–'}</span><span class="muted" style="font-size:11.5px;">${t('hist_max_hr')}</span></div>
+        <div><span class="mono" style="font-size:20px; font-weight:800; display:block;">${avgHr||'–'}</span><span class="muted" style="font-size:12px;">${t('rd_avg_hr_full')}</span></div>
+        <div><span class="mono" style="font-size:20px; font-weight:800; display:block;">${maxHr||'–'}</span><span class="muted" style="font-size:12px;">${t('hist_max_hr')}</span></div>
       </div>
       ${buildAreaChartSVG(r.series.t, r.series.hr, hrColor, true, v => Math.round(v))}
       <div class="rd-donut-row">
@@ -17111,8 +17119,8 @@ function renderRDGraficos(panel){
     html += `<div class="card rd-chart-card">
       <h3 style="font-size:16px; margin-bottom:14px;">${t('rd_chart_pace')}</h3>
       <div style="display:flex; justify-content:space-around; text-align:center; margin-bottom:12px;">
-        <div><span class="mono" style="font-size:20px; font-weight:800; display:block;">${fmtPace(paceMin)}</span><span class="muted" style="font-size:11.5px;">${t('rd_avg_pace')}</span></div>
-        <div><span class="mono" style="font-size:20px; font-weight:800; display:block;">${fmtPace(fastest)}</span><span class="muted" style="font-size:11.5px;">${t('rd_peak_pace')}</span></div>
+        <div><span class="mono" style="font-size:20px; font-weight:800; display:block;">${fmtPace(paceMin)}</span><span class="muted" style="font-size:12px;">${t('rd_avg_pace')}</span></div>
+        <div><span class="mono" style="font-size:20px; font-weight:800; display:block;">${fmtPace(fastest)}</span><span class="muted" style="font-size:12px;">${t('rd_peak_pace')}</span></div>
       </div>
       ${buildAreaChartSVG(r.series.t, r.series.paceMin, paceColor, false, v => fmtPace(v))}
       <div class="rd-donut-row">
