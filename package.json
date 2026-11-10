@@ -9,7 +9,9 @@
     "test": "node --test test/*.test.js test/perf/*.test.js",
     "scan:secrets": "node scripts/scan-secrets.js --history",
     "scan:local": "node scripts/scan-secrets.js --local",
-    "loadtest": "node loadtest/run.js"
+    "loadtest": "node loadtest/run.js",
+    "eval:coach": "node evals/coach/run.js",
+    "eval:coach:dry": "node evals/coach/run.js --dry"
   },
   "dependencies": {
     "@garmin/fitsdk": "^21.218.0",

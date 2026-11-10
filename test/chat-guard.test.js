@@ -126,7 +126,7 @@ test('app.js arma el texto de sistema del traductor exactamente como lo exige el
 
 test('app.js sigue empezando sus textos de sistema con los arranques que el servidor exige', () => {
   const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
-  assert.ok(app.includes('const system = `' + SYSTEM_PREFIXES.coach), 'el coach de app.js ya no empieza como exige api/_lib/chat-guard.js');
+  assert.ok(app.includes('return `' + SYSTEM_PREFIXES.coach), 'el coach de app.js ya no empieza como exige api/_lib/chat-guard.js');
   assert.ok(app.includes("const system = '" + SYSTEM_PREFIXES.translate), 'el traductor de app.js ya no empieza como exige api/_lib/chat-guard.js');
 });
 

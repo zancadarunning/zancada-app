@@ -1236,13 +1236,14 @@ test('chat: modificar, cancelar y mover no escriben sobre el día de una carrera
 });
 
 test('chat: después de un cambio real el siguiente pedido del mismo mensaje recibe el contexto actualizado, no el plan de antes', () => {
-  assert.ok(SRC.includes('const ctxAtStart = safeBuildContext();') && SRC.includes('${ctxAtStart}'), 'el contexto se arma una vez al principio');
+  assert.ok(SRC.includes('const ctxAtStart = safeBuildContext();') && SRC.includes('buildCoachSystem(ctxAtStart)'), 'el contexto se arma una vez al principio');
   assert.ok(SRC.includes('body: JSON.stringify({system: systemNow, tools:TOOLS, messages, lang}),'), 'cada vuelta manda el sistema vigente');
   assert.ok(SRC.includes('if(ctxFresh && ctxAtStart) systemNow = system.split(ctxAtStart).join(ctxFresh);'), 'se reemplaza el contexto tras un cambio');
   // el reemplazo es exacto: el contexto aparece una sola vez dentro del prompt
-  const start = SRC.indexOf('const system = `Sos "Zonda"');
+  const start = SRC.indexOf('function buildCoachSystem(ctx){');
   const end = SRC.indexOf('no intentes diagnosticar vos la causa.`;', start);
-  assert.equal((SRC.slice(start, end).match(/\$\{ctxAtStart\}/g) || []).length, 1);
+  assert.equal((SRC.slice(start, end).match(/\$\{ctx\}/g) || []).length, 1);
+  assert.ok(SRC.includes('const system = buildCoachSystem(ctxAtStart);'));
 });
 
 test('mensajes automáticos del coach: quien entrena por tiempo ve minutos (no "tus 30 km semanales"); por distancia, su unidad', () => {
@@ -1312,7 +1313,7 @@ test('chat: Zonda usa los mismos nombres que la pantalla (fase "puesta a punto";
   assert.ok(SRC.includes("taper:'puesta a punto'"));
   assert.ok(!SRC.includes("taper:'reducción final'"));
   assert.ok(SRC.includes('(la fecha objetivo cargada en Perfil > Datos personales)'));
-  const promptStart = SRC.indexOf('const system = `Sos "Zonda"');
+  const promptStart = SRC.indexOf('function buildCoachSystem(ctx){');
   const promptEnd = SRC.indexOf('no intentes diagnosticar vos la causa.`;', promptStart);
   assert.ok(!SRC.slice(promptStart, promptEnd).includes('Perfil > Metas'), 'el prompt no manda a una pantalla que no existe');
   assert.match(read('locales/es.js'), /plan_phase_taper:"Puesta a punto"/);
@@ -1386,4 +1387,48 @@ test('recorte tras dos faltazos: la sesión de AYER no cuenta (puede figurar sal
   assert.equal(plan[4].dist, before, 'ayer no cuenta');
   app.softenQualityAfterMisses(4);   // hoy = viernes: martes y miércoles ya tienen 2 días o más
   assert.ok(plan[4].dist < before, 'dos días atrás sí cuentan');
+});
+
+// ---------- mejoras de Zonda ----------
+test('Zonda: las respuestas de las herramientas dicen lo que el corredor VE después del cambio (total por tiempo, calentamiento aparte por distancia, y cómo quedaron los dos días al mover)', () => {
+  const realDay = Date.prototype.getDay;
+  Date.prototype.getDay = function () { return 1; };
+  try {
+    for (const trainBy of ['time', 'distance']) {
+      const app = loadApp();
+      ready(app);
+      app.state.onboarded = true;
+      app.state.profile = sweepProfile(app, { trainBy });
+      app.state.weekStart = app.getMondayISO(new Date());
+      app.state.plan = app.generatePlan(app.state.profile, 7);
+      const r = app.applyPlanChange({ dia: 'thu', tipo: 'Rodaje', tipo_categoria: 'easy', descripcion: 'x', zona: 2, [trainBy === 'time' ? 'duracion_min' : 'distancia_km']: trainBy === 'time' ? 35 : 6 });
+      assert.match(r, /^OK/, r);
+      if (trainBy === 'time') assert.match(r, /la ve como 35 min \(incluye calentamiento y vuelta a la calma\)/, r);
+      else assert.match(r, /la ve como 6\.0 km \(el calentamiento y la vuelta a la calma van aparte\)/, r);
+      const nx = app.applyPlanChange({ semana: 'siguiente', dia: 'thu', tipo: 'Rodaje', tipo_categoria: 'easy', descripcion: 'x', zona: 2, [trainBy === 'time' ? 'duracion_min' : 'distancia_km']: trainBy === 'time' ? 35 : 6 });
+      assert.match(nx, /la ve como/, nx);
+      const sessionDays = app.state.plan.filter(d => d.dist > 0).map(d => d.day);
+      const free = ['tue', 'wed', 'fri'].find(d => !sessionDays.includes(d));
+      if (free) assert.match(app.applyMoveSession({ dia_origen: 'thu', dia_destino: free }), /^OK, moví la sesión de thu a \w+\. Ahora \w+: .+; thu: sin sesión\./);
+    }
+  } finally { Date.prototype.getDay = realDay; }
+});
+
+test('Zonda: el contexto trae la constancia de las últimas semanas cerradas (solo cuántas sesiones se hicieron) y no la inventa sin datos', () => {
+  const app = loadApp();
+  ready(app);
+  app.state.onboarded = true;
+  app.state.profile = sweepProfile(app, {});
+  app.state.weekStart = app.getMondayISO(new Date());
+  app.state.plan = app.generatePlan(app.state.profile, 6);
+  app.state.planHistory = [];
+  assert.ok(!app.buildContext().includes('Constancia en las últimas'), 'sin semanas cerradas no hay frase');
+  const mk = doneN => ({ weekStart: '2026-10-05', plan: ['mon', 'tue', 'wed', 'thu'].map((d, i) => ({ day: d, dist: 5, typeKey: 'easy', status: i < doneN ? 'done' : 'skipped' })) });
+  app.state.planHistory = [mk(4), mk(3), mk(2)];
+  app.state.streakWeeks = 3;
+  const s = app.adherenceSummary();
+  assert.equal(JSON.stringify(s), JSON.stringify({ weeks: 3, planned: 12, done: 9, pct: 75 }));
+  assert.match(app.buildContext(), /Constancia en las últimas 3 semanas cerradas: cumplió 9 de 12 sesiones planeadas \(75%\), racha de 3 semanas seguidas cumpliendo\./);
+  app.state.planHistory = [mk(4), mk(4), mk(4), mk(4), mk(0)];
+  assert.equal(app.adherenceSummary().weeks, 4, 'solo las últimas 4');
 });

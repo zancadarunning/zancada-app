@@ -76,3 +76,6 @@ node_modules/
 .env
 .env.*
 !.env.example
+
+# Resultados de las pruebas de Zonda con el modelo real (evals/coach/run.js): locales, no se versionan.
+evals/coach/results/
