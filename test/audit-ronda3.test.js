@@ -1542,3 +1542,23 @@ test('contexto de Zonda: una carrera sin distancia o duración numéricas no lo 
   assert.doesNotThrow(() => { ctx = app.buildContext(); });
   assert.ok(ctx.length > 1000 && /5\.00km/.test(ctx), 'sigue usando la carrera válida');
 });
+
+test('Wahoo y Polar quedan fuera de Zonda igual que Strava y Garmin, también las convertidas en manuales (decisión del 2026-11-10)', () => {
+  const app = loadApp();
+  app.state.runs = [
+    { id: 1, source: 'wahoo', distanceKm: 5, durationSec: 1800 },
+    { id: 2, source: 'polar', distanceKm: 6, durationSec: 2000 },
+    { id: 3, origin: 'polar', aiExcluded: true, distanceKm: 7, durationSec: 2400 },
+    { id: 4, source: 'suunto', distanceKm: 8, durationSec: 2600 },
+    { id: 5, distanceKm: 9, durationSec: 3000 }
+  ];
+  assert.deepEqual(app.aiVisibleRuns().map(r => r.id), [4, 5], 'solo Suunto y las propias llegan a la IA');
+  assert.ok(app.isRestrictedRun(app.state.runs[0]) && app.isRestrictedRun(app.state.runs[1]) && app.isRestrictedRun(app.state.runs[2]));
+  assert.ok(!app.isRestrictedRun(app.state.runs[3]) && !app.isRestrictedRun(app.state.runs[4]));
+  // el aviso de carrera y el resumen semanal del servidor usan la misma lista que el cliente
+  const fs = require('fs'), path = require('path');
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'api', '_lib', 'notify-new-run.js'), 'utf8');
+  const weekly = fs.readFileSync(path.join(__dirname, '..', 'api', '_lib', 'weekly-summary.js'), 'utf8');
+  assert.match(srv, /RESTRICTED_SOURCES = new Set\(\['strava', 'garmin', 'wahoo', 'polar'\]\)/);
+  assert.match(weekly, /RESTRICTED_SOURCES = \['strava', 'garmin', 'wahoo', 'polar'\]/);
+});

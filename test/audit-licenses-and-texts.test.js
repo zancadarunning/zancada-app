@@ -19,8 +19,8 @@ test('las carreras de Strava/Garmin convertidas en manuales siguen fuera de la I
   ];
   assert.deepEqual(app.aiVisibleRuns().map(r => r.id), [3]);
   // lo que hace confirmKeepDataBeforeDisconnect (sin el diálogo): se conserva la marca
-  const keep = (src, idField) => app.state.runs.filter(r => r.source === src).forEach(r => { if (src === 'strava' || src === 'garmin') { r.origin = src; r.aiExcluded = true; } delete r.source; delete r[idField]; });
-  assert.ok(/if\(sourceKey === 'strava' \|\| sourceKey === 'garmin'\)\{ r\.origin = sourceKey; r\.aiExcluded = true; \}/.test(SRC), 'confirmKeepDataBeforeDisconnect deja la marca');
+  const keep = (src, idField) => app.state.runs.filter(r => r.source === src).forEach(r => { if (['strava', 'garmin', 'wahoo', 'polar'].includes(src)) { r.origin = src; r.aiExcluded = true; } delete r.source; delete r[idField]; });
+  assert.ok(/if\(AI_RESTRICTED_SOURCES\.includes\(sourceKey\)\)\{ r\.origin = sourceKey; r\.aiExcluded = true; \}/.test(SRC), 'confirmKeepDataBeforeDisconnect deja la marca');
   keep('strava', 'stravaId'); keep('garmin', 'garminId');
   assert.deepEqual(app.aiVisibleRuns().map(r => r.id), [3], 'siguen fuera de la IA aunque ya no tengan source');
   assert.match(app.garminAttribution(app.state.runs[1]), /^Garmin/, 'la atribución de Garmin sobrevive a la conversión');
@@ -29,7 +29,7 @@ test('las carreras de Strava/Garmin convertidas en manuales siguen fuera de la I
 
 test('"bajar la carga": con carreras de Strava/Garmin no se manda a la IA un porcentaje calculado con ellas', () => {
   const body = SRC.slice(SRC.indexOf('function askZondaLowerLoad'), SRC.indexOf('// ---- Plan de carrera: tiempo objetivo'));
-  assert.ok(body.includes("t('load_prompt_generic')") && body.includes("r.source === 'strava' || r.source === 'garmin' || r.aiExcluded"));
+  assert.ok(body.includes("t('load_prompt_generic')") && body.includes("AI_RESTRICTED_SOURCES.includes(r.source) || r.aiExcluded"));
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.ok(loc(l).includes('load_prompt_generic:'), l);
 });
 
