@@ -1562,3 +1562,14 @@ test('Wahoo y Polar quedan fuera de Zonda igual que Strava y Garmin, también la
   assert.match(srv, /RESTRICTED_SOURCES = new Set\(\['strava', 'garmin', 'wahoo', 'polar'\]\)/);
   assert.match(weekly, /RESTRICTED_SOURCES = \['strava', 'garmin', 'wahoo', 'polar'\]/);
 });
+
+test('"Hoy en tu reloj" vive al final de la pestaña Plan (pedido del dueño 2026-11-10), no en Inicio', () => {
+  const fs = require('fs'), path = require('path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').split(String.fromCharCode(13)).join('');
+  const plan = html.slice(html.indexOf('<section class="view" id="view-plan">'), html.indexOf('<section class="view" id="view-correr">'));
+  const home = html.slice(html.indexOf('<section class="view" id="view-inicio">'), html.indexOf('<section class="view" id="view-plan">'));
+  assert.ok(plan.includes('id="home-watch-card"'), 'está en Plan');
+  assert.ok(!home.includes('id="home-watch-card"'), 'ya no está en Inicio');
+  assert.ok(plan.indexOf('id="home-watch-card"') > plan.indexOf('id="past-weeks-card"'), 'va abajo de todo, después de las semanas pasadas');
+  assert.ok(plan.indexOf('id="home-watch-card"') > plan.indexOf('id="perfil-ltest-card"'), 'y después del test de nivel');
+});
