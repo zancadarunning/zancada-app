@@ -2654,6 +2654,80 @@
   
   }
 
+  /* ==== Revision estetica 2026-11-10: celulares angostos (320-360 px) y detalles ====
+     Todo lo de abajo solo cambia lo que se rompia en pantallas chicas o en filas con texto largo; en 375 px y mas se ve igual que antes. */
+  /* Esta semana (Inicio): el anillo cede lugar y la etiqueta baja a su renglon cuando no entra "30.4 km PLANEADOS" */
+  @media (max-width:370px){
+    .week-ring{gap:14px;}
+    .week-ring-fig, .week-ring-fig svg{width:92px; height:92px;}
+    .week-ring-fig .wr-label{font-size:18px;}
+    .ws-row{flex-wrap:wrap; row-gap:0; justify-content:flex-start;}
+    .ws-row .l{flex:1 0 100%; text-align:left; margin-top:-3px;}
+    .ws-row .u{margin-right:0;}
+  }
+  /* Dias de entreno: 7 columnas que se achican en vez de salirse de la pantalla (antes cada una pedia 44 px como minimo) */
+  #perfil-days, #perfil-sport-days, #home-weekdays-picker{grid-template-columns:repeat(7, minmax(0, 1fr));}
+  #perfil-days .day-pill, #perfil-sport-days .day-pill, #home-weekdays-picker .day-pill{min-height:0; min-width:0; max-width:52px; justify-self:center; width:100%;}
+  /* Relojes y conectividad: en pantallas angostas la tarjeta y las filas usan menos margen interno para que quepan logo + etiqueta + flecha; en 320 el nombre largo (Garmin Connect) baja a dos renglones */
+  @media (max-width:370px){
+    #devices-overlay .card{padding-left:12px; padding-right:12px;}
+    .conn-row-head{padding:0 12px; gap:8px;}
+    .conn-row-head .tag{padding-left:8px; padding-right:8px;}
+    .conn-row-head .tag, .conn-row-head .icon-sq{flex-shrink:0;}
+  }
+  @media (max-width:340px){
+    .conn-row-head .brand-logo-chip img{max-width:80px;}
+    .conn-row-head .brand-logo-chip > span{white-space:normal; line-height:1.1; max-width:74px;}
+  }
+  /* Zapatillas: el nombre se corta con puntos suspensivos pero el tipo de terreno (ASFALTO / TRAIL) siempre se ve */
+  .shoe-row .shoe-info .n{display:flex; align-items:center; gap:4px; overflow:visible; text-overflow:clip;}
+  .shoe-row .shoe-info .n .shoe-name{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .shoe-row .shoe-info .n .tag{flex:none; margin-left:0 !important;}
+  /* Zapatillas en 320 px: el nombre ocupa todo el ancho y el terreno baja debajo; el formulario para agregar se apila */
+  @media (max-width:340px){
+    .shoe-row .shoe-info .n{flex-wrap:wrap; row-gap:3px;}
+    .shoe-row .shoe-info .n .shoe-name{flex:1 0 100%;}
+    #shoes-overlay .add-row{flex-direction:column;}
+    #shoes-overlay .add-row #shoe-terrain, #shoes-overlay .add-row input{flex:none; width:100%;}
+  }
+  /* Records personales (Logros): la fecha y el ritmo pasan a dos renglones en vez de cortarse */
+  .pr-info small{white-space:normal; overflow:visible; text-overflow:clip; line-height:1.3;}
+  @media (max-width:400px){ .pr-time{font-size:24px;} }
+  @media (max-width:340px){ .pr-row{gap:8px; padding-left:8px; padding-right:8px;} .pr-time{font-size:20px;} }
+  /* Deslizar para borrar: el rojo de atras no asoma por los bordes en reposo (antes solo en Historial; ahora tambien en Zapatillas y el resto) */
+  .swipe-item:not(:has(.swipe-content[style*="translate3d(-"])) .swipe-action-delete{visibility:hidden;}
+  /* Al cambiar de pestana la vista entra deslizandose 18 px: sin esto la pagina se ensanchaba un instante y asomaba el scroll horizontal. clip no crea un contenedor de scroll, asi que lo fijo y lo pegajoso siguen igual */
+  html, body{overflow-x:clip;}
+  /* Respuesta al toque: lo que se podia tocar y no cambiaba al presionarlo (mismo gesto que el resto de la app: achicarse un poco o atenuarse) */
+  .next-session, .pred-head, .trend-col, .avatar-big-wrap, .rd-tab-btn, #session-sheet .ss-close, .day-pill, .tap-pad,
+  #history-list [data-on-click*="shareRunImage"], [data-on-click="openRaceTipsInfo()"]{transition:transform .13s var(--ease-out), opacity .13s ease;}
+  .next-session:active, .avatar-big-wrap:active, .day-pill:active, #history-list [data-on-click*="shareRunImage"]:active{transform:scale(.96);}
+  .pred-head:active, .trend-col:active, .rd-tab-btn:active, #session-sheet .ss-close:active, .tap-pad:active, [data-on-click="openRaceTipsInfo()"]:active{opacity:.6;}
+  .run-mode-card:active, .date-box:active, .choice:active{background:var(--press);}
+  /* Medallas de Logros: las 3 columnas pueden achicarse (antes cada una pedia el ancho de su texto "Te faltan X km" y la tercera se salia de la tarjeta) */
+  .pr-medal-grid{grid-template-columns:repeat(auto-fill, minmax(84px, 1fr));}
+  .pr-medal{min-width:0;}
+  /* Plan: el dia de descanso no reserva la columna vacia de la derecha (le sacaba 88 px al texto y "Descanso" se partia en 320) */
+  .day-row-rest .day-row-end:has(> .day-end-slot:empty:only-child){display:none;}
+  /* Palabras largas (sobre todo en aleman, p. ej. "Herzfrequenzzonen"): en pantallas chicas se dividen con guion en vez de cortarse a la mitad (la app marca el idioma en <html lang>) */
+  @media (max-width:400px){ h2, h3, .choice, .l, .pr-medal-label, .pr-medal-time{hyphens:auto; -webkit-hyphens:auto;} }
+  /* Celulares angostos: el Check-in apila la pregunta arriba de las 3 opciones (hasta 369 px) y en 320 los botones de opcion achican un poco la letra, asi ninguna palabra se parte a la mitad */
+  @media (max-width:369px){
+    .rd3-row{flex-wrap:wrap; gap:4px 10px;}
+    .rd3-lbl{flex:1 0 100%;}
+    .rd3-row .choice-row{flex:1 0 100%;}
+  }
+  /* en aleman las palabras son mas largas (Mittelmaessig): el Check-in se apila en todos los celulares */
+  @media (max-width:420px){
+    :lang(de) .rd3-row{flex-wrap:wrap; gap:4px 10px;}
+    :lang(de) .rd3-lbl{flex:1 0 100%;}
+    :lang(de) .rd3-row .choice-row{flex:1 0 100%;}
+  }
+  @media (max-width:340px){
+    .choice, .choice-row.segmented .choice{font-size:12.5px; padding-left:3px; padding-right:3px;}
+    #perfil-gender-choice{flex-wrap:wrap; border-radius:18px;}
+    #perfil-gender-choice .choice{flex:1 1 45%;}
+  }
 </style>
 <style id="text-guard-css">
 /* ===== Texto largo que nunca se pisa con lo de al lado (2026-11-02) =====

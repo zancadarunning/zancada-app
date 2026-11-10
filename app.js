@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-10T13:29:16Z';
+const APP_VERSION = '2026-11-10T15:01:05Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1018,6 +1018,8 @@ function updateProfileUnitLabels(){
     // que sin esto un lector de pantalla se quedaba sin ningún nombre accesible persistente
     // para este campo (encontrado en una auditoría de accesibilidad de index.html).
     evDist.setAttribute('aria-label', evDistLabel);
+    const evLbl = document.querySelector('label[for="ev-distance"]');   // el rotulo visible tambien: decia "en km" aunque la persona use millas
+    if(evLbl) evLbl.textContent = evDistLabel;
   }
 }
 function fmtPace(minPerKm){
@@ -9704,7 +9706,7 @@ function renderHome(){
     document.getElementById('home-done-dist-label').textContent = distUnit();
     document.getElementById('home-done-time').textContent = fmtTime(todayRun.durationSec);
     document.getElementById('home-done-pace').textContent = fmtPace(paceMin);
-    document.getElementById('home-done-pace-label').textContent = t('run_pace');
+    document.getElementById('home-done-pace-label').textContent = t('run_pace_word') + ' /' + distUnit();   // con millas decia "/km" aunque el ritmo ya estuviera en min/mi
   } else {
     cardTitleEl.textContent = t('home_next');
     nextSessionBlock.style.display = '';
@@ -9847,7 +9849,7 @@ function renderRunTodayCard(){
     document.getElementById('run-done-dist-label').textContent = distUnit();
     document.getElementById('run-done-time').textContent = fmtTime(todayRun.durationSec);
     document.getElementById('run-done-pace').textContent = fmtPace(paceMin);
-    document.getElementById('run-done-pace-label').textContent = t('run_pace');
+    document.getElementById('run-done-pace-label').textContent = t('run_pace_word') + ' /' + distUnit();   // con millas decia "/km" aunque el ritmo ya estuviera en min/mi
     doneCard.style.display = 'block';
     return;
   }
@@ -11024,7 +11026,7 @@ function renderPerfil(){
       <div class="swipe-item">
         <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" data-on-click="deleteShoe(${s.id})"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
         <div class="swipe-content"><div class="shoe-info">
-          <div class="n">${escapeHtml(s.name)} <span class="tag tag-${s.terrain}" style="margin-left:4px;">${t('ob_terrain_'+s.terrain)}</span></div>
+          <div class="n"><span class="shoe-name">${escapeHtml(s.name)}</span> <span class="tag tag-${s.terrain}">${t('ob_terrain_'+s.terrain)}</span></div>
           <div class="muted mono" style="font-size:11.5px; margin-top:2px;">${fmtDist(s.km,0)} / ${fmtDist(threshold,0)} ${distUnit()}</div>
           <div class="wearbar ${pct>80?'warn':''}"><div style="width:${pct}%;"></div></div></div>
           <button class="small-link" style="display:inline-flex;" aria-label="${t('aria_edit')}" data-on-click="startEditShoe(${s.id})"><span class="icon-sq" style="width:15px; height:15px;">${ICONS.edit}</span></button>
