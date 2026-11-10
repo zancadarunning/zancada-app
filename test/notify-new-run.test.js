@@ -31,16 +31,16 @@ test('mensaje de una carrera: distancia, tiempo y ritmo, en el idioma y la unida
   const es = buildMessage([mkRun('suunto_1')], 'suunto', 'es', false);
   assert.equal(es.title, 'Entrenamiento cargado');
   assert.match(es.body, /Suunto: 8\.00 km · 48:48 · 6:06\/km/);
-  const en = buildMessage([mkRun('x')], 'polar', 'en', true);
-  assert.match(en.body, /Polar/);
+  const en = buildMessage([mkRun('x')], 'suunto', 'en', true);
+  assert.match(en.body, /Suunto/);
   assert.match(en.body, /4\.97 mi/);
   assert.match(en.body, /\/mi/);
   assert.equal(fmtPace(0, 5, false), '--:--');
 });
 
 test('varias carreras nuevas: un solo mensaje con el total', () => {
-  const m = buildMessage([mkRun('a', { distanceKm: 5 }), mkRun('b', { distanceKm: 3 })], 'wahoo', 'es', false);
-  assert.match(m.body, /2 entrenamientos de Wahoo \(8\.00 km en total\)/);
+  const m = buildMessage([mkRun('a', { distanceKm: 5 }), mkRun('b', { distanceKm: 3 })], 'suunto', 'es', false);
+  assert.match(m.body, /2 entrenamientos de Suunto \(8\.00 km en total\)/);
 });
 
 test('carrera nueva: se hace el merge y se manda la notificación con etiqueta', async () => {
@@ -69,7 +69,7 @@ test('carrera que ya estaba guardada (evento de edición): no avisa', async () =
 test('el merge la descartó por duplicada (ya llegó por otra marca): no avisa', async () => {
   sent.length = 0;
   global.fetch = fakeFetch({ stored: new Set() });
-  await mergeAndNotify(async () => ({ merged: true }), 'http://db', {}, 'u1', [mkRun('wahoo_2')], 'skip', 'wahoo');
+  await mergeAndNotify(async () => ({ merged: true }), 'http://db', {}, 'u1', [mkRun('wahoo_2')], 'skip', 'suunto');
   assert.equal(sent.length, 0);
 });
 
@@ -91,7 +91,7 @@ test('entreno viejo (relleno de historial) o usuario sin notificaciones: no avis
 test('si la notificación falla, el merge igual termina bien', async () => {
   const db = { stored: new Set() };
   global.fetch = async (url) => { if (String(url).includes('push_subscriptions')) throw new Error('red caída'); return fakeFetch(db)(url); };
-  const run = mkRun('polar_3');
-  const r = await mergeAndNotify(async () => { db.stored.add(run.id); return { merged: true }; }, 'http://db', {}, 'u1', [run], 'skip', 'polar');
+  const run = mkRun('suunto_3');
+  const r = await mergeAndNotify(async () => { db.stored.add(run.id); return { merged: true }; }, 'http://db', {}, 'u1', [run], 'skip', 'suunto');
   assert.deepEqual(r, { merged: true });
 });

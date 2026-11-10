@@ -14,7 +14,8 @@ const body = fn => {
 };
 
 test('aiVisibleRuns descarta las carreras importadas de Strava', () => {
-  assert.match(body('aiVisibleRuns'), /source\s*!==\s*'strava'/);
+  assert.match(body('aiVisibleRuns'), /AI_RESTRICTED_SOURCES\.includes\(r\.source\)/);
+  assert.match(src, /const AI_RESTRICTED_SOURCES = \[[^\]]*'strava'/);
 });
 
 test('el contexto de Zonda usa solo carreras sin Strava', () => {
@@ -29,6 +30,6 @@ test('el contexto de Zonda usa solo carreras sin Strava', () => {
 
 // Garmin Connect Developer Program: la misma regla (se declara en el formulario de acceso). Las carreras con source:'garmin' no llegan a Zonda.
 test('aiVisibleRuns descarta también las carreras de Garmin, y Zonda sabe que hay carreras que no ve', () => {
-  assert.match(body('aiVisibleRuns'), /source\s*!==\s*'garmin'/);
-  assert.match(src, /hasStravaRuns = \(state\.runs\|\|\[\]\)\.some\(r => r\.source === 'strava' \|\| r\.source === 'garmin'\)/);
+  assert.match(src, /const AI_RESTRICTED_SOURCES = \[[^\]]*'garmin'/);
+  assert.match(src, /hasStravaRuns = \(state\.runs\|\|\[\]\)\.some\(r => AI_RESTRICTED_SOURCES\.includes\(r\.source\) \|\| r\.aiExcluded\)/);
 });

@@ -31,9 +31,9 @@ const TEXTS = {
   de: { plan: (p, pct) => `Plan für heute: ${p} (du hast ${pct} % geschafft).`, title: 'Training geladen', one: (b, d, t, p) => `Wir haben deinen Lauf von ${b} geladen: ${d} · ${t} · ${p}. Er ist in deinem Verlauf.`, many: (n, b, d) => `Wir haben ${n} Trainings von ${b} geladen (${d} insgesamt). Sie sind in deinem Verlauf.` }
 };
 
-// Las carreras de Strava y Garmin NO se comparten con terceros más allá de Supabase/Vercel (lo exigen sus acuerdos y lo dice la política): el aviso viaja por el servicio de notificaciones del sistema (Firebase/Apple),
+// Las carreras de Strava, Garmin, Wahoo y Polar NO se comparten con terceros más allá de Supabase/Vercel (lo exigen sus acuerdos y lo dice la política): el aviso viaja por el servicio de notificaciones del sistema (Firebase/Apple),
 // así que para esas marcas solo dice que se cargó, SIN distancia, tiempo, ritmo ni comparación con el plan.
-const RESTRICTED_SOURCES = new Set(['strava', 'garmin']);
+const RESTRICTED_SOURCES = new Set(['strava', 'garmin', 'wahoo', 'polar']);   // espejo de AI_RESTRICTED_SOURCES en app.js
 const GENERIC = {
   es: { one: b => `Cargamos tu carrera de ${b}. Ya está en tu Historial.`, many: (n, b) => `Cargamos ${n} entrenamientos de ${b}. Ya están en tu Historial.` },
   en: { one: b => `We loaded your ${b} run. It's in your History.`, many: (n, b) => `We loaded ${n} workouts from ${b}. They're in your History.` },
