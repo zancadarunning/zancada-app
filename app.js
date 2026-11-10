@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-10T02:07:51Z';
+const APP_VERSION = '2026-11-10T02:30:42Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -861,9 +861,9 @@ function showConfirm(message, opts){
     const codeField = !!opts.codeField;
     const codeHtml = codeField ? `<div class="field" style="margin:14px 0 16px;"><label for="confirm-code">${escapeHtml(t('reauth_code_label'))}</label><input type="text" id="confirm-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*"></div>` : '';
     const pwHtml = pwField ? `<div class="field" style="margin:14px 0 16px;"><label for="confirm-pw">${escapeHtml(t('reauth_password_label'))}</label><input type="password" id="confirm-pw" autocomplete="current-password" maxlength="200"></div><div class="captcha-box" id="captcha-reauth"></div>` : '';
-    backdrop.innerHTML = `<div class="confirm-card"><p>${message}</p>${pwHtml}${codeHtml}<div class="confirm-actions">
-      <button class="btn btn-outline" id="confirm-cancel-btn">${cancelText}</button>
-      <button class="btn ${danger?'btn-danger':'btn-primary'}" id="confirm-ok-btn">${confirmText}</button>
+    backdrop.innerHTML = `<div class="confirm-card"><p>${escapeHtml(message)}</p>${pwHtml}${codeHtml}<div class="confirm-actions">
+      <button class="btn btn-outline" id="confirm-cancel-btn">${escapeHtml(cancelText)}</button>
+      <button class="btn ${danger?'btn-danger':'btn-primary'}" id="confirm-ok-btn">${escapeHtml(confirmText)}</button>
     </div></div>`;
     backdrop.classList.add('show');
     haptic(15);
@@ -921,6 +921,22 @@ function normalizeLoadedState(s){
   if(!s.profile || typeof s.profile !== 'object' || Array.isArray(s.profile)) s.profile = {};
   ['plan','runs','shoes','chat','painLog','readinessLog'].forEach(k => { s[k] = Array.isArray(s[k]) ? s[k].filter(x => x && typeof x === 'object') : []; });
   if(typeof s.lang !== 'string') s.lang = lang;
+  // Historial de semanas cerradas: lista de {weekStart, plan:[...]}. Con otra forma, buildContext (el contexto de Zonda), el indicador de carga y la constancia lanzaban, y Zonda se quedaba SIN contexto sin avisar.
+  s.planHistory = Array.isArray(s.planHistory)
+    ? s.planHistory.filter(w => w && typeof w === 'object' && typeof w.weekStart === 'string' && Array.isArray(w.plan)).map(w => Object.assign({}, w, {plan: w.plan.filter(x => x && typeof x === 'object')}))
+    : [];
+  // Carreras: distancia y duración siempre son números (la base permite null; un null o un texto rompía toFixed en el historial y en el contexto de Zonda).
+  s.runs.forEach(r => { if(r.distanceKm !== undefined && !Number.isFinite(r.distanceKm)) r.distanceKm = 0; if(r.durationSec !== undefined && !Number.isFinite(r.durationSec)) r.durationSec = 0; });
+  s.shoes.forEach(sh => { if(!Number.isFinite(sh.km)) sh.km = 0; });
+  // Zonas de pulso: o están completas (1 a 5, con mínimo y máximo numéricos) o se descartan y la app trabaja sin zonas, como antes de cargarlas.
+  const z = s.profile.hrZones;
+  if(z !== undefined && z !== null && !([1,2,3,4,5].every(k => z[k] && Number.isFinite(z[k].min) && Number.isFinite(z[k].max)))) delete s.profile.hrZones;
+  if(s.weekStart !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(s.weekStart))) delete s.weekStart;   // sin semana válida: checkWeekRollover() arma la de hoy
+  if(s.profile.trainingDays !== undefined && !Array.isArray(s.profile.trainingDays)) delete s.profile.trainingDays;
+  if(s.event && (typeof s.event !== 'object' || typeof s.event.date !== 'string')) s.event = null;
+  // Días elegidos para la semana que viene: {weekStart, days:[...]} o nada.
+  const nd = s.nextWeekDays;
+  if(nd !== undefined && nd !== null && !(typeof nd === 'object' && typeof nd.weekStart === 'string' && Array.isArray(nd.days))) s.nextWeekDays = null;
   return s;
 }
 let pendingEmail = '';
@@ -7663,6 +7679,22 @@ function checkReturningBreakGraduation(){
   renderChat();
   persist();
 }
+/* Tope de UNA sola salida según el objetivo. El volumen semanal ya tiene techo (1,8 veces el base), pero el reparto entre sesiones no: con pocos días por semana, una sola salida podía quedar enorme
+   (con 1 día y 20 km/semana, 36 km en la semana 14; con 2 días y 45 km/semana, 53 km). Si la sesión pasa el tope se reduce (sin repartir el resto: es más seguro que sumarlo a otro día).
+   La carrera objetivo no se toca: se aplica después. Los topes son altos a propósito: solo frenan salidas absurdas (el plan de siempre, protegido por test/support/plan-golden-v4.json, no puede cambiar
+   para los casos normales): ultra 60 km, maratón 42, media 35, el resto 32 (el "muro" de la tirada larga). */
+const SESSION_KM_CAP = { ultra: 60, '42k': 42, '21k': 35 };
+const SESSION_KM_CAP_DEFAULT = 32;
+function capSessionLengths(days, p){
+  const cap = SESSION_KM_CAP[p && p.goal] || SESSION_KM_CAP_DEFAULT;
+  return (days || []).map(d => {
+    if(!d || !(d.dist > cap)) return d;
+    const copy = Object.assign({}, d);
+    if(copy.interval) copy.interval = Object.assign({}, copy.interval);
+    scaleDayAmount(copy, cap / d.dist, true);
+    return copy;
+  });
+}
 function generatePlan(p, weekNumber, weekStartDate){
   weekNumber = weekNumber || 1;
   weekStartDate = weekStartDate || state.weekStart;
@@ -7759,7 +7791,7 @@ function generatePlan(p, weekNumber, weekStartDate){
   // Entrenar POR TIEMPO ya no es el plan en km convertido a minutos: se arma aparte, directo en minutos
   // (ver buildTimePlanDays) -- con trote/caminata para principiantes, series y cuestas por duración, etc.
   if(p.trainBy === 'time'){
-    return applyLevelTestDay(applyEventRaceNeighbors(applyGoalRaceDay(buildTimePlanDays({p, weekNumber, mult, beginner, easyOnly, caution, sessionMap, trainingDays, effectiveWeeklyKm, zoneMap, phaseInfo, goal: p.goal}), p, weekStartDate, phaseInfo), p, weekStartDate), p, weekStartDate, beginner);
+    return applyLevelTestDay(applyEventRaceNeighbors(applyGoalRaceDay(capSessionLengths(buildTimePlanDays({p, weekNumber, mult, beginner, easyOnly, caution, sessionMap, trainingDays, effectiveWeeklyKm, zoneMap, phaseInfo, goal: p.goal}), p), p, weekStartDate, phaseInfo), p, weekStartDate), p, weekStartDate, beginner);
   }
   // Reparto del volumen semanal entre las sesiones que de verdad va a tener esta semana, en
   // vez de calcular cada tipo de sesión por separado con una proporción fija (0.85x a 1.5x)
@@ -7885,7 +7917,7 @@ function generatePlan(p, weekNumber, weekStartDate){
     spreadPhaseShortfall(kmDays, weekTargetKm, phaseInfo.longCapKm || LONG_CAP_KM[p.goal] || Infinity, sessionCapKm, p);
   }
   applyPhaseRacePace(kmDays, phaseInfo, p.goal, easyOnly, true);
-  return applyLevelTestDay(applyEventRaceNeighbors(applyGoalRaceDay(kmDays, p, weekStartDate, phaseInfo), p, weekStartDate), p, weekStartDate, beginner);
+  return applyLevelTestDay(applyEventRaceNeighbors(applyGoalRaceDay(capSessionLengths(kmDays, p), p, weekStartDate, phaseInfo), p, weekStartDate), p, weekStartDate, beginner);
 }
 /* ================= TEST DE NIVEL + PLAN POR TIEMPO PROPIO =================
    Dos cosas que se agregaron juntas porque se apoyan una en la otra:
@@ -8123,7 +8155,8 @@ const RUNWALK_STAGES = [
   {reps:4, run:300, walk:120},
   {reps:3, run:480, walk:120},
   {reps:3, run:600, walk:120},
-  {reps:2, run:900, walk:120}
+  // el último escalón dura MÁS que el anterior (antes 2 x (900+120) = 34 min contra 36 min del escalón de arriba: en las semanas 7 y 8 la tirada larga salía más corta que un rodaje común)
+  {reps:2, run:1020, walk:120}
 ];
 function runWalkStageFor(weekNumber, isLong){
   let wn = weekNumber || 1;
@@ -10097,7 +10130,7 @@ function buildDayListHtml(wd){
     // index.html). Antes este tilde de "hecho" usaba --hivis puro y quedaba casi invisible
     // en modo claro -- reportado por el usuario.
     const statusIcon = d.status==='done' ? `<div class="icon-sq" style="width:16px; height:16px; color:var(--hivis-text);">${ICONS.check}</div>` : d.status==='skipped' ? `<div class="icon-sq" style="width:16px; height:16px; color:var(--danger);">${ICONS.cross}</div>` : '';
-    const zoneDetail = (d.zone && !isEventDay) ? `<br><br><span class="zone-chip zone-${d.zone}">${t('zone_word')} ${d.zone}</span> <span class="mono muted">${z[d.zone].min}-${z[d.zone].max} bpm</span>` : '';
+    const zoneDetail = (d.zone && z && z[d.zone] && !isEventDay) ? `<br><br><span class="zone-chip zone-${d.zone}">${t('zone_word')} ${d.zone}</span> <span class="mono muted">${z[d.zone].min}-${z[d.zone].max} bpm</span>` : '';
     let statusBlock = '';
     if(d.status==='done'){
       const run = d.linkedRunId ? state.runs.find(r=>r.id===d.linkedRunId) : null;
@@ -10413,6 +10446,7 @@ function markSession(i, status){
 const ZONE_PCT = {1:'50–60%', 2:'60–70%', 3:'70–80%', 4:'80–90%', 5:'90–100%'};
 function renderZones(){
   const z = state.profile.hrZones;
+  if(!z || !([1,2,3,4,5].every(k => z[k] && Number.isFinite(z[k].min) && Number.isFinite(z[k].max)))) return;
   // hrKnown distingue si la FC máxima es una estimación por edad o si el corredor la
   // confirmó (por chat, con el coach) -- antes este flag no se usaba en ningún lado, y
   // el texto de acá siempre decía "se calcula según tu edad" aunque ya hubiera una FC
@@ -17107,7 +17141,7 @@ function renderRDDetalles(panel){
       </div>
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; padding-top:16px; border-top:1px solid var(--asphalt-3); gap:8px; flex-wrap:wrap;"><span class="muted">${t('hist_shoe')}</span>${shoeSelect}</div>
     </div>
-    ${r.hrLog && r.hrLog.length>1 ? `<div class="hist-hrlist" style="margin-top:12px;">${r.hrLog.map(h=>`<span class="zone-chip zone-${classifyHR(h.bpm)}">${h.bpm} bpm</span>`).join('')}</div>` : ''}
+    ${r.hrLog && r.hrLog.length>1 ? `<div class="hist-hrlist" style="margin-top:12px;">${r.hrLog.map(h=>`<span class="zone-chip zone-${classifyHR(Number(h.bpm) || 0)}">${Math.round(Number(h.bpm) || 0)} bpm</span>`).join('')}</div>` : ''}
   `;
 }
 // Cuánto varía el ritmo entre parciales y cuánto cambió la segunda mitad respecto de la primera (el veredicto "negativo / parejo /
@@ -18788,6 +18822,8 @@ function paceMinPerKmOf(r){
 function safeBuildContext(){
   try{ return buildContext(); }catch(e){ console.error('buildContext falló', e); return ''; }
 }
+// el contexto de Zonda solo usa carreras con distancia y duración numéricas (una sin esos datos hacía lanzar buildContext y Zonda quedaba sin contexto en silencio)
+const runHasNumbers = r => Number.isFinite(r.distanceKm) && Number.isFinite(r.durationSec);
 function buildContext(){
   const p = state.profile;
   // Sin esto, el coach no tenía NINGÚN dato explícito de qué día es hoy -- tenía que
@@ -18893,7 +18929,7 @@ function buildContext(){
   if(p.weeklyGoalKm > 0) ctx += ` Meta ${isTimeMode() ? 'de tiempo' : 'de km'} que el corredor se puso para esta semana: ${isTimeMode() ? weeklyGoalAmount().km + ' minutos' : p.weeklyGoalKm + 'km'} (esto ya se usó para ajustar el volumen del plan actual, dentro de márgenes seguros).`;
   if(p.goalNote) ctx += ` Objetivo personal, en sus propias palabras: "${p.goalNote}".`;
   { const ad = adherenceSummary(); if(ad.planned >= 3) ctx += ` Constancia en las últimas ${ad.weeks} semanas cerradas: cumplió ${ad.done} de ${ad.planned} sesiones planeadas (${ad.pct}%)${state.streakWeeks >= 2 ? ', racha de ' + state.streakWeeks + ' semanas seguidas cumpliendo' : ''}.`; }
-  const aiRuns = aiVisibleRuns();   // sin las carreras de Strava (ver aiVisibleRuns)
+  const aiRuns = aiVisibleRuns().filter(runHasNumbers);   // sin las carreras de Strava (ver aiVisibleRuns)
   const hasStravaRuns = (state.runs||[]).some(r => r.source === 'strava' || r.source === 'garmin');   // (Strava o Garmin: las dos marcas prohíben pasar sus datos a una IA)
   // la pausa se mide sobre TODAS las carreras (es lo que ya redujo el plan), pero solo se le dice a Zonda que existe una pausa: nunca el contenido de una carrera de Strava
   const gapWeeks = detectTrainingGapWeeks(state.weekStart);

@@ -20,7 +20,7 @@ test('aiVisibleRuns descarta las carreras importadas de Strava', () => {
 test('el contexto de Zonda usa solo carreras sin Strava', () => {
   const i = src.indexOf('const aiRuns = aiVisibleRuns()');
   assert.ok(i > 0, 'el contexto del coach debe partir de aiVisibleRuns()');
-  const ctx = src.slice(i, i + 6000);
+  const ctx = src.slice(i, i + 7000);
   assert.match(ctx, /runsByDateAsc\(aiRuns\)/);
   assert.match(ctx, /aiRuns\.filter\(/);
   assert.match(ctx, /hasStravaRuns \? null : calcTrainingLoad\(aiRuns\)/);

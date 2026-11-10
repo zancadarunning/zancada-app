@@ -1453,3 +1453,92 @@ test('Zonda: el prompt trae ejemplos de pedidos claros que se aplican sin pregun
   assert.ok(prompt.includes('Si tu respuesta empieza con "¿querés que...?" para algo que el corredor ya pidió con claridad, es un error'));
   assert.ok(prompt.length < 20000);
 });
+
+test('plan: una sola salida tiene tope según el objetivo (antes, con pocos días por semana, podía salir una sesión de 36 a 144 km); los casos normales no cambian', () => {
+  const app = loadApp();
+  const days = { '1d': ['sat'], '2d': ['tue', 'sat'], '4d': ['tue', 'thu', 'sat', 'sun'] };
+  const longest = (goal, d, cur, trainBy) => {
+    const p = { name: 'x', weight: 70, height: 170, birth: '1985-01-01', gender: 'm', currentWeeklyKm: cur, goal, runnerType: 'active', trainingDays: days[d], units: 'metric', trainBy: trainBy || 'distance', terrain: 'asfalto', hrZones: app.computeZones(185), hrMax: 185 };
+    p.weeklyKm = app.calcWeeklyKm(p);
+    app.state.profile = p; app.state.weekStart = app.getMondayISO(new Date()); app.state.onboarded = true;
+    let mx = 0;
+    for (let w = 1; w <= 16; w++) for (const s of app.generatePlan(p, w)) if (!s.raceDay) mx = Math.max(mx, s.dist);
+    return mx;
+  };
+  assert.ok(longest('10k', '1d', 45) <= 32.1, 'un solo día y 45 km/sem: ' + longest('10k', '1d', 45));
+  assert.ok(longest('5k', '2d', 80) <= 32.1);
+  assert.ok(longest('21k', '1d', 80) <= 35.1);
+  assert.ok(longest('42k', '1d', 80) <= 42.1);
+  assert.ok(longest('ultra', '1d', 80) <= 60.1);
+  assert.ok(longest('10k', '1d', 45, 'time') <= 32.1, 'también por tiempo');
+  // un plan normal (4 días, 30 km/semana) no se toca: la sesión más larga queda por debajo del tope
+  assert.ok(longest('10k', '4d', 30) < 25);
+  assert.equal(app.capSessionLengths([{ day: 'sat', typeKey: 'long', dist: 20 }], { goal: '10k' })[0].dist, 20, 'por debajo del tope: igual');
+  const capped = app.capSessionLengths([{ day: 'sat', typeKey: 'long', dist: 64, durMin: 400, timeBased: true }], { goal: '10k' })[0];
+  assert.ok(capped.dist <= 32.1 && capped.durMin < 400, 'también escala los minutos: ' + JSON.stringify(capped));
+});
+
+test('carga de estado: un estado con la forma rota (historial, carreras, zonas, semana, días, evento) se arregla al cargar y las pantallas y el contexto de Zonda no lanzan', () => {
+  const app = loadApp();
+  const bad = {
+    onboarded: true, weekStart: 12345, planHistory: { no: 'es lista' }, event: { name: 'x', date: null },
+    profile: { name: 'Ana', trainingDays: 'lun', hrZones: { 1: {} }, units: 'metric', trainBy: 'distance', goal: '10k', runnerType: 'active', weeklyKm: 20, currentWeeklyKm: 20 },
+    plan: [null, { day: 'mon', dist: 5, typeKey: 'easy', zone: 99 }], runs: [{ id: 'a', date: Date.now(), distanceKm: null, durationSec: 'abc' }, null], shoes: [{ id: 1, name: 'Z', km: 'mucho' }], nextWeekDays: 'x'
+  };
+  const s = app.normalizeLoadedState(JSON.parse(JSON.stringify(bad)));
+  assert.equal(JSON.stringify(s.planHistory), '[]');
+  assert.equal(s.weekStart, undefined);
+  assert.equal(s.event, null);
+  assert.equal(s.profile.trainingDays, undefined);
+  assert.equal(s.profile.hrZones, undefined);
+  assert.equal(s.nextWeekDays, null);
+  assert.equal(s.runs.length, 1);
+  assert.equal(s.runs[0].distanceKm, 0);
+  assert.equal(s.runs[0].durationSec, 0);
+  assert.equal(s.shoes[0].km, 0);
+  // y uno sano queda igual
+  const ok = { onboarded: true, weekStart: '2026-11-09', planHistory: [{ weekStart: '2026-11-02', plan: [{ day: 'mon', dist: 5 }] }], profile: { hrZones: app.computeZones(190), trainingDays: ['mon'] }, plan: [], runs: [{ id: 'a', distanceKm: 5, durationSec: 1800 }], shoes: [], event: { name: 'E', date: '2026-11-20' } };
+  const o = app.normalizeLoadedState(JSON.parse(JSON.stringify(ok)));
+  assert.equal(o.weekStart, '2026-11-09');
+  assert.equal(o.planHistory.length, 1);
+  assert.equal(o.event.date, '2026-11-20');
+  assert.equal(o.runs[0].distanceKm, 5);
+  assert.ok(o.profile.hrZones && o.profile.trainingDays.length === 1);
+  // con el estado roto ya normalizado (sobre el estado vivo de la app), el contexto de Zonda y las pantallas no lanzan
+  Object.keys(app.state).forEach(k => delete app.state[k]);
+  Object.assign(app.state, JSON.parse(JSON.stringify(bad)));
+  app.normalizeLoadedState(app.state);
+  app.state.chat = []; app.state.painLog = [];
+  app.checkWeekRollover();
+  assert.doesNotThrow(() => app.buildContext());
+  assert.doesNotThrow(() => app.renderZones());
+  assert.doesNotThrow(() => app.renderPlan());
+  assert.doesNotThrow(() => app.adherenceSummary());
+});
+
+test('plan para principiantes por tiempo: la tirada larga nunca dura menos que un rodaje común (el último escalón de trote-caminata duraba menos que el anterior)', () => {
+  const app = loadApp();
+  for (const days of [['tue', 'sat'], ['mon', 'wed', 'fri'], ['mon', 'tue', 'thu', 'sat']]) {
+    const p = { name: 'x', weight: 70, height: 170, birth: '1985-01-01', gender: 'm', weeklyKm: 15, currentWeeklyKm: 15, goal: 'start', runnerType: 'active', trainingDays: days, units: 'metric', trainBy: 'time', terrain: 'asfalto', hrZones: app.computeZones(185), hrMax: 185 };
+    app.state.profile = p; app.state.weekStart = app.getMondayISO(new Date()); app.state.onboarded = true;
+    for (let w = 1; w <= 14; w++) {
+      const s = app.generatePlan(p, w).filter(d => d.dist > 0 && !d.raceDay);
+      const long = s.find(d => d.typeKey === 'long');
+      const easy = s.filter(d => d.typeKey === 'easy');
+      if (long && easy.length) assert.ok(long.durMin >= Math.max(...easy.map(d => d.durMin)), `${days.length}d s${w}: tirada ${long.durMin} min < rodaje ${Math.max(...easy.map(d => d.durMin))} min`);
+    }
+  }
+});
+
+test('contexto de Zonda: una carrera sin distancia o duración numéricas no lo rompe (antes Zonda se quedaba sin contexto en silencio)', () => {
+  const app = loadApp();
+  ready(app);
+  app.state.onboarded = true;
+  app.state.profile = sweepProfile(app, {});
+  app.state.weekStart = app.getMondayISO(new Date());
+  app.state.plan = app.generatePlan(app.state.profile, 6);
+  app.state.runs = [{ id: 'a', date: Date.now() - 864e5, distanceKm: 5, durationSec: 1800 }, { id: 'b', date: Date.now() - 2 * 864e5 }, { id: 'c', date: Date.now() - 3 * 864e5, distanceKm: null, durationSec: 100 }];
+  let ctx;
+  assert.doesNotThrow(() => { ctx = app.buildContext(); });
+  assert.ok(ctx.length > 1000 && /5\.00km/.test(ctx), 'sigue usando la carrera válida');
+});
