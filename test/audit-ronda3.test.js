@@ -1432,3 +1432,14 @@ test('Zonda: el contexto trae la constancia de las últimas semanas cerradas (so
   app.state.planHistory = [mk(4), mk(4), mk(4), mk(4), mk(0)];
   assert.equal(app.adherenceSummary().weeks, 4, 'solo las últimas 4');
 });
+
+test('Zonda: ante un pedido claro con número aplica directo, sin preguntar lo que el plan ya dice (resultado de evals/coach: preguntaba de más)', () => {
+  const start = SRC.indexOf('function buildCoachSystem(ctx){');
+  const end = SRC.indexOf('no intentes diagnosticar vos la causa.`;', start);
+  const prompt = SRC.slice(start, end);
+  assert.ok(prompt.includes('aplicalo DIRECTO con la herramienta, manteniendo el tipo de sesión, la zona y el terreno que ya tenía ese día'));
+  assert.ok(prompt.includes('no discutas si el número es mayor o menor que el actual'));
+  assert.ok(prompt.includes('el número de minutos que pide es el total que él ve en la app'));
+  // el prompt sigue siendo uno solo y entra holgado en el tope del servidor
+  assert.ok(prompt.length < 20000, 'largo del texto de instrucciones: ' + prompt.length);
+});
