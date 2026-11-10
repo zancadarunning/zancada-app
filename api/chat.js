@@ -4,6 +4,7 @@ const { applyCors, isPreflight } = require('./_lib/cors');
 const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { pick } = require('./_lib/own');
 const { sanitizeChatRequest } = require('./_lib/chat-guard');
+const { pickModel } = require('./_lib/chat-model');
 
 // Mensajes que sí le mostramos al corredor tal cual, en su idioma. Antes, cualquier error
 // que no fuera "muy solicitado" (token de sesión faltante/vencido, un error interno de la
@@ -173,7 +174,8 @@ module.exports = withSentry(async (req, res) => {
     // tools con input_schema) -- de hecho por eso se armó así desde el principio, aunque
     // hasta ahora esto le pegaba a Gemini con una capa de traducción en el medio. Se los
     // mandamos prácticamente tal cual.
-    const model = 'claude-haiku-4-5-20251001';
+    // Haiku para todo, salvo que CHAT_ACTION_MODEL esté definido: entonces los pedidos que cambian el plan o el perfil usan ese modelo (ver api/_lib/chat-model.js).
+    const model = pickModel(messages, !!(tools && tools.length), process.env);
     const url = 'https://api.anthropic.com/v1/messages';
     const body = JSON.stringify({
       model,

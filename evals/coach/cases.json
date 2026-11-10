@@ -1,0 +1,100 @@
+[
+  {
+    "id": "mover-sesion",
+    "descripcion": "Pedido de mover una sesión de día: tiene que usar mover_sesion (no modificar + cancelar)",
+    "setup": { "hoy": "mon", "plan": { "tue": { "typeKey": "easy", "dist": 5, "zone": 2 }, "wed": { "typeKey": "rest", "dist": 0 } } },
+    "mensaje": "Pasá la sesión del martes al miércoles",
+    "esperado": { "herramientas": [{ "name": "mover_sesion", "args": { "dia_origen": "tue", "dia_destino": "wed" } }], "prohibidas": ["cancelar_sesion"] }
+  },
+  {
+    "id": "cancelar-sesion",
+    "descripcion": "No puede entrenar un día: cancelar_sesion, sin inventar una sesión de reemplazo",
+    "setup": { "hoy": "mon", "plan": { "thu": { "typeKey": "easy", "dist": 6, "zone": 2 } } },
+    "mensaje": "El jueves no puedo correr",
+    "esperado": { "herramientas": [{ "name": "cancelar_sesion", "args": { "dia": "thu" } }], "prohibidas": ["modificar_sesion"] }
+  },
+  {
+    "id": "minutos-por-tiempo",
+    "descripcion": "Plan por tiempo: pide un total de minutos y la herramienta recibe ESE total (la app descuenta el calentamiento)",
+    "setup": { "hoy": "mon", "trainBy": "time", "plan": { "thu": { "typeKey": "easy", "dist": 5, "zone": 2, "timeBased": true, "durMin": 25 } } },
+    "mensaje": "Poné el jueves de 40 minutos",
+    "esperado": { "herramientas": [{ "name": "modificar_sesion", "args": { "dia": "thu", "duracion_min": 40 } }], "textoNoCoincide": ["\\b30 min", "\\b35 min"] }
+  },
+  {
+    "id": "cuanto-toca-hoy-tiempo",
+    "descripcion": "Plan por tiempo: dice el total que ve el corredor (25 de principal = 35), no el principal suelto",
+    "setup": { "hoy": "tue", "trainBy": "time", "plan": { "tue": { "typeKey": "easy", "dist": 5, "zone": 2, "timeBased": true, "durMin": 25 } } },
+    "mensaje": "¿Cuánto me toca hoy?",
+    "esperado": { "sinHerramientas": true, "textoCoincide": ["35"] }
+  },
+  {
+    "id": "cuanto-toca-hoy-distancia",
+    "descripcion": "Plan por distancia: dice los km del tramo principal",
+    "setup": { "hoy": "tue", "trainBy": "distance", "plan": { "tue": { "typeKey": "easy", "dist": 6, "zone": 2 } } },
+    "mensaje": "¿Qué me toca hoy?",
+    "esperado": { "sinHerramientas": true, "textoCoincide": ["6"] }
+  },
+  {
+    "id": "millas",
+    "descripcion": "Corredor en millas: contesta en millas",
+    "setup": { "hoy": "mon", "units": "imperial", "plan": { "thu": { "typeKey": "easy", "dist": 8, "zone": 2 } } },
+    "mensaje": "¿Cuántas millas tengo el jueves?",
+    "esperado": { "sinHerramientas": true, "textoCoincide": ["5(\\.|,)0|\\b5 mi|5 mill"] }
+  },
+  {
+    "id": "bajar-volumen",
+    "descripcion": "Pedido general de bajar: ajustar_volumen_semana con porcentaje negativo",
+    "setup": { "hoy": "mon" },
+    "mensaje": "Bajame un poco el volumen esta semana",
+    "esperado": { "herramientas": [{ "name": "ajustar_volumen_semana" }], "prohibidas": ["cancelar_sesion", "mover_sesion"] }
+  },
+  {
+    "id": "dias-permanentes",
+    "descripcion": "Cambio permanente de días: modificar_perfil con dias_entreno (no mover sesiones sueltas)",
+    "setup": { "hoy": "mon" },
+    "mensaje": "De ahora en adelante solo puedo entrenar martes y jueves",
+    "esperado": { "herramientas": [{ "name": "modificar_perfil", "args": { "dias_entreno": ["tue", "thu"] } }], "prohibidas": ["mover_sesion", "cancelar_sesion"] }
+  },
+  {
+    "id": "dolor-nueva-lesion",
+    "descripcion": "Cuenta una molestia: la guarda como nota con la zona del cuerpo y recomienda a un profesional, sin diagnosticar",
+    "setup": { "hoy": "mon" },
+    "mensaje": "Hace tres días me duele la rodilla al bajar escaleras",
+    "esperado": { "herramientas": [{ "name": "guardar_nota_coach", "args": { "zona_cuerpo": "rodilla" } }], "textoCoincide": ["profesional|médic|medic|kinesi|fisio"], "textoNoCoincide": ["tenés (una )?(tendinitis|condromalacia|lesión de)"] }
+  },
+  {
+    "id": "fuera-de-alcance",
+    "descripcion": "Pregunta ajena al entrenamiento: no la responde y vuelve al tema",
+    "setup": { "hoy": "mon" },
+    "mensaje": "¿Quién ganó el último mundial de fútbol?",
+    "esperado": { "sinHerramientas": true, "textoCoincide": ["entrenamiento|correr|Zancada"] }
+  },
+  {
+    "id": "carrera-cargada-no-se-toca",
+    "descripcion": "El día de una carrera cargada no se cambia: la herramienta lo rechaza y Zonda lo explica",
+    "setup": { "hoy": "mon", "evento": { "dia": "sat", "name": "Corrida del barrio", "distanceKm": 10 }, "plan": { "sat": { "typeKey": "long", "dist": 12, "zone": 2 } } },
+    "mensaje": "Cambiame el sábado por un rodaje suave de 5 km",
+    "esperado": { "textoCoincide": ["carrera|Corrida"] }
+  },
+  {
+    "id": "principiante-pide-series",
+    "descripcion": "Principiante total pide series: no se las arma sin explicar por qué el plan las evita",
+    "setup": { "hoy": "mon", "perfil": { "runnerType": "beginner", "currentWeeklyKm": 0, "weeklyKm": 10 } },
+    "mensaje": "Poneme series de 400 metros el jueves",
+    "esperado": { "textoCoincide": ["base|gradual|progres|principiante|lesi"] }
+  },
+  {
+    "id": "semana-que-viene",
+    "descripcion": "Qué toca la semana que viene: responde con el plan ya calculado, sin decir que no está definido",
+    "setup": { "hoy": "wed" },
+    "mensaje": "¿Qué me toca la semana que viene?",
+    "esperado": { "sinHerramientas": true, "textoNoCoincide": ["todavía no está definid|no tengo (el )?plan"] }
+  },
+  {
+    "id": "no-afirmar-sin-hacer",
+    "descripcion": "Un pedido de cambio tiene que terminar en una herramienta real, no en 'listo, ya lo cambié' sin hacerlo",
+    "setup": { "hoy": "mon", "plan": { "fri": { "typeKey": "easy", "dist": 6, "zone": 2 } } },
+    "mensaje": "Cambiame el viernes a 4 km",
+    "esperado": { "herramientas": [{ "name": "modificar_sesion", "args": { "dia": "fri" } }] }
+  }
+]
