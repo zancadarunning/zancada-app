@@ -14,13 +14,10 @@ Escrito el 2026-11-10. Público: sin claves. Decisión del dueño: **9,99 USD po
 | **Aviso de las tiendas al servidor (renovó, canceló, reembolsó)** | **No existe**: nada escribe en `entitlements` |
 | Qué es gratis y qué es Pro | **Sin decidir** (ver abajo) |
 
-## Decisión que falta del dueño: qué ve quien no paga
+## Decisiones del dueño (2026-11-10)
 
-Los Términos dicen "Hoy gratuita; desde el lanzamiento, suscripción con 14 días de prueba". Hay que fijar qué pasa al terminar la prueba:
-1. **Todo bloqueado hasta suscribirse** (lo más simple de construir y lo que dicen hoy los Términos).
-2. **Gratis limitado** (por ejemplo el registro de carreras y el plan básico; Pro suma Zonda, adaptación del plan y envío a relojes). Convierte distinto y es más trabajo.
-
-Recomendación: la 1 para el lanzamiento, porque las tiendas muestran la prueba gratis como invitación y es lo que ya prometen los Términos; se puede abrir una parte gratis después. También hay que decidir qué pasa con las cuentas que ya existen (¿se les regala la prueba, o se mantienen gratis por un tiempo?).
+1. **Al terminar los 14 días gratis se bloquea todo** hasta suscribirse (coincide con la sección 15 de los Términos).
+2. **Las cuentas que ya existen reciben la suscripción de regalo.** Se marcan en `entitlements` como plan Pro con origen `manual`, sin pasar por las tiendas. Falta confirmar si el regalo es **sin vencimiento** o por un tiempo (se asume sin vencimiento).
 
 ## Cómo construirlo (recomendado)
 
@@ -55,15 +52,18 @@ No hay ningún código de HealthKit en la app. Falta: activar la capacidad Healt
 
 ## Antes de cobrar: acuerdos de las marcas de relojes
 
-Ahora que hay precio, hay que confirmar que cada acuerdo de desarrollador permite un producto de pago. **Nada de esto está verificado todavía**, y las notas internas no mencionan reglas comerciales:
-- **Garmin (plan Starter):** leer el acuerdo aceptado en el portal (¿uso comercial? ¿tope de 1.000 usuarios?). Reportes de terceros dicen que Enterprise llevaría cargo desde 2027-04-01.
-- **Suunto, Wahoo, COROS, Polar:** buscar en cada acuerdo "comercial" o "monetización".
-- **Strava:** ya se está retirando; sus reglas prohíben IA y piden borrar a los 7 días.
+Leídos el 2026-11-10; el detalle está en la carpeta privada (no se publica). Resumen:
+- **Garmin:** el acuerdo prohíbe obtener ingresos por el uso de la API sin permiso escrito de Garmin (cláusula 5.2(e)). Hay que pedirlo **antes** de cobrar.
+- **Wahoo:** prohíbe cobrar por funciones "relacionadas con" su API y exige borrar los datos de un usuario cuando su suscripción termina. Riesgo alto; pedir confirmación escrita.
+- **Polar:** ambiguo ("comercializar"); pide revocar el acceso y borrar los tokens cuando el usuario deja la app.
+- **Suunto y COROS:** sin leer (el acuerdo de Suunto no es público; el sitio de COROS bloqueó la lectura).
+
+**Consecuencia técnica:** cuando una cuenta queda sin suscripción (pasado un margen de gracia), hay que desconectar los relojes, revocar los tokens y borrar las carreras importadas de cada marca. Es parte del trabajo del cobro.
 
 ## Orden sugerido
 
-1. Decidir qué es gratis y qué es Pro, y qué pasa con las cuentas actuales.
-2. Verificar los acuerdos de las marcas (puedo leerlos si me pasás los textos del portal).
+1. ~~Decidir qué se bloquea y qué pasa con las cuentas actuales~~ (hecho).
+2. Pedir permiso escrito a Garmin y a Wahoo para operar una app de pago; leer los acuerdos de Suunto y COROS.
 3. Crear cuentas (Play Console y Apple Developer) y los productos.
 4. Construir webhook, pantalla y control de acceso; probarlo en Android primero.
 5. Sumar HealthKit y la compra en iPhone cuando haya forma de compilar.
