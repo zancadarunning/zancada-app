@@ -2,10 +2,16 @@
 
 Textos listos para pegar en Play Console → Presencia en la tienda. Escritos el 2026-11-10 a partir de `PRODUCT.md` y del código. Público: sin claves.
 
-**Reglas que respeté:** no hay cifras de usuarios, reseñas ni premios (no existen y Play los rechaza si no se pueden probar); no se dice "gratis" ni se nombra ningún precio (el modelo de cobro no está decidido); no se promete nada médico; no se usa "#1", "el mejor" ni palabras de oferta, que Play prohíbe en el título y la descripción.
+**Reglas que respeté:** no hay cifras de usuarios, reseñas ni premios (no existen y Play los rechaza si no se pueden probar); no se promete nada médico; no se usa "#1", "el mejor" ni palabras de oferta, que Play prohíbe en el título y la descripción.
+
+**Modelo de cobro (decidido el 2026-11-10):** app gratuita de descargar con **suscripción dentro de la app**: **9,99 USD por mes** o **79,99 USD por año** (el año sale unos 40 USD menos que 12 meses, un 33% de ahorro) y **14 días de prueba gratis** (ver sección 15 de los Términos). Los precios en cada país los muestra la tienda; en la descripción no se escriben cifras porque cambian por país e impuestos. Cómo se arma: `docs/suscripciones-plan.md`.
+
+**Qué se muestra en cada tienda y por qué cambia:**
+- **Android:** el texto de abajo (Health Connect). Play pide declarar "contiene compras en la app".
+- **iPhone:** otro texto que habla de Apple Health en vez de Health Connect (al final de este archivo). Apple exige que la descripción incluya el nombre de la suscripción, su duración, su precio, la renovación automática y los enlaces a la política de privacidad y a los Términos.
 
 **Antes de publicar, confirmá a mano:**
-- La lista de marcas de relojes del texto largo (hoy: Health Connect, Garmin, Suunto, Wahoo, COROS, Polar). Garmin está aprobado pero todavía no se verificó una carrera real que llegue sola; si preferís no prometerlo, sacalo de la lista.
+- La lista de marcas de relojes del texto largo (Health Connect, Garmin, Suunto, Wahoo, COROS, Polar). Garmin: confirmado por vos el 2026-11-10 que las carreras llegan.
 - Que la app esté publicada con el mismo nombre en `zancada.org` (Play compara la identidad).
 
 ## Datos del listado
@@ -149,4 +155,44 @@ Play exige: icono 512×512 (`icon-512.png`, ya existe), **gráfico de funciones 
 - **Seguridad de los datos y permisos sensibles:** ver `docs/tiendas-formularios-privacidad.md` (respuestas ya redactadas, incluida la justificación del servicio en primer plano de ubicación y de Health Connect).
 - **Declaración de Health Connect:** pide un texto por cada permiso (ejercicio, distancia, frecuencia cardíaca, elevación, calorías, pasos) y la política de privacidad: usar las justificaciones de `tiendas-formularios-privacidad.md`.
 - **App de salud:** Play pide declarar si es una app de salud; marcar que ofrece "seguimiento de actividad / estado físico" y que **no** es un dispositivo médico.
-- **Cuenta de pago / precios:** dejar la app como "gratuita" hasta decidir el modelo de cobro; cambiar de gratuita a paga después **no es posible** en la misma ficha (hay que usar compras dentro de la app). Si se piensa cobrar, decidirlo antes de publicar.
+- **Precio de la app:** dejarla **Gratuita** y declarar **"Contiene compras en la app"**. Cambiar una app de gratuita a paga no se puede en la misma ficha, y de todos modos el cobro va por suscripción. Las suscripciones se crean en Play Console → Monetizar → Productos → Suscripciones (ver `docs/suscripciones-plan.md`).
+
+## App Store (iPhone): campos y textos
+
+**Cambios respecto del texto de Android:** en la sección "TUS DATOS DE ENTRENAMIENTO" reemplazar "Health Connect" por "Apple Salud (HealthKit)", y agregar al final el bloque de suscripción de abajo. Hoy la app **no** lee Apple Salud todavía (no hay código de HealthKit); no publicar ese texto hasta que exista (ver `docs/suscripciones-plan.md`, sección "Pendiente para iPhone").
+
+| Campo | Español | English |
+|---|---|---|
+| Nombre (máx. 30) | `Zancada: coach de running` | `Zancada: running coach` |
+| Subtítulo (máx. 30) | `Plan, carreras y coach con IA` | `Plans, runs and an AI coach` |
+| Texto promocional (máx. 170) | `Un plan de entrenamiento que se adapta a vos, guía por voz en cada salida y Zonda, tu coach con IA. Probalo 14 días gratis.` | `A training plan that adapts to you, voice guidance on every run, and Zonda, your AI coach. Try it free for 14 days.` |
+| Palabras clave (máx. 100, sin espacios) | `running,correr,entrenamiento,maratón,plan,carrera,coach,ritmo,gps,5k,10k,pulso,trotar` | `running,run,training,marathon,plan,coach,pace,gps,5k,10k,half marathon,heart rate` |
+| URL de soporte | `https://www.zancada.org` | igual |
+| URL de privacidad | `https://www.zancada.org/privacy.html` | igual |
+| Términos de uso (EULA) | `https://www.zancada.org/terms.html` | igual |
+
+**Bloque de suscripción (pegar al final de la descripción, es):**
+
+```
+SUSCRIPCIÓN ZANCADA PRO
+• Mensual: 9,99 USD por mes. Anual: 79,99 USD por año (el precio en tu moneda lo muestra la App Store).
+• 14 días de prueba gratis. No se cobra durante la prueba y podés cancelar cuando quieras.
+• El pago se carga a tu cuenta de Apple al confirmar la compra. La suscripción se renueva sola salvo que la canceles al menos 24 horas antes de que termine el período en curso. Se cobra la renovación dentro de las 24 horas previas al fin del período.
+• Podés administrar o cancelar la suscripción en los Ajustes de tu cuenta de Apple, después de la compra.
+
+Política de privacidad: https://www.zancada.org/privacy.html
+Términos de uso: https://www.zancada.org/terms.html
+```
+
+**Bloque de suscripción (en):**
+
+```
+ZANCADA PRO SUBSCRIPTION
+• Monthly: 9.99 USD per month. Yearly: 79.99 USD per year (the App Store shows the price in your currency).
+• 14-day free trial. You are not charged during the trial and you can cancel any time.
+• Payment is charged to your Apple Account when you confirm the purchase. The subscription renews automatically unless you cancel it at least 24 hours before the end of the current period. The renewal is charged within 24 hours before the end of the period.
+• You can manage or cancel your subscription in your Apple Account settings after purchase.
+
+Privacy Policy: https://www.zancada.org/privacy.html
+Terms of Use: https://www.zancada.org/terms.html
+```
