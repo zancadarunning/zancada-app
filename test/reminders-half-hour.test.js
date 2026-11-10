@@ -81,7 +81,7 @@ test('recordatorio diario: respeta las unidades y el modo por tiempo (antes dec�
   assert.equal(await body({}), 'Hoy toca: Rodaje suave · 5.0 km');
   assert.equal(await body({ units: 'imperial' }), 'Hoy toca: Rodaje suave · 3.1 mi');
   const timePlan = plan.map(d => ({ ...d, durMin: 40 }));
-  assert.equal(await body({ plan: timePlan, trainBy: 'time' }), 'Hoy toca: Rodaje suave · 40 min');
+  assert.equal(await body({ plan: timePlan, trainBy: 'time' }), 'Hoy toca: Rodaje suave · 50 min');   // total: 40 + 5 de calentamiento + 5 de vuelta a la calma
   assert.equal(await body({ lang: 'en' }), 'Today: Easy run · 5.0 km');
 });
 

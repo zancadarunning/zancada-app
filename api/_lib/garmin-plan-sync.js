@@ -79,6 +79,22 @@ async function removeOrphanZancadaWorkouts(base, headers, userId, accessToken, g
   return removed;
 }
 
+// Fechas con un entrenamiento en Garmin que hay que borrar porque el plan ya no tiene nada ese día (sesión quitada o movida a otro día).
+//  - Con planDates (las fechas donde el plan tiene alguna sesión, hecha o pendiente, de esta semana y la próxima) se mira desde el lunes de esta semana: una sesión que se pasó al lunes y se devolvió al martes
+//    el mismo lunes dejaba el entrenamiento del lunes para siempre, porque antes solo se borraban fechas POSTERIORES a hoy. Una sesión ya hecha sigue figurando en planDates, así que no se toca.
+//  - Sin planDates (versiones viejas de la app) se mantiene la regla de antes: solo fechas posteriores a hoy.
+const DATE_RE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+function addDaysIso(iso, n) { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function staleGarminDates(known, { today, weekStart, keepDates, planDates, dayDates }) {
+  const useWeek = planDates && planDates.size > 0 && DATE_RE_ONLY.test(String(weekStart)) && DATE_RE_ONLY.test(String(today)) && weekStart <= today && addDaysIso(weekStart, 7) > today;
+  const end = useWeek ? addDaysIso(weekStart, 13) : null;
+  return Object.keys(known).filter(d => {
+    if (dayDates && dayDates.has(d)) return false;   // se está reenviando
+    if (useWeek) return d >= weekStart && d <= end && !planDates.has(d) && !(keepDates && keepDates.has(d));
+    return (!today || d > today) && keepDates && keepDates.size > 0 && !keepDates.has(d);
+  }).sort();
+}
+
 // Quita TODO lo que Zancada mandó (al desconectar o al borrar la cuenta). Devuelve cuántos entrenamientos se borraron.
 async function removeAllGarminWorkouts(base, headers, userId, accessToken) {
   // Solo lo que todavía está por venir (desde ayer, por el huso) y en orden de fecha: antes se traían hasta 60 filas SIN orden, con las fechas ya pasadas, y los 40 que se recorrían eran
@@ -95,4 +111,4 @@ async function removeAllGarminWorkouts(base, headers, userId, accessToken) {
   return removed;
 }
 
-module.exports = { KIND, loadKnown, saveKnown, forgetKnown, deleteGarminWorkout, removeAllGarminWorkouts, removeOrphanZancadaWorkouts };
+module.exports = { KIND, staleGarminDates, loadKnown, saveKnown, forgetKnown, deleteGarminWorkout, removeAllGarminWorkouts, removeOrphanZancadaWorkouts };

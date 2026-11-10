@@ -44,10 +44,22 @@ function isNudgeTime(localHour, localMinute) {
 
 // Qué decía la sesión, para el texto: "Rodaje suave · 8.0 km" (o minutos si el plan es por tiempo). Todo sale de números y de la lista fija de
 // nombres de tipo; un tipo propio de la persona (custom) se recorta y se limpia.
+// Minutos de calentamiento + vuelta a la calma de una sesión: mismas reglas que warmCoolMinutes() de la app (10 de calentamiento en calidad, 5 en el resto, 5 de vuelta a la calma; nada en descanso ni carrera).
+const QUALITY_TYPES = new Set(['intervals', 'tempo', 'fartlek', 'hills', 'progression', 'test']);
+function warmCoolTotalMin(d) {
+  if (!d || !(Number(d.dist) > 0) || d.raceDay || d.typeKey === 'rest') return 0;
+  return (QUALITY_TYPES.has(d.typeKey) ? 10 : 5) + 5;
+}
+// Minutos que la persona ve en el plan por tiempo: el tramo principal MÁS el calentamiento y la vuelta a la calma (antes el aviso decía solo el principal: "25 min" cuando el plan mostraba 35).
+function timePlanMinutes(d) {
+  const main = d.typeKey === 'test' ? 12 : Math.round(Number(d.durMin));
+  return main + warmCoolTotalMin(d);
+}
+
 function describeSession(today, typeLabel, imperial, timeMode) {
   let label = String(typeLabel || '').replace(/[\r\n\u0000-\u001f]/g, ' ').slice(0, 40).trim();
   let amount;
-  if (timeMode && Number(today.durMin) > 0) amount = Math.round(Number(today.durMin)) + ' min';
+  if (timeMode && Number(today.durMin) > 0) amount = timePlanMinutes(today) + ' min';
   else {
     const km = Number(today.dist);
     amount = (imperial ? km * MI_PER_KM : km).toFixed(1) + (imperial ? ' mi' : ' km');
@@ -86,4 +98,4 @@ async function hasRunToday(base, headers, userId, win) {
   } catch (e) { return null; }
 }
 
-module.exports = { NUDGE_HOUR, mondayOf, isNudgeTime, sessionDueToday, describeSession, buildNudge, localDayWindow, hasRunToday };
+module.exports = { NUDGE_HOUR, mondayOf, isNudgeTime, sessionDueToday, describeSession, timePlanMinutes, buildNudge, localDayWindow, hasRunToday };
