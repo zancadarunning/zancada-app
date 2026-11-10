@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-10T15:12:00Z';
+const APP_VERSION = '2026-11-10T15:26:52Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2834,6 +2834,22 @@ function storeWatchPlanCopy(all, zones, labels){
   state.watchPlanSig = sig;
   return true;
 }
+// Fechas (esta semana y la próxima) donde el plan tiene alguna sesión o una carrera, HECHA O PENDIENTE: Garmin las usa para saber qué entrenamientos del calendario ya no corresponden a nada (una sesión que se quitó o se pasó
+// a otro día, incluso hoy o un día ya pasado de esta semana) sin tocar los de sesiones hechas. A diferencia de buildWatchPlanDays no salta lo hecho ni lo pasado.
+function watchPlanDates(){
+  const out = [];
+  const addWeek = (plan, weekStart) => {
+    if(!plan || !weekStart) return;
+    plan.forEach((d, i) => {
+      const date = addDaysToIsoLocal(weekStart, i);
+      const hasSession = !!d && ((d.dist > 0 && d.typeKey !== 'rest') || d.raceDay);
+      if(hasSession || (state.event && state.event.date === date) || eventRaceDayPayload(date)) out.push(date);
+    });
+  };
+  addWeek(state.plan, state.weekStart);
+  try{ const nw = getNextWeekPlan(); addWeek(nw.plan, nw.weekStart); }catch(e){ /* sin la semana próxima alcanza con la actual */ }
+  return [...new Set(out)];
+}
 function watchWindow(){
   const weekStart = state.weekStart, weekEnd = addDaysToIsoLocal(weekStart, 6);
   const all = buildWatchPlanDays();
@@ -3182,7 +3198,7 @@ async function syncPlanToGarmin(force){
         const res = await fetch(apiUrl('/api/garmin-push-plan'), {
           method:'POST',
           headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
-          body: JSON.stringify({ days:changed, keepDates:keep, weekStart, today:todayLocalISO(), zones, labels, force:!!force })
+          body: JSON.stringify({ days:changed, keepDates:keep, planDates:watchPlanDates(), weekStart, today:todayLocalISO(), zones, labels, force:!!force })
         });
         result = await res.json().catch(()=>null);
         if(!result && !res.ok) garminBlockedUntil = Date.now() + 15*60*1000;

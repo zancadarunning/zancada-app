@@ -16,7 +16,7 @@ const { payloadHash, isDuplicate, remember } = require('./_lib/plan-dedupe');
 const { withinDailyCap, withinHourlyCap } = require('./_lib/daily-cap');
 const { ensureFreshGarminToken, garminCall, refreshGarminPermissions, GARMIN_API } = require('./_lib/garmin-activity-helpers');
 const { buildGarminWorkout, countSteps } = require('./_lib/garmin-workout-builder');
-const { loadKnown, saveKnown, forgetKnown, deleteGarminWorkout, removeOrphanZancadaWorkouts } = require('./_lib/garmin-plan-sync');
+const { loadKnown, saveKnown, forgetKnown, deleteGarminWorkout, removeOrphanZancadaWorkouts, staleGarminDates } = require('./_lib/garmin-plan-sync');
 const { withSentry, reportError } = require('./_lib/sentry');
 
 const MAX_DAYS = 14;   // esta semana y la próxima
@@ -37,12 +37,15 @@ module.exports = withSentry(async (req, res) => {
   const zones = cleanZones(body.zones);
   const labels = cleanLabels(body.labels);
   const today = DATE_RE.test(String(body.today || '')) ? body.today : null;
+  const weekStart = DATE_RE.test(String(body.weekStart || '')) ? body.weekStart : null;
+  // fechas (esta semana y la próxima) donde el plan tiene alguna sesión, hecha o pendiente: lo que Garmin tenga en una fecha que no está acá es de una sesión que se quitó o se movió
+  const planDates = new Set((Array.isArray(body.planDates) ? body.planDates : []).filter(d => DATE_RE.test(String(d))).slice(0, 14));
 
   const base = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_KEY;
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
-  const planHash = payloadHash({ v: 2, days, keepDates: [...keepDates].sort(), zones, labels, today });
+  const planHash = payloadHash({ v: 3, days, keepDates: [...keepDates].sort(), planDates: [...planDates].sort(), weekStart, zones, labels, today });
   if (body.force !== true && await isDuplicate(base, headers, userId, 'garmin_plan', planHash)) {
     res.status(200).json({ pushed: 0, failed: 0, unchanged: true, pushedDates: days.map(d => d.date) });
     return;
@@ -63,7 +66,9 @@ module.exports = withSentry(async (req, res) => {
     if (!perms.length) perms = (await refreshGarminPermissions(base, headers, userId, accessToken)) || [];   // vacíos = no sabemos: se vuelven a pedir
     if (perms.length && !perms.includes('WORKOUT_IMPORT')) { res.status(200).json({ pushed: 0, reason: 'no_permission' }); return; }
 
-    const known = await loadKnown(base, headers, userId, today || '0000-00-00');
+    // con planDates se mira desde el lunes de esta semana (ver staleGarminDates); sin ellos, desde hoy como siempre
+    const usePlanDates = planDates.size > 0 && weekStart && today && weekStart <= today;
+    const known = await loadKnown(base, headers, userId, usePlanDates ? weekStart : (today || '0000-00-00'));
     let created = 0, skipped = 0, failed = 0, deleted = 0, firstError = null;
     let stop = null;   // 'rate_limited' | 'no_permission': se corta el envío
     const pushedDates = [];
@@ -112,8 +117,8 @@ module.exports = withSentry(async (req, res) => {
       } catch (e) { fail(day.date, e); }
     }
 
-    // sesiones que el plan quitó o movió de día (fechas futuras que ya no están): se borran de Garmin
-    const staleDates = Object.keys(known).filter(d => (!today || d > today) && keepDates.size && !keepDates.has(d) && !days.some(x => x.date === d)).sort();
+    // sesiones que el plan quitó o movió de día: se borran de Garmin (incluida la de hoy y las ya pasadas de esta semana si el plan ya no las tiene)
+    const staleDates = staleGarminDates(known, { today, weekStart, keepDates, planDates, dayDates: new Set(days.map(x => x.date)) });
     if (!stop) {
       for (const date of staleDates.slice(0, 7)) {
         try { if (await deleteGarminWorkout(accessToken, known[date])) { await forgetKnown(base, headers, userId, date); deleted++; } } catch (e) { /* se reintenta en el próximo envío */ }

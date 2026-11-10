@@ -40,7 +40,13 @@ test('mondayOf: el lunes de la semana en curso, cualquier día y en el huso de l
 test('texto: kilómetros, millas y minutos, limpio de saltos de línea, en los 6 idiomas', () => {
   assert.equal(nudge.describeSession({ dist: 8 }, 'Rodaje suave', false, false), 'Rodaje suave · 8.0 km');
   assert.equal(nudge.describeSession({ dist: 8 }, 'Easy', true, false), 'Easy · 5.0 mi');
-  assert.equal(nudge.describeSession({ dist: 8, durMin: 45 }, 'Rodaje', false, true), 'Rodaje · 45 min');
+  // plan por tiempo: el aviso dice el TOTAL que ve la persona en el plan (principal + calentamiento + vuelta a la calma), no solo el principal
+  assert.equal(nudge.describeSession({ dist: 8, durMin: 45 }, 'Rodaje', false, true), 'Rodaje · 55 min');
+  assert.equal(nudge.describeSession({ dist: 8, durMin: 25, typeKey: 'easy' }, 'Rodaje suave', false, true), 'Rodaje suave · 35 min', '25 + 5 + 5 (el caso reportado: el aviso decía 25 y el plan 35)');
+  assert.equal(nudge.describeSession({ dist: 6, durMin: 30, typeKey: 'intervals' }, 'Series', false, true), 'Series · 45 min', 'calidad: 10 de calentamiento + 5 de vuelta a la calma');
+  assert.equal(nudge.describeSession({ dist: 6, durMin: 40, typeKey: 'test' }, 'Test', false, true), 'Test · 27 min', 'el test de nivel son 12 minutos fijos');
+  assert.equal(nudge.describeSession({ dist: 8, durMin: 45, raceDay: true }, 'Carrera', false, true), 'Carrera · 45 min', 'la carrera no lleva calentamiento guiado');
+  assert.equal(nudge.timePlanMinutes({ dist: 8, durMin: 25, typeKey: 'long' }), 35);
   assert.equal(nudge.describeSession({ dist: 8 }, 'a\nb\r\n' + 'x'.repeat(100), false, false).includes('\n'), false);
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
     const m = nudge.buildNudge(l, 'X · 8.0 km');
@@ -149,7 +155,7 @@ test('cron: a las 20:00 con sesión planeada y sin carrera hoy manda el aviso, u
 test('cron: plan por tiempo muestra minutos', async () => {
   registry.clear();
   const a = await runAt(TUE + 'T20:00:10Z', { id: 'n2', plan: mkPlan(), weekStart: '2026-10-12', trainBy: 'time' }, false);
-  assert.match(a.sent[0].body, /Rodaje suave · 40 min/);
+  assert.match(a.sent[0].body, /Rodaje suave · 50 min/);   // 40 del plan + 5 de calentamiento + 5 de vuelta a la calma
 });
 
 test('cron: no manda si ya corrió, si la base no pudo contestar, fuera de las 20:00, o con la sesión ya resuelta o el plan viejo', async () => {
