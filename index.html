@@ -2868,6 +2868,7 @@ body{overflow-wrap:break-word;}
   .watch-dot{flex:0 0 auto; width:9px; height:9px; margin-top:6px; border-radius:50%; background:var(--mist);}
   .watch-dot.sent{background:var(--hivis-text);}
   .watch-actions{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;}
+  .watch-actions .btn{flex:1 1 150px;}   /* los dos botones del mismo ancho (cada uno ocupa toda la fila cuando no entran juntos) */
   .watch-steps{margin:12px 0 0; padding-left:20px; font-size:13.5px; line-height:1.5; color:var(--mist);}
   .watch-steps li{margin:0 0 6px;}
   .watch-note{margin:8px 0 0; font-size:12px; line-height:1.4; color:var(--mist);}
@@ -3574,7 +3575,6 @@ body{overflow-wrap:break-word;}
     </div>
     </div>
 
-    <div class="card watch-card" id="home-watch-card" style="display:none;"></div>
     <div class="card" id="readiness-card" style="display:none;">
       <h3 style="margin:0 0 12px;" data-i18n="readiness_title3"></h3>
       <div class="rd3-row"><span class="rd3-lbl" data-i18n="readiness_q_sleep"></span>
@@ -3735,6 +3735,7 @@ body{overflow-wrap:break-word;}
         <div id="past-weeks-list"></div>
       </div>
     </div>
+    <div class="card watch-card" id="home-watch-card" style="display:none; margin-top:14px;"></div>
   </section>
 
   <section class="view" id="view-correr">
