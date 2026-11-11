@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-11T18:58:41Z';
+const APP_VERSION = '2026-11-11T19:22:58Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1833,7 +1833,7 @@ async function loadUserAndEnter(user, isRetry){
     document.getElementById('onboard').style.display='block';
     resetOnboardSteps();
     // Volviendo de autorizar un reloj en medio del inicio (web/iPhone): se confirma la conexión AHORA y se repintan las filas (antes recién al terminar todo, cuando el código de un solo uso ya había vencido).
-    finishPendingProviderLink().then(()=>{ if(obCurrentStep === 19) obRefreshConnections(); }).catch(()=>{});
+    finishPendingProviderLink().then(()=>{ if(obCurrentStep === OB_CONNECT_PAGE) obRefreshConnections(); }).catch(()=>{});
     if(window.zcBootDone) window.zcBootDone();
   }catch(e){
     console.error('load error', e);
@@ -4732,7 +4732,10 @@ function computeZonesFor(p, hrmax){
   return rest ? computeZonesKarvonen(hrmax, rest) : computeZones(hrmax);
 }
 // El inicio es de UNA pregunta por pantalla (ver #onboard en index.html). Algunos pasos solo aplican según una respuesta anterior (data-when="active": los de quien ya corre).
-const OB_STEP_COUNT = document.querySelectorAll('#onboard .ob-step').length;
+// El inicio son 7 pantallas (.ob-page); cada una junta varias preguntas (.ob-step, que ahora es un bloque dentro de su pantalla). obCurrentStep es el número de PANTALLA.
+const OB_PAGE_COUNT = document.querySelectorAll('#onboard .ob-page').length;
+const OB_HEALTH_PAGE = 5;    // peso y altura, género (y embarazo) y lesiones
+const OB_CONNECT_PAGE = 6;   // notificaciones, reloj y "¿cómo nos conociste?"
 let obCurrentStep = 1;
 let obNotifNeeded = true;   // ¿falta pedir las notificaciones? (data-when="notif")
 function obStepEls(){ return [...document.querySelectorAll('#onboard .ob-step')]; }
@@ -4741,12 +4744,17 @@ function obStepApplies(el){
   if(el.dataset.when === 'active') return (document.querySelector('#ob-runnertype .choice.active') || {dataset:{}}).dataset.v === 'active';
   return true;
 }
-// Barra de progreso y contador cuentan solo los pasos que le tocan a esta persona
+function obPageEls(){ return [...document.querySelectorAll('#onboard .ob-page')]; }
+// Los bloques que no le tocan a esta persona (las preguntas de "ya corro" y el pedido de notificaciones) se ocultan dentro de su pantalla
+function obRefreshBlocks(){
+  obStepEls().forEach(el => { el.hidden = !obStepApplies(el); });
+}
+// Barra de progreso y contador: pantalla actual sobre el total de pantallas
 function updateObProgress(){
-  const steps = obStepEls().filter(obStepApplies);
-  const pos = Math.max(1, steps.findIndex(el => parseInt(el.dataset.step,10) === obCurrentStep) + 1);
-  document.getElementById('ob-progress-fill').style.transform = `scaleX(${pos/steps.length})`;
-  { const c = document.getElementById('ob-step-count'); if(c) c.textContent = pos + '/' + steps.length; }
+  const total = obPageEls().length || OB_PAGE_COUNT || 1;
+  const pos = Math.min(Math.max(1, obCurrentStep), total);
+  document.getElementById('ob-progress-fill').style.transform = `scaleX(${pos/total})`;
+  { const c = document.getElementById('ob-step-count'); if(c) c.textContent = pos + '/' + total; }
 }
 function resetOnboardSteps(){
   obCurrentStep = 1;
@@ -4757,15 +4765,15 @@ function resetOnboardSteps(){
 }
 function obGotoStep(n){
   obCurrentStep = n;
-  document.querySelectorAll('#onboard .ob-step').forEach(el=>el.classList.toggle('active', parseInt(el.dataset.step,10)===n));
+  obPageEls().forEach(el=>el.classList.toggle('active', parseInt(el.dataset.page,10)===n));
+  obRefreshBlocks();
   updateObProgress();
   document.getElementById('ob-back-btn').style.display = n>1 ? 'flex' : 'none';
   document.getElementById('onboard').scrollTop = 0;
   updateObStep2ButtonState();
-  if(n === 19) obRefreshConnections();
-  // en el celular, la pregunta de texto o número abre el teclado sola (no en pasos de elegir una opción)
-  const active = document.querySelector('#onboard .ob-step.active');
-  const first = active && active.querySelector('input[type="text"], input[type="number"], textarea');
+  if(n === OB_CONNECT_PAGE) obRefreshConnections();
+  // en el celular, la primera pantalla abre el teclado en el nombre (las demás mezclan opciones y campos: no se abre sola)
+  const first = n === 1 ? document.getElementById('ob-name') : null;
   if(first && !first.value && window.matchMedia && window.matchMedia('(pointer:coarse)').matches){ try{ first.focus({preventScroll:true}); }catch(e){} }
 }
 // El paso 2 del onboarding (peso/altura/fecha de nacimiento) dejaba avanzar sin llenar nada
@@ -4775,8 +4783,22 @@ function obGotoStep(n){
 // el atributo disabled en index.html) y solo se habilita cuando los 3 campos tienen un valor
 // real -- oninput en peso/altura, y calSelectDay() para la fecha (se elige desde el calendario
 // compartido, no dispara 'input').
-// Con una pregunta por pantalla, cada botón Continuar se habilita con lo suyo: nombre (pantalla 1), fecha de nacimiento (14) y peso + altura (15).
+// Cada pantalla habilita su Continuar con lo obligatorio de esa pantalla: nombre y fecha de nacimiento (pantalla 1) y peso + altura (pantalla 5). Los botones de bloque (ocultos) siguen la misma lógica de siempre.
+function updateObPageCtas(){
+  const nameOk = !!document.getElementById('ob-name').value.trim();
+  const birthOk = !!document.getElementById('ob-birth').value;
+  const weightOk = parseWeightInput(document.getElementById('ob-weight').value) > 0;
+  const heightOk = parseHeightInput(document.getElementById('ob-height').value) > 0;
+  const set = (page, ok, missing) => {
+    const btn = document.getElementById('ob-page-cta-' + page), why = document.getElementById('ob-page-reason-' + page);
+    if(btn) btn.disabled = !ok;
+    if(why) why.textContent = missing.length ? t('why_missing', {items: missing.join(', ')}) : '';
+  };
+  set(1, nameOk && birthOk, [nameOk ? null : t('why_item_name'), birthOk ? null : t('why_item_birth')].filter(Boolean));
+  set(OB_HEALTH_PAGE, weightOk && heightOk, [weightOk ? null : t('why_item_weight'), heightOk ? null : t('why_item_height')].filter(Boolean));
+}
 function updateObStep2ButtonState(){
+  updateObPageCtas();
   const nameBtn = document.getElementById('ob-name-continue-btn');
   if(nameBtn) nameBtn.disabled = !document.getElementById('ob-name').value.trim();
   const birth = document.getElementById('ob-birth').value;
@@ -4800,14 +4822,18 @@ function updateObStep2ButtonState(){
 }
 function obNextStep(){
   haptic(10);
-  const next = obStepEls().find(el => parseInt(el.dataset.step,10) > obCurrentStep && obStepApplies(el));
-  if(next) obGotoStep(parseInt(next.dataset.step,10));
+  const total = obPageEls().length || OB_PAGE_COUNT;
+  if(obCurrentStep < total) obGotoStep(obCurrentStep + 1);
 }
 function obPrevStep(){
   haptic(10);
-  const prev = obStepEls().filter(el => parseInt(el.dataset.step,10) < obCurrentStep && obStepApplies(el)).pop();
-  if(prev) obGotoStep(parseInt(prev.dataset.step,10));
+  if(obCurrentStep > 1) obGotoStep(obCurrentStep - 1);
 }
+// Al tocar una opción (por ejemplo "Ya corro") aparecen o se van las preguntas que dependen de ella, sin cambiar de pantalla
+(function(){
+  const ob = document.getElementById('onboard');
+  if(ob && ob.addEventListener) ob.addEventListener('click', () => setTimeout(() => { try{ obRefreshBlocks(); updateObStep2ButtonState(); }catch(e){} }, 0));
+})();
 async function finishOnboard(){
   const name = document.getElementById('ob-name').value.trim() || 'Runner';
   // "|| 70"/"|| 170" (como estaba antes) solo cubre NaN/0 -- un valor negativo (typo, un
@@ -15236,7 +15262,7 @@ function obCollectDraft(){
   const val = id => (document.getElementById(id) || {}).value || '';
   const choice = sel => (document.querySelector(sel + ' .choice.active') || {dataset:{}}).dataset.v || null;
   const pills = sel => [...document.querySelectorAll(sel + ' .day-pill.active')].map(e => e.dataset.v);
-  return { v:1, step: obCurrentStep, name: val('ob-name'), runnertype: choice('#ob-runnertype'), currentkm: val('ob-currentkm'), returning: choice('#ob-returning'),
+  return { v:2, step: obCurrentStep, name: val('ob-name'), runnertype: choice('#ob-runnertype'), currentkm: val('ob-currentkm'), returning: choice('#ob-returning'),
     refDist: val('ob-refrace-dist'), refMin: val('ob-refrace-min'), sports: obSelectedSports.slice(), sportDays: pills('#ob-sport-days'), terrain: choice('#ob-terrain'), trainby: choice('#ob-trainby'),
     days: pills('#ob-days'), availmin: val('ob-availmin'), goal: val('ob-goal'), racedate: val('ob-racedate'), gender: choice('#ob-gender'),
     birth: val('ob-birth'), weight: val('ob-weight'), height: val('ob-height'), referral: choice('#ob-referral') };   // sin embarazo/posparto ni molestias/lesiones: son datos de salud sensibles y no se dejan en sessionStorage
@@ -15252,7 +15278,7 @@ function obRestoreDraft(){
   if(!key) return false;
   let d = null;
   try{ d = JSON.parse(sessionStorage.getItem(key) || 'null'); }catch(e){ d = null; }
-  if(!d || d.v !== 1) return false;
+  if(!d || d.v !== 2) return false;   // v2: "step" es el número de pantalla (el borrador v1 guardaba el paso de 20)
   const setVal = (id, v) => { const el = document.getElementById(id); if(el && typeof v === 'string') el.value = v; };
   const setChoice = (sel, v) => { if(typeof v !== 'string') return; document.querySelectorAll(sel + ' .choice').forEach(c => c.classList.toggle('active', c.dataset.v === v)); };
   const setPills = (sel, arr) => { const ok = Array.isArray(arr) ? arr.filter(x => DAY_KEYS.includes(x)) : []; document.querySelectorAll(sel + ' .day-pill').forEach(p => p.classList.toggle('active', ok.includes(p.dataset.v))); };
@@ -15272,10 +15298,9 @@ function obRestoreDraft(){
   dateBoxUpdaters['ob-birth'] && dateBoxUpdaters['ob-birth']();
   dateBoxUpdaters['ob-racedate'] && dateBoxUpdaters['ob-racedate']();
   let step = Number(d.step);
-  // Embarazo/posparto (paso 13, solo si es mujer) y molestias/lesiones (paso 16) NO se guardan en el borrador (son datos de salud): si ya habías pasado esos pasos se vuelven a preguntar, en vez de seguir con los campos vacíos sin avisar.
-  if(step > 16) step = d.gender === 'f' ? 13 : 16;
-  else if(step > 13 && d.gender === 'f') step = 13;
-  if(step >= 1 && step <= OB_STEP_COUNT) obGotoStep(step);
+  // Embarazo/posparto y molestias/lesiones (los dos en la pantalla de salud) NO se guardan en el borrador (son datos de salud): si ya habías pasado esa pantalla se vuelve a ella para preguntarlos de nuevo, en vez de seguir con los campos vacíos sin avisar.
+  if(step > OB_HEALTH_PAGE) step = OB_HEALTH_PAGE;
+  if(step >= 1 && step <= OB_PAGE_COUNT) obGotoStep(step);
   return true;
 }
 // ¿Falta pedir las notificaciones? (si ya están concedidas o bloqueadas, o el dispositivo no las soporta, esa pantalla se salta)
@@ -15288,12 +15313,13 @@ async function obCheckNotifNeeded(){
     else needs = Notification.permission === 'default';
   }catch(e){ needs = false; }
   obNotifNeeded = needs;
+  obRefreshBlocks();
   updateObProgress();
 }
 async function acceptNotifPrompt(){
   const btn = document.getElementById('np-enable-btn');
   if(btn) btn.disabled = true;
-  try{ await enablePushNotifications({skipSoftAsk:true}); }finally{ if(btn) btn.disabled = false; await obCheckNotifNeeded(); obNextStep(); }
+  try{ await enablePushNotifications({skipSoftAsk:true}); }finally{ if(btn) btn.disabled = false; await obCheckNotifNeeded(); }   // el bloque de notificaciones desaparece solo cuando ya no hay nada que pedir; se sigue en la misma pantalla (reloj y "¿cómo nos conociste?")
 }
 // Pantalla de conectar el reloj: lo conectado figura como "Conectado" y no se puede tocar de nuevo
 function refreshObConnectRows(){

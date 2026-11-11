@@ -76,7 +76,9 @@ test('notas de Zonda: se listan (escapadas) y se pueden borrar desde Perfil', ()
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) for (const k of ['coach_notes_title', 'coach_notes_lead', 'coach_notes_empty', 'coach_notes_delete']) assert.ok(loc(l).includes(k + ':'), l + ' ' + k);
 });
 
-test('al volver de conectar un reloj en el inicio, los pasos con datos de salud que no se guardan en el borrador se vuelven a preguntar', () => {
-  assert.ok(SRC.includes("if(step > 16) step = d.gender === 'f' ? 13 : 16;"));
-  assert.ok(SRC.includes("else if(step > 13 && d.gender === 'f') step = 13;"));
+test('al volver de conectar un reloj en el inicio, la pantalla con datos de salud que no se guardan en el borrador se vuelve a preguntar', () => {
+  // embarazo/posparto y lesiones están en la pantalla 5 y no viajan en el borrador: al volver de la pantalla 6 (reloj) se retoma en la 5
+  assert.ok(SRC.includes('const OB_HEALTH_PAGE = 5;'));
+  assert.ok(SRC.includes('if(step > OB_HEALTH_PAGE) step = OB_HEALTH_PAGE;'));
+  assert.ok(SRC.includes('if(!d || d.v !== 2) return false;'), 'un borrador de la versión anterior (pasos de 20) no se interpreta como número de pantalla');
 });

@@ -2839,6 +2839,32 @@ body{overflow-wrap:break-word;}
 #onboard .ob-step.active{display:flex; flex-direction:column; flex:1; animation:obIn .3s cubic-bezier(.2,.8,.2,1);}
 @keyframes obIn{from{opacity:0; transform:translateX(18px);} to{opacity:1; transform:none;}}
 @media (prefers-reduced-motion:reduce){ #onboard .ob-step.active{animation:none;} }
+/* Inicio en 7 pantallas (2026-11-11, aprobado por el dueño sobre una maqueta): cada .ob-page junta varias preguntas; .ob-step pasa a ser un bloque dentro de la página.
+   Los campos, sus ids y lo que guarda finishOnboard no cambian. La página 7 (.ob-page-solo) conserva el aspecto de pantalla completa de "¡Todo listo!". */
+#onboard .ob-page{display:none;}
+#onboard .ob-page.active{display:flex; flex-direction:column; flex:1; animation:obIn .3s cubic-bezier(.2,.8,.2,1);}
+@media (prefers-reduced-motion:reduce){ #onboard .ob-page.active{animation:none;} }
+#onboard .ob-page-head{padding-top:clamp(14px,4vh,40px);}
+#onboard .ob-page .ob-step{display:block; flex:none; animation:none;}
+#onboard .ob-page .ob-step[hidden]{display:none;}
+#onboard .ob-page.ob-page-solo .ob-step{display:flex; flex-direction:column; flex:1;}
+#onboard .ob-page:not(.ob-page-solo) .ob-step .ob-body{display:block; flex:none; padding-top:0;}
+#onboard .ob-page:not(.ob-page-solo) .ob-step .ob-actions{display:none;}
+#onboard .ob-page:not(.ob-page-solo) .ob-step .ob-q{margin:26px 0 0; font-size:13px; font-weight:700; line-height:1.35; letter-spacing:.04em; text-transform:uppercase; text-align:left; color:var(--mist); max-width:none; text-wrap:wrap;}
+#onboard .ob-page:not(.ob-page-solo) .ob-step .ob-sub, #onboard .ob-page:not(.ob-page-solo) .ob-step .ob-note{text-align:left; margin:6px 0 0; max-width:none; font-size:13px; line-height:1.45;}
+#onboard .ob-page:not(.ob-page-solo) .ob-step :is(.ob-field-big, .ob-options, .ob-date, .two-col, .day-picker, .ob-textarea, .ob-refrace-row, .field){margin-top:10px;}
+#onboard .ob-page:not(.ob-page-solo) .ob-options{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+#onboard .ob-page:not(.ob-page-solo) .ob-options .choice{min-height:54px; padding:0 14px; justify-content:center; text-align:center; font-size:15px;}
+#onboard .ob-page:not(.ob-page-solo) .ob-options .choice::after{display:none;}
+#onboard .ob-page:not(.ob-page-solo) .ob-options .choice:last-child:nth-child(odd){grid-column:1 / -1;}
+#onboard .ob-page:not(.ob-page-solo) .ob-field-big input, #onboard .ob-page:not(.ob-page-solo) .ob-field-big select{height:56px; font-size:19px;}
+#onboard .ob-page:not(.ob-page-solo) .ob-date{min-height:56px; font-size:18px;}
+#onboard .ob-page-actions{padding-top:28px;}
+/* notificaciones: dentro de la página el botón de activar es una acción secundaria del bloque (el lima queda para Continuar) */
+#onboard .ob-page:not(.ob-page-solo) .ob-step[data-step="18"] .ob-actions{display:flex; padding-top:12px; margin-top:0;}
+#onboard .ob-page:not(.ob-page-solo) .ob-step[data-step="18"] .ob-skip, #onboard .ob-page:not(.ob-page-solo) .ob-step[data-step="18"] .np-bell{display:none;}
+#onboard .ob-page:not(.ob-page-solo) .ob-step[data-step="18"] .np-list{text-align:left;}
+#onboard .ob-page:not(.ob-page-solo) #np-enable-btn{width:100%; min-height:52px;}
 #onboard .ob-body{flex:1; padding-top:clamp(20px,7vh,64px);}
 #onboard .ob-q{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text',Inter,system-ui,sans-serif; font-size:clamp(26px,7.6vw,32px); font-weight:700; line-height:1.14; letter-spacing:-.022em; text-align:center; text-transform:none; color:var(--g-ink); margin:0; text-wrap:balance;}
 #onboard .ob-sub{text-align:center; color:var(--mist); font-size:15px; line-height:1.5; margin:12px auto 0; max-width:34ch; text-wrap:pretty;}
@@ -3166,16 +3192,41 @@ body{overflow-wrap:break-word;}
       <span class="ob-step-count" id="ob-step-count" aria-hidden="true"></span>
     </div>
 
+    <!-- Página 1 · sobre vos -->
+    <div class="ob-page active" data-page="1">
+      <div class="ob-page-head"><h2 class="ob-q" data-i18n="ob_p1_title"></h2><p class="ob-sub" data-i18n="ob_lead"></p></div>
     <!-- 1 · nombre -->
-    <div class="ob-step active" data-step="1">
+    <div class="ob-step" data-step="1">
       <div class="ob-body">
         <h2 class="ob-q" data-i18n="ob_q_name"></h2>
-        <p class="ob-sub" data-i18n="ob_lead"></p>
-        <div class="field ob-field-big"><input type="text" id="ob-name" autocomplete="given-name" data-i18n-ph="ob_name_label" data-i18n-aria="ob_name_label" data-on-input="updateObStep2ButtonState()"></div>
+                <div class="field ob-field-big"><input type="text" id="ob-name" autocomplete="given-name" data-i18n-ph="ob_name_label" data-i18n-aria="ob_name_label" data-on-input="updateObStep2ButtonState()"></div>
       </div>
       <div class="ob-actions"><button class="btn btn-primary ob-cta" id="ob-name-continue-btn" data-i18n="login_continue" data-on-click="obNextStep()" disabled></button></div>
     </div>
 
+    <!-- 14 · fecha de nacimiento (obligatoria) -->
+    <div class="ob-step" data-step="14">
+      <div class="ob-body">
+        <h2 class="ob-q" data-i18n="ob_birth_label"></h2>
+        <div class="date-box ob-date" role="button" tabindex="0" data-i18n-aria="ob_birth_label" data-on-click="openCalendar('ob-birth','ob-birth-text')"><span class="date-box-text" id="ob-birth-text"></span></div>
+        <input type="hidden" id="ob-birth">
+        <p class="ob-note" data-i18n="ob_birth_hint"></p>
+        <p class="ob-note" data-i18n="ob_step2_hint"></p>
+      </div>
+      <div class="ob-actions">
+        <button class="btn btn-primary ob-cta" id="ob-birth-continue-btn" data-i18n="login_continue" data-on-click="obNextStep()" disabled></button>
+        <p class="btn-reason" id="ob-birth-reason" role="status"></p>
+      </div>
+    </div>
+
+      <div class="ob-actions ob-page-actions">
+        <p class="btn-reason" id="ob-page-reason-1"></p>
+        <button class="btn btn-primary ob-cta" id="ob-page-cta-1" data-i18n="login_continue" data-on-click="obNextStep()" disabled></button>
+      </div>
+    </div>
+    <!-- Página 2 · tu nivel -->
+    <div class="ob-page" data-page="2">
+      <div class="ob-page-head"><h2 class="ob-q" data-i18n="ob_p2_title"></h2><p class="ob-sub" data-i18n="ob_p2_lead"></p></div>
     <!-- 2 · ¿ya corrés? -->
     <div class="ob-step" data-step="2">
       <div class="ob-body">
@@ -3237,40 +3288,25 @@ body{overflow-wrap:break-word;}
       </div>
     </div>
 
-    <!-- 6 · otros deportes (opcional) -->
-    <div class="ob-step" data-step="6">
-      <div class="ob-body">
-        <h2 class="ob-q" id="ob-crosstraining-label" data-i18n="ob_crosstraining_label"></h2>
-        <p class="ob-sub" data-i18n="ob_crosstraining_hint"></p>
-        <div class="choice-row" id="ob-sports-selected" role="group" aria-labelledby="ob-crosstraining-label" style="flex-wrap:wrap; display:none;"></div>
-        <button type="button" class="btn btn-outline" id="ob-sports-select-btn" style="margin-top:14px; width:100%;" data-on-click="openSportPicker('ob')" data-i18n="sport_select_btn"></button>
-        <div id="ob-sport-days-wrap" style="margin-top:22px; display:none;">
-          <label id="ob-sport-days-label" data-i18n="ob_sport_days_label"></label>
-          <div class="day-picker" id="ob-sport-days">
-            <div class="day-pill" data-v="mon"></div>
-            <div class="day-pill" data-v="tue"></div>
-            <div class="day-pill" data-v="wed"></div>
-            <div class="day-pill" data-v="thu"></div>
-            <div class="day-pill" data-v="fri"></div>
-            <div class="day-pill" data-v="sat"></div>
-            <div class="day-pill" data-v="sun"></div>
-          </div>
-        </div>
-      </div>
-      <div class="ob-actions">
-        <button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button>
-        <button type="button" class="ob-skip" data-on-click="obNextStep()" data-i18n="ob_skip"></button>
+      <div class="ob-actions ob-page-actions">
+        <button class="btn btn-primary ob-cta" id="ob-page-cta-2" data-i18n="login_continue" data-on-click="obNextStep()"></button>
       </div>
     </div>
-
-    <!-- 7 · terreno -->
-    <div class="ob-step" data-step="7">
+    <!-- Página 3 · cómo entrenás -->
+    <div class="ob-page" data-page="3">
+      <div class="ob-page-head"><h2 class="ob-q" data-i18n="ob_p3_title"></h2><p class="ob-sub" data-i18n="ob_p3_lead"></p></div>
+    <!-- 9 · días de entrenamiento -->
+    <div class="ob-step" data-step="9">
       <div class="ob-body">
-        <h2 class="ob-q" id="ob-terrain-label" data-i18n="ob_terrain_label"></h2>
-        <div class="choice-row ob-options" id="ob-terrain" role="group" aria-labelledby="ob-terrain-label">
-          <div class="choice active" data-v="asfalto" data-i18n="ob_terrain_asfalto"></div>
-          <div class="choice" data-v="trail" data-i18n="ob_terrain_trail"></div>
-          <div class="choice" data-v="mixto" data-i18n="ob_terrain_mixto"></div>
+        <h2 class="ob-q" id="ob-days-label" data-i18n="ob_days_label"></h2>
+        <div class="day-picker" id="ob-days" role="group" aria-labelledby="ob-days-label">
+          <div class="day-pill" data-v="mon"></div>
+          <div class="day-pill active" data-v="tue"></div>
+          <div class="day-pill" data-v="wed"></div>
+          <div class="day-pill active" data-v="thu"></div>
+          <div class="day-pill" data-v="fri"></div>
+          <div class="day-pill" data-v="sat"></div>
+          <div class="day-pill active" data-v="sun"></div>
         </div>
       </div>
       <div class="ob-actions"><button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button></div>
@@ -3289,18 +3325,14 @@ body{overflow-wrap:break-word;}
       <div class="ob-actions"><button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button></div>
     </div>
 
-    <!-- 9 · días de entrenamiento -->
-    <div class="ob-step" data-step="9">
+    <!-- 7 · terreno -->
+    <div class="ob-step" data-step="7">
       <div class="ob-body">
-        <h2 class="ob-q" id="ob-days-label" data-i18n="ob_days_label"></h2>
-        <div class="day-picker" id="ob-days" role="group" aria-labelledby="ob-days-label">
-          <div class="day-pill" data-v="mon"></div>
-          <div class="day-pill active" data-v="tue"></div>
-          <div class="day-pill" data-v="wed"></div>
-          <div class="day-pill active" data-v="thu"></div>
-          <div class="day-pill" data-v="fri"></div>
-          <div class="day-pill" data-v="sat"></div>
-          <div class="day-pill active" data-v="sun"></div>
+        <h2 class="ob-q" id="ob-terrain-label" data-i18n="ob_terrain_label"></h2>
+        <div class="choice-row ob-options" id="ob-terrain" role="group" aria-labelledby="ob-terrain-label">
+          <div class="choice active" data-v="asfalto" data-i18n="ob_terrain_asfalto"></div>
+          <div class="choice" data-v="trail" data-i18n="ob_terrain_trail"></div>
+          <div class="choice" data-v="mixto" data-i18n="ob_terrain_mixto"></div>
         </div>
       </div>
       <div class="ob-actions"><button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button></div>
@@ -3318,6 +3350,13 @@ body{overflow-wrap:break-word;}
       </div>
     </div>
 
+      <div class="ob-actions ob-page-actions">
+        <button class="btn btn-primary ob-cta" id="ob-page-cta-3" data-i18n="login_continue" data-on-click="obNextStep()"></button>
+      </div>
+    </div>
+    <!-- Página 4 · tu objetivo -->
+    <div class="ob-page" data-page="4">
+      <div class="ob-page-head"><h2 class="ob-q" data-i18n="ob_p4_title"></h2><p class="ob-sub" data-i18n="ob_p4_lead"></p></div>
     <!-- 11 · objetivo -->
     <div class="ob-step" data-step="11">
       <div class="ob-body">
@@ -3352,6 +3391,55 @@ body{overflow-wrap:break-word;}
       </div>
     </div>
 
+    <!-- 6 · otros deportes (opcional) -->
+    <div class="ob-step" data-step="6">
+      <div class="ob-body">
+        <h2 class="ob-q" id="ob-crosstraining-label" data-i18n="ob_crosstraining_label"></h2>
+        <p class="ob-sub" data-i18n="ob_crosstraining_hint"></p>
+        <div class="choice-row" id="ob-sports-selected" role="group" aria-labelledby="ob-crosstraining-label" style="flex-wrap:wrap; display:none;"></div>
+        <button type="button" class="btn btn-outline" id="ob-sports-select-btn" style="margin-top:14px; width:100%;" data-on-click="openSportPicker('ob')" data-i18n="sport_select_btn"></button>
+        <div id="ob-sport-days-wrap" style="margin-top:22px; display:none;">
+          <label id="ob-sport-days-label" data-i18n="ob_sport_days_label"></label>
+          <div class="day-picker" id="ob-sport-days">
+            <div class="day-pill" data-v="mon"></div>
+            <div class="day-pill" data-v="tue"></div>
+            <div class="day-pill" data-v="wed"></div>
+            <div class="day-pill" data-v="thu"></div>
+            <div class="day-pill" data-v="fri"></div>
+            <div class="day-pill" data-v="sat"></div>
+            <div class="day-pill" data-v="sun"></div>
+          </div>
+        </div>
+      </div>
+      <div class="ob-actions">
+        <button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button>
+        <button type="button" class="ob-skip" data-on-click="obNextStep()" data-i18n="ob_skip"></button>
+      </div>
+    </div>
+
+      <div class="ob-actions ob-page-actions">
+        <button class="btn btn-primary ob-cta" id="ob-page-cta-4" data-i18n="login_continue" data-on-click="obNextStep()"></button>
+      </div>
+    </div>
+    <!-- Página 5 · tu cuerpo y tu salud -->
+    <div class="ob-page" data-page="5">
+      <div class="ob-page-head"><h2 class="ob-q" data-i18n="ob_p5_title"></h2><p class="ob-sub" data-i18n="ob_p5_lead"></p></div>
+    <!-- 15 · peso y altura (obligatorios) -->
+    <div class="ob-step" data-step="15">
+      <div class="ob-body">
+        <h2 class="ob-q" data-i18n="ob_q_body"></h2>
+        <div class="two-col">
+          <div class="field"><label for="ob-weight" data-i18n="ob_weight_label"></label><input type="number" id="ob-weight" inputmode="decimal" value="70" min="30" max="200" data-on-input="updateObStep2ButtonState()"></div>
+          <div class="field"><label for="ob-height" data-i18n="ob_height_label"></label><input type="number" id="ob-height" inputmode="numeric" value="170" min="120" max="230" data-on-input="updateObStep2ButtonState()"></div>
+        </div>
+        <p class="ob-note" data-i18n="ob_step2_hint"></p>
+      </div>
+      <div class="ob-actions">
+        <button class="btn btn-primary ob-cta" id="ob-step2-continue-btn" data-i18n="login_continue" data-on-click="obNextStep()" disabled></button>
+        <p class="btn-reason" id="ob-step2-reason" role="status"></p>
+      </div>
+    </div>
+
     <!-- 13 · género (opcional) -->
     <div class="ob-step" data-step="13">
       <div class="ob-body">
@@ -3372,37 +3460,6 @@ body{overflow-wrap:break-word;}
       <div class="ob-actions"><button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button></div>
     </div>
 
-    <!-- 14 · fecha de nacimiento (obligatoria) -->
-    <div class="ob-step" data-step="14">
-      <div class="ob-body">
-        <h2 class="ob-q" data-i18n="ob_birth_label"></h2>
-        <div class="date-box ob-date" role="button" tabindex="0" data-i18n-aria="ob_birth_label" data-on-click="openCalendar('ob-birth','ob-birth-text')"><span class="date-box-text" id="ob-birth-text"></span></div>
-        <input type="hidden" id="ob-birth">
-        <p class="ob-note" data-i18n="ob_birth_hint"></p>
-        <p class="ob-note" data-i18n="ob_step2_hint"></p>
-      </div>
-      <div class="ob-actions">
-        <button class="btn btn-primary ob-cta" id="ob-birth-continue-btn" data-i18n="login_continue" data-on-click="obNextStep()" disabled></button>
-        <p class="btn-reason" id="ob-birth-reason" role="status"></p>
-      </div>
-    </div>
-
-    <!-- 15 · peso y altura (obligatorios) -->
-    <div class="ob-step" data-step="15">
-      <div class="ob-body">
-        <h2 class="ob-q" data-i18n="ob_q_body"></h2>
-        <div class="two-col">
-          <div class="field"><label for="ob-weight" data-i18n="ob_weight_label"></label><input type="number" id="ob-weight" inputmode="decimal" value="70" min="30" max="200" data-on-input="updateObStep2ButtonState()"></div>
-          <div class="field"><label for="ob-height" data-i18n="ob_height_label"></label><input type="number" id="ob-height" inputmode="numeric" value="170" min="120" max="230" data-on-input="updateObStep2ButtonState()"></div>
-        </div>
-        <p class="ob-note" data-i18n="ob_step2_hint"></p>
-      </div>
-      <div class="ob-actions">
-        <button class="btn btn-primary ob-cta" id="ob-step2-continue-btn" data-i18n="login_continue" data-on-click="obNextStep()" disabled></button>
-        <p class="btn-reason" id="ob-step2-reason" role="status"></p>
-      </div>
-    </div>
-
     <!-- 16 · lesiones o condiciones (opcional) -->
     <div class="ob-step" data-step="16">
       <div class="ob-body">
@@ -3413,6 +3470,49 @@ body{overflow-wrap:break-word;}
         <button class="btn btn-primary ob-cta" data-i18n="login_continue" data-on-click="obNextStep()"></button>
         <button type="button" class="ob-skip" data-on-click="obNextStep()" data-i18n="ob_skip"></button>
       </div>
+    </div>
+
+      <div class="ob-actions ob-page-actions">
+        <p class="btn-reason" id="ob-page-reason-5"></p>
+        <button class="btn btn-primary ob-cta" id="ob-page-cta-5" data-i18n="login_continue" data-on-click="obNextStep()" disabled></button>
+      </div>
+    </div>
+    <!-- Página 6 · últimos detalles -->
+    <div class="ob-page" data-page="6">
+      <div class="ob-page-head"><h2 class="ob-q" data-i18n="ob_p6_title"></h2><p class="ob-sub" data-i18n="ob_p6_lead"></p></div>
+    <!-- 18 · activar notificaciones (solo si falta pedirlas) -->
+    <div class="ob-step" data-step="18" data-when="notif">
+      <div class="ob-body ob-done">
+        <div class="np-bell" aria-hidden="true"><svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 17h12l-1.4-1.8a4 4 0 0 1-.9-2.5V10a3.7 3.7 0 0 0-7.4 0v2.7a4 4 0 0 1-.9 2.5L6 17z"/><path d="M10.2 20a2 2 0 0 0 3.6 0"/></svg></div>
+        <h2 class="ob-q" data-i18n="notif_prompt_title"></h2>
+        <p class="ob-sub" data-i18n="notif_prompt_lead"></p>
+        <ul class="np-list">
+          <li data-i18n="notif_prompt_r1"></li>
+          <li data-i18n="notif_prompt_r2"></li>
+        </ul>
+      </div>
+      <div class="ob-actions">
+        <button class="btn btn-outline" id="np-enable-btn" data-on-click="acceptNotifPrompt()" data-i18n="notif_prompt_enable"></button>
+        <button type="button" class="ob-skip" data-on-click="obNextStep()" data-i18n="notif_prompt_skip"></button>
+      </div>
+    </div>
+
+    <!-- 19 · conectar el reloj (al conectar se sale a la página de la marca y se vuelve acá: obSaveDraft guarda las respuestas) -->
+    <div class="ob-step" data-step="19">
+      <div class="ob-body">
+        <h2 class="ob-q" data-i18n="conn_title"></h2>
+        <p class="ob-sub" data-i18n="conn_lead"></p>
+        <p class="cw-section" data-i18n="conn_section"></p>
+        <div class="cw-list">
+          <button class="cw-row" data-conn="garmin" data-on-click="obSaveDraft(); connectGarmin()"><span class="cw-left"><span class="brand-logo-chip" style="gap:10px;"><img class="brand-logo-color" src="img/brand-logos/garmin.png" alt="" width="26" height="26" style="height:26px; width:26px; max-width:26px; border-radius:7px;"><span class="cw-name">Garmin Connect</span></span><small class="cw-sub" data-i18n="conn_sub_workouts"></small></span><span class="cw-action" data-i18n="conn_connect"></span></button>
+          <button class="cw-row" data-conn="suunto" data-on-click="obSaveDraft(); connectSuunto()"><span class="cw-left"><span class="brand-logo-chip brand-logo-plate"><img class="brand-logo-color" src="img/brand-logos/suunto.png" alt="Suunto" width="600" height="213"></span><small class="cw-sub" data-i18n="conn_sub_workouts"></small></span><span class="cw-action" data-i18n="conn_connect"></span></button>
+          <button class="cw-row" data-conn="wahoo" data-on-click="obSaveDraft(); connectWahoo()"><span class="cw-left"><span class="brand-logo-chip"><img src="img/brand-logos/wahoo.svg" alt="Wahoo"></span><small class="cw-sub" data-i18n="conn_sub_workouts"></small></span><span class="cw-action" data-i18n="conn_connect"></span></button>
+          <button class="cw-row" data-conn="coros" data-on-click="obSaveDraft(); connectCoros()"><span class="cw-left"><span class="brand-logo-chip"><img src="img/brand-logos/coros.png" alt="COROS"></span><small class="cw-sub" data-i18n="conn_sub_workouts"></small></span><span class="cw-action" data-i18n="conn_connect"></span></button>
+          <button class="cw-row" data-conn="polar" data-on-click="obSaveDraft(); connectPolar()"><span class="cw-left"><span class="brand-logo-chip"><img src="img/brand-logos/polar.svg" alt="Polar"></span><small class="cw-sub" data-i18n="conn_sub_runs"></small></span><span class="cw-action" data-i18n="conn_connect"></span></button>
+          <button class="cw-row" id="hi-hc" data-conn="healthconnect" style="display:none;" data-on-click="obSaveDraft(); connectHealthConnect()"><span class="cw-left"><span class="brand-logo-chip" style="gap:10px;"><img class="brand-logo-color" src="img/brand-logos/healthconnect.png" alt="" style="height:26px; max-width:26px; border-radius:7px;"><span class="cw-name">Health Connect</span></span><small class="cw-sub" data-i18n="conn_sub_health"></small></span><span class="cw-action" data-i18n="conn_connect"></span></button>
+        </div>
+      </div>
+      <div class="ob-actions"><button class="btn btn-primary ob-cta" id="cw-continue-btn" data-on-click="obNextStep()"></button></div>
     </div>
 
     <!-- 17 · cómo nos conociste (opcional) -->
@@ -3438,41 +3538,12 @@ body{overflow-wrap:break-word;}
       </div>
     </div>
 
-    <!-- 18 · activar notificaciones (solo si falta pedirlas) -->
-    <div class="ob-step" data-step="18" data-when="notif">
-      <div class="ob-body ob-done">
-        <div class="np-bell" aria-hidden="true"><svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 17h12l-1.4-1.8a4 4 0 0 1-.9-2.5V10a3.7 3.7 0 0 0-7.4 0v2.7a4 4 0 0 1-.9 2.5L6 17z"/><path d="M10.2 20a2 2 0 0 0 3.6 0"/></svg></div>
-        <h2 class="ob-q" data-i18n="notif_prompt_title"></h2>
-        <p class="ob-sub" data-i18n="notif_prompt_lead"></p>
-        <ul class="np-list">
-          <li data-i18n="notif_prompt_r1"></li>
-          <li data-i18n="notif_prompt_r2"></li>
-        </ul>
-      </div>
-      <div class="ob-actions">
-        <button class="btn btn-primary ob-cta" id="np-enable-btn" data-on-click="acceptNotifPrompt()" data-i18n="notif_prompt_enable"></button>
-        <button type="button" class="ob-skip" data-on-click="obNextStep()" data-i18n="notif_prompt_skip"></button>
+      <div class="ob-actions ob-page-actions">
+        <button class="btn btn-primary ob-cta" id="ob-page-cta-6" data-i18n="login_continue" data-on-click="obNextStep()"></button>
       </div>
     </div>
-
-    <!-- 19 · conectar el reloj (al conectar se sale a la página de la marca y se vuelve acá: obSaveDraft guarda las respuestas) -->
-    <div class="ob-step" data-step="19">
-      <div class="ob-body">
-        <h2 class="ob-q" data-i18n="conn_title"></h2>
-        <p class="ob-sub" data-i18n="conn_lead"></p>
-        <p class="cw-section" data-i18n="conn_section"></p>
-        <div class="cw-list">
-          <button class="cw-row" data-conn="garmin" data-on-click="obSaveDraft(); connectGarmin()"><span class="cw-left"><span class="brand-logo-chip" style="gap:10px;"><img class="brand-logo-color" src="img/brand-logos/garmin.png" alt="" width="26" height="26" style="height:26px; width:26px; max-width:26px; border-radius:7px;"><span class="cw-name">Garmin Connect</span></span><small class="cw-sub" data-i18n="conn_sub_workouts"></small></span><span class="cw-action" data-i18n="conn_connect"></span></button>
-          <button class="cw-row" data-conn="suunto" data-on-click="obSaveDraft(); connectSuunto()"><span class="cw-left"><span class="brand-logo-chip brand-logo-plate"><img class="brand-logo-color" src="img/brand-logos/suunto.png" alt="Suunto" width="600" height="213"></span><small class="cw-sub" data-i18n="conn_sub_workouts"></small></span><span class="cw-action" data-i18n="conn_connect"></span></button>
-          <button class="cw-row" data-conn="wahoo" data-on-click="obSaveDraft(); connectWahoo()"><span class="cw-left"><span class="brand-logo-chip"><img src="img/brand-logos/wahoo.svg" alt="Wahoo"></span><small class="cw-sub" data-i18n="conn_sub_workouts"></small></span><span class="cw-action" data-i18n="conn_connect"></span></button>
-          <button class="cw-row" data-conn="coros" data-on-click="obSaveDraft(); connectCoros()"><span class="cw-left"><span class="brand-logo-chip"><img src="img/brand-logos/coros.png" alt="COROS"></span><small class="cw-sub" data-i18n="conn_sub_workouts"></small></span><span class="cw-action" data-i18n="conn_connect"></span></button>
-          <button class="cw-row" data-conn="polar" data-on-click="obSaveDraft(); connectPolar()"><span class="cw-left"><span class="brand-logo-chip"><img src="img/brand-logos/polar.svg" alt="Polar"></span><small class="cw-sub" data-i18n="conn_sub_runs"></small></span><span class="cw-action" data-i18n="conn_connect"></span></button>
-          <button class="cw-row" id="hi-hc" data-conn="healthconnect" style="display:none;" data-on-click="obSaveDraft(); connectHealthConnect()"><span class="cw-left"><span class="brand-logo-chip" style="gap:10px;"><img class="brand-logo-color" src="img/brand-logos/healthconnect.png" alt="" style="height:26px; max-width:26px; border-radius:7px;"><span class="cw-name">Health Connect</span></span><small class="cw-sub" data-i18n="conn_sub_health"></small></span><span class="cw-action" data-i18n="conn_connect"></span></button>
-        </div>
-      </div>
-      <div class="ob-actions"><button class="btn btn-primary ob-cta" id="cw-continue-btn" data-on-click="obNextStep()"></button></div>
-    </div>
-
+    <!-- Página 7 · listo -->
+    <div class="ob-page ob-page-solo" data-page="7">
     <!-- 20 · listo -->
     <div class="ob-step" data-step="20">
       <div class="ob-body ob-done">
@@ -3482,6 +3553,7 @@ body{overflow-wrap:break-word;}
         <p class="ob-callout" data-i18n="ob_test_note"></p>
       </div>
       <div class="ob-actions"><button class="btn btn-primary ob-cta" data-i18n="ob_submit" data-on-click="finishOnboard()"></button></div>
+    </div>
     </div>
    </div>
   </div>
