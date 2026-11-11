@@ -73,3 +73,14 @@ test('Tendencias: las barras no se aplastan (zona de 70 px + etiqueta) y hay lí
   assert.match(line, /class="trend-avg" style="bottom:71px;"/, 'promedio 7,5 de 10 -> 53 px + 18 de la etiqueta');
   assert.match(line, /7\.5 km/);
 });
+
+test('Perfil: cuatro grupos con título y una fila por entrada (12 en total), con los mismos destinos e ids de resumen', () => {
+  const perfil = HTML.slice(HTML.indexOf('<section class="view" id="view-perfil">'));
+  const groups = [...perfil.matchAll(/<div class="home-section-label" data-i18n="(perfil_group_\w+)"><\/div>\n    <div class="card settings-group">/g)].map(m => m[1]);
+  assert.deepEqual(groups, ['perfil_group_training', 'perfil_group_gear', 'perfil_group_progress', 'perfil_group_app']);
+  const rows = [...perfil.matchAll(/<div class="settile" role="button" tabindex="0" data-on-click="(\w+)\(\)">/g)].map(m => m[1]);
+  assert.deepEqual(rows, ['openGoalsOverlay', 'openDaysOverlay', 'openPersonalDataOverlay', 'openZonesOverlay', 'openCrossTrainingOverlay', 'openPainOverlay', 'openEventOverlay', 'openDevicesOverlay', 'openShoesOverlay', 'openAchievements', 'openLangOverlay', 'openPreferencesOverlay']);
+  assert.ok(!perfil.includes('class="settings-grid"') && !perfil.includes('class="card settile"'), 'ya no quedan mosaicos');
+  for (const id of ['perfil-devices-summary', 'perfil-days-summary', 'perfil-shoes-summary', 'perfil-zones-summary', 'perfil-pain-summary', 'perfil-ach-summary']) assert.ok(perfil.includes('id="' + id + '"'), id);
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) for (const k of groups) assert.ok(read('locales/' + l + '.js').includes(k + ':"'), l + ' ' + k);
+});
