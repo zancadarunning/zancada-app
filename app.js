@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-10T19:13:14Z';
+const APP_VERSION = '2026-11-11T14:12:14Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8840,6 +8840,43 @@ const DAILY_TIPS = {
   it: ["Ogni chilometro conta, anche se lento.","Anche il riposo fa parte dell'allenamento.","I giorni difficili costruiscono corridori forti.","Correre piano oggi significa correre meglio domani.","Ascolta il tuo corpo — il dolore non è lo stesso del disagio.","La costanza batte l'intensità, quasi sempre.","Il ritmo migliore è quello che riesci a sostenere e goderti.","Un buon riscaldamento evita un brutto infortunio.","Dormi bene: è l'allenamento invisibile.","La motivazione ti fa iniziare, l'abitudine ti fa finire.","Non confrontare i tuoi progressi con quelli di un altro corridore.","La tua peggiore giornata di corsa batte comunque una sul divano.","Non serve motivazione ogni giorno, serve un'abitudine.","Il corpo si adatta a quello che gli chiedi — dagli tempo.","Correre sotto la pioggia conta anche — e ti ricorderai di quel giorno.","Ogni corsa che finisci ti rende un po' più forte di ieri.","La scarpa più veloce è quella che hai già indossato.","Non serve correre veloce ogni giorno, serve correre spesso.","Il primo chilometro pesa sempre più dell'ultimo.","Il progresso non è lineare: ci sono settimane in salita e settimane di stallo.","Nessuno ha corso una maratona senza prima aver corso un metro.","La disciplina ti porta dove la sola motivazione non arriva.","Un allenamento negativo non cancella dieci positivi.","Correre è l'unica gara in cui vinci semplicemente finendola.","Il tuo ritmo di oggi non deve essere quello di ieri, né quello di domani.","L'aria fresca del mattino è gratis e funziona meglio di qualsiasi caffè.","A volte il traguardo più grande della giornata è essere usciti di casa.","Ogni goccia di sudore è una decisione che hai preso per te stesso.","Correre non cambia prima il corpo, cambia prima la testa.","Nessuno ti applaudirà al terzo chilometro di un martedì qualunque, e va bene così: è tuo.","Il riposo di oggi è la velocità di domani.","Non stai correndo contro nessuno, stai correndo contro te stesso di prima.","I chilometri lenti di oggi sono quelli che ti reggono al trentesimo.","Allacciarti le scarpe è già il 50% dell'allenamento.","Il tempo non decide se corri, decidi tu.","Ogni settimana in cui aggiungi chilometri è un investimento nella tua versione futura.","Non è magia, è costanza travestita da chilometri.","Quando dubiti di potercela fare, ricorda tutte le volte in cui ce l'hai già fatta.","La corsa non perdona l'impazienza, ma premia sempre la pazienza.","La tua peggior scusa di oggi è più debole del tuo peggior allenamento.","Un rodaggio lento fatto bene vale più di uno veloce fatto male.","Correre ti insegna a stare scomodo senza andare nel panico — utile anche per tutto il resto.","Non ci sono scorciatoie per la resistenza, solo chilometri accumulati.","Ogni corsa comincia con la decisione di uscire dalla porta.","Il corridore di oggi ringrazia quello che ha deciso di iniziare.","L'obiettivo non è non fermarsi mai, è non smettere mai di provarci.","I giorni in cui hai meno voglia sono quelli che ti insegnano di più.","Avrai allenamenti negativi — non sono la fine, fanno parte del percorso.","Prenderti cura del corpo oggi ti permette di continuare a correre domani.","Ogni corridore che vedi per strada ha avuto anche lui un primo giorno difficile.","Oggi non deve essere perfetto, deve solo succedere.","La parte più difficile è uscire di casa; il resto è solo correre.","Un passo in più, poi un altro. Così si costruiscono i chilometri.","Il te stesso di tra tre mesi ti ringrazierà.","Correre è il modo più semplice di sentirsi invincibili per un po'.","Non ti serve la voglia, ti serve iniziare: la voglia arriva lungo la strada.","Respira, rilassa le spalle e lascia lavorare le gambe.","Ogni falcata è un voto per il corridore che vuoi essere.","Oggi corri per chi ha iniziato, non solo per chi è arrivato.","Anche il progresso silenzioso è progresso.","Sei più forte di quanto pensi.","Quello che oggi ti costa fatica, domani sarà il tuo riscaldamento.","Anche dieci minuti battono il divano.","Non esiste un ritmo sbagliato quando ti stai divertendo.","Correre è pensare con i piedi.","I chilometri non si sommano da soli: li sommi tu.","Un altro giorno di costanza e sei già un altro corridore.","Goditi la strada: il traguardo è tuo nel momento in cui decidi di partire.","Non fermarti perché fa un po' male — fermati perché sei arrivato.","Dopo una corsa non ti penti mai; prima, invece, dubiti sempre."],
   de: ["Jeder Kilometer zählt, auch ein langsamer.","Erholung ist auch Teil des Trainings.","Harte Tage machen starke Läufer.","Heute locker laufen heißt morgen besser laufen.","Hör auf deinen Körper — Schmerz ist nicht dasselbe wie Unbehagen.","Beständigkeit schlägt fast immer Intensität.","Das beste Tempo ist das, was du durchhalten und genießen kannst.","Ein gutes Aufwärmen verhindert eine schlechte Verletzung.","Schlaf gut: das ist das unsichtbare Training.","Motivation lässt dich anfangen, Gewohnheit lässt dich fertig werden.","Vergleiche deinen Fortschritt nicht mit dem anderer Läufer.","Dein schlechtester Lauftag schlägt immer noch einen Tag auf dem Sofa.","Du brauchst nicht jeden Tag Motivation, du brauchst eine Gewohnheit.","Der Körper passt sich an das an, was du von ihm verlangst — gib ihm Zeit.","Laufen im Regen zählt auch — und du wirst dich an diesen Tag erinnern.","Jeder Lauf, den du beendest, macht dich ein bisschen stärker als gestern.","Der schnellste Schuh ist der, den du schon anhast.","Du musst nicht jeden Tag schnell laufen, du musst regelmäßig laufen.","Der erste Kilometer fühlt sich immer schwerer an als der letzte.","Fortschritt verläuft nicht geradlinig: es gibt Wochen bergauf und Wochen auf der Stelle.","Niemand ist einen Marathon gelaufen, ohne vorher einen Meter gelaufen zu sein.","Disziplin bringt dich dorthin, wo Motivation allein nicht hinreicht.","Ein schlechtes Training löscht nicht zehn gute aus.","Laufen ist der einzige Wettkampf, bei dem du schon durchs Ankommen gewinnst.","Dein heutiges Tempo muss nicht das von gestern oder morgen sein.","Kalte Morgenluft ist gratis und wirkt besser als jeder Kaffee.","Manchmal ist der größte Erfolg des Tages einfach, rausgegangen zu sein.","Jeder Schweißtropfen ist eine Entscheidung, die du für dich selbst getroffen hast.","Laufen verändert nicht zuerst den Körper, es verändert zuerst den Kopf.","Niemand wird dich bei Kilometer 3 an einem x-beliebigen Dienstag anfeuern, und das ist okay: der gehört dir.","Die Erholung von heute ist die Geschwindigkeit von morgen.","Du läufst gegen niemanden, du läufst gegen dein früheres Ich.","Die langsamen Kilometer von heute tragen dich bei Kilometer 30.","Die Laufschuhe anzuziehen ist schon 50 % des Trainings.","Nicht das Wetter entscheidet, ob du läufst, sondern du.","Jede Woche, in der du Kilometer sammelst, ist eine Investition in dein zukünftiges Ich.","Das ist keine Magie, das ist Beständigkeit, verkleidet als Kilometer.","Wenn du zweifelst, ob du es schaffst, erinnere dich an jedes Mal, als du es schon geschafft hast.","Laufen verzeiht keine Ungeduld, belohnt aber immer Geduld.","Deine schlechteste Ausrede heute ist schwächer als dein schlechtestes Training.","Ein gut gelaufener lockerer Lauf ist mehr wert als ein schlecht gelaufener schneller.","Laufen lehrt dich, unangenehme Situationen ohne Panik auszuhalten — das hilft auch bei allem anderen.","Es gibt keine Abkürzung zur Ausdauer, nur angesammelte Kilometer.","Jeder Lauf beginnt mit der Entscheidung, aus der Tür zu gehen.","Der heutige Läufer ist dem Läufer dankbar, der sich entschieden hat anzufangen.","Das Ziel ist nicht, nie mit dem Laufen aufzuhören, sondern nie aufzuhören, es zu versuchen.","Die Tage, an denen du am wenigsten Lust hast, lehren dich am meisten.","Du wirst schlechte Trainings haben — sie sind nicht das Ende, sie gehören zum Weg dazu.","Dich heute um deinen Körper zu kümmern bedeutet, morgen weiterlaufen zu können.","Jeder Läufer, den du auf der Straße siehst, hatte auch einen schweren ersten Tag.","Heute muss nicht perfekt sein, es muss nur stattfinden.","Das Schwerste ist, aus der Tür zu gehen; der Rest ist nur Laufen.","Noch ein Schritt, dann noch einer. So entstehen Kilometer.","Dein Ich in drei Monaten wird dir danken.","Laufen ist der einfachste Weg, sich eine Weile unbesiegbar zu fühlen.","Du brauchst keine Lust, du musst nur anfangen — die Lust kommt unterwegs.","Atme, lass die Schultern locker und überlass den Beinen die Arbeit.","Jeder Schritt ist eine Stimme für den Läufer, der du sein willst.","Heute läufst du für den, der angefangen hat, nicht nur für den, der ankommt.","Stiller Fortschritt ist trotzdem Fortschritt.","Du bist zäher, als du denkst.","Was heute hart ist, ist morgen dein Aufwärmen.","Schon zehn Minuten schlagen die Couch.","Es gibt kein schlechtes Tempo, wenn es dir Spaß macht.","Laufen heißt mit den Füßen denken.","Kilometer addieren sich nicht von allein — du addierst sie.","Ein weiterer Tag Beständigkeit und du bist ein anderer Läufer.","Genieße den Weg: Das Ziel gehört dir, sobald du losgehst.","Hör nicht auf, weil es ein bisschen wehtut — hör auf, weil du angekommen bist.","Nach dem Laufen bereut man nie etwas, davor zweifelt man immer."],
 };
+// "Cómo venís" (Inicio): tres datos de las propias carreras -- km de los últimos 7 días contra los 7 anteriores, ritmo medio de 28 días contra los 28 anteriores y la salida más larga de 28 días.
+// Sale de TODAS las carreras guardadas (es la persona mirando sus datos; nada de esto va a Zonda). Devuelve null si no hay nada corrido en 28 días: ahí Inicio muestra la frase del día.
+function homeInsights(now){
+  now = now || Date.now();
+  const DAY = 86400000;
+  const runs = (state.runs || []).filter(r => r && Number.isFinite(r.distanceKm) && r.distanceKm > 0 && Number.isFinite(Date.parse(r.date)));
+  const between = (a, b) => runs.filter(r => { const ms = Date.parse(r.date); return ms > now - a * DAY && ms <= now - b * DAY; });
+  const km = list => list.reduce((s, r) => s + r.distanceKm, 0);
+  // ritmo medio ponderado por distancia, solo con carreras de 2 km o más y un ritmo creíble (2 a 15 min/km)
+  const pace = list => { const ok = list.filter(r => r.distanceKm >= 2 && r.durationSec > 0 && (r.durationSec / 60 / r.distanceKm) >= 2 && (r.durationSec / 60 / r.distanceKm) <= 15); const d = km(ok); return d > 0 ? ok.reduce((s, r) => s + r.durationSec, 0) / 60 / d : null; };
+  const last28 = between(28, 0);
+  if(!last28.length) return null;
+  const km7 = km(between(7, 0)), kmPrev7 = km(between(14, 7));
+  const p28 = pace(last28), pPrev = pace(between(56, 28));
+  return {
+    km7, kmPrev7, pctKm: kmPrev7 > 0 ? Math.round((km7 - kmPrev7) / kmPrev7 * 100) : null,
+    pace28: p28, paceDeltaSec: (p28 && pPrev) ? Math.round((p28 - pPrev) * 60 * (isImperial() ? 1.609344 : 1)) : null,
+    longKm: Math.max(...last28.map(r => r.distanceKm)),
+    hasGarmin: last28.some(r => r.source === 'garmin' || r.origin === 'garmin')
+  };
+}
+function renderHomeInsights(){
+  const card = document.getElementById('home-insights-card'), quote = document.getElementById('home-quote-card');
+  if(!card) return;
+  const ins = state && state.onboarded ? homeInsights() : null;
+  if(!ins){ card.style.display = 'none'; card.innerHTML = ''; if(quote) quote.style.display = ''; return; }
+  const kmDelta = ins.pctKm === null ? t('ins_first') : t('ins_vs7', {d: (ins.pctKm > 0 ? '+' : '') + ins.pctKm + '%'});
+  const paceDelta = ins.paceDeltaSec === null ? t('ins_first') : (Math.abs(ins.paceDeltaSec) < 2 ? t('ins_same') : t(ins.paceDeltaSec < 0 ? 'ins_faster' : 'ins_slower', {s: Math.abs(ins.paceDeltaSec)}));
+  const cell = (label, value, unit, delta, up) => '<div class="stat-cell"><div class="n">' + escapeHtml(value) + (unit ? '<small>' + escapeHtml(unit) + '</small>' : '') + '</div><div class="l">' + escapeHtml(label) + '</div><div class="ins-delta' + (up ? ' up' : '') + '">' + escapeHtml(delta) + '</div></div>';
+  card.innerHTML = '<h3>' + escapeHtml(t('home_insights_title')) + '</h3><div class="stat-row-divided">'
+    + cell(t('ins_7d'), fmtDist(ins.km7, 1), distUnit(), kmDelta, ins.pctKm !== null && ins.pctKm > 0)
+    + cell(t('ins_pace'), ins.pace28 ? fmtPace(ins.pace28) : '—', ins.pace28 ? '/' + distUnit() : '', ins.pace28 ? paceDelta : t('ins_28d'), ins.paceDeltaSec !== null && ins.paceDeltaSec <= -2)
+    + cell(t('ins_long'), fmtDist(ins.longKm, 1), distUnit(), t('ins_28d'), false)
+    + '</div>' + (ins.hasGarmin ? '<p class="muted garmin-derived" style="margin:12px 0 0; font-size:12px;">' + escapeHtml(t('garmin_derived_note')) + '</p>' : '');
+  card.style.display = '';
+  if(quote) quote.style.display = 'none';
+}
 function renderDailyTip(){
   const today = localDateISO();
   const pool = DAILY_TIPS[lang] || DAILY_TIPS.es;
@@ -9590,6 +9627,7 @@ function renderHome(){
   renderHomeAdjust();
   limitHomeAlerts(2);
   renderDailyTip();
+  try{ renderHomeInsights(); }catch(e){ console.error('insights', e); }
   renderRaceTip();
   // La card de tips de carrera solo tiene sentido si hay una carrera cargada -- antes se
   // mostraba siempre, incluso para quien eligio un objetivo "salud y estilo de vida" sin
@@ -16153,7 +16191,7 @@ function renderHistory(){
       <div class="stat-cell"><div class="n">${tr.totalRuns}</div><div class="l">${t('hist_total_runs')}</div></div>
     </div>
     ${(state.runs||[]).some(r=>r.source==='garmin') ? `<p class="muted garmin-derived" style="margin:10px 0 0; font-size:12px;">${t('garmin_derived_note')}</p>` : ''}
-    <div class="trend-bars" id="hist-trend-bars" style="margin-top:46px;">${daily.map((x,i)=>{
+    <div class="trend-bars" id="hist-trend-bars" style="margin-top:46px;">${trendAvgLine(daily, maxKmDay)}${daily.map((x,i)=>{
       const h = x.km>0 ? Math.max(6, Math.round((x.km/maxKmDay)*70)) : (x.planned ? 4 : 2);
       const cls = (x.km>0 ? '' : (x.planned ? 'trend-planned' : 'trend-rest')) + (i===daily.length-1 ? ' trend-today' : '');
       return `<div class="trend-col" data-km="${x.km}" data-date="${x.date}" data-on-click="showTrendTip(this)"><div class="trend-stroke ${cls}" data-h="${h}" style="height:0px; transition-delay:${i*30}ms;"></div><div class="trend-lbl">${x.day}</div></div>`;
@@ -16225,6 +16263,14 @@ function renderHistory(){
   // pasaban por ahí, así que ninguna carrera del historial era alcanzable por teclado.
   makeClickablesFocusable(el);
   animateHistTrendBars();
+}
+// Línea punteada con el promedio de los días en que se corrió (hace falta haber corrido 2 días o más para que diga algo). La etiqueta de los días mide ~18 px: la línea se apoya sobre la zona de barras (70 px de alto).
+function trendAvgLine(daily, maxKmDay){
+  const ran = daily.filter(x => x.km > 0);
+  if(ran.length < 2) return '';
+  const avg = ran.reduce((s, x) => s + x.km, 0) / ran.length;
+  const h = Math.max(6, Math.round((avg / maxKmDay) * 70));
+  return '<div class="trend-avg" style="bottom:' + (h + 18) + 'px;"><span>' + escapeHtml(t('trend_avg', {v: fmtDist(avg, 1) + ' ' + distUnit()})) + '</span></div>';
 }
 // Tocar una barra del grafico de Tendencias: globito con los km de ese dia (se va solo a los 2,6s).
 let trendTipTimer = null;
