@@ -29,7 +29,7 @@ test('test de Cooper: con poca distancia no hay rangos de ritmo invertidos ni ri
 test('web/iPhone: al volver de autorizar un reloj en medio del inicio, la conexión se confirma enseguida y se repintan las filas', () => {
   const body = SRC.slice(SRC.indexOf('async function loadUserAndEnter'), SRC.indexOf('function isPasswordStrong'));
   const iReset = body.indexOf('resetOnboardSteps();');
-  const iFinish = body.indexOf('finishPendingProviderLink().then(()=>{ if(obCurrentStep === 19) obRefreshConnections(); })');
+  const iFinish = body.indexOf('finishPendingProviderLink().then(()=>{ if(obCurrentStep === OB_CONNECT_PAGE) obRefreshConnections(); })');
   assert.ok(iReset > 0 && iFinish > iReset, 'se confirma justo después de armar el inicio');
 });
 
