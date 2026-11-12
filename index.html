@@ -1283,6 +1283,12 @@
   .rd-stat-tile .rd-tile-ico{width:26px; height:26px; flex-shrink:0; margin-top:2px; color:var(--hivis-text);}
   .rd-stat-tile .rd-tile-val{font-size:17px; font-weight:800;}
   .rd-stat-tile .rd-tile-lbl{font-size:12px; color:var(--mist);}
+  /* barra de arriba del detalle: volver a la izquierda, menú de tres puntos (editar / eliminar) a la derecha */
+  .rd-topbar{position:relative; display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+  .rd-menu{position:absolute; top:40px; right:0; z-index:2000; min-width:190px; padding:6px; background:var(--asphalt-2); border:1px solid var(--asphalt-4); border-radius:var(--radius-sm); box-shadow:0 10px 28px rgba(0,0,0,.28);}
+  .rd-menu-item{display:block; width:100%; min-height:44px; padding:10px 12px; border:none; background:none; color:var(--chalk); font:inherit; font-size:15px; font-weight:600; text-align:left; border-radius:8px; cursor:pointer;}
+  .rd-menu-item:active{background:var(--asphalt-3);}
+  .rd-menu-danger{color:var(--danger);}
   .rd-seg-table{width:100%; border-collapse:collapse; font-size:13px;}
   .rd-seg-table th{text-align:right; color:var(--mist); font-weight:600; font-size:11px; padding:0 0 8px 8px; white-space:nowrap;}
   .rd-seg-table th:first-child{padding-left:0;}
@@ -2807,6 +2813,17 @@
   .pr-medal{min-width:0;}
   /* Plan: el dia de descanso no reserva la columna vacia de la derecha (le sacaba 88 px al texto y "Descanso" se partia en 320) */
   .day-row-rest .day-row-end:has(> .day-end-slot:empty:only-child){display:none;}
+  /* Los descansos ocupan una fila baja (44 px, el mínimo cómodo para tocar) y con el texto más liviano: así las sesiones resaltan y la semana entra casi entera.
+     Cada día sigue siendo una fila propia, para poder tocarlo y soltarle una sesión encima. */
+  .day-row.day-row-rest{min-height:44px; padding:2px 0;}
+  .day-row.day-row-rest .day-info .t{font-size:14px; font-weight:500;}
+  .day-row.day-row-rest .day-badge{padding:2px 0;}
+  .day-row.day-row-rest .day-badge .mono{margin-top:0 !important;}
+  /* Zonda: el lima queda para la acción (enviar). La burbuja propia y el avatar del encabezado pasan a neutro; el avatar conserva la cara, con el lima solo en el borde y los ojos. */
+  .msg.user{background:var(--asphalt-4); color:var(--chalk); box-shadow:none;}
+  .coach-head-avatar{box-shadow:none;}
+  .coach-head-avatar circle{fill:var(--asphalt-3); stroke:var(--hivis-line); stroke-width:1.5;}
+  .coach-head-avatar ellipse{fill:var(--hivis-text);}
   /* Palabras largas (sobre todo en aleman, p. ej. "Herzfrequenzzonen"): en pantallas chicas se dividen con guion en vez de cortarse a la mitad (la app marca el idioma en <html lang>) */
   @media (max-width:400px){ h2, h3, .choice, .l, .pr-medal-label, .pr-medal-time{hyphens:auto; -webkit-hyphens:auto;} }
   /* Celulares angostos: el Check-in apila la pregunta arriba de las 3 opciones (hasta 369 px) y en 320 los botones de opcion achican un poco la letra, asi ninguna palabra se parte a la mitad */
@@ -4186,7 +4203,15 @@ body{overflow-wrap:break-word;}
   </div>
 
   <div class="overlay" id="run-detail-modal" style="display:none;">
-    <button class="week-nav-btn" data-on-click="closeRunDetail()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <div class="rd-topbar">
+      <button class="week-nav-btn" data-on-click="closeRunDetail()" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+      <!-- Editar y eliminar viven en este menú (antes eran dos botones grandes al pie de cada pestaña del detalle) -->
+      <button class="week-nav-btn" id="rd-menu-btn" data-on-click="toggleRDMenu()" data-i18n-aria="aria_more_options" aria-haspopup="menu" aria-expanded="false"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></span></button>
+      <div class="rd-menu" id="rd-menu" role="menu" style="display:none;">
+        <button class="rd-menu-item" role="menuitem" data-on-click="rdMenuEdit()" data-i18n="edit_run_btn"></button>
+        <button class="rd-menu-item rd-menu-danger" role="menuitem" data-on-click="rdMenuDelete()" data-i18n="hist_delete_run"></button>
+      </div>
+    </div>
     <div id="run-detail-content"></div>
   </div>
 

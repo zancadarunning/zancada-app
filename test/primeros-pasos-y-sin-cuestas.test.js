@@ -276,3 +276,14 @@ test('pulido 3: pausa en 2×2, números de la carrera centrados, descanso con la
     for (const k of ['home_upcoming', 'rd_calories_label']) assert.ok(s.includes(k + ':"'), l + ' ' + k);
   }
 });
+
+test('diseño: editar/eliminar en el menú del detalle, descansos compactos en el plan y Zonda con el lima solo en enviar', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const js = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  assert.ok(html.includes('id="rd-menu-btn" data-on-click="toggleRDMenu()"') && html.includes('data-on-click="rdMenuEdit()"') && html.includes('data-on-click="rdMenuDelete()"'));
+  for (const fn of ['setRDMenuOpen', 'toggleRDMenu', 'rdMenuEdit', 'rdMenuDelete']) assert.ok(js.includes('function ' + fn + '('), fn);
+  assert.ok(!js.includes('class="btn btn-danger" style="width:100%; margin-top:12px;" data-on-click="deleteRun('), 'el botón rojo grande ya no va al pie del detalle');
+  assert.ok(html.includes('.day-row.day-row-rest{min-height:44px; padding:2px 0;}'));
+  assert.ok(html.includes('.msg.user{background:var(--asphalt-4); color:var(--chalk); box-shadow:none;}'));
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.ok(fs.readFileSync(path.join(__dirname, '..', 'locales', l + '.js'), 'utf8').includes('aria_more_options:"'), l);
+});

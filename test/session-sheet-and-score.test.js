@@ -48,7 +48,9 @@ test('el Plan abre la pestaña (ya no despliega el texto debajo) y el detalle de
   assert.match(app, /function toggleDay\(i\)\{ openSessionSheet\(i\); \}/);
   assert.ok(!/class="day-detail" id="detail-\$\{i\}"/.test(app));
   const detail = app.slice(app.indexOf("function openRunDetail("), app.indexOf("function switchRDTab("));
-  assert.ok(detail.indexOf('renderRunPlanScore(r)') > 0 && detail.indexOf('renderRunPlanScore(r)') < detail.indexOf("openEditRun('${r.id}')"), 'la puntuación va antes de Editar');
+  // Editar y eliminar pasaron al menú de tres puntos de arriba: la puntuación sigue cerrando el detalle
+  assert.ok(detail.indexOf('renderRunPlanScore(r)') > 0, 'la puntuación va en el detalle');
+  assert.ok(!detail.includes("openEditRun('${r.id}')"), 'Editar ya no es un botón al pie');
   const html = read('index.html');
   assert.ok(html.includes('id="session-sheet"') && html.includes('id="session-sheet-body"'));
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
