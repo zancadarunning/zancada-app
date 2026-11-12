@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-12T14:23:42Z';
+const APP_VERSION = '2026-11-12T14:32:12Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -970,6 +970,24 @@ function fmtDist(km, decimals=2){
 // que está viendo) -- hay que convertirlos a km ANTES de guardarlos en state.profile, si no
 // se guarda el número tal cual como si fuera km aunque el usuario lo haya escrito en millas.
 const MAX_CURRENT_WEEKLY_KM = 200;   // ni los corredores de élite pasan de ~200 km por semana: más que eso es un error de tipeo
+// Duración escrita como tiempo ("55:18", "1:02:40") en vez de minutos con decimales ("55,3"). Devuelve segundos, o NaN si no se entiende.
+// Un número sin dos puntos sigue valiendo como minutos ("45" = 45 min), que es lo que aceptaba el campo de antes.
+function parseDurationInput(val){
+  const s = String(val == null ? '' : val).trim().replace(',', '.');
+  if(!s) return NaN;
+  if(!s.includes(':')){ const m = Number(s); return (Number.isFinite(m) && m >= 0) ? Math.round(m * 60) : NaN; }
+  const parts = s.split(':').map(p => p.trim());
+  if(parts.length > 3 || parts.some(p => p === '' || !Number.isFinite(Number(p)) || Number(p) < 0)) return NaN;
+  const n = parts.map(Number);
+  const [h, m, sec] = n.length === 3 ? n : [0, n[0], n[1]];
+  if(sec >= 60 || (n.length === 3 && m >= 60)) return NaN;
+  return Math.round(h * 3600 + m * 60 + sec);
+}
+// Mientras se escribe: solo dígitos, y los dos puntos se ponen solos desde la derecha (5518 -> 55:18, 10240 -> 1:02:40). El teclado numérico del teléfono no trae ":".
+function fmtDurInput(el){
+  const d = String(el.value || '').replace(/[^0-9]/g, '').slice(0, 6);
+  el.value = d.length <= 2 ? d : d.length <= 4 ? d.slice(0, -2) + ':' + d.slice(-2) : d.slice(0, -4) + ':' + d.slice(-4, -2) + ':' + d.slice(-2);
+}
 function parseDistInput(val){
   const n = parseFloat(val);
   if(!(n>0) && n!==0) return 0;
@@ -15064,7 +15082,7 @@ function toggleManualForm(){
 function saveManualRun(){
   const date = document.getElementById('man-date').value;
   const dist = parseDistInput(document.getElementById('man-dist').value);
-  const durMin = parseFloat(document.getElementById('man-dur').value);
+  const durMin = parseDurationInput(document.getElementById('man-dur').value) / 60;
   // Antes solo chequeaba "truthy" (!dist), asi que un valor negativo (o -0) pasaba
   // derecho -- mismo criterio que ya usa saveEditRun, exigiendo que sean positivos de
   // verdad. Sin esto, una distancia negativa terminaba restando km de la zapatilla
@@ -18847,13 +18865,13 @@ function openEditRun(runId){
   // que ya usa la tarjeta de esta carrera en Historial, ver fmtDist), no en km sin convertir.
   document.getElementById('edit-run-dist-label').textContent = t(isImperial() ? 'hist_manual_dist_mi' : 'hist_manual_dist');
   document.getElementById('edit-run-dist').value = fmtDist(r.distanceKm, 2);
-  document.getElementById('edit-run-dur').value = Math.round((r.durationSec/60)*10)/10;
+  document.getElementById('edit-run-dur').value = fmtRunClock(Math.round(r.durationSec));   // "55:20" o "01:02:40", no "55,3" minutos
   // Releemos los campos que acabamos de escribir (en vez de recalcular la misma fórmula acá
   // aparte) para que la comparación en saveEditRun() sea contra el valor EXACTO que
   // parseDistInput/parseFloat le van a dar a esos mismos strings, sin depender de que la
   // fórmula de acá y la de allá se mantengan en sincro a mano.
   editingRunOrigDist = parseDistInput(document.getElementById('edit-run-dist').value);
-  editingRunOrigDurMin = parseFloat(document.getElementById('edit-run-dur').value);
+  editingRunOrigDurMin = parseDurationInput(document.getElementById('edit-run-dur').value) / 60;
   const avgHr = r.avgHr || (r.hrLog && r.hrLog.length ? Math.round(r.hrLog.reduce((a,h)=>a+h.bpm,0)/r.hrLog.length) : '');
   document.getElementById('edit-run-hr').value = avgHr || '';
   const sel = document.getElementById('edit-run-shoe');
@@ -18866,7 +18884,7 @@ async function saveEditRun(){
   if(!r) return;
   const date = document.getElementById('edit-run-date').value;
   const dist = parseDistInput(document.getElementById('edit-run-dist').value);
-  const durMin = parseFloat(document.getElementById('edit-run-dur').value);
+  const durMin = parseDurationInput(document.getElementById('edit-run-dur').value) / 60;
   const hr = parseInt(document.getElementById('edit-run-hr').value);
   // topes razonables: una distancia de 5000 km, 30 días de duración, una fecha futura o 900 bpm rompían récords, logros y la racha
   if(!date || !(dist>0) || !(durMin>0) || dist > 500 || durMin > 2880 || date > localDateISO(new Date()) || (!isNaN(hr) && hr !== 0 && (hr < 30 || hr > 250))){ showToast(t('edit_run_invalid'),'error'); return; }
