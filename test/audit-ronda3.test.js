@@ -1070,9 +1070,9 @@ test('Health Connect: el plugin de Android lee las series con paginación y no r
 });
 
 test('pestaña Plan: por distancia cada día con sesión suma la línea de calentamiento y vuelta a la calma; por tiempo no (la cantidad ya trae el total); descanso y carrera no la llevan', () => {
-  assert.ok(SRC.includes("const wcLine = (!isEventDay && !isTimeMode() && d.dist>0 && !d.raceDay) ? planWarmCoolText(d) : '';"));
-  assert.ok(SRC.includes("${wcLine ? `<div class=\"day-row-wc\">${escapeHtml(wcLine)}</div>` : ''}"), 'va escapada');
-  assert.ok(read('index.html').includes('.day-row-wc{'));
+  // La línea ya no se repite en cada fila de la semana (pedido del dueño, 2026-11-12): queda en la tarjeta de hoy en Inicio y en el detalle del día.
+  assert.ok(!SRC.includes('class="day-row-wc"'), 'la fila del plan ya no lleva la línea de calentamiento');
+  assert.ok(SRC.includes("nextTotalEl.textContent = raceToday ? '' : planWarmCoolText(today);"), 'sigue en la tarjeta de hoy');
   const app = loadApp();
   ready(app);
   const easy = app.state.plan.find(x => x.typeKey === 'easy');

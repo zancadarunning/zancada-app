@@ -941,7 +941,6 @@
      terreno/zona viven debajo del título (ver .day-row-chips), no acá. */
   .day-row-end{display:flex; align-items:center; flex-shrink:0; padding-top:2px;}
   .day-row-chips{display:flex; gap:5px; flex-wrap:wrap; margin-top:6px;}
-  .day-row-wc{margin-top:3px; font-size:12px; line-height:1.4; color:var(--mist);}
   /* Día de descanso: toda la fila baja de opacidad para que los días CON entrenamiento
      salten a la vista de entrada, sin tener que leer cada renglón. */
   .day-row.day-row-rest{opacity:.5;}
@@ -2819,11 +2818,8 @@
   .day-row.day-row-rest .day-info .t{font-size:14px; font-weight:500;}
   .day-row.day-row-rest .day-badge{padding:2px 0;}
   .day-row.day-row-rest .day-badge .mono{margin-top:0 !important;}
-  /* Zonda: el lima queda para la acción (enviar). La burbuja propia y el avatar del encabezado pasan a neutro; el avatar conserva la cara, con el lima solo en el borde y los ojos. */
+  /* Zonda: la burbuja propia pasa a neutro para que el lima quede en la acción (enviar). El avatar de Zonda NO se toca: verde con ojos negros, en claro y oscuro (pedido del dueño). */
   .msg.user{background:var(--asphalt-4); color:var(--chalk); box-shadow:none;}
-  .coach-head-avatar{box-shadow:none;}
-  .coach-head-avatar circle{fill:var(--asphalt-3); stroke:var(--hivis-line); stroke-width:1.5;}
-  .coach-head-avatar ellipse{fill:var(--hivis-text);}
   /* Palabras largas (sobre todo en aleman, p. ej. "Herzfrequenzzonen"): en pantallas chicas se dividen con guion en vez de cortarse a la mitad (la app marca el idioma en <html lang>) */
   @media (max-width:400px){ h2, h3, .choice, .l, .pr-medal-label, .pr-medal-time{hyphens:auto; -webkit-hyphens:auto;} }
   /* Celulares angostos: el Check-in apila la pregunta arriba de las 3 opciones (hasta 369 px) y en 320 los botones de opcion achican un poco la letra, asi ninguna palabra se parte a la mitad */
