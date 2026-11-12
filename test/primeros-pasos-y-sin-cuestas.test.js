@@ -258,3 +258,21 @@ test('pulido 2: el cronómetro de la carrera no se parte, la tabla de segmentos 
     for (const k of ['ltest_perfil_btn_do', 'ltest_perfil_btn_redo', 'login_password_enter_ph']) assert.ok(s.includes(k + ':"'), l + ' ' + k);
   }
 });
+
+test('pulido 3: pausa en 2×2, números de la carrera centrados, descanso con la próxima sesión, calorías sin repetir la unidad y volver en el registro', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const js = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  assert.ok(html.includes('.track-paused-stats{display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px;}'));
+  assert.ok(html.includes('.track-active-group .track-hero{order:-1;}'));
+  assert.ok(js.includes("function fmtRunClock(sec){ const s = fmtTime(sec); return s.startsWith('00:') ? s.slice(3) : s; }"));
+  assert.ok(js.includes("getElementById('track-timer').textContent = fmtRunClock(tracker.elapsedSec)"));
+  assert.ok(html.includes('id="home-next-upcoming"') && js.includes("t('home_upcoming', {day: dayName})"));
+  assert.ok(js.includes("const restToday = !todayRun && !raceToday && !(today.dist > 0);"));
+  assert.ok(js.includes("tiles.push([t('rd_calories_label'), cal+' kcal']);"));
+  const signup = html.slice(html.indexOf('id="signup"'), html.indexOf('id="signup"') + 400);
+  assert.ok(signup.includes('data-on-click="goBackToLogin()"') && signup.includes('data-i18n-aria="aria_back"'));
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
+    const s = fs.readFileSync(path.join(__dirname, '..', 'locales', l + '.js'), 'utf8');
+    for (const k of ['home_upcoming', 'rd_calories_label']) assert.ok(s.includes(k + ':"'), l + ' ' + k);
+  }
+});

@@ -1110,7 +1110,18 @@
      números un poco (margin-top acá). El botón de pausar en sí NO se baja con margin -- ver
      el comentario largo junto a .track-active-group .track-pause-circle más abajo, usa
      position:fixed. */
-  .track-active-group{margin-top:56px;}
+  /* Los números van centrados en el alto libre entre el rótulo de arriba y el círculo de pausar (antes quedaban arriba con un hueco grande debajo), con la
+     distancia primero y tiempo/ritmo debajo. Si aparece la guía de series la columna crece y la página se desliza, como antes. */
+  .track-active-group{display:flex; flex-direction:column; justify-content:center; min-height:calc(100dvh - 130px - var(--tabbar-h, 86px) - 148px - var(--safe-bottom, 0px));}
+  .track-active-group .track-hero{order:-1;}
+  .track-active-group .track-topstats{margin-top:18px;}
+  /* próxima sesión, debajo de un día de descanso en Inicio */
+  .home-upcoming{align-items:center; justify-content:space-between; gap:12px; margin-top:10px; padding-top:12px; border-top:1px solid var(--overlay-hairline);}
+  .home-upcoming-text{display:flex; flex-direction:column; min-width:0;}
+  .home-upcoming-when{font-size:12px; color:var(--mist);}
+  .home-upcoming-when::first-letter{text-transform:uppercase;}
+  .home-upcoming-type{font-size:15px; font-weight:700;}
+  .home-upcoming-amount{font-size:15px; font-weight:700; white-space:nowrap;}
   /* Tiempo y ritmo -- antes el tiempo era el número gigante de la pantalla; acá bajan a stats
      chicas arriba, el mismo rol que cumplen en la referencia (Ritmo/PPM/Tiempo chicos arriba
      del número de distancia). Sin tarjeta/fondo propio -- en la referencia estos números
@@ -1166,6 +1177,18 @@
      componente que ya usa el resumen final), no un sistema de grilla nuevo: ya probado, ya
      simétrico (4 cajas iguales, flex:1 cada una) y consistente con el resto de la app. */
   .track-paused-stats{margin:0 0 16px;}
+  /* 2×2 con cajas iguales: en una sola fila las cuatro quedaban de anchos distintos y "RITMO /KM" y "KCAL (EST.)" se partían en dos líneas */
+  .track-paused-stats{display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px;}
+  .track-paused-stats .stat-box .l{white-space:nowrap;}
+  .track-paused-group .map-wrap{height:clamp(170px, 30dvh, 260px);}
+  /* teléfonos muy bajos (568 px de alto): mapa y círculo de pausar más chicos para que nada quede tapado ni debajo de la barra */
+  @media (max-height:620px){
+    .track-paused-group .map-wrap{height:110px;}
+    .track-active-group .track-pause-circle{width:72px; height:72px;}
+    .track-active-group .track-pause-circle svg{width:28px; height:28px;}
+    .track-active-group .track-hero-num{font-size:56px;}
+    .track-active-group .track-topstats{margin-top:10px;}
+  }
   /* Terminar (rojo sólido, no transparente -- el usuario lo pidió explícito, el botón-pastilla
      de antes usaba el relleno traslúcido de .btn-danger) + reanudar (mismo .track-pause-circle
      lima de arriba) uno al lado del otro, como en la referencia. margin:0 en el círculo lima
@@ -3170,6 +3193,7 @@ body{overflow-wrap:break-word;}
   </div>
 
   <div class="overlay" id="signup" style="display:none;">
+    <button class="week-nav-btn" data-on-click="goBackToLogin()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></span></button>
     <h2 class="display" data-i18n="signup_title"></h2>
     <p class="lead" data-i18n="signup_lead"></p>
     <form id="signup-form" novalidate data-on-submit="event.preventDefault(); handleSignUp()">
@@ -3647,6 +3671,7 @@ body{overflow-wrap:break-word;}
         <span id="home-next-hint-label" data-i18n="home_next_see_detail"></span>
         <span class="icon-sq" id="home-next-hint-chevron" style="width:13px; height:13px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
       </div>
+      <div class="home-upcoming" id="home-next-upcoming" style="display:none;"></div>
       <div id="home-session-done-block" style="display:none;">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
           <span class="icon-sq" style="width:18px; height:18px; color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6.5 9 17.5l-5-5"/></svg></span>
