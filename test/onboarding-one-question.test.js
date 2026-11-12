@@ -57,7 +57,7 @@ test('la navegación va de pantalla en pantalla; las preguntas que no aplican se
 
 test('"¿Cómo conociste Zancada?" se guarda en el perfil solo con valores de la lista, y no hay "Cerrar sesión" arriba del inicio', () => {
   assert.match(app, /const referral = document\.querySelector\('#ob-referral \.choice\.active'\)\?\.dataset\.v \|\| null;/);
-  assert.match(app, /state\.profile = \{email:pendingEmail, name, weight, height, birth, gender, referral,/);
+  assert.match(app, /const profile = \{email:pendingEmail, name, weight, height, birth, gender, referral,/);
   const refBlock = block.slice(block.indexOf('id="ob-referral"'), block.indexOf('data-page="7"'));
   const options = [...refBlock.matchAll(/<div class="choice" data-v="([a-z]+)">(<svg.*?<\/svg>)+<span/g)].map(m => m[1]);
   assert.deepEqual(options, ['instagram', 'tiktok', 'youtube', 'google', 'facebook', 'appstore', 'playstore', 'friend', 'ai', 'other'], 'App Store y Play Store separadas, sin Reddit ni X, cada opción con su logo');
