@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-12T00:16:00Z';
+const APP_VERSION = '2026-11-12T00:43:24Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8977,7 +8977,12 @@ function firstSteps(){
     { key: 'watch', done: Object.keys(deviceConnections || {}).some(k => deviceConnections[k]), action: 'openDevicesOverlay()' },
     { key: 'run', done: (state.runs || []).length > 0, action: "showView('correr')" }
   ];
-  return steps.every(x => x.done) ? null : steps;
+  if(steps.every(x => x.done)){
+    // cierre: se muestra solo el día en que se completó (o hasta que se cierre); después no vuelve
+    if(!state.firstStepsDoneAt) state.firstStepsDoneAt = todayLocalISO();
+    return state.firstStepsDoneAt === todayLocalISO() ? steps : null;
+  }
+  return steps;
 }
 function renderFirstSteps(){
   const card = document.getElementById('home-firststeps-card');
@@ -8985,8 +8990,15 @@ function renderFirstSteps(){
   const steps = firstSteps();
   if(!steps){ card.style.display = 'none'; card.innerHTML = ''; return; }
   const done = steps.filter(x => x.done).length;
+  if(done === steps.length){
+    card.innerHTML = '<div class="fs-head fs-alldone"><span class="fs-check fs-check-on" aria-hidden="true">' + ICONS.check + '</span>'
+      + '<span class="fs-text"><b>' + escapeHtml(t('fs_done_title')) + '</b><small>' + escapeHtml(t('fs_done_sub')) + '</small></span>'
+      + '<button class="info-btn" data-on-click="dismissFirstSteps()" aria-label="' + escapeHtml(t('aria_close')) + '"><span class="icon-sq" style="width:16px; height:16px;">' + ICONS.cross + '</span></button></div>';
+    card.style.display = '';
+    return;
+  }
   card.innerHTML = '<div class="fs-head"><h3>' + escapeHtml(t('fs_title')) + '</h3><span class="fs-count">' + escapeHtml(t('fs_progress', {n: done, total: steps.length})) + '</span>'
-    + '<button class="info-btn" data-on-click="dismissFirstSteps()" aria-label="' + escapeHtml(t('aria_close')) + '">' + ICONS.cross + '</button></div>'
+    + '<button class="info-btn" data-on-click="dismissFirstSteps()" aria-label="' + escapeHtml(t('aria_close')) + '"><span class="icon-sq" style="width:16px; height:16px;">' + ICONS.cross + '</span></button></div>'
     + steps.map(x => '<div class="fs-row' + (x.done ? ' done' : '') + '"' + (x.done ? '' : ' role="button" tabindex="0" data-on-click="' + x.action + '"') + '>'
       + '<span class="fs-check" aria-hidden="true">' + (x.done ? ICONS.check : '') + '</span>'
       + '<span class="fs-text"><b>' + escapeHtml(t('fs_' + x.key)) + '</b><small>' + escapeHtml(t('fs_' + x.key + '_sub')) + '</small></span></div>').join('');
@@ -16400,8 +16412,8 @@ function renderHistory(){
     return `${monthHeader}<div class="swipe-item" data-swipe-id="${r.id}">
       <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" data-on-click="deleteRun('${r.id}')"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
       <div class="card hist-card swipe-content" data-on-click="openRunDetail('${r.id}')" style="cursor:pointer;">
-        <div class="hist-top"><span style="font-weight:700;">${dateStr}</span><span class="hist-top-right">${hasMap ? '' : `<span class="hist-date">${r.manual? `<span class="tag tag-asfalto" style="margin-right:6px;">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, true, r)}${fmtTime(r.durationSec)}</span>`}<button class="hist-share-btn" aria-label="${t('hist_share')}" title="${t('hist_share')}" data-on-click="event.stopPropagation(); shareRunImage('${r.id}')">${ICONS.share}</button></span></div>
-        ${hasMap ? `<div class="hist-map" data-run-id="${r.id}">${histMapInnerHtml(r, histMapCssWidth(), 108)}<div class="hist-map-badge">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false, r)}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
+        <div class="hist-top"><span class="hist-when"><span class="hist-day">${dateStr}</span>${(r.manual || sourceBadgeHtml(r.source, false, r)) ? `<span class="hist-date">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false, r)}</span>` : ''}</span><span class="hist-top-right"><span class="hist-time">${fmtTime(r.durationSec)}</span><button class="hist-share-btn" aria-label="${t('hist_share')}" title="${t('hist_share')}" data-on-click="event.stopPropagation(); shareRunImage('${r.id}')">${ICONS.share}</button></span></div>
+        ${hasMap ? `<div class="hist-map" data-run-id="${r.id}">${histMapInnerHtml(r, histMapCssWidth(), 108)}</div>` : ''}
         <div class="stat-row-divided">
           <div class="stat-cell"><div class="n">${fmtDist(r.distanceKm)}</div><div class="l">${distUnit()}</div></div>
           <div class="stat-cell"><div class="n">${fmtPace(paceMin)}</div><div class="l">${t('run_pace_word')}</div></div>
