@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-12T14:32:12Z';
+const APP_VERSION = '2026-11-12T20:45:55Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -14725,6 +14725,8 @@ function showRunSummaryUI(){
   updateRunUnitLabels();
   const sel = document.getElementById('sum-shoe');
   sel.innerHTML = shoeOptionsHtml();
+  // Sin zapatillas cargadas no se pregunta "¿Con qué par corriste?" (era un desplegable con una sola opción que no servía para nada)
+  { const shoeCard = document.getElementById('sum-shoe-card'); if(shoeCard) shoeCard.style.display = (state.shoes && state.shoes.length) ? '' : 'none'; }
   const dateEl = document.getElementById('sum-date');
   if(dateEl) dateEl.textContent = new Date(tracker.startedAt || Date.now()).toLocaleDateString(LOCALE_MAP[lang], {weekday:'short', day:'numeric', month:'short'});
   const pr = runSummaryPR();
