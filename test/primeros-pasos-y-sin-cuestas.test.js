@@ -294,3 +294,11 @@ test('historial vacío: sin buscador ni Tendencias, solo la invitación a salir 
   assert.ok(!js.includes('stravaSyncCard + trendsCard + `<div class="card empty-card">'));
   assert.ok(js.includes("if(s) s.style.display = (state.runs && state.runs.length) ? '' : 'none';"));
 });
+
+test('desplegables con el estilo de la app: zapatilla del detalle en pastilla y flecha propia en los formularios', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const js = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  assert.ok(js.includes('<span class="rd-shoe-pick"><select data-on-change="changeRunShoe('));
+  assert.ok(html.includes('.rd-shoe-pick select{-webkit-appearance:none; appearance:none;'));
+  assert.ok(html.includes('.field select{-webkit-appearance:none; appearance:none; padding-right:42px;'));
+});
