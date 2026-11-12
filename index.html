@@ -1978,7 +1978,10 @@
   /* Resumen de la carrera: las 4 cajas (km, tiempo, ritmo, kcal) se repartían sin encoger y se pasaban del borde de la tarjeta. */
   #runSummary .stat-row{gap:8px;}
   #runSummary .stat-box{flex:1 1 0; min-width:0; padding-left:6px; padding-right:6px;}
-  #runSummary .stat-box:nth-child(2){flex:1.7 1 0;}
+  /* Cajas iguales. La regla de antes ensanchaba la segunda caja, que era el tiempo cuando había cuatro; hoy la segunda es el ritmo y quedaba más ancha sin motivo.
+     Solo cuando aparece la cuarta caja (cadencia) el tiempo, que es el primero y puede ser "01:02:40", recibe un poco más. */
+  #runSummary .stat-row:has(#sum-cad-box:not([style*="none"])) .stat-box:first-child{flex:1.5 1 0;}
+  #runSummary .stat-box .n{white-space:nowrap;}
   #runSummary .stat-box .n{font-size:18px;}
 
   /* ===== Marcas estimadas e importar historial ===== */
@@ -4164,7 +4167,7 @@ body{overflow-wrap:break-word;}
       </div>
       <div class="two-col">
         <div class="field"><label for="man-dist" id="man-dist-label" data-i18n="hist_manual_dist"></label><input type="number" id="man-dist" step="0.1" min="0" inputmode="decimal"></div>
-        <div class="field"><label for="man-dur" data-i18n="hist_manual_dur"></label><input type="number" id="man-dur" min="0"></div>
+        <div class="field"><label for="man-dur" data-i18n="hist_manual_dur"></label><input type="text" inputmode="numeric" id="man-dur" placeholder="55:18" maxlength="8" autocomplete="off" data-on-input="fmtDurInput(this)"></div>
       </div>
       <div class="field"><label for="man-hr" data-i18n="hist_manual_hr"></label><input type="number" id="man-hr"></div>
       <div class="field"><label for="man-shoe" data-i18n="run_summary_shoe_q"></label><select id="man-shoe"></select></div>
@@ -4755,7 +4758,7 @@ body{overflow-wrap:break-word;}
     </div>
     <div class="two-col">
       <div class="field"><label for="edit-run-dist" id="edit-run-dist-label" data-i18n="hist_manual_dist"></label><input type="number" id="edit-run-dist" step="0.1"></div>
-      <div class="field"><label for="edit-run-dur" data-i18n="hist_manual_dur"></label><input type="number" id="edit-run-dur"></div>
+      <div class="field"><label for="edit-run-dur" data-i18n="hist_manual_dur"></label><input type="text" inputmode="numeric" id="edit-run-dur" placeholder="55:18" maxlength="8" autocomplete="off" data-on-input="fmtDurInput(this)"></div>
     </div>
     <div class="field"><label for="edit-run-hr" data-i18n="hist_manual_hr"></label><input type="number" id="edit-run-hr"></div>
     <div class="field"><label for="edit-run-shoe" data-i18n="run_summary_shoe_q"></label><select id="edit-run-shoe"></select></div>

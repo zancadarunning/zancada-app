@@ -302,3 +302,20 @@ test('desplegables con el estilo de la app: zapatilla del detalle en pastilla y 
   assert.ok(html.includes('.rd-shoe-pick select{-webkit-appearance:none; appearance:none;'));
   assert.ok(html.includes('.field select{-webkit-appearance:none; appearance:none; padding-right:42px;'));
 });
+
+test('duración como tiempo: 55:18 y 1:02:40 se entienden, un número solo sigue valiendo como minutos y lo inválido se rechaza', () => {
+  const { loadApp } = require('./support/load-app');
+  const a = loadApp();
+  assert.equal(a.parseDurationInput('55:18'), 3318);
+  assert.equal(a.parseDurationInput('1:02:40'), 3760);
+  assert.equal(a.parseDurationInput('01:02:40'), 3760);
+  assert.equal(a.parseDurationInput('45'), 2700);
+  assert.equal(a.parseDurationInput('55,3'), 3318);
+  for (const bad of ['', 'abc', '5:75', '1:70:00', '1:2:3:4', '-5', '5:-1']) assert.ok(Number.isNaN(a.parseDurationInput(bad)), bad);
+  const el = { value: '5518' }; a.fmtDurInput(el); assert.equal(el.value, '55:18');
+  el.value = '10240'; a.fmtDurInput(el); assert.equal(el.value, '1:02:40');
+  el.value = '45'; a.fmtDurInput(el); assert.equal(el.value, '45');
+  el.value = '55:1'; a.fmtDurInput(el); assert.equal(el.value, '5:51');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  for (const id of ['man-dur', 'edit-run-dur']) assert.ok(html.includes('id="' + id + '" placeholder="55:18"'), id);
+});
