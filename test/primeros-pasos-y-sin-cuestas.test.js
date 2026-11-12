@@ -287,3 +287,10 @@ test('diseño: editar/eliminar en el menú del detalle, descansos compactos en e
   assert.ok(html.includes('.msg.user{background:var(--asphalt-4); color:var(--chalk); box-shadow:none;}'));
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.ok(fs.readFileSync(path.join(__dirname, '..', 'locales', l + '.js'), 'utf8').includes('aria_more_options:"'), l);
 });
+
+test('historial vacío: sin buscador ni Tendencias, solo la invitación a salir a correr', () => {
+  const js = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  assert.ok(js.includes("el.innerHTML = stravaSyncCard + `<div class=\"card empty-card\">"));
+  assert.ok(!js.includes('stravaSyncCard + trendsCard + `<div class="card empty-card">'));
+  assert.ok(js.includes("if(s) s.style.display = (state.runs && state.runs.length) ? '' : 'none';"));
+});

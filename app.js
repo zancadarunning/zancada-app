@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-12T14:01:26Z';
+const APP_VERSION = '2026-11-12T14:12:18Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10365,14 +10365,14 @@ function buildDayListHtml(wd){
     // Sin botón "Sincronizar" en el ejercicio del día (pedido del usuario): las carreras llegan solas desde el reloj conectado.
     if(d.typeKey==='test' && !d.testRead && d.status!=='skipped') statusBlock += `<div style="margin-top:12px;"><button class="btn btn-primary btn-sm" data-on-click="event.stopPropagation(); openLevelTest()">${t('ltest_load_btn')}</button></div>`;
     planSheetData[i] = buildSessionSheetHtml({d, date:dayIso, title:lblType, lblDesc, statusBlock, isEventDay});
-    const wcLine = (!isEventDay && !isTimeMode() && d.dist>0 && !d.raceDay) ? planWarmCoolText(d) : '';
+    // La línea "Más 5 min de calentamiento y 5 min de vuelta a la calma" ya no se repite en cada fila de la semana (eran tres renglones por sesión):
+    // sigue en la tarjeta de hoy en Inicio y en el detalle que se abre al tocar el día.
     const kmHtml = isEventDay ? (eventAmountText ? `<span class="day-km-inline">${eventAmountText}</span>` : '') : (d.dist>0 ? `<span class="day-km-inline">${planShownAmountText(d)}</span>` : (extraRunAmountText ? `<span class="day-km-inline">${extraRunAmountText}</span>` : ''));
     return `<div>
       <div class="day-row ${isRestDay?'day-row-rest':''} ${isToday?'day-row-today':''}" data-idx="${i}"${(wd.mode==='current' && canEdit && !isEventDay && !d.status && !d.raceDay) ? (d.dist>0 ? ' data-src="1" data-drop="1"' : ' data-drop="1"') : ''} data-zone="${(d.dist>0 && d.zone && !isEventDay)?d.zone:''}" data-on-click="toggleDay(${i})">
         <div class="day-badge"><div class="d">${t('day_'+d.day).slice(0,3)}</div>${dateLbl?`<div class="mono muted" style="font-size:10px; margin-top:2px;">${dateLbl}</div>`:''}</div>
         <div class="day-info">
           <div class="day-info-title-row"><span class="t">${lblType}</span></div>
-          ${wcLine ? `<div class="day-row-wc">${escapeHtml(wcLine)}</div>` : ''}
           ${meta?`<div class="day-row-chips">${meta}</div>`:''}
         </div>
         <div class="day-row-end">${kmHtml}<span class="day-end-slot">${statusIcon}</span></div>
@@ -16402,7 +16402,9 @@ function renderHistory(){
   // reemplaza por el mismo perfil de elevacion que ya es la firma visual de la app
   // (hoy usado como separador en Perfil), agrandado como pieza central acá: "todavia
   // no recorriste este camino" en vez de un ícono de reloj cualquiera.
-  if(!state.runs || state.runs.length===0){ el.innerHTML = stravaSyncCard + trendsCard + `<div class="card empty-card"><div class="empty-track" aria-hidden="true"></div><h3 class="empty-title">${t('hist_empty_title')}</h3><p class="muted" style="margin:0 0 16px;">${t('hist_empty')}</p><button class="btn btn-primary" data-on-click="showView('correr')">${t('hist_empty_cta')}</button></div>`; animateHistTrendBars(); return; }
+  // Sin carreras no se muestran ni el buscador ni "Tendencias" (eran dos ceros, un gráfico vacío y un botón Compartir sin nada para compartir): solo la invitación a salir.
+  { const s = document.getElementById('hist-search'); if(s) s.style.display = (state.runs && state.runs.length) ? '' : 'none'; }
+  if(!state.runs || state.runs.length===0){ el.innerHTML = stravaSyncCard + `<div class="card empty-card"><div class="empty-track" aria-hidden="true"></div><h3 class="empty-title">${t('hist_empty_title')}</h3><p class="muted" style="margin:0 0 16px;">${t('hist_empty')}</p><button class="btn btn-primary" data-on-click="showView('correr')">${t('hist_empty_cta')}</button></div>`; return; }
   // Buscador simple + encabezados de mes -- con varios meses de historial cargado, una
   // lista plana se vuelve incómoda de recorrer. El buscador filtra por lo que se ve en
   // cada tarjeta (fecha, zapatilla, "manual"/Strava); los encabezados de mes se insertan
