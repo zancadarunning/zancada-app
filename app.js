@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-12T13:43:35Z';
+const APP_VERSION = '2026-11-12T14:01:26Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -16582,8 +16582,6 @@ function openRunDetail(runId){
     <div class="rd-tabs">${tabs.map(tb=>`<button class="rd-tab-btn" id="rd-tabbtn-${tb}" data-on-click="switchRDTab('${tb}')">${tabLabels[tb]}</button>`).join('')}</div>
     ${tabs.map(tb=>`<div class="rd-panel" id="rd-panel-${tb}"></div>`).join('')}
     ${renderRunPlanScore(r)}
-    <button class="btn btn-outline" style="width:100%; margin-top:24px;" data-on-click="openEditRun('${r.id}')">${t('edit_run_btn')}</button>
-    <button class="btn btn-danger" style="width:100%; margin-top:12px;" data-on-click="deleteRun('${r.id}')">${t('hist_delete_run')}</button>
   `;
   document.getElementById('run-detail-modal').style.display='block';
   switchRDTab(tabs[0]);
@@ -17975,7 +17973,23 @@ function drawRouteSilhouette(ctx, points, x, y, w, h, lineWidth, dotRadius){
   ctx.fillStyle = '#EDEFEF';
   ctx.fill();
 }
+// Menú de tres puntos del detalle de una carrera (editar / eliminar). Se cierra al elegir, al tocar afuera y al salir del detalle.
+function setRDMenuOpen(open){
+  const m = document.getElementById('rd-menu'), b = document.getElementById('rd-menu-btn');
+  if(m) m.style.display = open ? 'block' : 'none';
+  if(b) b.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+function toggleRDMenu(){ const m = document.getElementById('rd-menu'); setRDMenuOpen(!!m && m.style.display === 'none'); }
+function rdMenuEdit(){ setRDMenuOpen(false); if(rdCurrent && rdCurrent.r) openEditRun(rdCurrent.r.id); }
+function rdMenuDelete(){ setRDMenuOpen(false); if(rdCurrent && rdCurrent.r) deleteRun(rdCurrent.r.id); }
+document.addEventListener('click', e => {
+  const m = document.getElementById('rd-menu');
+  if(!m || m.style.display === 'none') return;
+  if(e.target.closest && (e.target.closest('#rd-menu') || e.target.closest('#rd-menu-btn'))) return;
+  setRDMenuOpen(false);
+});
 function closeRunDetail(){
+  setRDMenuOpen(false);
   document.getElementById('run-detail-modal').style.display='none';
   if(detailMap){ detailMap.remove(); detailMap=null; }
 }
