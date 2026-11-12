@@ -1288,6 +1288,15 @@
   .rd-menu-item{display:block; width:100%; min-height:44px; padding:10px 12px; border:none; background:none; color:var(--chalk); font:inherit; font-size:15px; font-weight:600; text-align:left; border-radius:8px; cursor:pointer;}
   .rd-menu-item:active{background:var(--asphalt-3);}
   .rd-menu-danger{color:var(--danger);}
+  /* Desplegables de los formularios: sin la flecha gris del sistema (quedaba pegada al borde y corría el texto); flecha propia, igual en claro y oscuro */
+  .field select{-webkit-appearance:none; appearance:none; padding-right:42px; text-overflow:ellipsis;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8f86' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") !important;
+    background-repeat:no-repeat !important; background-position:right 15px center !important; background-size:14px 14px !important;}
+  #onboard .ob-field-big select{padding-left:42px;}   /* texto centrado: mismo margen a los dos lados para que la flecha no lo corra */
+  .rd-shoe-pick{position:relative; display:inline-flex; align-items:center; max-width:62%; min-width:0;}
+  .rd-shoe-pick select{-webkit-appearance:none; appearance:none; min-height:40px; max-width:100%; padding:8px 36px 8px 16px; border-radius:999px; background:var(--asphalt-3); border:1px solid var(--overlay-hairline);
+    color:var(--chalk); font-family:inherit; font-size:14px; font-weight:600; text-overflow:ellipsis; cursor:pointer;}
+  .rd-shoe-chev{position:absolute; right:13px; width:13px; height:13px; color:var(--mist); pointer-events:none;}
   .rd-seg-table{width:100%; border-collapse:collapse; font-size:13px;}
   .rd-seg-table th{text-align:right; color:var(--mist); font-weight:600; font-size:11px; padding:0 0 8px 8px; white-space:nowrap;}
   .rd-seg-table th:first-child{padding-left:0;}

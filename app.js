@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-12T14:12:18Z';
+const APP_VERSION = '2026-11-12T14:23:42Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -17400,10 +17400,11 @@ function renderRDDetalles(panel){
   if(r.elevationGain!=null) tiles.push([t('rd_ascent'), isImperial() ? Math.round(r.elevationGain*3.28084)+' ft' : Math.round(r.elevationGain)+' m']);
   if(r.elevationLoss!=null) tiles.push([t('rd_descent'), isImperial() ? Math.round(r.elevationLoss*3.28084)+' ft' : Math.round(r.elevationLoss)+' m']);
 
-  const shoeSelect = `<select data-on-change="changeRunShoe('${r.id}', this.value)" style="background:var(--asphalt-3); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:6px 8px; border-radius:6px; font-family:inherit; font-size:13px; max-width:60%;">
+  // Selector de zapatilla con el estilo de la app (pastilla + flecha propia) en lugar del desplegable gris del sistema
+  const shoeSelect = `<span class="rd-shoe-pick"><select data-on-change="changeRunShoe('${r.id}', this.value)" aria-label="${escapeHtml(t('hist_shoe'))}">
     <option value="">${t('hist_no_shoe')}</option>
     ${state.shoes.map(s=>`<option value="${s.id}" ${String(s.id)===String(r.shoeId)?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}
-  </select>`;
+  </select><span class="icon-sq rd-shoe-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></span>`;
 
   panel.innerHTML = `
     <div class="card">
