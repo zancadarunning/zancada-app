@@ -319,3 +319,10 @@ test('duración como tiempo: 55:18 y 1:02:40 se entienden, un número solo sigue
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   for (const id of ['man-dur', 'edit-run-dur']) assert.ok(html.includes('id="' + id + '" placeholder="55:18"'), id);
 });
+
+test('resumen de la carrera: sin zapatillas cargadas no se pregunta con qué par corriste', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const js = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  assert.ok(html.includes('<div class="card" id="sum-shoe-card">'));
+  assert.ok(js.includes("if(shoeCard) shoeCard.style.display = (state.shoes && state.shoes.length) ? '' : 'none';"));
+});
