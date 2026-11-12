@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-12T00:43:24Z';
+const APP_VERSION = '2026-11-12T02:06:24Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8555,6 +8555,9 @@ function renderLevelTestUI(){
     } else {
       txt.textContent = t('ltest_perfil_none');
     }
+    // el botón dice lo que toca: "Hacer el test" si falta, "Repetir el test" si ya está hecho (antes decía las dos cosas a la vez)
+    const btn = document.getElementById('perfil-ltest-btn');
+    if(btn){ const key = (lt && lt.done) ? 'ltest_perfil_btn_redo' : 'ltest_perfil_btn_do'; btn.dataset.i18n = key; btn.textContent = t(key); }
   }
 }
 
@@ -16695,7 +16698,6 @@ function isNativeApp(){
 }
 function renderRDRuta(panel){
   const {r, paceMin, cal} = rdCurrent;
-  const dateStr = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
   const timeStr = new Date(r.date).toLocaleTimeString(LOCALE_MAP[lang], {hour:'numeric', minute:'2-digit'});
   const paces = fullSplitsOnly(getDisplaySplits(r)).map(s=>s.paceMin);
   const slowest = paces.length ? Math.max(...paces) : paceMin;
@@ -16710,7 +16712,7 @@ function renderRDRuta(panel){
     </div>
     <div class="rd-ruta-below" id="rd-ruta-below">
       <div class="rd-big-dist">${fmtDist(r.distanceKm)} <span style="font-size:19px; font-weight:700; color:var(--mist);">${distUnit()}</span></div>
-      <p class="muted" style="margin-top:2px;">${r.name ? dateStr.charAt(0).toUpperCase() + dateStr.slice(1) + ', ' + timeStr : timeStr}</p>
+      <p class="muted" style="margin-top:2px;">${timeStr}</p>
       <!-- Botón "Video del recorrido" sacado a pedido del usuario: en la web (PWA)
            nunca se pudo lograr que el video se guarde/comparta de forma confiable
            en iPhone (ver el historial de intentos alrededor de rdRemuxVideoIfNeeded
@@ -17205,6 +17207,8 @@ function renderRDSegmentos(panel){
   // milesOk (la unidad REAL de esta tabla, que puede ser km aunque el corredor esté en modo
   // imperial), así que no se puede reusar tal cual para esta columna en particular.
   const fmtSegDist = km => milesOk ? fmtDist(km) : km.toFixed(2);
+  // un tramo dura minutos: sin las horas en cero ("4:57" en vez de "00:04:57") la tabla de 6 columnas entra en un teléfono sin que los títulos se toquen
+  const fmtSegTime = sec => { const s = fmtTime(sec); return s.startsWith('00:') ? s.slice(3) : s; };
   const anyHr = splits.some(s=>s.avgHr!=null);
   const anyCad = splits.some(s=>s.avgCadence!=null);
   const rows = splits.map(s=>{
@@ -17212,7 +17216,7 @@ function renderRDSegmentos(panel){
     const segSec = Math.round(s.paceMin*60*segDistKm);
     return `<tr>
       <td>${s.km}</td>
-      <td>${fmtTime(segSec)}</td>
+      <td>${fmtSegTime(segSec)}</td>
       <td>${fmtSegDist(segDistKm)}</td>
       <td>${fmtPace(s.paceMin)}</td>
       ${anyHr ? `<td>${s.avgHr!=null ? s.avgHr : '–'}</td>` : ''}
@@ -17223,7 +17227,7 @@ function renderRDSegmentos(panel){
     <div style="overflow-x:auto;">
     <table class="rd-seg-table">
       <thead><tr>
-        <th>${unitLabel.toUpperCase()}</th><th>${t('rd_seg_dur')}</th><th>${t('rd_seg_dist')} (${unitLabel})</th><th>${t('run_pace_word')} (/${distUnit()})</th>
+        <th>${unitLabel.toUpperCase()}</th><th>${t('rd_seg_dur')}</th><th>${t('rd_seg_dist')}</th><th>${t('run_pace_word')}</th>
         ${anyHr ? `<th>${t('hist_avg_hr')}</th>` : ''}
         ${anyCad ? `<th>${t('hist_cadence')}</th>` : ''}
       </tr></thead>
