@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-11T19:22:58Z';
+const APP_VERSION = '2026-11-12T00:16:00Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2252,6 +2252,7 @@ async function refreshDeviceConnections(){
   }catch(e){ console.error(e); }
   deviceConnectionsLoaded = true;
   try{ renderWatchCard(); }catch(e){}
+  try{ renderFirstSteps(); }catch(e){}   // ahora se sabe si hay un reloj conectado
   try{ stravaSunsetDisconnect(); }catch(e){}
   renderPlan();
   if(document.getElementById('perfil-devices-summary')) renderPerfil();
@@ -4772,6 +4773,7 @@ function obGotoStep(n){
   document.getElementById('onboard').scrollTop = 0;
   updateObStep2ButtonState();
   if(n === OB_CONNECT_PAGE) obRefreshConnections();
+  if(n === OB_PAGE_COUNT || n === 7) renderObPlanPreview();   // la última pantalla muestra la primera semana ya armada
   // en el celular, la primera pantalla abre el teclado en el nombre (las demás mezclan opciones y campos: no se abre sola)
   const first = n === 1 ? document.getElementById('ob-name') : null;
   if(first && !first.value && window.matchMedia && window.matchMedia('(pointer:coarse)').matches){ try{ first.focus({preventScroll:true}); }catch(e){} }
@@ -4834,7 +4836,8 @@ function obPrevStep(){
   const ob = document.getElementById('onboard');
   if(ob && ob.addEventListener) ob.addEventListener('click', () => setTimeout(() => { try{ obRefreshBlocks(); updateObStep2ButtonState(); }catch(e){} }, 0));
 })();
-async function finishOnboard(){
+// Lee las respuestas del inicio y arma el perfil. No toca el estado: lo usan finishOnboard() (para crear la cuenta) y obPlanPreview() (para mostrar la primera semana antes de crearla).
+function obBuildProfile(){
   const name = document.getElementById('ob-name').value.trim() || 'Runner';
   // "|| 70"/"|| 170" (como estaba antes) solo cubre NaN/0 -- un valor negativo (typo, un
   // signo de menos que se cuela) es truthy en JS y pasaba derecho, guardando un peso/altura
@@ -4921,7 +4924,40 @@ async function finishOnboard(){
   // perdida, cuando en realidad todavía ni tenía cuenta esos días.
   // "¿Cómo conociste Zancada?" (opcional): un valor de una lista fija, o null
   const referral = document.querySelector('#ob-referral .choice.active')?.dataset.v || null;
-  state.profile = {email:pendingEmail, name, weight, height, birth, gender, referral,pregnancyPostpartum, coachNotes: healthNotes ? [healthNotes] : [], terrain, trainBy, trainingDays: trainingDays.length?trainingDays:['tue','thu','sun'], goal, raceDate, runnerType, currentWeeklyKm, returningFromBreak, refRace, availableMinPerSession, crossTrainingSports, crossTrainingDays, hrMax, hrKnown, hrZones:computeZones(hrMax), tz:detectDeviceTz(), createdAt: todayLocalISO()};
+  const profile = {email:pendingEmail, name, weight, height, birth, gender, referral,pregnancyPostpartum, coachNotes: healthNotes ? [healthNotes] : [], terrain, trainBy, trainingDays: trainingDays.length?trainingDays:['tue','thu','sun'], goal, raceDate, runnerType, currentWeeklyKm, returningFromBreak, refRace, availableMinPerSession, crossTrainingSports, crossTrainingDays, hrMax, hrKnown, hrZones:computeZones(hrMax), tz:detectDeviceTz(), createdAt: todayLocalISO()};
+  return { profile, healthNotes };
+}
+// Las sesiones de la primera semana tal como las va a ver la persona (día, tipo y cantidad), calculadas con el mismo motor que el plan real pero sin guardar nada: se usa el estado un instante y se devuelve como estaba.
+function obPlanPreview(){
+  const keep = { profile: state.profile, weekNumber: state.weekNumber, weekStart: state.weekStart, plan: state.plan };
+  try{
+    const { profile } = obBuildProfile();
+    profile.levelTest = {required:true, done:false};
+    state.profile = profile;
+    profile.weeklyKm = calcWeeklyKm(profile);
+    state.weekNumber = 1;
+    state.weekStart = getMondayISO(new Date());
+    const today = todayLocalISO();
+    const plan = generatePlan(profile, 1);
+    return plan.map((d, i) => ({ d, iso: addDaysToIsoLocal(state.weekStart, i) }))
+      .filter(x => x.d && x.d.dist > 0 && x.d.typeKey !== 'rest' && x.iso >= today)   // los días que ya pasaron quedan como descanso (igual que en finishOnboard)
+      .map(x => ({ day: t('day_' + x.d.day), type: x.d.custom ? String(x.d.type) : t('type_' + x.d.typeKey), amount: planShownAmountText(x.d), zone: x.d.zone || null }));
+  }catch(e){ console.error('adelanto del plan', e); return []; }
+  finally{ state.profile = keep.profile; state.weekNumber = keep.weekNumber; state.weekStart = keep.weekStart; state.plan = keep.plan; }
+}
+function renderObPlanPreview(){
+  const el = document.getElementById('ob-plan-preview');
+  if(!el) return;
+  const rows = obPlanPreview();
+  if(!rows.length){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.innerHTML = '<p class="ob-preview-title">' + escapeHtml(t('ob_preview_title')) + '</p>' + rows.map(r =>
+    '<div class="ob-preview-row"><span class="ob-preview-day">' + escapeHtml(r.day) + '</span><span class="ob-preview-type">' + escapeHtml(r.type) + '</span><span class="ob-preview-amount">' + escapeHtml(r.amount) + '</span></div>').join('');
+  el.style.display = '';
+}
+async function finishOnboard(){
+  const { profile, healthNotes } = obBuildProfile();
+  const name = profile.name, terrain = profile.terrain;
+  state.profile = profile;
   // Antes esto era un flag propio (hasInjuryNote) que, a diferencia de toda otra señal de
   // cautela, no tenía forma de destildarse -- una molestia mencionada una sola vez en el
   // onboarding subía la cautela del plan para siempre, sin vencimiento ni botón en Perfil
@@ -5080,6 +5116,7 @@ function enterApp(){
   document.getElementById('perfil-name').value = state.profile.name;
   checkWeekRollover();
   checkPlanAlgoVersion();
+  try{ if(applyAvoidHills()) persist(); }catch(e){ console.error('sin cuestas', e); }   // nota de "no puedo hacer cuestas" ya guardada: las cuestas pendientes de esta semana se cambian por otra sesión
   checkBeginnerGraduation();
   checkReturningBreakGraduation();
   autoSkipPastDays();
@@ -5133,6 +5170,7 @@ document.addEventListener('visibilitychange', ()=>{
   if(document.hidden || !currentUserId || !state.onboarded) return;
   checkWeekRollover();
   checkPlanAlgoVersion();
+  try{ if(applyAvoidHills()) persist(); }catch(e){ console.error('sin cuestas', e); }   // nota de "no puedo hacer cuestas" ya guardada: las cuestas pendientes de esta semana se cambian por otra sesión
   checkBeginnerGraduation();
   checkReturningBreakGraduation();
   autoSkipPastDays();
@@ -7298,6 +7336,27 @@ function checkWeekRollover(){
     persist();
   }
 }
+// ¿La persona avisó que no puede (o no quiere) hacer cuestas? Sale de las notas que guarda Zonda y de las que se escriben en el inicio: una nota que nombra las cuestas junto con una negación
+// ("no puedo hacer cuestas donde vivo", "sin subidas", "vivo en zona llana", "no hills here"). Antes esa nota solo la leía Zonda en el chat y el plan seguía programando cuestas.
+// Si se borra la nota desde Perfil, las cuestas vuelven a entrar en la rotación.
+const HILL_WORDS = /cuesta|subida|pendiente|colina|loma|\bhills?\b|incline|uphill|ladeira|morro|c[ôo]tes?\b|mont[ée]e|d[ée]nivel|salit[ae]|collin|\bberg|h[üu]gel|steigung|anstieg/i;
+const HILL_NEGATION = /\bno\b|\bsin\b|\bni\b|nunca|tampoco|evit|imposible|llan[oa]|\bplan[oa]\b|\bflat\b|\bcan'?t\b|\bcannot\b|\bnot\b|n't\b|without|avoid|\bn[ãa]o\b|\bsem\b|\bpas\b|\bsans\b|aucun|[ée]viter|\bplat\b|\bnon\b|senza|pianur|piatt|\bkein|\bnicht\b|\bohne\b|vermeid|flach/i;
+function noteAvoidsHills(note){ const s = String(note || ''); return HILL_WORDS.test(s) && HILL_NEGATION.test(s); }
+function avoidsHills(p){ return !!p && (p.avoidHills === true || (Array.isArray(p.coachNotes) && p.coachNotes.some(noteAvoidsHills))); }
+// Las cuestas que todavía están por hacer en la semana en curso se cambian por la sesión que el plan arma hoy para ese día sin cuestas (mismo motor: respeta el plan por tiempo, las fases y la cautela). Devuelve true si cambió algo.
+function applyAvoidHills(){
+  if(!state || !state.onboarded || !Array.isArray(state.plan) || !avoidsHills(state.profile)) return false;
+  const pending = state.plan.map((d, i) => (d && d.typeKey === 'hills' && !d.custom && d.status !== 'done' && d.status !== 'skipped') ? i : -1).filter(i => i >= 0);
+  if(!pending.length) return false;
+  let fresh = null;
+  try{ fresh = generatePlan(state.profile, state.weekNumber || 1); }catch(e){ return false; }
+  let changed = false;
+  pending.forEach(i => {
+    const d = state.plan[i], f = fresh && fresh[i];
+    if(f && f.dist > 0 && f.typeKey !== 'rest' && f.typeKey !== 'hills'){ state.plan[i] = Object.assign({}, f, {day: d.day}); changed = true; }
+  });
+  return changed;
+}
 function hardSessionRotation(goal, caution){
   // Antes el "día fuerte" solo alternaba entre series y ritmo medio, semana tras
   // semana, sin importar el objetivo -> con el tiempo se volvía siempre el mismo
@@ -7444,6 +7503,8 @@ function distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isC
   // Con plan por fases (phase es un string) la rotación sale de la fase; sin phase, de la meta
   // como siempre -- el resto de la distribución no sabe de fases.
   let rotation = typeof phase==='string' ? hardSessionRotationForPhase(phase, goal, caution) : hardSessionRotation(goal, caution);
+  // la persona avisó que no puede hacer cuestas: salen de la rotación (queda el resto de los estímulos; si no quedara ninguno, fartlek)
+  if(avoidsHills(typeof state !== 'undefined' && state ? state.profile : null)){ rotation = rotation.filter(x => x !== 'hills'); if(!rotation.length) rotation = ['fartlek']; }
   // Alguien que TODAVÍA es principiante en running (nunca corrió solo) pero ya tiene base
   // de un deporte de impacto (ver hasRunningImpactBase) puede salir de "todo zona 1" -- pero
   // no le sirve de nada una sesión de series o ritmo medio con técnica y paces que todavía no
@@ -8480,6 +8541,7 @@ function renderLevelTestUI(){
     if(missedIso) document.getElementById('home-test-missed-desc').textContent = t('ltest_missed_desc', {day: new Date(missedIso + 'T12:00:00').toLocaleDateString(LOCALE_MAP[lang], {weekday:'long'})});
   }
   if(banner) banner.style.display = (levelTestPending(p) && !missedIso) ? 'block' : 'none';
+  renderFirstSteps();   // si la guía de primeros pasos está a la vista, el test figura ahí y el cartel de arriba no se repite
   limitHomeAlerts(2);
   const txt = document.getElementById('perfil-ltest-text');
   if(txt){
@@ -8902,6 +8964,41 @@ function renderHomeInsights(){
     + '</div>' + (ins.hasGarmin ? '<p class="muted garmin-derived" style="margin:12px 0 0; font-size:12px;">' + escapeHtml(t('garmin_derived_note')) + '</p>' : '');
   card.style.display = '';
   if(quote) quote.style.display = 'none';
+}
+// "Primeros pasos" (Inicio): las tres cosas que conviene hacer en los primeros días -- test de nivel, conectar el reloj y la primera salida. Solo para cuentas de menos de 21 días; se va sola al completar las tres o al cerrarla.
+const FIRST_STEPS_DAYS = 21;
+function firstSteps(){
+  const p = state && state.profile;
+  if(!state || !state.onboarded || !p || state.firstStepsDismissed) return null;
+  const created = Date.parse((p.createdAt || '') + 'T12:00:00');
+  if(!Number.isFinite(created) || Date.now() - created > FIRST_STEPS_DAYS * 86400000) return null;
+  const steps = [
+    { key: 'test', done: !levelTestPending(p), action: 'openLevelTest()' },
+    { key: 'watch', done: Object.keys(deviceConnections || {}).some(k => deviceConnections[k]), action: 'openDevicesOverlay()' },
+    { key: 'run', done: (state.runs || []).length > 0, action: "showView('correr')" }
+  ];
+  return steps.every(x => x.done) ? null : steps;
+}
+function renderFirstSteps(){
+  const card = document.getElementById('home-firststeps-card');
+  if(!card) return;
+  const steps = firstSteps();
+  if(!steps){ card.style.display = 'none'; card.innerHTML = ''; return; }
+  const done = steps.filter(x => x.done).length;
+  card.innerHTML = '<div class="fs-head"><h3>' + escapeHtml(t('fs_title')) + '</h3><span class="fs-count">' + escapeHtml(t('fs_progress', {n: done, total: steps.length})) + '</span>'
+    + '<button class="info-btn" data-on-click="dismissFirstSteps()" aria-label="' + escapeHtml(t('aria_close')) + '">' + ICONS.cross + '</button></div>'
+    + steps.map(x => '<div class="fs-row' + (x.done ? ' done' : '') + '"' + (x.done ? '' : ' role="button" tabindex="0" data-on-click="' + x.action + '"') + '>'
+      + '<span class="fs-check" aria-hidden="true">' + (x.done ? ICONS.check : '') + '</span>'
+      + '<span class="fs-text"><b>' + escapeHtml(t('fs_' + x.key)) + '</b><small>' + escapeHtml(t('fs_' + x.key + '_sub')) + '</small></span></div>').join('');
+  card.style.display = '';
+  // el test de nivel ya está en la guía: el cartel propio no se muestra a la vez
+  const banner = document.getElementById('home-test-banner');
+  if(banner && !steps[0].done) banner.style.display = 'none';
+}
+function dismissFirstSteps(){
+  state.firstStepsDismissed = true;
+  persist();
+  renderLevelTestUI();   // vuelve a mostrar el cartel del test si todavía está pendiente
 }
 function renderDailyTip(){
   const today = localDateISO();
@@ -11013,6 +11110,7 @@ function renderCoachNotes(){
   const box = document.getElementById('coach-notes-list');
   if(!box) return;
   const notes = (state.profile && Array.isArray(state.profile.coachNotes)) ? state.profile.coachNotes : [];
+  { const c = document.getElementById('coach-notes-count'); if(c) c.textContent = notes.length ? String(notes.length) : ''; }
   if(!notes.length){ box.innerHTML = '<p class="muted" style="margin:8px 0 0;">' + escapeHtml(t('coach_notes_empty')) + '</p>'; return; }
   box.innerHTML = notes.map((n, i) => '<div class="set-row" style="align-items:flex-start; gap:10px;"><span style="flex:1; min-width:0; white-space:normal; line-height:1.4;">' + escapeHtml(n) + '</span><button type="button" class="small-link" data-on-click="deleteCoachNote(' + i + ')">' + escapeHtml(t('coach_notes_delete')) + '</button></div>').join('');
 }
@@ -13868,6 +13966,43 @@ function buildHistMapStaticUrl(r, width, height){
   // mismo mapa claro de siempre (streets) y el mismo trazo verde oscuro, en cualquier tema
   return `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/static/path-3+0B5D2E-1(${encoded})/auto/${w}x${h}${retina}?padding=22,28,22,28&access_token=${MAPBOX_TOKEN}`;
 }
+// Carreras cuya marca no deja mandar el recorrido a terceros: a Mapbox se le pide solo el mapa de la zona (un centro redondeado a ~10 m y un zoom, lo mismo que ya revelan los cuadros del mapa del detalle)
+// y el recorrido se dibuja encima acá, con la misma proyección (Web Mercator, mosaicos de 512 px). Devuelve null si no hay puntos válidos.
+function restrictedMapView(points, width, height){
+  const pts = (Array.isArray(points) ? points : []).filter(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lon) && Math.abs(p.lat) < 85);
+  if(pts.length < 2) return null;
+  const W = Math.min(1280, Math.round(width)), H = Math.min(1280, Math.round(height));
+  const wx = lon => (lon + 180) / 360 * 512;
+  const wy = lat => { const r = lat * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 512; };
+  const xs = pts.map(p => wx(p.lon)), ys = pts.map(p => wy(p.lat));
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const fit = Math.min((W - 56) / Math.max(maxX - minX, 1e-7), (H - 44) / Math.max(maxY - minY, 1e-7));
+  const zoom = Math.floor(Math.min(17, Math.max(1, Math.log2(fit))) * 100) / 100;
+  // el centro se redondea ANTES de proyectar el trazo: mapa y trazo usan exactamente el mismo centro
+  const cLon = Math.round(((minX + maxX) / 2 / 512 * 360 - 180) * 1e4) / 1e4;
+  const cLat = Math.round((Math.atan(Math.sinh(Math.PI * (1 - 2 * ((minY + maxY) / 2) / 512))) * 180 / Math.PI) * 1e4) / 1e4;
+  const k = Math.pow(2, zoom), cx = wx(cLon), cy = wy(cLat);
+  const step = Math.max(1, Math.floor(pts.length / 160));
+  const px = [];
+  for(let i = 0; i < pts.length; i += step) px.push([(xs[i] - cx) * k + W / 2, (ys[i] - cy) * k + H / 2]);
+  px.push([(xs[xs.length - 1] - cx) * k + W / 2, (ys[ys.length - 1] - cy) * k + H / 2]);
+  const dpr = (typeof devicePixelRatio!=='undefined' && devicePixelRatio) || 1;
+  return {
+    w: W, h: H,
+    url: `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/static/${cLon},${cLat},${zoom},0/${W}x${H}${dpr > 1.25 ? '@2x' : ''}?access_token=${MAPBOX_TOKEN}`,
+    path: px.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(''),
+    start: px[0]
+  };
+}
+// Mapa de la tarjeta del Historial: imagen de Mapbox con el recorrido (carreras propias) o mapa de la zona + recorrido dibujado acá (marcas restringidas). Si la imagen no carga queda el trazo.
+function histMapInnerHtml(r, width, height){
+  const imgAttrs = 'loading="lazy" alt="" decoding="async" data-on-load="this.classList.add(\'loaded\')" data-on-error="this.style.display=\'none\'"';
+  if(isRestrictedRun(r)){
+    const v = restrictedMapView(r.points, width, height);
+    if(v) return '<img class="hist-map-img" src="' + v.url + '" ' + imgAttrs + '><svg class="hist-map-route" viewBox="0 0 ' + v.w + ' ' + v.h + '" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><path d="' + v.path + '"/><circle cx="' + v.start[0].toFixed(1) + '" cy="' + v.start[1].toFixed(1) + '" r="4"/></svg>';
+  }
+  return routeSketchSvg(r.points) + '<img class="hist-map-img" src="' + buildHistMapStaticUrl(r, width, height) + '" ' + imgAttrs + '>';
+}
 function initLiveMap(){
   if(liveMap){ liveMap.remove(); liveMap=null; }
   liveMap = L.map('liveMap', {zoomControl:false, attributionControl:true}).setView([0,0], 15);
@@ -16265,18 +16400,15 @@ function renderHistory(){
     return `${monthHeader}<div class="swipe-item" data-swipe-id="${r.id}">
       <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" data-on-click="deleteRun('${r.id}')"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
       <div class="card hist-card swipe-content" data-on-click="openRunDetail('${r.id}')" style="cursor:pointer;">
-        <div class="hist-top"><span style="font-weight:700;">${dateStr}</span>${hasMap ? '' : `<span class="hist-date">${r.manual? `<span class="tag tag-asfalto" style="margin-right:6px;">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, true, r)}${fmtTime(r.durationSec)}</span>`}</div>
-        ${hasMap ? `<div class="hist-map" data-run-id="${r.id}">${routeSketchSvg(r.points)}<img class="hist-map-img" src="${buildHistMapStaticUrl(r, histMapCssWidth(), 108)}" loading="lazy" alt="" decoding="async" data-on-load="this.classList.add('loaded')" data-on-error="this.style.display='none'"><div class="hist-map-badge">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false, r)}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
+        <div class="hist-top"><span style="font-weight:700;">${dateStr}</span><span class="hist-top-right">${hasMap ? '' : `<span class="hist-date">${r.manual? `<span class="tag tag-asfalto" style="margin-right:6px;">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, true, r)}${fmtTime(r.durationSec)}</span>`}<button class="hist-share-btn" aria-label="${t('hist_share')}" title="${t('hist_share')}" data-on-click="event.stopPropagation(); shareRunImage('${r.id}')">${ICONS.share}</button></span></div>
+        ${hasMap ? `<div class="hist-map" data-run-id="${r.id}">${histMapInnerHtml(r, histMapCssWidth(), 108)}<div class="hist-map-badge">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false, r)}<span class="hist-map-duration">${fmtTime(r.durationSec)}</span></div></div>` : ''}
         <div class="stat-row-divided">
           <div class="stat-cell"><div class="n">${fmtDist(r.distanceKm)}</div><div class="l">${distUnit()}</div></div>
           <div class="stat-cell"><div class="n">${fmtPace(paceMin)}</div><div class="l">${t('run_pace_word')}</div></div>
           <div class="stat-cell"><div class="n">${avgHr||'—'}</div><div class="l">${t('hist_avg_hr')}</div></div>
           <div class="stat-cell"><div class="n">${cal}</div><div class="l">${t('run_calories')}</div></div>
         </div>
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; gap:8px;">
-          ${shoe ? `<p class="muted" style="margin:0; font-size:13px;">${t('hist_shoe')}: ${escapeHtml(shoe.name)}</p>` : '<span></span>'}
-          <button class="hist-share-btn" aria-label="${t('hist_share')}" title="${t('hist_share')}" data-on-click="event.stopPropagation(); shareRunImage('${r.id}')">${ICONS.share}</button>
-        </div>
+        ${shoe ? `<p class="muted hist-shoe">${t('hist_shoe')}: ${escapeHtml(shoe.name)}</p>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -17526,7 +17658,7 @@ function shareStatsOf(r){
   return [
     [fmtDist(r.distanceKm), distUnit().toUpperCase()],
     [`${fmtPace(paceMin)}/${distUnit()}`, t('run_pace_word').toUpperCase()],
-    [fmtTime(r.durationSec), t('run_time').toUpperCase()],
+    [fmtTime(r.durationSec).replace(/^00:/, ''), t('run_time').toUpperCase()],   // menos de una hora: "34:10", no "00:34:10"
   ];
 }
 // tres cifras en fila, centradas en cada tercio del ancho
@@ -17637,7 +17769,7 @@ function buildShareImageBlob(r){
       const stats = [
         [fmtDist(r.distanceKm), distUnit().toUpperCase()],
         [`${fmtPace(paceMin)}/${distUnit()}`, t('run_pace_word').toUpperCase()],
-        [fmtTime(r.durationSec), t('run_time').toUpperCase()],
+        [fmtTime(r.durationSec).replace(/^00:/, ''), t('run_time').toUpperCase()],   // menos de una hora: "34:10", no "00:34:10"
       ];
       const rowTop = 610, rowHeight = 240; // apilados uno abajo del otro, con espacio entre cada uno
       stats.forEach((s,i)=>{
@@ -19872,6 +20004,7 @@ function applyCoachNote(input){
   // Una nota guardada en un turno POSTERIOR al del snapshot de "deshacer" no es parte de lo que se deshace: se anota para conservarla (antes restaurar las notas del snapshot la borraba en silencio).
   if(state.coachUndoSnapshot && !coachUndoTurnSnapshotTaken){ (state.coachUndoSnapshot.laterNotes = state.coachUndoSnapshot.laterNotes || []).push(noteText); }
   showToast(t('coach_note_saved', {nota: noteText}), 'info');
+  try{ if(noteAvoidsHills(noteText) && applyAvoidHills()){ renderHome(); renderPlan(); } }catch(e){ console.error('sin cuestas', e); }
   // Antes, una lesión mencionada por chat quedaba SOLO en coachNotes -- una nota que el coach
   // podía mencionar en la charla, pero invisible para trainingCaution/generatePlan (que sí
   // reaccionan a una molestia cargada a mano en Perfil > Molestias, ver activePainEntries).

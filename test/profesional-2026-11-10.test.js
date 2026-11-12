@@ -45,7 +45,8 @@ test('detalles: versión legible, compartir como icono, la fecha no se repite en
   assert.equal(fn('2026-11-10T15:25:34Z'), 'v2026.11.10 (1525)');
   assert.equal(fn('rara'), 'vrara');
   assert.ok(APP.includes('<button class="hist-share-btn" aria-label="${t(\'hist_share\')}"'));
-  assert.match(CSS, /\.hist-share-btn\{width:var\(--tap\); height:var\(--tap\);/);
+  assert.match(CSS, /\.hist-share-btn\{position:relative; width:32px; height:32px;/);
+  assert.match(CSS, /\.hist-share-btn::before\{content:''; position:absolute; inset:-7px;\}/, 'zona de toque de 46 px');
   assert.ok(APP.includes("${r.name ? dateStr.charAt(0).toUpperCase() + dateStr.slice(1) + ', ' + timeStr : timeStr}"));
   assert.doesNotMatch(view('inicio', 'plan'), /👋/);
 });
