@@ -243,3 +243,18 @@ test('Perfil: Notas de Zonda va pegada a Zonda (antes de "Ayudanos a mejorar"); 
   assert.ok(HTML.includes(':root:not([data-theme="dark"]) .brand-logo-plate{background:transparent; padding:0;}'));
   assert.ok(HTML.includes('#onboard .ob-done{display:flex; flex-direction:column; align-items:center; justify-content:center; padding-top:0;}'));
 });
+
+test('pulido 2: el cronómetro de la carrera no se parte, la tabla de segmentos entra en el teléfono y el botón del test dice lo que toca', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const js = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  assert.ok(css.includes('.track-topstat{text-align:center; min-width:108px;}'));
+  assert.ok(css.includes('.track-topstat .n{font-size:27px; font-weight:800; white-space:nowrap;}'));
+  assert.ok(js.includes("const fmtSegTime = sec => { const s = fmtTime(sec); return s.startsWith('00:') ? s.slice(3) : s; };"));
+  assert.ok(js.includes("<th>${t('rd_seg_dist')}</th><th>${t('run_pace_word')}</th>"));
+  assert.ok(css.includes('id="perfil-ltest-btn"') && js.includes("(lt && lt.done) ? 'ltest_perfil_btn_redo' : 'ltest_perfil_btn_do'"));
+  assert.ok(css.includes('id="login-password" name="password" autocomplete="current-password" data-i18n-ph="login_password_enter_ph"'), 'el login no pide "mínimo 8 caracteres"');
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
+    const s = fs.readFileSync(path.join(__dirname, '..', 'locales', l + '.js'), 'utf8');
+    for (const k of ['ltest_perfil_btn_do', 'ltest_perfil_btn_redo', 'login_password_enter_ph']) assert.ok(s.includes(k + ':"'), l + ' ' + k);
+  }
+});

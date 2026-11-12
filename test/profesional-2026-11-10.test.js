@@ -47,7 +47,9 @@ test('detalles: versión legible, compartir como icono, la fecha no se repite en
   assert.ok(APP.includes('<button class="hist-share-btn" aria-label="${t(\'hist_share\')}"'));
   assert.match(CSS, /\.hist-share-btn\{position:relative; width:32px; height:32px;/);
   assert.match(CSS, /\.hist-share-btn::before\{content:''; position:absolute; inset:-7px;\}/, 'zona de toque de 46 px');
-  assert.ok(APP.includes("${r.name ? dateStr.charAt(0).toUpperCase() + dateStr.slice(1) + ', ' + timeStr : timeStr}"));
+  // debajo de la distancia va solo la hora: la fecha ya está arriba (como título, o debajo del nombre si la carrera tiene nombre)
+  assert.ok(APP.includes('<p class="muted" style="margin-top:2px;">${timeStr}</p>'));
+  assert.ok(!APP.includes("dateStr.slice(1) + ', ' + timeStr"));
   assert.doesNotMatch(view('inicio', 'plan'), /👋/);
 });
 
