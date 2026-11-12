@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-12T02:06:24Z';
+const APP_VERSION = '2026-11-12T13:43:35Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -9906,6 +9906,27 @@ function renderHome(){
     nextHintBlock.style.display = '';
     doneBlock.style.display = 'none';
   }
+  // Día de descanso: la tarjeta ya no dice "Tu próxima sesión: Descanso" (el rótulo "Hoy" de arriba alcanza) y
+  // debajo muestra cuál es la próxima sesión de verdad de esta semana y qué día cae.
+  {
+    const restToday = !todayRun && !raceToday && !(today.dist > 0);
+    cardTitleEl.style.display = restToday ? 'none' : '';
+    const upEl = document.getElementById('home-next-upcoming');
+    if(upEl){
+      let html = '';
+      if(restToday){
+        for(let i = idx + 1; i < state.plan.length; i++){
+          const d = state.plan[i];
+          if(!d || !(d.dist > 0) || d.typeKey === 'rest') continue;
+          const dayName = new Date(addDaysToIsoLocal(state.weekStart || getMondayISO(new Date()), i) + 'T12:00:00').toLocaleDateString(LOCALE_MAP[lang], {weekday:'long'});
+          html = '<span class="home-upcoming-text"><span class="home-upcoming-when">' + escapeHtml(t('home_upcoming', {day: dayName})) + '</span><span class="home-upcoming-type">' + escapeHtml(String(planLabel(d).type)) + '</span></span><span class="home-upcoming-amount mono">' + escapeHtml(planShownAmountText(d)) + '</span>';
+          break;
+        }
+      }
+      upEl.innerHTML = html;
+      upEl.style.display = html ? 'flex' : 'none';
+    }
+  }
 
   const weekRuns = (state.runs||[]).filter(r => getMondayISO(new Date(r.date)) === state.weekStart);
   const doneKm = weekRuns.reduce((a,r)=>a+r.distanceKm, 0);
@@ -14617,15 +14638,17 @@ function updateRunUnitLabels(){
   ['track-dist-label','track-pdist-label','sum-dist-label'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent = distLbl; });
   ['track-pace-label','track-ppace-label','sum-pace-label'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent = paceLbl; });
 }
+// El cronómetro de la carrera sin las horas en cero ("12:40" hasta llegar a la hora, después "01:02:40")
+function fmtRunClock(sec){ const s = fmtTime(sec); return s.startsWith('00:') ? s.slice(3) : s; }
 function updateLiveStats(){
-  document.getElementById('track-timer').textContent = fmtTime(tracker.elapsedSec);
+  document.getElementById('track-timer').textContent = fmtRunClock(tracker.elapsedSec);
   document.getElementById('track-dist').textContent = fmtDist(tracker.distanceKm);
   const paceMin = tracker.distanceKm>0.02 ? (tracker.elapsedSec/60)/tracker.distanceKm : 0;
   document.getElementById('track-pace').textContent = fmtPace(paceMin);
   // Misma info que arriba, para la grilla de .track-paused-group (ver index.html) -- se
   // actualiza siempre junto con los stats chicos de arriba, no solo mientras está pausado,
   // así ya está al día apenas is-paused la muestra en vez de esperar el próximo tick.
-  document.getElementById('track-ptime').textContent = fmtTime(tracker.elapsedSec);
+  document.getElementById('track-ptime').textContent = fmtRunClock(tracker.elapsedSec);
   document.getElementById('track-pdist').textContent = fmtDist(tracker.distanceKm);
   document.getElementById('track-ppace').textContent = fmtPace(paceMin);
   document.getElementById('track-pcal').textContent = Math.round((state.profile.weight||70)*tracker.distanceKm*1.036);
@@ -17358,7 +17381,7 @@ function renderRDDetalles(panel){
   const speedKmh = r.durationSec>0 ? (r.distanceKm/(r.durationSec/3600)) : 0;
   const tiles = [];
   tiles.push([t('run_time'), fmtTime(r.durationSec)]);
-  tiles.push([t('run_calories'), cal+' kcal']);
+  tiles.push([t('rd_calories_label'), cal+' kcal']);   // el valor ya dice "kcal": la etiqueta dice "Calorías (est.)" para no repetir la unidad
   tiles.push([`${t('run_pace_word')} /${distUnit()}`, fmtPace(paceMin)]);
   tiles.push([t('rd_avg_speed'), (isImperial()? (speedKmh*0.621371).toFixed(2)+' mph' : speedKmh.toFixed(2)+' km/h')]);
   if(r.avgCadence) tiles.push([t('hist_cadence'), Math.round(r.avgCadence)+' spm']);
