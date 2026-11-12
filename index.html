@@ -872,9 +872,6 @@
   /* Insignia "STRAVA" + duración sobre la vista previa del mapa, en vez de una fila de
      texto aparte encima de la tarjeta -- libera espacio y agrupa el origen del dato
      (Strava) con el mapa que ya lo representa visualmente. */
-  .hist-map-badge{position:absolute; top:8px; right:8px; z-index:1000; display:flex; align-items:center; gap:6px;}
-  .hist-map-badge .tag{margin:0;}
-  .hist-map-badge .hist-map-duration{background:rgba(10,10,10,.62); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px); color:var(--chalk); font-size:12px; font-weight:700; font-family:'JetBrains Mono',monospace; padding:4px 8px; border-radius:999px;}
   /* Peso/Altura (Perfil): en vez de dos inputs numéricos encajonados, un valor grande
      centrado con la etiqueta arriba y un divisor fino abajo -- se ve y se edita como un
      dato destacado, no como un formulario. */
@@ -1909,7 +1906,6 @@
   @supports not (-webkit-touch-callout:none){ .coach-fab, .coach-fab-thinking, nav.tabbar, header.top, #app::after{will-change:transform;} }
   /* Historial: el brillo del trazo queda tapado por la imagen del mapa y el desenfoque de 3px de la etiqueta de duración no se aprecia sobre ese mapa; ambos se repetían en cada tarjeta. */
   .hist-map-sketch path{filter:none;}
-  .hist-map-badge .hist-map-duration{-webkit-backdrop-filter:none; backdrop-filter:none; background:rgba(10,10,10,.7);}
 
   /* ===== Cuarta pasada 2026-10-08: chat (copiar / escribiendo), sin conexión, contador de onboarding ===== */
   .msg{-webkit-user-select:none; user-select:none; -webkit-touch-callout:none; transition:opacity .13s ease;}
@@ -2248,7 +2244,6 @@
   nav.tabbar button{font-size:11px;}
   .trend-lbl, .wd-lbl, .stat-box .l, .stat-cell .l, .tp-unit, .soon-tag, .lt-badge i, .ws-row .l, .tag, .sum-kicker, .hl-kicker, .msg-time{font-size:11px;}
   /* Historial: la pastilla de fuente y duración va a la izquierda (a la derecha la tapaba el botón flotante) y el borde rojo del borrar no asoma en reposo */
-  .hist-map-badge{right:auto; left:8px;}
   #history-list .swipe-item:not(:has(.swipe-content[style*="translate3d(-"])) .swipe-action-delete{visibility:hidden;}
   /* Detalle de carrera: las pestañas quedan fijas al hacer scroll y la leyenda del mapa muestra las 5 zonas que realmente se pintan */
   .rd-tabs{position:sticky; top:0; z-index:20; background:var(--asphalt);}
@@ -2527,8 +2522,7 @@
   /* Logos de marca: en oscuro se pasan a blanco; acá a negro */
   :root[data-theme="light"] .brand-logo-chip img{filter:brightness(0);}
   :root[data-theme="light"] .brand-logo-chip img.brand-logo-color{filter:none;}
-  /* Sobre un mapa, la duración va en píldora oscura con letra clara (igual que en oscuro) */
-  :root[data-theme="light"] .hist-map-badge .hist-map-duration{color:#F4F7EA; background:rgba(20,23,12,.72);}
+  :root[data-theme="light"] .brand-logo-plate{background:transparent; padding:0;}
   /* Lo que en oscuro es lima fino sobre negro, acá en oliva profundo */
   :root[data-theme="light"] .week-ring-fig .wr-fill{stroke:var(--hivis-line);}
   :root[data-theme="light"] .ob-progress-fill, :root[data-theme="light"] .wearbar > div, :root[data-theme="light"] #goal-progress-bar, :root[data-theme="light"] #workout-guide-progress-bar{background:var(--hivis-line) !important;}
@@ -2631,9 +2625,8 @@
     /* Logos de marca: en oscuro se pasan a blanco; acá a negro */
     :root:not([data-theme="dark"]) .brand-logo-chip img{filter:brightness(0);}
     :root:not([data-theme="dark"]) .brand-logo-chip img.brand-logo-color{filter:none;}
-    /* Sobre un mapa, la duración va en píldora oscura con letra clara (igual que en oscuro) */
-    :root:not([data-theme="dark"]) .hist-map-badge .hist-map-duration{color:#F4F7EA; background:rgba(20,23,12,.72);}
-    /* Lo que en oscuro es lima fino sobre negro, acá en oliva profundo */
+    :root:not([data-theme="dark"]) .brand-logo-plate{background:transparent; padding:0;}
+      /* Lo que en oscuro es lima fino sobre negro, acá en oliva profundo */
     :root:not([data-theme="dark"]) .week-ring-fig .wr-fill{stroke:var(--hivis-line);}
     :root:not([data-theme="dark"]) .ob-progress-fill, :root:not([data-theme="dark"]) .wearbar > div, :root:not([data-theme="dark"]) #goal-progress-bar, :root:not([data-theme="dark"]) #workout-guide-progress-bar{background:var(--hivis-line) !important;}
     :root:not([data-theme="dark"]) .trend-stroke.trend-today, :root:not([data-theme="dark"]) .week-days .wd-col.today .wd-bar{background:var(--hivis-line); box-shadow:none;}
@@ -2710,7 +2703,7 @@
   .fs-check{flex:none; width:24px; height:24px; border-radius:50%; border:2px solid var(--asphalt-4); display:flex; align-items:center; justify-content:center; color:var(--ink);}
   .fs-check svg{width:14px; height:14px;}
   .fs-row.done .fs-check{background:var(--hivis); border-color:var(--hivis);}
-  .fs-text{display:flex; flex-direction:column; min-width:0;}
+  .fs-text{display:flex; flex-direction:column; min-width:0; flex:1;}
   .fs-text b{font-size:15px; font-weight:600; color:var(--chalk);}
   .fs-text small{font-size:12px; line-height:1.35; color:var(--mist); margin-top:1px;}
   .fs-row.done .fs-text b{color:var(--mist); text-decoration:line-through; text-decoration-thickness:1px;}
@@ -2751,13 +2744,28 @@
   .hist-share-btn svg{width:16px; height:16px;}
   .hist-share-btn::before{content:''; position:absolute; inset:-7px;}   /* zona de toque de 46 px aunque el botón mida 32 */
   .hist-top{align-items:center;}
-  .hist-top-right{display:flex; align-items:center; gap:8px; margin-left:auto; min-width:0;}
+  .hist-top-right{display:flex; align-items:center; gap:10px; margin-left:auto; min-width:0;}
+  /* la marca va debajo de la fecha y el tiempo a la derecha, junto a compartir (antes iban encima del mapa y tapaban el recorrido) */
+  .hist-top{display:grid; grid-template-columns:1fr auto; column-gap:12px;}
+  .hist-when{display:contents;}
+  .hist-day{grid-area:1 / 1; min-width:0;}
+  .hist-top-right{grid-area:1 / 2;}
+  .hist-date{grid-area:2 / 1 / 3 / 3; margin-top:6px;}   /* la marca ocupa su propia línea, a todo el ancho: "Garmin Forerunner 265" entra entero también a 320 px */
+  .hist-day{font-weight:700;}
+  .hist-date{display:flex; flex-wrap:wrap; align-items:center; gap:6px; min-width:0;}
+  .hist-top-right{flex:none;}
+  .hist-date .tag{margin:0;}
+  .hist-time{font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; color:var(--chalk); font-variant-numeric:tabular-nums;}
+  /* Primeros pasos: cierre al completar los tres */
+  .fs-alldone{margin-bottom:0; gap:14px;}
+  .fs-check-on{background:var(--hivis); border-color:var(--hivis);}
   .hist-shoe{margin:10px 0 0; font-size:13px;}
   /* las 4 columnas de datos de la tarjeta miden lo mismo (antes la primera y la última tenían menos margen y quedaban corridas) */
   .hist-card .stat-row-divided .stat-cell, .hist-card .stat-row-divided .stat-cell:first-child, .hist-card .stat-row-divided .stat-cell:last-child{padding:0 4px;}
   /* recorrido dibujado sobre el mapa de la zona (carreras de marcas que no dejan mandar la ruta a terceros) */
   .hist-map-route{position:absolute; inset:0; width:100%; height:100%; z-index:1; pointer-events:none;}
-  .hist-map-route path{fill:none; stroke:#0B5D2E; stroke-width:3; stroke-linecap:round; stroke-linejoin:round;}
+  .hist-map-route path{fill:none; stroke:var(--hivis-text); stroke-width:3; stroke-linecap:round; stroke-linejoin:round;}
+  .hist-map-img.loaded + .hist-map-route path{stroke:#0B5D2E;}   /* sobre el mapa (siempre claro) el trazo va en verde oscuro; mientras carga o si falla, en el color del tema para que se lea en oscuro */
   .hist-map-route circle{fill:#4ADE80; stroke:#fff; stroke-width:1.5;}
   /* Relojes: la etiqueta y la flecha van siempre contra el borde derecho, a la misma altura en todas las marcas (antes quedaban pegadas al logo, y como cada logo mide distinto no coincidían) */
   .conn-row-head .brand-logo-chip{margin-right:auto;}
@@ -2964,8 +2972,8 @@ body{overflow-wrap:break-word;}
 #onboard .btn-reason{text-align:center; margin:8px 0 0;}
 
 /* pantalla final */
-#onboard .ob-done{display:flex; flex-direction:column; align-items:center;}
-#onboard .ob-done-mark{width:88px; height:88px; margin:6vh 0 24px; border-radius:50%; display:grid; place-items:center; color:#101200;
+#onboard .ob-done{display:flex; flex-direction:column; align-items:center; justify-content:center; padding-top:0;}
+#onboard .ob-done-mark{width:88px; height:88px; margin:0 0 24px; flex:none; border-radius:50%; display:grid; place-items:center; color:#101200;
   background:var(--hivis); box-shadow:none;}
 #onboard .ob-done-mark svg{width:42px; height:42px;}
 /* última pantalla del inicio: la primera semana ya armada */
@@ -5063,16 +5071,6 @@ body{overflow-wrap:break-word;}
       </div>
     </details>
 
-    <!-- Formulario de feedback -- a diferencia del link mailto de "Contactar soporte" más
-         abajo (que depende de que el corredor tenga una app de mail configurada en el
-         celular), esto manda el mensaje directo desde la app vía api/send-feedback.js. -->
-    <div class="card">
-      <h3 data-i18n="perfil_feedback_title"></h3>
-      <p class="muted" style="font-size:12px; margin:2px 0 10px;" data-i18n="perfil_feedback_hint"></p>
-      <textarea id="feedback-message" rows="3" maxlength="4000" data-i18n-ph="perfil_feedback_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
-      <button class="btn btn-gray btn-sm" id="feedback-send-btn" style="margin-top:12px; width:100%;" data-i18n="perfil_feedback_send" data-on-click="sendFeedback()"></button>
-    </div>
-
     <details class="card fold" id="coach-notes-card">
       <summary>
         <span class="icon-sq" style="width:22px; height:22px; color:var(--hivis-text); flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h9l4 4V20.5H6z"/><path d="M15 3.5v4h4"/><path d="M9 12h7M9 15.5h7"/></svg></span>
@@ -5085,6 +5083,16 @@ body{overflow-wrap:break-word;}
         <div class="set-list" id="coach-notes-list"></div>
       </div>
     </details>
+
+    <!-- Formulario de feedback -- a diferencia del link mailto de "Contactar soporte" más
+         abajo (que depende de que el corredor tenga una app de mail configurada en el
+         celular), esto manda el mensaje directo desde la app vía api/send-feedback.js. -->
+    <div class="card">
+      <h3 data-i18n="perfil_feedback_title"></h3>
+      <p class="muted" style="font-size:12px; margin:2px 0 10px;" data-i18n="perfil_feedback_hint"></p>
+      <textarea id="feedback-message" rows="3" maxlength="4000" data-i18n-ph="perfil_feedback_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+      <button class="btn btn-gray btn-sm" id="feedback-send-btn" style="margin-top:12px; width:100%;" data-i18n="perfil_feedback_send" data-on-click="sendFeedback()"></button>
+    </div>
 
     <div class="card">
       <h3 data-i18n="perfil_about"></h3>

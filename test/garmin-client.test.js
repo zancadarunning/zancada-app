@@ -41,7 +41,7 @@ test('atribución de Garmin: "Garmin [modelo]" (sin repetir "Garmin") en el hist
   assert.equal(a.garminAttribution({ source: 'strava', device: 'x' }), '', 'solo para datos de Garmin');
   assert.match(a.sourceBadgeHtml('garmin', false, { source: 'garmin', device: 'Forerunner 265' }), />Garmin Forerunner 265</);
   assert.ok(!/<script/.test(a.sourceBadgeHtml('garmin', false, { source: 'garmin', device: '<script>x</script>' })), 'el modelo se escapa');
-  assert.match(app, /sourceBadgeHtml\(r\.source, true, r\)/);
+  assert.match(app, /sourceBadgeHtml\(r\.source, false, r\)/);
   assert.match(app, /garmin-attr[^`]*escapeHtml\(garminAttribution\(r\)\)/);
   assert.match(app, /drawShareAttribution\(ctx, W, H, garminAttribution\(r\)\);\s*canvas\.toBlob/);
   assert.match(app, /ctx\.fillText\(garminAttribution\(r\), W-40, 124\)/);

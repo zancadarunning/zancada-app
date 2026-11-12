@@ -207,3 +207,39 @@ test('los textos nuevos existen en los 6 idiomas', () => {
     for (const k of keys) assert.ok(new RegExp('\\b' + k + ':"[^"]').test(src), lang + ' ' + k);
   }
 });
+
+// ---- pulido del 2026-11-12 ----
+test('Historial: la marca y el tiempo ya no van encima del mapa; la marca ocupa su línea debajo de la fecha', () => {
+  assert.ok(!SRC.includes('hist-map-badge') && !HTML.includes('hist-map-badge'));
+  assert.ok(SRC.includes('<span class="hist-when"><span class="hist-day">${dateStr}</span>'));
+  assert.ok(SRC.includes('<span class="hist-time">${fmtTime(r.durationSec)}</span><button class="hist-share-btn"'));
+  assert.ok(HTML.includes('.hist-date{grid-area:2 / 1 / 3 / 3; margin-top:6px;}'));
+  assert.ok(HTML.includes('.hist-map-img.loaded + .hist-map-route path{stroke:#0B5D2E;}'), 'sin mapa cargado el trazo usa el color del tema (se lee en oscuro)');
+});
+
+test('Primeros pasos: el botón de cerrar tiene tamaño (ícono envuelto) y al completar los tres pasos la tarjeta se despide ese día', () => {
+  assert.equal(SRC.split(`'"><span class="icon-sq" style="width:16px; height:16px;">' + ICONS.cross + '</span></button></div>'`).length - 1, 2);
+  const app = loadApp();
+  app.state.profile = profile({ createdAt: app.todayLocalISO(), levelTest: { required: true, done: true, result: { distanceKm: 2.4 } } });
+  app.state.onboarded = true; app.state.runs = [{ id: 1 }];
+  require('vm').runInContext('deviceConnections.garmin = true', app);   // `let` de nivel superior: no cuelga del sandbox
+  const s = app.firstSteps();
+  assert.ok(s && Array.from(s).every(x => x.done), 'el día que se completa se sigue mostrando (cierre)');
+  assert.equal(app.state.firstStepsDoneAt, app.todayLocalISO());
+  app.state.firstStepsDoneAt = '2020-01-01';
+  assert.equal(app.firstSteps(), null, 'al día siguiente ya no vuelve');
+  app.state.firstStepsDoneAt = null; app.state.firstStepsDismissed = true;
+  assert.equal(app.firstSteps(), null);
+  for (const lang of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'locales', lang + '.js'), 'utf8');
+    for (const k of ['fs_done_title', 'fs_done_sub']) assert.ok(src.includes(k + ':"'), lang + ' ' + k);
+  }
+});
+
+test('Perfil: Notas de Zonda va pegada a Zonda (antes de "Ayudanos a mejorar"); Suunto sin placa blanca en claro; alta: última pantalla centrada', () => {
+  const z = HTML.indexOf('id="perfil-zonda-fold"'), n = HTML.indexOf('id="coach-notes-card"'), f = HTML.indexOf('id="feedback-message"');
+  assert.ok(z > 0 && z < n && n < f);
+  assert.ok(HTML.includes(':root[data-theme="light"] .brand-logo-plate{background:transparent; padding:0;}'));
+  assert.ok(HTML.includes(':root:not([data-theme="dark"]) .brand-logo-plate{background:transparent; padding:0;}'));
+  assert.ok(HTML.includes('#onboard .ob-done{display:flex; flex-direction:column; align-items:center; justify-content:center; padding-top:0;}'));
+});
