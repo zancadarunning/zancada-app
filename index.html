@@ -1114,6 +1114,16 @@
   .track-active-group{display:flex; flex-direction:column; justify-content:center; min-height:calc(100dvh - 130px - var(--tabbar-h, 86px) - 148px - var(--safe-bottom, 0px));}
   .track-active-group .track-hero{order:-1;}
   .track-active-group .track-topstats{margin-top:18px;}
+  /* Correr antes de empezar: el mapa y los avisos del GPS ocupan menos, así EMPEZAR queda a la vista sin deslizar también los días con sesión
+     (antes mapa + tarjeta de avisos + las dos opciones lo empujaban debajo de la barra). Los avisos siguen completos, sin caja y más juntos. */
+  #runIdle .idle-map-wrap{height:132px;}
+  #runIdle .gps-status-card{background:none; border:none; box-shadow:none; padding:0 4px; margin-top:10px; gap:8px;}
+  #runIdle .gps-status-card > .icon-sq{width:16px !important; height:16px !important; margin-top:1px;}
+  #runIdle .gps-status-title{margin:0 0 2px; font-size:13px;}
+  #runIdle .gps-status-bullet{margin:2px 0 0;}
+  #runIdle .run-mode-choice{flex-direction:row; align-items:stretch; margin-top:12px;}
+  #runIdle .run-mode-card{flex:1 1 0; min-width:0; padding:12px 12px;}
+  #runIdle .run-idle-cta{padding-top:18px;}
   /* Inicio: botón "Empezar" de la sesión de hoy y tarjetas secundarias plegadas en una fila */
   .home-next-start{width:100%; margin-top:14px;}
   .card.home-fold:not(.open){padding-top:0 !important; padding-bottom:0 !important;}
@@ -4228,7 +4238,7 @@ body{overflow-wrap:break-word;}
       <button class="week-nav-btn" data-on-click="closeRunDetail()" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
       <!-- Editar y eliminar viven en este menú (antes eran dos botones grandes al pie de cada pestaña del detalle) -->
       <button class="week-nav-btn" id="rd-menu-btn" data-on-click="toggleRDMenu()" data-i18n-aria="aria_more_options" aria-haspopup="menu" aria-expanded="false"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></span></button>
-      <div class="rd-menu-backdrop" id="rd-menu-backdrop" style="display:none;" data-on-click="setRDMenuOpen(false)"></div>
+      <div class="rd-menu-backdrop" id="rd-menu-backdrop" style="display:none;" data-on-click="setRDMenuOpen(false)" data-i18n-aria="aria_close"></div>
       <div class="rd-menu" id="rd-menu" role="menu" style="display:none;">
         <button class="rd-menu-item" role="menuitem" data-on-click="rdMenuEdit()" data-i18n="edit_run_btn"></button>
         <button class="rd-menu-item rd-menu-danger" role="menuitem" data-on-click="rdMenuDelete()" data-i18n="hist_delete_run"></button>
