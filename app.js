@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-13T18:00:04Z';
+const APP_VERSION = '2026-11-13T23:26:26Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -16649,11 +16649,16 @@ function openRunDetail(runId){
   const tabLabels = {ruta:t('rd_tab_ruta'), ritmo:t('rd_tab_ritmo'), segmentos:t('rd_tab_segmentos'), graficos:t('rd_tab_graficos'), detalles:t('rd_tab_detalles')};
   const dateStr = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long', year:'numeric'});
 
+  // El nombre (o la fecha, si no tiene nombre) y las pestañas viven en el encabezado fijo del modal; la fecha completa y la marca del reloj van abajo, en el cuerpo.
+  const shortDate = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
+  document.getElementById('rd-head-title').textContent = r.name || shortDate;
+  document.getElementById('rd-head-tabs').innerHTML = `<div class="rd-tabs">${tabs.map(tb=>`<button class="rd-tab-btn" id="rd-tabbtn-${tb}" data-on-click="switchRDTab('${tb}')">${tabLabels[tb]}</button>`).join('')}</div>`;
+  document.getElementById('run-detail-modal').scrollTop = 0;
   document.getElementById('run-detail-content').innerHTML = `
-    <h2 class="subtitle" style="font-size:22px; margin-bottom:2px;">${escapeHtml(r.name) || dateStr}</h2>
-    ${r.name ? `<p class="muted" style="margin-bottom:10px;">${dateStr}</p>` : '<div style="margin-bottom:10px;"></div>'}
-    ${(r.source === 'garmin' || r.origin === 'garmin') ? `<p class="muted garmin-attr" style="margin:-4px 0 10px; font-weight:700; letter-spacing:.02em;">${escapeHtml(garminAttribution(r))}</p>` : ''}
-    <div class="rd-tabs">${tabs.map(tb=>`<button class="rd-tab-btn" id="rd-tabbtn-${tb}" data-on-click="switchRDTab('${tb}')">${tabLabels[tb]}</button>`).join('')}</div>
+    <div class="rd-meta">
+    <p class="muted">${dateStr}</p>
+    ${(r.source === 'garmin' || r.origin === 'garmin') ? `<p class="muted garmin-attr" style="margin-top:4px; font-weight:700; letter-spacing:.02em;">${escapeHtml(garminAttribution(r))}</p>` : ''}
+    </div>
     ${tabs.map(tb=>`<div class="rd-panel" id="rd-panel-${tb}"></div>`).join('')}
     ${renderRunPlanScore(r)}
   `;

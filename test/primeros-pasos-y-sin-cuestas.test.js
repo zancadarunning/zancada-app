@@ -352,3 +352,12 @@ test('Correr antes de empezar: mapa y avisos compactos y las dos opciones lado a
   assert.ok(html.includes('#runIdle .run-mode-choice{flex-direction:row; align-items:stretch; margin-top:12px;}'));
   assert.ok(html.includes('data-i18n="run_bg_warning"'), 'los avisos del GPS siguen estando');
 });
+
+test('detalle de la carrera: volver, nombre, menú y pestañas forman un encabezado fijo con fondo sólido', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const js = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  assert.ok(html.includes('.rd-head{position:sticky; top:0; z-index:30; background:var(--asphalt);'));
+  assert.ok(html.includes('id="rd-head-title"') && html.includes('id="rd-head-tabs"'));
+  assert.ok(js.includes("document.getElementById('rd-head-title').textContent = r.name || shortDate;"));
+  assert.ok(!html.includes('.rd-tabs{position:sticky'), 'las pestañas ya no se pegan solas arriba del todo');
+});
