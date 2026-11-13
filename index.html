@@ -1304,7 +1304,15 @@
   .rd-stat-tile .rd-tile-val{font-size:17px; font-weight:800;}
   .rd-stat-tile .rd-tile-lbl{font-size:12px; color:var(--mist);}
   /* barra de arriba del detalle: volver a la izquierda, menú de tres puntos (editar / eliminar) a la derecha */
-  .rd-topbar{position:relative; display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+  /* Encabezado del detalle: volver + nombre de la carrera + menú en una fila y las pestañas pegadas debajo, todo fijo arriba.
+     Tiene fondo sólido y llega hasta el borde de la pantalla (incluida la barra de estado), así que lo que se desliza pasa por detrás y nunca se mezcla con el mapa. */
+  #run-detail-modal{padding-top:0;}
+  .rd-head{position:sticky; top:0; z-index:30; background:var(--asphalt); margin:0 -24px 12px; padding:calc(12px + var(--safe-top)) 24px 0;}
+  .rd-topbar{position:relative; display:flex; align-items:center; gap:12px; margin-bottom:6px;}
+  .rd-head-title{flex:1; min-width:0; margin:0; font-size:20px !important; line-height:1.2; font-weight:700; letter-spacing:-0.022em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .rd-topbar .week-nav-btn{flex:none;}
+  .rd-meta{margin:2px 0 12px;}
+  .rd-meta p{margin:0;}
   .rd-menu{position:absolute; top:40px; right:0; z-index:2000; min-width:190px; padding:6px; background:var(--asphalt-2); border:1px solid var(--asphalt-4); border-radius:var(--radius-sm); box-shadow:0 10px 28px rgba(0,0,0,.28);}
   .rd-menu-item{display:block; width:100%; min-height:44px; padding:10px 12px; border:none; background:none; color:var(--chalk); font:inherit; font-size:15px; font-weight:600; text-align:left; border-radius:8px; cursor:pointer;}
   .rd-menu-item:active{background:var(--asphalt-3);}
@@ -2308,7 +2316,7 @@
   /* Historial: la pastilla de fuente y duración va a la izquierda (a la derecha la tapaba el botón flotante) y el borde rojo del borrar no asoma en reposo */
   #history-list .swipe-item:not(:has(.swipe-content[style*="translate3d(-"])) .swipe-action-delete{visibility:hidden;}
   /* Detalle de carrera: las pestañas quedan fijas al hacer scroll y la leyenda del mapa muestra las 5 zonas que realmente se pintan */
-  .rd-tabs{position:sticky; top:0; z-index:20; background:var(--asphalt);}
+  .rd-tabs{margin-bottom:0; background:var(--asphalt);}
   .rd-legend-bar{background:linear-gradient(90deg, var(--zone1-fill), var(--zone2-fill), var(--zone3-fill), var(--zone4-fill), var(--zone5-fill)) !important;}
   /* Botón destructivo sin borde (DESIGN.md: Danger silencioso) y las acciones de abajo separadas */
   .btn-danger{border:none; box-shadow:none; color:var(--danger-text);}
@@ -4234,8 +4242,10 @@ body{overflow-wrap:break-word;}
   </div>
 
   <div class="overlay" id="run-detail-modal" style="display:none;">
+    <div class="rd-head">
     <div class="rd-topbar">
       <button class="week-nav-btn" data-on-click="closeRunDetail()" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+      <h2 class="rd-head-title" id="rd-head-title"></h2>
       <!-- Editar y eliminar viven en este menú (antes eran dos botones grandes al pie de cada pestaña del detalle) -->
       <button class="week-nav-btn" id="rd-menu-btn" data-on-click="toggleRDMenu()" data-i18n-aria="aria_more_options" aria-haspopup="menu" aria-expanded="false"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></span></button>
       <div class="rd-menu-backdrop" id="rd-menu-backdrop" style="display:none;" data-on-click="setRDMenuOpen(false)" data-i18n-aria="aria_close"></div>
@@ -4243,6 +4253,8 @@ body{overflow-wrap:break-word;}
         <button class="rd-menu-item" role="menuitem" data-on-click="rdMenuEdit()" data-i18n="edit_run_btn"></button>
         <button class="rd-menu-item rd-menu-danger" role="menuitem" data-on-click="rdMenuDelete()" data-i18n="hist_delete_run"></button>
       </div>
+    </div>
+    <div id="rd-head-tabs"></div>
     </div>
     <div id="run-detail-content"></div>
   </div>
