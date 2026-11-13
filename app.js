@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-12T20:45:55Z';
+const APP_VERSION = '2026-11-13T17:51:09Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -9027,6 +9027,7 @@ function renderFirstSteps(){
   // el test de nivel ya está en la guía: el cartel propio no se muestra a la vez
   const banner = document.getElementById('home-test-banner');
   if(banner && !steps[0].done) banner.style.display = 'none';
+  if(typeof applyHomeFolds === 'function') applyHomeFolds();
 }
 function dismissFirstSteps(){
   state.firstStepsDismissed = true;
@@ -10058,6 +10059,44 @@ function renderHome(){
     loadCard.style.display = 'none';
   }
   updateSyncBadge();
+  // "Empezar" en la tarjeta de hoy: solo si hay una sesión real para hoy y todavía no se corrió
+  { const b = document.getElementById('home-next-start'); if(b) b.style.display = (!todayRun && !raceToday && today.dist > 0 && today.status !== 'done' && today.status !== 'skipped') ? '' : 'none'; }
+  applyHomeFolds();
+}
+// La sesión de hoy es la protagonista de Inicio: las tarjetas secundarias (Primeros pasos, ajustar el plan a las carreras importadas, check-in)
+// se muestran como una fila de una línea y se abren al tocarlas. Lo abierto se recuerda mientras dure la sesión, para que un re-dibujo no lo cierre.
+const HOME_FOLD_IDS = ['home-firststeps-card', 'history-calib-card', 'readiness-card'];
+const homeFoldOpen = new Set();
+function applyHomeFolds(){
+  HOME_FOLD_IDS.forEach(id => {
+    const card = document.getElementById(id);
+    if(!card || !card.querySelector) return;
+    const old = card.querySelector('.home-fold-head');
+    if(old) old.remove();
+    const h = card.querySelector('h3');
+    if(!h || card.querySelector('.fs-alldone')){ card.classList.remove('home-fold', 'open'); return; }   // el cierre "ya tenés todo" se ve entero
+    const extra = card.querySelector('.fs-count');
+    card.classList.add('home-fold');
+    card.classList.toggle('open', homeFoldOpen.has(id));
+    const head = document.createElement('button');
+    head.type = 'button';
+    head.className = 'home-fold-head';
+    head.setAttribute('data-on-click', "openHomeFold('" + id + "')");
+    head.setAttribute('aria-expanded', 'false');
+    head.innerHTML = '<span class="home-fold-title">' + escapeHtml(h.textContent) + '</span>' + (extra ? '<span class="home-fold-extra">' + escapeHtml(extra.textContent) + '</span>' : '')
+      + '<span class="icon-sq home-fold-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span>';
+    card.insertBefore(head, card.firstChild);
+  });
+}
+function openHomeFold(id){
+  homeFoldOpen.add(id);
+  const card = document.getElementById(id);
+  if(card) card.classList.add('open');
+}
+// Desde Inicio a Correr con la sesión de hoy ya elegida. No arranca el GPS ni el reloj: eso sigue siendo el botón EMPEZAR de esa pantalla.
+function goRunScheduled(){
+  showView('correr');
+  try{ selectRunMode('scheduled'); }catch(e){}
 }
 // Busca la carrera más reciente registrada HOY -- se usa para mostrar el resumen de
 // "sesión completada" tanto en Inicio como en la pestaña Correr, en vez del cartel de
@@ -14115,10 +14154,21 @@ function initIdleMap(){
   // con la última posición conocida (guardada en las carreras anteriores) y el permiso se pide recién al
   // arrancar la carrera, que es cuando hace falta de verdad.
   if(isIosStandalonePwa()){
+    // La última posición se guarda redondeada a ~1 km (privacidad) y puede tener días: antes se dibujaba como un punto exacto a nivel de calle,
+    // así que el mapa marcaba un lugar donde la persona no estaba (hasta varias cuadras de diferencia, o la ciudad de la última carrera).
+    // Ahora se muestra como zona, más lejos y sin punto. Si el permiso de ubicación ya está dado en esta sesión, se usa la posición real (no dispara el cartel).
     const last = readLastKnownPosition();
-    if(last) drawIdleMap(last.lat, last.lng);
+    if(last) drawIdleMap(last.lat, last.lng, true);
+    try{
+      if(navigator.permissions && navigator.permissions.query && 'geolocation' in navigator){
+        navigator.permissions.query({name: 'geolocation'}).then(st => { if(st && st.state === 'granted') locateIdleMap(); }).catch(() => {});
+      }
+    }catch(e){}
     return;
   }
+  locateIdleMap();
+}
+function locateIdleMap(){
   if(!('geolocation' in navigator)) return;
   navigator.geolocation.getCurrentPosition(
     (pos) => {
@@ -14236,13 +14286,15 @@ function readLastKnownPosition(){
   }catch(e){}
   return null;
 }
-function drawIdleMap(latitude, longitude){
+// approx=true: la posición es la guardada (redondeada y posiblemente vieja), así que se muestra la zona desde más lejos y sin el punto de "estás acá".
+function drawIdleMap(latitude, longitude, approx){
   if(!document.getElementById('idleMap') || document.getElementById('runIdle').style.display === 'none') return;
   if(idleMap){ idleMap.remove(); idleMap = null; }
   idleMap = L.map('idleMap', {zoomControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, touchZoom:false, boxZoom:false, keyboard:false, tap:false, attributionControl:true})
-    .setView([latitude, longitude], 16);
+    .setView([latitude, longitude], approx ? 13 : 16);
   mapboxTileLayer().addTo(idleMap);
   slimMapAttribution(idleMap);
+  if(approx){ setTimeout(()=>{ if(idleMap) idleMap.invalidateSize(); }, 200); return; }
   const dotIcon = L.divIcon({
     className: '',
     html: '<div class="idle-map-dot-ring" style="position:absolute; inset:0;"></div><div class="idle-map-dot" style="position:absolute; inset:0; margin:auto;"></div>',
@@ -18001,6 +18053,8 @@ function setRDMenuOpen(open){
   const m = document.getElementById('rd-menu'), b = document.getElementById('rd-menu-btn');
   if(m) m.style.display = open ? 'block' : 'none';
   if(b) b.setAttribute('aria-expanded', open ? 'true' : 'false');
+  const bd = document.getElementById('rd-menu-backdrop');
+  if(bd) bd.style.display = open ? 'block' : 'none';
 }
 function toggleRDMenu(){ const m = document.getElementById('rd-menu'); setRDMenuOpen(!!m && m.style.display === 'none'); }
 function rdMenuEdit(){ setRDMenuOpen(false); if(rdCurrent && rdCurrent.r) openEditRun(rdCurrent.r.id); }
