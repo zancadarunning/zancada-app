@@ -1114,6 +1114,17 @@
   .track-active-group{display:flex; flex-direction:column; justify-content:center; min-height:calc(100dvh - 130px - var(--tabbar-h, 86px) - 148px - var(--safe-bottom, 0px));}
   .track-active-group .track-hero{order:-1;}
   .track-active-group .track-topstats{margin-top:18px;}
+  /* Inicio: botón "Empezar" de la sesión de hoy y tarjetas secundarias plegadas en una fila */
+  .home-next-start{width:100%; margin-top:14px;}
+  .card.home-fold:not(.open){padding-top:0 !important; padding-bottom:0 !important;}
+  .card.home-fold:not(.open) > *:not(.home-fold-head){display:none !important;}
+  .card.home-fold.open > .home-fold-head{display:none;}
+  .home-fold-head{display:flex; align-items:center; gap:10px; width:100%; min-height:54px; padding:0; border:none; background:none; color:var(--chalk); font:inherit; text-align:left; cursor:pointer;}
+  .home-fold-title{flex:1; min-width:0; font-size:15px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .home-fold-extra{font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--mist); white-space:nowrap;}
+  .home-fold-chev{width:14px; height:14px; color:var(--mist); flex:none;}
+  /* debajo del menú de tres puntos del detalle: recibe el toque que lo cierra, para que no active lo que hay detrás */
+  .rd-menu-backdrop{position:fixed; inset:0; z-index:1999; background:transparent;}
   /* próxima sesión, debajo de un día de descanso en Inicio */
   .home-upcoming{align-items:center; justify-content:space-between; gap:12px; margin-top:10px; padding-top:12px; border-top:1px solid var(--overlay-hairline);}
   .home-upcoming-text{display:flex; flex-direction:column; min-width:0;}
@@ -3687,6 +3698,8 @@ body{overflow-wrap:break-word;}
         <div style="text-align:right; flex-shrink:0;"><div class="day-dist" id="home-next-dist"></div><div id="home-next-zone" style="margin-top:6px;"></div></div>
       </div>
       <div class="next-session-total" id="home-next-total"></div>
+      <!-- btn-outline a propósito: en Inicio la única acción lima es el botón central de correr (regla de "una sola señal") -->
+      <button class="btn btn-outline home-next-start" id="home-next-start" style="display:none;" data-on-click="goRunScheduled()" data-i18n="home_next_start"></button>
       <div class="next-session-detail" id="home-next-detail">
         <div>
           <div class="next-session-bullets" id="home-next-desc"></div>
@@ -4215,6 +4228,7 @@ body{overflow-wrap:break-word;}
       <button class="week-nav-btn" data-on-click="closeRunDetail()" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
       <!-- Editar y eliminar viven en este menú (antes eran dos botones grandes al pie de cada pestaña del detalle) -->
       <button class="week-nav-btn" id="rd-menu-btn" data-on-click="toggleRDMenu()" data-i18n-aria="aria_more_options" aria-haspopup="menu" aria-expanded="false"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></span></button>
+      <div class="rd-menu-backdrop" id="rd-menu-backdrop" style="display:none;" data-on-click="setRDMenuOpen(false)"></div>
       <div class="rd-menu" id="rd-menu" role="menu" style="display:none;">
         <button class="rd-menu-item" role="menuitem" data-on-click="rdMenuEdit()" data-i18n="edit_run_btn"></button>
         <button class="rd-menu-item rd-menu-danger" role="menuitem" data-on-click="rdMenuDelete()" data-i18n="hist_delete_run"></button>

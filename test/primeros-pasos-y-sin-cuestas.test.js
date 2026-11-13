@@ -326,3 +326,22 @@ test('resumen de la carrera: sin zapatillas cargadas no se pregunta con qué par
   assert.ok(html.includes('<div class="card" id="sum-shoe-card">'));
   assert.ok(js.includes("if(shoeCard) shoeCard.style.display = (state.shoes && state.shoes.length) ? '' : 'none';"));
 });
+
+test('inicio: botón Empezar en la sesión de hoy, tarjetas secundarias plegadas, y el menú del detalle no deja pasar el toque', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const js = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  assert.ok(html.includes('id="home-next-start" style="display:none;" data-on-click="goRunScheduled()" data-i18n="home_next_start"'));
+  assert.ok(js.includes("const HOME_FOLD_IDS = ['home-firststeps-card', 'history-calib-card', 'readiness-card'];"));
+  for (const fn of ['applyHomeFolds', 'openHomeFold', 'goRunScheduled']) assert.ok(js.includes('function ' + fn + '('), fn);
+  assert.ok(html.includes('.card.home-fold:not(.open) > *:not(.home-fold-head){display:none !important;}'));
+  assert.ok(html.includes('id="rd-menu-backdrop" style="display:none;" data-on-click="setRDMenuOpen(false)"'));
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.ok(fs.readFileSync(path.join(__dirname, '..', 'locales', l + '.js'), 'utf8').includes('home_next_start:"'), l);
+});
+
+test('mapa de Correr en iPhone (web instalada): la posición guardada se muestra como zona, sin punto exacto, y la real solo si el permiso ya está dado', () => {
+  const js = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  assert.ok(js.includes('if(last) drawIdleMap(last.lat, last.lng, true);'));
+  assert.ok(js.includes(".setView([latitude, longitude], approx ? 13 : 16);"));
+  assert.ok(js.includes("if(st && st.state === 'granted') locateIdleMap();"));
+  assert.ok(js.includes('function locateIdleMap(){'));
+});
