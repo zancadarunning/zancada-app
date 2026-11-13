@@ -334,7 +334,7 @@ test('inicio: botón Empezar en la sesión de hoy, tarjetas secundarias plegadas
   assert.ok(js.includes("const HOME_FOLD_IDS = ['home-firststeps-card', 'history-calib-card', 'readiness-card'];"));
   for (const fn of ['applyHomeFolds', 'openHomeFold', 'goRunScheduled']) assert.ok(js.includes('function ' + fn + '('), fn);
   assert.ok(html.includes('.card.home-fold:not(.open) > *:not(.home-fold-head){display:none !important;}'));
-  assert.ok(html.includes('id="rd-menu-backdrop" style="display:none;" data-on-click="setRDMenuOpen(false)"'));
+  assert.ok(html.includes('id="rd-menu-backdrop" style="display:none;" data-on-click="setRDMenuOpen(false)" data-i18n-aria="aria_close"'));
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.ok(fs.readFileSync(path.join(__dirname, '..', 'locales', l + '.js'), 'utf8').includes('home_next_start:"'), l);
 });
 
@@ -344,4 +344,11 @@ test('mapa de Correr en iPhone (web instalada): la posición guardada se muestra
   assert.ok(js.includes(".setView([latitude, longitude], approx ? 13 : 16);"));
   assert.ok(js.includes("if(st && st.state === 'granted') locateIdleMap();"));
   assert.ok(js.includes('function locateIdleMap(){'));
+});
+
+test('Correr antes de empezar: mapa y avisos compactos y las dos opciones lado a lado, para que EMPEZAR quede a la vista', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.ok(html.includes('#runIdle .idle-map-wrap{height:132px;}'));
+  assert.ok(html.includes('#runIdle .run-mode-choice{flex-direction:row; align-items:stretch; margin-top:12px;}'));
+  assert.ok(html.includes('data-i18n="run_bg_warning"'), 'los avisos del GPS siguen estando');
 });
