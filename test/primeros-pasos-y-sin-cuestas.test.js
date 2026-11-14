@@ -179,7 +179,7 @@ test('Perfil: "Notas de Zonda" es un desplegable con la cantidad a la vista y no
   assert.ok(HTML.indexOf('id="coach-notes-list"') > HTML.indexOf('id="coach-notes-card"'));
   assert.ok(SRC.includes("const c = document.getElementById('coach-notes-count'); if(c) c.textContent = notes.length ? String(notes.length) : '';"));
   assert.ok(HTML.includes('.settings-group + .card, .settings-group + details{margin-top:20px;}'));
-  assert.ok(HTML.includes('.conn-row-head .brand-logo-chip{margin-right:auto; min-width:0;}'));
+  assert.ok(HTML.includes('.conn-row-head .brand-logo-chip{margin-right:auto; min-width:0; flex-shrink:1;}'));
 });
 
 test('carga más liviana: el ícono de iPhone es un archivo (no 31 KB incrustados en cada carga) e index.html/app.js se revalidan siempre pero no se vuelven a bajar si no cambiaron', () => {

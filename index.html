@@ -2846,7 +2846,7 @@
   .hist-map-img.loaded + .hist-map-route path{stroke:#0B5D2E;}   /* sobre el mapa (siempre claro) el trazo va en verde oscuro; mientras carga o si falla, en el color del tema para que se lea en oscuro */
   .hist-map-route circle{fill:#4ADE80; stroke:#fff; stroke-width:1.5;}
   /* Relojes: la etiqueta y la flecha van siempre contra el borde derecho, a la misma altura en todas las marcas (antes quedaban pegadas al logo, y como cada logo mide distinto no coincidían) */
-  .conn-row-head .brand-logo-chip{margin-right:auto; min-width:0;}
+  .conn-row-head .brand-logo-chip{margin-right:auto; min-width:0; flex-shrink:1;}
   /* Con la letra del sistema grande "Garmin Connect" empujaba la etiqueta CONECTADO fuera de la fila: el nombre baja a dos renglones y la etiqueta no se achica */
   .conn-row-head .brand-logo-chip > span{white-space:normal; line-height:1.15; min-width:0;}
   .conn-row-head .tag{flex-shrink:0; white-space:nowrap;}
