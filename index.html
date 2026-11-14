@@ -364,6 +364,10 @@
 
   .overlay{position:fixed; inset:0; z-index:50; background:var(--asphalt); max-width:480px; margin:0 auto;
     overflow-y:auto; display:none; padding:calc(28px + var(--safe-top)) 24px calc(28px + var(--safe-bottom));}
+  /* Al bajar, el contenido de una hoja pasaba por debajo del reloj/batería del teléfono y se pisaba con ellos: una franja del color de la hoja, pegada arriba, lo tapa */
+  .overlay{--ov-px:24px;}
+  #onboard, #session-sheet, #consent-modal{--ov-px:22px;}
+  .overlay-sheet:not(#run-detail-modal):not(#onboard)::before{content:''; display:block; position:sticky; top:0; z-index:40; height:var(--safe-top); margin:calc(-28px - var(--safe-top)) calc(-1 * var(--ov-px)) 28px; background:inherit; pointer-events:none;}
   .overlay h2{font-size:28px;}
   .overlay .lead{color:var(--mist); margin-top:6px; font-size:14px; line-height:1.5;}
 
