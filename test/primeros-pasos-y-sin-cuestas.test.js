@@ -403,3 +403,10 @@ test('detalle de carrera: las celdas de Segmentos tienen espacio entre columnas 
   const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(html, /\.rd-seg-table td\{text-align:right; padding:8px 0 8px 12px;/);
 });
+
+test('alta, paso de notificaciones: la lista informativa no parece botones (sin píldora, con tilde)', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /#onboard \.np-list li\{display:flex; align-items:flex-start; gap:12px; padding:6px 4px;/);
+  assert.ok(!/#onboard \.np-list li\{[^}]*background:var\(--g-fill\)/.test(html));
+  assert.match(html, /#onboard \.np-list li::before\{content:''/);
+});
