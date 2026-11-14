@@ -179,7 +179,7 @@ test('Perfil: "Notas de Zonda" es un desplegable con la cantidad a la vista y no
   assert.ok(HTML.indexOf('id="coach-notes-list"') > HTML.indexOf('id="coach-notes-card"'));
   assert.ok(SRC.includes("const c = document.getElementById('coach-notes-count'); if(c) c.textContent = notes.length ? String(notes.length) : '';"));
   assert.ok(HTML.includes('.settings-group + .card, .settings-group + details{margin-top:20px;}'));
-  assert.ok(HTML.includes('.conn-row-head .brand-logo-chip{margin-right:auto;}'));
+  assert.ok(HTML.includes('.conn-row-head .brand-logo-chip{margin-right:auto; min-width:0; flex-shrink:1;}'));
 });
 
 test('carga más liviana: el ícono de iPhone es un archivo (no 31 KB incrustados en cada carga) e index.html/app.js se revalidan siempre pero no se vuelven a bajar si no cambiaron', () => {
@@ -369,4 +369,19 @@ test('Correr: el círculo de las tarjetas no pisa el texto y un ritmo absurdo (c
   assert.match(html, /#runIdle \.run-mode-card\{padding:12px 36px 12px 12px;\}/);
   assert.match(html, /#runIdle \.run-mode-card::after\{right:10px; top:auto; bottom:12px;/);
   assert.equal((js.match(/if\(paceMin > 30\) paceMin = 0;/g) || []).length, 2, 'en vivo y en el resumen');
+});
+
+test('letra grande: Idioma en dos columnas, la etiqueta de Relojes no se sale de la fila y los títulos en español no se cortan con guion', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /#perfil-lang-choice \.choice\{flex:1 1 calc\(50% - 6px\); min-width:0; white-space:nowrap;\}/);
+  assert.match(html, /\.conn-row-head \.brand-logo-chip > span\{white-space:normal;/);
+  assert.match(html, /\.conn-row-head \.tag\{flex-shrink:0; white-space:nowrap;\}/);
+  assert.match(html, /\.conn-row-head \.brand-logo-chip > span\{overflow-wrap:normal; word-break:keep-all;/);
+  assert.match(html, /:root:lang\(es\) h2, :root:lang\(es\) h3\{hyphens:manual;/);
+});
+
+test('alta: --g-shadow nunca vale "none" (dentro de la lista de box-shadow invalida todo y la opcion elegida quedaba igual a las demas en el tema claro)', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
+  assert.doesNotMatch(html, /--g-shadow:\s*none/);
+  assert.ok((html.match(/--g-shadow:0 0 0 0 transparent;/g) || []).length >= 3);
 });
