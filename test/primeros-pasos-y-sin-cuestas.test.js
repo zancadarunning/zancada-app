@@ -429,3 +429,22 @@ test('rendimiento: los logos de marcas (en pantallas ocultas) se cargan diferido
   assert.ok(imgs.length >= 10, 'hay logos de marcas en el HTML');
   for (const i of imgs) assert.match(i, /loading="lazy"/, i.slice(0, 80));
 });
+
+test('Garmin: un envío sin cambios no vuelve a guardar el estado (antes: persist -> envío a los 4 s -> persist, sin fin)', () => {
+  const a = require('./support/load-app').loadApp();
+  const now = 1_700_000_000_000;
+  // sin cambios reales (el servidor llena pushedDates igual con los días que ya estaban iguales) y marca reciente: NO se guarda
+  assert.equal(a.watchSendWorthSaving(now - 5_000, { pushed: 0, created: 0, deleted: 0, orphansRemoved: 0, pushedDates: ['2026-11-14', '2026-11-15'], unchanged: true }, now), false);
+  assert.equal(a.watchSendWorthSaving(now - 9 * 60_000, { pushedDates: ['2026-11-14'] }, now), false);
+  // se mandó, borró o limpió algo: se guarda
+  for (const r of [{ pushed: 2 }, { created: 1 }, { deleted: 1 }, { orphansRemoved: 3 }]) assert.equal(a.watchSendWorthSaving(now - 5_000, r, now), true, JSON.stringify(r));
+  // nunca se guardó una marca, o ya está vieja (>10 min): se refresca una vez
+  assert.equal(a.watchSendWorthSaving(undefined, {}, now), true);
+  assert.equal(a.watchSendWorthSaving(now - 11 * 60_000, {}, now), true);
+  assert.equal(a.watchSendWorthSaving(now, null, now), false);
+  // y el envío a Garmin lo usa en vez de marcar siempre
+  const fs = require('node:fs'), src = fs.readFileSync(require('node:path').join(__dirname, '..', 'app.js'), 'utf8');
+  const body = src.slice(src.indexOf('async function syncPlanToGarmin('), src.indexOf('async function connectGarmin'));
+  assert.match(body, /if\(ok && \(force \|\| watchSendWorthSaving\(/);   // "Enviar ahora" (force) siempre actualiza el "enviado hace X min"
+  assert.ok(!/if\(ok\)\{ markWatchSent\('garmin'\); dirty = true; \}/.test(body));
+});

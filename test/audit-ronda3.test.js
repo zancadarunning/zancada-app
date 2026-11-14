@@ -510,7 +510,9 @@ test('el botón de la tarjeta no machaca la API de la marca: enfriamiento de 5 m
   assert.ok(fn.includes('watchLastPress[key] = 0;'), 'un error permite reintentar enseguida');
   assert.ok(fn.includes('b.sync(true)'), 'usa el envío forzado de cada marca (el que ya respeta enfriamientos y topes del servidor)');
   // los cuatro envíos automáticos marcan el momento del último envío exitoso
-  for (const b of ['garmin', 'suunto', 'wahoo', 'coros']) assert.ok(SRC.includes("if(ok){ markWatchSent('" + b + "'); dirty = true; }"), b);
+  for (const b of ['suunto', 'wahoo', 'coros']) assert.ok(SRC.includes("if(ok){ markWatchSent('" + b + "'); dirty = true; }"), b);
+  // Garmin manda siempre la ventana entera: marca solo si el envío movió algo (watchSendWorthSaving), si no se guardaba el estado cada ~5 s sin fin
+  assert.ok(SRC.includes("{ markWatchSent('garmin'); dirty = true; }") && SRC.includes('if(ok && (force || watchSendWorthSaving('), 'garmin');
   assert.ok(SRC.includes('try{ renderWatchCard(); }catch(e){}\n  renderHomePain();') || SRC.includes('try{ renderWatchCard(); }catch(e){}'), 'se pinta con Inicio');
 });
 
