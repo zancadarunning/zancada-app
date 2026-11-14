@@ -2876,7 +2876,7 @@
   /* En español los títulos cortan por palabras ("frecuen-cia" queda feo); el guion automático queda para los idiomas de palabras largas */
   @media (max-width:400px){ :root:lang(es) h2, :root:lang(es) h3, :root:lang(es) .l, :root:lang(es) .choice{hyphens:manual; -webkit-hyphens:manual;} }
   /* "PLANEA-DOS": la etiqueta de la semana entera en una sola línea, con letra apenas menor cuando la del sistema es grande */
-  .ws-row .l{white-space:nowrap; letter-spacing:.03em;}
+  .ws-row .l{white-space:nowrap; letter-spacing:0; font-size:10px;}
   /* Celulares angostos: el Check-in apila la pregunta arriba de las 3 opciones (hasta 369 px) y en 320 los botones de opcion achican un poco la letra, asi ninguna palabra se parte a la mitad */
   @media (max-width:369px){
     .rd3-row{flex-wrap:wrap; gap:4px 10px;}

@@ -377,7 +377,8 @@ test('letra grande: Idioma en dos columnas, la etiqueta de Relojes no se sale de
   assert.match(html, /\.conn-row-head \.brand-logo-chip > span\{white-space:normal;/);
   assert.match(html, /\.conn-row-head \.tag\{flex-shrink:0; white-space:nowrap;\}/);
   assert.match(html, /\.conn-row-head \.brand-logo-chip > span\{overflow-wrap:normal; word-break:keep-all;/);
-  assert.match(html, /:root:lang\(es\) h2, :root:lang\(es\) h3\{hyphens:manual;/);
+  assert.match(html, /:root:lang\(es\) h2, :root:lang\(es\) h3, :root:lang\(es\) \.l, :root:lang\(es\) \.choice\{hyphens:manual;/);
+  assert.match(html, /\.ws-row \.l\{white-space:nowrap;/);
 });
 
 test('alta: --g-shadow nunca vale "none" (dentro de la lista de box-shadow invalida todo y la opcion elegida quedaba igual a las demas en el tema claro)', () => {
