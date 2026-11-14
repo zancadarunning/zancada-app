@@ -389,5 +389,5 @@ test('alta: --g-shadow nunca vale "none" (dentro de la lista de box-shadow inval
 
 test('hojas: una franja del color de la hoja tapa la barra de estado al bajar (el contenido no se pisa con el reloj)', () => {
   const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
-  assert.match(html, /\.overlay-sheet:not\(#run-detail-modal\):not\(#onboard\)::before\{content:''; display:block; position:sticky; top:0;/);
+  assert.match(html, /\.overlay-sheet:not\(#run-detail-modal\):not\(#onboard\)::before\{content:''; display:block; position:sticky; top:calc\(-28px - var\(--safe-top\)\);/);
 });
