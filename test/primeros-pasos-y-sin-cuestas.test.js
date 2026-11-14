@@ -410,3 +410,9 @@ test('alta, paso de notificaciones: la lista informativa no parece botones (sin 
   assert.ok(!/#onboard \.np-list li\{[^}]*background:var\(--g-fill\)/.test(html));
   assert.match(html, /#onboard \.np-list li::before\{content:''/);
 });
+
+test('accesibilidad: la insignia de racha es un botón para TalkBack y el cuadro de comentarios tiene nombre', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /id="home-streak-badge" role="button" tabindex="0"/);
+  assert.match(html, /id="feedback-message"[^>]*data-i18n-aria="perfil_feedback_ph"/);
+});

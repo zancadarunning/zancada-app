@@ -3726,7 +3726,7 @@ body{overflow-wrap:break-word;}
   <section class="view" id="view-inicio">
     <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:14px 0 4px;">
       <p class="greeting" style="margin:0;"><span id="home-hi"></span> <span id="home-name" style="font-weight:800;">—</span></p>
-      <div class="streak-badge" id="home-streak-badge" style="display:none; cursor:pointer;" data-on-click="openPreferencesOverlay()"></div>
+      <div class="streak-badge" id="home-streak-badge" role="button" tabindex="0" style="display:none; cursor:pointer;" data-on-click="openPreferencesOverlay()"></div>
       <div class="wx-chip" id="home-wx" style="display:none;"></div>
     </div>
 
@@ -5214,7 +5214,7 @@ body{overflow-wrap:break-word;}
     <div class="card">
       <h3 data-i18n="perfil_feedback_title"></h3>
       <p class="muted" style="font-size:12px; margin:2px 0 10px;" data-i18n="perfil_feedback_hint"></p>
-      <textarea id="feedback-message" rows="3" maxlength="4000" data-i18n-ph="perfil_feedback_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+      <textarea id="feedback-message" rows="3" maxlength="4000" data-i18n-ph="perfil_feedback_ph" data-i18n-aria="perfil_feedback_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
       <button class="btn btn-gray btn-sm" id="feedback-send-btn" style="margin-top:12px; width:100%;" data-i18n="perfil_feedback_send" data-on-click="sendFeedback()"></button>
     </div>
 
