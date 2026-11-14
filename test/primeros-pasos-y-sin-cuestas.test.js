@@ -416,3 +416,9 @@ test('accesibilidad: la insignia de racha es un botón para TalkBack y el cuadro
   assert.match(html, /id="home-streak-badge" role="button" tabindex="0"/);
   assert.match(html, /id="feedback-message"[^>]*data-i18n-aria="perfil_feedback_ph"/);
 });
+
+test('sin cuestas: una nota que dice que le gustan o que no tiene problema NO saca las cuestas del plan', () => {
+  const a = require('./support/load-app').loadApp();
+  for (const n of ['no puedo hacer cuestas donde vivo', 'no hay cuestas ni subidas por acá', 'no corro en bajadas y cuestas', 'sin cuestas donde vivo, pero me gusta la pista', 'I cannot do hills here', 'no hills here']) assert.equal(a.noteAvoidsHills(n), true, n);
+  for (const n of ['me encantan las cuestas', 'me gustan las cuestas, no tengo lesiones', 'sin lesiones, quiero entrenar cuestas', 'no tengo problema con las subidas', 'no puedo correr, pero me encantan las cuestas', 'I love hills, no injuries']) assert.equal(a.noteAvoidsHills(n), false, n);
+});
