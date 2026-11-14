@@ -367,6 +367,6 @@ test('Correr: el círculo de las tarjetas no pisa el texto y un ritmo absurdo (c
   const html = fs2.readFileSync(p2.join(__dirname, '..', 'index.html'), 'utf8');
   const js = fs2.readFileSync(p2.join(__dirname, '..', 'app.js'), 'utf8');
   assert.match(html, /#runIdle \.run-mode-card\{padding:12px 36px 12px 12px;\}/);
-  assert.match(html, /#runIdle \.run-mode-card::after\{right:10px; top:12px;/);
+  assert.match(html, /#runIdle \.run-mode-card::after\{right:10px; top:auto; bottom:12px;/);
   assert.equal((js.match(/if\(paceMin > 30\) paceMin = 0;/g) || []).length, 2, 'en vivo y en el resumen');
 });
