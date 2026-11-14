@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-14T22:04:20Z';
+const APP_VERSION = '2026-11-14T22:43:58Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7359,7 +7359,13 @@ function checkWeekRollover(){
 // Si se borra la nota desde Perfil, las cuestas vuelven a entrar en la rotación.
 const HILL_WORDS = /cuesta|subida|pendiente|colina|loma|\bhills?\b|incline|uphill|ladeira|morro|c[ôo]tes?\b|mont[ée]e|d[ée]nivel|salit[ae]|collin|\bberg|h[üu]gel|steigung|anstieg/i;
 const HILL_NEGATION = /\bno\b|\bsin\b|\bni\b|nunca|tampoco|evit|imposible|llan[oa]|\bplan[oa]\b|\bflat\b|\bcan'?t\b|\bcannot\b|\bnot\b|n't\b|without|avoid|\bn[ãa]o\b|\bsem\b|\bpas\b|\bsans\b|aucun|[ée]viter|\bplat\b|\bnon\b|senza|pianur|piatt|\bkein|\bnicht\b|\bohne\b|vermeid|flach/i;
-function noteAvoidsHills(note){ const s = String(note || ''); return HILL_WORDS.test(s) && HILL_NEGATION.test(s); }
+// La negación tiene que estar en la misma frase que la palabra de cuestas ("sin lesiones, quiero entrenar cuestas" NO cuenta) y una frase que dice que
+// las quiere o que no le molestan tampoco ("me encantan las cuestas", "no tengo problema con las subidas").
+const HILL_POSITIVE = /me (gust|encant|divier)|adoro|\bquiero\b|\bamo\b|\blove\b|\blike\b|\bwant\b|no (tengo )?(ning[uú]n )?problem|sin problem|no problem|no me (molest|import)|n[ãa]o (tenho )?problem|sem problem|pas de probl|nessun problem|kein problem|gosto|j'aime|mi piace|gern/i;
+function noteAvoidsHills(note){
+  return String(note || '').split(/[,;.!?\n]|\b(?:pero|but|mas|mais|aber|ma)\b/i)
+    .some(c => HILL_WORDS.test(c) && HILL_NEGATION.test(c) && !HILL_POSITIVE.test(c));
+}
 function avoidsHills(p){ return !!p && (p.avoidHills === true || (Array.isArray(p.coachNotes) && p.coachNotes.some(noteAvoidsHills))); }
 // Las cuestas que todavía están por hacer en la semana en curso se cambian por la sesión que el plan arma hoy para ese día sin cuestas (mismo motor: respeta el plan por tiempo, las fases y la cautela). Devuelve true si cambió algo.
 function applyAvoidHills(){
