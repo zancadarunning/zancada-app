@@ -422,3 +422,10 @@ test('sin cuestas: una nota que dice que le gustan o que no tiene problema NO sa
   for (const n of ['no puedo hacer cuestas donde vivo', 'no hay cuestas ni subidas por acá', 'no corro en bajadas y cuestas', 'sin cuestas donde vivo, pero me gusta la pista', 'I cannot do hills here', 'no hills here']) assert.equal(a.noteAvoidsHills(n), true, n);
   for (const n of ['me encantan las cuestas', 'me gustan las cuestas, no tengo lesiones', 'sin lesiones, quiero entrenar cuestas', 'no tengo problema con las subidas', 'no puedo correr, pero me encantan las cuestas', 'I love hills, no injuries']) assert.equal(a.noteAvoidsHills(n), false, n);
 });
+
+test('rendimiento: los logos de marcas (en pantallas ocultas) se cargan diferidos y no compiten con la carga inicial', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
+  const imgs = html.match(/<img[^>]*src="img\/brand-logos\/[^"]+"[^>]*>/g) || [];
+  assert.ok(imgs.length >= 10, 'hay logos de marcas en el HTML');
+  for (const i of imgs) assert.match(i, /loading="lazy"/, i.slice(0, 80));
+});
