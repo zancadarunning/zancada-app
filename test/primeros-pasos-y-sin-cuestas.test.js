@@ -361,3 +361,12 @@ test('detalle de la carrera: volver, nombre, menú y pestañas forman un encabez
   assert.ok(js.includes("document.getElementById('rd-head-title').textContent = r.name || shortDate;"));
   assert.ok(!html.includes('.rd-tabs{position:sticky'), 'las pestañas ya no se pegan solas arriba del todo');
 });
+
+test('Correr: el círculo de las tarjetas no pisa el texto y un ritmo absurdo (casi parado) se muestra como guion', () => {
+  const fs2 = require('node:fs'), p2 = require('node:path');
+  const html = fs2.readFileSync(p2.join(__dirname, '..', 'index.html'), 'utf8');
+  const js = fs2.readFileSync(p2.join(__dirname, '..', 'app.js'), 'utf8');
+  assert.match(html, /#runIdle \.run-mode-card\{padding:12px 36px 12px 12px;\}/);
+  assert.match(html, /#runIdle \.run-mode-card::after\{right:10px; top:auto; bottom:12px;/);
+  assert.equal((js.match(/if\(paceMin > 30\) paceMin = 0;/g) || []).length, 2, 'en vivo y en el resumen');
+});
