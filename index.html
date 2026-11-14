@@ -368,6 +368,7 @@
   .overlay{--ov-px:24px;}
   #onboard, #session-sheet, #consent-modal{--ov-px:22px;}
   .overlay-sheet:not(#run-detail-modal):not(#onboard)::before{content:''; display:block; position:sticky; top:calc(-28px - var(--safe-top)); z-index:40; height:var(--safe-top); margin:calc(-28px - var(--safe-top)) calc(-1 * var(--ov-px)) 28px; background:inherit; pointer-events:none;}
+  textarea{resize:none;}
   .overlay h2{font-size:28px;}
   .overlay .lead{color:var(--mist); margin-top:6px; font-size:14px; line-height:1.5;}
 
@@ -1340,9 +1341,9 @@
   .rd-chart-svg{width:100%; height:110px; display:block;}
   .rd-donut-row{display:flex; align-items:center; gap:18px; margin-top:10px;}
   .rd-donut-legend{flex:1; display:flex; flex-direction:column; gap:6px;}
-  .rd-donut-legend-row{display:flex; align-items:center; justify-content:space-between; font-size:13px;}
+  .rd-donut-legend-row{display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13px;}
   .rd-donut-legend-row .dot{width:9px; height:9px; border-radius:50%; margin-right:7px; display:inline-block; flex-shrink:0;}
-  .rd-donut-legend-name{display:flex; align-items:center; color:var(--chalk);}
+  .rd-donut-legend-name{display:flex; align-items:center; color:var(--chalk); min-width:0; overflow-wrap:anywhere;}
   .rd-donut-legend-val{color:var(--mist); flex-shrink:0;}
   .rd-video-btn{background:var(--hivis-dim); color:var(--hivis-text); border:none; border-radius:999px; padding:11px 18px; font-weight:700; font-size:14px; display:inline-flex; align-items:center; gap:7px; cursor:pointer; white-space:nowrap;}
   .rd-video-overlay{position:fixed; inset:0; z-index:70; background:#000; display:none; flex-direction:column; align-items:center; justify-content:center;}
@@ -2364,7 +2365,7 @@
   .ws-row .u{font-size:11px; color:var(--mist); margin-left:3px; margin-right:auto;}
   .zone-chip{text-transform:uppercase; letter-spacing:.04em; font-size:11px;}
   /* Detalle de carrera */
-  .pace-bar-row .pace-bar-label{width:32px; text-align:right; font-family:'JetBrains Mono',monospace; font-size:12px;}
+  .pace-bar-row .pace-bar-label{width:auto; min-width:32px; white-space:nowrap; text-align:right; font-family:'JetBrains Mono',monospace; font-size:12px;}
   .pace-bar-fill{font-family:'JetBrains Mono',monospace; font-size:12px;}
   .rd-big-dist{font-family:'Bebas Neue',sans-serif; font-size:56px; font-weight:400; line-height:.9; letter-spacing:.02em;}
   .rd-chart-wrap{position:relative;}
