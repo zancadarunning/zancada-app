@@ -376,5 +376,6 @@ test('letra grande: Idioma en dos columnas, la etiqueta de Relojes no se sale de
   assert.match(html, /#perfil-lang-choice \.choice\{flex:1 1 calc\(50% - 6px\); min-width:0; white-space:nowrap;\}/);
   assert.match(html, /\.conn-row-head \.brand-logo-chip > span\{white-space:normal;/);
   assert.match(html, /\.conn-row-head \.tag\{flex-shrink:0; white-space:nowrap;\}/);
+  assert.match(html, /\.conn-row-head \.brand-logo-chip > span\{overflow-wrap:normal; word-break:keep-all;/);
   assert.match(html, /:root:lang\(es\) h2, :root:lang\(es\) h3\{hyphens:manual;/);
 });

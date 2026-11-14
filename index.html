@@ -2850,6 +2850,8 @@
   /* Con la letra del sistema grande "Garmin Connect" empujaba la etiqueta CONECTADO fuera de la fila: el nombre baja a dos renglones y la etiqueta no se achica */
   .conn-row-head .brand-logo-chip > span{white-space:normal; line-height:1.15; min-width:0;}
   .conn-row-head .tag{flex-shrink:0; white-space:nowrap;}
+  .conn-row-head .brand-logo-chip > span{overflow-wrap:normal; word-break:keep-all; hyphens:none; -webkit-hyphens:none;}
+  @media (max-width:420px){ .conn-row-head .brand-logo-chip > span{font-size:13px !important;} }
   /* Idioma: dos columnas, así "Português" no se parte ("Portuguê/s") con letra grande */
   #perfil-lang-choice .choice{flex:1 1 calc(50% - 6px); min-width:0; white-space:nowrap;}
   .hist-share-btn:active{transform:scale(.92); background:var(--asphalt-4);}
