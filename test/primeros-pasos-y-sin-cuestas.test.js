@@ -398,3 +398,8 @@ test('detalle de carrera: la etiqueta de km no se parte ("0.7/6") y la leyenda d
   assert.match(html, /\.rd-donut-legend-row\{display:flex; align-items:center; justify-content:space-between; gap:10px;/);
   assert.match(html, /\n\s*textarea\{resize:none;\}/);
 });
+
+test('detalle de carrera: las celdas de Segmentos tienen espacio entre columnas (no "0.7622:58")', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /\.rd-seg-table td\{text-align:right; padding:8px 0 8px 12px;/);
+});
