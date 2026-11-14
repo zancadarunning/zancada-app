@@ -377,11 +377,17 @@ test('letra grande: Idioma en dos columnas, la etiqueta de Relojes no se sale de
   assert.match(html, /\.conn-row-head \.brand-logo-chip > span\{white-space:normal;/);
   assert.match(html, /\.conn-row-head \.tag\{flex-shrink:0; white-space:nowrap;\}/);
   assert.match(html, /\.conn-row-head \.brand-logo-chip > span\{overflow-wrap:normal; word-break:keep-all;/);
-  assert.match(html, /:root:lang\(es\) h2, :root:lang\(es\) h3\{hyphens:manual;/);
+  assert.match(html, /:root:lang\(es\) h2, :root:lang\(es\) h3, :root:lang\(es\) \.l, :root:lang\(es\) \.choice\{hyphens:manual;/);
+  assert.match(html, /\.ws-row \.l\{white-space:nowrap;/);
 });
 
 test('alta: --g-shadow nunca vale "none" (dentro de la lista de box-shadow invalida todo y la opcion elegida quedaba igual a las demas en el tema claro)', () => {
   const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
   assert.doesNotMatch(html, /--g-shadow:\s*none/);
   assert.ok((html.match(/--g-shadow:0 0 0 0 transparent;/g) || []).length >= 3);
+});
+
+test('hojas: una franja del color de la hoja tapa la barra de estado al bajar (el contenido no se pisa con el reloj)', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /\.overlay-sheet:not\(#run-detail-modal\):not\(#onboard\)::before\{content:''; display:block; position:sticky; top:0;/);
 });
