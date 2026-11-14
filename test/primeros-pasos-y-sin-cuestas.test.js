@@ -389,5 +389,17 @@ test('alta: --g-shadow nunca vale "none" (dentro de la lista de box-shadow inval
 
 test('hojas: una franja del color de la hoja tapa la barra de estado al bajar (el contenido no se pisa con el reloj)', () => {
   const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
-  assert.match(html, /\.overlay-sheet:not\(#run-detail-modal\):not\(#onboard\)::before\{content:''; display:block; position:sticky; top:0;/);
+  assert.match(html, /\.overlay-sheet:not\(#run-detail-modal\):not\(#onboard\)::before\{content:''; display:block; position:sticky; top:calc\(-28px - var\(--safe-top\)\);/);
+});
+
+test('detalle de carrera: la etiqueta de km no se parte ("0.7/6") y la leyenda de zonas deja espacio entre nombre y minutos', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /\.pace-bar-row \.pace-bar-label\{width:auto; min-width:32px; white-space:nowrap;/);
+  assert.match(html, /\.rd-donut-legend-row\{display:flex; align-items:center; justify-content:space-between; gap:10px;/);
+  assert.match(html, /\n\s*textarea\{resize:none;\}/);
+});
+
+test('detalle de carrera: las celdas de Segmentos tienen espacio entre columnas (no "0.7622:58")', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /\.rd-seg-table td\{text-align:right; padding:8px 0 8px 12px;/);
 });
