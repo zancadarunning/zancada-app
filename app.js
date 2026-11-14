@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-14T13:51:39Z';
+const APP_VERSION = '2026-11-14T17:22:40Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -14713,7 +14713,8 @@ function fmtRunClock(sec){ const s = fmtTime(sec); return s.startsWith('00:') ? 
 function updateLiveStats(){
   document.getElementById('track-timer').textContent = fmtRunClock(tracker.elapsedSec);
   document.getElementById('track-dist').textContent = fmtDist(tracker.distanceKm);
-  const paceMin = tracker.distanceKm>0.02 ? (tracker.elapsedSec/60)/tracker.distanceKm : 0;
+  let paceMin = tracker.distanceKm>0.02 ? (tracker.elapsedSec/60)/tracker.distanceKm : 0;
+  if(paceMin > 30) paceMin = 0; // más lento que caminar muy despacio: casi parado, no se muestra "127:00 /km"
   document.getElementById('track-pace').textContent = fmtPace(paceMin);
   // Misma info que arriba, para la grilla de .track-paused-group (ver index.html) -- se
   // actualiza siempre junto con los stats chicos de arriba, no solo mientras está pausado,
@@ -14768,7 +14769,8 @@ function showRunSummaryUI(){
   document.getElementById('runActive').style.display='none';
   document.getElementById('runSummary').style.display='block';
   updateCoachFabVisibility();
-  const paceMin = tracker.distanceKm>0.02 ? (tracker.elapsedSec/60)/tracker.distanceKm : 0;
+  let paceMin = tracker.distanceKm>0.02 ? (tracker.elapsedSec/60)/tracker.distanceKm : 0;
+  if(paceMin > 30) paceMin = 0; // casi parado: "—" en vez de un ritmo absurdo
   document.getElementById('sum-dist').textContent = fmtDist(tracker.distanceKm);
   document.getElementById('sum-time').textContent = fmtRaceTime(tracker.elapsedSec);
   document.getElementById('sum-pace').textContent = fmtPace(paceMin);
