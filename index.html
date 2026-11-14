@@ -2846,7 +2846,12 @@
   .hist-map-img.loaded + .hist-map-route path{stroke:#0B5D2E;}   /* sobre el mapa (siempre claro) el trazo va en verde oscuro; mientras carga o si falla, en el color del tema para que se lea en oscuro */
   .hist-map-route circle{fill:#4ADE80; stroke:#fff; stroke-width:1.5;}
   /* Relojes: la etiqueta y la flecha van siempre contra el borde derecho, a la misma altura en todas las marcas (antes quedaban pegadas al logo, y como cada logo mide distinto no coincidían) */
-  .conn-row-head .brand-logo-chip{margin-right:auto;}
+  .conn-row-head .brand-logo-chip{margin-right:auto; min-width:0;}
+  /* Con la letra del sistema grande "Garmin Connect" empujaba la etiqueta CONECTADO fuera de la fila: el nombre baja a dos renglones y la etiqueta no se achica */
+  .conn-row-head .brand-logo-chip > span{white-space:normal; line-height:1.15; min-width:0;}
+  .conn-row-head .tag{flex-shrink:0; white-space:nowrap;}
+  /* Idioma: dos columnas, así "Português" no se parte ("Portuguê/s") con letra grande */
+  #perfil-lang-choice .choice{flex:1 1 calc(50% - 6px); min-width:0; white-space:nowrap;}
   .hist-share-btn:active{transform:scale(.92); background:var(--asphalt-4);}
   .next-session:active, .avatar-big-wrap:active, .day-pill:active{transform:scale(.96);}
   .pred-head:active, .trend-col:active, .rd-tab-btn:active, #session-sheet .ss-close:active, .tap-pad:active, [data-on-click="openRaceTipsInfo()"]:active{opacity:.6;}
@@ -2866,6 +2871,8 @@
   .msg.user{background:var(--asphalt-4); color:var(--chalk); box-shadow:none;}
   /* Palabras largas (sobre todo en aleman, p. ej. "Herzfrequenzzonen"): en pantallas chicas se dividen con guion en vez de cortarse a la mitad (la app marca el idioma en <html lang>) */
   @media (max-width:400px){ h2, h3, .choice, .l, .pr-medal-label, .pr-medal-time{hyphens:auto; -webkit-hyphens:auto;} }
+  /* En español los títulos cortan por palabras ("frecuen-cia" queda feo); el guion automático queda para los idiomas de palabras largas */
+  @media (max-width:400px){ :root:lang(es) h2, :root:lang(es) h3{hyphens:manual; -webkit-hyphens:manual;} }
   /* Celulares angostos: el Check-in apila la pregunta arriba de las 3 opciones (hasta 369 px) y en 320 los botones de opcion achican un poco la letra, asi ninguna palabra se parte a la mitad */
   @media (max-width:369px){
     .rd3-row{flex-wrap:wrap; gap:4px 10px;}
