@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-15T01:03:50Z';
+const APP_VERSION = '2026-11-15T15:07:57Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -16284,7 +16284,7 @@ function buildStravaSyncBanner(){
       <div style="min-width:0; flex:1;">
         <p style="margin:0; font-size:14px; font-weight:700; color:${color};">${issue.title}</p>
         ${detailHtml}
-        <button class="btn btn-outline btn-sm" style="margin-top:${issue.detail?'0':'10px'};" data-on-click="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>
+        <button id="sync-today-btn" class="btn btn-outline btn-sm" style="margin-top:${issue.detail?'0':'10px'};" data-on-click="syncTodayNow()"><span class="icon-sq" style="width:14px; height:14px;">${ICONS.refresh}</span> ${t('plan_sync_button')}</button>
       </div>
     </div>
   </div>`;
