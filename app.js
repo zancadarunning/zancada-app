@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-14T23:52:12Z';
+const APP_VERSION = '2026-11-15T01:03:50Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -1480,6 +1480,9 @@ function applyPendingBackup(pending, remoteTs){
         if(!s) return;
         if(!(r.points && r.points.length) && s.points && s.points.length) r.points = s.points;
         if(!r.series && s.series) r.series = s.series;
+        // las marcas del GPS separado (run_tracks): sin ellas la carrera perdería el aviso de que su recorrido completo está guardado aparte
+        if(r.trkN == null && s.trkN != null) r.trkN = s.trkN;
+        if(r.trkS == null && s.trkS != null) r.trkS = s.trkS;
       });
       const firstTs = backup.chat && backup.chat.length ? Number(backup.chat[0].ts) : Infinity;
       const older = (server.chat || []).filter(m => m && Number(m.ts) < firstTs);
@@ -1521,6 +1524,106 @@ let loadedStateVersion = null;
 let persistInFlight = false;
 let persistQueued = false;
 let persistSettledResolvers = [];
+/* ---- GPS y series fuera de app_state (tabla run_tracks, ver sql/run_tracks.sql) -----
+   El recorrido completo y las series (pulso/ritmo) pesaban ~80% del estado y viajaban en CADA guardado y en cada apertura. Ahora la base los separa sola (trigger de app_state):
+   en app_state queda una versión liviana (~60 puntos, sin series, con trkN = puntos guardados y trkS = hay series) y el recorrido completo se pide solo cuando hace falta.
+   - tracksEnabled: la base confirma (rpc tracks_enabled) que la separación está activa. Sin esa confirmación todo se sube completo, como antes: nunca se manda una versión liviana
+     a una base que no la entiende (se perdería el GPS).
+   - Las carreras recientes se bajan completas al iniciar (las revisiones del plan evalúan tramos con el recorrido y el pulso); el resto, al abrir el detalle, el video o compartir. */
+const RUN_LEAN_POINTS = 60, RUN_FULL_OVER = 80;   // iguales a lean_keep / full_over del trigger
+const RUN_HYDRATE_DAYS = 45, RUN_HYDRATE_MAX = 24;
+let tracksEnabled = false;
+const runTrackCache = new Map();      // "usuario:carrera" -> {points, series} ya bajados (sirve aunque state se reemplace por una lectura nueva del servidor)
+const runTrackInflight = new Map();
+async function detectTracksEnabled(){
+  try{ const { data, error } = await supabaseClient.rpc('tracks_enabled'); tracksEnabled = !error && data === true; }
+  catch(e){ tracksEnabled = false; }
+  return tracksEnabled;
+}
+// ¿Esta carrera está en versión liviana? (el servidor guarda más puntos de los que tiene acá, o series que acá faltan)
+function runNeedsTrack(r){
+  if(!r || typeof r !== 'object') return false;
+  const have = Array.isArray(r.points) ? r.points.length : 0;
+  return Number(r.trkN) > have || (r.trkS === true && !(r.series && typeof r.series === 'object'));
+}
+function fillRunFromTrack(r, tr){
+  if(!tr) return;
+  const have = Array.isArray(r.points) ? r.points.length : 0;
+  if(Array.isArray(tr.points) && tr.points.length > have) r.points = tr.points;
+  if(tr.series && typeof tr.series === 'object' && !r.series) r.series = tr.series;
+}
+function applyTrackCache(runs){
+  if(!currentUserId || !Array.isArray(runs)) return;
+  runs.forEach(r => { if(runNeedsTrack(r)) fillRunFromTrack(r, runTrackCache.get(currentUserId + ':' + r.id)); });
+}
+// Baja el recorrido completo de UNA carrera (si hace falta). Nunca tira: si falla, la carrera sigue con la versión liviana.
+async function ensureRunTrack(r){
+  if(!r || !currentUserId || !runNeedsTrack(r)) return r;
+  const key = currentUserId + ':' + r.id;
+  if(!runTrackCache.has(key)){
+    let p = runTrackInflight.get(key);
+    if(!p){
+      p = (async () => {
+        try{
+          const { data, error } = await supabaseClient.from('run_tracks').select('points,series').eq('user_id', currentUserId).eq('run_id', String(r.id)).maybeSingle();
+          if(!error && data) runTrackCache.set(key, { points: data.points, series: data.series });
+        }catch(e){ console.error('run track', e); }
+      })().finally(() => runTrackInflight.delete(key));
+      runTrackInflight.set(key, p);
+    }
+    await p;
+  }
+  fillRunFromTrack(r, runTrackCache.get(key));
+  return r;
+}
+// Las carreras de los últimos días, completas y de una sola vez (un pedido). Se espera antes de las revisiones del plan para que evalúen con el recorrido y el pulso de verdad.
+async function hydrateRecentTracks(){
+  if(!currentUserId || !state || !Array.isArray(state.runs)) return 0;
+  applyTrackCache(state.runs);
+  const cutoff = Date.now() - RUN_HYDRATE_DAYS * 864e5;
+  const need = state.runs.filter(r => runNeedsTrack(r) && new Date(r.date).getTime() >= cutoff)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, RUN_HYDRATE_MAX);
+  if(!need.length) return 0;
+  try{
+    const { data, error } = await supabaseClient.from('run_tracks').select('run_id,points,series').eq('user_id', currentUserId).in('run_id', need.map(r => String(r.id)));
+    if(error || !Array.isArray(data)) return 0;
+    data.forEach(row => runTrackCache.set(currentUserId + ':' + row.run_id, { points: row.points, series: row.series }));
+  }catch(e){ console.error('run tracks', e); return 0; }
+  applyTrackCache(need);
+  return need.length;
+}
+// Lo que se sube: las carreras con recorrido completo que el servidor YA guarda aparte van en versión liviana (sin series); las que el servidor todavía no separó (recién grabadas, o
+// con la separación apagada) suben completas y el servidor las separa. Sin tracksEnabled sube todo tal cual, como siempre.
+function buildUploadState(){
+  const runs = state && state.runs;
+  if(!tracksEnabled || !Array.isArray(runs)) return { data: state, fullRuns: [] };
+  let changed = false;
+  const fullRuns = [];
+  const out = runs.map(r => {
+    if(!r || typeof r !== 'object') return r;
+    const n = Array.isArray(r.points) ? r.points.length : 0;
+    if(!(n > RUN_FULL_OVER || (r.series && typeof r.series === 'object'))) return r;
+    if(Number(r.trkN) > 0){
+      changed = true;
+      const lean = Object.assign({}, r, { points: downsampleRoute(r.points, RUN_LEAN_POINTS) });
+      delete lean.series;
+      return lean;
+    }
+    fullRuns.push(r);
+    return r;
+  });
+  return { data: changed ? Object.assign({}, state, { runs: out }) : state, fullRuns };
+}
+// Tras un guardado bien hecho: las carreras que subieron completas ya están separadas en el servidor; se refleja acá (y se recuerda el recorrido) para no volver a subirlas.
+function markTracksUploaded(fullRuns){
+  fullRuns.forEach(r => {
+    const n = Array.isArray(r.points) ? r.points.length : 0;
+    if(Number(r.trkN) > 0 || !(n > RUN_FULL_OVER || (r.series && typeof r.series === 'object'))) return;
+    r.trkN = n;
+    if(r.series && typeof r.series === 'object') r.trkS = true;
+    runTrackCache.set(currentUserId + ':' + r.id, { points: r.points, series: r.series || null });
+  });
+}
 async function persist(){
   if(!currentUserId || stateLoadedFor !== currentUserId) return;
   // Una cuenta nueva a mitad del inicio (onboarded:false) NO sube nada: activar las notificaciones o conectar un reloj en esas pantallas llamaba a persist() y dejaba en la base un estado
@@ -1557,10 +1660,11 @@ async function persist(){
       // supabase-js NO lanza una excepción cuando falla la red: devuelve { error }. Sin revisarlo, un guardado sin conexión
       // se daba por bueno (se borraba el respaldo local y se avanzaba la versión conocida) y el cambio se perdía.
       let saveError;
+      const up = buildUploadState();   // con el GPS ya separado en el servidor, sube las carreras en versión liviana (ver arriba)
       if(loadedStateVersion){
         // Ya había una fila cuando se cargó esta sesión: se guarda con UPDATE y se mira cuántas filas cambió. Si no cambió ninguna, la fila se borró desde otro dispositivo ("Borrar mis datos" o borrado de la cuenta):
         // con upsert se recreaba con todo el estado que esta pestaña todavía tenía en memoria (perfil, carreras, chat), deshaciendo el borrado. Solo el primer guardado de una cuenta nueva (sin versión) usa upsert.
-        const res = await supabaseClient.from('app_state').update({ data: state, updated_at: nowIso }).eq('user_id', currentUserId).select('user_id');
+        const res = await supabaseClient.from('app_state').update({ data: up.data, updated_at: nowIso }).eq('user_id', currentUserId).select('user_id');
         saveError = res.error;
         if(!saveError && Array.isArray(res.data) && res.data.length === 0){
           clearPendingBackup();
@@ -1570,9 +1674,10 @@ async function persist(){
           return;
         }
       } else {
-        saveError = (await supabaseClient.from('app_state').upsert({ user_id: currentUserId, data: state, updated_at: nowIso })).error;
+        saveError = (await supabaseClient.from('app_state').upsert({ user_id: currentUserId, data: up.data, updated_at: nowIso })).error;
       }
       if(saveError) throw saveError;
+      markTracksUploaded(up.fullRuns);
       loadedStateVersion = nowIso; // este guardado ya es la versión más nueva que conocemos
       clearPendingBackup();
     } else {
@@ -1829,6 +1934,9 @@ async function loadUserAndEnter(user, isRetry){
         if(!(await ensureConsent())){ await declineConsentSignOut(); return; }
         persist();   // queda guardado en la cuenta (versión y fecha)
       }
+      // GPS separado en el servidor (run_tracks): se confirma que la separación está activa y se bajan completas las carreras de los últimos días ANTES de las revisiones del plan
+      // (evalúan tramos con el recorrido y el pulso). Si algo falla, sigue con la versión liviana: nunca frena la entrada.
+      try{ await detectTracksEnabled(); await hydrateRecentTracks(); }catch(e){ console.error('run tracks init', e); }
       if(!state.chat || !state.chat.length) seedCoachGreeting(); else renderChat();
       enterApp();
       return;
@@ -11872,6 +11980,7 @@ async function refreshStateFromServer(){
       } else {
         const prevRunIds = new Set((state.runs||[]).map(r=>String(r.id)));
         state = normalizeLoadedState(data.data);
+        try{ await hydrateRecentTracks(); }catch(e){}   // la lectura nueva trae las carreras en versión liviana: se vuelven a completar las recientes (casi siempre desde la memoria)
         // el phaseNow que viene del servidor puede ser de otra semana: se deriva de nuevo (ver refreshPhaseNow)
         refreshPhaseNow();
         // Reportado en una auditoría: esto pisaba state con lo que acaba de llegar del servidor
@@ -16646,10 +16755,11 @@ function zoneStrokeVar(n){
 function zoneColorVar(n){
   return (getComputedStyle(document.documentElement).getPropertyValue('--zone'+n+'-fill') || '').trim() || '#8B9296';
 }
-function openRunDetail(runId){
+async function openRunDetail(runId){
   if(swipeSuppressClick) return;
   const r = state.runs.find(x => String(x.id) === String(runId));
   if(!r) return;
+  if(runNeedsTrack(r)) await ensureRunTrack(r);   // el recorrido completo y las series viven aparte (run_tracks): se bajan al abrir el detalle (después queda en memoria)
   const paceMin = r.distanceKm>0.02 ? (r.durationSec/60)/r.distanceKm : 0;
   const avgHr = r.avgHr || (r.hrLog && r.hrLog.length ? Math.round(r.hrLog.reduce((a,h)=>a+h.bpm,0)/r.hrLog.length) : null);
   const cal = r.calories || Math.round((state.profile.weight||70)*r.distanceKm*1.036);
@@ -17112,6 +17222,7 @@ function planStepsFromPayload(p){
   return {steps, checkFaster: isRepeat && p.typeKey !== 'hills'};
 }
 function evaluateRunSteps(run, plan, zones){
+  if(runNeedsTrack(run)) return null;   // carrera en versión liviana (sin el recorrido completo ni el pulso): evaluar con ~60 puntos daría tramos y pulso equivocados; mejor no evaluar
   let pts = ((run && run.points) || []).filter(p => p && typeof p.t === 'number' && isFinite(p.t) && isFinite(p.lat) && isFinite(p.lon));
   let cum = null;
   // sin ruta GPS (Health Connect): la distancia acumulada en el tiempo alcanza para cortar los tramos
@@ -17829,6 +17940,7 @@ function buildRunShareBlob(r, tpl){
   if(tpl === 'sticker') return buildShareImageBlob(r);
   return new Promise(async (resolve) => {
     try{
+      await ensureRunTrack(r);   // la silueta de la ruta se dibuja con el recorrido completo
       await shareLoadFonts();
       const W = 1080, H = 1920;
       const canvas = document.createElement('canvas');
@@ -17876,6 +17988,7 @@ function buildRunShareBlob(r, tpl){
 function buildShareImageBlob(r){
   return new Promise(async (resolve)=>{
     try{
+      await ensureRunTrack(r);   // la silueta de la ruta se dibuja con el recorrido completo
       // aseguramos que las tipografías de la app (JetBrains Mono, Bebas Neue) ya estén cargadas
       // antes de dibujar; si no, el canvas dibuja con una fuente de reemplazo de menor calidad.
       try{
@@ -18341,6 +18454,7 @@ function closeDynamicVideo(){
 async function startDynamicVideo(runId){
   if(rdVideoState) closeDynamicVideo();
   const r = state.runs.find(x => String(x.id) === String(runId));
+  if(r) await ensureRunTrack(r);   // el video dibuja el recorrido completo con su tiempo
   if(!r || !r.points || r.points.length<2){ showToast(t('rd_video_error'), 'error'); return; }
   if(typeof MediaRecorder==='undefined' || !document.createElement('canvas').captureStream){
     showToast(t('rd_video_unsupported'), 'error');

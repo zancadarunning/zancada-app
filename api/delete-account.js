@@ -192,6 +192,7 @@ module.exports = withSentry(async (req, res) => {
         'sent_notifications', 'known_devices']) {
         await wipe(t, `user_id=eq.${userId}`);
       }
+      await wipe('run_tracks', `user_id=eq.${userId}`);   // el GPS y las series de las carreras (sql/run_tracks.sql); borrar la fila de app_state también los limpia (trigger), esto es explícito por las dudas
       await wipe('app_state', `user_id=eq.${userId}`);
       if (failed.length) {
         console.error('delete-account: no se pudo borrar', failed.join(','));
@@ -250,7 +251,7 @@ module.exports = withSentry(async (req, res) => {
     // sin REFERENCES), así que el borrado de arriba no la toca -- sin este loop
     // quedaría huérfana para siempre una fila por cada día que el usuario haya usado
     // el chat con el coach.
-    const tables = ['app_state', 'push_subscriptions', 'strava_connections', 'chat_usage', 'sent_notifications', 'sync_cooldowns', 'entitlements'];
+    const tables = ['app_state', 'run_tracks', 'push_subscriptions', 'strava_connections', 'chat_usage', 'sent_notifications', 'sync_cooldowns', 'entitlements'];
     for (const table of tables) {
       try {
         await fetch(`${base}/rest/v1/${table}?user_id=eq.${userId}`, { method: 'DELETE', headers });

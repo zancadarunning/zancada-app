@@ -136,20 +136,24 @@ function loadApp(opts) {
   // "responde" cada upsert y así simular guardados que llegan en otro orden.
   // opts.onMaybeSingle, con el mismo espíritu, deja simular qué "ya hay guardado" en el
   // servidor (updated_at) para el chequeo de conflicto entre pestañas de persist().
-  const chain = () => {
+  // run_tracks (GPS aparte): opts.onTrack({table, kind:'one'|'many', eq:{col:val}, in:{col:[...]}}) devuelve {data,error}; sin opts.onTrack responde vacío.
+  const chain = (table) => {
+    const flt = { eq: {}, in: {} };
     const q = {
-      select(){ return q; }, eq(){ return q; },
+      select(){ return q; }, eq(c, v){ flt.eq[c] = v; return q; }, in(c, v){ flt.in[c] = v; return q; },
       upsert(payload){ return opts.onUpsert ? opts.onUpsert(payload) : Promise.resolve({ data: null, error: null }); },
       // persist() guarda con update(...).eq(...).select(...) cuando la sesión ya cargó una fila: cuenta igual que un upsert (mismo payload) y devuelve algo "encadenable"
       update(payload){ const r = opts.onUpsert ? opts.onUpsert(payload) : Promise.resolve({ data: null, error: null }); const c = Object.assign(r, { eq(){ return c; }, select(){ return c; } }); return c; },
-      maybeSingle(){ return opts.onMaybeSingle ? opts.onMaybeSingle() : Promise.resolve({ data: null, error: null }); }, delete(){ return q; },
-      order(){ return q; }, limit(){ return q; }, then(resolve){ resolve({ data: null, error: null }); },
+      maybeSingle(){ if(table === 'run_tracks') return Promise.resolve(opts.onTrack ? opts.onTrack({ table, kind: 'one', eq: flt.eq, in: flt.in }) : { data: null, error: null }); return opts.onMaybeSingle ? opts.onMaybeSingle() : Promise.resolve({ data: null, error: null }); }, delete(){ return q; },
+      order(){ return q; }, limit(){ return q; }, then(resolve){ resolve(table === 'run_tracks' && opts.onTrack ? opts.onTrack({ table, kind: 'many', eq: flt.eq, in: flt.in }) : { data: null, error: null }); },
     };
     return q;
   };
   sandbox.supabase = {
     createClient: () => ({
-      from: () => chain(),
+      from: (table) => chain(table),
+      // opts.onRpc(nombre, args) -> {data,error}; sin opts.onRpc las funciones de la base "no existen" (error), como una base sin migrar
+      rpc: (name, args) => Promise.resolve(opts.onRpc ? opts.onRpc(name, args) : { data: null, error: { message: "rpc no disponible" } }),
       auth: {
         getSession: () => Promise.resolve({ data: { session: null }, error: null }),
         onAuthStateChange: () => ({ data: { subscription: { unsubscribe(){} } } }),

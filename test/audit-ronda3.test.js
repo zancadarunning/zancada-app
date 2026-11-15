@@ -239,7 +239,7 @@ test('rechazar los consentimientos también da de baja el aviso push de ese disp
 
 test('persist: con una fila ya cargada guarda con UPDATE y, si la fila ya no existe (borrada desde otro dispositivo), NO la recrea: cierra la sesión local', () => {
   const body = SRC.slice(SRC.indexOf('async function persist()'), SRC.indexOf('function waitForPendingPersist'));
-  assert.ok(body.includes("if(loadedStateVersion){") && body.includes(".update({ data: state, updated_at: nowIso }).eq('user_id', currentUserId).select('user_id')"));
+  assert.ok(body.includes("if(loadedStateVersion){") && body.includes(".update({ data: up.data, updated_at: nowIso }).eq('user_id', currentUserId).select('user_id')"));
   assert.ok(body.includes('Array.isArray(res.data) && res.data.length === 0'), 'solo una lista vacía cuenta como fila borrada (no un null)');
   assert.ok(body.includes('location.reload();\n          return;'), 'cierra y recarga en vez de recrear');
   assert.ok(/else \{\s*saveError = \(await supabaseClient\.from\('app_state'\)\.upsert\(/.test(body), 'el primer guardado de una cuenta nueva sigue siendo upsert');
