@@ -89,8 +89,8 @@ end $$;
 
 -- true SOLO si el trigger existe y esta activo: un cliente nuevo contra una base sin el trigger mandaria versiones livianas y perderia GPS.
 create or replace function public.tracks_enabled()
-returns boolean language sql stable security definer set search_path = public, pg_temp as $$
-  select exists (select 1 from pg_trigger where tgname = 'app_state_split_tracks_trg' and tgrelid = 'public.app_state'::regclass and not tgisinternal and tgenabled <> 'D')
+returns boolean language sql stable security invoker set search_path = public, pg_temp as $
+  select exists (select 1 from pg_catalog.pg_trigger where tgname = 'app_state_split_tracks_trg' and tgrelid = 'public.app_state'::regclass and not tgisinternal and tgenabled <> 'D')
 $$;
 
 revoke all on function public.downsample_points(jsonb, int) from public, anon, authenticated;
