@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-14T22:59:10Z';
+const APP_VERSION = '2026-11-14T23:52:12Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3224,7 +3224,9 @@ async function syncPlanToGarmin(force){
         if(result){
           if(result.reason === 'not_connected'){ deviceConnections.garmin = false; }
           const ok = res.ok && !result.error && !result.reason && !result.failed;
-          if(ok){ markWatchSent('garmin'); dirty = true; }
+          // Garmin recibe siempre la ventana entera, así que "ok" llega en CADA pasada. Guardar la hora cada vez (Date.now() cambia siempre) hacía un guardado completo del estado, ese guardado agendaba otro envío
+          // a los 4 s y así sin fin mientras la app estuviera abierta (~700 escrituras por hora, cada una con todo el estado). Solo se guarda si de verdad se mandó algo o si la marca ya está vieja.
+          if(ok && (force || watchSendWorthSaving(state.watchSentAt && state.watchSentAt.garmin, result, Date.now()))){ markWatchSent('garmin'); dirty = true; }
           if(result.reason === 'cooldown' || result.reason === 'rate_limited'){
             garminBlockedUntil = Date.now() + 6*60*1000;
             scheduleGarminSync(6*60*1000 + 2000);   // el servidor deja un envío cada 5 minutos: lo que cae en esa espera se reintenta solo
@@ -9711,6 +9713,16 @@ const WATCH_PLAN_BRANDS = [
 let watchHowOpen = false;
 const watchSending = {}, watchLastPress = {};
 const WATCH_PRESS_COOLDOWN_MS = 5 * 60 * 1000;   // el servidor deja un envío cada 5 minutos por marca (y Suunto tiene una cuota semanal compartida): el botón no se puede machacar
+// ¿Vale la pena guardar (persist) que se envió el plan al reloj? Sí si el envío movió algo (pushedDates) o si la última marca es vieja o no existe; si no, la hora no cambia nada que le importe a nadie y guardarla
+// solo vuelve a disparar el envío (persist -> scheduleWatchSync): un ciclo cada ~5 s.
+const WATCH_MARK_REFRESH_MS = 10 * 60 * 1000;
+function watchSendWorthSaving(prevAt, result, now){
+  // OJO: pushedDates NO sirve para esto: el servidor también lo llena con los días que ya estaban iguales (sin cambios). Lo que mueve algo de verdad son los contadores.
+  const r = result || {};
+  if([r.pushed, r.created, r.deleted, r.orphansRemoved].some(n => Number(n) > 0)) return true;
+  const prev = Number(prevAt);
+  return !(prev > 0) || (now - prev) > WATCH_MARK_REFRESH_MS;
+}
 function markWatchSent(brand){
   if(!state) return;
   if(!state.watchSentAt || typeof state.watchSentAt !== 'object') state.watchSentAt = {};
