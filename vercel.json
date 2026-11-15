@@ -1,5 +1,6 @@
 {
   "buildCommand": "node scripts/build-minify.js --inplace",
+  "outputDirectory": ".",
   "rewrites": [
     { "source": "/conectar", "destination": "/index.html" },
     { "source": "/api/garmin-webhook/:k", "destination": "/api/garmin-webhook?k=:k" }
