@@ -5,6 +5,7 @@ const pushDevices = require('./_lib/push-devices');
 const { isTrustedPushEndpoint } = require('./_lib/push-endpoint');
 const { buildWeeklySummary, isWeeklySlot, isWeeklyDue, sundayPending, currentWeeklySlot, mondayKeyFor } = require('./_lib/weekly-summary');
 const sentRegistry = require('./_lib/sent-registry');
+const { pruneUsage } = require('./_lib/daily-cap');
 const nudge = require('./_lib/missing-run-nudge');
 const { pick, ownKey } = require('./_lib/own');
 
@@ -269,6 +270,8 @@ module.exports = withSentry(async (req, res) => {
       if (!registryOk) console.warn('send-reminders: tabla sent_notifications no disponible; resumen semanal solo en el turno exacto (sin reintentos)');
       // limpieza: cada domingo, en la primera corrida de la franja, se borran los registros de más de 60 días
       if (registryOk && currentWeeklySlot(localClock(DEFAULT_TZ).hour, localClock(DEFAULT_TZ).minute) === 0) await sentRegistry.pruneOld(base, headers, 60);
+      // y los contadores de uso del coach/topes de más de 35 días (ver pruneUsage en _lib/daily-cap.js)
+      if (currentWeeklySlot(localClock(DEFAULT_TZ).hour, localClock(DEFAULT_TZ).minute) === 0) await pruneUsage(base, headers, 35);
     }
     async function sendWeekly({ row, subRow, period, exact }) {
       let claimed = false;

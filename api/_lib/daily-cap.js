@@ -45,4 +45,13 @@ async function withinHourlyCap(base, headers, scope, userId, limit, opts) {
   return withinDailyCap(base, headers, scope + ':' + hour, userId, limit, opts);
 }
 
-module.exports = { withinDailyCap, withinHourlyCap, capId };
+// Los contadores solo importan el día de hoy (el admin mira como mucho 7 días): sin limpieza la tabla crece para siempre (cada tope por hora suma una fila por hora y por ámbito) y guarda
+// indefinidamente cuándo usó cada persona el coach. Borra las filas de más de `days` días; nunca frena a quien lo llama.
+async function pruneUsage(base, headers, days) {
+  try {
+    const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+    await fetchWithTimeout(`${base}/rest/v1/chat_usage?usage_date=lt.${encodeURIComponent(cutoff)}`, { method: 'DELETE', headers }, 8000);
+  } catch (e) { /* no es crítico */ }
+}
+
+module.exports = { withinDailyCap, withinHourlyCap, capId, pruneUsage };
