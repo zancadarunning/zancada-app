@@ -160,7 +160,9 @@ test('calcTrainingLoad: una carrera con distanceKm negativa (dato corrupto) se i
   // -- se mostraba como "corriste de menos" (level:'low'), el resultado más alejado posible
   // de la realidad (tres semanas reales y parejas de 10km, nada de "menos").
   const app = loadApp();
-  app.state.weekStart = daysAgoISO(28).slice(0, 10);
+  // weekStart es un día LOCAL ("YYYY-MM-DD" como lo arma getMondayISO): con .slice(0,10) del ISO se tomaba el día UTC, que en husos atrasados (Los Ángeles) cae un día antes y corría la ventana
+  const d28 = new Date(Date.now() - 28 * 86400000);
+  app.state.weekStart = d28.getFullYear() + '-' + String(d28.getMonth() + 1).padStart(2, '0') + '-' + String(d28.getDate()).padStart(2, '0');
   app.state.runs = [
     { date: daysAgoISO(2), distanceKm: 10 },
     { date: daysAgoISO(10), distanceKm: 10 },
