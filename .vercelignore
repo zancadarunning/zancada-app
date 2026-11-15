@@ -2,7 +2,8 @@
 sql
 docs
 test
-scripts
+scripts/*
+!scripts/build-minify.js
 scratch
 CLAUDE-SECURITY-*
 loadtest

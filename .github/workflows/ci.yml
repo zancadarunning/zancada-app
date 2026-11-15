@@ -33,6 +33,11 @@ jobs:
         run: node --check app.js
       - name: Pruebas
         run: npm test
+      # el despliegue minifica app.js (scripts/build-minify.js): se prueba aca que el minificado se genera y que la bateria de pruebas que carga la app pasa igual con esa version
+      - name: Minificado de app.js
+        run: |
+          node scripts/build-minify.js
+          ZANCADA_APP_JS="$PWD/.build/app.js" npm test
 
   # Vulnerabilidades graves en lo que usa el servidor. Va en un trabajo aparte: un aviso nuevo de una librería
   # no tiene que mostrar en rojo un cambio que no tocó nada de eso.

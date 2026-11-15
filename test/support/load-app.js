@@ -28,7 +28,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const APP_JS_PATH = path.join(__dirname, '..', '..', 'app.js');
+const APP_JS_PATH = process.env.ZANCADA_APP_JS || path.join(__dirname, '..', '..', 'app.js');   // ZANCADA_APP_JS: probar la version minificada del despliegue (scripts/build-minify.js) con toda la bateria de tests
 const LOCALES_DIR = path.join(__dirname, '..', '..', 'locales');
 
 function makeFakeStyle() {

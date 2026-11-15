@@ -24,5 +24,8 @@ test('index.html trae una CSP <meta> igual a la de vercel.json (salvo frame-ance
 
 test('.vercelignore deja afuera sql, docs, scripts, test, mobile y los .env', () => {
   const v = fs.readFileSync(path.join(root, '.vercelignore'), 'utf8').split('\n').map(x => x.trim());
-  for (const x of ['sql', 'docs', 'test', 'scripts', 'mobile', '.env*']) assert.ok(v.includes(x), x);
+  for (const x of ['sql', 'docs', 'test', 'mobile', '.env*']) assert.ok(v.includes(x), x);
+  // scripts/ queda afuera salvo el minificador, que el build de Vercel necesita (y que vercel.json sigue sin servir al publico)
+  assert.ok(v.includes('scripts/*'), 'scripts/*');
+  assert.deepEqual(v.filter(x => x.startsWith('!')), ['!scripts/build-minify.js'], 'la unica excepcion permitida es el minificador');
 });
