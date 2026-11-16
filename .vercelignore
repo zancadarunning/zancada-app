@@ -7,6 +7,7 @@ scripts/*
 scratch
 CLAUDE-SECURITY-*
 loadtest
+evals
 email-templates
 mobile
 .github
