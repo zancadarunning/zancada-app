@@ -8,6 +8,8 @@
   "redirects": [
     { "source": "/:dir(sql|docs|test|scripts|loadtest|evals|mobile|email-templates|\\.github|\\.impeccable|\\.superpowers|\\.claude)/:path*", "destination": "/", "permanent": false },
     { "source": "/:file(DESIGN|PRODUCT)\\.md", "destination": "/", "permanent": false },
+    { "source": "/api/:path(.*)\\.js", "destination": "/", "permanent": false },
+    { "source": "/:file(vercel\\.json|\\.vercelignore|\\.gitignore)", "destination": "/", "permanent": false },
     { "source": "/:file((?:dark|light|v[0-9])_[a-z_]+)\\.png", "destination": "/", "permanent": false },
     { "source": "/CLAUDE-SECURITY-:rest*", "destination": "/", "permanent": false }
   ],

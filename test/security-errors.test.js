@@ -26,8 +26,11 @@ test('ningún endpoint devuelve el mensaje interno de un error al cliente', () =
 
 test('vercel.json: los archivos que no son de la app se redirigen y lo necesario no se toca', () => {
   const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'vercel.json'), 'utf8'));
-  const sources = (cfg.redirects || []).map(r => r.source).join(' ');
-  for (const dir of ['sql', 'docs', 'test', 'scripts', 'loadtest', 'mobile', 'email-templates']) assert.ok(sources.includes(dir), dir);
+  // el codigo fuente de las funciones (/api/algo.js y /api/_lib/*.js) no se sirve como archivo; las funciones en si (/api/algo, sin extension) siguen andando
+  const srcRule = cfg.redirects.find(r => r.source.startsWith('/api/'));
+  assert.equal(srcRule && srcRule.source, '/api/:path(.*)\\.js', 'solo se redirige lo que termina en .js dentro de /api');
+  const sources = (cfg.redirects || []).filter(r => r !== srcRule).map(r => r.source).join(' ');
+  for (const dir of ['sql', 'docs', 'test', 'scripts', 'loadtest', 'evals', 'mobile', 'email-templates']) assert.ok(sources.includes(dir), dir);
   // lo que la app y las tiendas sí necesitan no puede quedar en una redirección
   for (const needed of ['.well-known', 'locales', 'vendor', 'img', 'privacy', 'terms', 'manifest', 'sw.js', 'app.js', 'api']) {
     assert.ok(!/\/:dir\([^)]*\b(locales|vendor|img|api)\b/.test(sources) && !sources.includes(needed + '/'), needed);
