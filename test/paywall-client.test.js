@@ -60,3 +60,26 @@ test('los textos de la suscripción existen en los 6 idiomas y la leyenda legal 
     assert.match(I[l].paywall_trial, /14/, l + ': prueba de 14 días');
   }
 });
+
+test('tarjeta "Tu suscripción": solo con plan pago activo (con vencimiento); el regalo no muestra botón de la tienda', () => {
+  assert.match(html, /id="plan-card" style="display:none;"/);
+  assert.match(html, /play\.google\.com\/store\/account\/subscriptions/);
+  const a = loadApp();
+  const card = { style: { display: 'none' } }, txt = { textContent: '' };
+  const realGet = a.document.getElementById;
+  a.document.getElementById = id => id === 'plan-card' ? card : id === 'plan-card-text' ? txt : realGet.call(a.document, id);
+  try {
+    a.renderPlanCard({ active: true, expiresAt: '2027-03-01T00:00:00Z' });
+    assert.equal(card.style.display, '');
+    assert.ok(txt.textContent.length > 5);
+    a.renderPlanCard({ active: true, expiresAt: null });   // regalo
+    assert.equal(card.style.display, 'none');
+    a.renderPlanCard({ active: false, expiresAt: null });
+    assert.equal(card.style.display, 'none');
+  } finally { a.document.getElementById = realGet; }
+});
+
+test('borrar la cuenta avisa de la suscripción paga vigente en los 6 idiomas', () => {
+  assert.match(app, /delete_account_sub_warning/);
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.match(read('locales/' + l + '.js'), /delete_account_sub_warning:"/, l);
+});

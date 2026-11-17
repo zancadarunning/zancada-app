@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-17T16:29:08Z';
+const APP_VERSION = '2026-11-17T20:45:36Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5549,7 +5549,10 @@ async function resetApp(){
   location.reload();
 }
 async function deleteAccount(){
-  const accessToken = await confirmDestructiveWithPassword(t('delete_account_confirm_text'), {danger:true, confirmText:t('delete_account_confirm_btn')});
+  // Con una suscripción paga vigente, avisar que la tienda sigue cobrando aunque se borre la cuenta (solo con el cobro prendido).
+  let subWarn = '';
+  if(PAYWALL_ENABLED && isNativeApp()){ const p = await fetchPlan(); if(p && p.active && p.expiresAt) subWarn = ' ' + t('delete_account_sub_warning'); }
+  const accessToken = await confirmDestructiveWithPassword(t('delete_account_confirm_text') + subWarn, {danger:true, confirmText:t('delete_account_confirm_btn')});
   if(!accessToken) return;
   try{
     await waitForPendingPersist();
@@ -17046,8 +17049,19 @@ async function checkPaywall(force){
   await initBilling(currentUserId);
   const plan = await fetchPlan();
   if(plan === null) return;
+  renderPlanCard(plan);
   if(plan.active){ hidePaywall(); return; }
   showPaywall();
+}
+// Tarjeta "Tu suscripción" en Perfil: solo con el cobro prendido y plan activo. Sin fecha de vencimiento = cuenta con regalo (no hay nada que administrar en la tienda, no se muestra el botón).
+function renderPlanCard(plan){
+  const card = document.getElementById('plan-card'), txt = document.getElementById('plan-card-text');
+  if(!card || !txt) return;
+  if(!plan || !plan.active || !plan.expiresAt){ card.style.display = 'none'; return; }
+  const d = new Date(plan.expiresAt);
+  const date = d.toLocaleDateString(LOCALE_MAP[lang] || undefined, {day:'numeric', month:'long', year:'numeric'});
+  txt.textContent = t('plan_active_until', {date});
+  card.style.display = '';
 }
 function hidePaywall(){ const el = document.getElementById('paywall'); if(el) el.style.display = 'none'; }
 function setPaywallMsg(text){ const el = document.getElementById('paywall-error'); if(el) el.textContent = text || ''; }

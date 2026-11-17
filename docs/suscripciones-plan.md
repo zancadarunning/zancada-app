@@ -76,8 +76,10 @@ Leídos el 2026-11-10; el detalle está en la carpeta privada (no se publica). R
 5. **Probar con testers de licencia** de Play Console: poner `REVENUECAT_ALLOW_SANDBOX=1` en Vercel mientras se prueba; comprar, renovar, cancelar y restaurar en un teléfono real. Sacar esa variable después.
 6. **Prender el cobro (el día del lanzamiento)**: (a) correr `sql/entitlements_gift_existing.sql` (regala Pro a las cuentas que ya existen; sin vencimiento), (b) poner la clave `goog_...` en `REVENUECAT_ANDROID_KEY` y `PAYWALL_ENABLED = true` en app.js, (c) `PAYWALL_ENFORCE=1` en Vercel, (d) subir la versión a Play.
 
+## Hecho el 2026-11-17 (apagado con el resto)
+- Aviso al borrar la cuenta si hay suscripción paga vigente (la tienda sigue cobrando).
+- Tarjeta "Tu suscripción" en Perfil (vencimiento + botón a Google Play); no aparece en cuentas regaladas.
+
 ## Pendiente del cobro (no hecho)
-- Aviso en la pantalla de borrar la cuenta: la tienda sigue cobrando hasta que la persona cancele (los Términos ya lo dicen).
 - Al quedar una cuenta sin plan: desconectar relojes y borrar las carreras importadas de cada marca (hoy solo se corta el chat de IA y el video).
 - Huawei: Huawei IAP, aparte (RevenueCat no lo soporta). iPhone: StoreKit.
-- Poder ver el plan y la fecha de renovación en el Perfil.
