@@ -1,0 +1,150 @@
+diff --git a/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocationService.java b/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocationService.java
+index 2c5de94..fe5c47c 100644
+--- a/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocationService.java
++++ b/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocationService.java
+@@ -2,14 +2,22 @@ package com.equimaps.capacitor_background_geolocation;
+ 
+ import android.app.Notification;
+ import android.app.Service;
++import android.content.Context;
+ import android.content.Intent;
++import android.content.pm.ApplicationInfo;
+ import android.content.pm.ServiceInfo;
+ import android.location.Location;
++import android.location.LocationListener;
++import android.location.LocationManager;
+ import android.os.Binder;
+ import android.os.Build;
++import android.os.Bundle;
+ import android.os.IBinder;
++import android.os.Looper;
+ 
+ import com.getcapacitor.Logger;
++import com.google.android.gms.common.ConnectionResult;
++import com.google.android.gms.common.GoogleApiAvailability;
+ import com.google.android.gms.location.FusedLocationProviderClient;
+ import com.google.android.gms.location.LocationAvailability;
+ import com.google.android.gms.location.LocationCallback;
+@@ -17,6 +25,7 @@ import com.google.android.gms.location.LocationRequest;
+ import com.google.android.gms.location.LocationResult;
+ import com.google.android.gms.location.LocationServices;
+ 
++import java.io.File;
+ import java.util.HashSet;
+ 
+ import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+@@ -39,6 +48,61 @@ public class BackgroundGeolocationService extends Service {
+         public LocationRequest locationRequest;
+         public LocationCallback locationCallback;
+         public Notification backgroundNotification;
++        // Zancada: sin servicios de Google (telefonos Huawei nuevos y otros) el cliente "fused" no entrega nada;
++        // en ese caso se usa el GPS del propio Android (LocationManager), que no depende de Google.
++        public LocationManager systemManager;
++        public LocationListener systemListener;
++        public float distanceFilter;
++    }
++
++    // Zancada: hay servicios de Google en este telefono? Si no, el seguimiento usa LocationManager.
++    // Para probar ese camino en un telefono con Google: build de depuracion + archivo "force_nogms" en la carpeta files de la app.
++    private boolean useSystemLocation() {
++        try {
++            boolean debuggable = (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
++            if (debuggable && new File(getFilesDir(), "force_nogms").exists()) return true;
++            return GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(getApplicationContext()) != ConnectionResult.SUCCESS;
++        } catch (Throwable t) {
++            return true;
++        }
++    }
++
++    private void broadcastLocation(String id, Location location) {
++        Intent intent = new Intent(ACTION_BROADCAST);
++        intent.putExtra("location", location);
++        intent.putExtra("id", id);
++        LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
++    }
++
++    private void startSystemUpdates(Watcher watcher) {
++        try {
++            if (watcher.systemManager == null) {
++                watcher.systemManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
++            }
++            if (watcher.systemManager == null) return;
++            final String id = watcher.id;
++            if (watcher.systemListener == null) {
++                watcher.systemListener = new LocationListener() {
++                    @Override public void onLocationChanged(Location location) { broadcastLocation(id, location); }
++                    @Override public void onProviderEnabled(String provider) {}
++                    @Override public void onProviderDisabled(String provider) {}
++                    @Override public void onStatusChanged(String provider, int status, Bundle extras) {}
++                };
++            }
++            if (watcher.systemManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
++                watcher.systemManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, watcher.distanceFilter, watcher.systemListener, Looper.getMainLooper());
++            }
++        } catch (SecurityException ignore) {
++        } catch (Exception e) {
++            Logger.error("Zancada: no se pudo iniciar el GPS del sistema", e);
++        }
++    }
++
++    private void stopUpdates(Watcher watcher) {
++        try {
++            if (watcher.client != null && watcher.locationCallback != null) watcher.client.removeLocationUpdates(watcher.locationCallback);
++            if (watcher.systemManager != null && watcher.systemListener != null) watcher.systemManager.removeUpdates(watcher.systemListener);
++        } catch (Exception ignore) {}
+     }
+     private HashSet<Watcher> watchers = new HashSet<Watcher>();
+ 
+@@ -54,7 +118,7 @@ public class BackgroundGeolocationService extends Service {
+     @Override
+     public boolean onUnbind(Intent intent) {
+         for (Watcher watcher : watchers) {
+-            watcher.client.removeLocationUpdates(watcher.locationCallback);
++            stopUpdates(watcher);
+         }
+         watchers = new HashSet<Watcher>();
+         stopSelf();
+@@ -88,6 +152,22 @@ public class BackgroundGeolocationService extends Service {
+                 Notification backgroundNotification,
+                 float distanceFilter
+         ) {
++            if (useSystemLocation()) {
++                Watcher sysWatcher = new Watcher();
++                sysWatcher.id = id;
++                sysWatcher.backgroundNotification = backgroundNotification;
++                sysWatcher.distanceFilter = distanceFilter;
++                watchers.add(sysWatcher);
++                startSystemUpdates(sysWatcher);
++                if (backgroundNotification != null) {
++                    try {
++                        startForeground(NOTIFICATION_ID, backgroundNotification);
++                    } catch (Exception exception) {
++                        Logger.error("Failed to foreground service", exception);
++                    }
++                }
++                return;
++            }
+             FusedLocationProviderClient client = LocationServices.getFusedLocationProviderClient(
+                     BackgroundGeolocationService.this
+             );
+@@ -149,7 +229,7 @@ public class BackgroundGeolocationService extends Service {
+         void removeWatcher(String id) {
+             for (Watcher watcher : watchers) {
+                 if (watcher.id.equals(id)) {
+-                    watcher.client.removeLocationUpdates(watcher.locationCallback);
++                    stopUpdates(watcher);
+                     watchers.remove(watcher);
+                     if (getNotification() == null) {
+                         stopForeground(true);
+@@ -163,6 +243,11 @@ public class BackgroundGeolocationService extends Service {
+             // If permissions were granted while the app was in the background, for example in
+             // the Settings app, the watchers need restarting.
+             for (Watcher watcher : watchers) {
++                if (watcher.client == null) {
++                    stopUpdates(watcher);
++                    startSystemUpdates(watcher);
++                    continue;
++                }
+                 watcher.client.removeLocationUpdates(watcher.locationCallback);
+                 watcher.client.requestLocationUpdates(
+                         watcher.locationRequest,

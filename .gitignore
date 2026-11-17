@@ -19,6 +19,8 @@ mobile/*
 !mobile/package.json
 !mobile/package-lock.json
 !mobile/capacitor.config.json
+# Parche del plugin de ubicacion (GPS del sistema cuando el telefono no trae servicios de Google, p. ej. Huawei): se reaplica solo con `npm install` (postinstall: patch-package).
+!mobile/patches/
 
 # Lo ESCRITO A MANO del proyecto nativo de Android (manifest con el servicio de ubicación cerrado al exterior, los plugins Kotlin, file_paths.xml): si se regenera el proyecto con
 # `npx cap add android` esos arreglos de seguridad se pierden sin aviso, así que se versionan. Todo lo demás de mobile/android/ (build, local.properties, llaves) sigue afuera.
