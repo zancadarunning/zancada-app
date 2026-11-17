@@ -1008,7 +1008,7 @@
     {
       "day": "sun",
       "typeKey": "long",
-      "dist": 18,
+      "dist": 16,
       "terrain": "asfalto",
       "zone": 2,
       "beginner": false
@@ -1071,7 +1071,7 @@
     {
       "day": "sun",
       "typeKey": "long",
-      "dist": 21,
+      "dist": 16,
       "terrain": "asfalto",
       "zone": 2,
       "beginner": false
@@ -1134,7 +1134,7 @@
     {
       "day": "sun",
       "typeKey": "long",
-      "dist": 25,
+      "dist": 16,
       "terrain": "asfalto",
       "zone": 2,
       "beginner": false
@@ -1197,7 +1197,7 @@
     {
       "day": "sun",
       "typeKey": "long",
-      "dist": 29,
+      "dist": 16,
       "terrain": "asfalto",
       "zone": 2,
       "beginner": false

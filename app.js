@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-17T22:20:42Z';
+const APP_VERSION = '2026-11-17T22:26:40Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -7991,6 +7991,13 @@ function capSessionLengths(days, p){
     return copy;
   });
 }
+// Sin plan por fases (sin carrera cargada) ninguna sesión tenía techo por objetivo: con pocos días y mucho volumen un 5K podía terminar con una tirada de 26 km. Se acotan TODAS las sesiones al
+// techo de la tirada de ese objetivo (el mismo LONG_CAP_KM del plan por fases): ninguna es más larga que ese techo y la tirada sigue siendo la más larga. Lo que sobra no se reparte (la semana queda más corta).
+function capLongForGoal(distMap, usedTypes, goal, phaseInfo){
+  const capL = LONG_CAP_KM[goal];
+  if(!capL || (phaseInfo && phaseInfo.active)) return;
+  usedTypes.forEach(t => { if(distMap[t] > capL) distMap[t] = capL; });
+}
 function generatePlan(p, weekNumber, weekStartDate){
   weekNumber = weekNumber || 1;
   weekStartDate = weekStartDate || state.weekStart;
@@ -8159,6 +8166,8 @@ function generatePlan(p, weekNumber, weekStartDate){
     // por fases activo eso podía pasar el tope de la tirada (o dejarla más corta que otra en
     // semanas de 2-3 sesiones). Se vuelve a acotar; lo que excede se pierde (total más bajo).
     clampPhaseLongRun(distMap, usedTypes, phaseInfo, p.goal);
+    // Techo por objetivo cuando no hay plan por fases (ver capLongForGoal).
+    capLongForGoal(distMap, usedTypes, p.goal, phaseInfo);
   }
   // "¿Cuántos minutos tenés disponibles por sesión?" (onboarding, opcional) se guardaba en el
   // perfil pero nunca tocaba el plan de verdad -- solo se lo pasábamos al coach del chat como
@@ -8586,6 +8595,8 @@ function buildTimePlanDays(ctx){
     let maxM = typeKey === 'long' && beginner ? 60 : TIME_MAX_BY_TYPE[typeKey];
     // con fases, la tirada también respeta el tope de la distancia pasado a minutos (phaseLongCapMin)
     if(typeKey === 'long' && !beginner && phaseLongCap) maxM = Math.min(maxM, phaseLongCap);
+    // sin plan por fases: toda sesión respeta el techo de la tirada del objetivo (LONG_CAP_KM) pasado a minutos, igual que en distancia
+    if(!beginner && !(phaseInfo && phaseInfo.active) && LONG_CAP_KM[goal]) maxM = Math.min(maxM, phaseLongCapMin(LONG_CAP_KM[goal], p) || maxM);
     const minM = typeKey === 'long' && beginner ? 25 : TIME_MIN_BY_TYPE[typeKey];
     let m = Math.min(maxM, Math.max(minM, roundMin5(minMap[typeKey], minM)));
     if(availCap && typeKey !== 'long') m = Math.min(m, availCap);
