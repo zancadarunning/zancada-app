@@ -122,7 +122,7 @@ First release on AppGallery. Adaptive training plan, GPS run tracking with voice
 ```
 
 ## Capturas (`brand/store-huawei/`, 1080×2160, tema oscuro)
-Datos ficticios (una corredora de ejemplo, "Lucía"); no hay datos de ninguna persona real. En este orden:
+Datos ficticios (una corredora de ejemplo, "Lucía"); no hay datos de ninguna persona real, y se sacaron a 1080×2160 en tema oscuro. En este orden:
 1. `01-inicio.png` — Inicio: la sesión de hoy y la próxima carrera.
 2. `02-plan.png` — Tu semana.
 3. `03-zonda.png` — Chat con Zonda.
@@ -130,7 +130,7 @@ Datos ficticios (una corredora de ejemplo, "Lucía"); no hay datos de ninguna pe
 5. `05-eventos.png` — Tus próximos eventos.
 6. `06-perfil.png` — Perfil.
 Huawei pide un mínimo de 3 (se pueden subir las 6). Las capturas también sirven para Google Play (relación 2:1, el máximo que acepta).
-Los mapas del historial salen como dibujo del recorrido (sin mapa de fondo) porque el mapa solo responde desde el dominio de Zancada. Para la ficha de Play conviene rehacerlas desde la app real en un teléfono.
+Los recorridos del historial son ficticios, sobre un parque público (Bosques de Palermo, Buenos Aires), con el mapa real de fondo: no muestran ningún lugar personal. No se usó ninguna cuenta real (ni carreras de Strava).
 
 ## Cuestionarios de la consola
 - Edad y contenido: sin violencia, sin apuestas, sin compras dentro de la app (por ahora), sin anuncios.
