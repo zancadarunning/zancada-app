@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-17T21:23:23Z';
+const APP_VERSION = '2026-11-17T22:20:42Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5689,6 +5689,12 @@ function hasRunningImpactBase(p){
   return hasCrossTrainingBase(p) && !!(p.crossTrainingSports || []).some(s => RUNNING_IMPACT_SPORTS.includes(s));
 }
 const CROSS_TRAINING_BASE_BOOST = 1.3;
+// Principiante: solo las primeras BEGINNER_BASE_WEEKS semanas van en zona 1 (rodajes muy suaves). Pasadas esas semanas el plan ya es "normal": rodajes en zona 2, tirada larga y de a poco
+// una sesión de calidad (fartlek primero; progresivos y ritmo medio más adelante), y el volumen sigue creciendo. Antes se quedaba en zona 1, sin variedad y con el mismo volumen casi para siempre.
+const BEGINNER_BASE_WEEKS = 2;
+function beginnerPastBase(p, weekNumber){ return !!p && isBeginnerProfile(p) && (weekNumber || 1) > BEGINNER_BASE_WEEKS; }
+// El principiante tiene techo de volumen más alto que el resto de la curva (sigue creciendo en vez de clavarse en ~4 km por sesión).
+const BEGINNER_CAP_EXTRA = 0.6;
 function beginnerPerSessionKm(p){
   return hasCrossTrainingBase(p) ? 2.5 * CROSS_TRAINING_BASE_BOOST : 2.5;
 }
@@ -5734,7 +5740,7 @@ function growthParams(caution){
     cap: caution && caution.level>=2 ? 1.5 : caution && caution.level>=1 ? 1.65 : 1.8
   };
 }
-function weekMultiplier(n, caution, skipCutback){
+function weekMultiplier(n, caution, skipCutback, capExtra){
   n = n || 1;
   const growthSteps = n - Math.floor(n/4) - 1;
   // corredores con más cautela (mayor edad y/o contextura) progresan más despacio
@@ -5749,7 +5755,7 @@ function weekMultiplier(n, caution, skipCutback){
   // en Perfil > Metas Y en Próximos eventos -- acá es el mismo problema, pero entre la
   // descarga periódica y CUALQUIERA de las otras reducciones puntuales, no solo esa.
   if(isCutbackWeek(n) && !skipCutback) mult *= 0.75;
-  return Math.min(mult, cap);
+  return Math.min(mult, cap + (capExtra || 0));
 }
 function taperMultiplier(p, weekStartDate){
   // baja el volumen a propósito en las semanas justo antes de la carrera OBJETIVO (la fecha
@@ -7369,7 +7375,7 @@ function computeReturnFromBreakAdjustment(gapWeeks){
 // merge seguro de siempre (preserveLivedDays: nunca toca un día ya vivido, cancelado, o
 // editado a mano por el chat -- solo refresca los días de acá en adelante que el algoritmo
 // generó sin que nadie los haya tocado).
-const PLAN_ALGO_VERSION = 5;
+const PLAN_ALGO_VERSION = 6;
 function checkPlanAlgoVersion(){
   // Antes que nada, el cronograma del plan por fases al día con el perfil (es barato y no toca
   // nada si ya coincide) -- incluso si la versión del plan ya es la actual.
@@ -7383,6 +7389,12 @@ function checkPlanAlgoVersion(){
   // entrena por distancia no se le rehace la semana (se perderían sus ajustes automáticos de volumen), solo se anota la versión.
   // v4 -> v5 solo suma el volumen por fases (generatePlan), que arranca en la PRÓXIMA semana: el ancla del cronograma es
   // el lunes siguiente a hoy. La semana ya armada no cambia, así que tampoco se rehace -- por tiempo o por distancia.
+  // v5 -> v6 solo cambia el plan del PRINCIPIANTE pasadas sus primeras semanas (zona 2, variedad, volumen): al resto no se le rehace la semana.
+  if(state.planAlgoVersion === 5 && !beginnerPastBase(state.profile, state.weekNumber)){
+    state.planAlgoVersion = PLAN_ALGO_VERSION;
+    persist();
+    return;
+  }
   if(state.planAlgoVersion === 4){
     state.planAlgoVersion = PLAN_ALGO_VERSION;
     persist();
@@ -7687,7 +7699,8 @@ function distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isC
   // no le sirve de nada una sesión de series o ritmo medio con técnica y paces que todavía no
   // tiene: lo único que pidió explícitamente el entrenador acá es "algún fartlek de vez en
   // cuando", así que la rotación de calidad para este grupo queda fija en fartlek nomás.
-  if(beginner && varietyOk) rotation = ['fartlek'];
+  // Principiante: fartlek primero; con las semanas se suman progresivos y, al final, ritmo medio (nunca series ni cuestas: impacto alto para quien recién empieza).
+  if(beginner && varietyOk) rotation = wn > 12 ? ['fartlek','progression','tempo'] : wn > 8 ? ['fartlek','progression'] : ['fartlek'];
   let maxHardDays, hardOccurrence;
   if(remaining.length<=2){
     if(caution.level>=2 || (beginner && varietyOk)){
@@ -7697,7 +7710,8 @@ function distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isC
       // fuerte (1ra, 2da, 3ra...) y no el número de semana en sí para rotar el tipo
       // -- si usáramos la semana directamente, como el día fuerte cae siempre en
       // semana par, la rotación quedaría siempre en el mismo tipo.
-      maxHardDays = wn % 2 === 0 ? 1 : 0;
+      // El principiante que salió de la base por semanas (no el que ya trae base de otro deporte de impacto, que sigue en las pares) alterna en las semanas IMPARES (3, 5, 7...): las descargas caen en las pares (4, 8, 12), así su sesión de calidad no queda siempre tapada por la semana de descarga.
+      maxHardDays = (beginner && varietyOk && caution.level<2 && varietyOk === 'weeks') ? (wn % 2 === 1 ? 1 : 0) : (wn % 2 === 0 ? 1 : 0);
       hardOccurrence = Math.ceil(wn/2);
     } else {
       maxHardDays = 1;
@@ -8014,7 +8028,7 @@ function generatePlan(p, weekNumber, weekStartDate){
     // clampPhaseLongRun y el reparto de spreadPhaseShortfall
     phaseInfo.longCapKm = phaseLongCapKm(p.goal, phased.peakKm);
   } else {
-    weekFactor = weekMultiplier(legacyCurveWeek(weekNumber, p), caution, skipPeriodicCutback);
+    weekFactor = weekMultiplier(legacyCurveWeek(weekNumber, p), caution, skipPeriodicCutback, beginner ? BEGINNER_CAP_EXTRA : 0);
     // Después de salir del plan por fases sin otra carrera, v4 sube desde la continuación sin pasar el pico
     // de la carrera anterior (ver bridgePhaseExitCurve). Sin ese techo (todos los demás usuarios) nada cambia.
     // Después del vencimiento (y hasta que el rollover lo pase al corrimiento) sigue solo el crecimiento.
@@ -8047,8 +8061,13 @@ function generatePlan(p, weekNumber, weekStartDate){
   // para el CÁLCULO DE VOLUMEN (effectiveWeeklyKm/beginnerPerSessionKm más abajo no cambian: la
   // base de otro deporte no le da eficiencia de carrera, solo tolerancia al impacto). easyOnly es
   // el que de verdad decide zona/variedad de sesión; beginner sigue decidiendo el volumen.
-  const varietyOk = beginner && hasRunningImpactBase(p);
-  const easyOnly = beginner && !varietyOk;
+  // Pasadas las primeras semanas el principiante también sale de "todo zona 1" (ver BEGINNER_BASE_WEEKS). Plan por TIEMPO: mientras sigue con trote/caminata (todavía no corre seguido) no se le
+  // arman sesiones de calidad, pero sus rodajes ya van en zona 2; apenas termina esa etapa (o si el test de nivel dice que corre de corrido) entra el fartlek.
+  const pastBase = beginnerPastBase(p, weekNumber);
+  const stillRunWalk = p.trainBy === 'time' && !(p.levelTest && p.levelTest.continuousOk) && runWalkStageFor(weekNumber, false) !== null;
+  // varietyOk = 'weeks' cuando salió de la base solo por las semanas (alterna la calidad en las impares); true cuando ya traía base de otro deporte de impacto (como siempre).
+  const varietyOk = beginner && (hasRunningImpactBase(p) ? true : (pastBase && !stillRunWalk) ? 'weeks' : false);
+  const easyOnly = beginner && !varietyOk && !pastBase;
   const zoneMap = {easy:easyOnly?1:2, intervals:4, tempo:3, long:2, fartlek:3, hills:4, progression:3};
   const defaultDays = beginner ? ['tue','thu','sun'] : ['tue','wed','fri','sun'];
   const trainingDays = DAY_KEYS.filter(d => (p.trainingDays && p.trainingDays.length ? p.trainingDays : defaultDays).includes(d));
@@ -19618,6 +19637,8 @@ function buildContext(){
   if(isBeginnerProfile(p)){
     ctx += hasRunningImpactBase(p)
       ? ` Es principiante EN RUNNING (nunca entrenó corriendo solo de forma constante), aunque ya tiene base de otro deporte de impacto (${(p.crossTrainingSports||[]).map(s=>t('sport_'+s)).join(', ')}) -- por eso el plan ya lo tiene en zona 2 con algún fartlek libre cada tanto, en vez del "todo zona 1" de un principiante sin esa base. Si pide series estructuradas, ritmo medio o cuestas, explicale que todavía no le conviene esa carga técnica específica de correr (aunque esté en forma) y ofrecé como mucho más fartlek -- no uses modificar_sesion para darle series/tempo/cuestas.`
+      : beginnerPastBase(p, state.weekNumber)
+      ? ` Es principiante en running y ya pasó sus primeras semanas de base: el plan le da rodajes en zona 2, tirada larga y, de a poco, algún fartlek (y más adelante progresivos y ritmo medio), con el volumen subiendo de a poco. Si pide series o cuestas, explicale con calidez que todavía no (impacto alto para quien recién empieza); el fartlek suave sí se puede.`
       : ` Es TOTALMENTE principiante en running (nunca entrenó corriendo de forma constante) -- el plan lo tiene a propósito solo en zona 1, con rodajes suaves y sin ninguna sesión de velocidad, para construir base sin lesionarlo. Si pide series, ritmo fuerte, cuestas o fartlek, explicale con calidez por qué todavía no (se gana con constancia, no arrancando fuerte) y no uses modificar_sesion para dárselo -- el sistema lo va a graduar solo a zona 2 con variedad apenas demuestre unas semanas reales de constancia.`;
   }
   if(p.trainingDays && p.trainingDays.length) ctx += ` Días de entreno habituales (cronograma de base, permanente): ${p.trainingDays.map(d=>t('day_'+d)).join(', ')}. Si el corredor pide cambiar este cronograma de forma permanente (no solo esta semana), usá modificar_perfil con dias_entreno.`;
@@ -19977,7 +19998,7 @@ function coachSafetyRefusal(input){
   // Se mira la categoría EFECTIVA (un "Fartlek" puesto en tipo/descripcion con otra categoría no esquiva el filtro). El fartlek solo se bloquea al principiante TOTAL (sin base de impacto) y en el posparto reciente:
   // para molestia activa o cautela alta se deja pasar, como hace el generador.
   const cat = effectiveTipoCategoria(input);
-  const fartlekBlocked = cat === 'fartlek' && ((isBeginnerProfile(p) && !hasRunningImpactBase(p)) || pregnancyStillRecent(p));
+  const fartlekBlocked = cat === 'fartlek' && ((isBeginnerProfile(p) && !hasRunningImpactBase(p) && !beginnerPastBase(p, state.weekNumber)) || pregnancyStillRecent(p));
   const hard = COACH_HARD_TYPES.includes(cat) || resolveZone(input.zona) >= 4 || fartlekBlocked;
   if(!hard) return coachDistanceRefusal(input);
   let why = null;

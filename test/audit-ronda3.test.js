@@ -72,6 +72,7 @@ test('la actualización automática NO recarga la app con una carrera en curso o
 test('el coach no puede esquivar el filtro con "Fartlek" ni armar una sesión de distancia absurda para un perfil restringido', () => {
   const app = loadApp();
   ready(app, { runnerType: 'new', weeklyKm: 0, currentWeeklyKm: 0 });
+  app.state.weekNumber = 1;   // las primeras semanas de base: todavía sin fartlek (pasadas, el plan ya lo incluye y el coach también puede)
   assert.match(app.coachSafetyRefusal({ tipo: 'Fartlek', tipo_categoria: 'easy', descripcion: 'fartlek 10x3', zona: 3 }), /principiante/, 'un fartlek puesto en tipo/descripcion con otra categoría igual se bloquea para el principiante total');
   assert.match(app.coachSafetyRefusal({ tipo_categoria: 'fartlek', zona: 3 }), /principiante/);
   assert.match(app.coachSafetyRefusal({ tipo_categoria: 'long', distancia_km: 40, zona: 2 }), /demasiado para este corredor/, 'una tirada de 40 km no pasa');

@@ -458,11 +458,16 @@
     },
     {
       "day": "tue",
-      "typeKey": "easy",
-      "dist": 3,
+      "typeKey": "fartlek",
+      "dist": 3.2,
       "terrain": "asfalto",
-      "zone": 1,
-      "beginner": true
+      "zone": 3,
+      "beginner": true,
+      "interval": {
+        "reps": 8,
+        "workMin": 2,
+        "restMin": 1
+      }
     },
     {
       "day": "wed",
@@ -477,7 +482,7 @@
       "typeKey": "easy",
       "dist": 3,
       "terrain": "asfalto",
-      "zone": 1,
+      "zone": 2,
       "beginner": true
     },
     {
@@ -516,11 +521,16 @@
     },
     {
       "day": "tue",
-      "typeKey": "easy",
-      "dist": 2,
+      "typeKey": "fartlek",
+      "dist": 3.2,
       "terrain": "asfalto",
-      "zone": 1,
-      "beginner": true
+      "zone": 3,
+      "beginner": true,
+      "interval": {
+        "reps": 4,
+        "workMin": 4,
+        "restMin": 2
+      }
     },
     {
       "day": "wed",
@@ -535,7 +545,7 @@
       "typeKey": "easy",
       "dist": 2,
       "terrain": "asfalto",
-      "zone": 1,
+      "zone": 2,
       "beginner": true
     },
     {
