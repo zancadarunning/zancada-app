@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-17T22:26:40Z';
+const APP_VERSION = '2026-11-17T22:35:44Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4115,13 +4115,24 @@ window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', ()
   }
 });
 setTimeout(syncSystemBars, 400);
+// Con un solo día de entrenamiento por semana el plan casi no progresa (casi toda la semana es la tirada larga): se avisa debajo del selector, sin impedirlo.
+function updateOneDayHint(){
+  try{
+    [['ob-days','ob-days-one-hint'],['perfil-days','perfil-days-one-hint']].forEach(([picker, hint])=>{
+      const el = document.getElementById(hint); if(!el) return;
+      el.style.display = document.querySelectorAll('#' + picker + ' .day-pill.active').length === 1 ? '' : 'none';
+    });
+  }catch(e){}
+}
 document.getElementById('ob-days').addEventListener('click', e=>{
   const c=e.target.closest('.day-pill'); if(!c) return;
   c.classList.toggle('active');
+  updateOneDayHint();
 });
 document.getElementById('perfil-days').addEventListener('click', e=>{
   const c=e.target.closest('.day-pill'); if(!c) return;
   c.classList.toggle('active');
+  updateOneDayHint();
   markPerfilDirty('days'); // toggle de clase, no dispara 'change' -- hay que marcarlo a mano
 });
 function populateOnboardDays(){
@@ -4132,6 +4143,7 @@ function renderPerfilDays(){
   const selected = state.profile.trainingDays || [];
   document.getElementById('perfil-days').innerHTML = DAY_KEYS.map(d=>
     `<div class="day-pill${selected.includes(d)?' active':''}" data-v="${d}" role="button" tabindex="0">${t('day_'+d).slice(0,3)}</div>`).join('');
+  updateOneDayHint();
   const daysSummaryEl = document.getElementById('perfil-days-summary');
   if(daysSummaryEl) daysSummaryEl.textContent = DAY_KEYS.filter(d=>selected.includes(d)).map(d=>t('day_'+d)).join(', ');
 }
@@ -5258,6 +5270,8 @@ function enterApp(){
   autoClearPastEvent();
   repairCorruptedCustomDays();
   setTimeout(maybeSuggestPaceRecalibration, 5000);
+  setTimeout(maybeSuggestStartUpgrade, 9000);
+  setTimeout(maybeBeginnerBaseNote, 3000);
   checkProactiveCoachNudge();
   checkInactivityCheckin();
   checkPainCheckins();
@@ -7946,6 +7960,53 @@ function checkBeginnerGraduation(){
   renderChat();
   persist();
 }
+/* ---- "Empezar a correr desde cero" -> preparar un 5K ----
+   checkBeginnerGraduation nunca gradúa a quien eligió el objetivo "empezar a correr desde cero" (isBeginnerProfile sigue en true mientras el objetivo sea 'start'), así que esa persona se quedaba
+   sin una meta aunque ya corriera bien. Cuando el promedio REAL de las últimas semanas pasa el piso de graduación, Zonda le pregunta si quiere pasar a preparar un 5K; si dice que sí, el objetivo
+   cambia solo (sin entrar a Perfil). Si dice que no, no se vuelve a preguntar por START_UPGRADE_GAP_DAYS días. */
+const START_UPGRADE_WEEKS = 4, START_UPGRADE_GAP_DAYS = 28;
+function startUpgradeSuggestion(){
+  const p = state.profile;
+  if(!state.onboarded || !p || p.goal !== 'start' || !(state.weekNumber > BEGINNER_BASE_WEEKS)) return null;
+  if(state.startUpgradeDeclinedAt && (Date.now() - new Date(state.startUpgradeDeclinedAt + 'T12:00:00').getTime()) < START_UPGRADE_GAP_DAYS * 864e5) return null;
+  const avg = computeActualWeeklyKmAvg(START_UPGRADE_WEEKS, true);
+  if(avg === null || avg < BEGINNER_GRADUATION_MIN_KM) return null;
+  return {avgKm: Math.round(avg)};
+}
+function applyStartUpgrade(sug){
+  const p = state.profile;
+  p.goal = '5k';
+  p.runnerType = 'active';
+  p.currentWeeklyKm = sug.avgKm;
+  p.weeklyKm = calcWeeklyKm(p);
+  state.plan = preserveLivedDays(state.plan, generatePlan(p, state.weekNumber || 1));
+  state.chat = state.chat || [];
+  state.chat.push({role:'coach', text: t('start_upgrade_done'), ts: Date.now(), noAi: true});
+  persist();
+}
+// Pasadas las primeras semanas de base el rodaje del principiante cambia de zona 1 a zona 2 y se suma variedad: un aviso único de Zonda lo explica, para que no parezca un error.
+function maybeBeginnerBaseNote(){
+  const p = state.profile;
+  if(!state.onboarded || !p || state.beginnerBaseNoteSent || !beginnerPastBase(p, state.weekNumber)) return;
+  state.chat = state.chat || [];
+  state.chat.push({role:'coach', text: t('beginner_base_note'), ts: Date.now(), noAi: true});
+  state.beginnerBaseNoteSent = true;
+  try{ renderChat(); }catch(e){}
+  persist();
+}
+let startUpgradeAsking = false;
+async function maybeSuggestStartUpgrade(){
+  if(startUpgradeAsking || !state.onboarded || tracker.running || document.visibilityState !== 'visible') return;
+  const sug = startUpgradeSuggestion();
+  if(!sug) return;
+  startUpgradeAsking = true;
+  try{
+    const yes = await showConfirm(t('start_upgrade_ask', {km: sug.avgKm}), {confirmText: t('start_upgrade_yes'), cancelText: t('start_upgrade_no')});
+    if(yes){ applyStartUpgrade(sug); try{ renderPlan(); renderHome(); renderChat(); renderPerfil(); }catch(e){} }
+    else { state.startUpgradeDeclinedAt = todayLocalISO(); persist(); }
+  }catch(e){ console.error('pasar a 5K', e); }
+  finally{ startUpgradeAsking = false; }
+}
 // "Volver de una pausa larga" (ob-returning en el onboarding) es OTRO flag que, igual que el
 // de principiante antes de este fix, se guardaba una sola vez y nunca se sacaba solo -- baja
 // el punto de partida a un 60% de lo declarado (ver calcWeeklyKm) y sube la cautela para
@@ -8071,7 +8132,8 @@ function generatePlan(p, weekNumber, weekStartDate){
   // Pasadas las primeras semanas el principiante también sale de "todo zona 1" (ver BEGINNER_BASE_WEEKS). Plan por TIEMPO: mientras sigue con trote/caminata (todavía no corre seguido) no se le
   // arman sesiones de calidad, pero sus rodajes ya van en zona 2; apenas termina esa etapa (o si el test de nivel dice que corre de corrido) entra el fartlek.
   const pastBase = beginnerPastBase(p, weekNumber);
-  const stillRunWalk = p.trainBy === 'time' && !(p.levelTest && p.levelTest.continuousOk) && runWalkStageFor(weekNumber, false) !== null;
+  // Mismo criterio por tiempo y por distancia: mientras no corre de corrido (el test de nivel dice si puede) sigue con trote/caminata y sin sesiones de calidad.
+  const stillRunWalk = beginner && !(p.levelTest && p.levelTest.continuousOk) && runWalkStageFor(weekNumber, false) !== null;
   // varietyOk = 'weeks' cuando salió de la base solo por las semanas (alterna la calidad en las impares); true cuando ya traía base de otro deporte de impacto (como siempre).
   const varietyOk = beginner && (hasRunningImpactBase(p) ? true : (pastBase && !stillRunWalk) ? 'weeks' : false);
   const easyOnly = beginner && !varietyOk && !pastBase;
@@ -8197,6 +8259,11 @@ function generatePlan(p, weekNumber, weekStartDate){
     if(!typeKey) return {day, typeKey:'rest', dist:0, terrain:null, zone:null, beginner};
     const terrain = typeKey==='intervals' ? 'asfalto' : p.terrain;
     const dayObj = {day, typeKey, dist:distMap[typeKey], terrain, zone:zoneMap[typeKey], beginner};
+    // Principiante por DISTANCIA: las primeras semanas el rodaje también es trote/caminata (antes pedía correr 2 km seguidos desde el día 1). La distancia queda como referencia.
+    if((typeKey==='easy' || typeKey==='long') && beginner && !hasRunningImpactBase(p) && !(p.levelTest && p.levelTest.continuousOk)){
+      const st = runWalkStageFor(weekNumber, typeKey==='long');
+      if(st) dayObj.runWalk = {reps: st.reps, runSec: st.run, walkSec: st.walk};
+    }
     if(typeKey==='intervals' && !easyOnly){
       dayObj.interval = buildIntervalStructure(distMap[typeKey], caution, weekNumber);
       dayObj.dist = intervalActualKm(dayObj.interval);
@@ -8600,6 +8667,11 @@ function buildTimePlanDays(ctx){
     const minM = typeKey === 'long' && beginner ? 25 : TIME_MIN_BY_TYPE[typeKey];
     let m = Math.min(maxM, Math.max(minM, roundMin5(minMap[typeKey], minM)));
     if(availCap && typeKey !== 'long') m = Math.min(m, availCap);
+    // Al terminar la escalera de trote/caminata (semana 9) la sesión corrida de corrido no puede quedar MÁS corta que la última etapa con caminata (~36-38 min): antes la semana se caía de golpe.
+    if(beginner && !continuousBeginner && (typeKey === 'easy' || typeKey === 'long') && !runWalkStageFor(weekNumber, typeKey === 'long') && weekNumber > 2 && !isCutbackWeek(weekNumber)){
+      m = Math.max(m, typeKey === 'long' ? 40 : 35);
+      if(availCap && typeKey !== 'long') m = Math.min(m, availCap);
+    }
     const dayObj = {day, typeKey, terrain, zone: zoneMap[typeKey], beginner, durMin: m, timeBased: true};
     if((typeKey === 'easy' || typeKey === 'long') && beginner && !continuousBeginner){
       const st = runWalkStageFor(weekNumber, typeKey === 'long');

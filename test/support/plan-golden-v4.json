@@ -404,7 +404,12 @@
       "dist": 2,
       "terrain": "asfalto",
       "zone": 1,
-      "beginner": true
+      "beginner": true,
+      "runWalk": {
+        "reps": 7,
+        "runSec": 60,
+        "walkSec": 120
+      }
     },
     {
       "day": "wed",
@@ -420,7 +425,12 @@
       "dist": 2,
       "terrain": "asfalto",
       "zone": 1,
-      "beginner": true
+      "beginner": true,
+      "runWalk": {
+        "reps": 7,
+        "runSec": 60,
+        "walkSec": 120
+      }
     },
     {
       "day": "fri",
@@ -444,7 +454,12 @@
       "dist": 3,
       "terrain": "asfalto",
       "zone": 2,
-      "beginner": true
+      "beginner": true,
+      "runWalk": {
+        "reps": 6,
+        "runSec": 120,
+        "walkSec": 120
+      }
     }
   ],
   "principiante-carrera-a-10-semanas-semana-5": [
@@ -458,15 +473,15 @@
     },
     {
       "day": "tue",
-      "typeKey": "fartlek",
-      "dist": 3.2,
+      "typeKey": "easy",
+      "dist": 3,
       "terrain": "asfalto",
-      "zone": 3,
+      "zone": 2,
       "beginner": true,
-      "interval": {
-        "reps": 8,
-        "workMin": 2,
-        "restMin": 1
+      "runWalk": {
+        "reps": 4,
+        "runSec": 300,
+        "walkSec": 120
       }
     },
     {
@@ -483,7 +498,12 @@
       "dist": 3,
       "terrain": "asfalto",
       "zone": 2,
-      "beginner": true
+      "beginner": true,
+      "runWalk": {
+        "reps": 4,
+        "runSec": 300,
+        "walkSec": 120
+      }
     },
     {
       "day": "fri",
@@ -507,7 +527,12 @@
       "dist": 4,
       "terrain": "asfalto",
       "zone": 2,
-      "beginner": true
+      "beginner": true,
+      "runWalk": {
+        "reps": 3,
+        "runSec": 480,
+        "walkSec": 120
+      }
     }
   ],
   "principiante-carrera-a-10-semanas-semana-9": [
