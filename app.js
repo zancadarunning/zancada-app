@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-17T23:12:19Z';
+const APP_VERSION = '2026-11-17T23:19:11Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8302,6 +8302,13 @@ function generatePlan(p, weekNumber, weekStartDate){
     if(phaseIsCutbackWeek(phaseInfo) && !easyOnly) shrinkCutbackQuality(kmDays, caution, weekNumber, p);
     spreadPhaseShortfall(kmDays, weekTargetKm, phaseInfo.longCapKm || LONG_CAP_KM[p.goal] || Infinity, sessionCapKm, p);
   }
+  // Sin plan por fases, en semanas de 2-3 sesiones la sesión de calidad (con su techo de repeticiones) entrega mucho menos que el rodaje al que reemplaza y el total semanal oscilaba 25-40% de una
+  // semana a la otra. Mismo arreglo que en el plan por fases: la calidad que entrega poco pasa a tempo y lo que falta se reparte en rodajes y tirada (dentro de los techos del objetivo).
+  if(!beginner && !phaseInfo.active && weekTargetKm !== null && !easyOnly && kmDays.filter(d => d.typeKey !== 'rest').length <= 3){
+    swapShortQualityInShortWeeks(kmDays, distMap, {active:true, phase:'build'}, zoneMap, p);
+    // En la semana de descarga no se reparte lo que falta: el objetivo es justamente bajar.
+    if(!cutback) spreadPhaseShortfall(kmDays, weekTargetKm, LONG_CAP_KM[p.goal] || SESSION_KM_CAP[p.goal] || SESSION_KM_CAP_DEFAULT, sessionCapKm, p);
+  }
   applyPhaseRacePace(kmDays, phaseInfo, p.goal, easyOnly, true);
   // La tirada es siempre la sesión más larga: con volúmenes muy chicos un fartlek de estructura mínima (4 repeticiones) podía quedar más largo que la tirada.
   if(!beginner && !phaseInfo.active){
@@ -8735,6 +8742,20 @@ function buildTimePlanDays(ctx){
   if(!beginner && phaseInfo && phaseInfo.active && weekTargetMin !== null){
     spreadPhaseShortfallMin(timeDays, weekTargetMin, availCap || Infinity, phaseLongCap);
     timeDays.forEach(d => { if(d.typeKey === 'easy' || d.typeKey === 'long') d.dist = Math.max(0.1, Math.round(d.durMin / pace * 10) / 10); });
+  }
+  // Igual que en distancia, sin plan por fases y con 2-3 sesiones: la calidad por estructura (techo de repeticiones) entrega mucho menos que el rodaje al que reemplaza y el total oscilaba 25-40% entre
+  // semanas (ej. 185 min con rodaje y 130 con fartlek). La calidad que entrega menos de 2/3 de su parte pasa a tempo y lo que falta se reparte en rodajes y tirada.
+  if(!beginner && !(phaseInfo && phaseInfo.active) && weekTargetMin !== null && !easyOnly && timeDays.filter(d => d.typeKey !== 'rest' && d.typeKey !== 'test').length <= 3){
+    timeDays.forEach(d => {
+      if(!['fartlek', 'hills', 'intervals'].includes(d.typeKey) || !d.interval || !(minMap[d.typeKey] > 0) || d.durMin >= 2 / 3 * minMap[d.typeKey]) return;
+      d.typeKey = 'tempo'; d.zone = zoneMap.tempo; d.terrain = p.terrain; delete d.interval;
+      d.durMin = Math.min(TIME_MAX_BY_TYPE.tempo, Math.max(TIME_MIN_BY_TYPE.tempo, roundMin5(minMap.tempo, TIME_MIN_BY_TYPE.tempo)));
+      d.dist = Math.max(0.1, Math.round(d.durMin / pace * 10) / 10);
+    });
+    if(!cutback){
+      spreadPhaseShortfallMin(timeDays, weekTargetMin, availCap || Infinity, phaseLongCapMin(LONG_CAP_KM[goal], p) || TIME_MAX_BY_TYPE.long);
+      timeDays.forEach(d => { if(d.typeKey === 'easy' || d.typeKey === 'long') d.dist = Math.max(0.1, Math.round(d.durMin / pace * 10) / 10); });
+    }
   }
   applyPhaseRacePace(timeDays, phaseInfo, goal, easyOnly, false);
   return timeDays;
@@ -10865,6 +10886,9 @@ function renderPlan(){
   } else {
     eventWeekNote.style.display='none';
   }
+  // Con una molestia activa el plan es más conservador (sube más despacio y evita lo de más impacto): se explica en la semana actual para que no parezca un cambio sin motivo.
+  const painNote = document.getElementById('plan-pain-note');
+  if(painNote) painNote.style.display = (wd.mode === 'current' && wd.exists && activePainEntries(21).length) ? 'block' : 'none';
   const cutbackNote = document.getElementById('plan-cutback-note');
   if(isPlainCutbackWeek){
     cutbackNote.style.display='block';
