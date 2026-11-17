@@ -454,6 +454,27 @@
   .toast.error{background:var(--toast-error-bg); color:var(--toast-error-fg); border:1px solid rgba(255,107,93,.3);}
   .toast.success{background:var(--hivis-dim); color:var(--hivis-text); border:1px solid rgba(214,255,63,.3);}
 
+  /* Pantalla de suscripción (ver "SUSCRIPCIÓN" en app.js): a pantalla completa, sin cierre; solo aparece si el cobro está prendido y la cuenta no tiene plan. */
+  #paywall{position:fixed; inset:0; z-index:95; background:var(--asphalt); overflow-y:auto; -webkit-overflow-scrolling:touch;}
+  .paywall-inner{max-width:480px; margin:0 auto; padding:calc(28px + var(--safe-top)) 22px calc(28px + var(--safe-bottom));}
+  .paywall-inner h2{font-size:28px; line-height:1.1; margin:6px 0 8px;}
+  .paywall-list{list-style:none; padding:0; margin:18px 0 20px; display:flex; flex-direction:column; gap:10px;}
+  .paywall-list li{display:flex; gap:10px; align-items:flex-start; font-size:15px;}
+  .paywall-list li::before{content:''; flex:none; width:7px; height:7px; border-radius:50%; background:var(--hivis); margin-top:7px;}
+  .paywall-plan{display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:4px 12px; width:100%; text-align:left; padding:16px 18px; margin-bottom:10px; border-radius:18px; border:1px solid var(--asphalt-3); background:var(--asphalt-2); color:inherit; font:inherit; cursor:pointer;}
+  .paywall-plan.best{border-color:var(--hivis);}
+  .paywall-plan:active{transform:scale(.985);}
+  .paywall-plan[disabled]{opacity:.55;}
+  .paywall-plan-main{display:flex; align-items:center; gap:8px; font-size:16px;}
+  .paywall-badge{font-size:11px; font-weight:700; padding:3px 8px; border-radius:999px; background:var(--hivis); color:#0a0a0a;}
+  .paywall-plan-price{font-size:18px; font-weight:800;}
+  .paywall-plan-price small{font-size:12px; font-weight:500; color:var(--mist);}
+  .paywall-plan-trial{flex-basis:100%; font-size:13px; color:var(--hivis-text);}
+  .paywall-error{min-height:20px; margin:8px 0; font-size:13px; color:var(--hivis-text);}
+  .paywall-legal{font-size:12px; line-height:1.5; margin:12px 0;}
+  .paywall-links{display:flex; flex-wrap:wrap; gap:6px 16px; align-items:center; font-size:13px;}
+  .paywall-links a, .paywall-links button{color:var(--mist); text-decoration:underline; background:none; border:0; padding:4px 0; font:inherit; cursor:pointer;}
+
   .confirm-backdrop{position:fixed; inset:0; z-index:90; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; padding:24px;}
   .confirm-backdrop.show{display:flex;}
   .confirm-card{background:linear-gradient(160deg, rgba(255,255,255,.06), rgba(24,24,27,.7) 55%);
@@ -4563,6 +4584,29 @@ body{overflow-wrap:break-word;}
     </div>
   </div>
 
+  <div id="paywall" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="paywall-title">
+    <div class="paywall-inner">
+      <p class="muted" style="margin:0; letter-spacing:.08em; font-size:12px;" data-i18n="paywall_kicker"></p>
+      <h2 id="paywall-title" data-i18n="paywall_title"></h2>
+      <p class="muted" data-i18n="paywall_sub"></p>
+      <ul class="paywall-list">
+        <li data-i18n="paywall_f1"></li>
+        <li data-i18n="paywall_f2"></li>
+        <li data-i18n="paywall_f3"></li>
+        <li data-i18n="paywall_f4"></li>
+      </ul>
+      <div id="paywall-plans"></div>
+      <p id="paywall-error" class="paywall-error" role="alert"></p>
+      <p class="muted paywall-legal" data-i18n="paywall_legal"></p>
+      <div class="paywall-links">
+        <button type="button" id="paywall-restore" data-on-click="restorePaywall()" data-i18n="paywall_restore"></button>
+        <a href="/terms.html" target="_blank" rel="noopener" data-i18n="legal_terms_link"></a>
+        <a href="/privacy.html" target="_blank" rel="noopener" data-i18n="legal_privacy_link"></a>
+        <button type="button" data-on-click="confirmLogout()" data-i18n="perfil_logout"></button>
+      </div>
+    </div>
+  </div>
+
   <div class="overlay overlay-sheet" id="event-overlay">
     <button class="week-nav-btn" data-on-click="closeEventOverlay()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_event"></h2>
@@ -5226,6 +5270,12 @@ body{overflow-wrap:break-word;}
       <p class="muted" style="font-size:12px; margin:2px 0 10px;" data-i18n="perfil_feedback_hint"></p>
       <textarea id="feedback-message" rows="3" maxlength="4000" data-i18n-ph="perfil_feedback_ph" data-i18n-aria="perfil_feedback_ph" style="width:100%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--chalk); padding:12px; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; resize:vertical;"></textarea>
       <button class="btn btn-gray btn-sm" id="feedback-send-btn" style="margin-top:12px; width:100%;" data-i18n="perfil_feedback_send" data-on-click="sendFeedback()"></button>
+    </div>
+
+    <div class="card" id="plan-card" style="display:none;">
+      <h3 data-i18n="plan_title"></h3>
+      <p class="muted" id="plan-card-text" style="margin-top:6px;"></p>
+      <a class="btn btn-gray btn-sm" style="margin-top:12px; width:100%; text-align:center;" href="https://play.google.com/store/account/subscriptions" target="_blank" rel="noopener" data-i18n="plan_manage"></a>
     </div>
 
     <div class="card">

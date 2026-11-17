@@ -21,6 +21,7 @@ const PUBLIC = {
   'garmin-webhook.js': /GARMIN_WEBHOOK_SECRET/,  // avisos de Garmin (no firman): secreto en la dirección, comparado en tiempo constante
   'strava-webhook.js': /STRAVA_WEBHOOK_SECRET/,  // avisos de Strava: secreto en la URL + subscription_id
   'suunto-webhook.js': /signatureMatches/,        // avisos de Suunto: firma HMAC del cuerpo
+  'revenuecat-webhook.js': /REVENUECAT_WEBHOOK_SECRET/,   // avisos de RevenueCat (el plan de pago): secreto en el header Authorization, tiempo constante
   'health.js': /status: 'ok'/                      // chequeo de vida para el monitoreo: sin datos y sin tocar la base
 };
 const SESSION = /verifyUser\(/;

@@ -9,10 +9,10 @@ Escrito el 2026-11-10. Público: sin claves. Decisión del dueño: **9,99 USD po
 | Términos de suscripción (sección 15) y de iOS/Android (sección 19) | Hechos, en 6 idiomas |
 | Tabla `entitlements` (quién paga y hasta cuándo, solo la escribe el servidor) | Hecha (`sql/entitlements.sql`) |
 | `api/entitlement.js` (la app lee su plan) | Hecho; mientras la tabla esté vacía todas las cuentas son "free" |
-| **Comprar dentro de la app (Google Play Billing / StoreKit)** | **No existe** |
-| **Pantalla de suscripción (paywall)** | **No existe** |
-| **Aviso de las tiendas al servidor (renovó, canceló, reembolsó)** | **No existe**: nada escribe en `entitlements` |
-| Qué es gratis y qué es Pro | **Sin decidir** (ver abajo) |
+| Comprar dentro de la app (Android: RevenueCat + Google Play Billing) | **Hecho el 2026-11-17, apagado** (`PAYWALL_ENABLED = false`); falta tu cuenta de RevenueCat, los productos en Play Console y probarlo en un teléfono real. iPhone: no existe |
+| Pantalla de suscripción (paywall) | **Hecha, apagada** (6 idiomas; precio y prueba salen de la tienda; Restaurar compras; renovación automática y cómo cancelar) |
+| Aviso de las tiendas al servidor (renovó, canceló, reembolsó) | **Hecho**: `api/revenuecat-webhook.js` (secreto, orden de avisos, reembolso corta ya, cancelar renovación conserva lo pagado) |
+| Qué es gratis y qué es Pro | Decidido: **todo se bloquea** al terminar los 14 días (el servidor corta el chat de IA y el video con `PAYWALL_ENFORCE=1`; la app muestra la pantalla de suscripción) |
 
 ## Decisiones del dueño (2026-11-10)
 
@@ -67,3 +67,19 @@ Leídos el 2026-11-10; el detalle está en la carpeta privada (no se publica). R
 3. Crear cuentas (Play Console y Apple Developer) y los productos.
 4. Construir webhook, pantalla y control de acceso; probarlo en Android primero.
 5. Sumar HealthKit y la compra en iPhone cuando haya forma de compilar.
+
+## Pasos tuyos para prender el cobro en Android (en este orden)
+1. **Play Console**: cuenta de desarrollador (25 USD, una vez). Subir una primera versión a una prueba interna (hace falta para crear productos). Crear la suscripción **Zancada Pro** con dos planes base: `zancada_pro_monthly` (9,99 USD por mes) y `zancada_pro_yearly` (79,99 USD por año), cada uno con una oferta de **prueba gratis de 14 días** para usuarios nuevos.
+2. **RevenueCat** (revenuecat.com): crear el proyecto, conectar Google Play (credenciales de servicio de Play Console), importar los dos productos, crear el **entitlement `pro`**, un **offering "default"** con los paquetes mensual y anual. Copiar la **clave pública del SDK de Android** (empieza con `goog_`).
+3. **Webhook**: en RevenueCat > Integrations > Webhooks, URL `https://www.zancada.org/api/revenuecat-webhook` y en "Authorization header value" un secreto largo con el formato `Bearer <secreto>`. El mismo secreto va en Vercel como `REVENUECAT_WEBHOOK_SECRET` (solo el valor, sin "Bearer").
+4. **Tabla**: correr en el SQL Editor de Supabase `sql/entitlements_billing.sql` (agrega una columna, es seguro).
+5. **Probar con testers de licencia** de Play Console: poner `REVENUECAT_ALLOW_SANDBOX=1` en Vercel mientras se prueba; comprar, renovar, cancelar y restaurar en un teléfono real. Sacar esa variable después.
+6. **Prender el cobro (el día del lanzamiento)**: (a) correr `sql/entitlements_gift_existing.sql` (regala Pro a las cuentas que ya existen; sin vencimiento), (b) poner la clave `goog_...` en `REVENUECAT_ANDROID_KEY` y `PAYWALL_ENABLED = true` en app.js, (c) `PAYWALL_ENFORCE=1` en Vercel, (d) subir la versión a Play.
+
+## Hecho el 2026-11-17 (apagado con el resto)
+- Aviso al borrar la cuenta si hay suscripción paga vigente (la tienda sigue cobrando).
+- Tarjeta "Tu suscripción" en Perfil (vencimiento + botón a Google Play); no aparece en cuentas regaladas.
+
+## Pendiente del cobro (no hecho)
+- Al quedar una cuenta sin plan: desconectar relojes y borrar las carreras importadas de cada marca (hoy solo se corta el chat de IA y el video).
+- Huawei: Huawei IAP, aparte (RevenueCat no lo soporta). iPhone: StoreKit.

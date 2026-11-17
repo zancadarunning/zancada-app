@@ -27,6 +27,7 @@ const path = require('path');
 const crypto = require('crypto');
 const ffmpegPath = require('ffmpeg-static');
 const verifyUser = require('./_lib/verify-user');
+const requirePlan = require('./_lib/require-plan');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 
@@ -82,6 +83,7 @@ module.exports = withSentry(async (req, res) => {
 
   const auth = await verifyUser(req);
   if(!auth.ok){ res.status(auth.status).json({error: auth.error}); return; }
+  if(!(await requirePlan(auth.userId, res))) return;   // solo con el cobro prendido (PAYWALL_ENFORCE=1)
 
   const base = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_KEY;
