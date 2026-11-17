@@ -2349,7 +2349,7 @@
   .add-row input, .add-row select{min-width:0;}
   .add-row input{flex:1 1 auto;}
   .add-row select{flex:0 0 38%;}
-  #event-overlay .add-row select, #event-overlay .add-row .date-box{flex:none; width:100%;}
+  #event-edit-overlay .add-row select, #event-edit-overlay .add-row .date-box{flex:none; width:100%;}
   .zone-input{width:64px; height:var(--tap); padding:0; text-align:center; background:var(--asphalt-3); border:1.5px solid var(--asphalt-4); border-radius:var(--radius-sm); color:var(--chalk); font:600 16px 'JetBrains Mono',monospace; -moz-appearance:textfield;}
   .zone-input:focus{outline:none; border-color:var(--hivis); box-shadow:0 0 0 3px var(--hivis-dim);}
   .zone-row{padding:8px 0;}
@@ -4568,6 +4568,15 @@ body{overflow-wrap:break-word;}
     <h2 class="subtitle" style="font-size:22px;" data-i18n="perfil_event"></h2>
     <div class="card" style="margin-top:16px;">
       <div id="event-box"></div>
+      <button class="btn btn-primary btn-sm" style="margin-top:14px; width:100%;" data-i18n="ev_add" data-on-click="openEventEdit(null)"></button>
+    </div>
+  </div>
+
+  <div class="overlay overlay-sheet" id="event-edit-overlay">
+    <button class="week-nav-btn" data-on-click="closeEventEdit()" style="margin-bottom:14px;" data-i18n-aria="aria_back"><span class="icon-sq" style="width:16px; height:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></span></button>
+    <h2 class="subtitle" style="font-size:22px;" id="event-edit-title"></h2>
+    <div class="card" style="margin-top:16px;">
+      <div id="event-pace-box"></div>
       <button class="small-link" style="margin-top:10px; display:flex; align-items:center; gap:5px;" data-on-click="openPaceCalcModal()"><span class="icon-sq" style="width:14px; height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v2"/></svg></span><span data-i18n="pace_calc_open_btn"></span></button>
       <div class="field" style="margin-top:14px;"><label for="ev-name" data-i18n="perfil_ev_name_ph"></label><input type="text" id="ev-name" data-i18n-aria="perfil_ev_name_ph"></div>
       <div class="field"><label for="ev-distance" data-i18n="perfil_ev_dist_ph"></label><input type="number" id="ev-distance" step="0.1" min="0" inputmode="decimal" data-i18n-aria="perfil_ev_dist_ph"></div>
@@ -4581,6 +4590,7 @@ body{overflow-wrap:break-word;}
         </select>
       </div>
       <button class="btn btn-primary btn-sm" id="save-event-btn" style="margin-top:10px; width:100%;" data-i18n="perfil_ev_save" data-on-click="setEvent()"></button>
+      <button class="btn btn-danger event-delete-btn" id="event-delete-btn" style="display:none;" data-i18n="delete_event" data-on-click="deleteEvent()"></button>
     </div>
   </div>
 

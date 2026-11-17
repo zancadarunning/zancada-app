@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-16T20:14:55Z';
+const APP_VERSION = '2026-11-17T13:53:55Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -934,6 +934,9 @@ function normalizeLoadedState(s){
   if(s.weekStart !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(s.weekStart))) delete s.weekStart;   // sin semana válida: checkWeekRollover() arma la de hoy
   if(s.profile.trainingDays !== undefined && !Array.isArray(s.profile.trainingDays)) delete s.profile.trainingDays;
   if(s.event && (typeof s.event !== 'object' || typeof s.event.date !== 'string')) s.event = null;
+  // Varios eventos: s.events es la lista; s.event sigue siendo el MAS PROXIMO (es lo que lee el plan, el aviso del dia de carrera y los relojes). Con el evento unico de antes, se migra a la lista.
+  s.events = sanitizeEvents(s.events);
+  if(s.event && !s.events.some(e => e.date === s.event.date && e.name === s.event.name)) s.events = sanitizeEvents(s.events.concat([s.event]));
   // Días elegidos para la semana que viene: {weekStart, days:[...]} o nada.
   const nd = s.nextWeekDays;
   if(nd !== undefined && nd !== null && !(typeof nd === 'object' && typeof nd.weekStart === 'string' && Array.isArray(nd.days))) s.nextWeekDays = null;
@@ -6923,21 +6926,55 @@ function softenQualityAfterMisses(todayIdxForTest){
   persist();
   try{ renderPlan(); renderHome(); renderChat(); }catch(e){}
 }
+// ---- Varios eventos ("Tus próximos eventos"): state.events es la lista (cada uno {id, name, date, type, distanceKm}) y state.event es SIEMPRE el más próximo que todavía no pasó. Todo el plan (semana de carrera, descarga previa,
+// día de carrera, relojes, tarjeta de Inicio) sigue leyendo state.event, así que los demás eventos se muestran y avisan pero no cambian el plan.
+const EVENT_TYPES = ['ruta', 'trail', 'obstaculos'];
+const MAX_EVENTS = 30;
+function sanitizeEvents(list){
+  if(!Array.isArray(list)) return [];
+  const out = [], seen = new Set();
+  let nextId = Date.now();
+  list.forEach(e => {
+    if(!e || typeof e !== 'object' || typeof e.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(e.date) || typeof e.name !== 'string' || !e.name.trim()) return;
+    let id = Number.isFinite(e.id) ? e.id : null;
+    if(id === null || seen.has(id)){ id = nextId++; while(seen.has(id)) id = nextId++; }
+    seen.add(id);
+    const km = Number(e.distanceKm);
+    out.push({id: id, name: e.name.trim().slice(0, 80), date: e.date, type: EVENT_TYPES.includes(e.type) ? e.type : 'ruta', distanceKm: km > 0 && km < 1000 ? km : null});
+  });
+  out.sort((x, y) => x.date < y.date ? -1 : x.date > y.date ? 1 : x.id - y.id);
+  return out.slice(0, MAX_EVENTS);
+}
+// Todos los eventos (ordenados por fecha), incluido el state.event suelto de antes si todavía no está en la lista. No toca el estado.
+function allEvents(){
+  let list = sanitizeEvents(state.events);
+  const ev = state.event;
+  if(ev && typeof ev === 'object' && typeof ev.date === 'string' && !list.some(e => e.date === ev.date && e.name === ev.name)) list = sanitizeEvents(list.concat([ev]));
+  return list;
+}
+// Deja state.events normalizada y state.event apuntando al próximo evento que no pasó.
+function syncPrimaryEvent(){
+  // Solo la lista (NO se vuelve a sumar state.event: si se acaba de borrar el principal, volvería a aparecer). El state.event suelto de antes se suma antes, en allEvents() y al cargar el estado.
+  const list = sanitizeEvents(state.events);
+  state.events = list;
+  const today = localDateISO(new Date());
+  const next = list.find(e => e.date >= today) || null;
+  state.event = next ? {name: next.name, date: next.date, type: next.type, distanceKm: next.distanceKm} : null;
+}
 function autoClearPastEvent(){
-  // el evento cargado en "Próximos eventos" es justamente eso, PRÓXIMO -> una vez que pasó
-  // el día de la carrera, se saca solo de esa tarjeta (no tiene sentido seguir mostrando una
+  // los eventos cargados en "Próximos eventos" son justamente eso, PRÓXIMOS -> una vez que pasó el día de la carrera, se sacan solos de la lista (no tiene sentido seguir mostrando una
   // cuenta regresiva negativa de algo que ya corriste)
-  if(!state.event || !state.event.date) return;
-  const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
-  const eventDate = new Date(state.event.date+'T00:00:00');
-  if(!isNaN(eventDate.getTime()) && eventDate.getTime() < todayMidnight.getTime()){
-    // Guardamos la fecha antes de borrar el evento -- isRecoveryWeek() la sigue
-    // necesitando toda la semana de recuperación, después de que esta limpieza ya corrió.
-    state.lastEventDate = state.event.date;
-    try{ recordRaceCalibration(state.event); }catch(e){}
-    state.event = null;
-    persist();
-  }
+  const list = allEvents();
+  if(!list.length) return;
+  const today = localDateISO(new Date());
+  const past = list.filter(e => e.date < today);
+  if(!past.length) return;
+  // Guardamos la fecha antes de borrar el evento -- isRecoveryWeek() la sigue necesitando toda la semana de recuperación, después de que esta limpieza ya corrió.
+  state.lastEventDate = past[past.length - 1].date;
+  past.forEach(e => { try{ recordRaceCalibration(e); }catch(err){} });
+  state.events = list.filter(e => e.date >= today);
+  syncPrimaryEvent();
+  persist();
 }
 function repairCorruptedCustomDays(){
   if(!state.plan) return;
@@ -11433,30 +11470,29 @@ function renderPerfil(){
   }).join('');
 
   const evBox = document.getElementById('event-box');
-  if(state.event){
-    const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
-    const days = Math.round((new Date(state.event.date+'T00:00:00')-todayMidnight)/86400000);
-    // Ritmo objetivo estimado (fórmula de Riegel) a partir de la marca personal más cercana
-    // en distancia a la meta -- preferimos la distancia puntual de este evento (si la cargó)
-    // por sobre la distancia genérica del objetivo de entrenamiento, porque puede no coincidir
-    // (ej: el objetivo del plan es "10k" pero esta carrera puntual es de 15km).
-    const goalKm = (state.event.distanceKm > 0) ? state.event.distanceKm : getGoalRaceKm();
-    const prediction = goalKm ? predictRaceTime(goalKm) : null;
-    const paceBlock = prediction ? `<div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--asphalt-3);">
-      <p class="muted" style="margin:0 0 6px; font-size:12px;">${t('perfil_predicted_pace_label')} · ${fmtDist(goalKm,1)} ${distUnit()}</p>
-      <p class="mono" style="font-size:20px; font-weight:800; color:var(--hivis-text); margin:0;">${fmtPace((prediction.predictedSec/60)/goalKm)} /${distUnit()}</p>
-      <p class="muted" style="margin:6px 0 0; font-size:12px;">${t('perfil_predicted_pace_note', {ref: fmtDist(prediction.refDistanceKm,1)+' '+distUnit(), time: fmtTime(Math.round(prediction.predictedSec))})}</p>
-    </div>` : '';
-    evBox.innerHTML = `<p style="font-size:15px; font-weight:700;">${escapeHtml(state.event.name)} <span class="tag tag-${state.event.type==='ruta'?'asfalto':state.event.type==='trail'?'trail':'mixto'}">${t('ev_type_'+state.event.type)}</span></p>
-      <p class="display" style="font-size:34px; color:var(--hivis-text); margin-top:4px;">${Math.max(0,days)} <span style="font-size:13px; font-family:Inter; color:var(--mist);">${t('perfil_event_days')}</span></p>
-      ${paceBlock}
-      <button class="btn btn-danger event-delete-btn" data-on-click="deleteEvent()">${t('delete_event')}</button>`;
-    document.getElementById('ev-name').value = state.event.name;
-    document.getElementById('ev-distance').value = state.event.distanceKm>0 ? fmtDist(state.event.distanceKm,2) : '';
-    document.getElementById('ev-date').value = state.event.date;
-    dateBoxUpdaters['ev-date'] && dateBoxUpdaters['ev-date']();
-    document.getElementById('ev-type').value = state.event.type;
-  } else { evBox.innerHTML = `<div style="text-align:center; padding:10px 0;"><div class="icon-sq" style="width:24px; height:24px; margin:0 auto 8px; color:var(--mist-dim);">${ICONS.flag}</div><p class="muted" style="margin:0; font-size:13px;">${t('perfil_no_event')}</p></div>`; }
+  if(evBox){
+    const evList = allEvents();
+    if(!evList.length){
+      evBox.innerHTML = `<div style="text-align:center; padding:10px 0;"><div class="icon-sq" style="width:24px; height:24px; margin:0 auto 8px; color:var(--mist-dim);">${ICONS.flag}</div><p class="muted" style="margin:0; font-size:13px;">${t('perfil_no_event')}</p></div>`;
+    } else {
+      const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
+      evBox.innerHTML = evList.map((ev, idx) => {
+        const days = Math.round((new Date(ev.date+'T00:00:00')-todayMidnight)/86400000);
+        const isPrimary = !!state.event && ev.date === state.event.date && ev.name === state.event.name;
+        const when = new Date(ev.date+'T00:00:00').toLocaleDateString(LOCALE_MAP[lang], {day:'numeric', month:'short', year:'numeric'});
+        const dist = ev.distanceKm > 0 ? ` · ${fmtDist(ev.distanceKm, ev.distanceKm % 1 ? 1 : 0)} ${distUnit()}` : '';
+        const tagCls = ev.type === 'ruta' ? 'asfalto' : ev.type === 'trail' ? 'trail' : 'mixto';
+        return `<div class="event-card" role="button" tabindex="0" data-on-click="openEventEdit(${ev.id})" style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:14px 0; ${idx ? 'border-top:1px solid var(--asphalt-3); ' : ''}cursor:pointer;">
+          <div style="min-width:0;">
+            <p style="font-size:15px; font-weight:700; margin:0; overflow-wrap:anywhere;">${escapeHtml(ev.name)} <span class="tag tag-${tagCls}">${t('ev_type_'+ev.type)}</span></p>
+            <p class="muted" style="margin:4px 0 0; font-size:13px;">${when}${dist}</p>
+            ${isPrimary ? `<p style="margin:6px 0 0; font-size:12px; color:var(--hivis-text);">${t('ev_plan_tag')}</p>` : ''}
+          </div>
+          <div style="text-align:right; flex-shrink:0;"><p class="display" style="font-size:30px; line-height:1; color:var(--hivis-text); margin:0;">${Math.max(0,days)}</p><p class="muted" style="margin:2px 0 0; font-size:12px;">${t('perfil_event_days')}</p></div>
+        </div>`;
+      }).join('');
+    }
+  }
 
   const shoesSummaryEl = document.getElementById('perfil-shoes-summary');
   if(shoesSummaryEl) shoesSummaryEl.textContent = state.shoes.length ? t('perfil_shoes_count', {n: state.shoes.length}) : t('perfil_no_shoes');
@@ -11481,6 +11517,8 @@ function renderPerfil(){
       const todayMid = new Date(); todayMid.setHours(0,0,0,0);
       const daysLeft = Math.round((new Date(state.event.date+'T00:00:00')-todayMid)/86400000);
       eventSummaryEl.textContent = `${state.event.name} · ${Math.max(0,daysLeft)} ${t('perfil_event_days')}`;
+      const moreEv = allEvents().length - 1;
+      if(moreEv > 0) eventSummaryEl.textContent += ` · ${t('perfil_events_more', {n: moreEv})}`;
     } else {
       eventSummaryEl.textContent = t('perfil_no_event');
     }
@@ -11522,6 +11560,34 @@ function openShoesOverlay(){ openOverlaySheetEl(document.getElementById('shoes-o
 function closeShoesOverlay(){ document.getElementById('shoes-overlay').classList.remove('overlay-open'); }
 function openEventOverlay(){ openOverlaySheetEl(document.getElementById('event-overlay')); }
 function closeEventOverlay(){ document.getElementById('event-overlay').classList.remove('overlay-open'); }
+// Pantalla aparte para agregar, editar o borrar un evento (se abre al tocar uno de la lista o "Agregar evento").
+let editingEventId = null;
+function openEventEdit(id){
+  const ev = (id === null || id === undefined) ? null : allEvents().find(e => e.id === Number(id)) || null;
+  editingEventId = ev ? ev.id : null;
+  document.getElementById('event-edit-title').textContent = t(ev ? 'ev_edit_title' : 'ev_new_title');
+  document.getElementById('ev-name').value = ev ? ev.name : '';
+  document.getElementById('ev-distance').value = ev && ev.distanceKm > 0 ? fmtDist(ev.distanceKm, 2) : '';
+  document.getElementById('ev-date').value = ev ? ev.date : '';
+  dateBoxUpdaters['ev-date'] && dateBoxUpdaters['ev-date']();
+  document.getElementById('ev-type').value = ev ? ev.type : 'ruta';
+  document.getElementById('event-delete-btn').style.display = ev ? '' : 'none';
+  renderEventPace(ev);
+  openOverlaySheetEl(document.getElementById('event-edit-overlay'));
+}
+function closeEventEdit(){ document.getElementById('event-edit-overlay').classList.remove('overlay-open'); }
+// Ritmo objetivo estimado (fórmula de Riegel) a partir de la marca personal más cercana en distancia a la meta -- preferimos la distancia puntual de este evento (si la cargó) por sobre la distancia genérica del objetivo de entrenamiento.
+function renderEventPace(ev){
+  const box = document.getElementById('event-pace-box');
+  if(!box) return;
+  const goalKm = ev ? ((ev.distanceKm > 0) ? ev.distanceKm : getGoalRaceKm()) : null;
+  const prediction = goalKm ? predictRaceTime(goalKm) : null;
+  box.innerHTML = prediction ? `<div style="margin:0 0 14px; padding-bottom:14px; border-bottom:1px solid var(--asphalt-3);">
+      <p class="muted" style="margin:0 0 6px; font-size:12px;">${t('perfil_predicted_pace_label')} · ${fmtDist(goalKm,1)} ${distUnit()}</p>
+      <p class="mono" style="font-size:20px; font-weight:800; color:var(--hivis-text); margin:0;">${fmtPace((prediction.predictedSec/60)/goalKm)} /${distUnit()}</p>
+      <p class="muted" style="margin:6px 0 0; font-size:12px;">${t('perfil_predicted_pace_note', {ref: fmtDist(prediction.refDistanceKm,1)+' '+distUnit(), time: fmtTime(Math.round(prediction.predictedSec))})}</p>
+    </div>` : '';
+}
 // Tema/Unidades/Entrenar por/Avisos de voz consolidados en un solo botón "Preferencias" --
 // ver el comentario junto a preferences-overlay en index.html.
 // "Tamaño del texto" (solo en la app de Android, ver ZancadaDisplayPlugin.kt): automático (sigue al
@@ -12948,21 +13014,35 @@ function setEvent(){
   const name = document.getElementById('ev-name').value.trim(); const date = document.getElementById('ev-date').value;
   if(!name || !date){ showToast(t('ev_required_err'), 'error'); return; }
   const distanceKm = parseDistInput(document.getElementById('ev-distance').value);
-  state.event = {name, date, type:document.getElementById('ev-type').value, distanceKm: distanceKm>0 ? distanceKm : null};
-  // el evento (fecha, tipo de terreno) influye en el plan (taper, día de descanso el día
-  // de la carrera, terreno del rodaje largo) -- si no se regenera acá, esos efectos
+  const type = document.getElementById('ev-type').value;
+  // los que ya pasaron se archivan antes (calibración y semana de recuperación), así no se mezclan con el nuevo
+  autoClearPastEvent();
+  const list = allEvents();
+  const existing = editingEventId !== null ? list.find(e => e.id === editingEventId) : null;
+  if(existing){
+    existing.name = name; existing.date = date; existing.type = type; existing.distanceKm = distanceKm > 0 ? distanceKm : null;
+  } else {
+    if(list.length >= MAX_EVENTS){ showToast(t('ev_limit_err', {n: MAX_EVENTS}), 'error'); return; }
+    list.push({id: Date.now(), name, date, type, distanceKm: distanceKm > 0 ? distanceKm : null});
+  }
+  state.events = list;
+  syncPrimaryEvent();
+  // el evento más próximo (fecha, tipo de terreno) influye en el plan (taper, día de descanso el día de la carrera, terreno del rodaje largo) -- si no se regenera acá, esos efectos
   // quedaban "guardados" pero invisibles hasta el próximo cambio de semana natural.
   state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
   renderAll(); persist();
   flashSaved('save-event-btn');
+  setTimeout(closeEventEdit, 600);
 }
 async function deleteEvent(){
+  if(editingEventId === null) return;
   if(!(await showConfirm(t('confirm_delete'), {danger:true, confirmText:t('delete_word')}))) return;
-  state.event = null;
-  document.getElementById('ev-name').value=''; document.getElementById('ev-date').value=''; document.getElementById('ev-distance').value='';
-  dateBoxUpdaters['ev-date'] && dateBoxUpdaters['ev-date']();
+  state.events = allEvents().filter(e => e.id !== editingEventId);
+  editingEventId = null;
+  syncPrimaryEvent();
   state.plan = preserveLivedDays(state.plan, generatePlan(state.profile, state.weekNumber||1));
   renderAll(); persist();
+  closeEventEdit();
 }
 /* ================= LIVE TRACKER + MAP ================= */
 let tracker = {watchId:null, timerId:null, points:[], distanceKm:0, elapsedSec:0, running:false, hrLog:[], lastAnnouncedKm:0, startedAt:null, workout:null, autoPaused:false, lastMoveMs:null, lastFixMs:null};
