@@ -18,7 +18,7 @@ Para que una persona física pueda abrir los datos de **Huawei Health Service Ki
 |---|---|
 | Recordatorios y avisos push | **No llegan** (usan Firebase, que es de Google). Hace falta **Huawei Push Kit**: trabajo aparte. |
 | Health Connect | No existe en Huawei: esa tarjeta no sirve. Las carreras vendrán por **Huawei Health Service Kit** cuando Huawei lo apruebe. |
-| Compra / suscripción | Google Play Billing no existe: el cobro necesita **Huawei IAP**. Por ahora sale gratis. |
+| Compra / suscripción | Google Play Billing no existe: el cobro necesita **Huawei IAP**. Sale **sin cobro** primero; despues se suma con los mismos precios que en Google (9,99 USD por mes o 79,99 por ano, 14 dias de prueba). |
 | Ingreso con Google | Funciona por el navegador del teléfono. |
 | Voz del coach (TTS) | Depende del motor de voz del teléfono; probar. |
 
@@ -39,6 +39,9 @@ Para que una persona física pueda abrir los datos de **Huawei Health Service Ki
 - **Política de privacidad:** `https://www.zancada.org/privacy.html`. **Borrar cuenta:** `https://www.zancada.org/eliminar-cuenta.html`. **Contacto:** `info@zancada.org`.
 - **Edad:** 16+. Categoría: Salud y fitness / Deportes.
 - Cuestionario de contenido y de datos: usar `docs/tiendas-formularios-privacidad.md`.
+
+## Entrenamientos al reloj Huawei (consulta del 2026-11-17)
+No hay algo equivalente a la Training API de Garmin. Lo que se ve posible: la importacion de "cursos de running" de **Health Kit** (se escribe el curso en Huawei Health y, si el reloj lo soporta, llega al reloj; es lo que hace Intervals.icu). Las series con repeticiones pueden verse mal en el reloj. Requiere Health Kit aprobado y la app publicada. Sin confirmar en la documentacion oficial: se mira al pedir el acceso.
 
 ## Después de publicar
 1. Pedir **Health Service Kit** (nivel básico) con `docs/huawei-health-kit-solicitud.md`.
