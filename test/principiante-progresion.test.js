@@ -172,3 +172,16 @@ test('nota de cambio de zona: una sola vez, solo para el principiante que pasó 
   a.state.weekNumber = 3; a.maybeBeginnerBaseNote(); a.maybeBeginnerBaseNote();
   assert.equal(a.state.chat.filter(m => m.text === a.t('beginner_base_note')).length, 1, 'una sola vez');
 });
+
+test('los días de otro deporte cargados en Perfil no se eligen para las sesiones fuertes (si hay días libres)', () => {
+  const a = loadApp();
+  const p = { name: 'x', weeklyKm: 30, currentWeeklyKm: 30, goal: '10k', runnerType: 'active', trainingDays: ['mon', 'tue', 'thu', 'sat', 'sun'], units: 'metric', trainBy: 'distance', terrain: 'asfalto', crossTrainingSports: ['futbol'], crossTrainingDays: ['tue', 'thu'] };
+  a.state.profile = p; a.state.onboarded = true;
+  for (let w = 1; w <= 12; w++) {
+    const s = a.distributeSessionTypes(p.trainingDays, false, w, { level: 0 }, false, '10k', false);
+    ['tue', 'thu'].forEach(d => assert.ok(['easy'].includes(s[d]), `semana ${w}: ${d} (día de fútbol) debería ser rodaje, es ${s[d]}`));
+  }
+  p.crossTrainingDays = ['mon', 'tue', 'thu', 'sat'];   // casi todos ocupados: no alcanza, se usan igual
+  const s2 = a.distributeSessionTypes(p.trainingDays, false, 3, { level: 0 }, false, '10k', false);
+  assert.ok(Object.values(s2).some(t => !['easy', 'long'].includes(t)), 'sin días libres suficientes igual hay calidad');
+});

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-17T22:35:44Z';
+const APP_VERSION = '2026-11-17T23:12:19Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5760,7 +5760,8 @@ function weekMultiplier(n, caution, skipCutback, capExtra){
   // corredores con más cautela (mayor edad y/o contextura) progresan más despacio
   // semana a semana y con un techo de volumen más bajo, en vez de la misma curva para todos
   const { growth: growthRate, cap } = growthParams(caution);
-  let mult = Math.pow(growthRate, Math.max(0, growthSteps));
+  // El techo va ANTES de la descarga: si no, pasado el techo la descarga (x0,75) quedaba por encima del techo y desaparecía (las semanas 20 y 24 subían en vez de bajar).
+  let mult = Math.min(Math.pow(growthRate, Math.max(0, growthSteps)), cap + (capExtra || 0));
   // skipCutback: esta semana YA tiene una reducción de volumen deliberada y más específica
   // (taper antes de la carrera objetivo, recuperación post-carrera, o la semana puntual de
   // una carrera de "Próximos eventos") -- el recorte de descarga PERIÓDICO (cada 4 semanas,
@@ -5769,7 +5770,7 @@ function weekMultiplier(n, caution, skipCutback, capExtra){
   // en Perfil > Metas Y en Próximos eventos -- acá es el mismo problema, pero entre la
   // descarga periódica y CUALQUIERA de las otras reducciones puntuales, no solo esa.
   if(isCutbackWeek(n) && !skipCutback) mult *= 0.75;
-  return Math.min(mult, cap + (capExtra || 0));
+  return mult;
 }
 function taperMultiplier(p, weekStartDate){
   // baja el volumen a propósito en las semanas justo antes de la carrera OBJETIVO (la fecha
@@ -7742,17 +7743,25 @@ function distributeSessionTypes(trainingDays, beginner, weekNumber, caution, isC
   }
   // La rotación avanza una posición por cada ocurrencia de día fuerte, así que el
   // estímulo de calidad va variando en vez de repetir siempre el mismo tipo de sesión.
-  if(maxHardDays===1){
-    const hardType = rotation[(hardOccurrence-1) % rotation.length];
-    const [chosenDay] = pickSpacedDays(remaining, 1, longDay);
-    remaining.forEach(d=>{ sessions[d] = d===chosenDay ? hardType : 'easy'; });
-    return sessions;
+  // Dos días fuertes solo si caben sin quedar pegados entre sí ni a la tirada (al menos un día de por medio); si los días elegidos no lo permiten (ej. mar/mié/sáb/dom), queda uno solo en vez de
+  // dos seguidos. Un único día fuerte se deja siempre, aunque caiga pegado a la tirada (ej. sábado + domingo): sacarlo dejaría sin calidad a quien solo entrena el fin de semana.
+  const gapOk = (a, b) => Math.abs(DAY_KEYS.indexOf(a) - DAY_KEYS.indexOf(b)) >= 2;
+  // Los días de otro deporte (fútbol, gimnasio...) que la persona cargó en Perfil no se eligen para las sesiones fuertes, salvo que no queden suficientes días libres.
+  const crossDays = (typeof state !== 'undefined' && state && state.profile && Array.isArray(state.profile.crossTrainingDays)) ? state.profile.crossTrainingDays : [];
+  const hardPool = n => { const free = remaining.filter(d => !crossDays.includes(d)); return free.length >= n ? free : remaining; };
+  if(maxHardDays>=2){
+    const [dayA, dayB] = pickSpacedDays(hardPool(2), 2, longDay);
+    if(gapOk(dayA, dayB) && gapOk(dayA, longDay) && gapOk(dayB, longDay)){
+      const first = rotation[(hardOccurrence-1) % rotation.length];
+      let second = rotation[hardOccurrence % rotation.length];
+      if(second === first) second = 'tempo';
+      remaining.forEach(d=>{ sessions[d] = d===dayA ? first : d===dayB ? second : 'easy'; });
+      return sessions;
+    }
   }
-  const first = rotation[(hardOccurrence-1) % rotation.length];
-  let second = rotation[hardOccurrence % rotation.length];
-  if(second === first) second = 'tempo';
-  const [dayA, dayB] = pickSpacedDays(remaining, 2, longDay);
-  remaining.forEach(d=>{ sessions[d] = d===dayA ? first : d===dayB ? second : 'easy'; });
+  const hardType = rotation[(hardOccurrence-1) % rotation.length];
+  const [chosenDay] = pickSpacedDays(hardPool(1), 1, longDay);
+  remaining.forEach(d=>{ sessions[d] = d===chosenDay ? hardType : 'easy'; });
   return sessions;
 }
 function buildIntervalStructure(qualityKm, caution, weekNumber){
@@ -8042,8 +8051,8 @@ function checkReturningBreakGraduation(){
    para los casos normales): ultra 60 km, maratón 42, media 35, el resto 32 (el "muro" de la tirada larga). */
 const SESSION_KM_CAP = { ultra: 60, '42k': 42, '21k': 35 };
 const SESSION_KM_CAP_DEFAULT = 32;
-function capSessionLengths(days, p){
-  const cap = SESSION_KM_CAP[p && p.goal] || SESSION_KM_CAP_DEFAULT;
+function capSessionLengths(days, p, factor){
+  const cap = (SESSION_KM_CAP[p && p.goal] || SESSION_KM_CAP_DEFAULT) * (factor || 1);   // factor: en la semana de descarga el techo baja (si no, quien ya está en el techo no la nota)
   return (days || []).map(d => {
     if(!d || !(d.dist > cap)) return d;
     const copy = Object.assign({}, d);
@@ -8054,9 +8063,9 @@ function capSessionLengths(days, p){
 }
 // Sin plan por fases (sin carrera cargada) ninguna sesión tenía techo por objetivo: con pocos días y mucho volumen un 5K podía terminar con una tirada de 26 km. Se acotan TODAS las sesiones al
 // techo de la tirada de ese objetivo (el mismo LONG_CAP_KM del plan por fases): ninguna es más larga que ese techo y la tirada sigue siendo la más larga. Lo que sobra no se reparte (la semana queda más corta).
-function capLongForGoal(distMap, usedTypes, goal, phaseInfo){
-  const capL = LONG_CAP_KM[goal];
-  if(!capL || (phaseInfo && phaseInfo.active)) return;
+function capLongForGoal(distMap, usedTypes, goal, phaseInfo, cutback){
+  const capL = LONG_CAP_KM[goal] * (cutback ? 0.75 : 1);   // en la semana de descarga el techo baja igual: si no, la descarga no se notaba en quien ya está en el techo
+  if(!(capL > 0) || (phaseInfo && phaseInfo.active)) return;
   usedTypes.forEach(t => { if(distMap[t] > capL) distMap[t] = capL; });
 }
 function generatePlan(p, weekNumber, weekStartDate){
@@ -8161,7 +8170,7 @@ function generatePlan(p, weekNumber, weekStartDate){
   // Entrenar POR TIEMPO ya no es el plan en km convertido a minutos: se arma aparte, directo en minutos
   // (ver buildTimePlanDays) -- con trote/caminata para principiantes, series y cuestas por duración, etc.
   if(p.trainBy === 'time'){
-    return applyLevelTestDay(applyEventRaceNeighbors(applyGoalRaceDay(capSessionLengths(buildTimePlanDays({p, weekNumber, mult, beginner, easyOnly, caution, sessionMap, trainingDays, effectiveWeeklyKm, zoneMap, phaseInfo, goal: p.goal}), p), p, weekStartDate, phaseInfo), p, weekStartDate), p, weekStartDate, beginner);
+    return applyLevelTestDay(applyEventRaceNeighbors(applyGoalRaceDay(capSessionLengths(buildTimePlanDays({p, weekNumber, mult, beginner, easyOnly, caution, sessionMap, trainingDays, effectiveWeeklyKm, zoneMap, phaseInfo, cutback, goal: p.goal}), p, cutback && !phaseInfo.active ? 0.75 : 1), p, weekStartDate, phaseInfo), p, weekStartDate), p, weekStartDate, beginner);
   }
   // Reparto del volumen semanal entre las sesiones que de verdad va a tener esta semana, en
   // vez de calcular cada tipo de sesión por separado con una proporción fija (0.85x a 1.5x)
@@ -8229,7 +8238,7 @@ function generatePlan(p, weekNumber, weekStartDate){
     // semanas de 2-3 sesiones). Se vuelve a acotar; lo que excede se pierde (total más bajo).
     clampPhaseLongRun(distMap, usedTypes, phaseInfo, p.goal);
     // Techo por objetivo cuando no hay plan por fases (ver capLongForGoal).
-    capLongForGoal(distMap, usedTypes, p.goal, phaseInfo);
+    capLongForGoal(distMap, usedTypes, p.goal, phaseInfo, cutback);
   }
   // "¿Cuántos minutos tenés disponibles por sesión?" (onboarding, opcional) se guardaba en el
   // perfil pero nunca tocaba el plan de verdad -- solo se lo pasábamos al coach del chat como
@@ -8294,7 +8303,13 @@ function generatePlan(p, weekNumber, weekStartDate){
     spreadPhaseShortfall(kmDays, weekTargetKm, phaseInfo.longCapKm || LONG_CAP_KM[p.goal] || Infinity, sessionCapKm, p);
   }
   applyPhaseRacePace(kmDays, phaseInfo, p.goal, easyOnly, true);
-  return applyLevelTestDay(applyEventRaceNeighbors(applyGoalRaceDay(capSessionLengths(kmDays, p), p, weekStartDate, phaseInfo), p, weekStartDate), p, weekStartDate, beginner);
+  // La tirada es siempre la sesión más larga: con volúmenes muy chicos un fartlek de estructura mínima (4 repeticiones) podía quedar más largo que la tirada.
+  if(!beginner && !phaseInfo.active){
+    const L = kmDays.find(d => d.typeKey === 'long');
+    const maxOther = Math.max(0, ...kmDays.filter(d => d.typeKey !== 'long' && d.typeKey !== 'rest').map(d => d.dist || 0));
+    if(L && L.dist < maxOther) L.dist = Math.ceil(maxOther * 10) / 10;
+  }
+  return applyLevelTestDay(applyEventRaceNeighbors(applyGoalRaceDay(capSessionLengths(kmDays, p, cutback && !phaseInfo.active ? 0.75 : 1), p, weekStartDate, phaseInfo), p, weekStartDate), p, weekStartDate, beginner);
 }
 /* ================= TEST DE NIVEL + PLAN POR TIEMPO PROPIO =================
    Dos cosas que se agregaron juntas porque se apoyan una en la otra:
@@ -8614,7 +8629,7 @@ function spreadPhaseShortfallMin(days, targetMin, availCapMin, longCapMin){
   }
 }
 function buildTimePlanDays(ctx){
-  const {p, weekNumber, mult, beginner, easyOnly, caution, sessionMap, trainingDays, effectiveWeeklyKm, zoneMap, phaseInfo, goal} = ctx;
+  const {p, weekNumber, mult, beginner, easyOnly, caution, sessionMap, trainingDays, effectiveWeeklyKm, zoneMap, phaseInfo, cutback, goal} = ctx;
   const pace = estimateBasePaceMinPerKm(p);
   const RATIO_T = {easy:EASY_SESSION_RATIO, intervals:1.0, tempo:0.85, long:beginner ? BEGINNER_LONG_RATIO : 1.5, fartlek:1.0, hills:0.9, progression:1.0};
   const usedTypes = trainingDays.map(d => sessionMap[d]).filter(Boolean);
@@ -8663,7 +8678,8 @@ function buildTimePlanDays(ctx){
     // con fases, la tirada también respeta el tope de la distancia pasado a minutos (phaseLongCapMin)
     if(typeKey === 'long' && !beginner && phaseLongCap) maxM = Math.min(maxM, phaseLongCap);
     // sin plan por fases: toda sesión respeta el techo de la tirada del objetivo (LONG_CAP_KM) pasado a minutos, igual que en distancia
-    if(!beginner && !(phaseInfo && phaseInfo.active) && LONG_CAP_KM[goal]) maxM = Math.min(maxM, phaseLongCapMin(LONG_CAP_KM[goal], p) || maxM);
+    if(!beginner && !(phaseInfo && phaseInfo.active) && LONG_CAP_KM[goal]) maxM = Math.min(maxM, Math.round((phaseLongCapMin(LONG_CAP_KM[goal], p) || maxM) * (cutback ? 0.75 : 1)));
+    if(!beginner && cutback && !(phaseInfo && phaseInfo.active)) maxM = Math.round(maxM * 0.75);
     const minM = typeKey === 'long' && beginner ? 25 : TIME_MIN_BY_TYPE[typeKey];
     let m = Math.min(maxM, Math.max(minM, roundMin5(minMap[typeKey], minM)));
     if(availCap && typeKey !== 'long') m = Math.min(m, availCap);
@@ -8695,6 +8711,23 @@ function buildTimePlanDays(ctx){
     dayObj.dist = Math.max(0.1, Math.round(dayObj.durMin / pace * 10) / 10); // estimación, para estadísticas y relojes
     return dayObj;
   });
+  // La tirada es la sesión más larga también por tiempo (sin plan por fases): con la escalera de trote/caminata de un principiante con base de otro deporte, un fartlek de 27 min pasaba a la tirada de 24.
+  // Lo que sobra se recorta a la duración de la tirada; si la estructura de series/cuestas/fartlek no entra, esa sesión pasa a rodaje.
+  if(!(phaseInfo && phaseInfo.active)){
+    const L = timeDays.find(d => d.typeKey === 'long');
+    if(L && L.durMin > 0) timeDays.forEach(d => {
+      if(d === L || d.typeKey === 'rest' || d.typeKey === 'test' || !(d.durMin > L.durMin)) return;
+      if(d.typeKey === 'fartlek' && d.interval){
+        d.interval = buildTimeFartlekStructure(L.durMin, weekNumber);
+        d.durMin = Math.round(d.interval.reps * (d.interval.workMin + d.interval.restMin));
+      }
+      if(d.durMin > L.durMin){
+        if(d.typeKey === 'intervals' || d.typeKey === 'hills' || d.typeKey === 'fartlek'){ d.typeKey = 'easy'; d.zone = zoneMap.easy; d.terrain = p.terrain; delete d.interval; }
+        d.durMin = L.durMin;
+      }
+      d.dist = Math.max(0.1, Math.round(d.durMin / pace * 10) / 10);
+    });
+  }
   // Ritmo de carrera en tempo y series de las fases específicas. La tirada larga por tiempo no lleva
   // bloque a ritmo de carrera (en minutos no hay una distancia sobre la que calcularlo).
   // Mismo reparto que en distancia (spreadPhaseShortfall), en minutos: los topes por tipo (tempo 35,
