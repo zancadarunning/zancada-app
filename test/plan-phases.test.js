@@ -873,7 +873,7 @@ test('checkPlanAlgoVersion: con planAlgoVersion 4 (por distancia) solo anota la 
   app.state.plan = plan;
   app.state.planAlgoVersion = 4;
   app.checkPlanAlgoVersion();
-  assert.equal(app.state.planAlgoVersion, 5);
+  assert.equal(app.state.planAlgoVersion, 6);
   assert.equal(app.state.plan, plan, 'el mismo arreglo, sin regenerar');
   assert.deepEqual(plain(app.state.plan), plain(plan));
   assert.ok(calls.persist >= 1);
@@ -887,7 +887,7 @@ test('checkPlanAlgoVersion: con planAlgoVersion 3 por distancia sigue anotando s
   dist.app.state.plan = plan;
   dist.app.state.planAlgoVersion = 3;
   dist.app.checkPlanAlgoVersion();
-  assert.equal(dist.app.state.planAlgoVersion, 5);
+  assert.equal(dist.app.state.planAlgoVersion, 6);
   assert.equal(dist.app.state.plan, plan);
 
   const time = phasedApp(racingProfile({ trainBy: 'time' }), null);
@@ -897,7 +897,7 @@ test('checkPlanAlgoVersion: con planAlgoVersion 3 por distancia sigue anotando s
   time.app.state.plan = tplan;
   time.app.state.planAlgoVersion = 3;
   time.app.checkPlanAlgoVersion();
-  assert.equal(time.app.state.planAlgoVersion, 5);
+  assert.equal(time.app.state.planAlgoVersion, 6);
   assert.notEqual(time.app.state.plan, tplan, 'por tiempo se regenera');
   assert.equal(time.app.state.plan.length, 7);
 });
@@ -910,7 +910,7 @@ test('checkPlanAlgoVersion: con una versión más vieja (2) regenera el plan', (
   app.state.plan = plan;
   app.state.planAlgoVersion = 2;
   app.checkPlanAlgoVersion();
-  assert.equal(app.state.planAlgoVersion, 5);
+  assert.equal(app.state.planAlgoVersion, 6);
   assert.equal(app.state.plan.length, 7);
 });
 
@@ -922,7 +922,7 @@ test('checkPlanAlgoVersion: deja el cronograma al día aunque la versión ya sea
   app.state.onboarded = true;
   app.state.weekStart = '2026-10-26';
   app.state.plan = [{ day: 'tue', typeKey: 'easy', dist: 7 }];
-  app.state.planAlgoVersion = 5;
+  app.state.planAlgoVersion = 6;
   app.checkPlanAlgoVersion();
   assert.deepEqual(plain(app.state.phaseSchedule), withPeak(app, app.state.profile, SCHEDULE));
 });
@@ -942,7 +942,7 @@ test('checkWeekRollover / checkPlanAlgoVersion: no tiran si falta el perfil', ()
   app.state.onboarded = true;
   app.state.weekStart = app.getMondayISO(new app.Date());
   app.state.plan = [{ day: 'tue', typeKey: 'easy', dist: 7 }];
-  app.state.planAlgoVersion = 5;
+  app.state.planAlgoVersion = 6;
   assert.doesNotThrow(() => app.checkWeekRollover());
   assert.doesNotThrow(() => app.checkPlanAlgoVersion());
 });
@@ -960,7 +960,7 @@ test('checkWeekRollover: al cambiar de semana crea el cronograma y sella la vers
   app.checkWeekRollover();
   assert.equal(app.state.phaseSchedule.anchor, '2026-12-07');
   assert.equal(app.state.weekStart, '2026-11-30');
-  assert.equal(app.state.planAlgoVersion, 5);
+  assert.equal(app.state.planAlgoVersion, 6);
 });
 
 test('applyProfileChange (herramienta del coach): cambiar fecha_carrera o objetivo reemplaza el cronograma', () => {
