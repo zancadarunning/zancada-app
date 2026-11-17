@@ -204,3 +204,13 @@ test('con una molestia activa el Plan lo explica (nota en la semana actual) y ex
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8'), /plan-pain-note[\s\S]{0,200}activePainEntries\(21\)/);
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.match(fs.readFileSync(path.join(__dirname, '..', 'locales', l + '.js'), 'utf8'), /plan_pain_note:"/, l);
 });
+
+test('carrera objetivo: nada de tirada larga a 48 horas y el rodaje de la víspera de un 5K no pasa de 3 km', () => {
+  const a = loadApp();
+  const p = { name: 'x', goal: '5k', runnerType: 'new', currentWeeklyKm: 0, weeklyKm: 0, trainingDays: ['mon', 'thu', 'fri'], trainBy: 'distance', terrain: 'asfalto', units: 'metric', birth: '1988-06-15', weight: 65, height: 168, createdAt: '2026-03-02', raceDate: '2026-06-14' };
+  a.state.profile = p; a.state.onboarded = true; a.state.weekStart = '2026-06-08'; a.state.weekNumber = 14;
+  const plan = Array.from(a.generatePlan(p, 14, '2026-06-08'));
+  assert.equal(plan[6].raceDay, true, 'el domingo es la carrera');
+  assert.notEqual(plan[4].typeKey, 'long', 'el viernes (48 h antes) no hay tirada');
+  plan.filter((d, i) => i < 6 && d.typeKey === 'easy' && i >= 4).forEach(d => assert.ok(d.dist <= 3, 'rodaje corto de víspera: ' + d.dist));
+});

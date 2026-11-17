@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-17T23:19:11Z';
+const APP_VERSION = '2026-11-17T23:38:27Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -6881,6 +6881,8 @@ function applyEventRaceNeighbors(days, p, weekStartDate){
   };
   const out = days.slice();
   if(idx > 0 && GOAL_RACE_HEAVY.includes(out[idx - 1].typeKey)) out[idx - 1] = shortEasy(out[idx - 1]);
+  // una tirada larga a 48 horas de la carrera tampoco: pasa a rodaje corto (el resto de las sesiones de ese día no se toca)
+  if(idx > 1 && out[idx - 2].typeKey === 'long') out[idx - 2] = shortEasy(out[idx - 2]);
   for(let i = idx + 1; i < out.length; i++) out[i] = shortEasy(out[i]);
   return out;
 }
@@ -8498,20 +8500,25 @@ function applyGoalRaceDay(days, p, weekStartDate, phaseInfo){
   if(idx <= 6) out[idx] = { day: days[idx].day, typeKey: 'rest', dist: 0, terrain: null, zone: null, beginner: !!days[idx].beginner,
     raceDay: true, raceEventName: t('plan_goal_race_name', { dist: String(p.goal || '').toUpperCase() }) };
   const pace = estimateBasePaceMinPerKm(p);
+  // el rodaje corto de la víspera no pasa de la mitad de la distancia de la carrera (en un 5K, 3 km y no 5)
+  const raceKm = {'5k':5,'10k':10,'15k':15,'21k':21.1,'42k':42.2}[p.goal];
+  const capKm = raceKm ? Math.min(5, Math.max(2, Math.round(raceKm * 0.5))) : 5;
   const shortEasy = d => {
     if(!d || d.typeKey === 'rest' || d.typeKey === 'test' || (d.typeKey !== 'easy' && !GOAL_RACE_HEAVY.includes(d.typeKey))) return d;
     const o = { day: d.day, typeKey: 'easy', terrain: p.terrain, zone: 2, beginner: !!d.beginner };
     if(d.timeBased){
       o.timeBased = true;
-      o.durMin = Math.min(d.durMin || 0, roundMin5(5 * pace, TIME_MIN_BY_TYPE.easy));
+      o.durMin = Math.min(d.durMin || 0, roundMin5(capKm * pace, TIME_MIN_BY_TYPE.easy));
       o.dist = Math.max(0.1, Math.round(o.durMin / pace * 10) / 10);
     } else {
-      o.dist = Math.min(d.dist || 0, 5);
+      o.dist = Math.min(d.dist || 0, capKm);
     }
     return o;
   };
   // el día anterior: solo si traía una sesión fuerte (un rodaje suave queda como estaba)
   if(idx > 0 && GOAL_RACE_HEAVY.includes(out[idx - 1].typeKey)) out[idx - 1] = shortEasy(out[idx - 1]);
+  // una tirada larga a 48 horas de la carrera tampoco: pasa a rodaje corto (la sesión de calidad corta del taper a 48 horas se conserva a propósito)
+  if(idx > 1 && out[idx - 2].typeKey === 'long') out[idx - 2] = shortEasy(out[idx - 2]);
   for(let i = idx + 1; i < out.length; i++) out[i] = shortEasy(out[i]);
   return out;
 }

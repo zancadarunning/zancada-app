@@ -194,7 +194,7 @@ function loadApp(opts) {
   // actuallyStartRun de verdad (que necesita geolocalización, mapa de Leaflet, etc. -- nada de
   // eso existe en este sandbox mínimo).
   vm.runInContext(
-    'this.__exposed = { state, DAY_KEYS, lang, setCurrentUserId(v){ currentUserId = v; stateLoadedFor = v; }, setStateLoadedFor(v){ stateLoadedFor = v; }, getState(){ return state; }, setState(v){ state = v; }, getTracker(){ return tracker; }, setTracker(v){ tracker = v; }, setDeviceConnections(v){ deviceConnections = v; }, setDeviceConnectionsLoaded(v){ deviceConnectionsLoaded = v; }, setStravaSunset(v){ STRAVA_SUNSET = v; }, tickRunTimer };',
+    'this.__exposed = { state, DAY_KEYS, lang, setCurrentUserId(v){ currentUserId = v; stateLoadedFor = v; }, setStateLoadedFor(v){ stateLoadedFor = v; }, getState(){ return state; }, setState(v){ state = v; }, getTracker(){ return tracker; }, setTracker(v){ tracker = v; }, setDeviceConnections(v){ deviceConnections = v; }, setLangValue(v){ lang = v; }, setDeviceConnectionsLoaded(v){ deviceConnectionsLoaded = v; }, setStravaSunset(v){ STRAVA_SUNSET = v; }, tickRunTimer };',
     sandbox,
     { filename: 'expose-internals.js' }
   );

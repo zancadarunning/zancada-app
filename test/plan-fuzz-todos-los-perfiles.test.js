@@ -136,3 +136,25 @@ test('coherencia del plan sin carrera: la tirada es la más larga, nunca dos dí
     }
   }
 });
+
+test('los textos de todas las sesiones salen completos en los 6 idiomas (sin undefined, NaN ni claves sin traducir)', () => {
+  const a = loadApp();
+  const r = rng(Number(process.env.FUZZ_SEED) || 909);
+  for (let n = 0; n < 150; n++) {
+    const p = randomProfile(r); delete p.raceDate;
+    a.state.profile = p; a.state.onboarded = true; a.state.weekStart = MONDAY;
+    for (const w of [1, 3, 5, 9, 13]) {
+      a.state.weekNumber = w;
+      const plan = Array.from(a.generatePlan(p, w, addDays(MONDAY, 7 * (w - 1))));
+      for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
+        a.setLangValue(l);
+        plan.forEach(d => {
+          const lb = a.planLabel(d); const txt = (lb.type || '') + '\n' + (lb.desc || '');
+          assert.doesNotMatch(txt, /undefined|NaN|\[object|\{[a-z_]+\}|\b(desc|type|plan)_[a-z_]+\b/, `${l} ${d.typeKey}: ${txt.slice(0, 140)}`);
+          if (d.typeKey !== 'rest') assert.ok(lb.type, `${l} ${d.typeKey}: sin tipo`);
+        });
+      }
+      a.setLangValue('es');
+    }
+  }
+});
