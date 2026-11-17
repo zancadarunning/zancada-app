@@ -1,5 +1,6 @@
 // api/chat.js — función serverless de Vercel.
 const verifyUser = require('./_lib/verify-user');
+const requirePlan = require('./_lib/require-plan');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { pick } = require('./_lib/own');
@@ -28,6 +29,14 @@ const AUTH_ERROR_MSG = {
   fr: 'Ta session a expiré. Déconnecte-toi et reconnecte-toi pour continuer à utiliser le coach.',
   it: 'La tua sessione è scaduta. Esci e accedi di nuovo per continuare a usare il coach.',
   de: 'Deine Sitzung ist abgelaufen. Melde dich ab und wieder an, um den Coach weiter zu nutzen.'
+};
+const PLAN_REQUIRED_MSG = {
+  es: 'Para hablar con Zonda necesitás una suscripción activa de Zancada.',
+  en: 'You need an active Zancada subscription to chat with Zonda.',
+  pt: 'Para falar com a Zonda você precisa de uma assinatura ativa do Zancada.',
+  fr: 'Il faut un abonnement Zancada actif pour discuter avec Zonda.',
+  it: 'Per parlare con Zonda serve un abbonamento Zancada attivo.',
+  de: 'Um mit Zonda zu chatten, brauchst du ein aktives Zancada-Abo.'
 };
 const GENERIC_ERROR_MSG = {
   es: 'No me pude conectar ahora mismo. Probá de nuevo en un momento.',
@@ -101,6 +110,8 @@ module.exports = withSentry(async (req, res) => {
     res.status(auth.status).json({ error: { message: pick(AUTH_ERROR_MSG, lang, 'es') } });
     return;
   }
+  // Sin plan de pago vigente no hay IA (solo cuando el cobro está prendido: PAYWALL_ENFORCE=1; ver api/_lib/require-plan.js)
+  if (!(await requirePlan(auth.userId, res, { error: { message: pick(PLAN_REQUIRED_MSG, lang, 'es'), code: 'subscription_required' } }))) return;
 
   // Un mail sin confirmar no alcanza: las cuentas descartables sin confirmar no pueden gastar la cuota de la IA.
   if (!auth.emailConfirmed) {

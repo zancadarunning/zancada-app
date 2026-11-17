@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-17T13:53:55Z';
+const APP_VERSION = '2026-11-17T16:29:08Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5242,6 +5242,7 @@ function enterApp(){
   document.getElementById('mainHeader').style.display='flex';
   document.getElementById('tabbar').style.display='flex';
   document.getElementById('coach-fab-wrap').style.display='block';
+  try{ checkPaywall(true); }catch(e){}   // cobro: apagado hasta el lanzamiento (PAYWALL_ENABLED)
   syncTabbarHeight();
   applyStaticTranslations();
   document.getElementById('perfil-name').value = state.profile.name;
@@ -5473,6 +5474,7 @@ function wipeLocalUserData(uid){
 }
 async function logout(){
   obClearDraft();   // las respuestas a medio cargar del inicio no quedan para la próxima cuenta
+  try{ const P = purchasesPlugin(); if(P && billingConfigured) await P.logOut(); }catch(e){}   // cobro: se cierra también la sesión de RevenueCat
   await waitForPendingPersist();
   // Ver el comentario de runProgressKey(): sin esto, una carrera sin terminar quedaba
   // recuperable por la próxima cuenta que inicie sesión en este mismo dispositivo.
@@ -17006,6 +17008,113 @@ function buildColoredRouteSegments(r){
 function isNativeApp(){
   return !!(typeof window !== 'undefined' && window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 }
+/* ================= SUSCRIPCIÓN (cobro) =================
+   APAGADA hasta el lanzamiento: con PAYWALL_ENABLED = false esta parte no hace NADA (ni consulta, ni muestra pantallas). Para prenderla (ver docs/suscripciones-plan.md):
+     1) PAYWALL_ENABLED = true y la clave pública de RevenueCat en REVENUECAT_ANDROID_KEY, 2) PAYWALL_ENFORCE=1 en Vercel, 3) regalar el plan a las cuentas existentes (sql/entitlements_gift_existing.sql).
+   Solo en la app instalada (Android): la web no cobra. La compra la hace Google Play a través de RevenueCat; quien decide si una cuenta tiene plan es el SERVIDOR (api/entitlement.js, que lee lo que
+   escribe api/revenuecat-webhook.js): acá nunca se confía en que el teléfono diga "pagué". Si no se puede consultar (sin conexión), no se bloquea a nadie por eso. */
+const PAYWALL_ENABLED = false;
+const REVENUECAT_ANDROID_KEY = '';   // clave pública del SDK de Android (empieza con goog_): RevenueCat > API keys
+let billingConfigured = false, paywallPackages = [], paywallBusy = false, lastPlanCheckAt = 0;
+function purchasesPlugin(){
+  return isNativeApp() && window.Capacitor.Plugins && window.Capacitor.Plugins.Purchases ? window.Capacitor.Plugins.Purchases : null;
+}
+async function initBilling(userId){
+  const P = purchasesPlugin();
+  if(!P || !REVENUECAT_ANDROID_KEY || !userId) return false;
+  try{
+    if(!billingConfigured){ await P.configure({apiKey: REVENUECAT_ANDROID_KEY}); billingConfigured = true; }
+    await P.logIn({appUserID: userId});   // el id de la cuenta es el usuario de RevenueCat: así el aviso del servidor sabe de quién es la compra
+    return true;
+  }catch(e){ console.error('billing init', e); return false; }
+}
+// {active, plan, expiresAt} o null si no se pudo consultar
+async function fetchPlan(){
+  try{
+    const { data:{ session } } = await supabaseClient.auth.getSession();
+    if(!session) return null;
+    const res = await fetch(apiUrl('/api/entitlement'), { method:'POST', headers:{ 'Authorization': `Bearer ${session.access_token}` } });
+    if(!res.ok) return null;
+    const d = await res.json();
+    return d && typeof d.active === 'boolean' ? d : null;
+  }catch(e){ return null; }
+}
+async function checkPaywall(force){
+  if(!PAYWALL_ENABLED || !isNativeApp() || !currentUserId) return;
+  if(!force && Date.now() - lastPlanCheckAt < 10*60*1000) return;
+  lastPlanCheckAt = Date.now();
+  await initBilling(currentUserId);
+  const plan = await fetchPlan();
+  if(plan === null) return;
+  if(plan.active){ hidePaywall(); return; }
+  showPaywall();
+}
+function hidePaywall(){ const el = document.getElementById('paywall'); if(el) el.style.display = 'none'; }
+function setPaywallMsg(text){ const el = document.getElementById('paywall-error'); if(el) el.textContent = text || ''; }
+async function showPaywall(){
+  const el = document.getElementById('paywall');
+  if(!el) return;
+  el.style.display = 'block';
+  setPaywallMsg('');
+  const box = document.getElementById('paywall-plans');
+  box.innerHTML = '<div class="skel-line" style="height:84px; margin-bottom:10px;"></div><div class="skel-line" style="height:84px;"></div>';
+  const P = purchasesPlugin();
+  try{
+    if(!P || !billingConfigured) throw new Error('sin cobro');
+    const o = await P.getOfferings();
+    paywallPackages = ((o && o.current && o.current.availablePackages) || []).filter(p => p && p.product);
+    if(!paywallPackages.length) throw new Error('sin planes');
+    box.innerHTML = paywallPackages.map((p, i) => {
+      const annual = p.packageType === 'ANNUAL';
+      const trial = !!(p.product.introPrice);
+      return `<button type="button" class="paywall-plan${annual ? ' best' : ''}" data-on-click="buyPaywallPlan(${i})">
+        <span class="paywall-plan-main"><b>${t(annual ? 'paywall_yearly' : 'paywall_monthly')}</b>${annual ? `<span class="paywall-badge">${t('paywall_save')}</span>` : ''}</span>
+        <span class="paywall-plan-price">${escapeHtml(String(p.product.priceString || ''))}<small> / ${t(annual ? 'paywall_per_year' : 'paywall_per_month')}</small></span>
+        ${trial ? `<span class="paywall-plan-trial">${t('paywall_trial')}</span>` : ''}
+      </button>`;
+    }).join('');
+  }catch(e){
+    console.error('paywall offers', e);
+    box.innerHTML = '';
+    setPaywallMsg(t('paywall_unavailable'));
+  }
+}
+function setPaywallBusy(on){
+  document.querySelectorAll('#paywall button.paywall-plan, #paywall-restore').forEach(b => { b.disabled = !!on; });
+}
+// El plan lo confirma el servidor (llega por el aviso de RevenueCat, suele tardar unos segundos): se espera hasta ~30 s.
+async function waitForPlan(){
+  setPaywallMsg(t('paywall_activating'));
+  for(let i = 0; i < 15; i++){
+    const p = await fetchPlan();
+    if(p && p.active){ setPaywallMsg(''); hidePaywall(); showToast(t('paywall_welcome'), 'success'); return true; }
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  setPaywallMsg(t('paywall_pending'));
+  return false;
+}
+async function buyPaywallPlan(i){
+  const P = purchasesPlugin(), pkg = paywallPackages[Number(i)];
+  if(paywallBusy || !P || !pkg) return;
+  paywallBusy = true; setPaywallBusy(true); setPaywallMsg('');
+  try{
+    await P.purchasePackage({aPackage: pkg});
+    await waitForPlan();
+  }catch(e){
+    if(!(e && (e.userCancelled || String(e.code) === '1'))){ console.error('purchase', e); setPaywallMsg(t('paywall_error')); }
+  }finally{ paywallBusy = false; setPaywallBusy(false); }
+}
+async function restorePaywall(){
+  const P = purchasesPlugin();
+  if(paywallBusy || !P) return;
+  paywallBusy = true; setPaywallBusy(true); setPaywallMsg('');
+  try{
+    await P.restorePurchases();
+    if(!(await waitForPlan())) setPaywallMsg(t('paywall_restore_none'));
+  }catch(e){ console.error('restore', e); setPaywallMsg(t('paywall_error')); }
+  finally{ paywallBusy = false; setPaywallBusy(false); }
+}
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ try{ checkPaywall(false); }catch(e){} } });
 function renderRDRuta(panel){
   const {r, paceMin, cal} = rdCurrent;
   const timeStr = new Date(r.date).toLocaleTimeString(LOCALE_MAP[lang], {hour:'numeric', minute:'2-digit'});
@@ -20551,6 +20660,7 @@ async function sendChat(){
         signal: chatAbortController.signal
       });
       const data = await res.json();
+      if(data.error && data.error.code === 'subscription_required'){ try{ showPaywall(); }catch(e){} }
       if(data.error){ if(!anyToolApplied) finalText = data.error.message || t('coach_connection_error'); break; }   // con cambios ya aplicados no se muestra un error: se avisa que están (ver más abajo) y no se reintenta
       const blocks = data.content || [];
       const textPart = blocks.filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
