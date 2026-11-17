@@ -111,3 +111,28 @@ test('el volumen del principiante no se cae de golpe ni se dispara (semanas sin 
     assert.ok(tot(13) > 0 && tot(13) <= (p.trainBy === 'time' ? 1500 : 160), `perfil ${n}: total semanal razonable`);
   }
 });
+
+test('coherencia del plan sin carrera: la tirada es la más larga, nunca dos días fuertes seguidos, la descarga no sube y toda sesión tiene tamaño', () => {
+  const a = loadApp();
+  const r = rng(Number(process.env.FUZZ_SEED) || 5150);
+  const HARD = ['intervals', 'tempo', 'fartlek', 'hills', 'progression'];
+  for (let n = 0; n < 700; n++) {
+    const p = randomProfile(r); delete p.raceDate; delete p.levelTest; p.availableMinPerSession = 0;
+    a.state.profile = p; a.state.onboarded = true; a.state.weekStart = MONDAY;
+    const size = d => (p.trainBy === 'time' ? d.durMin : d.dist) || 0;
+    let prev = null;
+    for (let w = 1; w <= 24; w++) {
+      a.state.weekNumber = w;
+      const plan = Array.from(a.generatePlan(p, w, addDays(MONDAY, 7 * (w - 1))));
+      const sess = plan.filter(d => d.typeKey !== 'rest' && d.typeKey !== 'test');
+      const label = `perfil ${n} ${p.goal}/${p.trainBy}/${p.trainingDays.join('')} semana ${w}`;
+      sess.forEach(d => assert.ok(size(d) > 0, `${label}: sesión sin tamaño (${d.typeKey})`));
+      const longs = sess.filter(d => d.typeKey === 'long');
+      if (longs.length && sess.length > 1) assert.ok(Math.max(...longs.map(size)) >= Math.max(...sess.map(size)) - 1e-9, `${label}: la tirada no es la más larga (${sess.map(d => d.typeKey[0] + size(d)).join(" ")}) ${JSON.stringify(p)}`);
+      for (let i = 0; i < 6; i++) assert.ok(!(HARD.includes(plan[i].typeKey) && HARD.includes(plan[i + 1].typeKey)), `${label}: dos días fuertes seguidos (${plan[i].day})`);
+      const tot = sess.reduce((s, d) => s + size(d), 0);
+      if (prev !== null && w % 4 === 0 && prev > 0) assert.ok(tot <= prev * 1.06 + 5, `${label}: la semana de descarga sube (${prev} -> ${tot})`);
+      prev = tot;
+    }
+  }
+});

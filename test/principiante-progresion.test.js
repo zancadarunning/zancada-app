@@ -172,3 +172,35 @@ test('nota de cambio de zona: una sola vez, solo para el principiante que pasó 
   a.state.weekNumber = 3; a.maybeBeginnerBaseNote(); a.maybeBeginnerBaseNote();
   assert.equal(a.state.chat.filter(m => m.text === a.t('beginner_base_note')).length, 1, 'una sola vez');
 });
+
+test('los días de otro deporte cargados en Perfil no se eligen para las sesiones fuertes (si hay días libres)', () => {
+  const a = loadApp();
+  const p = { name: 'x', weeklyKm: 30, currentWeeklyKm: 30, goal: '10k', runnerType: 'active', trainingDays: ['mon', 'tue', 'thu', 'sat', 'sun'], units: 'metric', trainBy: 'distance', terrain: 'asfalto', crossTrainingSports: ['futbol'], crossTrainingDays: ['tue', 'thu'] };
+  a.state.profile = p; a.state.onboarded = true;
+  for (let w = 1; w <= 12; w++) {
+    const s = a.distributeSessionTypes(p.trainingDays, false, w, { level: 0 }, false, '10k', false);
+    ['tue', 'thu'].forEach(d => assert.ok(['easy'].includes(s[d]), `semana ${w}: ${d} (día de fútbol) debería ser rodaje, es ${s[d]}`));
+  }
+  p.crossTrainingDays = ['mon', 'tue', 'thu', 'sat'];   // casi todos ocupados: no alcanza, se usan igual
+  const s2 = a.distributeSessionTypes(p.trainingDays, false, 3, { level: 0 }, false, '10k', false);
+  assert.ok(Object.values(s2).some(t => !['easy', 'long'].includes(t)), 'sin días libres suficientes igual hay calidad');
+});
+
+test('semanas de 2-3 sesiones sin carrera: el total semanal ya no oscila entre semana con calidad y semana sin ella (distancia)', () => {
+  const a = loadApp();
+  [['wed', 'sun'], ['tue', 'thu', 'sun']].forEach(days => {
+    const p = { name: 'x', weeklyKm: 25, currentWeeklyKm: 25, goal: '10k', runnerType: 'active', trainingDays: days, units: 'metric', trainBy: 'distance', terrain: 'asfalto', birth: '1985-06-15', weight: 65, height: 170 };
+    a.state.profile = p; a.state.onboarded = true;
+    const tots = [];
+    for (let w = 9; w <= 19; w++) { if (w % 4 === 0) continue; tots.push(weekPlan(a, p, w).reduce((s, d) => s + d.dist, 0)); }
+    const max = Math.max(...tots), min = Math.min(...tots);
+    assert.ok(max / min <= 1.25, `${days.length} días: oscila de ${min} a ${max} km`);
+  });
+});
+
+test('con una molestia activa el Plan lo explica (nota en la semana actual) y existe en los 6 idiomas', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8'), /id="plan-pain-note"/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8'), /plan-pain-note[\s\S]{0,200}activePainEntries\(21\)/);
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.match(fs.readFileSync(path.join(__dirname, '..', 'locales', l + '.js'), 'utf8'), /plan_pain_note:"/, l);
+});
