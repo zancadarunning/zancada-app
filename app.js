@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-17T20:45:36Z';
+const APP_VERSION = '2026-11-17T21:23:23Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3645,7 +3645,7 @@ function updateHealthConnectStatusDisplay(){
   // ya sincroniza directo. data-i18n de index.html ya puso el texto de Strava por
   // default (ver applyStaticTranslations) -- acá solo lo pisamos en Android.
   const hintEl = document.getElementById('devices-hint-text');
-  if(hintEl) hintEl.textContent = isAndroid ? t('perfil_connectivity_hint_android') : t('perfil_connectivity_hint');
+  if(hintEl) hintEl.textContent = isAndroid ? t('perfil_connectivity_hint_android') : (isNativeApp() ? t('perfil_connectivity_hint_store') : t('perfil_connectivity_hint'));
   if(!isAndroid) return;
   const el = document.getElementById('healthconnect-status');
   const btn = document.getElementById('healthconnect-connect-btn');
@@ -5233,6 +5233,7 @@ async function registerLoginDevice(){
 }
 function enterApp(){
   sunsetStrava();
+  markStoreBuild();
   setTimeout(()=>{ try{ refreshNativePushRegistration(); }catch(e){} }, 1500);
   setTimeout(()=>{ try{ refreshWebPushRegistration(); }catch(e){} }, 2500);
   setTimeout(()=>{ try{ registerLoginDevice(); }catch(e){} }, 4000);   // aviso por mail si es un dispositivo nuevo (no frena la entrada)
@@ -9825,6 +9826,8 @@ function refreshHomeAlerts(){
 /* ---- Sacar Strava al lanzar ----
    Interruptor (ver docs/strava-sunset.md): con STRAVA_SUNSET en true la app oculta Strava, pasa sus carreras a carga manual (origin strava + aiExcluded: nunca llegan a Zonda, igual que "Conservar mis carreras" al desconectar)
    y desconecta la cuenta de Strava (revoca el permiso). Para quien no vuelva a abrir la app lo hace sql/strava_sunset.sql. Hoy está apagado. */
+// Decisión del dueño (2026-11-17): Strava queda SOLO en la web. En las apps de las tiendas (Android/iPhone) se oculta la conexión con Strava; no toca las carreras ni las conexiones que ya existan.
+function markStoreBuild(){ try{ if(isNativeApp()) document.body.classList.add('strava-store'); }catch(e){} }
 let STRAVA_SUNSET = false;
 let stravaSunsetBusy = false;
 function sunsetStrava(){
@@ -16333,6 +16336,8 @@ function renderPaceCalcResults(){
 // en el cartel de Historial (buildStravaSyncBanner) como en la nota corta de Perfil
 // (updateStravaStatusDisplay), para no repetir el mismo cálculo dos veces.
 function getStravaSyncIssue(){
+  // Sin Strava conectado (lo desconectó, o es la app de tienda, donde Strava no se ofrece) no hay nada que avisar: el estado viejo de la sincronización no cuenta.
+  if(isNativeApp() || (deviceConnectionsLoaded && !deviceConnections.strava)) return null;
   const sync = state.stravaSync;
   if(!sync) return null; // nunca se conectó Strava, o nunca corrió ningún intento todavía
   // lastError es el texto crudo que devolvió Strava/el servidor (a veces un JSON entero): el corredor ve un mensaje claro, el detalle queda en Sentry
