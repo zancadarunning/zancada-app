@@ -8,6 +8,7 @@ const sentRegistry = require('./_lib/sent-registry');
 const { pruneUsage } = require('./_lib/daily-cap');
 const nudge = require('./_lib/missing-run-nudge');
 const { pick, ownKey } = require('./_lib/own');
+const reminderSlot = require('./_lib/reminder-slot');
 
 // ANTES este cron corría UNA vez por día a una hora fija en UTC (11:00 UTC, ver
 // vercel.json) -- pensada para que le llegue a las 8am a un corredor en Argentina
@@ -193,9 +194,9 @@ module.exports = withSentry(async (req, res) => {
       // Cada corredor puede elegir la hora del aviso en Perfil (profile.reminderHour, 0-23); sin elegir, las 8.
       const chosen = parseInt(row.rh, 10);
       const wantHour = Number.isInteger(chosen) && chosen >= 0 && chosen <= 23 ? chosen : REMINDER_HOUR;
-      // El cron corre cada 30 minutos: de las dos corridas de cada hora, el recordatorio diario sale solo en la que cae en la primera
-      // mitad de la hora LOCAL del corredor (siempre hay exactamente una, también en husos con :30 o :45), si no llegaría duplicado.
-      if (hour !== wantHour || minute >= 30) { skipped++; continue; } // todavía no es la hora elegida en el huso de ESTE usuario
+      // El cron corre cada 30 minutos. La hora elegida se reparte en turnos (en punto y y media, fijo por cuenta: ver api/_lib/reminder-slot.js) para que no salgan todos juntos, y lo que no
+      // alcanzó a salir se reintenta en la corrida siguiente (el registro de enviados evita duplicados). Antes salía todo en la corrida de las en punto.
+      if (!reminderSlot.isReminderDue(row.user_id, wantHour, hour, minute)) { skipped++; continue; } // todavía no le toca (o ya pasó su ventana) en el huso de ESTE usuario
 
       // sessionDueToday exige que el plan guardado sea el de ESTA semana (weekStart == lunes actual en el huso del corredor): antes bastaba con que tuviera menos de 10 días, y
       // quien no abrió la app el lunes recibía el "Hoy toca" con la sesión del mismo día de la semana PASADA. Además descarta el descanso y la sesión ya resuelta
@@ -207,7 +208,7 @@ module.exports = withSentry(async (req, res) => {
       const typeLabel = today.custom ? String(today.type) : (pick(MSGS[lang].types, today.typeKey, '__none__') || String(today.typeKey));
       const body = MSGS[lang].body(nudge.describeSession(today, typeLabel, row.units === 'imperial', row.trainBy === 'time'));
 
-      due.push({ row, subRow, body });
+      due.push({ row, subRow, body, tz, exactRun: reminderSlot.isExactRun(row.user_id, wantHour, hour, minute) });
      } catch (rowErr) {
       // los datos de app_state los escribe cada cuenta con su propio JWT: una fila rara se salta, nunca aborta a las demás
       failed++;
@@ -244,11 +245,27 @@ module.exports = withSentry(async (req, res) => {
       failed++;
       return anyTransient ? 'failed' : 'dead';
     }
+    // Recordatorio diario: cada aviso se "reclama" en el registro de enviados antes de mandarlo (uno por persona por día, día LOCAL), así la corrida siguiente retoma a quienes no alcanzaron sin
+    // duplicar a nadie. Sin la tabla (null), solo se manda en la corrida exacta del turno: es el comportamiento de antes. Tope de tiempo: lo que no alcanza lo toma la próxima corrida.
+    const DAILY = 'daily_reminder';
+    async function sendDaily(item) {
+      const dayKey = nudge.localDayWindow(item.tz, Date.now()).dayKey;
+      const c = await sentRegistry.claim(base, headers, item.row.user_id, DAILY, dayKey);
+      if (c === false) { skipped++; return; }                          // ya se le mandó hoy
+      if (c === null && !item.exactRun) { skipped++; return; }         // sin registro no se reintenta: solo en la corrida exacta
+      const r = await sendOne(item);
+      if (r === 'failed' && c === true) await sentRegistry.release(base, headers, item.row.user_id, DAILY, dayKey);   // pasajero: se reintenta en la próxima corrida
+    }
+    const dailyStart = Date.now();
     let nextDue = 0;
     const workers = Array.from({ length: Math.min(SEND_CONCURRENCY, due.length) }, async () => {
-      while (nextDue < due.length) { await sendOne(due[nextDue++]); }
+      while (nextDue < due.length && Date.now() - dailyStart < 5000) {
+        try { await sendDaily(due[nextDue++]); } catch (e) { failed++; console.error('send-reminders: recordatorio diario', e && e.message); }
+      }
     });
     await Promise.all(workers);
+    const dailyPending = Math.max(0, due.length - nextDue);
+    if (dailyPending) console.warn('send-reminders: recordatorio diario sin enviar por falta de tiempo (se reintenta en la próxima corrida):', dailyPending);
 
     // Resumen semanal. El historial de carreras es pesado (puntos GPS), así que solo se pide para quienes les toca.
     // Con el registro de enviados (sql/sent_notifications.sql): a cada candidato se le "reclama" el aviso antes de mandarlo, así que una
@@ -336,7 +353,7 @@ module.exports = withSentry(async (req, res) => {
       }
     }));
 
-    res.status(200).json({ sent, skipped, failed, nudgeSent, weeklySent, weeklyRetried, weeklyPending, weeklyRegistry: registryOk });
+    res.status(200).json({ sent, skipped, failed, nudgeSent, weeklySent, weeklyRetried, weeklyPending, dailyPending, weeklyRegistry: registryOk });
   } catch (err) {
     console.error('send-reminders error', err);
     await reportError(err, { endpoint: 'send-reminders' });

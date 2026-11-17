@@ -7,6 +7,7 @@ const sent = [];
 const fcmPath = require.resolve(path.join('..', 'api', '_lib', 'fcm.js'));
 require.cache[fcmPath] = { id: fcmPath, filename: fcmPath, loaded: true, exports: { sendFcmPush: async (token, title, body) => { if (globalThis.__failPush) throw new Error('fcm caído'); sent.push({ token, title, body }); return false; } } };
 const { weeklySlotOf } = require('../api/_lib/weekly-summary.js');
+const { reminderBucket } = require('../api/_lib/reminder-slot.js');
 
 function fakeRes() {
   const r = { headers: {}, code: 200, body: null };
@@ -65,19 +66,27 @@ async function runAt(isoUtc, users) {
 
 const plan = Array.from({ length: 7 }, (_, i) => ({ day: i, typeKey: 'easy', dist: 5 }));
 
-test('recordatorio diario: sale en la corrida de :00 y NO en la de :30 (no se duplica)', async () => {
-  // martes 13/10/2026 (no es domingo), 08:00 y 08:30 UTC; el usuario tiene huso UTC y quiere el aviso a las 8
-  const users = [{ id: 'u1', plan, weekStart: '2026-10-12', runs: [] }];
+// usuario cuyo turno del recordatorio diario (en punto = 0, y media = 1) sea el pedido
+function userInBucket(bucket, prefix) { for (let i = 0; ; i++) if (reminderBucket((prefix || 'd') + i) === bucket) return (prefix || 'd') + i; }
+
+test('recordatorio diario: cada cuenta tiene su turno (en punto o y media), sale una sola vez y no se duplica entre corridas', async () => {
+  // martes 13/10/2026 (no es domingo), 08:00 y 08:30 UTC; los usuarios tienen huso UTC y quieren el aviso a las 8
+  registry.rows.clear(); registry.available = true; globalThis.__failPush = false;
+  const early = userInBucket(0), late = userInBucket(1);
+  const users = [early, late].map(id => ({ id, plan, weekStart: '2026-10-12', runs: [] }));
+  const hoy = r => r.sent.filter(s => /Hoy toca/.test(s.body)).map(s => s.token);
   const a = await runAt('2026-10-13T08:00:10Z', users);
   assert.equal(a.res.code, 200, JSON.stringify(a.res.body));
-  assert.equal(a.sent.filter(s => s.title === 'Zancada' && /Hoy toca/.test(s.body)).length, 1);
+  assert.deepEqual(hoy(a), ['tok-' + early], 'a las 8:00 sale solo el turno en punto');
   const b = await runAt('2026-10-13T08:30:10Z', users);
-  assert.equal(b.sent.length, 0, 'la corrida de :30 no manda el recordatorio diario otra vez');
+  assert.deepEqual(hoy(b), ['tok-' + late], 'a las 8:30 sale el otro turno; el primero NO se repite');
+  const c = await runAt('2026-10-13T09:00:10Z', users);
+  assert.equal(hoy(c).length, 0, 'despues de su ventana no vuelve a salir');
 });
 
 test('recordatorio diario: respeta las unidades y el modo por tiempo (antes decía siempre km)', async () => {
   const at = '2026-10-13T08:00:10Z';
-  const body = async (u) => (await runAt(at, [{ id: 'u1', plan, weekStart: '2026-10-12', runs: [], ...u }])).sent[0].body;
+  const body = async (u) => (registry.rows.clear(), await runAt(at, [{ id: userInBucket(0), plan, weekStart: '2026-10-12', runs: [], ...u }])).sent[0].body;
   assert.equal(await body({}), 'Hoy toca: Rodaje suave · 5.0 km');
   assert.equal(await body({ units: 'imperial' }), 'Hoy toca: Rodaje suave · 3.1 mi');
   const timePlan = plan.map(d => ({ ...d, durMin: 40 }));
@@ -172,7 +181,7 @@ test('recordatorio diario: con el plan guardado de la semana PASADA no avisa (an
 });
 
 test('si eligió las 20:00 para el recordatorio diario, no recibe además el aviso de "no apareció tu salida" a la misma hora', async () => {
-  const users = [{ id: 'u1', plan, weekStart: '2026-10-12', runs: [], rh: '20' }];
+  const users = [{ id: userInBucket(0), plan, weekStart: '2026-10-12', runs: [], rh: '20' }];
   const a = await runAt('2026-10-13T20:00:10Z', users);
   assert.equal(a.sent.length, 1, JSON.stringify(a.sent));
   assert.match(a.sent[0].body, /Hoy toca/);
@@ -189,4 +198,56 @@ test('varios dispositivos por cuenta: el resumen/recordatorio llega a todos, sin
   assert.equal(g.u1.devices.length, 2, 'el iPhone duplicado (legacy + nuevo) cuenta una vez');
   assert.deepEqual(g.u1.devices.map(d => d.platform).sort(), ['android', 'web']);
   assert.equal(g.u2.devices.length, 1);
+});
+
+// ---- reparto de los recordatorios diarios (fix/avisos-repartidos) ----
+test('REPARTO: muchas cuentas con la misma hora se reparten en dos corridas (parejo) y cada una recibe UN solo aviso', async () => {
+  registry.rows.clear(); registry.available = true; globalThis.__failPush = false;
+  const users = Array.from({ length: 60 }, (_, i) => ({ id: 'runner-' + i, plan, weekStart: '2026-10-12', runs: [] }));
+  const hoy = r => r.sent.filter(s => /Hoy toca/.test(s.body)).map(s => s.token);
+  const a = await runAt('2026-10-13T08:00:10Z', users), b = await runAt('2026-10-13T08:30:10Z', users), c = await runAt('2026-10-13T09:00:10Z', users);
+  const first = hoy(a), second = hoy(b);
+  assert.equal(first.length + second.length, 60, 'las 60 reciben el aviso');
+  assert.equal(new Set([...first, ...second]).size, 60, 'ninguna lo recibe dos veces');
+  assert.ok(first.length >= 18 && first.length <= 42, 'reparto parejo entre las dos corridas: ' + first.length + '/' + second.length);
+  assert.equal(hoy(c).length, 0);
+});
+
+test('REINTENTO: si el servicio de push falla en el turno, la corrida siguiente lo manda (y solo una vez)', async () => {
+  registry.rows.clear(); registry.available = true;
+  const id = userInBucket(0, 'retry');
+  const users = [{ id, plan, weekStart: '2026-10-12', runs: [] }];
+  globalThis.__failPush = true;
+  const a = await runAt('2026-10-13T08:00:10Z', users);
+  assert.equal(a.sent.length, 0, 'fallo transitorio: no salio');
+  globalThis.__failPush = false;
+  const b = await runAt('2026-10-13T08:30:10Z', users);
+  assert.equal(b.sent.filter(s => /Hoy toca/.test(s.body)).length, 1, 'la corrida siguiente lo manda');
+  const c = await runAt('2026-10-13T09:00:10Z', users);
+  assert.equal(c.sent.length, 0, 'y no se repite');
+});
+
+test('REPARTO sin la tabla sent_notifications: cada turno sale solo en su corrida exacta (no hay reintento, pero tampoco duplicados)', async () => {
+  registry.rows.clear(); registry.available = false; globalThis.__failPush = false;
+  try {
+    const early = userInBucket(0, 'sin'), late = userInBucket(1, 'sin');
+    const users = [early, late].map(id => ({ id, plan, weekStart: '2026-10-12', runs: [] }));
+    const hoy = r => r.sent.filter(s => /Hoy toca/.test(s.body)).map(s => s.token);
+    assert.deepEqual(hoy(await runAt('2026-10-13T08:00:10Z', users)), ['tok-' + early]);
+    assert.deepEqual(hoy(await runAt('2026-10-13T08:30:10Z', users)), ['tok-' + late]);
+    assert.equal(hoy(await runAt('2026-10-13T09:00:10Z', users)).length, 0);
+  } finally { registry.available = true; }
+});
+
+test('el turno de cada cuenta es estable (siempre el mismo) y reparte ~mitad y mitad', () => {
+  const { reminderBucket: bk, isReminderDue, isExactRun } = require('../api/_lib/reminder-slot.js');
+  const ids = Array.from({ length: 1000 }, (_, i) => '3f0c2a52-8d6e-4f5a-9a3e-' + String(i).padStart(12, '0'));
+  const zero = ids.filter(i => bk(i) === 0).length;
+  assert.ok(zero > 420 && zero < 580, 'cerca de la mitad: ' + zero);
+  assert.equal(bk(ids[7]), bk(ids[7]));
+  const e = ids.find(i => bk(i) === 0), l = ids.find(i => bk(i) === 1);
+  assert.equal(isReminderDue(e, 8, 7, 59), false, 'antes de la hora elegida no sale');
+  assert.equal(isReminderDue(e, 8, 8, 0), true); assert.equal(isExactRun(e, 8, 8, 0), true); assert.equal(isExactRun(e, 8, 8, 30), false);
+  assert.equal(isReminderDue(l, 8, 8, 0), false, 'el turno de y media no sale en punto'); assert.equal(isReminderDue(l, 8, 8, 30), true); assert.equal(isExactRun(l, 8, 8, 30), true);
+  assert.equal(isReminderDue(e, 8, 9, 0), false, 'fuera de su ventana de reintento');
 });
