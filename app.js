@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-18T12:57:43Z';
+const APP_VERSION = '2026-11-18T17:23:47Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -12224,6 +12224,15 @@ function updateCredits(){
   // diagnosticando bugs ya arreglados en una versión que el celular no había tomado.
   const versionEl = document.getElementById('app-version-text');
   if(versionEl) versionEl.textContent = appVersionLabel();
+  // En la app instalada se muestra además el número de versión de la tienda (p. ej. 1.0.2), que es el que se cita al hablar de "la versión"; la fecha y hora del build se mantienen porque sirven para saber qué código tiene cargado alguien.
+  try{
+    const AppPlugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+    if(versionEl && AppPlugin && typeof AppPlugin.getInfo === 'function' && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()){
+      AppPlugin.getInfo().then(info => {
+        if(info && info.version) versionEl.textContent = 'v' + info.version + ' · ' + appVersionLabel().slice(1);
+      }).catch(()=>{});
+    }
+  }catch(e){}
 }
 document.getElementById('perfil-name').addEventListener('input', ()=>{ updateCredits(); });
 document.getElementById('perfil-name').addEventListener('change', ()=>{
@@ -14464,6 +14473,7 @@ function isLightThemeNow(){
 }
 // Ancho en px CSS de la miniatura de una carrera (la tarjeta ocupa el ancho de la pantalla menos los márgenes)
 function histMapCssWidth(){ return Math.max(280, Math.min(640, Math.round((window.innerWidth || 400) - 34))); }
+// Las miniaturas se piden con attribution=false (sin el cartel de créditos grande dibujado en la imagen; el logo de Mapbox se mantiene, es obligatorio) y el crédito va como texto chico en la tarjeta (ver .hist-map::after en index.html), como permite la documentación de Mapbox.
 // Miniatura del recorrido (API de imágenes estáticas de Mapbox). Mejoras de calidad: se pide al tamaño real de la tarjeta y en retina (@2x, así no se estira),
 // con el mismo estilo de siempre (mapa claro, trazo verde oscuro), 200 puntos del
 // recorrido (antes 120) y un margen para que la ruta no toque los bordes.
@@ -14483,7 +14493,7 @@ function buildHistMapStaticUrl(r, width, height){
   const w = Math.min(1280, Math.round(width)), h = Math.min(1280, Math.round(height));
   const retina = dpr > 1.25 ? '@2x' : '';
   // mismo mapa claro de siempre (streets) y el mismo trazo verde oscuro, en cualquier tema
-  return `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/static/path-3+0B5D2E-1(${encoded})/auto/${w}x${h}${retina}?padding=22,28,22,28&access_token=${MAPBOX_TOKEN}`;
+  return `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/static/path-3+0B5D2E-1(${encoded})/auto/${w}x${h}${retina}?padding=22,28,22,28&attribution=false&access_token=${MAPBOX_TOKEN}`;
 }
 // Carreras cuya marca no deja mandar el recorrido a terceros: a Mapbox se le pide solo el mapa de la zona (un centro redondeado a ~10 m y un zoom, lo mismo que ya revelan los cuadros del mapa del detalle)
 // y el recorrido se dibuja encima acá, con la misma proyección (Web Mercator, mosaicos de 512 px). Devuelve null si no hay puntos válidos.
@@ -14508,7 +14518,7 @@ function restrictedMapView(points, width, height){
   const dpr = (typeof devicePixelRatio!=='undefined' && devicePixelRatio) || 1;
   return {
     w: W, h: H,
-    url: `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/static/${cLon},${cLat},${zoom},0/${W}x${H}${dpr > 1.25 ? '@2x' : ''}?access_token=${MAPBOX_TOKEN}`,
+    url: `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/static/${cLon},${cLat},${zoom},0/${W}x${H}${dpr > 1.25 ? '@2x' : ''}?attribution=false&access_token=${MAPBOX_TOKEN}`,
     path: px.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(''),
     start: px[0]
   };
