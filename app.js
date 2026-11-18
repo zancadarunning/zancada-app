@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-17T23:38:27Z';
+const APP_VERSION = '2026-11-17T23:55:46Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8522,6 +8522,7 @@ function applyGoalRaceDay(days, p, weekStartDate, phaseInfo){
   for(let i = idx + 1; i < out.length; i++) out[i] = shortEasy(out[i]);
   return out;
 }
+const HEAVY_NEIGHBOR_TYPES = ['intervals', 'tempo', 'fartlek', 'hills', 'progression'];
 function applyLevelTestDay(days, p, weekStartDate, beginner){
   if(!levelTestPending(p)) return days;
   const scheduled = (state.plan || []).some(d => d && d.typeKey === 'test' && d.status !== 'skipped' && (d.userTest || d.status === 'done'))
@@ -8539,14 +8540,33 @@ function applyLevelTestDay(days, p, weekStartDate, beginner){
   } else if((state.plan || []).some(d => d && d.typeKey === 'test' && d.status !== 'skipped')){
     return days;
   }
-  let idx = -1;
+  // El test es un esfuerzo máximo de 12 minutos: se pone en un rodaje (no reemplaza una sesión de calidad ni la tirada) y, si se puede, sin un día fuerte pegado antes o después.
+  // Entre los días posibles gana el de menos penalización y, a igual penalización, el más cercano.
+  const heavyDay = d => !!d && (d.typeKey === 'long' || HEAVY_NEIGHBOR_TYPES.includes(d.typeKey));
+  // Con 3 sesiones o menos en la semana el test reemplaza a la sesión de calidad (si no, quedaban test + calidad + tirada, tres días duros de tres).
+  const fewSessions = days.filter(d => d && d.typeKey !== 'rest').length <= 3;
+  const typePen = d => d.typeKey === 'long' ? 20 : fewSessions ? (d.typeKey === 'easy' ? 3 : 0) : (d.typeKey === 'easy' ? 0 : 10);
+  let idx = -1, bestPen = Infinity;
   for(let i = startIdx; i < days.length; i++){
-    if(days[i] && days[i].dist > 0 && days[i].typeKey !== 'rest'){ idx = i; break; }
+    const d = days[i];
+    if(!d || !(d.dist > 0) || d.typeKey === 'rest') continue;
+    const pen = typePen(d) + (heavyDay(days[i - 1]) ? 5 : 0) + (heavyDay(days[i + 1]) ? 5 : 0);
+    if(pen < bestPen){ bestPen = pen; idx = i; }
   }
   if(idx < 0) return days;
   const pace = estimateBasePaceMinPerKm(p);
   const out = days.slice();
   out[idx] = {day: days[idx].day, typeKey:'test', dist: Math.max(0.5, Math.round(12 / pace * 10) / 10), durMin: 12, timeBased: true, terrain:'asfalto', zone:null, beginner:!!beginner};
+  // El test cuenta como día fuerte: si con él quedan más días fuertes de los que tolera la semana (la mitad de las sesiones, como mínimo 1), las sesiones de calidad que sobran pasan a rodaje (primero las pegadas al test).
+  const nSess = out.filter(d => d && d.typeKey !== 'rest').length;
+  const allowedQuality = Math.max(0, Math.max(1, Math.floor(nSess / 2)) - 1);
+  const quality = out.map((d, k) => k).filter(k => k !== idx && out[k] && HEAVY_NEIGHBOR_TYPES.includes(out[k].typeKey));
+  quality.sort((x, y) => (Math.abs(x - idx) === 1 ? 0 : 1) - (Math.abs(y - idx) === 1 ? 0 : 1) || y - x);
+  for(let k = 0; quality.length - k > allowedQuality; k++){
+    const q = quality[k], d = out[q];
+    out[q] = {day: d.day, typeKey:'easy', dist: d.dist, terrain: d.terrain || p.terrain, zone: 2, beginner: !!d.beginner};
+    if(d.timeBased){ out[q].timeBased = true; out[q].durMin = d.durMin; }
+  }
   return out;
 }
 
