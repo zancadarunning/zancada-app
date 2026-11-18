@@ -46,8 +46,8 @@ test('api/chat.js usa pickModel y no deja el modelo fijo', () => {
   assert.ok(!src.includes("const model = 'claude-haiku"));
 });
 
-test('el modelo por defecto de Zonda es Haiku 5.5 (probado con las 14 conversaciones de evals/coach) y el de las pruebas es el mismo', () => {
-  assert.equal(DEFAULT_MODEL, 'claude-haiku-5-5');
+test('el modelo por defecto de Zonda es Haiku 4.5 (Haiku 5.5 dio respuestas vacías en el chat real el 2026-11-18) y el de las pruebas es el mismo', () => {
+  assert.equal(DEFAULT_MODEL, 'claude-haiku-4-5-20251001');
   const fs = require('node:fs'), path = require('node:path');
-  assert.match(fs.readFileSync(path.join(__dirname, '..', 'evals', 'coach', 'run.js'), 'utf8'), /EVAL_MODEL \|\| 'claude-haiku-5-5'/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'evals', 'coach', 'run.js'), 'utf8'), /EVAL_MODEL \|\| 'claude-haiku-4-5-20251001'/);
 });

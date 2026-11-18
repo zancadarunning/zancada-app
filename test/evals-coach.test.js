@@ -60,7 +60,9 @@ test('evaluate distingue lo correcto de lo incorrecto', () => {
   assert.ok(evaluate(mover, { calls: [{ name: 'mover_sesion', input: { dia_origen: 'tue', dia_destino: 'thu' } }], text: '' }).length >= 1, 'día equivocado');
   assert.ok(evaluate(mover, { calls: [{ name: 'mover_sesion', input: { dia_origen: 'tue', dia_destino: 'wed' } }, { name: 'cancelar_sesion', input: { dia: 'tue' } }], text: '' }).length >= 1, 'herramienta prohibida');
   const dias = byId['dias-permanentes'];
-  assert.deepEqual(evaluate(dias, { calls: [{ name: 'modificar_perfil', input: { dias_entreno: ['thu', 'tue'] } }], text: '' }), [], 'el orden de los días no importa');
+  assert.deepEqual(evaluate(dias, { calls: [{ name: 'modificar_perfil', input: { dias_entreno: ['thu', 'tue'] } }], text: 'Listo, los días quedaron así.' }), [], 'el orden de los días no importa');
+  // Haiku 5.5 devolvió respuestas vacías en el chat real (2026-11-18): una respuesta final sin texto siempre es una falla
+  assert.ok(evaluate(dias, { calls: [{ name: 'modificar_perfil', input: { dias_entreno: ['thu', 'tue'] } }], text: '' }).some(f => /vacía/.test(f)), 'respuesta vacía');
   const hoy = byId['cuanto-toca-hoy-tiempo'];
   assert.deepEqual(evaluate(hoy, { calls: [], text: 'Hoy son 35 minutos en total.' }), []);
   assert.ok(evaluate(hoy, { calls: [], text: 'Hoy son 25 minutos.' }).length >= 1);
