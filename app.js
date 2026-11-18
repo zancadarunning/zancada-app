@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-18T11:57:37Z';
+const APP_VERSION = '2026-11-18T12:57:43Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -14938,8 +14938,23 @@ function cancelRunCountdown(){
   document.getElementById('runIdle').style.display = '';
   try{ haptic(15); }catch(e){}
 }
+// Antes de que Android pida el permiso de ubicación, un aviso propio (una sola vez por cuenta) explica para qué se usa el GPS, que sigue con la pantalla apagada y que hay una notificación: la política de privacidad promete ese consentimiento al activar la función.
+let geoDisclosureAsking = false;
+function needsGeoDisclosure(){ return !(state && state.geoDisclosureAccepted); }
+function askGeoDisclosure(){
+  if(geoDisclosureAsking) return;
+  geoDisclosureAsking = true;
+  showConfirm(t('geo_disclosure_text'), {confirmText: t('geo_disclosure_ok'), cancelText: t('geo_disclosure_no')}).then(ok => {
+    geoDisclosureAsking = false;
+    if(!ok) return;
+    state.geoDisclosureAccepted = true;
+    persist();
+    startRunWithCountdown();
+  });
+}
 function startRunWithCountdown(){
   if(countdownActive) return;
+  if(needsGeoDisclosure()){ askGeoDisclosure(); return; }
   countdownActive = true;
   document.getElementById('runIdle').style.display = 'none';
   const overlay = document.getElementById('runCountdown');

@@ -16,6 +16,7 @@ Cómo se hace en cada caso: abrir el enlace, leer qué dice sobre cómo se firma
 | **Google / Firebase** (notificaciones Android, ingreso con Google) | Token del dispositivo; datos de cuenta si elige Google | https://firebase.google.com/terms/data-processing-terms | Incorporado en los términos de Firebase | Incorporado en los términos de Firebase según su página (no re-verificado el 2026-10-26). Guardar una copia. |
 | **Open-Meteo** (clima) | Coordenadas **redondeadas a 2 decimales** (aprox. 1 km) | https://open-meteo.com/en/terms | No ofrecen DPA (API gratuita). Riesgo bajo por el redondeo; si se quiere contrato, cambiar de proveedor | Decidido: aceptado |
 | **Strava / Suunto / Wahoo / Polar / COROS** | Tokens y carreras que la propia persona autoriza | Cada marca tiene sus términos de API | Son responsables independientes de lo suyo; revisar sus reglas (Strava: prohíbe IA y pide borrar a los 7 días) | Revisar |
+| **RevenueCat** (suscripciones) | Identificador de la cuenta (código aleatorio, sin nombre ni correo), datos de la compra que informan Google Play/Apple, datos técnicos de la conexión; nada de salud ni de entrenamiento | https://www.revenuecat.com/dpa | Leer en el enlace cómo se acepta (suele estar incorporado en sus términos; descargar copia si hace falta). **Hacerlo antes de activar el cobro** | **Pendiente** |
 | **Apple** (ingreso con Apple, futuro) | Datos de cuenta | Términos del programa de desarrolladores | Al inscribirse | Futuro |
 
 ## Ya no se usan
