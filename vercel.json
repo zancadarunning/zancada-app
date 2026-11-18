@@ -15,6 +15,7 @@
   ],
   "crons": [
     { "path": "/api/send-reminders", "schedule": "*/30 * * * *" },
+    { "path": "/api/usage-alert", "schedule": "0 13 * * *" },
     { "path": "/api/sync-strava", "schedule": "*/15 * * * *" },
     { "path": "/api/coros-sync", "schedule": "*/15 * * * *" },
     { "path": "/api/wahoo-sync", "schedule": "*/15 * * * *" },
