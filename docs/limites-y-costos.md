@@ -9,14 +9,14 @@ Público: sin claves. Los números salen de las páginas oficiales de cada servi
 | **Vercel** | Servidor y procesos automáticos | **Pro (ya está)** | Ya hecho (el gratis no permite uso comercial ni procesos más de 1 vez por día) | 20 USD/mes |
 | **Supabase** | Base de datos y cuentas | Gratis | Antes de cobrar, o a los pocos cientos de usuarios activos | 25 USD/mes |
 | **Resend** | Correos (registro, recuperar clave, avisos) | Gratis | Cuando se pase de 100 correos por día | 20 USD/mes |
-| **Open-Meteo** | Clima | Gratis | **Antes de cobrar** (el gratis es solo no comercial) | no verificado |
+| ~~Open-Meteo~~ | Clima (**sacado de la app el 2026-11-18**) | Ya no se usa | Cuando haya ganancias se puede volver a agregar con su plan comercial | 29 EUR/mes (Standard) |
 | **Anthropic** | Zonda (la IA) | Por uso | No es suscripción: poner tope de gasto | por uso |
 | **Mapbox** | Mapas | Gratis | Cuando se pase de 50.000 imágenes de mapa por mes | por uso |
 | **Sentry** | Errores | Gratis | Con un segundo usuario o muchos errores | 29 USD/mes |
 | **Google Play** | Publicar en Android | Pagado | Ya hecho | 25 USD una vez |
 | **Apple Developer** | Publicar en iPhone | No | Solo cuando haya app para iPhone | 99 USD/año |
 
-Costo fijo mensual estimado al lanzar: **Vercel 20 + Supabase 25 + Resend 20 = 65 USD/mes**, más el clima (Open-Meteo, a confirmar), Sentry si hace falta (29) y lo que se use de Anthropic y Mapbox.
+Costo fijo mensual estimado al lanzar: **Vercel 20 + Supabase 25 + Resend 20 = 65 USD/mes**, Sentry si hace falta (29) y lo que se use de Anthropic y Mapbox.
 
 ## Supabase (https://supabase.com/pricing)
 | | Gratis | Pro |
@@ -60,7 +60,7 @@ Costo fijo mensual estimado al lanzar: **Vercel 20 + Supabase 25 + Resend 20 = 6
 
 ## Open-Meteo (https://open-meteo.com/en/pricing)
 - Gratis: 600 pedidos por minuto, 5.000 por hora, 10.000 por día, 300.000 por mes, **solo uso no comercial**.
-- **Con una app de pago hay que contratar un plan comercial** (Standard: 1 millón de pedidos por mes). Precio: no verificado ("precio fijo mensual", se consulta en su panel o en info@open-meteo.com). **Es un requisito antes de cobrar.**
+- **Sacado de la app el 2026-11-18**, porque con una app de pago hace falta un plan comercial. Precio leído en su página: **Standard 29 EUR por mes** (1 millón de pedidos, licencia comercial, clave propia en `customer-api.open-meteo.com`); Professional 99 EUR. Cuando haya ganancias se puede volver a agregar (el código anterior está en el historial de git) y hay que sumar de nuevo su mención en la política y los términos.
 
 ## Sentry (https://sentry.io/pricing/)
 - Gratis (Developer): 5.000 errores (por mes, no aclarado), 30 días de historial, **1 solo usuario**.
