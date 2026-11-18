@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-17T23:55:46Z';
+const APP_VERSION = '2026-11-18T00:23:42Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2212,7 +2212,7 @@ async function handleGoogleSignIn(btnId){
   // (ver loadUserAndEnter, que lo saltea para provider==='google').
   setBtnBusy(btnId, true, t('google_loading'));
   try{
-    const { error } = await supabaseClient.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: window.location.origin } });
+    const { error } = await supabaseClient.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: window.location.origin, queryParams:{ prompt:'select_account' } } });   // select_account: siempre deja elegir el mail (si no, con una sola cuenta abierta en el navegador entra directo con esa)
     if(error){ console.error(error); showToast(t('login_err'),'error'); }
   }finally{ setBtnBusy(btnId, false); }
 }
