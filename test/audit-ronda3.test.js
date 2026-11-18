@@ -161,8 +161,8 @@ test('los recordatorios push nombran fartlek, cuestas y progresivo en los 6 idio
 
 test('la página pública de borrado de cuenta lista Garmin en los 6 idiomas', () => {
   const h = read('eliminar-cuenta.html');
-  assert.equal(h.split('Strava, Garmin, Suunto, Wahoo, Polar, COROS').length - 1, 6);
-  assert.equal(h.split('Strava, Garmin, Polar, Wahoo, COROS').length - 1, 6);
+  assert.equal(h.split('Garmin, Suunto, Wahoo, Polar, COROS').length - 1, 6);
+  assert.equal(h.split('Garmin, Polar, Wahoo, COROS').length - 1, 6);
 });
 
 // ---------- motor del plan ----------
@@ -345,8 +345,8 @@ test('retomar una carrera recuperada conserva la repetición y la fase de las se
 
 test('los Términos listan Garmin como integración en los 6 idiomas (antes lo omitían aunque la app y la política lo tratan)', () => {
   const t = read('js/legal-terms.js');
-  assert.equal((t.match(/Strava, Garmin, Polar, Wahoo, COROS/g) || []).length, 12, 'las dos listas (resumen y servicios) × 6 idiomas');
-  assert.equal(/Strava, Polar, Wahoo/.test(t), false);
+  assert.equal((t.match(/Garmin, Polar, Wahoo, COROS/g) || []).length, 12, 'las dos listas (resumen y servicios) × 6 idiomas');
+  assert.equal(/Strava/.test(t), false, 'Strava ya no se nombra en los Términos');
 });
 
 // ---------- datos de Strava/Garmin hacia terceros ----------

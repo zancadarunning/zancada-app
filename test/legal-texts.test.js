@@ -42,7 +42,7 @@ test('la política declara los datos de seguridad de la cuenta (dispositivo, pa�
 test('la política describe la seguridad real: tokens cifrados, aviso de dispositivo nuevo y copias cifradas con plazo de 90 días', () => {
   for (const l of LANGS) {
     const seg = P[l].sections[7].p[0], cons = P[l].sections[8].p.join('\n');
-    assert.match(seg, /HTTPS\/TLS/); assert.match(seg, /Strava/);
+    assert.match(seg, /HTTPS\/TLS/); assert.doesNotMatch(seg, /Strava/);
     assert.match(cons, /90/, l + ': plazo de las copias de seguridad');
   }
 });
@@ -91,4 +91,10 @@ test('edad mínima: 16 años en la política y en los Términos, igual que la pa
   }
   const app = fs.readFileSync(path.join(__dirname, '..', 'locales', 'es.js'), 'utf8');
   assert.match(app, /16/, 'la pantalla de consentimiento exige 16+');
+});
+
+test('Strava ya no se nombra en la política, los términos ni la página de borrado (se saca al lanzar)', () => {
+  for (const f of ['js/legal-privacy.js', 'js/legal-terms.js', 'eliminar-cuenta.html']) {
+    assert.doesNotMatch(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', f), 'utf8'), /Strava/, f);
+  }
 });
