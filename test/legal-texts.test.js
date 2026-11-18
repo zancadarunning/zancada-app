@@ -98,3 +98,13 @@ test('Strava ya no se nombra en la política, los términos ni la página de bor
     assert.doesNotMatch(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', f), 'utf8'), /Strava/, f);
   }
 });
+
+test('Huawei figura en la política y los términos en los 6 idiomas, y sus carreras no van a la IA', () => {
+  for (const l of LANGS) {
+    const pol = JSON.stringify(P[l]), ter = JSON.stringify(T[l]);
+    assert.match(pol, /Huawei Health/, l + ': la política nombra Huawei Health');
+    assert.match(ter, /Huawei/, l + ': los términos nombran Huawei');
+    assert.match(P[l].sections[4].p[1], /Polar[^;]*Huawei/, l + ': las carreras de Huawei no se mandan a Zonda');
+    assert.ok(P[l].sections[5].ul.some(x => /^<strong>Huawei Health/.test(x)), l + ': hay un apartado de Huawei en destinatarios');
+  }
+});
