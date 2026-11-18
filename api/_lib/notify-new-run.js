@@ -17,7 +17,7 @@ const { isTrustedPushEndpoint } = require('./push-endpoint');
 const { pick } = require('./own');
 const { localDateKey, dayNum } = require('./weekly-summary');
 
-const BRANDS = { suunto: 'Suunto', wahoo: 'Wahoo', coros: 'COROS', polar: 'Polar', strava: 'Strava', garmin: 'Garmin' };
+const BRANDS = { suunto: 'Suunto', wahoo: 'Wahoo', coros: 'COROS', polar: 'Polar', huawei: 'Huawei', strava: 'Strava', garmin: 'Garmin' };
 const MAX_AGE_MS = 36 * 3600 * 1000;   // solo entrenos recientes: un reenvío o un relleno de historial viejo no avisa
 const MI_PER_KM = 0.621371;
 const DEFAULT_TZ = 'America/Argentina/Buenos_Aires';   // mismo respaldo que send-reminders.js para cuentas sin profile.tz
@@ -33,7 +33,7 @@ const TEXTS = {
 
 // Las carreras de Strava, Garmin, Wahoo y Polar NO se comparten con terceros más allá de Supabase/Vercel (lo exigen sus acuerdos y lo dice la política): el aviso viaja por el servicio de notificaciones del sistema (Firebase/Apple),
 // así que para esas marcas solo dice que se cargó, SIN distancia, tiempo, ritmo ni comparación con el plan.
-const RESTRICTED_SOURCES = new Set(['strava', 'garmin', 'wahoo', 'polar']);   // espejo de AI_RESTRICTED_SOURCES en app.js
+const RESTRICTED_SOURCES = new Set(['strava', 'garmin', 'wahoo', 'polar', 'huawei']);   // espejo de AI_RESTRICTED_SOURCES en app.js
 const GENERIC = {
   es: { one: b => `Cargamos tu carrera de ${b}. Ya está en tu Historial.`, many: (n, b) => `Cargamos ${n} entrenamientos de ${b}. Ya están en tu Historial.` },
   en: { one: b => `We loaded your ${b} run. It's in your History.`, many: (n, b) => `We loaded ${n} workouts from ${b}. They're in your History.` },

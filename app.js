@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-18T17:23:47Z';
+const APP_VERSION = '2026-11-18T19:27:59Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2263,6 +2263,7 @@ async function confirmMultiDeviceConnect(newBrand){
   if(deviceConnections.coros && newBrand!=='COROS') others.push('COROS');
   if(deviceConnections.suunto && newBrand!=='Suunto') others.push('Suunto');
   if(deviceConnections.garmin && newBrand!=='Garmin') others.push('Garmin');
+  if(deviceConnections.huawei && newBrand!=='Huawei') others.push('Huawei');
   // Faltaba Health Connect acá -- reportado en una auditoría. No vive en deviceConnections
   // (ver el comentario grande arriba de esa variable: Health Connect se lee directo de
   // state.healthConnectConnected, no se cachea ahí), así que había que agregarlo aparte.
@@ -2281,7 +2282,7 @@ async function confirmMultiDeviceConnect(newBrand){
 // backend puede leer los datos viejos todavía.
 /* ---- Desconectar un reloj: el botón se bloquea y dice "Desconectando…" mientras se borra la conexión (antes no mostraba nada y parecía que no pasaba nada), y al terminar avisa. ---- */
 const disconnectingNow = {};
-const DISCONNECT_REFRESH = { strava:'updateStravaStatusDisplay', polar:'updatePolarStatusDisplay', wahoo:'updateWahooStatusDisplay', suunto:'updateSuuntoStatusDisplay', coros:'updateCorosStatusDisplay', garmin:'updateGarminStatusDisplay', healthconnect:'updateHealthConnectStatusDisplay' };
+const DISCONNECT_REFRESH = { strava:'updateStravaStatusDisplay', polar:'updatePolarStatusDisplay', wahoo:'updateWahooStatusDisplay', suunto:'updateSuuntoStatusDisplay', coros:'updateCorosStatusDisplay', huawei:'updateHuaweiStatusDisplay', garmin:'updateGarminStatusDisplay', healthconnect:'updateHealthConnectStatusDisplay' };
 function setDisconnecting(key, on){
   const btn = document.getElementById(key + '-connect-btn');
   if(!btn) return;
@@ -2363,7 +2364,7 @@ async function connectStrava(){
 // confirme una conexión real, que mostrarlo de entrada y tener que ocultarlo después
 // (ver refreshDeviceConnections(), llamada una vez al entrar a la app).
 let deviceConnectionsLoaded = false;
-let deviceConnections = { strava:false, polar:false, wahoo:false, coros:false, suunto:false, garmin:false };
+let deviceConnections = { strava:false, polar:false, wahoo:false, coros:false, suunto:false, garmin:false, huawei:false };
 async function refreshDeviceConnections(){
   if(!currentUserId) return;
   invalidateServerConnections(); // se llama justo después de conectar/desconectar: tiene que ver el estado nuevo, no el cacheado
@@ -2378,7 +2379,7 @@ async function refreshDeviceConnections(){
     ]);
     const srv = await fetchServerConnections();
     const pick = (brand, direct) => (srv && typeof srv[brand] === 'boolean') ? srv[brand] : !!direct;
-    deviceConnections = { strava: pick('strava', s.data), polar: pick('polar', p.data), wahoo: pick('wahoo', w.data), coros: pick('coros', c.data), suunto: pick('suunto', su.data), garmin: pick('garmin', g.data) };
+    deviceConnections = { strava: pick('strava', s.data), polar: pick('polar', p.data), wahoo: pick('wahoo', w.data), coros: pick('coros', c.data), suunto: pick('suunto', su.data), garmin: pick('garmin', g.data), huawei: HUAWEI_ENABLED ? pick('huawei', false) : false };
     scheduleWatchSync();
   }catch(e){ console.error(e); }
   deviceConnectionsLoaded = true;
@@ -2622,6 +2623,89 @@ async function disconnectWahooNow(){
   invalidateServerConnections(); // si no, la consulta de estado de los próximos 5 s devolvía el "conectado" de antes
   await updateWahooStatusDisplay();
 }
+/* ---- Huawei (Health Kit, en la nube) -----
+   Conexión por servidor con la cuenta HUAWEI ID (OAuth): sirve en cualquier celular (Android, iPhone o la web), porque Zancada le pide las carreras
+   a la nube de Huawei con el permiso de la persona. APAGADA (HUAWEI_ENABLED = false) hasta que Huawei apruebe la solicitud de Health Service Kit
+   (enviada el 2026-11-18): con la bandera en false el botón no aparece y nada de esto corre. Para activarla: crear sql/create_huawei_connections.sql
+   y sql/merge_huawei_runs.sql en Supabase, cargar en Vercel las tres claves de Huawei (ver .env.example, solo el servidor las usa) y poner la bandera en true.
+   Las carreras de Huawei NO llegan a Zonda (ver AI_RESTRICTED_SOURCES). El detalle del protocolo está en api/_lib/huawei-activity-helpers.js. */
+const HUAWEI_ENABLED = false;
+const HUAWEI_CLIENT_ID = '119871625';   // "ID de la aplicación" del producto de servidor en HUAWEI ID: no es un secreto (el secreto vive solo en el servidor)
+const HUAWEI_SCOPES = ['openid', 'https://www.huawei.com/healthkit/activityrecord.read', 'https://www.huawei.com/healthkit/distance.read', 'https://www.huawei.com/healthkit/historydata.open'];
+async function connectHuawei(){
+  if(!HUAWEI_ENABLED) return;
+  if(!(await confirmMultiDeviceConnect('Huawei'))) return;
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session){ showToast(t('huawei_connect_error'),'error'); return; }
+    const res = await fetch(apiUrl('/api/huawei-init'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
+    });
+    if(!res.ok) throw new Error('huawei-init failed');
+    const { state } = await res.json();
+    const redirectUri = 'https://zancada.org/api/huawei-auth';
+    const scope = encodeURIComponent(HUAWEI_SCOPES.join(' ')).replace(/%20/g, '+');
+    const url = `https://oauth-login.cloud.huawei.com/oauth2/v3/authorize?response_type=code&client_id=${HUAWEI_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&state=${encodeURIComponent(state)}&access_type=offline&display=touch`;
+    window.location.href = url;
+  }catch(e){
+    console.error(e);
+    showToast(t('huawei_connect_error'),'error');
+  }
+}
+async function updateHuaweiStatusDisplay(){
+  const card = document.getElementById('huawei-card');
+  if(card) card.style.display = HUAWEI_ENABLED ? '' : 'none';
+  const el = document.getElementById('huawei-status');
+  const btn = document.getElementById('huawei-connect-btn');
+  if(!HUAWEI_ENABLED || !el || !currentUserId) return;
+  try{
+    const srv = await fetchServerConnections();
+    const connected = !!(srv && srv.huawei === true);
+    deviceConnections.huawei = connected;
+    if(connected){
+      el.textContent = t('perfil_strava_connected'); el.className = 'tag tag-mixto';
+      if(btn){ btn.textContent = t('perfil_strava_disconnect'); btn.setAttribute('data-on-click', 'disconnectHuawei()'); }
+    } else {
+      el.textContent = t('perfil_native'); el.className = 'tag tag-quiet';
+      if(btn){ btn.textContent = t('huawei_connect'); btn.setAttribute('data-on-click', 'connectHuawei()'); }
+    }
+    renderPlan();
+  }catch(e){}
+}
+async function disconnectHuawei(){ return runDisconnect('huawei', 'Huawei', disconnectHuaweiNow); }
+async function disconnectHuaweiNow(){
+  if(!currentUserId) return;
+  if(!(await confirmKeepDataBeforeDisconnect('Huawei', 'huawei', 'huaweiId'))) return;
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(session){
+      const res = await fetch(apiUrl('/api/huawei-disconnect'), {
+        method:'POST',
+        headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`}
+      });
+      if(!res.ok) throw new Error('huawei-disconnect failed');
+    } else {
+      await supabaseClient.from('huawei_connections').delete().eq('user_id', currentUserId);
+    }
+  }catch(e){
+    console.error(e);
+    try{ await supabaseClient.from('huawei_connections').delete().eq('user_id', currentUserId); }catch(e2){}
+  }
+  deviceConnections.huawei = false;
+  if(state.runs && state.runs.some(r=>r.source==='huawei')){
+    state.runs = state.runs.filter(r=>r.source!=='huawei');
+    if(state.shoes){
+      state.shoes.forEach(shoe=>{
+        shoe.km = state.runs.filter(r=>String(r.shoeId)===String(shoe.id)).reduce((a,r)=>a+(r.distanceKm||0),0);
+      });
+      checkShoeWearAlerts();
+    }
+    renderHistory(); renderHome(); renderPerfil(); persist();
+  }
+  invalidateServerConnections();
+  await updateHuaweiStatusDisplay();
+}
 /* ---- Suunto -----
    Mismo patrón OAuth que Strava/Polar/Wahoo, con dos diferencias: (1) las carreras NO se
    buscan con un cron cada 15 minutos sino que Suunto avisa por webhook apenas se sube un
@@ -2662,7 +2746,7 @@ function parseLinkReturn(urlStr){
     if(u.origin !== location.origin && u.origin !== 'https://www.zancada.org' && u.origin !== 'https://zancada.org') return null;
     if(!/^\/conectar\/?$/.test(u.pathname)) return null;
     const p = u.searchParams.get('p'), code = u.searchParams.get('code'), state = u.searchParams.get('state');
-    if(!/^(strava|polar|wahoo|suunto|coros|garmin)$/.test(p || '') || !code || !state) return null;
+    if(!/^(strava|polar|wahoo|suunto|coros|garmin|huawei)$/.test(p || '') || !code || !state) return null;
     return { p, code, state };
   }catch(e){ return null; }
 }
@@ -3511,7 +3595,7 @@ function healthConnectExerciseToRun(ex){
 // Antes Historial solo reconocía r.source==='strava' para la insignia y la búsqueda --
 // Polar/Wahoo/Health Connect quedaban con carreras "sin marca" (sin insignia, invisibles
 // para el buscador) aunque llegaran de un reloj sincronizado igual que las de Strava.
-const SOURCE_LABELS = {strava:'Strava', polar:'Polar', wahoo:'Wahoo', coros:'COROS', suunto:'Suunto', garmin:'Garmin', healthconnect:'Health Connect'};
+const SOURCE_LABELS = {strava:'Strava', polar:'Polar', wahoo:'Wahoo', coros:'COROS', suunto:'Suunto', garmin:'Garmin', huawei:'Huawei', healthconnect:'Health Connect'};
 // Garmin exige mostrar "Garmin [modelo del reloj]" en TODO lugar donde se vean sus datos (historial, detalle, imágenes y videos compartidos); sin el modelo, solo "Garmin" (guía de marca de la API de Garmin).
 // una actividad cargada a mano en Garmin Connect llega con deviceName "unknown": no es un modelo, se muestra solo "Garmin"
 function garminAttribution(run){ return run && (run.source === 'garmin' || run.origin === 'garmin') ? ('Garmin' + (run.device && !/^unknown$/i.test(String(run.device).trim()) ? ' ' + String(run.device).replace(/^garmin\s+/i, '') : '')) : ''; }
@@ -13112,10 +13196,10 @@ async function showView(v){
     if(devOv && devOv.classList && currentUserId){
       devOv.classList.add('conn-loading');
       const stopLoading = () => devOv.classList.remove('conn-loading');
-      Promise.allSettled([updateStravaStatusDisplay(), updatePolarStatusDisplay(), updateWahooStatusDisplay(), updateCorosStatusDisplay(), updateSuuntoStatusDisplay(), updateGarminStatusDisplay()]).then(stopLoading);
+      Promise.allSettled([updateStravaStatusDisplay(), updatePolarStatusDisplay(), updateWahooStatusDisplay(), updateCorosStatusDisplay(), updateSuuntoStatusDisplay(), updateHuaweiStatusDisplay(), updateGarminStatusDisplay()]).then(stopLoading);
       setTimeout(stopLoading, 8000);
     } else {
-      updateStravaStatusDisplay(); updatePolarStatusDisplay(); updateWahooStatusDisplay(); updateCorosStatusDisplay(); updateSuuntoStatusDisplay(); updateGarminStatusDisplay();
+      updateStravaStatusDisplay(); updatePolarStatusDisplay(); updateWahooStatusDisplay(); updateCorosStatusDisplay(); updateSuuntoStatusDisplay(); updateGarminStatusDisplay(); updateHuaweiStatusDisplay();
     }
     updateHealthConnectStatusDisplay();
   }
@@ -16629,7 +16713,7 @@ function runsByDateAsc(list){
 // Garmin (Connect Developer Program) se declara igual en el formulario de acceso: los datos que vienen de dispositivos Garmin (source:'garmin') tampoco llegan a la IA ni se usan para entrenarla.
 // Las carreras de estas marcas (y las que la persona convirtió en manuales o desconectó conservándolas: aiExcluded) NUNCA llegan a la IA: lo exigen sus licencias.
 // Strava y Garmin lo prohíben. Wahoo (sección 6 de su acuerdo) y Polar (3.1.1) solo permiten pasar datos a terceros en condiciones que no pudimos confirmar: excluidas por prudencia el 2026-11-10 hasta tener respuesta escrita de cada marca. Para volver a incluir una, sacala de esta lista (y del espejo del servidor en api/_lib/notify-new-run.js y weekly-summary.js).
-const AI_RESTRICTED_SOURCES = ['strava', 'garmin', 'wahoo', 'polar'];
+const AI_RESTRICTED_SOURCES = ['strava', 'garmin', 'wahoo', 'polar', 'huawei'];
 function isRestrictedRun(r){ return !!r && (AI_RESTRICTED_SOURCES.includes(r.source) || AI_RESTRICTED_SOURCES.includes(r.origin) || !!r.aiExcluded); }
 function aiVisibleRuns(){ return (state.runs || []).filter(r => !AI_RESTRICTED_SOURCES.includes(r.source) && !r.aiExcluded); }
 // Boceto de la ruta (SVG) para las tarjetas del historial: se dibuja con los puntos del GPS, sin depender del mapa de Mapbox.

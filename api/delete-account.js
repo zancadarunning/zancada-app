@@ -17,6 +17,7 @@ const { ensureFreshSuuntoToken, suuntoApiHeaders, SUUNTO_API_BASE } = require('.
 const { removeAllZancada } = require('./_lib/wahoo-plans-sync');
 const { refreshWahooToken } = require('./_lib/wahoo-activity-helpers');
 const { refreshCorosToken } = require('./_lib/coros-activity-helpers');
+const { refreshHuaweiToken, cancelHuaweiConsent } = require('./_lib/huawei-activity-helpers');
 
 // El token guardado de Wahoo/COROS dura ~2 h: si ya venció o está por vencer, revocar con él fallaba en silencio (el permiso de Zancada seguía activo en la cuenta de la marca). Se renueva antes.
 async function freshAccessToken(base, headers, userId, conn, refresh) {
@@ -163,6 +164,17 @@ module.exports = withSentry(async (req, res) => {
       }
     } catch (e) { console.error('delete-account: coros revoke failed', e); await reportError(e, { endpoint: 'delete-account', step: 'coros-revoke' }).catch(() => {}); }
 
+    // Huawei Health Kit: al borrar la cuenta se revoca el permiso del lado de Huawei (solo si la conexión está configurada en este entorno: sin HUAWEI_CLIENT_ID no hay nada que revocar).
+    if (process.env.HUAWEI_CLIENT_ID) {
+      try {
+        const conn = await readConnection('huawei_connections', 'access_token,refresh_token,expires_at');
+        if (conn && decToken(conn.access_token)) {
+          const huaweiToken = await freshAccessToken(base, headers, userId, conn, refreshHuaweiToken);
+          await cancelHuaweiConsent(huaweiToken);
+        }
+      } catch (e) { console.error('delete-account: huawei revoke failed', e); await reportError(e, { endpoint: 'delete-account', step: 'huawei-revoke' }).catch(() => {}); }
+    }
+
     // Garmin (acuerdo del Garmin Connect Developer Program): al borrar la cuenta o los datos hay que avisarle con DELETE user/registration, y se sacan los entrenamientos que Zancada había mandado.
     try {
       const gRes = await fetch(`${base}/rest/v1/garmin_connections?user_id=eq.${userId}&select=user_id,access_token,refresh_token,expires_at,refresh_expires_at`, { headers });
@@ -188,7 +200,7 @@ module.exports = withSentry(async (req, res) => {
       };
       // chat_usage y sync_cooldowns NO se borran acá: son solo contadores de uso (cuántos mensajes al coach hoy, cuándo fue la última sincronización) y existen para frenar el abuso;
       // borrarlos permitía reiniciar el tope diario del coach y el enfriamiento de la sincronización con "Borrar mis datos". Se borran igual al eliminar la cuenta entera (más abajo).
-      for (const t of ['strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'suunto_connections', 'garmin_connections', 'push_subscriptions',
+      for (const t of ['strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'huawei_connections', 'suunto_connections', 'garmin_connections', 'push_subscriptions',
         'sent_notifications', 'known_devices']) {
         await wipe(t, `user_id=eq.${userId}`);
       }

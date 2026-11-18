@@ -16,7 +16,7 @@ const TABLES = [
   'app_state', 'push_subscriptions',
   'chat_usage', 'sent_notifications', 'sync_cooldowns'
 ];
-const TOKEN_TABLES = ['strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'suunto_connections'];
+const TOKEN_TABLES = ['strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'huawei_connections', 'suunto_connections'];
 const PAGE = 1000;
 // Tablas sin las cuales el respaldo no sirve: si no existen (404) es un error de configuración, no "tabla opcional" -- antes se anotaba "no existe" y el respaldo salía "exitoso" sin los datos de los corredores.
 const ESSENTIAL_TABLES = ['app_state'];

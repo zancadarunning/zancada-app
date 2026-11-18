@@ -77,7 +77,7 @@ const GENERIC_WEEK = {
   it: 'Il riepilogo della tua settimana è pronto su Zancada. Apri l’app per vederlo.',
   de: 'Deine Wochenübersicht ist in Zancada bereit. Öffne die App, um sie zu sehen.',
 };
-const RESTRICTED_SOURCES = ['strava', 'garmin', 'wahoo', 'polar'];   // espejo de AI_RESTRICTED_SOURCES en app.js
+const RESTRICTED_SOURCES = ['strava', 'garmin', 'wahoo', 'polar', 'huawei'];   // espejo de AI_RESTRICTED_SOURCES en app.js
 const isRestrictedRun = r => !!r && (RESTRICTED_SOURCES.includes(r.source) || RESTRICTED_SOURCES.includes(r.origin) || !!r.aiExcluded);
 
 // Fecha local (YYYY-MM-DD) de un instante en un huso horario
