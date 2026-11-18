@@ -47,7 +47,7 @@ Costo fijo mensual estimado al lanzar: **Vercel 20 + Supabase 25 + Resend 20 = 6
 - Los niveles son Start, Build y Scale (ya no "Tier 1 a 4"); la cuenta sube sola según el uso (no verificado: cuánto depósito pide).
 - **Tope de gasto mensual por nivel: Start 500 USD, Build 1.000 USD.** Al llegar, la API se **corta hasta el día 1 del mes siguiente** (error 429 `enforced_spend_limit_reached`). Por eso conviene fijar un tope propio más bajo y mirar el gasto.
 - Dónde: https://platform.claude.com/settings/spend-limits (tope de gasto) y https://platform.claude.com/usage (uso). Alertas por correo: no verificado.
-- Precio de Haiku 5.5: 0,10 USD (entrada) y 0,50 USD (salida) por millón de tokens. Zonda hoy usa Haiku 4.5 (1 USD y 5 USD por millón): evaluar pasarse al 5.5 por costo.
+- Precio de Haiku 5.5: 0,10 USD (entrada) y 0,50 USD (salida) por millón de tokens (según la página de precios de Anthropic al 2026-11-18; confirmarlo en la consola). **Zonda usa Haiku 5.5 desde el 2026-11-18** (antes, Haiku 4.5 a 1 USD y 5 USD por millón); las 14 conversaciones de prueba de evals/coach pasan igual con los dos.
 - Zancada ya limita los mensajes por persona (60 por día) y en total (2.000 por día).
 
 ## Mapbox (https://www.mapbox.com/pricing)

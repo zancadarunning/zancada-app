@@ -8,7 +8,8 @@
 // La decisión se toma en el servidor mirando el último mensaje de la persona: nada que mande el cliente puede elegir el modelo. Lo peor que puede hacer alguien es escribir un verbo de acción para usar el modelo más caro,
 // y ya está acotado por los topes diarios por cuenta y global.
 
-const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
+// Haiku 5.5 desde el 2026-11-18: las 14 conversaciones de prueba (evals/coach) pasan igual que con Haiku 4.5, con las mismas herramientas; cuesta menos según la página de precios de Anthropic.
+const DEFAULT_MODEL = 'claude-haiku-5-5';
 
 // Verbos / frases de pedido de cambio en los 6 idiomas de la app (la raíz alcanza: "mové", "movela", "move", "mover"...). Deliberadamente amplio: un falso positivo solo cuesta un poco más.
 const ACTION_RE = new RegExp([
