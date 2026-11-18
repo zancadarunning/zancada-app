@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-18T11:51:45Z';
+const APP_VERSION = '2026-11-18T11:57:37Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -196,6 +196,8 @@ async function setLang(code){
   populateOnboardDays();
   renderSportChips('ob');
   if(state.onboarded){
+    // el nombre de la carrera objetivo se guarda ya escrito en el plan: al cambiar de idioma se vuelve a escribir (si no, seguia en el idioma viejo)
+    if(state.profile && Array.isArray(state.plan)) state.plan.forEach(d => { if(d && d.raceDay && d.raceEventName) d.raceEventName = t('plan_goal_race_name', { dist: String(state.profile.goal || '').toUpperCase() }); });
     renderAll(); renderHistory(); renderZones(); renderPerfilDays(); renderPerfilCrossTraining(); persist();
     translateCustomPlanTexts(code);
     // Mismo motivo que en handleSignUp: sincronizamos el idioma al user_metadata de
@@ -7401,10 +7403,25 @@ function computeReturnFromBreakAdjustment(gapWeeks){
 // editado a mano por el chat -- solo refresca los días de acá en adelante que el algoritmo
 // generó sin que nadie los haya tocado).
 const PLAN_ALGO_VERSION = 6;
+// El día de la carrera objetivo (raceDay) vive guardado en el plan de la semana. Si la fecha de carrera cambió por un camino que no rehízo la semana (el "desde la semana que viene" de antes, otro dispositivo, una versión vieja de la app),
+// ese día quedaba marcado como carrera en la fecha vieja: se veía en el plan y no se podía mover una sesión ahí. Esta revisión compara los días de carrera guardados con los que arma el plan de hoy y, si no coinciden, rehace la semana (los días ya vividos y los personalizados se respetan).
+function healStaleRaceDay(){
+  if(!state.onboarded || !state.profile || !state.weekStart || !Array.isArray(state.plan) || state.plan.length !== 7) return false;
+  const sig = pl => pl.map(d => (d && d.raceDay) ? '1' : '0').join('');
+  let fresh;
+  try{ fresh = generatePlan(state.profile, state.weekNumber || 1); }catch(e){ return false; }
+  if(!Array.isArray(fresh) || fresh.length !== 7 || sig(fresh) === sig(state.plan)) return false;
+  const merged = preserveLivedDays(state.plan, fresh);
+  if(sig(merged) === sig(state.plan)) return false; // lo que no coincide es un día ya vivido o personalizado a propósito: se deja y no se vuelve a escribir en cada arranque
+  state.plan = merged;
+  persist();
+  return true;
+}
 function checkPlanAlgoVersion(){
   // Antes que nada, el cronograma del plan por fases al día con el perfil (es barato y no toca
   // nada si ya coincide) -- incluso si la versión del plan ya es la actual.
   if(state.onboarded) refreshPhaseSchedule();
+  if(state.onboarded) healStaleRaceDay();
   if(!state.onboarded || !state.plan || !state.plan.length) return;
   if(state.planAlgoVersion === PLAN_ALGO_VERSION) return;
   // Un build viejo instalado (app nativa sin actualizar) que ve una versión más nueva, guardada por

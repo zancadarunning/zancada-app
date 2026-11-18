@@ -42,3 +42,49 @@ test('cambiar la fecha objetivo desde Objetivos saca la carrera de hoy en el pla
   assert.equal(app.state.profile.raceDate, '2026-08-30');
   assert.ok(!app.state.plan[2].raceDay, 'hoy ya no es día de carrera');
 });
+
+function appConPlanViejo(raceDate) {
+  const app = loadApp();
+  const f = new Date('2026-06-10T10:00:00').getTime(); // miércoles
+  app.Date = class extends Date { constructor(...a) { if (a.length === 0) super(f); else super(...a); } static now() { return f; } };
+  app.persist = () => Promise.resolve(); app.renderAll = () => {}; app.renderChat = () => {};
+  const p = { name: 'x', goal: '10k', runnerType: 'active', currentWeeklyKm: 30, weeklyKm: 30, weeklyGoalKm: 0, trainingDays: ['tue', 'wed', 'fri', 'sun'], trainBy: 'distance', terrain: 'asfalto', units: 'metric', gender: 'f', weight: 65, height: 168, birth: '1988-06-15', createdAt: '2026-03-02', raceDate: '2026-06-10' };
+  app.state.profile = p; app.state.onboarded = true; app.state.weekNumber = 5; app.state.weekStart = '2026-06-08'; app.state.runs = []; app.state.shoes = []; app.state.chat = []; app.state.planHistory = [];
+  app.state.plan = app.generatePlan(p, 5, '2026-06-08');
+  p.raceDate = raceDate; // la fecha cambió por un camino que no rehízo la semana
+  return app;
+}
+
+test('un día de carrera viejo guardado en el plan se corrige solo al abrir la app', () => {
+  const app = appConPlanViejo('2026-08-30');
+  assert.ok(app.state.plan[2].raceDay);
+  assert.equal(app.healStaleRaceDay(), true);
+  assert.ok(!app.state.plan.some(d => d.raceDay), 'ya no queda ninguna carrera esta semana');
+  assert.equal(app.healStaleRaceDay(), false, 'segunda vez: nada que corregir');
+});
+
+test('si la fecha nueva cae esta semana, el día de carrera aparece solo', () => {
+  const app = appConPlanViejo('2026-06-12');
+  assert.equal(app.healStaleRaceDay(), true);
+  assert.ok(app.state.plan[4].raceDay && !app.state.plan[2].raceDay);
+});
+
+test('un día de carrera ya marcado como hecho no se pisa ni se reescribe en cada arranque', () => {
+  const app = appConPlanViejo('2026-08-30');
+  app.state.plan[2].status = 'done';
+  assert.equal(app.healStaleRaceDay(), false);
+  assert.ok(app.state.plan[2].raceDay);
+});
+
+test('al cambiar de idioma el nombre de la carrera objetivo del plan se vuelve a escribir', async () => {
+  const app = appConPlanViejo('2026-06-10');
+  app.state.plan = app.generatePlan(app.state.profile, 5, '2026-06-08');
+  const antes = app.state.plan[2].raceEventName;
+  assert.ok(antes);
+  app.document.getElementById = () => ({ value: '', style: {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {} }, children: [], addEventListener() {}, setAttribute() {}, textContent: '' });
+  app.ensureLocaleLoaded = async () => {}; app.applyStaticTranslations = () => {}; app.populateOnboardDays = () => {}; app.renderSportChips = () => {};
+  app.renderHistory = () => {}; app.renderZones = () => {}; app.renderPerfilDays = () => {}; app.renderPerfilCrossTraining = () => {}; app.translateCustomPlanTexts = () => {};
+  await app.setLang('en');
+  assert.notEqual(app.state.plan[2].raceEventName, antes);
+  assert.match(app.state.plan[2].raceEventName, /10K/);
+});
