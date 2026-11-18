@@ -79,7 +79,7 @@ test('Perfil: cuatro grupos con título y una fila por entrada (12 en total), co
   const groups = [...perfil.matchAll(/<div class="home-section-label" data-i18n="(perfil_group_\w+)"><\/div>\n    <div class="card settings-group">/g)].map(m => m[1]);
   assert.deepEqual(groups, ['perfil_group_training', 'perfil_group_gear', 'perfil_group_progress', 'perfil_group_app']);
   const rows = [...perfil.matchAll(/<div class="settile" role="button" tabindex="0" data-on-click="(\w+)\(\)">/g)].map(m => m[1]);
-  assert.deepEqual(rows, ['openGoalsOverlay', 'openDaysOverlay', 'openPersonalDataOverlay', 'openZonesOverlay', 'openCrossTrainingOverlay', 'openPainOverlay', 'openEventOverlay', 'openDevicesOverlay', 'openShoesOverlay', 'openAchievements', 'openLangOverlay', 'openPreferencesOverlay']);
+  assert.deepEqual(rows, ['openPersonalDataOverlay', 'openGoalsOverlay', 'openZonesOverlay', 'openDaysOverlay', 'openEventOverlay', 'openCrossTrainingOverlay', 'openPainOverlay', 'openDevicesOverlay', 'openShoesOverlay', 'openAchievements', 'openLangOverlay', 'openPreferencesOverlay']);
   assert.ok(!perfil.includes('class="settings-grid"') && !perfil.includes('class="card settile"'), 'ya no quedan mosaicos');
   for (const id of ['perfil-devices-summary', 'perfil-days-summary', 'perfil-shoes-summary', 'perfil-zones-summary', 'perfil-pain-summary', 'perfil-ach-summary']) assert.ok(perfil.includes('id="' + id + '"'), id);
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) for (const k of groups) assert.ok(read('locales/' + l + '.js').includes(k + ':"'), l + ' ' + k);

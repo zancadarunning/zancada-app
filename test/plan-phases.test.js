@@ -2343,7 +2343,7 @@ test('phaseLineText: post / maintenance no rompen con peakKm indefinido y nunca 
   });
 });
 
-test('index.html: #plan-post-race con el texto, y el botón abre el editor de meta y fecha (Datos personales)', () => {
+test('index.html: #plan-post-race con el texto, y el botón abre el editor de meta y fecha (Objetivos)', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   const m = html.match(/<div[^>]*id="plan-post-race"[^>]*>([\s\S]*?)<\/div>/);
   assert.ok(m, 'existe #plan-post-race');
@@ -2356,11 +2356,11 @@ test('index.html: #plan-post-race con el texto, y el botón abre el editor de me
   // el handler llama a la función que abre el panel donde se eligen meta y fecha de carrera
   const app = loadApp();
   let opened = 0;
-  app.openPersonalDataOverlay = () => { opened++; };
+  app.openGoalsOverlay = () => { opened++; };
   require('../js/ui-events.js').run(onclick, {}, {}, app, { stopped: false });   // el mismo intérprete que usa la página (sin eval)
   assert.equal(opened, 1);
   // y ese panel es el que tiene los campos de meta y fecha de carrera
-  const overlay = html.slice(html.indexOf('id="personal-data-overlay"'));
+  const overlay = html.slice(html.indexOf('id="goals-overlay"'));
   const end = overlay.indexOf('class="overlay overlay-sheet"');
   assert.ok(overlay.indexOf('id="perfil-goal"') > 0 && overlay.indexOf('id="perfil-goal"') < end);
   assert.ok(overlay.indexOf('id="perfil-racedate"') > 0 && overlay.indexOf('id="perfil-racedate"') < end);
