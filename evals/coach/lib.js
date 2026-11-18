@@ -99,9 +99,9 @@ function evaluate(c, result) {
   const exp = c.esperado || {};
   const fails = [];
   // Haiku 5.5 devolvió respuestas VACÍAS en el chat real (2026-11-18): la app mostraba "Listo, ya apliqué los cambios que charlamos" o "No me pude conectar" sin motivo. Una respuesta final sin texto es siempre una falla.
-  if (!String(text || '').trim()) fails.push('respuesta vacía: el modelo no escribió ningún texto');
   const calls = result.calls || [];
   const text = result.text || '';
+  if (!String(text || '').trim()) fails.push('respuesta vacía: el modelo no escribió ningún texto');
   (exp.herramientas || []).forEach(w => {
     const ok = calls.some(x => x.name === w.name && Object.entries(w.args || {}).every(([k, v]) => argMatches(x.input && x.input[k], v)));
     if (!ok) fails.push(`falta ${w.name}${w.args ? ' con ' + JSON.stringify(w.args) : ''}; llamó: ${calls.map(x => x.name + JSON.stringify(x.input)).join(' | ') || 'nada'}`);
