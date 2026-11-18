@@ -5,8 +5,7 @@
 -- (api/_lib/token-crypto.js), igual que en las otras marcas.
 --
 -- Cómo correrlo: pegar este archivo entero en el SQL Editor de Supabase y ejecutarlo
--- una sola vez, DESPUÉS de que Huawei apruebe la solicitud de Health Service Kit
--- (hasta entonces la conexión queda apagada en la app y no hace falta la tabla).
+-- una sola vez. YA CORRIDO en producción el 2026-11-18 (la conexión sigue apagada en la app hasta que Huawei apruebe).
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS public.huawei_connections (
@@ -25,12 +24,13 @@ ALTER TABLE public.huawei_connections ENABLE ROW LEVEL SECURITY;
 -- La app nunca selecciona las columnas de tokens: solo pregunta si existe la conexión.
 DROP POLICY IF EXISTS "huawei_connections_select_own" ON public.huawei_connections;
 CREATE POLICY "huawei_connections_select_own" ON public.huawei_connections
-  FOR SELECT USING (auth.uid() = user_id);
+  FOR SELECT USING ((select auth.uid()) = user_id);
 
 DROP POLICY IF EXISTS "huawei_connections_delete_own" ON public.huawei_connections;
 CREATE POLICY "huawei_connections_delete_own" ON public.huawei_connections
-  FOR DELETE USING (auth.uid() = user_id);
+  FOR DELETE USING ((select auth.uid()) = user_id);
 
 -- Ningún rol de la app puede leer los tokens (mismo criterio que sql/harden_connection_tokens.sql): el navegador solo pregunta si hay conexión (user_id).
 REVOKE SELECT ON public.huawei_connections FROM anon, authenticated;
 GRANT  SELECT (user_id) ON public.huawei_connections TO authenticated;
+REVOKE INSERT, UPDATE ON public.huawei_connections FROM anon, authenticated;   -- los tokens los escribe solo el servidor (mismo criterio que sql/security_fixes_2026_10_08.sql)

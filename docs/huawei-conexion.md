@@ -9,7 +9,7 @@ Estado: **programada y apagada** (2026-11-18). Se activa cuando Huawei aprueba l
 - Esta primera versión trae solo el **resumen** de cada carrera (distancia, duración, FC promedio y máxima, fecha local). **No trae la ruta GPS ni los parciales**, y **no manda entrenamientos al reloj**: Huawei no documenta una API REST para eso (se pidió el permiso "Schedule and Task Data" en la solicitud, pero no hay endpoint conocido).
 
 ## Para activarla (cuando Huawei apruebe)
-1. En Supabase (SQL Editor), correr `sql/create_huawei_connections.sql` y `sql/merge_huawei_runs.sql`.
+1. **Hecho el 2026-11-18:** `sql/create_huawei_connections.sql` y `sql/merge_huawei_runs.sql` ya están corridos en Supabase (tabla con RLS, sin lectura de tokens desde el navegador, función solo para el servidor).
 2. En Vercel cargar `HUAWEI_CLIENT_ID` (el "ID de la aplicación" del producto de servidor en HUAWEI ID), `HUAWEI_CLIENT_SECRET` (su secreto) y `HUAWEI_STATE_SECRET` (texto largo al azar, nuevo).
 3. Verificar en Huawei Developers que la callback declarada sea `https://zancada.org/api/huawei-auth` y la URL de confianza `https://zancada.org`.
 4. En `app.js` poner `HUAWEI_ENABLED = true`, publicar y probar con una cuenta de Huawei real con una carrera (el modo de prueba admite hasta 100 usuarios). Cuando funcione, tocar "Verify" en la tarjeta de Health Service Kit de la consola de Huawei para sacar el límite.
