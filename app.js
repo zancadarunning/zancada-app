@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-18T00:23:42Z';
+const APP_VERSION = '2026-11-18T11:51:45Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -4443,7 +4443,7 @@ function cancelPlanChangeTiming(){
   pendingPlanChangeBackup = null;
   renderPerfil(); // los inputs vuelven a mostrar los valores de verdad guardados, no lo que se había tipeado
 }
-function resolvePlanChangeTiming(choice){
+function resolvePlanChangeTiming(choice, raceChanged){
   document.getElementById('plan-change-timing-modal').style.display = 'none';
   const ctx = pendingPlanChangeContext;
   const backup = pendingPlanChangeBackup;
@@ -4459,6 +4459,7 @@ function resolvePlanChangeTiming(choice){
     if(choice === 'now') applyPersonalDataChangeNow(); else applyPersonalDataChangeNextWeek();
     finishPersonalDataSave();
   } else if(ctx === 'goals'){
+    if(raceChanged){ refreshPhaseSchedule(); state.nextWeekOverrides = {}; }
     if(choice === 'now') applyGoalsChangeNow(); else applyGoalsChangeNextWeek();
     finishGoalsSave();
   }
@@ -4508,16 +4509,12 @@ function savePersonalData(){
   }
   const terrainChoice = document.querySelector('#perfil-terrain-choice .choice.active');
   const genderChoice = document.querySelector('#perfil-gender-choice .choice.active');
-  const goal = document.getElementById('perfil-goal').value;
-  const raceDate = document.getElementById('perfil-racedate').value || null;
   const currentKmInput = document.getElementById('perfil-current-km');
-  const backup = { weight: state.profile.weight, height: state.profile.height, terrain: state.profile.terrain, gender: state.profile.gender, goal: state.profile.goal, raceDate: state.profile.raceDate, currentWeeklyKm: state.profile.currentWeeklyKm, runnerType: state.profile.runnerType, weeklyKm: state.profile.weeklyKm };
+  const backup = { weight: state.profile.weight, height: state.profile.height, terrain: state.profile.terrain, gender: state.profile.gender, currentWeeklyKm: state.profile.currentWeeklyKm, runnerType: state.profile.runnerType, weeklyKm: state.profile.weeklyKm };
   if(weight>0) state.profile.weight = weight;
   if(height>0) state.profile.height = height;
   if(terrainChoice) state.profile.terrain = terrainChoice.dataset.v;
   if(genderChoice) state.profile.gender = genderChoice.dataset.v;
-  if(goal) state.profile.goal = goal;
-  state.profile.raceDate = raceDate;
   if(currentKmInput && currentKmInput.value !== ''){
     // Mismo motivo que peso/altura arriba: si el campo sigue mostrando el fmtDist(...,1) con
     // el que se pobló, no lo tocó -- no lo re-parseamos, para no perder precisión (ej. 20km ->
@@ -4602,12 +4599,23 @@ function saveGoals(){
   // segundos) que antes quedaba guardado tal cual, sin ningún techo.
   const availMinRaw = parseFloat(document.getElementById('perfil-availmin').value);
   const availableMinPerSession = (availMinRaw>0 && availMinRaw<=300) ? Math.round(availMinRaw) : null;
+  const goalSel = document.getElementById('perfil-goal').value;
+  const raceDate = document.getElementById('perfil-racedate').value || null;
   const goalChanged = (state.profile.weeklyGoalKm||0) !== weeklyGoal || (state.profile.availableMinPerSession||null) !== availableMinPerSession;
-  const backup = { weeklyGoalKm: state.profile.weeklyGoalKm, goalNote: state.profile.goalNote, availableMinPerSession: state.profile.availableMinPerSession };
+  // La meta y la fecha de la carrera objetivo cambian TODO el plan (fases, dia de carrera, puesta a punto): si solo se
+  // aplicaran "desde la semana que viene", esta semana seguiria mostrando la carrera en el dia viejo (y bloqueando mover sesiones).
+  const raceChanged = (!!goalSel && goalSel !== state.profile.goal) || raceDate !== (state.profile.raceDate || null);
+  const backup = { weeklyGoalKm: state.profile.weeklyGoalKm, goalNote: state.profile.goalNote, availableMinPerSession: state.profile.availableMinPerSession, goal: state.profile.goal, raceDate: state.profile.raceDate, weeklyKm: state.profile.weeklyKm };
   state.profile.weeklyGoalKm = weeklyGoal;
   state.profile.goalNote = goalNote;
   state.profile.availableMinPerSession = availableMinPerSession;
-  if(goalChanged){
+  if(goalSel) state.profile.goal = goalSel;
+  state.profile.raceDate = raceDate;
+  if(raceChanged) state.profile.weeklyKm = calcWeeklyKm(state.profile);
+  if(raceChanged){
+    pendingPlanChangeContext = 'goals'; pendingPlanChangeBackup = backup;
+    resolvePlanChangeTiming('now', true);
+  } else if(goalChanged){
     openPlanChangeTimingModal('goals', backup);
   } else {
     // la meta no cambió de verdad (guardaron solo la nota, por ejemplo) -- no hay nada
@@ -4840,7 +4848,7 @@ function calSelectDay(day){
   const input = document.getElementById(calTargetInputId);
   input.value = dateStr;
   dateBoxUpdaters[calTargetInputId] && dateBoxUpdaters[calTargetInputId]();
-  if(calTargetInputId === 'perfil-racedate') markPerfilDirty('personal'); // set vía JS, no dispara 'change'
+  if(calTargetInputId === 'perfil-racedate') markPerfilDirty('goals'); // set vía JS, no dispara 'change'
   if(calTargetInputId === 'ob-birth') updateObStep2ButtonState();
   closeCalendar();
 }
@@ -11605,24 +11613,24 @@ function renderPerfil(){
   }
 
   updateProfileUnitLabels();
-  const editingPersonal = ['perfil-weight','perfil-height','perfil-racedate','perfil-current-km'].includes(document.activeElement && document.activeElement.id);
+  const editingPersonal = ['perfil-weight','perfil-height','perfil-current-km'].includes(document.activeElement && document.activeElement.id);
   if(!editingPersonal){
     document.getElementById('perfil-weight').value = p.weight ? fmtWeight(p.weight) : '';
     document.getElementById('perfil-height').value = p.height ? fmtHeight(p.height) : '';
     // 0 es un valor real y guardado a propósito (alguien nuevo que arranca desde cero) --
     // "|| ''" lo mostraba como campo vacío, indistinguible de "todavía no se cargó nada".
     document.getElementById('perfil-current-km').value = (p.currentWeeklyKm===0 || p.currentWeeklyKm) ? fmtDist(p.currentWeeklyKm,1) : '';
-    document.getElementById('perfil-goal').value = p.goal || 'start';
-    document.getElementById('perfil-racedate').value = p.raceDate || '';
-    dateBoxUpdaters['perfil-racedate'] && dateBoxUpdaters['perfil-racedate']();
     [...document.getElementById('perfil-terrain-choice').children].forEach(c=>c.classList.toggle('active', c.dataset.v===p.terrain));
     // Sin género guardado todavía (cuentas de antes de este campo, o quien lo dejó sin
     // elegir en el onboarding) no marcamos ninguna opción -- forzar "x" acá pisaría el
     // guardado con un valor que la persona nunca eligió, apenas abra este panel.
     [...document.getElementById('perfil-gender-choice').children].forEach(c=>c.classList.toggle('active', c.dataset.v===p.gender));
   }
-  const editingGoals = ['perfil-weekly-goal','perfil-goal-note','perfil-availmin'].includes(document.activeElement && document.activeElement.id);
+  const editingGoals = ['perfil-goal','perfil-racedate','perfil-weekly-goal','perfil-goal-note','perfil-availmin'].includes(document.activeElement && document.activeElement.id);
   if(!editingGoals){
+    document.getElementById('perfil-goal').value = p.goal || 'start';
+    document.getElementById('perfil-racedate').value = p.raceDate || '';
+    dateBoxUpdaters['perfil-racedate'] && dateBoxUpdaters['perfil-racedate']();
     document.getElementById('perfil-weekly-goal').value = p.weeklyGoalKm ? fmtDist(p.weeklyGoalKm,1) : '';
     document.getElementById('perfil-goal-note').value = p.goalNote || '';
     document.getElementById('perfil-availmin').value = p.availableMinPerSession || '';
