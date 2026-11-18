@@ -24,7 +24,7 @@ test('las funciones de Garmin existen y la conexión se refresca con las demás 
   assert.match(app, /updateGarminStatusDisplay\(\)\]\)\.then\(stopLoading\)/);
   // el login de Garmin vuelve a la dirección registrada en el portal de Garmin (garmin-callback), no a /api/garmin-auth
   assert.match(app, /link\.p === 'garmin' \? '\/api\/garmin-callback'/);
-  assert.match(app, /\(strava\|polar\|wahoo\|suunto\|coros\|garmin\)/);
+  assert.match(app, /\(strava\|polar\|wahoo\|suunto\|coros\|garmin\|huawei\)/);
   // solo se abre una dirección de Garmin (no una que devuelva otro servidor)
   assert.match(app, /connect\\\.garmin\\\.com/);
   // si no se puede avisar a Garmin la desconexión, NO se simula

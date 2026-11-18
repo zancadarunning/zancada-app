@@ -1562,8 +1562,8 @@ test('Wahoo y Polar quedan fuera de Zonda igual que Strava y Garmin, también la
   const fs = require('fs'), path = require('path');
   const srv = fs.readFileSync(path.join(__dirname, '..', 'api', '_lib', 'notify-new-run.js'), 'utf8');
   const weekly = fs.readFileSync(path.join(__dirname, '..', 'api', '_lib', 'weekly-summary.js'), 'utf8');
-  assert.match(srv, /RESTRICTED_SOURCES = new Set\(\['strava', 'garmin', 'wahoo', 'polar'\]\)/);
-  assert.match(weekly, /RESTRICTED_SOURCES = \['strava', 'garmin', 'wahoo', 'polar'\]/);
+  assert.match(srv, /RESTRICTED_SOURCES = new Set\(\['strava', 'garmin', 'wahoo', 'polar', 'huawei'\]\)/);
+  assert.match(weekly, /RESTRICTED_SOURCES = \['strava', 'garmin', 'wahoo', 'polar', 'huawei'\]/);
 });
 
 test('"Hoy en tu reloj" vive al final de la pestaña Plan (pedido del dueño 2026-11-10), no en Inicio', () => {

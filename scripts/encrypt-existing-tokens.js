@@ -20,6 +20,7 @@ const TABLES = {
   polar_connections: ['access_token'],
   wahoo_connections: ['access_token', 'refresh_token'],
   coros_connections: ['access_token', 'refresh_token'],
+  huawei_connections: ['access_token', 'refresh_token'],
   suunto_connections: ['access_token', 'refresh_token']
 };
 

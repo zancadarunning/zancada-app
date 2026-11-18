@@ -15,6 +15,7 @@ const PUBLIC = {
   'strava-auth.js': /verifyState/,      // vuelta del OAuth: el "state" lo firmó nuestro servidor
   'polar-auth.js': /verifyState/,
   'wahoo-auth.js': /verifyState/,
+  'huawei-auth.js': /verifyState/,
   'suunto-auth.js': /verifyState/,
   'coros-auth.js': /verifyState/,
   'garmin-callback.js': /verifyState/,           // vuelta del OAuth de Garmin: el state lo firmó nuestro servidor
