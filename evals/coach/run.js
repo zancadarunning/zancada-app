@@ -18,7 +18,7 @@ const { loadCases, prepareCase, executeTool, evaluate } = require('./lib');
 const args = process.argv.slice(2);
 const dry = args.includes('--dry');
 const only = args.includes('--case') ? args[args.indexOf('--case') + 1] : null;
-const model = process.env.EVAL_MODEL || 'claude-haiku-5-5';
+const model = process.env.EVAL_MODEL || 'claude-haiku-4-5-20251001';
 
 async function callModel(system, tools, messages) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
