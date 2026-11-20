@@ -249,15 +249,14 @@ test('forma física: el VDOT de un 5K en 20:00 es ~49.8 y el índice sube cuando
   assert.equal(app.computeFitnessTrend(12).filter(w => w.v !== null).length, 0, 'una carrera de menos de 3 km no cuenta');
 });
 
-test('clima: traduce los códigos de Open-Meteo', () => {
-  const app = loadApp();
-  assert.equal(app.wxKind(0).k, 'clear');
-  assert.equal(app.wxKind(2).k, 'partly');
-  assert.equal(app.wxKind(3).k, 'cloudy');
-  assert.equal(app.wxKind(63).k, 'rain');
-  assert.equal(app.wxKind(81).k, 'rain');
-  assert.equal(app.wxKind(73).k, 'snow');
-  assert.equal(app.wxKind(95).k, 'storm');
+test('el clima de Inicio se sacó (Open-Meteo gratis es solo no comercial): ni el pedido, ni el chip, ni el permiso de conexión en el CSP', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.doesNotMatch(app, /api\.open-meteo\.com/);
+  assert.doesNotMatch(app, /refreshHomeWeather|requestWeatherLocation|paintHomeWeather/);
+  assert.doesNotMatch(html, /home-wx|open-meteo/i);
+  for (const f of ['js/legal-privacy.js', 'js/legal-terms.js']) assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), /Open-Meteo/, f);
 });
 
 test('forma física: con pocas semanas de datos muestra una tarjeta explicativa (no desaparece)', () => {

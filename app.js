@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-20T14:50:50Z';
+const APP_VERSION = '2026-11-20T15:00:50Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10267,7 +10267,6 @@ function renderHome(){
   if(installHelpCard) installHelpCard.style.display = (isRunningStandalone() || !!deferredInstallPrompt) ? 'none' : '';
   document.getElementById('home-name').textContent = state.profile.name;
   { const hh = new Date().getHours(); const hi = document.getElementById('home-hi'); if(hi) hi.textContent = t(hh < 5 || hh >= 21 ? 'greet_evening' : hh < 12 ? 'greet_morning' : 'greet_afternoon') + ','; }
-  refreshHomeWeather();
   document.getElementById('headerDate').textContent = new Date().toLocaleDateString(LOCALE_MAP[lang],{weekday:'short',day:'numeric',month:'short'});
 
   // Carrera cargada en "Próximos eventos" (Perfil) -- se muestra también acá en Inicio
@@ -14709,81 +14708,8 @@ function isIosStandalonePwa(){
   return ios && standalone && !(typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
 }
 const LAST_POS_KEY = 'zancada_last_pos';
-// ---- Clima en Inicio (Open-Meteo, sin clave) ----
-// Usa la última ubicación conocida (la que ya guarda la pantalla de Correr), redondeada a ~1 km; si todavía no
-// hay ninguna, el chip simplemente no aparece. El resultado se guarda 30 minutos.
-const WX_KEY = 'zancada_wx';
-let wxInFlight = false;
-function wxKind(code){
-  if(code === 0) return {k: 'clear', e: 'wxClear'};
-  if(code === 1 || code === 2) return {k: 'partly', e: 'wxPartly'};
-  if(code === 3) return {k: 'cloudy', e: 'wxCloud'};
-  if(code === 45 || code === 48) return {k: 'fog', e: 'wxFog'};
-  if(code >= 51 && code <= 57) return {k: 'drizzle', e: 'wxRain'};
-  if((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return {k: 'rain', e: 'wxRain'};
-  if((code >= 71 && code <= 77) || code === 85 || code === 86) return {k: 'snow', e: 'wxSnow'};
-  if(code >= 95) return {k: 'storm', e: 'wxStorm'};
-  return {k: 'cloudy', e: 'wxCloud'};
-}
-function paintHomeWeather(w){
-  const chip = document.getElementById('home-wx');
-  if(!chip) return;
-  if(!w || !Number.isFinite(w.temp)){ chip.style.display = 'none'; return; }
-  const k = wxKind(w.code);
-  const deg = isImperial() ? Math.round(w.temp * 9 / 5 + 32) + '°F' : Math.round(w.temp) + '°C';
-  chip.innerHTML = '<span class="ico" aria-hidden="true">' + ICONS[k.e] + '</span><span>' + escapeHtml(deg + ' · ' + t('wx_' + k.k)) + '</span>';
-  chip.style.display = '';
-  chip.removeAttribute('role'); chip.removeAttribute('tabindex'); chip.onclick = null;
-}
-// Pide la ubicación una vez (con el aviso del sistema si hace falta) y la guarda para el clima.
-function requestWeatherLocation(){
-  if(!navigator.geolocation){ paintHomeWeather(null); return; }
-  navigator.geolocation.getCurrentPosition(p => {
-    saveLastKnownPosition(p.coords.latitude, p.coords.longitude);
-    refreshHomeWeather();
-  }, () => {
-    showToast(t('wx_denied'), 'error');
-    paintHomeWeather(null);
-  }, {enableHighAccuracy: false, timeout: 10000, maximumAge: 600000});
-}
-function paintWeatherInvite(){
-  const chip = document.getElementById('home-wx');
-  if(!chip) return;
-  chip.textContent = '📍 ' + t('wx_enable');
-  chip.style.display = '';
-  chip.setAttribute('role', 'button'); chip.tabIndex = 0;
-  chip.onclick = requestWeatherLocation;
-}
-async function refreshHomeWeather(){
-  const pos = readLastKnownPosition();
-  if(!pos){
-    // Sin ubicación guardada: si el permiso ya está concedido la tomamos sin molestar; si no, el chip invita a activarla.
-    let state0 = 'prompt';
-    try{ if(navigator.permissions && navigator.permissions.query) state0 = (await navigator.permissions.query({name: 'geolocation'})).state; }catch(e){}
-    if(state0 === 'granted' && navigator.geolocation){ requestWeatherLocation(); return; }
-    if(state0 === 'denied' || !navigator.geolocation){ paintHomeWeather(null); return; }
-    paintWeatherInvite();
-    return;
-  }
-  const lat = Math.round(pos.lat * 100) / 100, lng = Math.round(pos.lng * 100) / 100;
-  let cached = null;
-  try{ cached = JSON.parse(localStorage.getItem(WX_KEY) || 'null'); }catch(e){}
-  if(cached && Math.abs(cached.lat - lat) < 0.1 && Math.abs(cached.lng - lng) < 0.1) paintHomeWeather(cached);
-  if(cached && Date.now() - cached.ts < 30 * 60000 && Math.abs(cached.lat - lat) < 0.1 && Math.abs(cached.lng - lng) < 0.1) return;
-  if(wxInFlight || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
-  wxInFlight = true;
-  try{
-    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const to = setTimeout(() => { if(ctl) ctl.abort(); }, 6000);
-    const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lng + '&current=temperature_2m,weather_code&timezone=auto', ctl ? {signal: ctl.signal} : undefined);
-    clearTimeout(to);
-    const j = await r.json();
-    const w = {ts: Date.now(), lat, lng, temp: j.current.temperature_2m, code: j.current.weather_code};
-    try{ localStorage.setItem(WX_KEY, JSON.stringify(w)); }catch(e){}
-    paintHomeWeather(w);
-  }catch(e){ /* sin conexión o sin respuesta: queda lo que ya había */ }
-  finally{ wxInFlight = false; }
-}
+// (El clima de Inicio se sacó el 2026-11-18: el plan gratis de Open-Meteo es solo para uso no comercial. Cuando haya ganancias se puede volver a agregar con su plan comercial: el código anterior está en el historial de git, commit previo a este cambio.)
+const WX_KEY = 'zancada_wx';   // se sigue borrando de los teléfonos que lo tenían guardado (ver clearLastKnownPosition)
 // Texto hexadecimal al azar con el generador criptográfico del navegador (sirve para ids; no para secretos propios)
 function randomHex(n){
   try{ const a = new Uint8Array(Math.ceil(n/2)); crypto.getRandomValues(a); return Array.from(a, b => b.toString(16).padStart(2,'0')).join('').slice(0, n); }

@@ -3,7 +3,7 @@
 <head>
   <!-- CSP también como <meta>: la app nativa (Capacitor) carga este archivo desde https://localhost y NO recibe los headers de vercel.json, así que sin esto no tenía ninguna.
        Es la misma política que vercel.json (test/security-csp-meta.test.js lo exige) más https://www.zancada.org en connect-src, que es adonde llama la app nativa. frame-ancestors solo funciona como header. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://api.mapbox.com; media-src 'self' blob:; connect-src 'self' https://www.zancada.org https://challenges.cloudflare.com https://smcicgaraqlvalxvdriz.supabase.co wss://smcicgaraqlvalxvdriz.supabase.co https://api.open-meteo.com https://api.mapbox.com https://events.mapbox.com; worker-src 'self' blob:; child-src 'self' blob:; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://api.mapbox.com; media-src 'self' blob:; connect-src 'self' https://www.zancada.org https://challenges.cloudflare.com https://smcicgaraqlvalxvdriz.supabase.co wss://smcicgaraqlvalxvdriz.supabase.co https://api.mapbox.com https://events.mapbox.com; worker-src 'self' blob:; child-src 'self' blob:; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta charset="UTF-8">
 <!-- interactive-widget: OJO -- confirmado (bugs.webkit.org #259770, todavía "NEW" sin
      resolver) que Safari/WebKit NO IMPLEMENTA esta propiedad en absoluto, así que este
@@ -3752,7 +3752,6 @@ body{overflow-wrap:break-word;}
     <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:14px 0 4px;">
       <p class="greeting" style="margin:0;"><span id="home-hi"></span> <span id="home-name" style="font-weight:800;">—</span></p>
       <div class="streak-badge" id="home-streak-badge" role="button" tabindex="0" style="display:none; cursor:pointer;" data-on-click="openPreferencesOverlay()"></div>
-      <div class="wx-chip" id="home-wx" style="display:none;"></div>
     </div>
 
     <div class="home-section-label" data-i18n="home_section_today"></div>

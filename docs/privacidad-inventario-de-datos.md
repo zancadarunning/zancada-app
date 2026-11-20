@@ -30,7 +30,6 @@ Lo que **no** se guarda: contraseñas en claro, datos de tarjetas, documentos de
 | **Sentry** | Errores | Metadatos técnicos, sin datos personales | EE. UU. |
 | **Cloudflare** | DNS, reenvío de correo (`info@`) | Direcciones y contenido de lo que se reenvía | Global |
 | **Mapbox** | Mapas de las rutas | **La ruta** (hasta 200 puntos) de cada carrera cuyo mapa se dibuja, y las coordenadas de los cuadros de mapa que se ven (zona donde corre la persona) | EE. UU. |
-| **Open-Meteo** | Clima en la pantalla de inicio | Las coordenadas **redondeadas a 2 decimales** (aprox. 1 km) | Europa |
 | **Google (Firebase)** | Notificaciones en Android; ingreso con Google | Token de dispositivo; datos de la cuenta si elige Google | EE. UU. |
 | **Apple (notificaciones)** | Notificaciones en iPhone (web instalada hoy; app cuando exista) | Identificador de la suscripción y el aviso (cifrado en las suscripciones web) | EE. UU. |
 
