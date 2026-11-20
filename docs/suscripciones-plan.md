@@ -97,6 +97,15 @@ Arreglado en el código (rama fix/cobros-auditoria-2026-11-20):
 
 **Decisión pendiente con `PAYWALL_ENFORCE=1`:** corta el chat y el video para **todo** cliente, también la web. Las cuentas nuevas en zancada.org (o iPhone antes de que exista la app) no tendrían forma de pagar. Hay que decidir: cerrar el registro web al lanzar, o dejar el chat sin cobro en la web.
 
+### Tercera pasada (2026-11-20): respaldo si se pierde el aviso de la tienda
+- **Problema:** el acceso dependía solo del webhook. Si Vercel caía justo cuando alguien pagaba y RevenueCat agotaba los reintentos, esa persona quedaba con la compra hecha y sin acceso.
+- **Arreglo:** si la tabla `entitlements` dice "sin plan", el servidor le pregunta directo a RevenueCat (`GET /v1/subscribers/{id}`, `api/_lib/revenuecat-lookup.js`) tanto en `api/entitlement.js` (lo que ve la app) como en `require-plan.js` (el corte del chat y el video). RevenueCat es la fuente de verdad; no escribe nada en la base; cualquier error cae a "sin plan"; cache de 30 s.
+- **Para activarlo (lo hace el dueño):** en RevenueCat, Project settings > **API keys** > crear una **Secret API key** (empieza con `sk_`, permiso de solo lectura si deja elegir) y cargarla en Vercel como `REVENUECAT_SECRET_KEY` (tipo Sensitive, Production). Sin la variable, todo funciona como antes (solo por webhook).
+- Cuando el servidor dice "falta suscripción" (402) la app ahora vuelve a preguntar el plan antes de mostrar la pantalla de pago (si se acaba de activar, no se la muestra).
+- "Producto ya comprado" que no llega a la cuenta (la suscripción es de otra cuenta de Zancada) muestra el mensaje correcto en vez de "se está procesando".
+
+**Decisión pendiente, relojes:** el servidor NO corta las conexiones con relojes (Garmin, Suunto, Wahoo, Polar, COROS, Huawei) a quien no paga; solo la pantalla de la app los tapa. Cortarlos por servidor agrava el conflicto con los acuerdos de Garmin y Wahoo sobre cobrar por funciones que usan su API (ver más arriba). No se hizo a propósito: decidir junto con el permiso escrito de esas marcas.
+
 ## Pendiente del cobro (no hecho)
 - Al quedar una cuenta sin plan: desconectar relojes y borrar las carreras importadas de cada marca (hoy solo se corta el chat de IA y el video).
 - Huawei: Huawei IAP, aparte (RevenueCat no lo soporta). iPhone: StoreKit.

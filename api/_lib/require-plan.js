@@ -8,6 +8,7 @@
 // Devuelve true si puede seguir, o false (y ya respondió) si hay que cortar.
 const { entitlementFromRow } = require('../entitlement');
 const { fetchWithTimeout } = require('./fetch-with-timeout');
+const { lookupActivePlan } = require('./revenuecat-lookup');
 
 async function planStatus(userId) {
   if (process.env.PAYWALL_ENFORCE !== '1') return 'ok';
@@ -16,7 +17,9 @@ async function planStatus(userId) {
     const r = await fetchWithTimeout(`${base}/rest/v1/entitlements?user_id=eq.${encodeURIComponent(userId)}&select=plan,status,expires_at&limit=1`, { headers: { apikey: key, Authorization: `Bearer ${key}` } }, 6000);
     if (!r.ok) return 'unavailable';
     const rows = await r.json();
-    return entitlementFromRow(Array.isArray(rows) ? rows[0] : null, Date.now()).active ? 'ok' : 'no_plan';
+    if (entitlementFromRow(Array.isArray(rows) ? rows[0] : null, Date.now()).active) return 'ok';
+    const live = await lookupActivePlan(userId);   // el aviso puede haberse perdido: se confirma con RevenueCat (solo con REVENUECAT_SECRET_KEY)
+    return live && live.active ? 'ok' : 'no_plan';
   } catch (e) {
     return 'unavailable';
   }

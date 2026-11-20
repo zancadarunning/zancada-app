@@ -8,6 +8,7 @@
 const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');
 const { withSentry } = require('./_lib/sentry');
+const { lookupActivePlan } = require('./_lib/revenuecat-lookup');
 
 const FREE = { plan: 'free', active: false, expiresAt: null };
 // Margen después del vencimiento: la tienda renueva y avisa con unas horas de diferencia; sin este margen un suscriptor al día quedaría un rato en la pantalla de pago.
@@ -39,9 +40,12 @@ const handler = withSentry(async (req, res) => {
   res.setHeader('Cache-Control', 'private, no-store');
   try {
     const r = await fetch(`${base}/rest/v1/entitlements?user_id=eq.${encodeURIComponent(auth.userId)}&select=plan,status,expires_at&limit=1`, { headers });
-    if (!r.ok) { res.status(200).json(FREE); return; }
-    const rows = await r.json();
-    res.status(200).json(entitlementFromRow(Array.isArray(rows) ? rows[0] : null, Date.now()));
+    const rows = r.ok ? await r.json() : [];
+    const fromTable = entitlementFromRow(Array.isArray(rows) ? rows[0] : null, Date.now());
+    if (fromTable.active) { res.status(200).json(fromTable); return; }
+    // Sin plan en la tabla: si el aviso de la tienda se perdió o demora, RevenueCat sabe si pagó (solo con REVENUECAT_SECRET_KEY; si no, no hace nada)
+    const live = await lookupActivePlan(auth.userId);
+    res.status(200).json(live && live.active ? { plan: 'pro', active: true, expiresAt: live.expiresAt } : fromTable);
   } catch (e) {
     res.status(200).json(FREE);
   }

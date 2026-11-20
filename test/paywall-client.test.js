@@ -59,7 +59,7 @@ test('cobro seguro: nunca se compra como anónimo, no se compra si ya hay plan, 
 test('se revisa el plan al entrar, al volver a la app y cuando el servidor dice que falta; al cerrar sesión se cierra también la de RevenueCat', () => {
   assert.match(app, /try\{ checkPaywall\(true\); \}catch\(e\)\{\}/);
   assert.match(app, /visibilityState === 'visible'\)\{ try\{ checkPaywall\(false\); \}/);
-  assert.match(app, /data\.error\.code === 'subscription_required' && PAYWALL_ENABLED && isNativeApp\(\)\)\{ try\{ showPaywall\(\); \}/);
+  assert.match(app, /data\.error\.code === 'subscription_required' && PAYWALL_ENABLED && isNativeApp\(\)\)\{ try\{ checkPaywall\(true\); \}/);
   assert.match(app, /async function logout\(\)\{\r?\n\s*obClearDraft\(\);[^\n]*\r?\n\s*try\{ const P = purchasesPlugin\(\); if\(P && billingConfigured\) await P\.logOut\(\); \}catch\(e\)\{\}/);
 });
 
