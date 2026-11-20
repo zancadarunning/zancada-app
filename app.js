@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-20T15:50:28Z';
+const APP_VERSION = '2026-11-20T16:14:29Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -17269,7 +17269,7 @@ function isNativeApp(){
    Solo en la app instalada (Android): la web no cobra. La compra la hace Google Play a través de RevenueCat; quien decide si una cuenta tiene plan es el SERVIDOR (api/entitlement.js, que lee lo que
    escribe api/revenuecat-webhook.js): acá nunca se confía en que el teléfono diga "pagué". Si no se puede consultar (sin conexión), no se bloquea a nadie por eso. */
 const PAYWALL_ENABLED = false;
-const REVENUECAT_ANDROID_KEY = '';   // clave pública del SDK de Android (empieza con goog_): RevenueCat > API keys
+const REVENUECAT_ANDROID_KEY = 'goog_hilNGdfcwEjMBqGkOpyinPDBHpy';   // clave pública del SDK de Android (empieza con goog_): RevenueCat > API keys
 let billingConfigured = false, billingUser = null, paywallPackages = [], paywallBusy = false, lastPlanCheckAt = 0, planPollTimer = null;
 function purchasesPlugin(){
   return isNativeApp() && window.Capacitor.Plugins && window.Capacitor.Plugins.Purchases ? window.Capacitor.Plugins.Purchases : null;
