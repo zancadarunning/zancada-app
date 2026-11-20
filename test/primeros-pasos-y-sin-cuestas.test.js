@@ -341,7 +341,7 @@ test('inicio: botón Empezar en la sesión de hoy, tarjetas secundarias plegadas
 test('mapa de Correr en iPhone (web instalada): la posición guardada se muestra como zona, sin punto exacto, y la real solo si el permiso ya está dado', () => {
   const js = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
   assert.ok(js.includes('if(last) drawIdleMap(last.lat, last.lng, true);'));
-  assert.ok(js.includes(".setView([latitude, longitude], approx ? 13 : 16);"));
+  assert.ok(js.includes(".setView([latitude, longitude], approx ? 13 : 15);"));
   assert.ok(js.includes("if(st && st.state === 'granted') locateIdleMap();"));
   assert.ok(js.includes('function locateIdleMap(){'));
 });
