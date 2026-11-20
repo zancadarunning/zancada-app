@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-18T19:27:59Z';
+const APP_VERSION = '2026-11-20T14:50:50Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -20895,6 +20895,8 @@ Si el pedido es ambiguo entre "esta semana" y "de ahora en adelante", aplicá el
 
 Tu alcance es la app Zancada, el entrenamiento de running/trail, el ejercicio físico y la salud ligada a correr (lesiones, nutrición deportiva, descanso, sueño, etc.). Si el corredor te pregunta algo totalmente ajeno a eso (política, código, tareas de otra app, cultura general, etc.), no lo respondas -- decí con buena onda que solo podés ayudar con su entrenamiento y la app, y ofrecé volver a eso. Esto no te impide charlar con calidez si te saludan o te cuentan cómo están, ni usar ejemplos de la vida cotidiana para explicar algo de entrenamiento -- el límite es responder de lleno un tema sin relación real con correr o la app.
 
+Los mensajes tuyos anteriores pueden terminar con un [Registro de la app: ...]: significa que esos cambios YA se aplicaron. NUNCA los repitas ni llames de nuevo esas herramientas por un "gracias", un "ok", un emoji o una pregunta; solo si el corredor pide un cambio nuevo y distinto. Si el corredor cuenta una molestia o un dolor, llamá guardar_nota_coach con zona_cuerpo en esa misma respuesta, SIEMPRE.
+
 Formato del texto: el chat solo interpreta **negrita** (usala con moderación, para resaltar un dato clave) y guiones "- " al inicio de línea para listas cortas. No uses encabezados (#), links, tablas ni bloques de código: no se muestran bien en el chat.
 
 Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, que empeora al correr, o que persiste más de unos días, recomendá frenar y consultar a un profesional de la salud antes de seguir entrenando — no intentes diagnosticar vos la causa.`;
@@ -20957,7 +20959,7 @@ async function sendChat(){
   // los mensajes marcados noAi (resumen semanal, récords, logros, devolución de la sesión: llevan números de carreras que pueden venir de Strava) NO se reenvían a la IA; la política de Strava prohíbe usar sus datos como contexto de una conversación
   let messages = state.chat.filter(m=>(m.role==='user'||m.role==='coach') && !m.noAi).slice(0,-1).slice(-CHAT_HISTORY_LIMIT).map(m=>({
     role: m.role==='user'?'user':'assistant',
-    content: (m.ts && dayKeyOfTs(m.ts) !== todayKeyNow) ? `[${dateLabelOfTs(m.ts)}] ${String(m.text).slice(0, 2000)}` : String(m.text).slice(0, 2000)
+    content: ((m.ts && dayKeyOfTs(m.ts) !== todayKeyNow) ? `[${dateLabelOfTs(m.ts)}] ${String(m.text).slice(0, 2000)}` : String(m.text).slice(0, 2000)) + (m.role==='coach' && Array.isArray(m.acciones) && m.acciones.length ? `\n[Registro de la app (no lo escribió el corredor): en esa respuesta YA se aplicaron estos cambios: ${m.acciones.join(' | ').slice(0, 600)}. No los repitas.]` : '')
   }));
   const nowLabelFull = nowDate.toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
   const nowClock = nowDate.toLocaleTimeString(LOCALE_MAP[lang], {hour:'2-digit', minute:'2-digit', hour12:false});
@@ -20970,6 +20972,10 @@ async function sendChat(){
   let networkFailed = false;
   let cancelled = false;
   let anyToolApplied = false;
+  // Lo que de verdad se aplicó en este mensaje (lo devuelven las herramientas): se muestra si el modelo no escribe texto y se guarda en el chat para que los mensajes siguientes sepan que YA está hecho (sin eso, un "gracias" hacía que el modelo repitiera el cambio).
+  const appliedActions = [];
+  const changesFallbackText = () => { const txt = appliedActions.map(a => a.text).filter(Boolean).join(' ').slice(0, 600); return txt || t('coach_changes_applied_fallback'); };
+  let painNoteCalled = false, painNudged = false;
   // Después de cada cambio real (plan o perfil) las vueltas siguientes del mismo mensaje reciben el contexto ACTUALIZADO: con el viejo, el modelo seguía viendo el plan de antes
   // (un día ya movido o cancelado) y encadenaba mal el pedido siguiente ("pasá el martes al miércoles y después cambiame el miércoles").
   let systemNow = system;
@@ -20988,6 +20994,8 @@ async function sendChat(){
   // y una respuesta informativa buena se descartaba, se gastaba otro pedido y se empujaba al modelo a llamar herramientas que nadie pidió.
   const CLAIM_PATTERN = /(\b(cambié|actualicé|apliqué|ajusté|moví|cancelé|guardé|armé|modifiqué|eliminé)(?![a-záéíóúñ])|\bya\s+(lo\s+|los\s+|las\s+)?(cambié|actualicé|apliqué|hice|moví|cancelé|ajusté|guardé|armé)(?![a-záéíóúñ])|\b(se\s+)?(aplicó|cambió|actualizó|guardó|canceló)\s+(el|la|los|las|tu|tus)\b|\blisto,\s*(ya\b|lo\s+(cambié|actualicé|apliqué|hice)|apliqué|cambié|actualicé)|\balready\s+(updated|changed|applied|done)|\ball\s+set\b|\bit'?s\s+(done|updated)|\bc'est\s+(fait|mis\s+à\s+jour)|\bgi[àa]\s+(aggiornat|fatt)|\b(bereits|schon)\s+(aktualisiert|erledigt)|\bj[aá]\s+atualizad)/i;
   let correctionAttempted = false;
+  // El corredor CUENTA una molestia ("me duele...", "tengo una molestia...", "agregá una molestia...") y el modelo no llamó guardar_nota_coach: se le pide una vuelta más (antes quedaba sin guardar y el chat decía que sí).
+  const PAIN_REPORT = new RegExp('(\\bme (duele|duelen|molesta|molestan|lastim|torc)|\\btengo (una |un )?(molestia|dolor|lesi[oó]n|tirón)|\\b(agreg[aá]|agr[eé]game|anot[aá]|registr[aá])\\s+(una\\s+|la\\s+)?molestia|\\bmy [a-z ]{0,12}(hurts?|is sore|aches)|\\bI (hurt|twisted|strained) )', 'i');
   chatAbortController = new AbortController();
   try{
     // Mandamos el token de sesión igual que en los demás endpoints, para que
@@ -21007,7 +21015,15 @@ async function sendChat(){
       const textPart = blocks.filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
       if(textPart) finalText += (finalText? '\n':'') + textPart;
       const toolUses = blocks.filter(b=>b.type==='tool_use');
+      if(toolUses.some(tu=>tu.name==='guardar_nota_coach')) painNoteCalled = true;
       if(toolUses.length===0){
+        if(!painNoteCalled && !painNudged && PAIN_REPORT.test(text)){
+          painNudged = true;
+          messages.push({role:'assistant', content: blocks});
+          messages.push({role:'user', content: 'El corredor te acaba de contar una molestia o un dolor y todavía no llamaste guardar_nota_coach. Llamala ahora mismo con la nota y, si se puede identificar la zona, zona_cuerpo (rodilla, tobillo, pantorrilla, isquios, cadera, espalda, pie, cuadriceps u otro). Si en realidad ya quedó guardada en esta charla, decilo con claridad.'});
+          finalText = '';
+          continue;
+        }
         // Nunca se llamó ninguna herramienta en TODA la charla y el texto suena a que sí se
         // aplicó algo: le damos una única vuelta más para que se autocorrija (llame la
         // herramienta de verdad, o aclare que en realidad no hay ningún cambio aplicado) en
@@ -21045,6 +21061,7 @@ async function sendChat(){
       });
       if(coachStateFingerprint() !== stateBefore){
         anyToolApplied = true;
+        toolUses.forEach((tu, i) => { const r = toolResults[i] && toolResults[i].content; if(typeof r === 'string' && r) appliedActions.push({name: tu.name, text: r.replace(/[\r\n]+/g, ' ').slice(0, 220)}); });
         const ctxFresh = safeBuildContext();
         if(ctxFresh && ctxAtStart) systemNow = system.split(ctxAtStart).join(ctxFresh);
       }
@@ -21061,7 +21078,7 @@ async function sendChat(){
   // y el cambio (por ejemplo +15% de volumen) se aplicaba dos veces. Se da por respondido con el aviso de que los cambios ya están.
   if((networkFailed || cancelled) && anyToolApplied){
     networkFailed = false; cancelled = false;
-    if(!finalText.trim()) finalText = t('coach_changes_applied_fallback');
+    if(!finalText.trim()) finalText = changesFallbackText();
   }
   if(cancelled){
     // El corredor apretó "pausar": no mostramos error ni reintentamos, simplemente
@@ -21089,8 +21106,8 @@ async function sendChat(){
   // llegara a mandar una respuesta final en texto plano, finalText puede quedar
   // vacío aunque sí se hayan aplicado cambios reales -- antes eso se mostraba como
   // un mensaje "..." confuso, como si el coach no hubiera hecho nada.
-  if(!finalText.trim() && anyToolApplied) finalText = t('coach_changes_applied_fallback');
-  state.chat.push({role:'coach', text: finalText || t('coach_connection_error'), ts:Date.now()});
+  if(!finalText.trim() && anyToolApplied) finalText = changesFallbackText();
+  state.chat.push({role:'coach', text: finalText || t('coach_connection_error'), ts:Date.now(), acciones: appliedActions.length ? appliedActions.slice(0, 6).map(a => a.name + ': ' + a.text) : undefined});
   restoreSendBtn();
   renderChat();
   persist();

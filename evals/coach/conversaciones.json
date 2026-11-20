@@ -1,0 +1,147 @@
+[
+  {
+    "id": "molestia-pie-y-verificar",
+    "descripcion": "El caso real del 2026-11-18: pide agregar una molestia en el pie y después pregunta si quedó en Molestias",
+    "setup": { "hoy": "mon" },
+    "turnos": [
+      { "mensaje": "Hola Zonda, ¿cómo vengo esta semana?", "esperado": { "sinHerramientas": true } },
+      { "mensaje": "y agrega una molestia en el pie derecho", "esperado": { "herramientas": [{ "name": "guardar_nota_coach", "args": { "zona_cuerpo": "pie" } }], "estado": { "painLog": ["pie"] } } },
+      { "mensaje": "agregaste la molestia en molestias?", "esperado": { "textoNoCoincide": ["no (pude|puedo) conectar"] } }
+    ]
+  },
+  {
+    "id": "molestia-pie-repetida",
+    "descripcion": "Pide la misma molestia dos veces: no debe duplicarla ni contestar vacío",
+    "setup": { "hoy": "tue" },
+    "turnos": [
+      { "mensaje": "agregá una molestia en el pie derecho", "esperado": { "herramientas": [{ "name": "guardar_nota_coach", "args": { "zona_cuerpo": "pie" } }], "estado": { "painLog": ["pie"] } } },
+      { "mensaje": "agregá una molestia en el pie derecho", "esperado": {} }
+    ]
+  },
+  {
+    "id": "dos-molestias-y-listado",
+    "descripcion": "Dos molestias en el mismo chat y después pregunta cuáles tiene",
+    "setup": { "hoy": "mon" },
+    "turnos": [
+      { "mensaje": "me duele la rodilla izquierda desde ayer", "esperado": { "herramientas": [{ "name": "guardar_nota_coach", "args": { "zona_cuerpo": "rodilla" } }], "estado": { "painLog": ["rodilla"] } } },
+      { "mensaje": "y también me molesta la espalda baja", "esperado": { "herramientas": [{ "name": "guardar_nota_coach", "args": { "zona_cuerpo": "espalda" } }], "estado": { "painLog": ["rodilla", "espalda"] } } },
+      { "mensaje": "¿qué molestias tengo registradas?", "esperado": { "textoCoincide": ["rodilla", "espalda"] } }
+    ]
+  },
+  {
+    "id": "dolor-fuerte-tobillo",
+    "descripcion": "Dolor fuerte: guarda la nota, no diagnostica y recomienda un profesional",
+    "setup": { "hoy": "wed" },
+    "turnos": [
+      { "mensaje": "me torcí el tobillo y no puedo apoyar el pie, me duele mucho", "esperado": { "herramientas": [{ "name": "guardar_nota_coach", "args": { "zona_cuerpo": "tobillo" } }], "textoCoincide": ["profesional|médic|medic|kinesi|fisio|traumat"], "textoNoCoincide": ["tenés (un|una) (esguince|fractura|rotura)"], "estado": { "painLog": ["tobillo"] } } },
+      { "mensaje": "¿es un esguince?", "esperado": { "textoNoCoincide": ["(?<!si )(es|tenés) (un|una) (esguince|fractura)", "seguro (es|tenés)"] } }
+    ]
+  },
+  {
+    "id": "mover-y-preguntar",
+    "descripcion": "Mueve una sesión, pregunta qué toca y después lo deshace",
+    "setup": { "hoy": "mon", "plan": { "thu": { "typeKey": "easy", "dist": 6, "zone": 2 }, "fri": { "typeKey": "rest", "dist": 0 } } },
+    "turnos": [
+      { "mensaje": "pasá el jueves al viernes", "esperado": { "herramientas": [{ "name": "mover_sesion", "args": { "dia_origen": "thu", "dia_destino": "fri" } }], "prohibidas": ["cancelar_sesion"] } },
+      { "mensaje": "¿qué me toca el viernes?", "esperado": { "sinHerramientas": true, "textoCoincide": ["6"] } },
+      { "mensaje": "mejor deshacelo", "esperado": { "herramientas": [{ "name": "deshacer_cambio" }] } }
+    ]
+  },
+  {
+    "id": "dos-pedidos-en-uno",
+    "descripcion": "Un mensaje con dos pedidos: cancelar un día y bajar el volumen",
+    "setup": { "hoy": "mon", "plan": { "sat": { "typeKey": "long", "dist": 12, "zone": 2 } } },
+    "turnos": [
+      { "mensaje": "cancelá el sábado y bajame el volumen de la semana un 10%", "esperado": { "herramientas": [{ "name": "cancelar_sesion", "args": { "dia": "sat" } }, { "name": "ajustar_volumen_semana" }] } },
+      { "mensaje": "gracias", "esperado": { "sinHerramientas": true } }
+    ]
+  },
+  {
+    "id": "charla-y-cambio",
+    "descripcion": "Charla casual y después un pedido concreto de cambio",
+    "setup": { "hoy": "tue", "plan": { "wed": { "typeKey": "rest", "dist": 0 }, "tue": { "typeKey": "easy", "dist": 5, "zone": 2 } } },
+    "turnos": [
+      { "mensaje": "hola", "esperado": { "sinHerramientas": true } },
+      { "mensaje": "tengo ganas de correr más, ¿está bien?", "esperado": { "sinHerramientas": true } },
+      { "mensaje": "movela de hoy a mañana, estoy cansado", "esperado": { "herramientas": [{ "name": "mover_sesion", "args": { "dia_origen": "tue", "dia_destino": "wed" } }] } }
+    ]
+  },
+  {
+    "id": "preferencia-horaria",
+    "descripcion": "Dato permanente sin zona del cuerpo: guarda una nota",
+    "setup": { "hoy": "mon" },
+    "turnos": [
+      { "mensaje": "solo puedo correr a la noche, después de las 21", "esperado": { "herramientas": [{ "name": "guardar_nota_coach" }], "estado": { "coachNotesMin": 1 } } },
+      { "mensaje": "¿te acordás a qué hora puedo correr?", "esperado": { "textoCoincide": ["noche|21"] } }
+    ]
+  },
+  {
+    "id": "pedido-ambiguo",
+    "descripcion": "Pedido sin contexto: pregunta qué cambiar en vez de tocar el plan",
+    "setup": { "hoy": "mon" },
+    "turnos": [
+      { "mensaje": "cambialo", "esperado": { "sinHerramientas": true } },
+      { "mensaje": "el del jueves", "esperado": {} }
+    ]
+  },
+  {
+    "id": "mensajes-cortos",
+    "descripcion": "Mensajes de una palabra después de un cambio: nunca deben dejar la respuesta vacía",
+    "setup": { "hoy": "mon", "plan": { "tue": { "typeKey": "easy", "dist": 5, "zone": 2 }, "wed": { "typeKey": "rest", "dist": 0 } } },
+    "turnos": [
+      { "mensaje": "pasá el martes al miércoles", "esperado": { "herramientas": [{ "name": "mover_sesion", "args": { "dia_origen": "tue", "dia_destino": "wed" } }] } },
+      { "mensaje": "ok", "esperado": { "sinHerramientas": true } },
+      { "mensaje": "dale", "esperado": { "sinHerramientas": true } },
+      { "mensaje": "👍", "esperado": { "sinHerramientas": true } }
+    ]
+  },
+  {
+    "id": "dias-permanentes-y-pregunta",
+    "descripcion": "Cambia los días de entreno y pregunta cuántos son",
+    "setup": { "hoy": "mon" },
+    "turnos": [
+      { "mensaje": "de ahora en adelante quiero entrenar martes, jueves y domingo", "esperado": { "herramientas": [{ "name": "modificar_perfil", "args": { "dias_entreno": ["tue", "thu", "sun"] } }], "estado": { "diasEntreno": ["tue", "thu", "sun"] } } },
+      { "mensaje": "¿cuántos días entreno por semana?", "esperado": { "sinHerramientas": true, "textoCoincide": ["3|tres"] } }
+    ]
+  },
+  {
+    "id": "tiempo-y-pregunta",
+    "descripcion": "Plan por tiempo: cambia los minutos y pregunta cuánto toca",
+    "setup": { "hoy": "mon", "trainBy": "time", "plan": { "thu": { "typeKey": "easy", "dist": 5, "zone": 2, "timeBased": true, "durMin": 25 } } },
+    "turnos": [
+      { "mensaje": "poné el jueves de 40 minutos", "esperado": { "herramientas": [{ "name": "modificar_sesion", "args": { "dia": "thu", "duracion_min": 40 } }] } },
+      { "mensaje": "¿cuánto toca el jueves?", "esperado": { "sinHerramientas": true, "textoCoincide": ["50|40"] } }
+    ]
+  },
+  {
+    "id": "millas-y-cambio",
+    "descripcion": "Corredor en millas: pregunta y pide un cambio",
+    "setup": { "hoy": "mon", "units": "imperial", "plan": { "thu": { "typeKey": "easy", "dist": 8, "zone": 2 } } },
+    "turnos": [
+      { "mensaje": "how far is thursday?", "esperado": { "sinHerramientas": true } },
+      { "mensaje": "poné el jueves de 4 millas", "esperado": { "herramientas": [{ "name": "modificar_sesion", "args": { "dia": "thu" } }] } }
+    ]
+  },
+  {
+    "id": "carrera-y-pedido-imposible",
+    "descripcion": "Quiere cambiar el día de la carrera cargada: no debe tocarlo y debe explicarlo",
+    "setup": { "hoy": "mon", "evento": { "dia": "sat", "name": "Corrida del barrio", "distanceKm": 10 }, "plan": { "sat": { "typeKey": "long", "dist": 12, "zone": 2 } } },
+    "turnos": [
+      { "mensaje": "cancelá el sábado", "esperado": { "textoCoincide": ["carrera|Corrida"] } },
+      { "mensaje": "dale, igual cancelalo", "esperado": {} }
+    ]
+  },
+  {
+    "id": "conversacion-larga-mezclada",
+    "descripcion": "Seis turnos mezclando preguntas, molestia, cambios y agradecimientos",
+    "setup": { "hoy": "wed", "plan": { "thu": { "typeKey": "easy", "dist": 6, "zone": 2 }, "fri": { "typeKey": "rest", "dist": 0 } } },
+    "turnos": [
+      { "mensaje": "¿qué toca hoy?", "esperado": { "sinHerramientas": true } },
+      { "mensaje": "me duele la cadera cuando termino de correr", "esperado": { "herramientas": [{ "name": "guardar_nota_coach", "args": { "zona_cuerpo": "cadera" } }], "estado": { "painLog": ["cadera"] } } },
+      { "mensaje": "pasá el jueves al viernes entonces", "esperado": { "herramientas": [{ "name": "mover_sesion", "args": { "dia_origen": "thu", "dia_destino": "fri" } }] } },
+      { "mensaje": "gracias", "esperado": { "sinHerramientas": true } },
+      { "mensaje": "¿y la molestia de la cadera quedó anotada?", "esperado": { "textoCoincide": ["cadera"] } },
+      { "mensaje": "perfecto", "esperado": { "sinHerramientas": true } }
+    ]
+  }
+]
