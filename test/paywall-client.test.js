@@ -41,6 +41,21 @@ test('el plan lo decide el servidor: la compra se confirma consultando api/entit
   assert.match(block, /isNativeApp\(\)/, 'solo en la app instalada');
 });
 
+test('cobro seguro: nunca se compra como anónimo, no se compra si ya hay plan, "ya comprado" no cobra de nuevo y una confirmación demorada llega sola', () => {
+  const block = app.slice(app.indexOf('SUSCRIPCIÓN (cobro)'), app.indexOf('function renderRDRuta'));
+  assert.match(block, /P\.getAppUserID\(\)/, 'se confirma quién quedó identificado en RevenueCat');
+  assert.match(block, /billingUser = userId;/);
+  assert.match(block, /if\(!P \|\| !\(await initBilling\(currentUserId\)\)\) throw/, 'la pantalla de planes exige usuario identificado');
+  const buy = block.slice(block.indexOf('async function buyPaywallPlan'), block.indexOf('async function restorePaywall'));
+  assert.ok(buy.indexOf('initBilling(currentUserId)') < buy.indexOf('purchasePackage'), 'primero se identifica, después se compra');
+  assert.ok(buy.indexOf('const before = await fetchPlan()') < buy.indexOf('purchasePackage'), 'se mira el plan del servidor antes de cobrar');
+  assert.match(buy, /PRODUCT_ALREADY_PURCHASED_ERROR[\s\S]*restorePurchases/, 'ya comprado: se sincroniza, no se vuelve a cobrar');
+  assert.match(buy, /RECEIPT_ALREADY_IN_USE_ERROR[\s\S]*paywall_in_use/);
+  assert.match(block, /function pollPlanLater\(\)/);
+  assert.match(block, /setPaywallMsg\(t\('paywall_pending'\)\);\s*pollPlanLater\(\);/);
+  assert.match(app, /await P\.logOut\(\); \}catch\(e\)\{\}\r?\n\s*billingUser = null;/, 'al cerrar sesión se olvida el usuario de cobro');
+});
+
 test('se revisa el plan al entrar, al volver a la app y cuando el servidor dice que falta; al cerrar sesión se cierra también la de RevenueCat', () => {
   assert.match(app, /try\{ checkPaywall\(true\); \}catch\(e\)\{\}/);
   assert.match(app, /visibilityState === 'visible'\)\{ try\{ checkPaywall\(false\); \}/);
@@ -49,7 +64,7 @@ test('se revisa el plan al entrar, al volver a la app y cuando el servidor dice 
 });
 
 test('los textos de la suscripción existen en los 6 idiomas y la leyenda legal menciona renovación automática, 24 horas y cómo cancelar', () => {
-  const keys = ['paywall_kicker', 'paywall_title', 'paywall_sub', 'paywall_f1', 'paywall_f2', 'paywall_f3', 'paywall_f4', 'paywall_monthly', 'paywall_yearly', 'paywall_save', 'paywall_per_month', 'paywall_per_year', 'paywall_trial', 'paywall_legal', 'paywall_restore', 'paywall_unavailable', 'paywall_activating', 'paywall_welcome', 'paywall_pending', 'paywall_error', 'paywall_restore_none'];
+  const keys = ['paywall_kicker', 'paywall_title', 'paywall_sub', 'paywall_f1', 'paywall_f2', 'paywall_f3', 'paywall_f4', 'paywall_monthly', 'paywall_yearly', 'paywall_save', 'paywall_per_month', 'paywall_per_year', 'paywall_trial', 'paywall_legal', 'paywall_restore', 'paywall_unavailable', 'paywall_activating', 'paywall_welcome', 'paywall_pending', 'paywall_error', 'paywall_restore_none', 'paywall_in_use'];
   const I = {}; global.window = {};
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) new Function('window', read('locales/' + l + '.js'))(global.window);
   Object.assign(I, global.window.I18N);

@@ -10,13 +10,16 @@ const { applyCors, isPreflight } = require('./_lib/cors');
 const { withSentry } = require('./_lib/sentry');
 
 const FREE = { plan: 'free', active: false, expiresAt: null };
+// Margen después del vencimiento: la tienda renueva y avisa con unas horas de diferencia; sin este margen un suscriptor al día quedaría un rato en la pantalla de pago.
+// Solo cuenta para 'active'/'grace': un reembolso o un vencimiento confirmado ('refunded', 'expired') cortan en el acto.
+const EXPIRY_TOLERANCE_MS = 6 * 3600 * 1000;
 
 // ¿La fila cuenta como plan vigente ahora? Pura, para poder probarla.
 function entitlementFromRow(row, nowMs) {
   if (!row || typeof row !== 'object') return FREE;
   const plan = String(row.plan || 'free');
   const expiresAt = row.expires_at ? Date.parse(row.expires_at) : null;
-  const notExpired = expiresAt === null || (Number.isFinite(expiresAt) && expiresAt > nowMs);
+  const notExpired = expiresAt === null || (Number.isFinite(expiresAt) && expiresAt + EXPIRY_TOLERANCE_MS > nowMs);
   const statusOk = row.status === 'active' || row.status === 'grace';
   const active = plan !== 'free' && statusOk && notExpired;
   return { plan: active ? plan : 'free', active, expiresAt: active && expiresAt ? new Date(expiresAt).toISOString() : null };
@@ -46,3 +49,4 @@ const handler = withSentry(async (req, res) => {
 
 module.exports = handler;
 module.exports.entitlementFromRow = entitlementFromRow;
+module.exports.EXPIRY_TOLERANCE_MS = EXPIRY_TOLERANCE_MS;
