@@ -95,36 +95,49 @@ test('endpoint: sin secreto configurado, con secreto incorrecto o con otro méto
   } finally { global.fetch = realFetch; }
 });
 
-test('endpoint: con el secreto correcto guarda el plan (upsert) y devuelve 200; un aviso viejo no pisa a uno nuevo; si la cuenta ya no existe no reintenta', async () => {
+test('endpoint: guarda el plan de forma atómica (PATCH condicional, si no hay fila INSERT); un aviso viejo no pisa a uno nuevo; si la cuenta ya no existe no reintenta; si la base falla, 500', async () => {
   const handler = require('../api/revenuecat-webhook');
   const realFetch = global.fetch; const seen = [];
-  let stored = null, upStatus = 201;
+  let stored = null, patchStatus = 200, postStatus = 201, postInserts = true;
   global.fetch = async (url, opts) => {
-    seen.push({ url: String(url), method: (opts && opts.method) || 'GET', body: opts && opts.body });
-    if (!opts || !opts.method || opts.method === 'GET') return { ok: true, status: 200, json: async () => (stored === null ? [] : [{ last_event_ms: stored }]) };
-    return { ok: upStatus < 300, status: upStatus, json: async () => ({}) };
+    const method = (opts && opts.method) || 'GET';
+    seen.push({ url: String(url), method, body: opts && opts.body, prefer: opts && opts.headers && opts.headers.Prefer });
+    if (method === 'PATCH') {
+      // la base aplica la condición del filtro: solo actualiza si no hay aviso guardado o el guardado no es más nuevo
+      const m = /last_event_ms\.lte\.(\d+)/.exec(String(url));
+      const hit = stored !== null && Number(m[1]) >= stored;
+      return { ok: patchStatus < 300, status: patchStatus, json: async () => (hit ? [{ user_id: U }] : []) };
+    }
+    return { ok: postStatus < 300, status: postStatus, json: async () => (postInserts ? [{ user_id: U }] : []) };
   };
   const req = (e) => ({ method: 'POST', headers: { authorization: 'Bearer s3cret-largo-de-prueba' }, body: { event: e } });
   try {
     await withEnv({ REVENUECAT_WEBHOOK_SECRET: 's3cret-largo-de-prueba', SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_KEY: 'k' }, async () => {
-      const r = await call(handler, req(ev()));
-      assert.equal(r.code, 200);
-      const post = seen.find(s => s.method === 'POST');
-      assert.ok(post && /on_conflict=user_id/.test(post.url));
+      // cuenta sin fila todavía: el PATCH no toca nada y se inserta
+      let r = await call(handler, req(ev()));
+      assert.equal(r.code, 200); assert.equal(r.body.stale, undefined);
+      const patch = seen.find(x => x.method === 'PATCH'), post = seen.find(x => x.method === 'POST');
+      assert.ok(patch && /or=\(last_event_ms\.is\.null,last_event_ms\.lte\.\d+\)/.test(patch.url), 'la condición de orden la evalúa la base');
+      assert.ok(post && /on_conflict=user_id/.test(post.url) && /ignore-duplicates/.test(post.prefer), 'insert que nunca pisa una fila que apareció en el medio');
       const row = JSON.parse(post.body);
       assert.equal(row.user_id, U); assert.equal(row.plan, 'pro'); assert.equal(row.status, 'active');
-      // aviso viejo: ya hay uno más nuevo guardado
-      seen.length = 0; stored = NOW + 1000;
+      // ya hay fila y el aviso es más nuevo o igual: el PATCH la actualiza y no inserta
+      seen.length = 0; stored = NOW - 1000;
+      r = await call(handler, req(ev()));
+      assert.equal(r.code, 200); assert.ok(!seen.some(x => x.method === 'POST'));
+      // aviso viejo: ya hay uno más nuevo guardado -> el PATCH no actualiza, el insert no inserta -> se descarta
+      seen.length = 0; stored = NOW + 1000; postInserts = false;
       const old = await call(handler, req(ev({ event_timestamp_ms: NOW })));
       assert.equal(old.code, 200); assert.equal(old.body.stale, true);
-      assert.ok(!seen.some(s => s.method === 'POST'), 'no escribe');
-      // cuenta borrada (409)
-      stored = null; upStatus = 409;
+      // cuenta borrada (409 al insertar)
+      stored = null; postStatus = 409; postInserts = true;
       assert.equal((await call(handler, req(ev()))).code, 200);
       // falla de la base: 500 para que RevenueCat reintente, sin detalle
-      upStatus = 500;
+      postStatus = 500;
       const fail = await call(handler, req(ev()));
       assert.equal(fail.code, 500); assert.deepEqual(Object.keys(fail.body), ['error']);
+      postStatus = 201; patchStatus = 500;
+      assert.equal((await call(handler, req(ev()))).code, 500);
       // avisos ignorados no tocan la base
       seen.length = 0;
       assert.equal((await call(handler, req(ev({ type: 'TEST' })))).code, 200);
@@ -165,6 +178,16 @@ test('require-plan: apagado (sin PAYWALL_ENFORCE) deja pasar a todos sin consult
       r = await run(); assert.equal(r.ok, true, 'regalo sin vencimiento');
       global.fetch = async () => { throw new Error('red'); };
       r = await run(); assert.equal(r.ok, false, 'si la base no responde, no se regala');
+      assert.equal(r.out.code, 503, 'pero no se manda a pagar a quien ya pagó: es un 503, no un 402');
+      global.fetch = async () => ({ ok: false, status: 500, json: async () => ({}) });
+      r = await run(); assert.equal(r.ok, false); assert.equal(r.out.code, 503);
+      // margen de unas horas después del vencimiento (la renovación llega con retraso), pero no más
+      global.fetch = async () => ({ ok: true, status: 200, json: async () => [{ plan: 'pro', status: 'active', expires_at: new Date(Date.now() - 3600000).toISOString() }] });
+      r = await run(); assert.equal(r.ok, true, 'vencido hace 1 hora: todavía pasa');
+      global.fetch = async () => ({ ok: true, status: 200, json: async () => [{ plan: 'pro', status: 'refunded', expires_at: new Date(Date.now() - 1000).toISOString() }] });
+      r = await run(); assert.equal(r.ok, false, 'reembolsado: corta en el acto');
+      global.fetch = async () => ({ ok: true, status: 200, json: async () => [{ plan: 'pro', status: 'expired', expires_at: new Date(Date.now() - 1000).toISOString() }] });
+      r = await run(); assert.equal(r.ok, false, 'vencimiento confirmado: corta');
     });
   } finally { global.fetch = realFetch; }
 });

@@ -111,7 +111,7 @@ module.exports = withSentry(async (req, res) => {
     return;
   }
   // Sin plan de pago vigente no hay IA (solo cuando el cobro está prendido: PAYWALL_ENFORCE=1; ver api/_lib/require-plan.js)
-  if (!(await requirePlan(auth.userId, res, { error: { message: pick(PLAN_REQUIRED_MSG, lang, 'es'), code: 'subscription_required' } }))) return;
+  if (!(await requirePlan(auth.userId, res, { error: { message: pick(PLAN_REQUIRED_MSG, lang, 'es'), code: 'subscription_required' } }, { error: { message: pick(GENERIC_ERROR_MSG, lang, 'es'), code: 'plan_check_unavailable' } }))) return;
 
   // Un mail sin confirmar no alcanza: las cuentas descartables sin confirmar no pueden gastar la cuota de la IA.
   if (!auth.emailConfirmed) {

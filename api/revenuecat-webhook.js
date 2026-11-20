@@ -36,22 +36,28 @@ const handler = withSentry(async (req, res) => {
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
   const row = decision.row;
   try {
-    // no pisar un aviso nuevo con uno viejo
-    const cur = await fetchWithTimeout(`${base}/rest/v1/entitlements?user_id=eq.${encodeURIComponent(row.user_id)}&select=last_event_ms&limit=1`, { headers }, 6000);
-    if (cur.ok) {
-      const rows = await cur.json();
-      const last = Array.isArray(rows) && rows[0] ? Number(rows[0].last_event_ms) : NaN;
-      if (Number.isFinite(last) && last > row.last_event_ms) { res.status(200).json({ ok: true, stale: true }); return; }
-    }
-    const up = await fetchWithTimeout(`${base}/rest/v1/entitlements?on_conflict=user_id`, {
+    // Escritura atómica y en orden (dos avisos casi simultáneos no se pisan): 1) se actualiza la fila SOLO si el último aviso aplicado no es más nuevo que este (la condición la evalúa la base);
+    // 2) si no había fila, se inserta (sin pisar una fila que apareció en el medio); 3) si ninguna de las dos escribió, había un aviso más nuevo y este se descarta.
+    const uid = encodeURIComponent(row.user_id);
+    const upd = await fetchWithTimeout(`${base}/rest/v1/entitlements?user_id=eq.${uid}&or=(last_event_ms.is.null,last_event_ms.lte.${encodeURIComponent(String(Math.floor(row.last_event_ms)))})`, {
+      method: 'PATCH',
+      headers: Object.assign({}, headers, { Prefer: 'return=representation' }),
+      body: JSON.stringify(row)
+    }, 8000);
+    if (!upd.ok) { console.error('revenuecat-webhook: no se pudo guardar el plan (HTTP ' + upd.status + ')'); res.status(500).json({ error: 'Error interno' }); return; }
+    const updated = await upd.json();
+    if (Array.isArray(updated) && updated.length) { res.status(200).json({ ok: true }); return; }
+    const ins = await fetchWithTimeout(`${base}/rest/v1/entitlements?on_conflict=user_id`, {
       method: 'POST',
-      headers: Object.assign({}, headers, { Prefer: 'resolution=merge-duplicates,return=minimal' }),
+      headers: Object.assign({}, headers, { Prefer: 'resolution=ignore-duplicates,return=representation' }),
       body: JSON.stringify(row)
     }, 8000);
     // 409 = la cuenta ya no existe (se borró): no hay a quién asignarle el plan y reintentar no sirve
-    if (up.status === 409) { res.status(200).json({ ok: true, ignored: true }); return; }
-    if (!up.ok) { console.error('revenuecat-webhook: no se pudo guardar el plan (HTTP ' + up.status + ')'); res.status(500).json({ error: 'Error interno' }); return; }
-    res.status(200).json({ ok: true });
+    if (ins.status === 409) { res.status(200).json({ ok: true, ignored: true }); return; }
+    if (!ins.ok) { console.error('revenuecat-webhook: no se pudo guardar el plan (HTTP ' + ins.status + ')'); res.status(500).json({ error: 'Error interno' }); return; }
+    const inserted = await ins.json();
+    if (Array.isArray(inserted) && inserted.length) { res.status(200).json({ ok: true }); return; }
+    res.status(200).json({ ok: true, stale: true });
   } catch (e) {
     await reportError(e, { where: 'revenuecat-webhook' }).catch(() => {});
     console.error('revenuecat-webhook: error al guardar el plan');

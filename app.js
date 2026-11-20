@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-20T15:00:50Z';
+const APP_VERSION = '2026-11-20T15:50:28Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5583,7 +5583,8 @@ function wipeLocalUserData(uid){
 }
 async function logout(){
   obClearDraft();   // las respuestas a medio cargar del inicio no quedan para la próxima cuenta
-  try{ const P = purchasesPlugin(); if(P && billingConfigured) await P.logOut(); }catch(e){}   // cobro: se cierra también la sesión de RevenueCat
+  try{ const P = purchasesPlugin(); if(P && billingConfigured) await P.logOut(); }catch(e){}
+  billingUser = null;   // cobro: se cierra también la sesión de RevenueCat
   await waitForPendingPersist();
   // Ver el comentario de runProgressKey(): sin esto, una carrera sin terminar quedaba
   // recuperable por la próxima cuenta que inicie sesión en este mismo dispositivo.
@@ -17269,7 +17270,7 @@ function isNativeApp(){
    escribe api/revenuecat-webhook.js): acá nunca se confía en que el teléfono diga "pagué". Si no se puede consultar (sin conexión), no se bloquea a nadie por eso. */
 const PAYWALL_ENABLED = false;
 const REVENUECAT_ANDROID_KEY = '';   // clave pública del SDK de Android (empieza con goog_): RevenueCat > API keys
-let billingConfigured = false, paywallPackages = [], paywallBusy = false, lastPlanCheckAt = 0;
+let billingConfigured = false, billingUser = null, paywallPackages = [], paywallBusy = false, lastPlanCheckAt = 0, planPollTimer = null;
 function purchasesPlugin(){
   return isNativeApp() && window.Capacitor.Plugins && window.Capacitor.Plugins.Purchases ? window.Capacitor.Plugins.Purchases : null;
 }
@@ -17278,9 +17279,14 @@ async function initBilling(userId){
   if(!P || !REVENUECAT_ANDROID_KEY || !userId) return false;
   try{
     if(!billingConfigured){ await P.configure({apiKey: REVENUECAT_ANDROID_KEY}); billingConfigured = true; }
+    if(billingUser === userId) return true;
     await P.logIn({appUserID: userId});   // el id de la cuenta es el usuario de RevenueCat: así el aviso del servidor sabe de quién es la compra
+    // Nunca se compra como usuario anónimo: el servidor ignora los avisos de ids que no son una cuenta y se cobraría sin dar acceso. Se confirma quién quedó identificado.
+    const who = await P.getAppUserID();
+    if(!who || String(who.appUserID || '').toLowerCase() !== String(userId).toLowerCase()) throw new Error('usuario de cobro distinto');
+    billingUser = userId;
     return true;
-  }catch(e){ console.error('billing init', e); return false; }
+  }catch(e){ billingUser = null; console.error('billing init', e); return false; }
 }
 // {active, plan, expiresAt} o null si no se pudo consultar
 async function fetchPlan(){
@@ -17325,7 +17331,7 @@ async function showPaywall(){
   box.innerHTML = '<div class="skel-line" style="height:84px; margin-bottom:10px;"></div><div class="skel-line" style="height:84px;"></div>';
   const P = purchasesPlugin();
   try{
-    if(!P || !billingConfigured) throw new Error('sin cobro');
+    if(!P || !(await initBilling(currentUserId))) throw new Error('sin cobro');
     const o = await P.getOfferings();
     paywallPackages = ((o && o.current && o.current.availablePackages) || []).filter(p => p && p.product);
     if(!paywallPackages.length) throw new Error('sin planes');
@@ -17352,21 +17358,46 @@ async function waitForPlan(){
   setPaywallMsg(t('paywall_activating'));
   for(let i = 0; i < 15; i++){
     const p = await fetchPlan();
-    if(p && p.active){ setPaywallMsg(''); hidePaywall(); showToast(t('paywall_welcome'), 'success'); return true; }
+    if(p && p.active){ setPaywallMsg(''); hidePaywall(); renderPlanCard(p); showToast(t('paywall_welcome'), 'success'); return true; }
     await new Promise(r => setTimeout(r, 2000));
   }
   setPaywallMsg(t('paywall_pending'));
+  pollPlanLater();
   return false;
+}
+// Si la confirmación tarda (aviso de la tienda demorado, pago pendiente, corte de red justo después de pagar), se sigue consultando un rato: el acceso llega solo, sin que el usuario tenga que hacer nada.
+function pollPlanLater(){
+  if(planPollTimer) return;
+  let n = 0;
+  planPollTimer = setInterval(async () => {
+    n++;
+    const p = await fetchPlan();
+    if(p && p.active){ clearInterval(planPollTimer); planPollTimer = null; setPaywallMsg(''); hidePaywall(); renderPlanCard(p); showToast(t('paywall_welcome'), 'success'); return; }
+    if(n >= 40){ clearInterval(planPollTimer); planPollTimer = null; }
+  }, 15000);
 }
 async function buyPaywallPlan(i){
   const P = purchasesPlugin(), pkg = paywallPackages[Number(i)];
   if(paywallBusy || !P || !pkg) return;
   paywallBusy = true; setPaywallBusy(true); setPaywallMsg('');
   try{
+    if(!(await initBilling(currentUserId))){ setPaywallMsg(t('paywall_error')); return; }
+    // Si el servidor ya dice que hay plan (otro teléfono, otra pantalla abierta), no se compra de nuevo: así nadie paga dos veces la misma cuenta.
+    const before = await fetchPlan();
+    if(before && before.active){ hidePaywall(); renderPlanCard(before); return; }
     await P.purchasePackage({aPackage: pkg});
     await waitForPlan();
   }catch(e){
-    if(!(e && (e.userCancelled || String(e.code) === '1'))){ console.error('purchase', e); setPaywallMsg(t('paywall_error')); }
+    const code = String(e && (e.code != null ? e.code : '')).toUpperCase();
+    if(e && (e.userCancelled || code === '1' || code === 'PURCHASE_CANCELLED_ERROR')){ /* canceló: no es un error */ }
+    else if(code === '6' || code === 'PRODUCT_ALREADY_PURCHASED_ERROR'){
+      // Google ya tiene esa suscripción en esta cuenta de Google (no hay doble cobro): se sincroniza y se espera la confirmación
+      try{ await P.restorePurchases(); }catch(e2){}
+      await waitForPlan();
+    }
+    else if(code === '7' || code === 'RECEIPT_ALREADY_IN_USE_ERROR'){ setPaywallMsg(t('paywall_in_use')); }
+    else if(code === '20' || code === 'PAYMENT_PENDING_ERROR'){ setPaywallMsg(t('paywall_pending')); pollPlanLater(); }
+    else{ console.error('purchase', e); setPaywallMsg(t('paywall_error')); pollPlanLater(); }   // por si el cobro se hizo igual: el acceso llega solo
   }finally{ paywallBusy = false; setPaywallBusy(false); }
 }
 async function restorePaywall(){

@@ -80,6 +80,23 @@ Leídos el 2026-11-10; el detalle está en la carpeta privada (no se publica). R
 - Aviso al borrar la cuenta si hay suscripción paga vigente (la tienda sigue cobrando).
 - Tarjeta "Tu suscripción" en Perfil (vencimiento + botón a Google Play); no aparece en cuentas regaladas.
 
+## Auditoría del cobro (2026-11-20) y ajustes de RevenueCat que hay que hacer en su panel
+Arreglado en el código (rama fix/cobros-auditoria-2026-11-20):
+- **Comprar sin estar identificado**: si fallaba el `logIn` de RevenueCat, la pantalla igual ofrecía comprar como usuario anónimo: se cobraba y el servidor ignoraba el aviso (pagó y no tenía acceso). Ahora nunca se compra sin confirmar con `getAppUserID` que RevenueCat identificó la cuenta.
+- **Pagar dos veces**: antes de cobrar se consulta el plan al servidor (si ya hay plan, no se compra); "producto ya comprado" sincroniza en vez de volver a cobrar; el botón queda bloqueado mientras se procesa.
+- **Confirmación demorada**: si el aviso de la tienda tarda, si el pago queda pendiente o se corta la red justo después de pagar, la app sigue consultando hasta 10 minutos y activa sola.
+- **Aviso viejo pisando a uno nuevo**: antes se leía y después se escribía (dos avisos casi simultáneos podían pisarse); ahora es una actualización condicional atómica en la base.
+- **Suscriptor al día mandado a pagar**: si la base fallaba, el servidor respondía 402 y la app mostraba la pantalla de pago aunque la persona hubiera pagado; ahora responde 503 (no se manda a pagar). Y hay un margen de 6 horas después del vencimiento (la renovación llega con retraso); un reembolso o un vencimiento confirmado cortan en el acto.
+
+**Ajustes en el panel de RevenueCat (los hace el dueño):**
+1. Project settings > General > **Restore behavior** (comportamiento al restaurar compras): elegir **mantener con el usuario original / no transferir** a otra cuenta. Con "transferir", una misma cuenta de Google podría mover la suscripción de una cuenta de Zancada a otra, y el aviso TRANSFER no le da acceso a la cuenta nueva (el servidor lo ignora a propósito).
+2. Integrations > Webhooks: URL y secreto (ver los pasos de arriba); mandar eventos de **Production** (y Sandbox solo mientras se prueba).
+3. Una **suscripción compartida por dos cuentas de Zancada** no es posible: es lo buscado (la segunda ve el mensaje "ya está asociada a otra cuenta").
+
+**Límite conocido, no es un bug:** la pantalla de suscripción vive en la app instalada. Quien modifique su propia copia del código en un teléfono con root podría ver las pantallas, pero **todo lo que cuesta plata (chat de IA y video) lo corta el servidor** con `PAYWALL_ENFORCE=1`. Lo que corre solo en el teléfono (planes, registro de carreras) no se puede proteger del todo y no cuesta nada.
+
+**Decisión pendiente con `PAYWALL_ENFORCE=1`:** corta el chat y el video para **todo** cliente, también la web. Las cuentas nuevas en zancada.org (o iPhone antes de que exista la app) no tendrían forma de pagar. Hay que decidir: cerrar el registro web al lanzar, o dejar el chat sin cobro en la web.
+
 ## Pendiente del cobro (no hecho)
 - Al quedar una cuenta sin plan: desconectar relojes y borrar las carreras importadas de cada marca (hoy solo se corta el chat de IA y el video).
 - Huawei: Huawei IAP, aparte (RevenueCat no lo soporta). iPhone: StoreKit.

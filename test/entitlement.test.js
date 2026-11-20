@@ -19,6 +19,10 @@ test('entitlementFromRow: plan pago vigente, en gracia y sin vencimiento cuentan
   assert.equal(entitlementFromRow({ plan: 'pro', status: 'grace', expires_at: future }, NOW).active, true);
   assert.equal(entitlementFromRow({ plan: 'pro', status: 'active', expires_at: null }, NOW).active, true);
   assert.equal(entitlementFromRow({ plan: 'pro', status: 'active', expires_at: '2026-10-01T00:00:00Z' }, NOW).active, false, 'vencido');
+  const justExpired = new Date(NOW - 3600000).toISOString();
+  assert.equal(entitlementFromRow({ plan: 'pro', status: 'active', expires_at: justExpired }, NOW).active, true, 'margen de unas horas: la renovación llega con retraso');
+  assert.equal(entitlementFromRow({ plan: 'pro', status: 'refunded', expires_at: justExpired }, NOW).active, false, 'un reembolso no tiene margen');
+  assert.equal(entitlementFromRow({ plan: 'pro', status: 'active', expires_at: new Date(NOW - 7 * 3600000).toISOString() }, NOW).active, false, 'pasado el margen, vencido');
   assert.equal(entitlementFromRow({ plan: 'pro', status: 'cancelled', expires_at: future }, NOW).active, false);
   assert.equal(entitlementFromRow({ plan: 'pro', status: 'refunded', expires_at: future }, NOW).active, false);
   assert.equal(entitlementFromRow({ plan: 'pro', status: 'active', expires_at: 'no-es-una-fecha' }, NOW).active, false, 'una fecha ilegible nunca regala el plan');
