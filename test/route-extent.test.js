@@ -32,3 +32,12 @@ test('el resumen y la lista de Historial usan routeHasExtent; el mapa de Correr 
   assert.match(html, /\.map-wrap::after\{content:'\\00A9  Mapbox  \\00A9  OpenStreetMap'/, 'crédito chico en el mapa de la carrera en pausa');
   assert.ok(!/\.idle-map \.leaflet-control-attribution/.test(html) && !/\.map-wrap \.leaflet-control-attribution/.test(html), 'ya no hay cartel de créditos de Leaflet con fondo');
 });
+
+test('el mapa de la carrera nunca arranca en (0,0): usa la posición del mapa de antes de correr o la última conocida', () => {
+  assert.ok(app.includes('let lastIdlePos = null;'));
+  assert.ok(app.includes('lastIdlePos = {lat: latitude, lng: longitude};'), 'se guarda la posición real del mapa de antes de correr');
+  const fn = app.slice(app.indexOf('function initLiveMap(){'), app.indexOf('function updateLiveMap('));
+  assert.match(fn, /const start0 = lastIdlePos \|\| readLastKnownPosition\(\);/);
+  assert.match(fn, /setView\(start0 \? \[start0\.lat, start0\.lng\] : \[0,0\], start0 \? 15 : 3\)/);
+  assert.ok(fn.includes('if(lastIdlePos){ liveMarker = L.circleMarker('), 'el punto "estás acá" desde el principio');
+});

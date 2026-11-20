@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-20T19:38:21Z';
+const APP_VERSION = '2026-11-20T20:23:46Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -14618,10 +14618,13 @@ function histMapInnerHtml(r, width, height){
 }
 function initLiveMap(){
   if(liveMap){ liveMap.remove(); liveMap=null; }
-  liveMap = L.map('liveMap', {zoomControl:false, attributionControl:false}).setView([0,0], 15);   // el crédito va como texto chico por CSS (.map-wrap::after)
+  // Antes del primer punto de GPS el mapa NO puede quedar en (0,0) (mar abierto, un cuadro celeste vacío): arranca en la posición que ya vio el mapa de antes de correr, o en la última conocida.
+  const start0 = lastIdlePos || readLastKnownPosition();
+  liveMap = L.map('liveMap', {zoomControl:false, attributionControl:false}).setView(start0 ? [start0.lat, start0.lng] : [0,0], start0 ? 15 : 3);   // el crédito va como texto chico por CSS (.map-wrap::after)
   mapboxTileLayer().addTo(liveMap);
   livePolyline = L.polyline([], {color:'#0B5D2E', weight:3.5, lineCap:'round', lineJoin:'round'}).addTo(liveMap);
   liveMarker = null; startMarker = null;
+  if(lastIdlePos){ liveMarker = L.circleMarker([lastIdlePos.lat, lastIdlePos.lng], {radius:8, color:'#121415', weight:3, fillColor:'#D6FF3F', fillOpacity:1}).addTo(liveMap); }   // "estás acá" desde el principio; el primer punto de GPS lo mueve
   liveMapFollowing = true;
   document.querySelector('.map-recenter-btn')?.classList.remove('visible');
   // dragstart/zoomstart de Leaflet también disparan con nuestros propios setView() de acá
@@ -14661,6 +14664,7 @@ function updateLiveMap(lat, lon){
 // reusar una lectura reciente del sistema en vez de forzar un fix de GPS nuevo cada vez
 // que se abre la pestaña.
 let idleMap = null;
+let lastIdlePos = null;   // la posición real que vio el mapa de antes de correr: con ella arranca el mapa de la carrera (antes quedaba en (0,0), mar abierto, hasta el primer punto de GPS)
 function initIdleMap(){
   const container = document.getElementById('idleMap');
   // Guarda por si esto se llama alguna vez con la carrera ya arrancada (runIdle oculto) --
@@ -14694,6 +14698,7 @@ function locateIdleMap(){
       // La pestaña pudo haberse cerrado/cambiado mientras esperábamos el fix de GPS.
       if(!document.getElementById('idleMap') || document.getElementById('runIdle').style.display === 'none') return;
       const { latitude, longitude } = pos.coords;
+      lastIdlePos = {lat: latitude, lng: longitude};
       saveLastKnownPosition(latitude, longitude);
       drawIdleMap(latitude, longitude);
     },
