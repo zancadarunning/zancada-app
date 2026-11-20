@@ -60,7 +60,9 @@ test('evaluate distingue lo correcto de lo incorrecto', () => {
   assert.ok(evaluate(mover, { calls: [{ name: 'mover_sesion', input: { dia_origen: 'tue', dia_destino: 'thu' } }], text: '' }).length >= 1, 'día equivocado');
   assert.ok(evaluate(mover, { calls: [{ name: 'mover_sesion', input: { dia_origen: 'tue', dia_destino: 'wed' } }, { name: 'cancelar_sesion', input: { dia: 'tue' } }], text: '' }).length >= 1, 'herramienta prohibida');
   const dias = byId['dias-permanentes'];
-  assert.deepEqual(evaluate(dias, { calls: [{ name: 'modificar_perfil', input: { dias_entreno: ['thu', 'tue'] } }], text: '' }), [], 'el orden de los días no importa');
+  assert.deepEqual(evaluate(dias, { calls: [{ name: 'modificar_perfil', input: { dias_entreno: ['thu', 'tue'] } }], text: 'Listo, los días quedaron así.' }), [], 'el orden de los días no importa');
+  // Haiku 5.5 devolvió respuestas vacías en el chat real (2026-11-18): una respuesta final sin texto siempre es una falla
+  assert.ok(evaluate(dias, { calls: [{ name: 'modificar_perfil', input: { dias_entreno: ['thu', 'tue'] } }], text: '' }).some(f => /vacía/.test(f)), 'respuesta vacía');
   const hoy = byId['cuanto-toca-hoy-tiempo'];
   assert.deepEqual(evaluate(hoy, { calls: [], text: 'Hoy son 35 minutos en total.' }), []);
   assert.ok(evaluate(hoy, { calls: [], text: 'Hoy son 25 minutos.' }).length >= 1);
@@ -75,4 +77,18 @@ test('el runner pide la clave y no tiene ninguna guardada', () => {
   assert.ok(src.includes('process.env.ANTHROPIC_API_KEY'));
   assert.ok(!/sk-ant-[A-Za-z0-9_-]{20,}/.test(src), 'sin claves en el repositorio');
   assert.ok(realTools().length >= 7);
+});
+
+test('las conversaciones de varios mensajes (conversaciones*.json) arman bien y el chat lleva la constancia de lo aplicado, la vuelta por molestia y el texto de respaldo', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  for (const n of ['conversaciones.json', 'conversaciones-app.json']) {
+    const list = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'evals', 'coach', n), 'utf8'));
+    assert.ok(list.length >= 15, n);
+    for (const c of list) assert.ok(c.id && Array.isArray(c.turnos) && c.turnos.length >= 2, c.id);
+  }
+  const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  assert.match(app, /Registro de la app \(no lo escribió el corredor\)/, 'el historial lleva lo ya aplicado (si no, un "gracias" repetía el cambio)');
+  assert.match(app, /const PAIN_REPORT = /, 'vuelta extra si el corredor cuenta una molestia y no se guardó');
+  assert.match(app, /const changesFallbackText = /, 'si la respuesta final viene vacía se muestra lo que se aplicó');
+  assert.doesNotMatch(app, /finalText = t\('coach_changes_applied_fallback'\)/, 'el texto genérico solo se usa si no hay detalle de lo aplicado');
 });
