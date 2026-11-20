@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-20T16:14:29Z';
+const APP_VERSION = '2026-11-20T16:53:25Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -17270,7 +17270,7 @@ function isNativeApp(){
    escribe api/revenuecat-webhook.js): acá nunca se confía en que el teléfono diga "pagué". Si no se puede consultar (sin conexión), no se bloquea a nadie por eso. */
 const PAYWALL_ENABLED = false;
 const REVENUECAT_ANDROID_KEY = 'goog_hilNGdfcwEjMBqGkOpyinPDBHpy';   // clave pública del SDK de Android (empieza con goog_): RevenueCat > API keys
-let billingConfigured = false, billingUser = null, paywallPackages = [], paywallBusy = false, lastPlanCheckAt = 0, planPollTimer = null;
+let billingConfigured = false, billingUser = null, paywallPackages = [], paywallSelected = 0, paywallBusy = false, lastPlanCheckAt = 0, planPollTimer = null;
 function purchasesPlugin(){
   return isNativeApp() && window.Capacitor.Plugins && window.Capacitor.Plugins.Purchases ? window.Capacitor.Plugins.Purchases : null;
 }
@@ -17301,6 +17301,7 @@ async function fetchPlan(){
 }
 async function checkPaywall(force){
   if(!PAYWALL_ENABLED || !isNativeApp() || !currentUserId) return;
+  { const ra = document.getElementById('runActive'); if(ra && ra.style.display && ra.style.display !== 'none') return; }   // nunca se tapa una carrera en curso (con el botón de terminar) con la pantalla de pago: se revisa de nuevo al volver
   if(!force && Date.now() - lastPlanCheckAt < 10*60*1000) return;
   lastPlanCheckAt = Date.now();
   await initBilling(currentUserId);
@@ -17335,23 +17336,52 @@ async function showPaywall(){
     const o = await P.getOfferings();
     paywallPackages = ((o && o.current && o.current.availablePackages) || []).filter(p => p && p.product);
     if(!paywallPackages.length) throw new Error('sin planes');
+    const bi = paywallPackages.findIndex(p => p.packageType === 'ANNUAL');
+    paywallSelected = bi >= 0 ? bi : 0;   // el plan anual viene elegido (es el que más conviene)
     box.innerHTML = paywallPackages.map((p, i) => {
       const annual = p.packageType === 'ANNUAL';
-      const trial = !!(p.product.introPrice);
-      return `<button type="button" class="paywall-plan${annual ? ' best' : ''}" data-on-click="buyPaywallPlan(${i})">
-        <span class="paywall-plan-main"><b>${t(annual ? 'paywall_yearly' : 'paywall_monthly')}</b>${annual ? `<span class="paywall-badge">${t('paywall_save')}</span>` : ''}</span>
+      let eq = '';
+      if(annual && Number(p.product.price) > 0 && p.product.currencyCode){
+        try{ eq = t('paywall_eq', {price: new Intl.NumberFormat(LOCALE_MAP[lang] || undefined, {style:'currency', currency:p.product.currencyCode}).format(Number(p.product.price) / 12)}); }catch(e){ eq = ''; }
+      }
+      return `<button type="button" role="radio" class="paywall-plan${i === paywallSelected ? ' selected' : ''}" aria-checked="${i === paywallSelected}" data-on-click="selectPaywallPlan(${i})">
+        ${annual ? `<span class="paywall-badge">${t('paywall_save')}</span>` : ''}
+        <span class="paywall-plan-main"><b>${t(annual ? 'paywall_yearly' : 'paywall_monthly')}</b></span>
         <span class="paywall-plan-price">${escapeHtml(String(p.product.priceString || ''))}<small> / ${t(annual ? 'paywall_per_year' : 'paywall_per_month')}</small></span>
-        ${trial ? `<span class="paywall-plan-trial">${t('paywall_trial')}</span>` : ''}
+        ${eq ? `<span class="paywall-plan-sub">${escapeHtml(eq)}</span>` : ''}
       </button>`;
     }).join('');
+    renderPaywallCta();
   }catch(e){
     console.error('paywall offers', e);
     box.innerHTML = '';
+    const cta0 = document.getElementById('paywall-cta'), af0 = document.getElementById('paywall-after');
+    if(cta0) cta0.style.display = 'none';
+    if(af0) af0.textContent = '';
     setPaywallMsg(t('paywall_unavailable'));
   }
 }
+// Botón grande de acción: dice "Empezar 14 días gratis" si el plan elegido trae prueba, y "Suscribirme" si no (por ejemplo, quien ya usó la prueba). Debajo, qué se cobra y cuándo.
+function renderPaywallCta(){
+  const cta = document.getElementById('paywall-cta'), after = document.getElementById('paywall-after');
+  const p = paywallPackages[paywallSelected];
+  if(!cta || !p) return;
+  const annual = p.packageType === 'ANNUAL';
+  const price = String(p.product.priceString || ''), period = t(annual ? 'paywall_per_year' : 'paywall_per_month');
+  const trial = !!(p.product.introPrice);
+  cta.style.display = '';
+  cta.textContent = t(trial ? 'paywall_cta_trial' : 'paywall_cta_buy');
+  if(after) after.textContent = t(trial ? 'paywall_after_trial' : 'paywall_after_buy', {price, period});
+}
+function selectPaywallPlan(i){
+  if(paywallBusy) return;
+  paywallSelected = Number(i) || 0;
+  document.querySelectorAll('#paywall-plans .paywall-plan').forEach((b, k) => { const on = k === paywallSelected; b.classList.toggle('selected', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); });
+  renderPaywallCta();
+}
+function buyPaywallSelected(){ return buyPaywallPlan(paywallSelected); }
 function setPaywallBusy(on){
-  document.querySelectorAll('#paywall button.paywall-plan, #paywall-restore').forEach(b => { b.disabled = !!on; });
+  document.querySelectorAll('#paywall button.paywall-plan, #paywall-restore, #paywall-cta').forEach(b => { b.disabled = !!on; });
 }
 // El plan lo confirma el servidor (llega por el aviso de RevenueCat, suele tardar unos segundos): se espera hasta ~30 s.
 async function waitForPlan(){
@@ -20966,7 +20996,7 @@ async function sendChat(){
         signal: chatAbortController.signal
       });
       const data = await res.json();
-      if(data.error && data.error.code === 'subscription_required'){ try{ showPaywall(); }catch(e){} }
+      if(data.error && data.error.code === 'subscription_required' && PAYWALL_ENABLED && isNativeApp()){ try{ showPaywall(); }catch(e){} }
       if(data.error){ if(!anyToolApplied) finalText = data.error.message || t('coach_connection_error'); break; }   // con cambios ya aplicados no se muestra un error: se avisa que están (ver más abajo) y no se reintenta
       const blocks = data.content || [];
       const textPart = blocks.filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
