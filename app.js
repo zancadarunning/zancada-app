@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-20T17:42:39Z';
+const APP_VERSION = '2026-11-20T18:00:18Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -12308,12 +12308,12 @@ function updateCredits(){
   // diagnosticando bugs ya arreglados en una versión que el celular no había tomado.
   const versionEl = document.getElementById('app-version-text');
   if(versionEl) versionEl.textContent = appVersionLabel();
-  // En la app instalada se muestra además el número de versión de la tienda (p. ej. 1.0.2), que es el que se cita al hablar de "la versión"; la fecha y hora del build se mantienen porque sirven para saber qué código tiene cargado alguien.
+  // En la app instalada se muestra SOLO el número de versión de la tienda (p. ej. v1.0.4), que es el que se cita al hablar de "la versión" (decisión del dueño, 2026-11-20: sin fecha ni paréntesis). En la web se sigue mostrando la fecha y hora del build, que sirve para saber qué código tiene cargado alguien.
   try{
     const AppPlugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
     if(versionEl && AppPlugin && typeof AppPlugin.getInfo === 'function' && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()){
       AppPlugin.getInfo().then(info => {
-        if(info && info.version) versionEl.textContent = 'v' + info.version + ' · ' + appVersionLabel().slice(1);
+        if(info && info.version) versionEl.textContent = 'v' + info.version;
       }).catch(()=>{});
     }
   }catch(e){}
