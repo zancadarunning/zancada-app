@@ -1063,8 +1063,8 @@
      encima de hermanos de afuera sin importar qué transform/z-index tenga Leaflet. */
   .idle-map-wrap{position:relative; z-index:0; isolation:isolate; height:180px; border-radius:var(--radius); overflow:hidden; margin-top:10px; border:1px solid var(--overlay-hairline); background:var(--asphalt-3);}
   .idle-map{height:100%; width:100%;}
-  .idle-map .leaflet-control-attribution{font-size:9px; background:rgba(10,10,10,.5); color:var(--mist-dim);}
-  .idle-map .leaflet-control-attribution a{color:var(--mist);}
+  /* Crédito del mapa como texto chico, igual que en las miniaturas de Historial (.hist-map::after): sin cartel gris encima del mapa */
+  .idle-map-wrap::after{content:'\00A9  Mapbox  \00A9  OpenStreetMap'; position:absolute; right:6px; bottom:3px; z-index:1000; pointer-events:none; font-size:7px; line-height:1; letter-spacing:.02em; color:rgba(20,20,20,.6); text-shadow:0 0 2px rgba(255,255,255,.9);}
   /* Punto "estás acá" estilo Google Maps: círculo sólido con borde + un anillo translúcido
      alrededor que respira despacio (la variación real de precisión del GPS, no un adorno
      al azar). */
@@ -1227,8 +1227,7 @@
   .map-wrap{position:relative; isolation:isolate; height:260px; border-radius:var(--radius); overflow:hidden; margin-bottom:14px; border:1px solid var(--asphalt-4);
     background:linear-gradient(90deg, var(--asphalt-3) 25%, var(--asphalt-4) 37%, var(--asphalt-3) 63%); background-size:400% 100%; animation:skeletonShine 1.4s ease infinite;}
   #liveMap{height:100%; width:100%; background:var(--asphalt-3);}
-  .map-wrap .leaflet-control-attribution{background:rgba(10,10,10,.75); color:var(--mist-dim); font-size:9px; padding:1px 5px;}
-  .map-wrap .leaflet-control-attribution a{color:var(--mist);}
+  .map-wrap::after{content:'\00A9  Mapbox  \00A9  OpenStreetMap'; position:absolute; right:6px; bottom:3px; z-index:1000; pointer-events:none; font-size:7px; line-height:1; letter-spacing:.02em; color:rgba(20,20,20,.6); text-shadow:0 0 2px rgba(255,255,255,.9);}
   .map-recenter-btn{position:absolute; bottom:12px; right:12px; z-index:1500; width:40px; height:40px; border-radius:50%; background:var(--asphalt-2); border:1.5px solid var(--asphalt-4); color:var(--hivis-text); font-size:17px; cursor:pointer; display:flex; align-items:center; justify-content:center;
     opacity:0; pointer-events:none; transform:scale(.85); transition:opacity .2s ease, transform .2s ease;}
   .map-recenter-btn.visible{opacity:1; pointer-events:auto; transform:scale(1);}

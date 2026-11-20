@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-20T18:00:18Z';
+const APP_VERSION = '2026-11-20T19:38:21Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -14618,9 +14618,8 @@ function histMapInnerHtml(r, width, height){
 }
 function initLiveMap(){
   if(liveMap){ liveMap.remove(); liveMap=null; }
-  liveMap = L.map('liveMap', {zoomControl:false, attributionControl:true}).setView([0,0], 15);
+  liveMap = L.map('liveMap', {zoomControl:false, attributionControl:false}).setView([0,0], 15);   // el crédito va como texto chico por CSS (.map-wrap::after)
   mapboxTileLayer().addTo(liveMap);
-  slimMapAttribution(liveMap);
   livePolyline = L.polyline([], {color:'#0B5D2E', weight:3.5, lineCap:'round', lineJoin:'round'}).addTo(liveMap);
   liveMarker = null; startMarker = null;
   liveMapFollowing = true;
@@ -14650,7 +14649,7 @@ function updateLiveMap(lat, lon){
   else{ liveMarker = L.circleMarker([lat,lon], {radius:8, color:'#121415', weight:3, fillColor:'#D6FF3F', fillOpacity:1}).addTo(liveMap); }
   if(liveMapFollowing){
     liveMapProgrammaticMoveAt = Date.now();
-    liveMap.setView([lat,lon], Math.max(liveMap.getZoom(),16));
+    liveMap.setView([lat,lon], Math.max(liveMap.getZoom(),15));
   }
 }
 // Mapa de fondo de la pantalla de Correr ANTES de arrancar a correr -- reemplaza el
@@ -14737,10 +14736,9 @@ function readLastKnownPosition(){
 function drawIdleMap(latitude, longitude, approx){
   if(!document.getElementById('idleMap') || document.getElementById('runIdle').style.display === 'none') return;
   if(idleMap){ idleMap.remove(); idleMap = null; }
-  idleMap = L.map('idleMap', {zoomControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, touchZoom:false, boxZoom:false, keyboard:false, tap:false, attributionControl:true})
-    .setView([latitude, longitude], approx ? 13 : 16);
+  idleMap = L.map('idleMap', {zoomControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, touchZoom:false, boxZoom:false, keyboard:false, tap:false, attributionControl:false})   // el crédito va como texto chico por CSS (.idle-map-wrap::after), como en Historial
+    .setView([latitude, longitude], approx ? 13 : 15);   // 15: se ve un poco más de zona (antes 16)
   mapboxTileLayer().addTo(idleMap);
-  slimMapAttribution(idleMap);
   if(approx){ setTimeout(()=>{ if(idleMap) idleMap.invalidateSize(); }, 200); return; }
   const dotIcon = L.divIcon({
     className: '',
@@ -14755,7 +14753,7 @@ function recenterMap(){
   liveMapFollowing = true;
   document.querySelector('.map-recenter-btn')?.classList.remove('visible');
   liveMapProgrammaticMoveAt = Date.now();
-  liveMap.setView(liveMarker.getLatLng(), 17);
+  liveMap.setView(liveMarker.getLatLng(), 16);
 }
 // En Android/iOS nativos usamos @capacitor-community/background-geolocation para que el GPS
 // siga grabando aunque el corredor salga de la app o se le apague la pantalla -- a
@@ -15248,7 +15246,7 @@ function showRunSummaryUI(){
   const pr = runSummaryPR();
   const mapEl = document.getElementById('sum-map');
   if(mapEl){
-    const hasMap = !!(tracker.points && tracker.points.length > 1);
+    const hasMap = routeHasExtent(tracker.points);   // sin recorrido real (celular quieto) no se muestra una tarjeta de mapa vacía
     mapEl.style.display = hasMap ? 'block' : 'none';
     mapEl.innerHTML = hasMap
       ? routeSketchSvg(tracker.points) + '<img class="hist-map-img" src="' + buildHistMapStaticUrl({points: tracker.points}, histMapCssWidth(), 150) + '" alt="" decoding="async" data-on-load="this.classList.add(\'loaded\')" data-on-error="this.style.display=\'none\'">' + (pr ? '<span class="sum-pr-badge">' + t('sum_pr_badge', {label: pr.label}) + '</span>' : '')
@@ -16665,6 +16663,16 @@ function routeSketchSvg(points){
   const d = pts.map((p, i) => (i ? 'L' : 'M') + X(i) + ' ' + Y(i)).join('');
   return '<svg class="hist-map-sketch" viewBox="0 0 400 108" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path d="' + d + '"/><circle cx="' + X(0) + '" cy="' + Y(0) + '" r="3.5"/></svg>';
 }
+// ¿La ruta tiene recorrido de verdad? Una carrera con el celular quieto o adentro de una casa deja varios puntos casi en el mismo lugar: Mapbox no puede dibujar eso (la imagen da error) y el croquis queda vacío,
+// así que no se muestra una tarjeta de mapa vacía.
+function routeHasExtent(points, minMeters){
+  if(!Array.isArray(points) || points.length < 2) return false;
+  const first = points.find(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lon));
+  if(!first) return false;
+  const lim = (minMeters || 30) / 1000;
+  for(const p of points){ if(p && Number.isFinite(p.lat) && Number.isFinite(p.lon) && haversine(first.lat, first.lon, p.lat, p.lon) >= lim) return true; }
+  return false;
+}
 // ---- Tu progreso (Historial): km por semana, ritmo promedio y tiempo por zona ----
 // Datos de las últimas 8 semanas (lunes a domingo). El ritmo semanal es tiempo total / km totales de esa semana.
 function computeWeeklyProgress(weeks){
@@ -16967,7 +16975,7 @@ function renderHistory(){
     const paceMin = r.distanceKm>0.02 ? (r.durationSec/60)/r.distanceKm : 0;
     const avgHr = r.avgHr || (r.hrLog && r.hrLog.length ? Math.round(r.hrLog.reduce((a,h)=>a+h.bpm,0)/r.hrLog.length) : null);
     const cal = r.calories || Math.round((state.profile.weight||70)*r.distanceKm*1.036);
-    const hasMap = !!(r.points && r.points.length>1);
+    const hasMap = routeHasExtent(r.points);
     const dateStr = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {weekday:'short', day:'numeric', month:'short'});
     const monthKey = new Date(r.date).toLocaleDateString(LOCALE_MAP[lang], {month:'long', year:'numeric'});
     let monthHeader = '';

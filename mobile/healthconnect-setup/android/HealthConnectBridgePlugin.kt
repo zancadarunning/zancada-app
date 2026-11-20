@@ -90,7 +90,7 @@ class HealthConnectBridgePlugin : Plugin() {
     private val permissions = requiredPermissions + optionalPermissions
 
     private fun client(): HealthConnectClient? {
-        val status = HealthConnectClient.sdkStatus(context)
+        val status = HealthConnectClient.getSdkStatus(context)
         if (status != HealthConnectClient.SDK_AVAILABLE) return null
         return HealthConnectClient.getOrCreate(context)
     }
@@ -100,7 +100,7 @@ class HealthConnectBridgePlugin : Plugin() {
     // la app no debería ni mostrar el botón de conectar.
     @PluginMethod
     fun checkAvailability(call: PluginCall) {
-        val status = HealthConnectClient.sdkStatus(context)
+        val status = HealthConnectClient.getSdkStatus(context)
         val result = JSObject()
         result.put("available", status == HealthConnectClient.SDK_AVAILABLE)
         call.resolve(result)
