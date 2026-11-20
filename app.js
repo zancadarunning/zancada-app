@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-20T16:55:33Z';
+const APP_VERSION = '2026-11-20T17:42:39Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -17423,7 +17423,7 @@ async function buyPaywallPlan(i){
     else if(code === '6' || code === 'PRODUCT_ALREADY_PURCHASED_ERROR'){
       // Google ya tiene esa suscripción en esta cuenta de Google (no hay doble cobro): se sincroniza y se espera la confirmación
       try{ await P.restorePurchases(); }catch(e2){}
-      await waitForPlan();
+      if(!(await waitForPlan())) setPaywallMsg(t('paywall_in_use'));   // la compra existe pero no llegó a esta cuenta: está asociada a otra
     }
     else if(code === '7' || code === 'RECEIPT_ALREADY_IN_USE_ERROR'){ setPaywallMsg(t('paywall_in_use')); }
     else if(code === '20' || code === 'PAYMENT_PENDING_ERROR'){ setPaywallMsg(t('paywall_pending')); pollPlanLater(); }
@@ -20996,7 +20996,7 @@ async function sendChat(){
         signal: chatAbortController.signal
       });
       const data = await res.json();
-      if(data.error && data.error.code === 'subscription_required' && PAYWALL_ENABLED && isNativeApp()){ try{ showPaywall(); }catch(e){} }
+      if(data.error && data.error.code === 'subscription_required' && PAYWALL_ENABLED && isNativeApp()){ try{ checkPaywall(true); }catch(e){} }
       if(data.error){ if(!anyToolApplied) finalText = data.error.message || t('coach_connection_error'); break; }   // con cambios ya aplicados no se muestra un error: se avisa que están (ver más abajo) y no se reintenta
       const blocks = data.content || [];
       const textPart = blocks.filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
