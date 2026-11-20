@@ -36,17 +36,22 @@ const handler = withSentry(async (req, res) => {
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
   const row = decision.row;
   try {
-    // Escritura atómica y en orden (dos avisos casi simultáneos no se pisan): 1) se actualiza la fila SOLO si el último aviso aplicado no es más nuevo que este (la condición la evalúa la base);
-    // 2) si no había fila, se inserta (sin pisar una fila que apareció en el medio); 3) si ninguna de las dos escribió, había un aviso más nuevo y este se descarta.
+    // Escritura atómica y en orden (dos avisos casi simultáneos no se pisan):
+    //   1) se actualiza la fila SOLO si el último aviso aplicado no es más nuevo que este (la condición la evalúa la base);
+    //   2) si no había fila, se inserta (sin pisar una fila que apareció en el medio);
+    //   3) si el insert no escribió nada, otro aviso creó la fila justo ahora: se reintenta el paso 1 una vez (si no, un aviso NUEVO se descartaría por error);
+    //   4) si tampoco así, la fila tiene un aviso más nuevo y este se descarta.
     const uid = encodeURIComponent(row.user_id);
-    const upd = await fetchWithTimeout(`${base}/rest/v1/entitlements?user_id=eq.${uid}&or=(last_event_ms.is.null,last_event_ms.lte.${encodeURIComponent(String(Math.floor(row.last_event_ms)))})`, {
-      method: 'PATCH',
-      headers: Object.assign({}, headers, { Prefer: 'return=representation' }),
-      body: JSON.stringify(row)
-    }, 8000);
-    if (!upd.ok) { console.error('revenuecat-webhook: no se pudo guardar el plan (HTTP ' + upd.status + ')'); res.status(500).json({ error: 'Error interno' }); return; }
-    const updated = await upd.json();
-    if (Array.isArray(updated) && updated.length) { res.status(200).json({ ok: true }); return; }
+    const patchUrl = `${base}/rest/v1/entitlements?user_id=eq.${uid}&or=(last_event_ms.is.null,last_event_ms.lte.${encodeURIComponent(String(Math.floor(row.last_event_ms)))})`;
+    const patchIfNewer = async () => {
+      const r = await fetchWithTimeout(patchUrl, { method: 'PATCH', headers: Object.assign({}, headers, { Prefer: 'return=representation' }), body: JSON.stringify(row) }, 8000);
+      if (!r.ok) { console.error('revenuecat-webhook: no se pudo guardar el plan (HTTP ' + r.status + ')'); return { fail: true }; }
+      const out = await r.json();
+      return { applied: Array.isArray(out) && out.length > 0 };
+    };
+    let w = await patchIfNewer();
+    if (w.fail) { res.status(500).json({ error: 'Error interno' }); return; }
+    if (w.applied) { res.status(200).json({ ok: true }); return; }
     const ins = await fetchWithTimeout(`${base}/rest/v1/entitlements?on_conflict=user_id`, {
       method: 'POST',
       headers: Object.assign({}, headers, { Prefer: 'resolution=ignore-duplicates,return=representation' }),
@@ -57,7 +62,9 @@ const handler = withSentry(async (req, res) => {
     if (!ins.ok) { console.error('revenuecat-webhook: no se pudo guardar el plan (HTTP ' + ins.status + ')'); res.status(500).json({ error: 'Error interno' }); return; }
     const inserted = await ins.json();
     if (Array.isArray(inserted) && inserted.length) { res.status(200).json({ ok: true }); return; }
-    res.status(200).json({ ok: true, stale: true });
+    w = await patchIfNewer();
+    if (w.fail) { res.status(500).json({ error: 'Error interno' }); return; }
+    res.status(200).json(w.applied ? { ok: true } : { ok: true, stale: true });
   } catch (e) {
     await reportError(e, { where: 'revenuecat-webhook' }).catch(() => {});
     console.error('revenuecat-webhook: error al guardar el plan');

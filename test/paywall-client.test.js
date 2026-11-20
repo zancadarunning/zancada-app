@@ -59,7 +59,7 @@ test('cobro seguro: nunca se compra como anónimo, no se compra si ya hay plan, 
 test('se revisa el plan al entrar, al volver a la app y cuando el servidor dice que falta; al cerrar sesión se cierra también la de RevenueCat', () => {
   assert.match(app, /try\{ checkPaywall\(true\); \}catch\(e\)\{\}/);
   assert.match(app, /visibilityState === 'visible'\)\{ try\{ checkPaywall\(false\); \}/);
-  assert.match(app, /data\.error\.code === 'subscription_required'\)\{ try\{ showPaywall\(\); \}/);
+  assert.match(app, /data\.error\.code === 'subscription_required' && PAYWALL_ENABLED && isNativeApp\(\)\)\{ try\{ showPaywall\(\); \}/);
   assert.match(app, /async function logout\(\)\{\r?\n\s*obClearDraft\(\);[^\n]*\r?\n\s*try\{ const P = purchasesPlugin\(\); if\(P && billingConfigured\) await P\.logOut\(\); \}catch\(e\)\{\}/);
 });
 
@@ -97,4 +97,11 @@ test('tarjeta "Tu suscripción": solo con plan pago activo (con vencimiento); el
 test('borrar la cuenta avisa de la suscripción paga vigente en los 6 idiomas', () => {
   assert.match(app, /delete_account_sub_warning/);
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) assert.match(read('locales/' + l + '.js'), /delete_account_sub_warning:"/, l);
+});
+
+test('la pantalla de pago nunca tapa una carrera en curso y en la web no se muestra (no hay cobro ahí)', () => {
+  const block = app.slice(app.indexOf('async function checkPaywall'), app.indexOf('function renderPlanCard'));
+  assert.match(block, /getElementById\('runActive'\)[\s\S]*return;/, 'con una carrera en pantalla no se revisa el plan');
+  assert.ok(block.indexOf('runActive') < block.indexOf('showPaywall()'), 'la revisión de la carrera va antes de mostrar la pantalla');
+  assert.match(app, /subscription_required' && PAYWALL_ENABLED && isNativeApp\(\)/, 'en la web el 402 no abre una pantalla de pago imposible de pagar');
 });
