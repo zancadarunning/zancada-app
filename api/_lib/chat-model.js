@@ -8,8 +8,8 @@
 // La decisión se toma en el servidor mirando el último mensaje de la persona: nada que mande el cliente puede elegir el modelo. Lo peor que puede hacer alguien es escribir un verbo de acción para usar el modelo más caro,
 // y ya está acotado por los topes diarios por cuenta y global.
 
-// Haiku 4.5. Se probó Haiku 5.5 el 2026-11-18 (las 14 conversaciones de evals/coach pasaban igual) pero en el chat real devolvió respuestas VACÍAS (la app mostró "Listo, ya apliqué los cambios que charlamos" y "No me pude conectar" sin motivo) y guardó una molestia sin cargarla en Molestias: se volvió a Haiku 4.5. Para volver a probarlo, ver evals/coach/README.md y mirar las respuestas vacías.
-const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
+// Haiku 5.5 (2026-11-20): probado con 33 conversaciones de varios mensajes (evals/coach/run-conv.js, 2 pasadas): 0 respuestas vacías en 238 llamadas, mientras Haiku 4.5 dio 6 vacías en 169 tras usar una herramienta. Se había vuelto a 4.5 el 2026-11-18 por un error de diagnóstico (ese día el chat fallaba con 4.5).
+const DEFAULT_MODEL = 'claude-haiku-5-5';
 
 // Verbos / frases de pedido de cambio en los 6 idiomas de la app (la raíz alcanza: "mové", "movela", "move", "mover"...). Deliberadamente amplio: un falso positivo solo cuesta un poco más.
 const ACTION_RE = new RegExp([

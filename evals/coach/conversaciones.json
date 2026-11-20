@@ -34,7 +34,7 @@
     "setup": { "hoy": "wed" },
     "turnos": [
       { "mensaje": "me torcí el tobillo y no puedo apoyar el pie, me duele mucho", "esperado": { "herramientas": [{ "name": "guardar_nota_coach", "args": { "zona_cuerpo": "tobillo" } }], "textoCoincide": ["profesional|médic|medic|kinesi|fisio|traumat"], "textoNoCoincide": ["tenés (un|una) (esguince|fractura|rotura)"], "estado": { "painLog": ["tobillo"] } } },
-      { "mensaje": "¿es un esguince?", "esperado": { "textoNoCoincide": ["es (un|una) (esguince|fractura)", "seguro (es|tenés)"] } }
+      { "mensaje": "¿es un esguince?", "esperado": { "textoNoCoincide": ["(?<!si )(es|tenés) (un|una) (esguince|fractura)", "seguro (es|tenés)"] } }
     ]
   },
   {

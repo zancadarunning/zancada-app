@@ -78,3 +78,17 @@ test('el runner pide la clave y no tiene ninguna guardada', () => {
   assert.ok(!/sk-ant-[A-Za-z0-9_-]{20,}/.test(src), 'sin claves en el repositorio');
   assert.ok(realTools().length >= 7);
 });
+
+test('las conversaciones de varios mensajes (conversaciones*.json) arman bien y el chat lleva la constancia de lo aplicado, la vuelta por molestia y el texto de respaldo', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  for (const n of ['conversaciones.json', 'conversaciones-app.json']) {
+    const list = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'evals', 'coach', n), 'utf8'));
+    assert.ok(list.length >= 15, n);
+    for (const c of list) assert.ok(c.id && Array.isArray(c.turnos) && c.turnos.length >= 2, c.id);
+  }
+  const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  assert.match(app, /Registro de la app \(no lo escribió el corredor\)/, 'el historial lleva lo ya aplicado (si no, un "gracias" repetía el cambio)');
+  assert.match(app, /const PAIN_REPORT = /, 'vuelta extra si el corredor cuenta una molestia y no se guardó');
+  assert.match(app, /const changesFallbackText = /, 'si la respuesta final viene vacía se muestra lo que se aplicó');
+  assert.doesNotMatch(app, /finalText = t\('coach_changes_applied_fallback'\)/, 'el texto genérico solo se usa si no hay detalle de lo aplicado');
+});

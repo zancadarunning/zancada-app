@@ -20,11 +20,11 @@ const args = process.argv.slice(2);
 const dry = args.includes('--dry');
 const only = args.includes('--only') ? args[args.indexOf('--only') + 1] : null;
 const runs = args.includes('--runs') ? Math.max(1, parseInt(args[args.indexOf('--runs') + 1], 10) || 1) : 1;
-const model = process.env.EVAL_MODEL || 'claude-haiku-4-5-20251001';
+const model = process.env.EVAL_MODEL || 'claude-haiku-5-5';
 const FALLBACK_APPLIED = 'Listo, ya apliqué los cambios que charlamos.';
 const FALLBACK_ERROR = 'No me pude conectar ahora mismo. Probá de nuevo en un momento.';
 
-function loadConversations() { return JSON.parse(fs.readFileSync(path.join(__dirname, 'conversaciones.json'), 'utf8')); }
+function loadConversations() { return ['conversaciones.json', 'conversaciones-app.json'].flatMap(n => JSON.parse(fs.readFileSync(path.join(__dirname, n), 'utf8'))); }
 
 // La misma expresión que usa la app para detectar "dice que cambió algo" (CLAIM_PATTERN en app.js), leída del archivo para no quedar desfasada.
 function claimPattern() {
@@ -33,6 +33,14 @@ function claimPattern() {
   return m ? new Function('return ' + m[1])() : null;
 }
 const CLAIM = claimPattern();
+// La misma detección de "el corredor cuenta una molestia" que usa la app (PAIN_REPORT en app.js).
+function painPattern() {
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'app.js'), 'utf8');
+  const m = src.match(/const PAIN_REPORT = (new RegExp\(.*\));/);
+  return m ? new Function('return ' + m[1])() : null;
+}
+const PAIN = painPattern();
+const NUDGE = 'El corredor te acaba de contar una molestia o un dolor y todavía no llamaste guardar_nota_coach. Llamala ahora mismo con la nota y, si se puede identificar la zona, zona_cuerpo (rodilla, tobillo, pantorrilla, isquios, cadera, espalda, pie, cuadriceps u otro). Si en realidad ya quedó guardada en esta charla, decilo con claridad.';
 
 async function callModel(system, tools, messages) {
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -78,6 +86,8 @@ async function runConversation(sc, runIdx) {
       const calls = [], meta = [];
       let text = '';
       const before = fingerprint(app);
+      const acciones = [];
+      let painNoteCalled = false, painNudged = false;
       for (let round = 0; round < 4; round++) {
         const data = await callModel(system, p.tools, messages);
         const blocks = data.content || [];
@@ -85,10 +95,15 @@ async function runConversation(sc, runIdx) {
         meta.push({ stop_reason: data.stop_reason, tipos: blocks.map(b => b.type), usage: data.usage ? { in: data.usage.input_tokens, out: data.usage.output_tokens } : null, textoVacio: !t });
         if (t) text += (text ? '\n' : '') + t;
         const uses = blocks.filter(b => b.type === 'tool_use');
-        if (!uses.length) break;
+        if (uses.some(u => u.name === 'guardar_nota_coach')) painNoteCalled = true;
+        if (!uses.length) {
+          if (PAIN && !painNoteCalled && !painNudged && PAIN.test(turn.mensaje)) { painNudged = true; messages.push({ role: 'assistant', content: blocks }); messages.push({ role: 'user', content: NUDGE }); text = ''; continue; }
+          break;
+        }
         const results = uses.map(u => {
           const output = executeTool(app, u.name, u.input);
           calls.push({ name: u.name, input: u.input, output: String(output).slice(0, 200) });
+          acciones.push(u.name + ': ' + String(output).replace(/[\r\n]+/g, ' ').slice(0, 220));
           return { type: 'tool_result', tool_use_id: u.id, content: String(output) };
         });
         messages.push({ role: 'assistant', content: blocks });
@@ -99,12 +114,14 @@ async function runConversation(sc, runIdx) {
       const estado = esperado.estado; delete esperado.estado;
       const fails = evaluate({ esperado }, { calls, text });
       if (estado) fails.push(...checkState(app, estado));
-      if (CLAIM && !applied && CLAIM.test(text)) fails.push('dice que aplicó un cambio pero el plan, el perfil y las molestias no cambiaron: "' + text.slice(0, 120) + '"');
+      if (CLAIM && !applied && (esperado.herramientas || []).length && CLAIM.test(text)) fails.push('dice que aplicó un cambio pero el plan, el perfil y las molestias no cambiaron: "' + text.slice(0, 120) + '"');
       const emptyCalls = meta.filter(m => m.textoVacio && !(m.tipos || []).includes('tool_use')).length;
       turns.push({ mensaje: turn.mensaje, text, calls, meta, applied, emptyCalls, fails });
       // lo que queda en el historial del chat real: solo el texto (y, si la respuesta vino vacía, el mensaje de emergencia de la app)
       history.push({ role: 'user', content: turn.mensaje });
-      history.push({ role: 'assistant', content: text || (applied ? FALLBACK_APPLIED : FALLBACK_ERROR) });
+      const fallbackApplied = applied ? (calls.map(c => c.output).join(' ').slice(0, 600) || FALLBACK_APPLIED) : FALLBACK_ERROR;
+      const registro = applied && acciones.length ? `\n[Registro de la app (no lo escribió el corredor): en esa respuesta YA se aplicaron estos cambios: ${acciones.slice(0, 6).join(' | ').slice(0, 600)}. No los repitas.]` : '';
+      history.push({ role: 'assistant', content: (text || fallbackApplied) + registro });
     }
   } finally { p.restoreDate(); }
   return { id: sc.id, run: runIdx, turns, fails: turns.flatMap((t, i) => t.fails.map(f => `turno ${i + 1} ("${t.mensaje.slice(0, 40)}"): ${f}`)) };
