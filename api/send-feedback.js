@@ -20,6 +20,9 @@ const { withinDailyCap } = require('./_lib/daily-cap');
 // Un mensaje por minuto y por usuario: cada uno manda un email real.
 const FEEDBACK_COOLDOWN_MS = 30 * 60 * 1000;   // 48 por dia como maximo por cuenta (antes 1 por minuto = 1.440): una sola cuenta no puede agotar los mails de la app
 
+// Un reporte por minuto y por usuario (más el tope global del día).
+const REPORT_COOLDOWN_MS = 60 * 1000;
+
 // Tope generoso para un mensaje de feedback -- bastante más que cualquier queja o idea
 // real, pero corta un abuso deliberado (igual que MAX_INPUT_CHARS en chat.js).
 const MAX_MESSAGE_CHARS = 4000;
@@ -37,18 +40,20 @@ module.exports = withSentry(async (req, res) => {
   // Una cuenta con el mail sin confirmar no puede mandar emails reales a nuestra casilla (mismo criterio que chat.js): reply_to llevaría un mail ajeno sin verificar.
   if (!auth.emailConfirmed) { res.status(403).json({ error: 'Email not confirmed' }); return; }
 
+  // kind:'report' = el usuario reporta una respuesta de Zonda (Google Play lo exige para apps con IA). Mismo canal y misma verificación, pero con su propio límite para que un reporte no quede bloqueado por haber mandado feedback hace un rato.
+  const isReport = !!(req.body && req.body.kind === 'report');
   const message = ((req.body && req.body.message) || '').toString().trim().slice(0, MAX_MESSAGE_CHARS);
   if (!message) { res.status(400).json({ error: 'Empty message' }); return; }
 
   const sbBase = process.env.SUPABASE_URL;
   const sbKey = process.env.SUPABASE_SERVICE_KEY;
   const sbHeaders = { apikey: sbKey, Authorization: `Bearer ${sbKey}`, 'Content-Type': 'application/json' };
-  if (!(await checkSyncCooldown(sbBase, sbHeaders, auth.userId, 'feedback', FEEDBACK_COOLDOWN_MS, { failClosed: true }))) {
+  if (!(await checkSyncCooldown(sbBase, sbHeaders, auth.userId, isReport ? 'report' : 'feedback', isReport ? REPORT_COOLDOWN_MS : FEEDBACK_COOLDOWN_MS, { failClosed: true }))) {
     res.status(429).json({ error: 'Too many requests' });
     return;
   }
   // tope global del dia: varias cuentas confirmadas no pueden agotar entre todas la cuota de mails de la app (se comparte con los mails de registro)
-  if (!(await withinDailyCap(sbBase, sbHeaders, 'feedback-global', null, 20, { failClosed: true }))) {
+  if (!(await withinDailyCap(sbBase, sbHeaders, isReport ? 'report-global' : 'feedback-global', null, isReport ? 40 : 20, { failClosed: true }))) {
     res.status(429).json({ error: 'Too many requests' });
     return;
   }
@@ -71,7 +76,7 @@ module.exports = withSentry(async (req, res) => {
         // reply_to: así quien lee el mensaje puede simplemente tocar "Responder" en su
         // cliente de mail y que le llegue directo al corredor, sin copiar el email a mano.
         reply_to: auth.email || undefined,
-        subject: 'Nuevo mensaje de "Ayudanos a mejorar" (Zancada)',
+        subject: isReport ? 'Reporte de una respuesta de Zonda (Zancada)' : 'Nuevo mensaje de "Ayudanos a mejorar" (Zancada)',
         text: `${message}\n\n---\nDe: ${auth.email || auth.userId}`
       })
     });
