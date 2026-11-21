@@ -28,6 +28,15 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="www.zancada.org" android:pathPrefix="/conectar" />
             </intent-filter>
+
+            <!-- Vuelta del inicio de sesión con Google: https://www.zancada.org/auth/app?code=.. abre ESTA app (si no, el usuario elegía la cuenta y quedaba en el navegador sin volver).
+                 app.js (finishGoogleAppReturn, via appUrlOpen) termina el inicio de sesión con el codigo. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="www.zancada.org" android:pathPrefix="/auth/app" />
+            </intent-filter>
         </activity>
 
         <!-- El plugin de ubicación en carrera declara este servicio con exported="true" (visible para CUALQUIER otra app del teléfono, sin permiso). La propia app lo
