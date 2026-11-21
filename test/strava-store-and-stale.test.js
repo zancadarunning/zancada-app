@@ -24,5 +24,5 @@ test('cartel de Strava desactualizado: no aparece sin Strava conectado, sí con 
 });
 
 test('el ingreso con Google siempre deja elegir la cuenta de Google (prompt=select_account)', () => {
-  assert.match(app, /signInWithOAuth\(\{ provider:'google', options:\{ redirectTo: window\.location\.origin, queryParams:\{ prompt:'select_account' \} \} \}\)/);
+  assert.match(app, /signInWithOAuth\(\{ provider:'google', options:\{ redirectTo, queryParams:\{ prompt:'select_account' \} \} \}\)/);
 });

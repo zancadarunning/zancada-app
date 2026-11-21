@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-21T01:05:41Z';
+const APP_VERSION = '2026-11-21T20:43:10Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2206,6 +2206,20 @@ function goToLoginFromSignup(){
   document.getElementById('login-email').value = document.getElementById('signup-email').value;
   goBackToLogin();
 }
+const GOOGLE_APP_RETURN = 'https://www.zancada.org/auth/app';
+// Vuelta de Google a la app (App Link): termina el inicio de sesión con el código (flujo PKCE: el verificador quedó guardado en la app al empezar). Devuelve true si la URL era esta vuelta.
+async function finishGoogleAppReturn(url){
+  let u;
+  try{ u = new URL(url || ''); }catch(e){ return false; }
+  if(u.origin !== 'https://www.zancada.org' || u.pathname !== '/auth/app') return false;
+  const code = u.searchParams.get('code');
+  if(u.searchParams.get('error') || u.searchParams.get('error_description') || !code){ showToast(t('login_err'), 'error'); return true; }
+  try{
+    const { error } = await supabaseClient.auth.exchangeCodeForSession(code);
+    if(error){ console.error(error); showToast(t('login_err'), 'error'); }
+  }catch(e){ console.error(e); showToast(t('login_err'), 'error'); }
+  return true;
+}
 async function handleGoogleSignIn(btnId){
   // A diferencia de email/Apple, Google muestra su propia pantalla de consentimiento
   // ("Para continuar, revisá los Términos y la Política de Privacidad de Zancada") antes de
@@ -2214,7 +2228,11 @@ async function handleGoogleSignIn(btnId){
   // (ver loadUserAndEnter, que lo saltea para provider==='google').
   setBtnBusy(btnId, true, t('google_loading'));
   try{
-    const { error } = await supabaseClient.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: window.location.origin, queryParams:{ prompt:'select_account' } } });   // select_account: siempre deja elegir el mail (si no, con una sola cuenta abierta en el navegador entra directo con esa)
+    // App nativa (Android): Google abre el navegador del teléfono, y si la vuelta fuera a https://localhost (el origen de la app) o al sitio, quedaba en el navegador y NUNCA volvía a la app (el usuario
+    // elegía la cuenta y terminaba viendo zancada.org en Chrome). Se vuelve por un App Link verificado (https://www.zancada.org/auth/app, ver AndroidManifest y vercel.json) y appUrlOpen termina el
+    // inicio de sesión con el código (ver finishGoogleAppReturn). En la web sigue como siempre.
+    const redirectTo = isNativeApp() ? GOOGLE_APP_RETURN : window.location.origin;
+    const { error } = await supabaseClient.auth.signInWithOAuth({ provider:'google', options:{ redirectTo, queryParams:{ prompt:'select_account' } } });   // select_account: siempre deja elegir el mail (si no, con una sola cuenta abierta en el navegador entra directo con esa)
     if(error){ console.error(error); showToast(t('login_err'),'error'); }
   }finally{ setBtnBusy(btnId, false); }
 }
@@ -2803,7 +2821,7 @@ async function finishPendingProviderLink(){
   try{
     const AppPlugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
     if(AppPlugin && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()){
-      const handle = (url) => { const l = parseLinkReturn(url || ''); if(l){ stashLinkReturn(l); if(typeof currentUserId !== 'undefined' && currentUserId) finishPendingProviderLink(); } };
+      const handle = (url) => { if(typeof url === 'string' && url.indexOf('https://www.zancada.org/auth/app') === 0){ finishGoogleAppReturn(url); return; } const l = parseLinkReturn(url || ''); if(l){ stashLinkReturn(l); if(typeof currentUserId !== 'undefined' && currentUserId) finishPendingProviderLink(); } };
       AppPlugin.addListener('appUrlOpen', ev => handle(ev && ev.url));
       AppPlugin.getLaunchUrl().then(r => handle(r && r.url)).catch(()=>{});
     }
