@@ -746,7 +746,7 @@ test('los cuatro relojes reciben la entrada en calor y la vuelta a la calma como
 function planToday(app, patch) {
   const idx = (new Date().getDay() + 6) % 7;
   const base = app.state.plan.find(x => x.typeKey === 'easy') || app.state.plan.find(x => x.dist > 0);
-  app.state.plan[idx] = Object.assign({}, base, { raceDay: false, interval: undefined }, patch);
+  app.state.plan[idx] = Object.assign({}, base, { raceDay: false, interval: undefined, runWalk: undefined }, patch);   // runWalk: estos tests prueban el rodaje continuo; el trote y caminata tiene su guía en test/voz-trote-y-caminata.test.js
   return app.state.plan[idx];
 }
 
