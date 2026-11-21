@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-21T20:43:10Z';
+const APP_VERSION = '2026-11-21T22:17:28Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -13948,6 +13948,8 @@ function getTodayWorkoutStructureBase(){
   const idx = (new Date().getDay()+6)%7;
   const today = state.plan[idx];
   if(!today || today.typeKey==='rest') return null;
+  // Principiante con trote y caminata (dayObj.runWalk: N tramos de runSec trotando + walkSec caminando): la guía en vivo avisa cada tramo por voz y en pantalla. Antes caía en 'continuous' y decía solo "¡A correr!", sin nunca avisar cuándo trotar ni cuándo caminar.
+  if(today.runWalk && today.runWalk.reps > 0 && !today.interval && (today.typeKey === 'easy' || today.typeKey === 'long')) return {typeKey:'runwalk', reps:today.runWalk.reps, runSec:today.runWalk.runSec, walkSec:today.runWalk.walkSec, planTypeKey:today.typeKey};
   if(today.interval){
     // Si el corredor entrena "por tiempo", las repeticiones (series/cuestas) se completan
     // por tiempo transcurrido (repSec) en vez de por distancia GPS (repMeters) -- ver
@@ -13993,6 +13995,7 @@ function setupWorkoutGuide(restore){
   }
   renderWorkoutGuide();
   if(tracker.workout && tracker.workout.wc && !resumed){ announceWarmStart(tracker.workout); return; }
+  if(structure && structure.typeKey==='runwalk' && !resumed && tracker.workout && tracker.workout.phase==='pending'){ beginWorkoutReps(); return; }
   if(structure && structure.typeKey==='continuous' && !resumed) announceContinuousWorkoutStart(structure);   // retomando no se vuelve a decir "¡A correr!"
 }
 /* ---- Calentamiento y vuelta a la calma guiados ----
@@ -14000,13 +14003,14 @@ function setupWorkoutGuide(restore){
    arranca sola cuando se cumple el principal (continuas: objetivo cumplido; series/cuestas/fartlek: terminó la última repetición). Se pueden saltar. La carrera se pausa y se retoma igual: cuentan los segundos de carrera. */
 function wcStageSec(w){ return tracker.elapsedSec - (w.wc.stageStartElapsedSec || 0); }
 function announceWarmStart(w){
-  announceKey('start', t('voice_warm_start', {dur: fmtDurationSpoken(w.wc.warmSec)}));
+  announceKey('start', t(w.structure.typeKey === 'runwalk' ? 'voice_warm_start_walk' : 'voice_warm_start', {dur: fmtDurationSpoken(w.wc.warmSec)}));
 }
 function wcEndWarm(w, silent){
   w.wc.stage = 'main';
   w.wc.mainStartElapsedSec = tracker.elapsedSec;
   w.wc.mainStartDistanceKm = tracker.distanceKm;
   if(silent) return;
+  if(w.structure.typeKey === 'runwalk'){ beginWorkoutReps(); return; }
   if(w.structure.typeKey === 'continuous') announceContinuousWorkoutStart(w.structure);
   else announceKey('rep', t('voice_warm_done_reps'));
 }
@@ -14079,6 +14083,12 @@ function announceWorkoutPhase(){
   // puede ser distinto del que se ve ("Faltan Xm"/el target grande de la tarjeta).
   const target = getWorkoutPhaseTarget(w);
   const targetSpoken = target.sec!=null ? fmtDurationSpoken(target.sec) : t('voice_target_meters', {meters: target.meters});
+  if(s.typeKey==='runwalk'){
+    if(w.phase==='effort') announceKey('rep', t('voice_run_start',{cur:w.currentRep, total:s.reps, target:targetSpoken}));
+    else if(w.phase==='recovery') announceKey('recovery', t('voice_walk_start',{target:targetSpoken}));
+    else if(w.phase==='done' && !w.wc) announceKey('done', t('voice_workout_done'));
+    return;
+  }
   if(w.phase==='effort'){
     // "Repetición" (genérico) sirve igual de bien para series y fartlek -- solo cuestas
     // tiene su propia palabra ("Subida").
@@ -14123,6 +14133,7 @@ function getWorkoutPhaseTarget(w){
     if(isEffort) return s.repSec!=null ? {sec:s.repSec} : {meters:s.repMeters};
     return {sec: s.recoveryMin*60};
   }
+  if(s.typeKey==='runwalk') return {sec: isEffort ? s.runSec : s.walkSec};   // trote y caminata: siempre por tiempo
   if(s.typeKey==='fartlek') return {sec: isEffort ? s.workSec : s.restSec}; // ver getTodayWorkoutStructure(): fartlek siempre por tiempo
   // hills: tanto la subida (esfuerzo) como la bajada trotando (recuperación) se miden con
   // la misma distancia repMeters -- salvo en modo "por tiempo", donde ambas fases usan repSec.
@@ -14160,7 +14171,7 @@ function renderWarmCoolCard(w){
   tag.className = 'tag ' + (warm ? 'tag-mixto' : 'tag-asfalto');
   document.getElementById('workout-guide-wc-time').textContent = fmtCountdown(total - spent);
   document.getElementById('workout-guide-wc-bar').style.transform = `scaleX(${total > 0 ? spent / total : 0})`;
-  document.getElementById('workout-guide-wc-hint').textContent = t(warm ? 'run_guide_warm_hint' : 'run_guide_cool_hint');
+  document.getElementById('workout-guide-wc-hint').textContent = t(warm ? (w.structure.typeKey === 'runwalk' ? 'run_guide_warm_hint_walk' : 'run_guide_warm_hint') : 'run_guide_cool_hint');
   const nextEl = document.getElementById('workout-guide-wc-next');
   if(warm){
     const idx = (new Date().getDay()+6)%7;
@@ -14205,7 +14216,7 @@ function renderWorkoutGuide(){
     const s = w.structure;
     const tag = document.getElementById('workout-guide-phase-tag');
     const isEffort = w.phase==='effort';
-    tag.textContent = isEffort ? t('run_guide_tag_effort') : t('run_guide_tag_recovery');
+    tag.textContent = s.typeKey==='runwalk' ? t(isEffort ? 'run_guide_tag_run' : 'run_guide_tag_walk') : (isEffort ? t('run_guide_tag_effort') : t('run_guide_tag_recovery'));
     tag.className = 'tag ' + (isEffort ? 'tag-load-risk' : 'tag-mixto');
     document.getElementById('workout-guide-rep-count').textContent = `${w.currentRep}/${s.reps}`;
     // Objetivo + cuánto falta de ESTA fase, en números -- antes la única referencia era la
