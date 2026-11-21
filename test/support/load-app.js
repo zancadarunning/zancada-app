@@ -126,6 +126,7 @@ function loadApp(opts) {
   // notado -- animateCountUp() la usa para animar los números de la pantalla de Inicio.
   sandbox.performance = { now: () => Date.now() };
   sandbox.URLSearchParams = URLSearchParams;
+  sandbox.URL = URL;
   sandbox.Intl = Intl;
   sandbox.Date = Date;
 
@@ -158,6 +159,8 @@ function loadApp(opts) {
         getSession: () => Promise.resolve({ data: { session: null }, error: null }),
         onAuthStateChange: () => ({ data: { subscription: { unsubscribe(){} } } }),
         signInWithPassword: () => Promise.resolve({ data: null, error: null }),
+        // opts.onExchange(code) -> {data,error}: vuelta de Google a la app (ver test/google-login-android.test.js)
+        exchangeCodeForSession: (code) => Promise.resolve(opts.onExchange ? opts.onExchange(code) : { data: null, error: { message: 'sin onExchange' } }),
       },
     }),
   };
