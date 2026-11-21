@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-20T20:23:46Z';
+const APP_VERSION = '2026-11-21T00:06:14Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -19736,12 +19736,14 @@ function renderChat(){
     // respuesta del coach recién llegada, aviso proactivo, etc.) -- se lo anima a él
     // solo, no a la charla entera (ver el comentario junto a .msg-enter en el CSS).
     const enterCls = i===msgs.length-1 ? ' msg-enter' : '';
+    const msgIdx = (allMsgs.length - msgs.length) + i;   // posición real en state.chat (el botón Reportar la usa)
     html += `<div class="msg ${m.role} ${groupCls}${enterCls}">${safeText}</div>`;
     if(m.role!=='system' && m.ts && !sameAsNext){
       const d = new Date(m.ts);
       const hh = String(d.getHours()).padStart(2,'0');
       const mm = String(d.getMinutes()).padStart(2,'0');
-      html += `<div class="msg-time ${m.role==='user'?'right':'left'}">${hh}:${mm}</div>`;
+      const reportBtn = m.role==='coach' ? `<button type="button" class="msg-report" data-on-click="reportCoachMsg(${msgIdx})">${escapeHtml(t('chat_report'))}</button>` : '';   // Google Play exige poder reportar respuestas de IA sin salir de la app
+      html += `<div class="msg-time ${m.role==='user'?'right':'left'}">${hh}:${mm}${reportBtn}</div>`;
     }
   }
   document.getElementById('chatLog').innerHTML = html;
@@ -19755,6 +19757,31 @@ function renderChat(){
     scrollChatToBottom();
   }
   updateChatBadge();
+}
+// Reportar una respuesta de Zonda (requisito de Google Play para apps con chat de IA: el usuario tiene que poder marcar contenido ofensivo o incorrecto sin salir de la app).
+// Manda la respuesta reportada y el mensaje anterior del usuario a nuestra casilla por api/send-feedback (kind:'report'), con la misma verificación de sesión que el formulario de "Ayudanos a mejorar".
+async function reportCoachMsg(idx){
+  const m = (state.chat || [])[idx];
+  if(!m || m.role !== 'coach') return;
+  const ok = await showConfirm(t('report_confirm'), {confirmText: t('report_send')});
+  if(!ok) return;
+  let prevUser = null;
+  for(let j = idx - 1; j >= 0; j--){ if(state.chat[j] && state.chat[j].role === 'user'){ prevUser = state.chat[j]; break; } }
+  const message = 'REPORTE DE UNA RESPUESTA DE ZONDA\n\nRespuesta reportada:\n' + String(m.text || '').slice(0, 2000)
+    + (prevUser ? '\n\nMensaje anterior del usuario:\n' + String(prevUser.text || '').slice(0, 800) : '');
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(!session) throw new Error('no session');
+    const res = await fetch(apiUrl('/api/send-feedback'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}`},
+      body: JSON.stringify({kind:'report', message})
+    });
+    if(!res.ok) throw new Error('report failed');
+    showToast(t('report_sent'));
+  }catch(e){
+    showToast(t('report_error'),'error');
+  }
 }
 // Aviso de que hay un mensaje del coach (proactivo o de ajuste automático) que todavía no
 // viste, para no depender de entrar "porque sí" a mirar -- antes era un puntito chico sobre
