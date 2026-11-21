@@ -6,7 +6,8 @@
       "package_name": "org.zancada.app",
       "sha256_cert_fingerprints": [
         "36:B7:A9:06:9F:CF:E2:7F:AF:E6:51:47:C7:8D:24:58:D3:E5:F7:47:36:38:B3:88:78:C6:55:43:FC:2A:7A:38",
-        "AF:3C:B8:2C:0F:71:A0:A4:6A:A5:9C:5A:4B:BC:A7:4F:5E:EB:91:15:BF:30:C7:79:29:7D:33:11:F0:2E:5D:9E"
+        "AF:3C:B8:2C:0F:71:A0:A4:6A:A5:9C:5A:4B:BC:A7:4F:5E:EB:91:15:BF:30:C7:79:29:7D:33:11:F0:2E:5D:9E",
+        "64:DF:46:FC:EA:2D:F4:3D:7A:45:4B:75:9B:9B:77:01:36:95:02:5E:04:13:AC:14:CC:89:30:BC:35:65:03:AD"
       ]
     }
   }
