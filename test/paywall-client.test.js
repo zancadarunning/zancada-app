@@ -117,3 +117,12 @@ test('tarjeta "Mi suscripción": título propio (no el de los tramos), administr
     for (const k of ['sub_card_title', 'sub_card_note', 'sub_card_history', 'plan_manage']) assert.match(s, new RegExp(k + ':"[^"]+"'), l + ' ' + k);
   }
 });
+
+test('el título de la pestaña Plan no lo pisa un texto de suscripción: el último plan_title repetido es el que gana, y no puede hablar de suscripción', () => {
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
+    const vals = read('locales/' + l + '.js').split('plan_title:"').slice(1).map(x => x.split('"')[0]);
+    assert.ok(vals.length >= 1, l);
+    const last = vals[vals.length - 1];
+    assert.ok(!/suscri|subscri|assinat|abonn|abbon|^Abo|Dein Abo/i.test(last), l + ': el título del Plan dice ' + last);
+  }
+});
