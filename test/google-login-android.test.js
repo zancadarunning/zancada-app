@@ -27,15 +27,19 @@ test('appUrlOpen entrega la vuelta de Google a finishGoogleAppReturn antes que a
 test('finishGoogleAppReturn: canjea el código; ignora otras URLs; un error de Google no entra', async () => {
   const calls = [];
   const toasts = [];
-  const app = loadApp({ onExchange: (c) => { calls.push(c); return { data: {}, error: null }; } });
+  const entered = [];
+  const app = loadApp({ onExchange: (c) => { calls.push(c); return { data: { user: { id: 'u1' } }, error: null }; } });
   app.showToast = (m, k) => toasts.push(k);
+  app.loadUserAndEnter = async (u) => { entered.push(u.id); };   // la vuelta de Google tiene que ENTRAR a la app (antes solo guardaba la sesión y quedaba en la pantalla de inicio)
   assert.equal(await app.finishGoogleAppReturn('https://www.zancada.org/auth/app?code=abc123'), true);
   assert.deepEqual(calls, ['abc123']);
+  assert.deepEqual(entered, ['u1'], 'después de canjear el código, entra a la app');
   assert.equal(await app.finishGoogleAppReturn('https://www.zancada.org/conectar?p=garmin&code=x'), false, 'otro link: no es esta vuelta');
   assert.equal(await app.finishGoogleAppReturn('https://evil.example/auth/app?code=x'), false, 'otro dominio: no');
   assert.equal(await app.finishGoogleAppReturn('https://www.zancada.org/auth/app?error=access_denied&error_description=x'), true);
   assert.equal(await app.finishGoogleAppReturn('https://www.zancada.org/auth/app'), true, 'sin código tampoco entra');
   assert.deepEqual(calls, ['abc123'], 'solo se canjeó el código válido');
+  assert.deepEqual(entered, ['u1'], 'y solo entró una vez');
   assert.equal(toasts.filter(k => k === 'error').length, 2);
 });
 

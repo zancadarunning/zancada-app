@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-21T22:17:28Z';
+const APP_VERSION = '2026-11-21T23:45:10Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2215,8 +2215,11 @@ async function finishGoogleAppReturn(url){
   const code = u.searchParams.get('code');
   if(u.searchParams.get('error') || u.searchParams.get('error_description') || !code){ showToast(t('login_err'), 'error'); return true; }
   try{
-    const { error } = await supabaseClient.auth.exchangeCodeForSession(code);
-    if(error){ console.error(error); showToast(t('login_err'), 'error'); }
+    const { data, error } = await supabaseClient.auth.exchangeCodeForSession(code);
+    if(error || !data || !data.user){ if(error) console.error(error); showToast(t('login_err'), 'error'); return true; }
+    // La sesión ya quedó guardada, pero la app seguía en la pantalla de inicio (la web entra sola porque la página se recarga con el código; acá la app no se recarga): hay que entrar a mano,
+    // igual que después de iniciar sesión con correo y clave. Probado en el A33 el 2026-11-21: sin esto el inicio de sesión "volvía" a la pantalla principal y solo entraba al cerrar y abrir la app.
+    await loadUserAndEnter(data.user);
   }catch(e){ console.error(e); showToast(t('login_err'), 'error'); }
   return true;
 }
