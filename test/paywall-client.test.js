@@ -105,3 +105,15 @@ test('la pantalla de pago nunca tapa una carrera en curso y en la web no se mues
   assert.ok(block.indexOf('runActive') < block.indexOf('showPaywall()'), 'la revisión de la carrera va antes de mostrar la pantalla');
   assert.match(app, /subscription_required' && PAYWALL_ENABLED && isNativeApp\(\)/, 'en la web el 402 no abre una pantalla de pago imposible de pagar');
 });
+
+test('tarjeta "Mi suscripción": título propio (no el de los tramos), administra la suscripción de Zancada y lleva al historial de compras de Play, en los 6 idiomas', () => {
+  const card = html.slice(html.indexOf('id="plan-card"'), html.indexOf('id="plan-card"') + 1200);
+  assert.ok(card.includes('data-i18n="sub_card_title"'), 'el título ya no usa plan_title (que es "Tramos del entrenamiento")');
+  assert.ok(!card.includes('data-i18n="plan_title"'));
+  assert.ok(card.includes('https://play.google.com/store/account/subscriptions?package=org.zancada.app'));
+  assert.ok(card.includes('https://play.google.com/store/account/orderhistory'));
+  for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
+    const s = read('locales/' + l + '.js');
+    for (const k of ['sub_card_title', 'sub_card_note', 'sub_card_history', 'plan_manage']) assert.match(s, new RegExp(k + ':"[^"]+"'), l + ' ' + k);
+  }
+});
