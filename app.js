@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-22T00:18:00Z';
+const APP_VERSION = '2026-11-22T17:58:23Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10968,7 +10968,7 @@ function initPlanDrag(){
     const from = drag.idx, to = drag.target ? parseInt(drag.target.dataset.idx, 10) : -1;
     reset();
     if(to >= 0 && to !== from){
-      const res = applyMoveSession({dia_origen: DAY_KEYS[from], dia_destino: DAY_KEYS[to]});
+      const res = applyMoveSession({dia_origen: DAY_KEYS[from], dia_destino: DAY_KEYS[to], manual: true});
       if(/^OK/.test(res)){ try{ haptic(15); }catch(err){} showToast(t('plan_moved', {day: t('day_' + DAY_KEYS[to])}), 'success'); }
       else showToast(res, 'error');
     }
@@ -20388,6 +20388,20 @@ function coachDistanceRefusal(input){
 function coachStateFingerprint(){
   try{ return JSON.stringify([state.plan, state.nextWeekOverrides, state.profile, state.painLog, state.coachNotes]); }catch(e){ return String(Math.random()); }
 }
+// Principiante que todavía está en la etapa de trote y caminata: una sesión de rodaje o tirada larga que le arma Zonda por chat conserva esa estructura (antes se borraba y quedaba un rodaje continuo de
+// "trote suave", justo lo que no se le tiene que pedir a quien recién empieza). Si el pedido dice explícitamente que corra de corrido, o trae series/cuestas/fartlek, no se aplica.
+// wantedMin > 0 = duracion_min que pidió: se redondea a tramos enteros del escalón de la semana; 0 = los tramos del escalón tal cual.
+function beginnerRunWalkFor(input, weekNumber, wantedMin){
+  if(!input || (input.tipo_categoria !== 'easy' && input.tipo_categoria !== 'long')) return null;
+  if(/sin\s+camin|de\s+corrido|continu/i.test(String(input.tipo || '') + ' ' + String(input.descripcion || ''))) return null;
+  const p = state.profile || {};
+  if(!isBeginnerProfile(p) || (p.levelTest && p.levelTest.continuousOk)) return null;
+  const st = runWalkStageFor(weekNumber, input.tipo_categoria === 'long');
+  if(!st) return null;
+  const cycle = st.run + st.walk;
+  const reps = wantedMin > 0 ? Math.max(1, Math.round(wantedMin * 60 / cycle)) : st.reps;
+  return {reps, runSec: st.run, walkSec: st.walk, durMin: Math.round(reps * cycle / 60)};
+}
 function applyPlanChange(input){
   // El input_schema de la herramienta declara dia como enum:DAY_KEYS, pero eso es solo una
   // guía para el modelo -- la API de tool use no lo hace cumplir de verdad (mismo motivo que
@@ -20489,7 +20503,11 @@ function applyPlanChange(input){
     // mismo criterio que la semana actual: duracion_min fija los minutos; solo distancia los recalcula; el trote/caminata del día base no se hereda
     if(typeof input.duracion_min === 'number' && input.duracion_min > 0) override.durMin = Math.min(MAX_CUSTOM_DURATION_MIN, Math.round(toolMainMinutes(input)));
     else if(effectiveDistKm !== null) override.durMin = undefined;
-    override.runWalk = undefined;
+    {
+      const rwNext = resolveCustomInterval(input) ? null : beginnerRunWalkFor(input, (state.weekNumber || 1) + 1, (typeof input.duracion_min === 'number' && input.duracion_min > 0) ? toolMainMinutes(input) : 0);
+      if(rwNext){ override.runWalk = {reps: rwNext.reps, runSec: rwNext.runSec, walkSec: rwNext.walkSec}; override.durMin = rwNext.durMin; }
+      else override.runWalk = undefined;
+    }
     const zone = resolveZone(input.zona);
     if(zone!==null) override.zone = zone;
     if(input.terreno) override.terrain = input.terreno;
@@ -20508,7 +20526,7 @@ function applyPlanChange(input){
     renderPlan(); persist();
     state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+input.dia)), ts:Date.now()});
     const amountTxt = typeof input.duracion_min==='number' ? `${input.duracion_min}min (~${fmtDist(effectiveDistKm,1)}${distUnit()})` : (effectiveDistKm!==null ? fmtDist(effectiveDistKm,1)+distUnit() : '');
-    return `OK, actualicé ${input.dia} de la semana que viene: ${input.tipo}${amountTxt?', '+amountTxt:''}${zone?', zona '+zone:''}.` + shownAfterNote(getNextWeekPlan().plan.find(x => x.day === input.dia));
+    return `OK, actualicé ${t('day_' + input.dia)} de la semana que viene: ${input.tipo}${amountTxt?', '+amountTxt:''}${zone?', zona '+zone:''}.` + shownAfterNote(getNextWeekPlan().plan.find(x => x.day === input.dia));
   }
   const d = state.plan.find(x=>x.day===input.dia);
   if(!d) return "Día no encontrado.";
@@ -20532,7 +20550,11 @@ function applyPlanChange(input){
   // se recalculen de la distancia nueva; y el trote/caminata del principiante no vale para una sesión nueva.
   if(typeof input.duracion_min === 'number' && input.duracion_min > 0) d.durMin = Math.min(MAX_CUSTOM_DURATION_MIN, Math.round(toolMainMinutes(input)));
   else if(effectiveDistKm !== null) delete d.durMin;
-  delete d.runWalk;
+  {
+    const rwNow = resolveCustomInterval(input) ? null : beginnerRunWalkFor(input, state.weekNumber || 1, (typeof input.duracion_min === 'number' && input.duracion_min > 0) ? toolMainMinutes(input) : 0);
+    if(rwNow){ d.runWalk = {reps: rwNow.reps, runSec: rwNow.runSec, walkSec: rwNow.walkSec}; d.durMin = rwNow.durMin; }
+    else delete d.runWalk;
+  }
   const zone = resolveZone(input.zona);
   if(zone!==null) d.zone = zone;
   const customInterval = resolveCustomInterval(input);
@@ -20551,7 +20573,7 @@ function applyPlanChange(input){
   renderPlan(); renderHome(); persist();
   state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+d.day)), ts:Date.now()});
   const amountTxt = typeof input.duracion_min==='number' ? `${input.duracion_min}min (~${fmtDist(d.dist,1)}${distUnit()})` : `${fmtDist(d.dist,1)}${distUnit()}`;
-  return `OK, actualizado ${d.day}: ${d.type}, ${amountTxt}${d.zone?', zona '+d.zone:''}.` + shownAfterNote(d);
+  return `OK, actualizado ${t('day_' + d.day)}: ${d.type}, ${amountTxt}${d.zone?', zona '+d.zone:''}.` + shownAfterNote(d);
 }
 // Lo que el corredor VE para esa sesión después de un cambio hecho por el chat: se le devuelve al modelo para que cite ese número y no el que cree haber mandado.
 function shownAfterNote(d){
@@ -20621,7 +20643,7 @@ function applyMoveSession(input){
     d.custom = true;
   });
   renderPlan(); renderHome(); renderRunTodayCard(); persist();
-  state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+input.dia_origen)+' → '+t('day_'+input.dia_destino)), ts:Date.now()});
+  if(!input.manual) state.chat.push({role:'system', text:sysMsgWithIcon(ICONS.edit, t('coach_plan_updated')+': '+t('day_'+input.dia_origen)+' → '+t('day_'+input.dia_destino)), ts:Date.now()});   // manual: lo movió la persona arrastrando, no Zonda
   return `OK, moví la sesión de ${input.dia_origen} a ${input.dia_destino}. Ahora ${input.dia_destino}: ${planLabel(destDay).type}${destDay.dist > 0 ? ', ' + planShownAmountText(destDay) : ''}; ${input.dia_origen}: ${origDay.dist > 0 ? planLabel(origDay).type + ', ' + planShownAmountText(origDay) : 'sin sesión'}.`;
 }
 // El día de la carrera objetivo (plan por fases, ver applyGoalRaceDay) no se modifica ni se cancela por el
