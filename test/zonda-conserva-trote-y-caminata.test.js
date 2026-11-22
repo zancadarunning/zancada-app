@@ -87,6 +87,6 @@ test('la sesión de Zonda con trote y caminata muestra esa estructura en sus not
   app.applyPlanChange(ask());
   const d = nextWed(app);
   const body = app.planLabelBody(d).desc;
-  assert.ok(body.includes('Tranqui, hablando'), 'conserva el texto de Zonda');
+  assert.ok(!body.includes('Tranqui, hablando'), 'el texto libre de Zonda no contradice los tramos');
   assert.match(body, /trote/i, 'agrega los tramos de trote y caminata');
 });
