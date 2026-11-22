@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-22T17:58:23Z';
+const APP_VERSION = '2026-11-22T18:13:24Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -9320,6 +9320,9 @@ function planLabelBody(d){
       const rest = timeModeNow ? fmtDurationShort(d.interval.restMin*60) : `${repMetersFromMin(d.interval.restMin, state.profile)}m`;
       body = `${d.desc}\n${t('desc_custom_reps_detail', {reps:d.interval.reps, work, rest, zone:d.zone})}`;
     }
+    // Sesión de Zonda que conserva el trote y caminata del principiante: se agrega la estructura real a su texto libre (si no, el texto podía decir "ritmo cómodo de principio a fin" y contradecir la guía en vivo).
+    if(d.runWalk && d.runWalk.reps>0 && !d.interval) body = `${d.desc}
+${t('desc_runwalk', {reps:d.runWalk.reps, run:fmtDurExact(d.runWalk.runSec), walk:fmtDurExact(d.runWalk.walkSec)})}`;
     return {type:d.type, desc:body};
   }
   const timeMode = isTimeMode();

@@ -81,3 +81,12 @@ test('la tarjeta de calentamiento tiene el botón "Saltar" arriba, junto a la et
   assert.ok(tag > 0 && skip > tag && skip < time, 'el botón va antes del cronómetro');
   assert.equal(html.split('id="workout-guide-wc-skip"').length - 1, 1, 'un solo botón');
 });
+
+test('la sesión de Zonda con trote y caminata muestra esa estructura en sus notas (no solo el texto libre)', () => {
+  const app = setup();
+  app.applyPlanChange(ask());
+  const d = nextWed(app);
+  const body = app.planLabelBody(d).desc;
+  assert.ok(body.includes('Tranqui, hablando'), 'conserva el texto de Zonda');
+  assert.match(body, /trote/i, 'agrega los tramos de trote y caminata');
+});
