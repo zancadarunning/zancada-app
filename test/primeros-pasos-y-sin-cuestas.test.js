@@ -212,7 +212,7 @@ test('los textos nuevos existen en los 6 idiomas', () => {
 test('Historial: la marca y el tiempo ya no van encima del mapa; la marca ocupa su línea debajo de la fecha', () => {
   assert.ok(!SRC.includes('hist-map-badge') && !HTML.includes('hist-map-badge'));
   assert.ok(SRC.includes('<span class="hist-when"><span class="hist-day">${dateStr}</span>'));
-  assert.ok(SRC.includes('<span class="hist-time">${fmtTime(r.durationSec)}</span><button class="hist-share-btn"'));
+  assert.ok(SRC.includes('<span class="hist-time">${fmtRunClock(r.durationSec)}</span><button class="hist-share-btn"'));
   assert.ok(HTML.includes('.hist-date{grid-area:2 / 1 / 3 / 3; margin-top:6px;}'));
   assert.ok(HTML.includes('.hist-map-img.loaded + .hist-map-route path{stroke:#0B5D2E;}'), 'sin mapa cargado el trazo usa el color del tema (se lee en oscuro)');
 });

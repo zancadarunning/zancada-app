@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-22T23:09:32Z';
+const APP_VERSION = '2026-11-22T23:37:10Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10416,7 +10416,7 @@ function renderHome(){
     document.getElementById('home-session-done-sub').textContent = t('home_session_done_sub', {type: lbl.type});
     document.getElementById('home-done-dist').textContent = fmtDist(todayRun.distanceKm);
     document.getElementById('home-done-dist-label').textContent = distUnit();
-    document.getElementById('home-done-time').textContent = fmtTime(todayRun.durationSec);
+    document.getElementById('home-done-time').textContent = fmtRunClock(todayRun.durationSec);
     document.getElementById('home-done-pace').textContent = fmtPace(paceMin);
     document.getElementById('home-done-pace-label').textContent = t('run_pace_word') + ' /' + distUnit();   // con millas decia "/km" aunque el ritmo ya estuviera en min/mi
   } else {
@@ -15352,7 +15352,8 @@ function computeRunHighlight(run, history){
     const bestPrev = Math.min(...similar.map(r => r.durationSec / 60 / r.distanceKm));
     if(pace < bestPrev * 0.99) return {key:'hl_best_pace', vars:{d: fmtDist(d, 0), u, u2: u, p: fmtPace(pace)}};
   }
-  const splits = (run.splits || []).filter(s => s && s.paceMin > 0 && s.paceMin < 20 && Number.isInteger(parseFloat(s.km)));
+  // paceMin >= 2: por debajo de 2:00/km no es un ritmo humano sino un salto del GPS (un tramo de 0:01/km salía como "tu tramo más rápido").
+  const splits = (run.splits || []).filter(s => s && s.paceMin >= 2 && s.paceMin < 20 && Number.isInteger(parseFloat(s.km)));
   // 3) segunda mitad más rápida que la primera (negative split)
   if(splits.length >= 4){
     const mid = Math.floor(splits.length / 2);
@@ -16994,7 +16995,7 @@ function renderHistory(){
       <button class="tap-pad" data-on-click="shareWeeklyRecapImage()" style="background:none; border:1.5px solid var(--asphalt-4); color:var(--hivis-text); font-size:12px; cursor:pointer; padding:5px 9px; border-radius:6px; display:flex; align-items:center; gap:5px; font-weight:700; flex-shrink:0;">${t('hist_share')}</button>
     </div>
     <div class="stat-row-divided">
-      <div class="stat-cell"><div class="n">${fmtDist(tr.totalKm,0)}</div><div class="l">${t('hist_total_km')} (${distUnit()})</div></div>
+      <div class="stat-cell"><div class="n">${fmtDist(tr.totalKm, tr.totalKm < 100 ? 1 : 0)}</div><div class="l">${t('hist_total_km')} (${distUnit()})</div></div>
       <div class="stat-cell"><div class="n">${tr.totalRuns}</div><div class="l">${t('hist_total_runs')}</div></div>
     </div>
     ${(state.runs||[]).some(r=>r.source==='garmin') ? `<p class="muted garmin-derived" style="margin:10px 0 0; font-size:12px;">${t('garmin_derived_note')}</p>` : ''}
@@ -17048,7 +17049,7 @@ function renderHistory(){
     return `${monthHeader}<div class="swipe-item" data-swipe-id="${r.id}">
       <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" data-on-click="deleteRun('${r.id}')"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
       <div class="card hist-card swipe-content" data-on-click="openRunDetail('${r.id}')" style="cursor:pointer;">
-        <div class="hist-top"><span class="hist-when"><span class="hist-day">${dateStr}</span>${(r.manual || sourceBadgeHtml(r.source, false, r)) ? `<span class="hist-date">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false, r)}</span>` : ''}</span><span class="hist-top-right"><span class="hist-time">${fmtTime(r.durationSec)}</span><button class="hist-share-btn" aria-label="${t('hist_share')}" title="${t('hist_share')}" data-on-click="event.stopPropagation(); shareRunImage('${r.id}')">${ICONS.share}</button></span></div>
+        <div class="hist-top"><span class="hist-when"><span class="hist-day">${dateStr}</span>${(r.manual || sourceBadgeHtml(r.source, false, r)) ? `<span class="hist-date">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false, r)}</span>` : ''}</span><span class="hist-top-right"><span class="hist-time">${fmtRunClock(r.durationSec)}</span><button class="hist-share-btn" aria-label="${t('hist_share')}" title="${t('hist_share')}" data-on-click="event.stopPropagation(); shareRunImage('${r.id}')">${ICONS.share}</button></span></div>
         ${hasMap ? `<div class="hist-map" data-run-id="${r.id}">${histMapInnerHtml(r, histMapCssWidth(), 108)}</div>` : ''}
         <div class="stat-row-divided">
           <div class="stat-cell"><div class="n">${fmtDist(r.distanceKm)}</div><div class="l">${distUnit()}</div></div>
@@ -17543,7 +17544,7 @@ function renderRDRuta(panel){
         <div class="rd-legend-labels"><span>${t('rd_slowest')} ${fmtPace(slowest)}/${distUnit()}</span><span>${t('rd_fastest')} ${fmtPace(fastest)}/${distUnit()}</span></div>
       ` : ''}
       <div class="rd-stat-row">
-        <div><span class="mono">${fmtTime(r.durationSec)}</span><span class="muted" style="font-size:11px;">${t('run_time')}</span></div>
+        <div><span class="mono">${fmtRunClock(r.durationSec)}</span><span class="muted" style="font-size:11px;">${t('run_time')}</span></div>
         <div><span class="mono">${fmtPace(paceMin)}</span><span class="muted" style="font-size:11px;">${t('run_pace_word')}/${distUnit()}</span></div>
         <div><span class="mono">${cal}</span><span class="muted" style="font-size:11px;">${t('run_calories')}</span></div>
       </div>
@@ -18173,7 +18174,7 @@ function renderRDDetalles(panel){
   const {r, paceMin, avgHr, cal} = rdCurrent;
   const speedKmh = r.durationSec>0 ? (r.distanceKm/(r.durationSec/3600)) : 0;
   const tiles = [];
-  tiles.push([t('run_time'), fmtTime(r.durationSec)]);
+  tiles.push([t('run_time'), fmtRunClock(r.durationSec)]);
   tiles.push([t('rd_calories_label'), cal+' kcal']);   // el valor ya dice "kcal": la etiqueta dice "Calorías (est.)" para no repetir la unidad
   tiles.push([`${t('run_pace_word')} /${distUnit()}`, fmtPace(paceMin)]);
   tiles.push([t('rd_avg_speed'), (isImperial()? (speedKmh*0.621371).toFixed(2)+' mph' : speedKmh.toFixed(2)+' km/h')]);
