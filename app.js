@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-22T22:30:01Z';
+const APP_VERSION = '2026-11-22T22:41:18Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10618,7 +10618,7 @@ function renderRunTodayCard(){
     const paceMin = todayRun.distanceKm>0.02 ? (todayRun.durationSec/60)/todayRun.distanceKm : 0;
     document.getElementById('run-done-dist').textContent = fmtDist(todayRun.distanceKm);
     document.getElementById('run-done-dist-label').textContent = distUnit();
-    document.getElementById('run-done-time').textContent = fmtTime(todayRun.durationSec);
+    document.getElementById('run-done-time').textContent = fmtRaceTime(todayRun.durationSec);   // mm:ss (h:mm:ss solo desde la hora): fmtTime daba 00:02:49 y la caja se desbordaba
     document.getElementById('run-done-pace').textContent = fmtPace(paceMin);
     document.getElementById('run-done-pace-label').textContent = t('run_pace_word') + ' /' + distUnit();   // con millas decia "/km" aunque el ritmo ya estuviera en min/mi
     doneCard.style.display = 'block';

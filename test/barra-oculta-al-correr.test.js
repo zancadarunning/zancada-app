@@ -28,3 +28,8 @@ test('arrancar y terminar la carrera vuelven a calcularla (la barra reaparece en
   const sumCall = app.indexOf('updateCoachFabVisibility();', sum);
   assert.ok(sum > 0 && sumCall > sum && sumCall - sum < 400, 'al terminar');
 });
+
+test('la tarjeta "Sesión completada" usa mm:ss y las cajas pueden achicarse (se veía cortada: 00:02:49 desbordaba)', () => {
+  assert.match(app, /getElementById\('run-done-time'\)\.textContent = fmtRaceTime\(todayRun\.durationSec\)/);
+  assert.match(html, /\.stat-box\{flex:1; min-width:0;/);
+});
