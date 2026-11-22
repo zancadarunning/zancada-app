@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-22T18:26:09Z';
+const APP_VERSION = '2026-11-22T22:30:01Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -13134,6 +13134,8 @@ function updateCoachFabVisibility(){
   const inSummary = !!sumEl && sumEl.style.display === 'block';
   const fabWrapEl = document.getElementById('coach-fab-wrap');
   fabWrapEl.style.display = (inCoach || inExercise || inSummary) ? 'none' : 'block';
+  // En pleno ejercicio (corriendo o pausado) la barra de abajo se esconde y queda solo el botón de pausa; vuelve al terminar, al cerrar el resumen o al salir de la pestaña Correr (pedido del dueño 2026-11-22). Solo si la vista Correr está a la vista: nunca deja la barra oculta en otra pantalla.
+  document.body.classList.toggle('exercising', !!(inExercise && document.getElementById('view-correr').classList.contains('active')));
   fabWrapEl.classList.remove('coach-fab-away');   // cada pantalla arranca con Zonda a la vista
 }
 // Ver el comentario junto a .coach-fab-away en el CSS.
