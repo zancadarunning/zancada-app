@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-22T18:13:24Z';
+const APP_VERSION = '2026-11-22T18:26:09Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8721,6 +8721,20 @@ function runWalkStageFor(weekNumber, isLong){
   const idx = wn - 1 + (isLong ? 1 : 0);
   return idx >= RUNWALK_STAGES.length ? null : RUNWALK_STAGES[idx];
 }
+// Trote y caminata para quien entrena por DISTANCIA: el plan guarda los tramos en segundos (runSec/walkSec), pero a esa persona se le muestra y se le guía en metros, como las series.
+// El trote se pasa a metros con su ritmo base (repMetersFromMin) y la caminata rápida con ~1,4 m/s; ambos a la baldosa de 50 m. Devuelve null si entrena por tiempo (ahí se sigue mostrando en minutos).
+function runWalkMetersFor(rw){
+  if(!rw || !(rw.reps > 0) || isTimeMode()) return null;
+  const runM = repMetersFromMin(rw.runSec / 60, state.profile);
+  const walkM = Math.max(50, Math.round(rw.walkSec * 1.4 / 50) * 50);
+  return {runM, walkM};
+}
+// Texto de los tramos para pantalla: en metros (por distancia) o en tiempo (por tiempo).
+function runWalkDescText(rw){
+  const m = runWalkMetersFor(rw);
+  if(m) return t('desc_runwalk_dist', {reps: rw.reps, run: m.runM + ' m', walk: m.walkM + ' m'});
+  return t('desc_runwalk', {reps: rw.reps, run: fmtDurExact(rw.runSec), walk: fmtDurExact(rw.walkSec)});
+}
 // Duración exacta para leer en pantalla (1 min 30 seg), a diferencia de fmtDurationShort que redondea a 15 seg.
 function fmtDurExact(sec){
   sec = Math.round(sec);
@@ -9322,7 +9336,7 @@ function planLabelBody(d){
     }
     // Sesión de Zonda que conserva el trote y caminata del principiante: se agrega la estructura real a su texto libre (si no, el texto podía decir "ritmo cómodo de principio a fin" y contradecir la guía en vivo).
     if(d.runWalk && d.runWalk.reps>0 && !d.interval) body = `${d.desc}
-${t('desc_runwalk', {reps:d.runWalk.reps, run:fmtDurExact(d.runWalk.runSec), walk:fmtDurExact(d.runWalk.walkSec)})}`;
+${runWalkDescText(d.runWalk)}`;
     return {type:d.type, desc:body};
   }
   const timeMode = isTimeMode();
@@ -9331,7 +9345,7 @@ ${t('desc_runwalk', {reps:d.runWalk.reps, run:fmtDurExact(d.runWalk.runSec), wal
   const suf = d.beginner && (d.typeKey==='easy'||d.typeKey==='long'||d.typeKey==='rest') ? '_beginner' : '';
   let desc = t('desc_'+d.typeKey+suf);
   if(d.runWalk && d.runWalk.reps>0){
-    desc = t('desc_runwalk', {reps:d.runWalk.reps, run:fmtDurExact(d.runWalk.runSec), walk:fmtDurExact(d.runWalk.walkSec)});
+    desc = runWalkDescText(d.runWalk);
   } else if(d.typeKey==='intervals' && d.interval && d.interval.repSec>0 && nativeTime){
     desc = t('desc_intervals_time_native', {reps:d.interval.reps, dur:fmtDurExact(d.interval.repSec), rest:fmtDurExact(d.interval.recSec), zone:d.zone});
   } else if(d.typeKey==='hills' && d.interval && d.interval.repSec>0 && nativeTime){
@@ -13955,7 +13969,7 @@ function getTodayWorkoutStructureBase(){
   const today = state.plan[idx];
   if(!today || today.typeKey==='rest') return null;
   // Principiante con trote y caminata (dayObj.runWalk: N tramos de runSec trotando + walkSec caminando): la guía en vivo avisa cada tramo por voz y en pantalla. Antes caía en 'continuous' y decía solo "¡A correr!", sin nunca avisar cuándo trotar ni cuándo caminar.
-  if(today.runWalk && today.runWalk.reps > 0 && !today.interval && (today.typeKey === 'easy' || today.typeKey === 'long')) return {typeKey:'runwalk', reps:today.runWalk.reps, runSec:today.runWalk.runSec, walkSec:today.runWalk.walkSec, planTypeKey:today.typeKey};
+  if(today.runWalk && today.runWalk.reps > 0 && !today.interval && (today.typeKey === 'easy' || today.typeKey === 'long')) { const mt = runWalkMetersFor(today.runWalk); return {typeKey:'runwalk', reps:today.runWalk.reps, runSec:today.runWalk.runSec, walkSec:today.runWalk.walkSec, runMeters: mt ? mt.runM : null, walkMeters: mt ? mt.walkM : null, planTypeKey:today.typeKey}; }
   if(today.interval){
     // Si el corredor entrena "por tiempo", las repeticiones (series/cuestas) se completan
     // por tiempo transcurrido (repSec) en vez de por distancia GPS (repMeters) -- ver
@@ -14139,7 +14153,10 @@ function getWorkoutPhaseTarget(w){
     if(isEffort) return s.repSec!=null ? {sec:s.repSec} : {meters:s.repMeters};
     return {sec: s.recoveryMin*60};
   }
-  if(s.typeKey==='runwalk') return {sec: isEffort ? s.runSec : s.walkSec};   // trote y caminata: siempre por tiempo
+  if(s.typeKey==='runwalk'){   // trote y caminata: por distancia si la persona entrena por km (runMeters/walkMeters), si no por tiempo
+    if(s.runMeters > 0) return {meters: isEffort ? s.runMeters : s.walkMeters};
+    return {sec: isEffort ? s.runSec : s.walkSec};
+  }
   if(s.typeKey==='fartlek') return {sec: isEffort ? s.workSec : s.restSec}; // ver getTodayWorkoutStructure(): fartlek siempre por tiempo
   // hills: tanto la subida (esfuerzo) como la bajada trotando (recuperación) se miden con
   // la misma distancia repMeters -- salvo en modo "por tiempo", donde ambas fases usan repSec.
