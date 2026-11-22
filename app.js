@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-22T22:41:18Z';
+const APP_VERSION = '2026-11-22T23:09:32Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -10652,7 +10652,10 @@ function renderRunModeChoice(){
   // Si ya corrió hoy la sesión programada, el default pasa a "libre" (sigue pudiendo elegir
   // la programada de nuevo a mano si quiere repetirla) -- si todavía no corrió, el default
   // es la programada.
-  selectedRunMode = getTodayRun() ? 'free' : 'scheduled';
+  // Pedido del dueño 2026-11-22: con la sesión de hoy ya hecha, la tarjeta "Programado" desaparece y queda solo "Correr libre" (antes seguía ofreciendo la misma sesión).
+  const doneToday = !!getTodayRun();
+  document.getElementById('run-mode-scheduled').style.display = doneToday ? 'none' : '';
+  selectedRunMode = doneToday ? 'free' : 'scheduled';
   updateRunModeCardStyles();
 }
 function selectRunMode(mode){
