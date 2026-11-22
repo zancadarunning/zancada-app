@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-22T23:45:39Z';
+const APP_VERSION = '2026-11-22T23:55:45Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -20424,7 +20424,8 @@ function beginnerRunWalkFor(input, weekNumber, wantedMin){
   const st = runWalkStageFor(weekNumber, input.tipo_categoria === 'long');
   if(!st) return null;
   const cycle = st.run + st.walk;
-  const reps = wantedMin > 0 ? Math.max(1, Math.round(wantedMin * 60 / cycle)) : st.reps;
+  // Tope de 60 min: un pedido absurdo (500 min) daba 125 repeticiones de trote y caminata; más de una hora de trote y caminata no es una sesión de principiante.
+  const reps = wantedMin > 0 ? Math.max(1, Math.round(Math.min(wantedMin, 60) * 60 / cycle)) : st.reps;
   return {reps, runSec: st.run, walkSec: st.walk, durMin: Math.round(reps * cycle / 60)};
 }
 function applyPlanChange(input){
