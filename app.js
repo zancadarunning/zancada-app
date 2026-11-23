@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-23T00:15:24Z';
+const APP_VERSION = '2026-11-23T13:32:32Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -8280,7 +8280,7 @@ function generatePlan(p, weekNumber, weekStartDate){
   // arman sesiones de calidad, pero sus rodajes ya van en zona 2; apenas termina esa etapa (o si el test de nivel dice que corre de corrido) entra el fartlek.
   const pastBase = beginnerPastBase(p, weekNumber);
   // Mismo criterio por tiempo y por distancia: mientras no corre de corrido (el test de nivel dice si puede) sigue con trote/caminata y sin sesiones de calidad.
-  const stillRunWalk = beginner && !(p.levelTest && p.levelTest.continuousOk) && runWalkStageFor(weekNumber, false) !== null;
+  const stillRunWalk = beginner && !(p.levelTest && p.levelTest.continuousOk) && runWalkStageFor(weekNumber, false, true) !== null;   // la calidad (fartlek) sigue entrando después de la escalera completa, aunque el trote y caminata ya termine en la semana 3
   // varietyOk = 'weeks' cuando salió de la base solo por las semanas (alterna la calidad en las impares); true cuando ya traía base de otro deporte de impacto (como siempre).
   const varietyOk = beginner && (hasRunningImpactBase(p) ? true : (pastBase && !stillRunWalk) ? 'weeks' : false);
   const easyOnly = beginner && !varietyOk && !pastBase;
@@ -8723,9 +8723,13 @@ const RUNWALK_STAGES = [
   // el último escalón dura MÁS que el anterior (antes 2 x (900+120) = 34 min contra 36 min del escalón de arriba: en las semanas 7 y 8 la tirada larga salía más corta que un rodaje común)
   {reps:2, run:1020, walk:120}
 ];
-function runWalkStageFor(weekNumber, isLong){
+// Pedido del dueño 2026-11-22: el trote y caminata dura SOLO las primeras semanas (antes llegaba hasta la 8, con escalones que eran casi todo correr). Desde la semana siguiente son rodajes corridos de corrido.
+const RUNWALK_MAX_WEEKS = 3;
+function runWalkStageFor(weekNumber, isLong, ignoreCap){
   let wn = weekNumber || 1;
-  if(isCutbackWeek(wn)) wn = Math.max(1, wn - 1); // semana de descarga: se repite el escalón anterior
+  if(!ignoreCap && wn > RUNWALK_MAX_WEEKS) return null;   // la semana 4 (descarga) ya corre de corrido, no repite el trote y caminata
+  // ignoreCap = la escalera completa (8 semanas), solo para decidir cuándo entra la calidad: ahí la semana de descarga repite el escalón anterior, como siempre.
+  if(ignoreCap && isCutbackWeek(wn)) wn = Math.max(1, wn - 1);
   const idx = wn - 1 + (isLong ? 1 : 0);
   return idx >= RUNWALK_STAGES.length ? null : RUNWALK_STAGES[idx];
 }
@@ -8875,9 +8879,10 @@ function buildTimePlanDays(ctx){
     const minM = typeKey === 'long' && beginner ? 25 : TIME_MIN_BY_TYPE[typeKey];
     let m = Math.min(maxM, Math.max(minM, roundMin5(minMap[typeKey], minM)));
     if(availCap && typeKey !== 'long') m = Math.min(m, availCap);
-    // Al terminar la escalera de trote/caminata (semana 9) la sesión corrida de corrido no puede quedar MÁS corta que la última etapa con caminata (~36-38 min): antes la semana se caía de golpe.
-    if(beginner && !continuousBeginner && (typeKey === 'easy' || typeKey === 'long') && !runWalkStageFor(weekNumber, typeKey === 'long') && weekNumber > 2 && !isCutbackWeek(weekNumber)){
-      m = Math.max(m, typeKey === 'long' ? 40 : 35);
+    // Al terminar el trote y caminata (después de la semana 3) la sesión corrida de corrido arranca corta y sube de a poco: rodaje ~20 min y tirada ~25 min, +2 y +3 min por semana (tope 35 y 40).
+    if(beginner && !continuousBeginner && (typeKey === 'easy' || typeKey === 'long') && !runWalkStageFor(weekNumber, typeKey === 'long') && weekNumber > RUNWALK_MAX_WEEKS && !isCutbackWeek(weekNumber)){
+      const k = weekNumber - RUNWALK_MAX_WEEKS - 1;
+      m = Math.max(m, typeKey === 'long' ? Math.min(40, 25 + 3 * k) : Math.min(35, 20 + 2 * k));
       if(availCap && typeKey !== 'long') m = Math.min(m, availCap);
     }
     const dayObj = {day, typeKey, terrain, zone: zoneMap[typeKey], beginner, durMin: m, timeBased: true};

@@ -50,7 +50,7 @@ test('plan por tiempo: tempo es un bloque continuo con tope y la tirada larga va
   assert.match(app.planAmountText(long), /min$/);
 });
 
-test('principiante por tiempo: trote/caminata que sube un escalón por semana y pasa a continuo', () => {
+test('principiante por tiempo: trote/caminata que sube un escalón por semana (semanas 1 a 3) y pasa a continuo', () => {
   const app = loadApp();
   const p = setup(app, newbie({ trainBy: 'time' }));
   const w1 = app.generatePlan(p, 1, '2026-09-07').find(d => d.typeKey === 'easy');
@@ -59,9 +59,11 @@ test('principiante por tiempo: trote/caminata que sube un escalón por semana y 
   assert.match(app.planLabel(w1).desc, /Alterná 7 veces: 1 min de trote suave y 2 min de caminata/);
   const w3 = app.generatePlan(p, 3, '2026-09-07').find(d => d.typeKey === 'easy');
   assert.equal(w3.runWalk.runSec, 180);
-  // semana de descarga (4): repite el escalón anterior
+  // semana 4 (descarga): el trote y caminata ya terminó (solo dura las semanas 1 a 3), corre de corrido
   const w4 = app.generatePlan(p, 4, '2026-09-07').find(d => d.typeKey === 'easy');
-  assert.equal(w4.runWalk.runSec, 180);
+  assert.equal(w4.runWalk, undefined);
+  const w6 = app.generatePlan(p, 6, '2026-09-07').find(d => d.typeKey === 'easy');
+  assert.equal(w6.runWalk, undefined);
   const w10 = app.generatePlan(p, 10, '2026-09-07').find(d => d.typeKey === 'easy');
   assert.equal(w10.runWalk, undefined);
   assert.ok(w10.durMin >= 20);

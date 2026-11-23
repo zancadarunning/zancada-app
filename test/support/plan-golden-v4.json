@@ -474,15 +474,10 @@
     {
       "day": "tue",
       "typeKey": "easy",
-      "dist": 3.2,
+      "dist": 3,
       "terrain": "asfalto",
       "zone": 2,
-      "beginner": true,
-      "runWalk": {
-        "reps": 4,
-        "runSec": 300,
-        "walkSec": 120
-      }
+      "beginner": true
     },
     {
       "day": "wed",
@@ -495,15 +490,10 @@
     {
       "day": "thu",
       "typeKey": "easy",
-      "dist": 3.2,
+      "dist": 3,
       "terrain": "asfalto",
       "zone": 2,
-      "beginner": true,
-      "runWalk": {
-        "reps": 4,
-        "runSec": 300,
-        "walkSec": 120
-      }
+      "beginner": true
     },
     {
       "day": "fri",
@@ -524,15 +514,10 @@
     {
       "day": "sun",
       "typeKey": "long",
-      "dist": 3.6,
+      "dist": 4,
       "terrain": "asfalto",
       "zone": 2,
-      "beginner": true,
-      "runWalk": {
-        "reps": 3,
-        "runSec": 480,
-        "walkSec": 120
-      }
+      "beginner": true
     }
   ],
   "principiante-carrera-a-10-semanas-semana-9": [
