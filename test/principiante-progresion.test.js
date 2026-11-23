@@ -44,10 +44,10 @@ test('el volumen sigue subiendo (se comparan semanas sin descarga: 3, 5, 7, 9, 1
   });
 });
 
-test('por tiempo: trote/caminata hasta terminar la escalera y sin calidad mientras tanto; después corre seguido y entra el fartlek', () => {
+test('por tiempo: trote/caminata solo las semanas 1 a 3; hasta la 8 sigue sin calidad pero corriendo de corrido; después entra el fartlek', () => {
   const a = loadApp();
   const p = profile('start', 'time', 3); a.state.profile = p; a.state.onboarded = true;
-  for (let w = 1; w <= 8; w++) weekPlan(a, p, w).forEach(d => { assert.ok(['easy', 'long'].includes(d.typeKey), `semana ${w}: solo rodajes y tirada`); assert.ok(d.runWalk, `semana ${w}: con caminata`); });
+  for (let w = 1; w <= 8; w++) weekPlan(a, p, w).forEach(d => { assert.ok(['easy', 'long'].includes(d.typeKey), `semana ${w}: solo rodajes y tirada`); if (w <= 3) assert.ok(d.runWalk, `semana ${w}: con caminata`); else assert.ok(!d.runWalk, `semana ${w}: corre de corrido`); });
   const later = []; for (let w = 9; w <= 13; w++) later.push(...weekPlan(a, p, w));
   assert.ok(later.some(d => d.typeKey === 'fartlek'), 'después de la escalera aparece el fartlek');
   assert.ok(later.filter(d => d.typeKey === 'easy' || d.typeKey === 'long').every(d => !d.runWalk), 'corre de corrido');
@@ -136,10 +136,11 @@ test('"empezar desde cero": no propone con pocos km reales, ni en las primeras s
   assert.equal(c.startUpgradeSuggestion(), null, 'otro objetivo no');
 });
 
-test('principiante por DISTANCIA: trote/caminata las primeras semanas (salvo que el test de nivel diga que corre de corrido), y desaparece al terminar la escalera', () => {
+test('principiante por DISTANCIA: trote/caminata solo las semanas 1 a 3 (salvo que el test de nivel diga que corre de corrido); desde la 4 corre de corrido', () => {
   const a = loadApp();
   const p = profile('start', 'distance', 3); a.state.profile = p; a.state.onboarded = true;
-  [1, 4, 8].forEach(w => weekPlan(a, p, w).filter(d => d.typeKey === 'easy' || d.typeKey === 'long').forEach(d => assert.ok(d.runWalk && d.runWalk.reps > 0, `semana ${w}: con caminata`)));
+  [1, 2, 3].forEach(w => weekPlan(a, p, w).filter(d => d.typeKey === 'easy' || d.typeKey === 'long').forEach(d => assert.ok(d.runWalk && d.runWalk.reps > 0, `semana ${w}: con caminata`)));
+  [4, 6, 8].forEach(w => weekPlan(a, p, w).forEach(d => assert.ok(!d.runWalk, `semana ${w}: corre de corrido`)));
   weekPlan(a, p, 10).forEach(d => assert.ok(!d.runWalk, 'semana 10: corre de corrido'));
   const q = profile('start', 'distance', 3); q.levelTest = { required: true, done: true, continuousOk: true }; a.state.profile = q;
   weekPlan(a, q, 1).forEach(d => assert.ok(!d.runWalk, 'si corre de corrido desde el test, sin caminata'));
@@ -213,4 +214,13 @@ test('carrera objetivo: nada de tirada larga a 48 horas y el rodaje de la víspe
   assert.equal(plan[6].raceDay, true, 'el domingo es la carrera');
   assert.notEqual(plan[4].typeKey, 'long', 'el viernes (48 h antes) no hay tirada');
   plan.filter((d, i) => i < 6 && d.typeKey === 'easy' && i >= 4).forEach(d => assert.ok(d.dist <= 3, 'rodaje corto de víspera: ' + d.dist));
+});
+
+test('por tiempo: el paso del trote y caminata (semana 3) a correr de corrido (semana 4) no es un salto brusco', () => {
+  const a = loadApp();
+  [2, 3, 4, 5].forEach(n => {
+    const p = profile('start', 'time', n); a.state.profile = p; a.state.onboarded = true;
+    const t = w => total(weekPlan(a, p, w), 'time');
+    assert.ok(t(4) >= t(3) * 0.8 && t(4) <= t(3) * 1.3, `${n} días: semana 4 (${t(4)}) vs semana 3 (${t(3)})`);
+  });
 });
