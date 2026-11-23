@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-22T23:55:45Z';
+const APP_VERSION = '2026-11-23T00:01:51Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -17511,10 +17511,12 @@ async function restorePaywall(){
   finally{ paywallBusy = false; setPaywallBusy(false); }
 }
 document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ try{ checkPaywall(false); }catch(e){} } });
+// Ritmos de tramos sin los imposibles: por debajo de 2:00/km (o no numéricos) es un salto del GPS, no una marca humana ("Más rápido 0:01/km").
+function humanPaces(list){ return (list || []).filter(p => Number.isFinite(p) && p >= 2); }
 function renderRDRuta(panel){
   const {r, paceMin, cal} = rdCurrent;
   const timeStr = new Date(r.date).toLocaleTimeString(LOCALE_MAP[lang], {hour:'numeric', minute:'2-digit'});
-  const paces = fullSplitsOnly(getDisplaySplits(r)).map(s=>s.paceMin);
+  const paces = humanPaces(fullSplitsOnly(getDisplaySplits(r)).map(s=>s.paceMin));   // sin saltos de GPS (ritmos de menos de 2:00/km)
   const slowest = paces.length ? Math.max(...paces) : paceMin;
   const fastest = paces.length ? Math.min(...paces) : paceMin;
   panel.innerHTML = `
@@ -17720,7 +17722,7 @@ function renderRDRitmo(panel){
   // izquierda tiene que reflejar eso, no asumir ciegamente distUnit().
   const unitLabel = displaySplitsAreMiles(r, splits) ? 'mi' : 'km';
   const splitPaces = splits.map(s=>s.paceMin).filter(p=>p>0);
-  const fullPaces = fullSplitsOnly(splits).map(s=>s.paceMin);
+  const fullPaces = humanPaces(fullSplitsOnly(splits).map(s=>s.paceMin));
   const fastest = fullPaces.length ? Math.min(...fullPaces) : paceMin;
   const maxPaceForBar = Math.max(...splitPaces, paceMin) * 1.02 || 1;
   const pacingAnalysis = analyzeSplitPacing(splits);

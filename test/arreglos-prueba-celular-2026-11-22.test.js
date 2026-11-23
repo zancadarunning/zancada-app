@@ -33,3 +33,14 @@ test('los tiempos de menos de una hora se muestran mm:ss (no 00:02:49) en Inicio
   assert.equal(a.fmtRunClock(169), '02:49');
   assert.equal(a.fmtRunClock(3725), '01:02:05');
 });
+
+test('humanPaces descarta ritmos imposibles (saltos de GPS) y deja los humanos', () => {
+  const a = loadApp();
+  assert.equal(JSON.stringify(a.humanPaces([0.02, 5.5, 6.1, 1.2, NaN, 2, 19.9])), JSON.stringify([5.5, 6.1, 2, 19.9]));
+  assert.equal(JSON.stringify(a.humanPaces(undefined)), '[]');
+});
+
+test('el detalle de la carrera usa humanPaces para "más lento / más rápido"', () => {
+  assert.match(app, /const paces = humanPaces\(fullSplitsOnly\(getDisplaySplits\(r\)\)/);
+  assert.match(app, /const fullPaces = humanPaces\(fullSplitsOnly\(splits\)/);
+});
