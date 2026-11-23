@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-23T13:32:32Z';
+const APP_VERSION = '2026-11-23T13:35:03Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3019,6 +3019,13 @@ function watchDayPayload(d, date){
         : { reps: p.reps, workMin: p.repSec / 60, restMin: p.recSec > 0 ? p.recSec / 60 : 1, recoveryMin: p.recSec > 0 ? p.recSec / 60 : 1 };
       if(!p.repMeters){ repSecX = p.repSec; recSecX = p.recSec; }
     }
+  }
+  // Trote y caminata (principiante): al reloj va por BLOQUES, N repeticiones de trote + caminata, así el reloj avisa cuándo parar y cuándo seguir (mismo formato que el fartlek: bloques de tiempo,
+  // que entienden los constructores de Garmin, COROS, Suunto y Wahoo). Por distancia también va en tiempo: es el aviso del reloj, que cuenta segundos de forma confiable.
+  if(!iv && d.runWalk && d.runWalk.reps > 0 && (d.typeKey === 'easy' || d.typeKey === 'long')){
+    const rw = d.runWalk;
+    iv = { reps: rw.reps, workMin: rw.runSec / 60, restMin: rw.walkSec / 60, recoveryMin: rw.walkSec / 60 };
+    repSecX = rw.runSec; recSecX = rw.walkSec;
   }
   return {
     date, name: lbl.type, typeKey: d.typeKey, zone: d.zone||null, distKm: d.dist,
