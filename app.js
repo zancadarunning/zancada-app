@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-23T00:01:51Z';
+const APP_VERSION = '2026-11-23T00:15:24Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5831,6 +5831,11 @@ function beginnerPerSessionKm(p){
 function estimateBeginnerWeeklyKm(profile){
   const trainingDays = profile && profile.trainingDays;
   const days = (trainingDays && trainingDays.length) ? trainingDays.length : 3; // mismo default de 3 días que generatePlan
+  // Por distancia y en trote y caminata (semana 1): los km son los de los tramos, igual que arma generatePlan (ver runWalkDayKm).
+  if(profile && profile.trainBy !== 'time' && !hasRunningImpactBase(profile) && !(profile.levelTest && profile.levelTest.continuousOk)){
+    const stL = runWalkStageFor(1, true), stE = runWalkStageFor(1, false);
+    if(stL && stE) return Math.round((runWalkDayKm(stL, profile) + runWalkDayKm(stE, profile) * Math.max(0, days - 1)) * 10) / 10;
+  }
   const per = beginnerPerSessionKm(profile); // mismo valor que generatePlan en semana 1 (mult=1 siempre en la primera semana)
   const long = Math.round(per * BEGINNER_LONG_RATIO);
   const easy = Math.round(per * EASY_SESSION_RATIO);
@@ -8404,7 +8409,10 @@ function generatePlan(p, weekNumber, weekStartDate){
     // Principiante por DISTANCIA: las primeras semanas el rodaje también es trote/caminata (antes pedía correr 2 km seguidos desde el día 1). La distancia queda como referencia.
     if((typeKey==='easy' || typeKey==='long') && beginner && !hasRunningImpactBase(p) && !(p.levelTest && p.levelTest.continuousOk)){
       const st = runWalkStageFor(weekNumber, typeKey==='long');
-      if(st) dayObj.runWalk = {reps: st.reps, runSec: st.run, walkSec: st.walk};
+      if(st){
+        dayObj.runWalk = {reps: st.reps, runSec: st.run, walkSec: st.walk};
+        dayObj.dist = runWalkDayKm(st, p);   // los km reales de los tramos (antes decía 2.7 km y los tramos sumaban 2.0)
+      }
     }
     if(typeKey==='intervals' && !easyOnly){
       dayObj.interval = buildIntervalStructure(distMap[typeKey], caution, weekNumber);
@@ -8734,6 +8742,11 @@ function runWalkDescText(rw){
   const m = runWalkMetersFor(rw);
   if(m) return t('desc_runwalk_dist', {reps: rw.reps, run: m.runM + ' m', walk: m.walkM + ' m'});
   return t('desc_runwalk', {reps: rw.reps, run: fmtDurExact(rw.runSec), walk: fmtDurExact(rw.walkSec)});
+}
+// Km reales de un día de trote y caminata por DISTANCIA: lo que suman sus tramos (trote al ritmo base + caminata rápida a ~1,4 m/s), a 0,1 km. Es la distancia que muestra el plan y la que cuenta para marcar la sesión como hecha.
+function runWalkDayKm(st, profile){
+  const runM = repMetersFromMin(st.run / 60, profile), walkM = Math.max(50, Math.round(st.walk * 1.4 / 50) * 50);
+  return Math.max(0.5, Math.round(st.reps * (runM + walkM) / 100) / 10);
 }
 // Duración exacta para leer en pantalla (1 min 30 seg), a diferencia de fmtDurationShort que redondea a 15 seg.
 function fmtDurExact(sec){
@@ -20428,7 +20441,8 @@ function beginnerRunWalkFor(input, weekNumber, wantedMin){
   const cycle = st.run + st.walk;
   // Tope de 60 min: un pedido absurdo (500 min) daba 125 repeticiones de trote y caminata; más de una hora de trote y caminata no es una sesión de principiante.
   const reps = wantedMin > 0 ? Math.max(1, Math.round(Math.min(wantedMin, 60) * 60 / cycle)) : st.reps;
-  return {reps, runSec: st.run, walkSec: st.walk, durMin: Math.round(reps * cycle / 60)};
+  // km: por distancia, lo que suman los tramos (la distancia del día tiene que coincidir con ellos); por tiempo no se usa.
+  return {reps, runSec: st.run, walkSec: st.walk, durMin: Math.round(reps * cycle / 60), km: isTimeMode() ? null : runWalkDayKm({reps, run: st.run, walk: st.walk}, p)};
 }
 function applyPlanChange(input){
   // El input_schema de la herramienta declara dia como enum:DAY_KEYS, pero eso es solo una
@@ -20533,7 +20547,7 @@ function applyPlanChange(input){
     else if(effectiveDistKm !== null) override.durMin = undefined;
     {
       const rwNext = resolveCustomInterval(input) ? null : beginnerRunWalkFor(input, (state.weekNumber || 1) + 1, (typeof input.duracion_min === 'number' && input.duracion_min > 0) ? toolMainMinutes(input) : 0);
-      if(rwNext){ override.runWalk = {reps: rwNext.reps, runSec: rwNext.runSec, walkSec: rwNext.walkSec}; override.durMin = rwNext.durMin; }
+      if(rwNext){ override.runWalk = {reps: rwNext.reps, runSec: rwNext.runSec, walkSec: rwNext.walkSec}; override.durMin = rwNext.durMin; if(rwNext.km) override.dist = rwNext.km; }
       else override.runWalk = undefined;
     }
     const zone = resolveZone(input.zona);
@@ -20580,7 +20594,7 @@ function applyPlanChange(input){
   else if(effectiveDistKm !== null) delete d.durMin;
   {
     const rwNow = resolveCustomInterval(input) ? null : beginnerRunWalkFor(input, state.weekNumber || 1, (typeof input.duracion_min === 'number' && input.duracion_min > 0) ? toolMainMinutes(input) : 0);
-    if(rwNow){ d.runWalk = {reps: rwNow.reps, runSec: rwNow.runSec, walkSec: rwNow.walkSec}; d.durMin = rwNow.durMin; }
+    if(rwNow){ d.runWalk = {reps: rwNow.reps, runSec: rwNow.runSec, walkSec: rwNow.walkSec}; d.durMin = rwNow.durMin; if(rwNow.km) d.dist = rwNow.km; }
     else delete d.runWalk;
   }
   const zone = resolveZone(input.zona);
