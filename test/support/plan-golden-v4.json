@@ -401,7 +401,7 @@
     {
       "day": "tue",
       "typeKey": "easy",
-      "dist": 2,
+      "dist": 2.1,
       "terrain": "asfalto",
       "zone": 1,
       "beginner": true,
@@ -422,7 +422,7 @@
     {
       "day": "thu",
       "typeKey": "easy",
-      "dist": 2,
+      "dist": 2.1,
       "terrain": "asfalto",
       "zone": 1,
       "beginner": true,
@@ -451,7 +451,7 @@
     {
       "day": "sun",
       "typeKey": "long",
-      "dist": 3,
+      "dist": 2.4,
       "terrain": "asfalto",
       "zone": 2,
       "beginner": true,
@@ -474,7 +474,7 @@
     {
       "day": "tue",
       "typeKey": "easy",
-      "dist": 3,
+      "dist": 3.2,
       "terrain": "asfalto",
       "zone": 2,
       "beginner": true,
@@ -495,7 +495,7 @@
     {
       "day": "thu",
       "typeKey": "easy",
-      "dist": 3,
+      "dist": 3.2,
       "terrain": "asfalto",
       "zone": 2,
       "beginner": true,
@@ -524,7 +524,7 @@
     {
       "day": "sun",
       "typeKey": "long",
-      "dist": 4,
+      "dist": 3.6,
       "terrain": "asfalto",
       "zone": 2,
       "beginner": true,

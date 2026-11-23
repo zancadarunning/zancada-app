@@ -33,3 +33,12 @@ test('la tarjeta "Sesión completada" usa mm:ss y las cajas pueden achicarse (se
   assert.match(app, /getElementById\('run-done-time'\)\.textContent = fmtRaceTime\(todayRun\.durationSec\)/);
   assert.match(html, /\.stat-box\{flex:1; min-width:0;/);
 });
+
+test('los números de la tarjeta "Sesión completada" no se parten en dos líneas', () => {
+  assert.match(html, /#run-done-today-card \.stat-box \.n\{font-size:clamp\(15px, 4\.6vw, 20px\); white-space:nowrap;\}/);
+});
+
+test('con la sesión de hoy hecha, la tarjeta "Programado" se oculta y queda correr libre', () => {
+  assert.match(app, /getElementById\('run-mode-scheduled'\)\.style\.display = doneToday \? 'none' : ''/);
+  assert.match(app, /selectedRunMode = doneToday \? 'free' : 'scheduled'/);
+});

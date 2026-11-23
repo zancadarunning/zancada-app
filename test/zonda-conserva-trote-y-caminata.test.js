@@ -87,6 +87,13 @@ test('la sesión de Zonda con trote y caminata muestra esa estructura en sus not
   app.applyPlanChange(ask());
   const d = nextWed(app);
   const body = app.planLabelBody(d).desc;
-  assert.ok(body.includes('Tranqui, hablando'), 'conserva el texto de Zonda');
+  assert.ok(!body.includes('Tranqui, hablando'), 'el texto libre de Zonda no contradice los tramos');
   assert.match(body, /trote/i, 'agrega los tramos de trote y caminata');
+});
+
+test('un pedido absurdo de duración (500 min) no arma 125 repeticiones: tope de 60 min', () => {
+  const app = setup();
+  app.applyPlanChange(ask({ duracion_min: 500 }));
+  const d = nextWed(app);
+  assert.ok(d.runWalk && d.runWalk.reps * (d.runWalk.runSec + d.runWalk.walkSec) / 60 <= 61, JSON.stringify(d.runWalk));
 });

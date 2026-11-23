@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-22T22:41:18Z';
+const APP_VERSION = '2026-11-23T00:15:24Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -5831,6 +5831,11 @@ function beginnerPerSessionKm(p){
 function estimateBeginnerWeeklyKm(profile){
   const trainingDays = profile && profile.trainingDays;
   const days = (trainingDays && trainingDays.length) ? trainingDays.length : 3; // mismo default de 3 días que generatePlan
+  // Por distancia y en trote y caminata (semana 1): los km son los de los tramos, igual que arma generatePlan (ver runWalkDayKm).
+  if(profile && profile.trainBy !== 'time' && !hasRunningImpactBase(profile) && !(profile.levelTest && profile.levelTest.continuousOk)){
+    const stL = runWalkStageFor(1, true), stE = runWalkStageFor(1, false);
+    if(stL && stE) return Math.round((runWalkDayKm(stL, profile) + runWalkDayKm(stE, profile) * Math.max(0, days - 1)) * 10) / 10;
+  }
   const per = beginnerPerSessionKm(profile); // mismo valor que generatePlan en semana 1 (mult=1 siempre en la primera semana)
   const long = Math.round(per * BEGINNER_LONG_RATIO);
   const easy = Math.round(per * EASY_SESSION_RATIO);
@@ -8404,7 +8409,10 @@ function generatePlan(p, weekNumber, weekStartDate){
     // Principiante por DISTANCIA: las primeras semanas el rodaje también es trote/caminata (antes pedía correr 2 km seguidos desde el día 1). La distancia queda como referencia.
     if((typeKey==='easy' || typeKey==='long') && beginner && !hasRunningImpactBase(p) && !(p.levelTest && p.levelTest.continuousOk)){
       const st = runWalkStageFor(weekNumber, typeKey==='long');
-      if(st) dayObj.runWalk = {reps: st.reps, runSec: st.run, walkSec: st.walk};
+      if(st){
+        dayObj.runWalk = {reps: st.reps, runSec: st.run, walkSec: st.walk};
+        dayObj.dist = runWalkDayKm(st, p);   // los km reales de los tramos (antes decía 2.7 km y los tramos sumaban 2.0)
+      }
     }
     if(typeKey==='intervals' && !easyOnly){
       dayObj.interval = buildIntervalStructure(distMap[typeKey], caution, weekNumber);
@@ -8734,6 +8742,11 @@ function runWalkDescText(rw){
   const m = runWalkMetersFor(rw);
   if(m) return t('desc_runwalk_dist', {reps: rw.reps, run: m.runM + ' m', walk: m.walkM + ' m'});
   return t('desc_runwalk', {reps: rw.reps, run: fmtDurExact(rw.runSec), walk: fmtDurExact(rw.walkSec)});
+}
+// Km reales de un día de trote y caminata por DISTANCIA: lo que suman sus tramos (trote al ritmo base + caminata rápida a ~1,4 m/s), a 0,1 km. Es la distancia que muestra el plan y la que cuenta para marcar la sesión como hecha.
+function runWalkDayKm(st, profile){
+  const runM = repMetersFromMin(st.run / 60, profile), walkM = Math.max(50, Math.round(st.walk * 1.4 / 50) * 50);
+  return Math.max(0.5, Math.round(st.reps * (runM + walkM) / 100) / 10);
 }
 // Duración exacta para leer en pantalla (1 min 30 seg), a diferencia de fmtDurationShort que redondea a 15 seg.
 function fmtDurExact(sec){
@@ -9335,8 +9348,7 @@ function planLabelBody(d){
       body = `${d.desc}\n${t('desc_custom_reps_detail', {reps:d.interval.reps, work, rest, zone:d.zone})}`;
     }
     // Sesión de Zonda que conserva el trote y caminata del principiante: se agrega la estructura real a su texto libre (si no, el texto podía decir "ritmo cómodo de principio a fin" y contradecir la guía en vivo).
-    if(d.runWalk && d.runWalk.reps>0 && !d.interval) body = `${d.desc}
-${runWalkDescText(d.runWalk)}`;
+    if(d.runWalk && d.runWalk.reps>0 && !d.interval) body = runWalkDescText(d.runWalk);   // solo la estructura real: el texto libre de Zonda ("ritmo cómodo de principio a fin") contradecía los tramos
     return {type:d.type, desc:body};
   }
   const timeMode = isTimeMode();
@@ -10416,7 +10428,7 @@ function renderHome(){
     document.getElementById('home-session-done-sub').textContent = t('home_session_done_sub', {type: lbl.type});
     document.getElementById('home-done-dist').textContent = fmtDist(todayRun.distanceKm);
     document.getElementById('home-done-dist-label').textContent = distUnit();
-    document.getElementById('home-done-time').textContent = fmtTime(todayRun.durationSec);
+    document.getElementById('home-done-time').textContent = fmtRunClock(todayRun.durationSec);
     document.getElementById('home-done-pace').textContent = fmtPace(paceMin);
     document.getElementById('home-done-pace-label').textContent = t('run_pace_word') + ' /' + distUnit();   // con millas decia "/km" aunque el ritmo ya estuviera en min/mi
   } else {
@@ -10652,7 +10664,10 @@ function renderRunModeChoice(){
   // Si ya corrió hoy la sesión programada, el default pasa a "libre" (sigue pudiendo elegir
   // la programada de nuevo a mano si quiere repetirla) -- si todavía no corrió, el default
   // es la programada.
-  selectedRunMode = getTodayRun() ? 'free' : 'scheduled';
+  // Pedido del dueño 2026-11-22: con la sesión de hoy ya hecha, la tarjeta "Programado" desaparece y queda solo "Correr libre" (antes seguía ofreciendo la misma sesión).
+  const doneToday = !!getTodayRun();
+  document.getElementById('run-mode-scheduled').style.display = doneToday ? 'none' : '';
+  selectedRunMode = doneToday ? 'free' : 'scheduled';
   updateRunModeCardStyles();
 }
 function selectRunMode(mode){
@@ -15349,7 +15364,8 @@ function computeRunHighlight(run, history){
     const bestPrev = Math.min(...similar.map(r => r.durationSec / 60 / r.distanceKm));
     if(pace < bestPrev * 0.99) return {key:'hl_best_pace', vars:{d: fmtDist(d, 0), u, u2: u, p: fmtPace(pace)}};
   }
-  const splits = (run.splits || []).filter(s => s && s.paceMin > 0 && s.paceMin < 20 && Number.isInteger(parseFloat(s.km)));
+  // paceMin >= 2: por debajo de 2:00/km no es un ritmo humano sino un salto del GPS (un tramo de 0:01/km salía como "tu tramo más rápido").
+  const splits = (run.splits || []).filter(s => s && s.paceMin >= 2 && s.paceMin < 20 && Number.isInteger(parseFloat(s.km)));
   // 3) segunda mitad más rápida que la primera (negative split)
   if(splits.length >= 4){
     const mid = Math.floor(splits.length / 2);
@@ -16991,7 +17007,7 @@ function renderHistory(){
       <button class="tap-pad" data-on-click="shareWeeklyRecapImage()" style="background:none; border:1.5px solid var(--asphalt-4); color:var(--hivis-text); font-size:12px; cursor:pointer; padding:5px 9px; border-radius:6px; display:flex; align-items:center; gap:5px; font-weight:700; flex-shrink:0;">${t('hist_share')}</button>
     </div>
     <div class="stat-row-divided">
-      <div class="stat-cell"><div class="n">${fmtDist(tr.totalKm,0)}</div><div class="l">${t('hist_total_km')} (${distUnit()})</div></div>
+      <div class="stat-cell"><div class="n">${fmtDist(tr.totalKm, tr.totalKm < 100 ? 1 : 0)}</div><div class="l">${t('hist_total_km')} (${distUnit()})</div></div>
       <div class="stat-cell"><div class="n">${tr.totalRuns}</div><div class="l">${t('hist_total_runs')}</div></div>
     </div>
     ${(state.runs||[]).some(r=>r.source==='garmin') ? `<p class="muted garmin-derived" style="margin:10px 0 0; font-size:12px;">${t('garmin_derived_note')}</p>` : ''}
@@ -17045,7 +17061,7 @@ function renderHistory(){
     return `${monthHeader}<div class="swipe-item" data-swipe-id="${r.id}">
       <div class="swipe-action-delete" role="button" tabindex="0" aria-label="${t('aria_delete')}" data-on-click="deleteRun('${r.id}')"><span class="icon-sq" style="width:20px; height:20px;">${ICONS.trash}</span></div>
       <div class="card hist-card swipe-content" data-on-click="openRunDetail('${r.id}')" style="cursor:pointer;">
-        <div class="hist-top"><span class="hist-when"><span class="hist-day">${dateStr}</span>${(r.manual || sourceBadgeHtml(r.source, false, r)) ? `<span class="hist-date">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false, r)}</span>` : ''}</span><span class="hist-top-right"><span class="hist-time">${fmtTime(r.durationSec)}</span><button class="hist-share-btn" aria-label="${t('hist_share')}" title="${t('hist_share')}" data-on-click="event.stopPropagation(); shareRunImage('${r.id}')">${ICONS.share}</button></span></div>
+        <div class="hist-top"><span class="hist-when"><span class="hist-day">${dateStr}</span>${(r.manual || sourceBadgeHtml(r.source, false, r)) ? `<span class="hist-date">${r.manual? `<span class="tag tag-asfalto">${t('hist_manual_tag')}</span>`:''}${sourceBadgeHtml(r.source, false, r)}</span>` : ''}</span><span class="hist-top-right"><span class="hist-time">${fmtRunClock(r.durationSec)}</span><button class="hist-share-btn" aria-label="${t('hist_share')}" title="${t('hist_share')}" data-on-click="event.stopPropagation(); shareRunImage('${r.id}')">${ICONS.share}</button></span></div>
         ${hasMap ? `<div class="hist-map" data-run-id="${r.id}">${histMapInnerHtml(r, histMapCssWidth(), 108)}</div>` : ''}
         <div class="stat-row-divided">
           <div class="stat-cell"><div class="n">${fmtDist(r.distanceKm)}</div><div class="l">${distUnit()}</div></div>
@@ -17508,10 +17524,12 @@ async function restorePaywall(){
   finally{ paywallBusy = false; setPaywallBusy(false); }
 }
 document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ try{ checkPaywall(false); }catch(e){} } });
+// Ritmos de tramos sin los imposibles: por debajo de 2:00/km (o no numéricos) es un salto del GPS, no una marca humana ("Más rápido 0:01/km").
+function humanPaces(list){ return (list || []).filter(p => Number.isFinite(p) && p >= 2); }
 function renderRDRuta(panel){
   const {r, paceMin, cal} = rdCurrent;
   const timeStr = new Date(r.date).toLocaleTimeString(LOCALE_MAP[lang], {hour:'numeric', minute:'2-digit'});
-  const paces = fullSplitsOnly(getDisplaySplits(r)).map(s=>s.paceMin);
+  const paces = humanPaces(fullSplitsOnly(getDisplaySplits(r)).map(s=>s.paceMin));   // sin saltos de GPS (ritmos de menos de 2:00/km)
   const slowest = paces.length ? Math.max(...paces) : paceMin;
   const fastest = paces.length ? Math.min(...paces) : paceMin;
   panel.innerHTML = `
@@ -17540,7 +17558,7 @@ function renderRDRuta(panel){
         <div class="rd-legend-labels"><span>${t('rd_slowest')} ${fmtPace(slowest)}/${distUnit()}</span><span>${t('rd_fastest')} ${fmtPace(fastest)}/${distUnit()}</span></div>
       ` : ''}
       <div class="rd-stat-row">
-        <div><span class="mono">${fmtTime(r.durationSec)}</span><span class="muted" style="font-size:11px;">${t('run_time')}</span></div>
+        <div><span class="mono">${fmtRunClock(r.durationSec)}</span><span class="muted" style="font-size:11px;">${t('run_time')}</span></div>
         <div><span class="mono">${fmtPace(paceMin)}</span><span class="muted" style="font-size:11px;">${t('run_pace_word')}/${distUnit()}</span></div>
         <div><span class="mono">${cal}</span><span class="muted" style="font-size:11px;">${t('run_calories')}</span></div>
       </div>
@@ -17717,7 +17735,7 @@ function renderRDRitmo(panel){
   // izquierda tiene que reflejar eso, no asumir ciegamente distUnit().
   const unitLabel = displaySplitsAreMiles(r, splits) ? 'mi' : 'km';
   const splitPaces = splits.map(s=>s.paceMin).filter(p=>p>0);
-  const fullPaces = fullSplitsOnly(splits).map(s=>s.paceMin);
+  const fullPaces = humanPaces(fullSplitsOnly(splits).map(s=>s.paceMin));
   const fastest = fullPaces.length ? Math.min(...fullPaces) : paceMin;
   const maxPaceForBar = Math.max(...splitPaces, paceMin) * 1.02 || 1;
   const pacingAnalysis = analyzeSplitPacing(splits);
@@ -18170,7 +18188,7 @@ function renderRDDetalles(panel){
   const {r, paceMin, avgHr, cal} = rdCurrent;
   const speedKmh = r.durationSec>0 ? (r.distanceKm/(r.durationSec/3600)) : 0;
   const tiles = [];
-  tiles.push([t('run_time'), fmtTime(r.durationSec)]);
+  tiles.push([t('run_time'), fmtRunClock(r.durationSec)]);
   tiles.push([t('rd_calories_label'), cal+' kcal']);   // el valor ya dice "kcal": la etiqueta dice "Calorías (est.)" para no repetir la unidad
   tiles.push([`${t('run_pace_word')} /${distUnit()}`, fmtPace(paceMin)]);
   tiles.push([t('rd_avg_speed'), (isImperial()? (speedKmh*0.621371).toFixed(2)+' mph' : speedKmh.toFixed(2)+' km/h')]);
@@ -20421,8 +20439,10 @@ function beginnerRunWalkFor(input, weekNumber, wantedMin){
   const st = runWalkStageFor(weekNumber, input.tipo_categoria === 'long');
   if(!st) return null;
   const cycle = st.run + st.walk;
-  const reps = wantedMin > 0 ? Math.max(1, Math.round(wantedMin * 60 / cycle)) : st.reps;
-  return {reps, runSec: st.run, walkSec: st.walk, durMin: Math.round(reps * cycle / 60)};
+  // Tope de 60 min: un pedido absurdo (500 min) daba 125 repeticiones de trote y caminata; más de una hora de trote y caminata no es una sesión de principiante.
+  const reps = wantedMin > 0 ? Math.max(1, Math.round(Math.min(wantedMin, 60) * 60 / cycle)) : st.reps;
+  // km: por distancia, lo que suman los tramos (la distancia del día tiene que coincidir con ellos); por tiempo no se usa.
+  return {reps, runSec: st.run, walkSec: st.walk, durMin: Math.round(reps * cycle / 60), km: isTimeMode() ? null : runWalkDayKm({reps, run: st.run, walk: st.walk}, p)};
 }
 function applyPlanChange(input){
   // El input_schema de la herramienta declara dia como enum:DAY_KEYS, pero eso es solo una
@@ -20527,7 +20547,7 @@ function applyPlanChange(input){
     else if(effectiveDistKm !== null) override.durMin = undefined;
     {
       const rwNext = resolveCustomInterval(input) ? null : beginnerRunWalkFor(input, (state.weekNumber || 1) + 1, (typeof input.duracion_min === 'number' && input.duracion_min > 0) ? toolMainMinutes(input) : 0);
-      if(rwNext){ override.runWalk = {reps: rwNext.reps, runSec: rwNext.runSec, walkSec: rwNext.walkSec}; override.durMin = rwNext.durMin; }
+      if(rwNext){ override.runWalk = {reps: rwNext.reps, runSec: rwNext.runSec, walkSec: rwNext.walkSec}; override.durMin = rwNext.durMin; if(rwNext.km) override.dist = rwNext.km; }
       else override.runWalk = undefined;
     }
     const zone = resolveZone(input.zona);
@@ -20574,7 +20594,7 @@ function applyPlanChange(input){
   else if(effectiveDistKm !== null) delete d.durMin;
   {
     const rwNow = resolveCustomInterval(input) ? null : beginnerRunWalkFor(input, state.weekNumber || 1, (typeof input.duracion_min === 'number' && input.duracion_min > 0) ? toolMainMinutes(input) : 0);
-    if(rwNow){ d.runWalk = {reps: rwNow.reps, runSec: rwNow.runSec, walkSec: rwNow.walkSec}; d.durMin = rwNow.durMin; }
+    if(rwNow){ d.runWalk = {reps: rwNow.reps, runSec: rwNow.runSec, walkSec: rwNow.walkSec}; d.durMin = rwNow.durMin; if(rwNow.km) d.dist = rwNow.km; }
     else delete d.runWalk;
   }
   const zone = resolveZone(input.zona);
