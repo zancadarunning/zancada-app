@@ -44,3 +44,14 @@ test('el detalle de la carrera usa humanPaces para "más lento / más rápido"',
   assert.match(app, /const paces = humanPaces\(fullSplitsOnly\(getDisplaySplits\(r\)\)/);
   assert.match(app, /const fullPaces = humanPaces\(fullSplitsOnly\(splits\)/);
 });
+
+test('blindaje: un tiempo vacío o dañado se ve 00:00:00 y un trote y caminata dañado no muestra "NaN"', () => {
+  const a = loadApp(); a.setLangValue('es');
+  for (const v of [NaN, undefined, null, -5, Infinity]) assert.ok(!/NaN|undefined|Infinity/.test(a.fmtTime(v)), String(v));
+  assert.equal(a.fmtRunClock(NaN), '00:00');
+  a.state.profile = Object.assign(a.state.profile || {}, { trainBy: 'distance', units: 'metric', name: 'T', runnerType: 'new', weeklyKm: 0, currentWeeklyKm: 0 });
+  const body = a.planLabelBody({ day: 'wed', typeKey: 'easy', dist: 2, durMin: 20, beginner: true, runWalk: { reps: 5, runSec: null, walkSec: 120 } });
+  assert.ok(!/NaN|undefined/.test(body.desc), body.desc);
+  const pay = a.watchDayPayload({ day: 'wed', typeKey: 'easy', dist: 2, durMin: 20, beginner: true, runWalk: { reps: 5, runSec: null, walkSec: 120 } }, '2026-12-01');
+  assert.equal(pay.interval, null, 'sin bloques con datos dañados');
+});

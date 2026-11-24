@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-24T13:59:11Z';
+const APP_VERSION = '2026-11-24T14:15:21Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3031,7 +3031,7 @@ function watchDayPayload(d, date){
   }
   // Trote y caminata (principiante): al reloj va por BLOQUES, N repeticiones de trote + caminata, así el reloj avisa cuándo parar y cuándo seguir (mismo formato que el fartlek: bloques de tiempo,
   // que entienden los constructores de Garmin, COROS, Suunto y Wahoo). Por distancia también va en tiempo: es el aviso del reloj, que cuenta segundos de forma confiable.
-  if(!iv && d.runWalk && d.runWalk.reps > 0 && (d.typeKey === 'easy' || d.typeKey === 'long')){
+  if(!iv && d.runWalk && d.runWalk.reps > 0 && Number(d.runWalk.runSec) > 0 && Number(d.runWalk.walkSec) > 0 && (d.typeKey === 'easy' || d.typeKey === 'long')){
     const rw = d.runWalk;
     iv = { reps: rw.reps, workMin: rw.runSec / 60, restMin: rw.walkSec / 60, recoveryMin: rw.walkSec / 60 };
     repSecX = rw.runSec; recSecX = rw.walkSec;
@@ -8761,6 +8761,7 @@ function runWalkMetersFor(rw){
 }
 // Texto de los tramos para pantalla: en metros (por distancia) o en tiempo (por tiempo).
 function runWalkDescText(rw){
+  if(!rw || !(rw.reps > 0) || !(Number(rw.runSec) > 0) || !(Number(rw.walkSec) > 0)) return '';   // datos dañados: sin texto en vez de "NaN min"
   const m = runWalkMetersFor(rw);
   if(m) return t('desc_runwalk_dist', {reps: rw.reps, run: m.runM + ' m', walk: m.walkM + ' m'});
   return t('desc_runwalk', {reps: rw.reps, run: fmtDurExact(rw.runSec), walk: fmtDurExact(rw.walkSec)});
@@ -9371,7 +9372,7 @@ function planLabelBody(d){
       body = `${d.desc}\n${t('desc_custom_reps_detail', {reps:d.interval.reps, work, rest, zone:d.zone})}`;
     }
     // Sesión de Zonda que conserva el trote y caminata del principiante: se agrega la estructura real a su texto libre (si no, el texto podía decir "ritmo cómodo de principio a fin" y contradecir la guía en vivo).
-    if(d.runWalk && d.runWalk.reps>0 && !d.interval) body = runWalkDescText(d.runWalk);   // solo la estructura real: el texto libre de Zonda ("ritmo cómodo de principio a fin") contradecía los tramos
+    if(d.runWalk && d.runWalk.reps>0 && !d.interval) body = runWalkDescText(d.runWalk) || body;   // solo la estructura real: el texto libre de Zonda ("ritmo cómodo de principio a fin") contradecía los tramos
     return {type:d.type, desc:body};
   }
   const timeMode = isTimeMode();
@@ -9380,7 +9381,7 @@ function planLabelBody(d){
   const suf = d.beginner && (d.typeKey==='easy'||d.typeKey==='long'||d.typeKey==='rest') ? '_beginner' : '';
   let desc = t('desc_'+d.typeKey+suf);
   if(d.runWalk && d.runWalk.reps>0){
-    desc = runWalkDescText(d.runWalk);
+    desc = runWalkDescText(d.runWalk) || desc;
   } else if(d.typeKey==='intervals' && d.interval && d.interval.repSec>0 && nativeTime){
     desc = t('desc_intervals_time_native', {reps:d.interval.reps, dur:fmtDurExact(d.interval.repSec), rest:fmtDurExact(d.interval.recSec), zone:d.zone});
   } else if(d.typeKey==='hills' && d.interval && d.interval.repSec>0 && nativeTime){
@@ -14321,6 +14322,7 @@ function haversine(lat1,lon1,lat2,lon2){
   return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 function fmtTime(sec){
+  if(!Number.isFinite(sec) || sec < 0) sec = 0;   // un tiempo vacío o dañado se ve 00:00:00, no NaN:NaN:NaN
   const h=String(Math.floor(sec/3600)).padStart(2,'0'), m=String(Math.floor((sec%3600)/60)).padStart(2,'0'), s=String(Math.floor(sec%60)).padStart(2,'0');
   return `${h}:${m}:${s}`;
 }
