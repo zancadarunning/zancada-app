@@ -329,7 +329,8 @@
   #splash .word{font-size:64px; line-height:.9;}
   #splash .word span{color:var(--hivis-text);}
   #splash .tag{color:var(--mist); margin-top:10px; font-size:15px;}
-  #splash .pulse-strip{margin:28px 0; max-width:280px;}
+  /* La línea de pulso va de borde a borde de la pantalla: sale del margen interno de #splash (--splash-pad) en vez de quedar en una columna de 280px. */
+  #splash .pulse-strip{margin:28px calc(-1 * var(--splash-pad, 28px)); width:calc(100% + 2 * var(--splash-pad, 28px)); max-width:none;}
   /* Pantalla de inicio (#splash): marca arriba al centro y las formas de entrar pegadas abajo. Google/Apple son botones claros (el "chalk" del tema: claro en oscuro, tinta en claro), el correo es el borde. */
   .auth-actions{width:100%; max-width:340px; flex-shrink:0; display:flex; flex-direction:column; gap:10px; padding-bottom:max(26px, env(safe-area-inset-bottom));}
   .auth-actions .btn{min-height:52px; font-size:16px;}
@@ -349,9 +350,9 @@
      desktop) -- letra más chica, menos aire entre elementos -- para que entre más de un
      vistazo sin perder el mismo diseño ni layout. */
   @media (max-height:700px){
-    #splash{padding:20px 32px;}
+    #splash{padding:20px 32px; --splash-pad:32px;}
     #splash .word{font-size:44px;}
-    #splash .pulse-strip{margin:14px 0;}
+    #splash .pulse-strip{margin:14px calc(-1 * var(--splash-pad, 28px));}
     #splash .tag{margin-top:6px; font-size:14px;}
     #splash .splash-mid{padding-bottom:12px;}
     .auth-actions{gap:8px;}
