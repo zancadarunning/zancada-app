@@ -22,7 +22,6 @@
 //   SUPABASE_URL
 //   SUPABASE_SERVICE_KEY
 
-const { decToken } = require('./_lib/token-crypto');
 const { revokeStravaAccess } = require('./_lib/strava-revoke');
 const verifyUser = require('./_lib/verify-user');
 const { applyCors, isPreflight } = require('./_lib/cors');

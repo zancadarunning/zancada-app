@@ -634,11 +634,9 @@
     transition:background .13s ease, color .13s ease;}
   .plan-secondary-btn:active{background:var(--press); color:var(--chalk);}
   .btn-sm{padding:10px 16px; font-size:14px; width:auto;}
-  .btn-disabled{background:var(--asphalt-2); color:var(--mist-dim); border:1.5px solid var(--asphalt-4);
-    cursor:not-allowed; position:relative; margin-top:10px;}
-  .soon-tag{position:absolute; right:14px; top:50%; transform:translateY(-50%); font-size:9px;
-    text-transform:uppercase; letter-spacing:.05em; background:var(--asphalt-3); padding:3px 7px; border-radius:6px;}
-  .soon-note{font-size:12px; color:var(--mist-dim); text-align:center; margin-top:10px; line-height:1.5;}
+
+
+
   .err-text{color:var(--danger); font-size:13px; margin-top:8px; display:none;}
 
   /* isolation:isolate acá también -- ver el comentario junto a .idle-map-wrap. Subimos
@@ -762,13 +760,13 @@
   .zone-3{background:var(--zone3-bg); color:var(--zone3);}
   .zone-4{background:var(--zone4-bg); color:var(--zone4);}
   .zone-5{background:var(--zone5-bg); color:var(--zone5);}
-  .zone-badge-live{display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-radius:var(--radius-sm); margin-bottom:12px; background:var(--asphalt-2);}
-  .zone-badge-live.zone-1{background:var(--zone1-bg-live);}
-  .zone-badge-live.zone-2{background:var(--zone2-bg-live);}
-  .zone-badge-live.zone-3{background:var(--zone3-bg-live);}
-  .zone-badge-live.zone-4{background:var(--zone4-bg-live);}
-  .zone-badge-live.zone-5{background:var(--zone5-bg-live);}
-  .zone-badge-live .zn{font-size:19px; font-weight:800;}
+
+
+
+
+
+
+
 
   .greeting{font-size:25px; font-weight:600; margin:14px 0 4px; letter-spacing:-.01em;}
   .next-session{display:flex; justify-content:space-between; align-items:flex-start;}
@@ -951,8 +949,8 @@
   .week-days .wd-col.today .wd-bar{background:var(--hivis); box-shadow:0 0 3px var(--hivis-glow);}
   .week-days .wd-col:active .wd-bar{transform:scaleX(1.4);}
   .week-days .wd-col.today .wd-lbl{color:var(--chalk); font-weight:700;}
-  .coach-snippet{display:flex; gap:12px; align-items:flex-start;}
-  .coach-avatar{width:40px; height:40px; border-radius:var(--radius-sm); background:var(--hivis-dim); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+
+
 
   /* min-height + align-items:center -- sin esto, un día de descanso (una sola línea,
      "Descanso") queda visiblemente más bajo que un día con chip de zona (dos líneas),
@@ -1347,7 +1345,7 @@
   .pace-bar-fill{height:100%; border-radius:8px; display:flex; align-items:center; justify-content:flex-end; padding-right:8px; font-size:12px; font-weight:700; color:var(--ink); min-width:38px; filter:saturate(1.45) brightness(1.06);}
   .rd-stat-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px 12px;}
   .rd-stat-tile{display:flex; align-items:flex-start; gap:9px;}
-  .rd-stat-tile .rd-tile-ico{width:26px; height:26px; flex-shrink:0; margin-top:2px; color:var(--hivis-text);}
+
   .rd-stat-tile .rd-tile-val{font-size:17px; font-weight:800;}
   .rd-stat-tile .rd-tile-lbl{font-size:12px; color:var(--mist);}
   /* barra de arriba del detalle: volver a la izquierda, menú de tres puntos (editar / eliminar) a la derecha */
@@ -1530,18 +1528,9 @@
   .avatar-edit-badge{position:absolute; bottom:-4px; right:-4px; width:22px; height:22px; border-radius:50%; background:var(--hivis); color:var(--ink); display:flex; align-items:center; justify-content:center; border:2.5px solid var(--asphalt); pointer-events:none;}
   .pr-medal-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-top:4px;}
   .pr-medal{position:relative; display:flex; flex-direction:column; align-items:center; gap:5px; padding:14px 6px; border-radius:var(--radius-sm); background:var(--asphalt-3); text-align:center; transition:background .13s ease, transform .13s var(--ease-out);}
-  /* Ícono chico de compartir en la esquina de cada medalla ya ganada -- solo ahí, porque
-     compartir necesita una carrera real de referencia (km, tiempo, recorrido) que una
-     medalla todavía bloqueada no tiene. */
-  /* Reportado en una auditoría: 22x22px (la mitad del mínimo táctil recomendado de
-     ~40-44px) hacía fácil tocar la card entera en vez del botón. width/height a 40px con
-     más padding (el ícono en sí queda visualmente parecido a antes, ver svg más abajo)
-     agranda el área tocable sin que el ícono se vea gigante en una medalla chica. */
-  .pr-medal-share-btn{position:absolute; top:2px; right:2px; width:40px; height:40px; padding:11px;
-    border:none; border-radius:50%; background:rgba(0,0,0,.28); color:var(--hivis-text);
-    display:flex; align-items:center; justify-content:center; cursor:pointer; transition:transform .13s var(--ease-out), background .13s ease;}
-  .pr-medal-share-btn:active{transform:scale(.88); background:rgba(0,0,0,.4);}
-  .pr-medal-share-btn svg{width:100%; height:100%;}
+
+
+
   /* Una medalla ganada de verdad se siente distinta a una fila de datos: fondo tintado
      COMO YA ESTABA + el mismo glow que el sistema reserva para "esto está encendido"
      (botón primario, tab activo) -- el vitrina de trofeos no puede sentirse como
@@ -1562,10 +1551,10 @@
   .wearbar{height:6px; background:var(--asphalt-3); border-radius:999px; margin-top:6px; overflow:hidden;}
   .wearbar > div{height:100%; background:var(--hivis);}
   .wearbar.warn > div{background:var(--danger);}
-  .conn-item{display:flex; align-items:center; justify-content:space-between; padding:11px 0; border-bottom:1px solid var(--asphalt-3); transition:background .13s ease;}
-  .conn-item:active{background:var(--press);}
-  .conn-item:last-child{border-bottom:none;}
-  .conn-item .n{font-size:14px; font-weight:600;}
+
+
+
+
   .zone-row{display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--asphalt-3);}
   .zone-row:last-child{border-bottom:none;}
   .zone-row .zd{font-size:11px; color:var(--mist-dim); margin-top:2px;}
@@ -1809,15 +1798,7 @@
      el click tiene que seguir yendo al <button> de afuera, no perderse acá.*/
   .mascot-shade, .mascot-sheen{pointer-events:none;}
 
-  /* Grilla de accesos de Perfil: las 9 filas de navegación (Logros, Datos
-     personales, Objetivos, Días, Zonas, Molestias, Zapatillas, Evento, Idioma)
-     antes eran una lista vertical de una sola columna -- se escaneaban una por
-     una, scrolleando. Como grilla de 2 columnas se ven de un vistazo, más
-     parecido a cómo Strava/Nike Run Club presentan la configuración. Si el
-     total es impar, la última ficha ocupa el ancho completo en vez de quedar
-     sola y descentrada. */
-  .settings-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;}
-  .settings-grid .settile:last-child:nth-child(odd){grid-column:1 / -1;}
+
   .settile{margin-bottom:0; padding:16px 14px; text-align:left;}
   .settile .icon-sq{width:34px; height:34px; border-radius:50%; background:var(--asphalt-3);
     display:flex; align-items:center; justify-content:center; margin-bottom:10px;}
@@ -2034,11 +2015,9 @@
 
   .msg.typing{gap:0;} .msg.typing::before{margin-right:11px;} .msg.typing span{margin-right:5px;}
 
-  /* Logros: el botón de compartir mantiene su zona táctil de 40px pero el círculo visible es de 26px, así no se encima con la medalla. */
-  .pr-medal-share-btn{background:none !important; top:0; right:0;}
-  .pr-medal-share-btn::before{content:''; position:absolute; width:26px; height:26px; border-radius:50%; background:rgba(0,0,0,.28);}
-  .pr-medal-share-btn:active::before{background:rgba(0,0,0,.4);}
-  .pr-medal-share-btn svg{position:relative; width:18px; height:18px;}
+
+
+
 
   /* Botones de conectar relojes: mientras todavía no cargó su texto (se completa al consultar el estado), un relleno liso en vez de una píldora vacía. */
   .btn:empty{background:var(--asphalt-3); border-color:transparent; box-shadow:none; min-height:48px; pointer-events:none;}
@@ -2072,9 +2051,9 @@
   .pred-need{font-size:12px; color:var(--mist-dim); text-align:right;}
   .pred-note{margin:10px 0 0; font-size:12px; line-height:1.45;}
   #history-calib-card{border-color:var(--hivis);}
-  .hi-row{display:flex; align-items:center; justify-content:space-between; width:100%; min-height:62px; padding:0 18px; margin-bottom:10px; background:var(--asphalt-2); border:none; border-radius:var(--radius-sm); color:var(--chalk); cursor:pointer; font:inherit; transition:background .13s ease, transform .13s ease;}
-  .hi-row:active{background:var(--press); transform:scale(.985);}
-  .hi-row svg{color:var(--mist-dim); flex-shrink:0;}
+
+
+
 
   /* ===== Relojes y conectividad: cada marca es una fila-botón (como "Traé tu historial") que se despliega ===== */
   .conn-row, .conn-row-featured{padding:0; margin:0 0 10px; border-top:none; background:var(--asphalt-3); border-radius:var(--radius-sm); overflow:hidden;}
@@ -2207,15 +2186,15 @@
   .sum-pr .mdl-rib{fill:var(--hivis-text); fill-opacity:.5;} .sum-pr .mdl-rib.b{fill-opacity:.32;} .sum-pr .mdl-disc{fill:var(--hivis); stroke:none; stroke-dasharray:none;}
   .sum-pr .mdl-ring{stroke:var(--ink); stroke-opacity:.3; stroke-width:1.4;} .sum-pr .mdl-star{fill:var(--ink); fill-opacity:1;}
   .quote-card{position:relative; padding:18px 20px 18px 56px; background:var(--asphalt-2);}
-  .quote-mark{position:absolute; left:16px; top:10px; font-family:'Bebas Neue',sans-serif; font-size:68px; line-height:1; color:var(--hivis-text);}
+
   .quote-card p{margin:0; font-size:16px; line-height:1.5; font-weight:600; color:var(--chalk);}
   .coach-fab-wrap{--fab-size:60px;}
   .coach-head-avatar{width:52px; height:52px;}
 
   /* Frase del día: insignia con comillas dibujadas, centrada con el texto */
   .quote-card{display:flex; align-items:center; gap:14px; padding:16px 18px;}
-  .quote-card .quote-mark{position:static; flex:none; width:36px; height:36px; border-radius:50%; background:var(--hivis-dim); color:var(--hivis-text); display:flex; align-items:center; justify-content:center; font-size:0; line-height:0;}
-  .quote-card .quote-mark svg{width:26px; height:26px; fill:currentColor; display:block;}
+
+
 
   /* Frase del día: etiqueta chica en lima, sin comillas */
   .quote-card{display:block; padding:14px 18px 16px;}
@@ -2294,11 +2273,7 @@
   .rp-row b{flex:1; font-weight:700;} .rp-row .m{font-family:'JetBrains Mono',monospace; width:64px; text-align:right; color:var(--mist);} .rp-row .c{font-family:'JetBrains Mono',monospace; width:84px; text-align:right; font-weight:700; color:var(--hivis-text);}
   .rp-row.fin b,.rp-row.fin .m{color:var(--chalk);}
 
-  /* Saludo + clima en Inicio */
-  .wx-chip{display:inline-flex; align-items:center; gap:6px; background:var(--asphalt-2); border-radius:999px; padding:6px 12px; font-size:13px; font-weight:700; color:var(--chalk);}
 
-  /* Título de tarjeta con botón de información */
-  .pg-title-row{display:flex; align-items:center; justify-content:space-between; gap:10px;} .pg-title-row h3{margin:0;}
 
   /* Tarjetas desplegables del Historial */
   .fold-head{display:flex; align-items:center; gap:10px;} .fold-head .pred-head{flex:1; min-width:0; width:auto;}
