@@ -8,6 +8,7 @@ const { withinDailyCap } = require('./_lib/daily-cap');
 const { withSentry, reportError } = require('./_lib/sentry');
 const { safeConvert } = require('./_lib/safe-convert');
 const { knownRunIds } = require('./_lib/known-run-ids');
+const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 
 // Auditoría de costos: sin esto, alguien apretando "Sincronizar ahora" muy seguido (o un
 // script pegándole directo al endpoint) podía disparar muchos intentos por segundo -- el
@@ -40,7 +41,7 @@ module.exports = withSentry(async (req, res) => {
     let conn = conns[0];
 
     if (conn.expires_at < Math.floor(Date.now() / 1000)) {
-      const refreshRes = await fetch('https://www.strava.com/oauth/token', {
+      const refreshRes = await fetchWithTimeout('https://www.strava.com/oauth/token', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ client_id: process.env.STRAVA_CLIENT_ID, client_secret: process.env.STRAVA_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: decToken(conn.refresh_token) })
       });
@@ -55,7 +56,7 @@ module.exports = withSentry(async (req, res) => {
     }
 
     const after = Math.floor(Date.now() / 1000) - 24 * 3600;
-    const actsRes = await fetch(`https://www.strava.com/api/v3/athlete/activities?after=${after}&per_page=30`, {
+    const actsRes = await fetchWithTimeout(`https://www.strava.com/api/v3/athlete/activities?after=${after}&per_page=30`, {
       headers: { Authorization: `Bearer ${decToken(conn.access_token)}` }
     });
     // Mismo bug que ya se había arreglado en polar-sync-now.js/wahoo-sync-now.js: sin

@@ -6,6 +6,7 @@ const requireCronSecret = require('./_lib/require-cron-secret');
 // suscripción al webhook a voluntad. Ahora requiere el mismo secreto que el
 // resto de los endpoints de administración (por header Authorization).
 const { withSentry, reportError } = require('./_lib/sentry');
+const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 
 module.exports = withSentry(async (req, res) => {
   if (!(await requireCronSecret(req))) {
@@ -13,7 +14,7 @@ module.exports = withSentry(async (req, res) => {
   }
   try {
     const url = `https://www.strava.com/api/v3/push_subscriptions?client_id=${process.env.STRAVA_CLIENT_ID}&client_secret=${process.env.STRAVA_CLIENT_SECRET}`;
-    const response = await fetch(url);
+    const response = await fetchWithTimeout(url);
     const data = await response.json();
     res.status(200).json(data);
   } catch (err) {

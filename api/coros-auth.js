@@ -43,6 +43,7 @@ const { withSentry, reportError } = require('./_lib/sentry');
 const { withOAuthLink } = require('./_lib/oauth-link');
 const { safeConvertSync } = require('./_lib/safe-convert');
 const { knownRunIds } = require('./_lib/known-run-ids');
+const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 
 // Ver el comentario igual a este en strava-auth.js: antes cada rama de error de acá abajo
 // dejaba al usuario en una página muerta (texto plano o el JSON crudo del proveedor) sin
@@ -63,7 +64,7 @@ const linkAccount = async (req, res) => {
   const { userId, codeVerifier } = verified;
 
   try {
-    const tokenRes = await fetch(`https://${REGION_HOST}/oauth2/token`, {
+    const tokenRes = await fetchWithTimeout(`https://${REGION_HOST}/oauth2/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({

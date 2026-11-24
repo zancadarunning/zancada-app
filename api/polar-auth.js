@@ -41,6 +41,7 @@ const { withSentry, reportError } = require('./_lib/sentry');
 const { withOAuthLink } = require('./_lib/oauth-link');
 const { safeConvert } = require('./_lib/safe-convert');
 const { knownRunIds } = require('./_lib/known-run-ids');
+const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 
 // Ver el comentario igual a este en strava-auth.js: antes cada rama de error de acá abajo
 // dejaba al usuario en una página muerta (texto plano o el JSON crudo del proveedor) sin
@@ -62,7 +63,7 @@ const linkAccount = async (req, res) => {
 
   try {
     const basicAuth = Buffer.from(`${process.env.POLAR_CLIENT_ID}:${process.env.POLAR_CLIENT_SECRET}`).toString('base64');
-    const tokenRes = await fetch('https://polarremote.com/v2/oauth2/token', {
+    const tokenRes = await fetchWithTimeout('https://polarremote.com/v2/oauth2/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -78,7 +79,7 @@ const linkAccount = async (req, res) => {
 
     // Registrar al usuario contra nuestra app -- 409 (ya registrado) no es un
     // error, todo lo demás que no sea 2xx sí lo es.
-    const registerRes = await fetch('https://www.polaraccesslink.com/v3/users', {
+    const registerRes = await fetchWithTimeout('https://www.polaraccesslink.com/v3/users', {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ 'member-id': userId })
@@ -100,7 +101,7 @@ const linkAccount = async (req, res) => {
 
     // Traer ejercicios de los últimos 30 días como punto de partida (es lo
     // máximo que devuelve /v3/exercises sin transacción -- ver swagger).
-    const exsRes = await fetch('https://www.polaraccesslink.com/v3/exercises', {
+    const exsRes = await fetchWithTimeout('https://www.polaraccesslink.com/v3/exercises', {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
     const exsData = await exsRes.json();
