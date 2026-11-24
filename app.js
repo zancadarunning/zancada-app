@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-24T15:23:03Z';
+const APP_VERSION = '2026-11-24T16:17:37Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2162,6 +2162,8 @@ function translateAuthError(error){
   // generic_error en vez de mostrar el string de Supabase tal cual.
   if(msg.includes('Email not confirmed')) return t('login_check_email');
   if(/captcha/i.test(msg)) return t('captcha_failed');
+  // Supabase corta con 429 ("email rate limit exceeded", "you can only request this after N seconds"): se le dice que espere, no un "algo salió mal" que invita a reintentar enseguida.
+  if((error && error.status === 429) || /rate limit|too many|only request this after|security purposes/i.test(msg)) return t('auth_rate_limited');
   return msg ? t('generic_error') : t('login_err');
 }
 function togglePasswordVisibility(inputId, btn){

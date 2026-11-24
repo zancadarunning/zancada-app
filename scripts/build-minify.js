@@ -18,7 +18,8 @@ const esbuild = require('esbuild');
 
 const ROOT = path.join(__dirname, '..');
 const inplace = process.argv.includes('--inplace');
-const outDir = inplace ? ROOT : path.join(ROOT, '.build');
+// ZANCADA_BUILD_DIR: carpeta de salida alternativa (solo para pruebas). test/build-minify.test.js la usa para no reescribir .build/app.js mientras otros tests lo cargan en paralelo (CI los corre con ZANCADA_APP_JS=.build/app.js).
+const outDir = inplace ? ROOT : (process.env.ZANCADA_BUILD_DIR || path.join(ROOT, '.build'));
 const TARGET = 'es2020';   // iPhone con iOS 13.4+, Chrome/WebView 80+: el piso que ya exige la app (usa ?. y ??); esbuild no sube la sintaxis por encima
 
 function minify(code, name) {
