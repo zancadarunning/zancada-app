@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-24T14:58:39Z';
+const APP_VERSION = '2026-11-24T15:23:03Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -926,7 +926,7 @@ function normalizeLoadedState(s){
     ? s.planHistory.filter(w => w && typeof w === 'object' && typeof w.weekStart === 'string' && Array.isArray(w.plan)).map(w => Object.assign({}, w, {plan: w.plan.filter(x => x && typeof x === 'object')}))
     : [];
   // Carreras: distancia y duración siempre son números (la base permite null; un null o un texto rompía toFixed en el historial y en el contexto de Zonda).
-  s.runs.forEach(r => { if(r.distanceKm !== undefined && !Number.isFinite(r.distanceKm)) r.distanceKm = 0; if(r.durationSec !== undefined && !Number.isFinite(r.durationSec)) r.durationSec = 0; });
+  s.runs.forEach(r => { if(!Number.isFinite(r.distanceKm)) r.distanceKm = 0; if(!Number.isFinite(r.durationSec)) r.durationSec = 0; });
   s.shoes.forEach(sh => { if(!Number.isFinite(sh.km)) sh.km = 0; });
   // Zonas de pulso: o están completas (1 a 5, con mínimo y máximo numéricos) o se descartan y la app trabaja sin zonas, como antes de cargarlas.
   const z = s.profile.hrZones;
@@ -7571,6 +7571,8 @@ function checkPlanAlgoVersion(){
 }
 function checkWeekRollover(){
   if(!state.onboarded) return;
+  // Cuenta ya configurada pero sin plan (guardado cortado o dato dañado): Inicio, Plan y Correr dependen del plan de hoy y se rompían. Se arma el de esta semana.
+  if(!state.plan.length && state.profile && Object.keys(state.profile).length){ try{ state.plan = generatePlan(state.profile, state.weekNumber || 1); }catch(e){ console.error(e); } }
   // Cronograma al día ANTES de armar la semana nueva (más abajo): así generatePlan ya lo ve.
   refreshPhaseSchedule();
   const currentMonday = getMondayISO(new Date());
