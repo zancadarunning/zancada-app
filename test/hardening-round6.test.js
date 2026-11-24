@@ -133,7 +133,7 @@ test('normalizeLoadedState: fuerza la forma minima y descarta entradas que no so
   const bad = app.normalizeLoadedState({ profile: null, plan: 'x', runs: [null, 5, { id: 1 }], shoes: {}, chat: [{ role: 'user' }, 'texto'], lang: 7 });
   assert.deepEqual(JSON.parse(JSON.stringify(bad.profile)), {});
   assert.deepEqual(JSON.parse(JSON.stringify(bad.plan)), []);
-  assert.deepEqual(JSON.parse(JSON.stringify(bad.runs)), [{ id: 1 }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(bad.runs)), [{ id: 1, distanceKm: 0, durationSec: 0 }]);   // sin distancia o duración queda en 0 (si no, el Historial lanzaba)
   assert.deepEqual(JSON.parse(JSON.stringify(bad.shoes)), []);
   assert.deepEqual(JSON.parse(JSON.stringify(bad.chat)), [{ role: 'user' }]);
   assert.equal(typeof bad.lang, 'string');
