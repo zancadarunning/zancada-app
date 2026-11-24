@@ -6,6 +6,7 @@
 
 // rows: filas de push_subscriptions (de cualquier cantidad de usuarios). Devuelve { [user_id]: { devices: [{ subscription, platform, device_id }] } }
 // sin repetir el mismo destino (mismo endpoint o mismo token): las filas "legacy" de antes de la migración suelen duplicar al dispositivo que ya se registró de nuevo.
+const { fetchWithTimeout } = require('./fetch-with-timeout');
 function groupByUser(rows) {
   const out = {};
   const seen = new Set();
@@ -27,7 +28,7 @@ function groupByUser(rows) {
 async function deleteDevice(base, headers, userId, deviceId) {
   let url = base + '/rest/v1/push_subscriptions?user_id=eq.' + encodeURIComponent(userId);
   if (deviceId) url += '&device_id=eq.' + encodeURIComponent(deviceId);
-  try { await fetch(url, { method: 'DELETE', headers }); } catch (e) { /* si falla, el próximo envío lo vuelve a intentar */ }
+  try { await fetchWithTimeout(url, { method: 'DELETE', headers }); } catch (e) { /* si falla, el próximo envío lo vuelve a intentar */ }
 }
 
 module.exports = { groupByUser, deleteDevice };

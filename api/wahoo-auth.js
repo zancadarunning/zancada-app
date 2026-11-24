@@ -31,6 +31,7 @@ const { withSentry, reportError } = require('./_lib/sentry');
 const { withOAuthLink } = require('./_lib/oauth-link');
 const { safeConvert } = require('./_lib/safe-convert');
 const { knownRunIds } = require('./_lib/known-run-ids');
+const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 
 // Ver el comentario igual a este en strava-auth.js: antes cada rama de error de acá abajo
 // dejaba al usuario en una página muerta (texto plano o el JSON crudo del proveedor) sin
@@ -50,7 +51,7 @@ const linkAccount = async (req, res) => {
   if (!userId) { failGracefully(res, 'state inválido o vencido'); return; }
 
   try {
-    const tokenRes = await fetch('https://api.wahooligan.com/oauth/token', {
+    const tokenRes = await fetchWithTimeout('https://api.wahooligan.com/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -85,7 +86,7 @@ const linkAccount = async (req, res) => {
     // Traer los workouts recientes como punto de partida (paginado -- pedimos
     // los últimos 30, alcanza para "los últimos 30 días" como en Strava/Polar
     // salvo que el usuario entrene más de una vez por día seguido).
-    const wRes = await fetch('https://api.wahooligan.com/v1/workouts?page=1&per_page=30', {
+    const wRes = await fetchWithTimeout('https://api.wahooligan.com/v1/workouts?page=1&per_page=30', {
       headers: { Authorization: `Bearer ${tokenData.access_token}` }
     });
     const wData = await wRes.json();

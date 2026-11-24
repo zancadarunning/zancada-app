@@ -14,6 +14,7 @@ const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 const { withSentry, reportError } = require('./_lib/sentry');
 const { safeConvert } = require('./_lib/safe-convert');
 const { knownRunIds } = require('./_lib/known-run-ids');
+const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 
 // Auditoría de costos: ver el mismo comentario en strava-sync-now.js.
 const SYNC_COOLDOWN_MS = 20000;
@@ -48,7 +49,7 @@ module.exports = withSentry(async (req, res) => {
       conn.access_token = refreshed.accessToken;
     }
 
-    const wRes = await fetch('https://api.wahooligan.com/v1/workouts?page=1&per_page=10', {
+    const wRes = await fetchWithTimeout('https://api.wahooligan.com/v1/workouts?page=1&per_page=10', {
       headers: { Authorization: `Bearer ${decToken(conn.access_token)}` }
     });
     if (!wRes.ok) {

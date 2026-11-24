@@ -16,6 +16,7 @@ const { applyCors, isPreflight } = require('./_lib/cors');
 const { withSentry, reportError } = require('./_lib/sentry');
 const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 const { withinDailyCap } = require('./_lib/daily-cap');
+const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 
 // Un mensaje por minuto y por usuario: cada uno manda un email real.
 const FEEDBACK_COOLDOWN_MS = 30 * 60 * 1000;   // 48 por dia como maximo por cuenta (antes 1 por minuto = 1.440): una sola cuenta no puede agotar los mails de la app
@@ -67,7 +68,7 @@ module.exports = withSentry(async (req, res) => {
   }
 
   try {
-    const resendRes = await fetch('https://api.resend.com/emails', {
+    const resendRes = await fetchWithTimeout('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({

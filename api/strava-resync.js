@@ -3,6 +3,7 @@ const requireCronSecret = require('./_lib/require-cron-secret');
 const { decodePolyline, fetchStreams, mergeStravaRuns } = require('./_lib/strava-activity-helpers');
 
 const { withSentry, reportError } = require('./_lib/sentry');
+const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 
 module.exports = withSentry(async (req, res) => {
   // Antes este secreto se mandaba por query string (?secret=...), lo que lo
@@ -26,7 +27,7 @@ module.exports = withSentry(async (req, res) => {
       try {
         let accessToken = decToken(conn.access_token);
         if (conn.expires_at < Math.floor(Date.now() / 1000)) {
-          const refreshRes = await fetch('https://www.strava.com/oauth/token', {
+          const refreshRes = await fetchWithTimeout('https://www.strava.com/oauth/token', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ client_id: process.env.STRAVA_CLIENT_ID, client_secret: process.env.STRAVA_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: decToken(conn.refresh_token) })
           });
@@ -48,7 +49,7 @@ module.exports = withSentry(async (req, res) => {
           if (hasBasics && hasCurrentSplits) continue; // ya tiene todo, con la versión más nueva de parciales
 
           if (!hasBasics) {
-            const actRes = await fetch(`https://www.strava.com/api/v3/activities/${run.stravaId}`, {
+            const actRes = await fetchWithTimeout(`https://www.strava.com/api/v3/activities/${run.stravaId}`, {
               headers: { Authorization: `Bearer ${accessToken}` }
             });
             const act = await actRes.json();

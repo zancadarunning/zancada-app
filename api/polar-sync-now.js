@@ -14,6 +14,7 @@ const { checkSyncCooldown } = require('./_lib/sync-cooldown');
 const { withSentry, reportError } = require('./_lib/sentry');
 const { safeConvert } = require('./_lib/safe-convert');
 const { knownRunIds } = require('./_lib/known-run-ids');
+const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 
 // Auditoría de costos: ver el mismo comentario en strava-sync-now.js.
 const SYNC_COOLDOWN_MS = 20000;
@@ -45,7 +46,7 @@ module.exports = withSentry(async (req, res) => {
     // usuario quedó registrado contra nuestra app (ver polar-auth.js). Un
     // ejercicio cargado antes de conectar nunca va a aparecer acá, ni ahora
     // ni en ningún sync futuro.
-    const exsRes = await fetch('https://www.polaraccesslink.com/v3/exercises', {
+    const exsRes = await fetchWithTimeout('https://www.polaraccesslink.com/v3/exercises', {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
     const exsData = await exsRes.json().catch(() => null);

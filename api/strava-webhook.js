@@ -2,6 +2,7 @@ const { decToken, encToken } = require('./_lib/token-crypto');
 const crypto = require('crypto');
 const { pick } = require('./_lib/own');
 const { activityToRun, mergeStravaRuns, purgeStravaRunsForUser, deleteStravaRun } = require('./_lib/strava-activity-helpers');
+const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 
 // Comparación en tiempo constante (se hashea para que el largo no se filtre).
 function safeEqual(a, b) {
@@ -16,7 +17,7 @@ function safeEqual(a, b) {
 //  - "se borró la actividad": solo es cierto si Strava responde 404 para esa actividad.
 // Ante cualquier duda (error de red, 5xx, rate limit) no se borra nada: el cron de sincronización corrige después.
 async function stravaRefresh(conn) {
-  const r = await fetch('https://www.strava.com/oauth/token', {
+  const r = await fetchWithTimeout('https://www.strava.com/oauth/token', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ client_id: process.env.STRAVA_CLIENT_ID, client_secret: process.env.STRAVA_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: decToken(conn.refresh_token) })
   });
@@ -53,7 +54,7 @@ async function syncActivity(athleteId, activityId) {
   let conn = conns[0];
 
   if (conn.expires_at < Math.floor(Date.now() / 1000)) {
-    const refreshRes = await fetch('https://www.strava.com/oauth/token', {
+    const refreshRes = await fetchWithTimeout('https://www.strava.com/oauth/token', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ client_id: process.env.STRAVA_CLIENT_ID, client_secret: process.env.STRAVA_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: decToken(conn.refresh_token) })
     });
@@ -67,7 +68,7 @@ async function syncActivity(athleteId, activityId) {
     }
   }
 
-  const actRes = await fetch(`https://www.strava.com/api/v3/activities/${activityId}`, {
+  const actRes = await fetchWithTimeout(`https://www.strava.com/api/v3/activities/${activityId}`, {
     headers: { Authorization: `Bearer ${decToken(conn.access_token)}` }
   });
   const act = await actRes.json();
@@ -131,7 +132,7 @@ async function deleteActivity(athleteId, activityId) {
     if (!rf.ok) return;
     token = rf.data.access_token;
   }
-  const check = await fetch(`https://www.strava.com/api/v3/activities/${encodeURIComponent(activityId)}`, { headers: { Authorization: `Bearer ${token}` } });
+  const check = await fetchWithTimeout(`https://www.strava.com/api/v3/activities/${encodeURIComponent(activityId)}`, { headers: { Authorization: `Bearer ${token}` } });
   if (check.status !== 404) return;   // sigue existiendo (o no se pudo comprobar): no se borra
 
   await deleteStravaRun(base, headers, conn.user_id, activityId);

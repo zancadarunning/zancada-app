@@ -4,6 +4,7 @@
 // venció, deauthorize falla y la autorización quedaba activa del lado de Strava aunque nosotros borráramos la conexión. Por eso se renueva antes y se revisa
 // la respuesta. Devuelve true si Strava confirmó la revocación (o si ya no había nada que revocar: 401 = el permiso ya no existe).
 const { decToken } = require('./token-crypto');
+const { fetchWithTimeout } = require('./fetch-with-timeout');
 
 async function revokeStravaAccess(conn) {
   if (!conn) return true;
@@ -13,7 +14,7 @@ async function revokeStravaAccess(conn) {
   const refreshTok = decToken(conn.refresh_token || '') || null;
   if (refreshTok && exp < Math.floor(Date.now() / 1000) + 120) {
     try {
-      const r = await fetch('https://www.strava.com/oauth/token', {
+      const r = await fetchWithTimeout('https://www.strava.com/oauth/token', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ client_id: process.env.STRAVA_CLIENT_ID, client_secret: process.env.STRAVA_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: refreshTok })
       });
@@ -23,7 +24,7 @@ async function revokeStravaAccess(conn) {
     } catch (e) { /* se intenta con el token que haya */ }
   }
   try {
-    const res = await fetch('https://www.strava.com/oauth/deauthorize?access_token=' + encodeURIComponent(token), { method: 'POST' });
+    const res = await fetchWithTimeout('https://www.strava.com/oauth/deauthorize?access_token=' + encodeURIComponent(token), { method: 'POST' });
     if (res.ok || res.status === 401) return true;
     console.error('strava revoke: Strava respondió', res.status);
     return false;

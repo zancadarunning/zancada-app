@@ -16,6 +16,7 @@ const { applyCors, isPreflight } = require('./_lib/cors');
 const { purgePolarRunsForUser } = require('./_lib/polar-activity-helpers');
 
 const { withSentry, reportError } = require('./_lib/sentry');
+const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 
 module.exports = withSentry(async (req, res) => {
   applyCors(req, res);
@@ -37,7 +38,7 @@ module.exports = withSentry(async (req, res) => {
       const connRows = await connRes.json();
       const conn = connRows && connRows[0];
       if (conn && decToken(conn.access_token)) {
-        await fetch(`https://www.polaraccesslink.com/v3/users/${conn.polar_user_id}`, {
+        await fetchWithTimeout(`https://www.polaraccesslink.com/v3/users/${conn.polar_user_id}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${decToken(conn.access_token)}` }
         });

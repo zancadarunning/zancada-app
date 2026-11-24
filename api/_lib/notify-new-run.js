@@ -16,6 +16,7 @@ const pushDevices = require('./push-devices');
 const { isTrustedPushEndpoint } = require('./push-endpoint');
 const { pick } = require('./own');
 const { localDateKey, dayNum } = require('./weekly-summary');
+const { fetchWithTimeout } = require('./fetch-with-timeout');
 
 const BRANDS = { suunto: 'Suunto', wahoo: 'Wahoo', coros: 'COROS', polar: 'Polar', huawei: 'Huawei', strava: 'Strava', garmin: 'Garmin' };
 const MAX_AGE_MS = 36 * 3600 * 1000;   // solo entrenos recientes: un reenvío o un relleno de historial viejo no avisa
@@ -120,7 +121,7 @@ function planFor(run, plan, weekStart, tz, timeMode, raceDates) {
 async function runExists(base, headers, userId, runId) {
   // (URL armada por concatenación: el filtro ya va escapado con encodeURIComponent)
   const filter = encodeURIComponent(JSON.stringify({ runs: [{ id: runId }] }));
-  const res = await fetch(base + '/rest/v1/app_state?user_id=eq.' + encodeURIComponent(userId) + '&data=cs.' + filter + '&select=user_id', { headers });
+  const res = await fetchWithTimeout(base + '/rest/v1/app_state?user_id=eq.' + encodeURIComponent(userId) + '&data=cs.' + filter + '&select=user_id', { headers });
   if (!res.ok) throw new Error('exists check failed ' + res.status);
   const rows = await res.json();
   return Array.isArray(rows) && rows.length > 0;

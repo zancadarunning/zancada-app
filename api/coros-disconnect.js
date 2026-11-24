@@ -12,6 +12,7 @@ const { purgeCorosRunsForUser } = require('./_lib/coros-activity-helpers');
 const REGION_HOST = 'mcpus.coros.com'; // ver el comentario sobre región en coros-auth.js
 
 const { withSentry, reportError } = require('./_lib/sentry');
+const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 
 module.exports = withSentry(async (req, res) => {
   applyCors(req, res);
@@ -33,7 +34,7 @@ module.exports = withSentry(async (req, res) => {
       const connRows = await connRes.json();
       const accessToken = connRows && connRows[0] && decToken(connRows[0].access_token);
       if (accessToken) {
-        await fetch(`https://${REGION_HOST}/oauth2/revoke`, {
+        await fetchWithTimeout(`https://${REGION_HOST}/oauth2/revoke`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({ token: accessToken, client_id: process.env.COROS_CLIENT_ID })
