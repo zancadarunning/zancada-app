@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-24T12:48:16Z';
+const APP_VERSION = '2026-11-24T13:59:11Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -2827,6 +2827,15 @@ async function finishPendingProviderLink(){
       const handle = (url) => { if(typeof url === 'string' && url.indexOf('https://www.zancada.org/auth/app') === 0){ finishGoogleAppReturn(url); return; } const l = parseLinkReturn(url || ''); if(l){ stashLinkReturn(l); if(typeof currentUserId !== 'undefined' && currentUserId) finishPendingProviderLink(); } };
       AppPlugin.addListener('appUrlOpen', ev => handle(ev && ev.url));
       AppPlugin.getLaunchUrl().then(r => handle(r && r.url)).catch(()=>{});
+      // Botón atrás de Android: en pleno ejercicio NO cierra la app (se perdería la carrera en curso, y con la barra de abajo escondida es lo primero que se toca para "salir"): la manda a segundo plano y la carrera sigue.
+      // Fuera de un ejercicio hace lo mismo que Capacitor por defecto: volver en el historial (cierra overlays, ver popstate más arriba) o cerrar la app.
+      AppPlugin.addListener('backButton', ev => {
+        let exercising = false;
+        try{ exercising = document.body.classList.contains('exercising'); }catch(e){}
+        if(exercising){ if(typeof AppPlugin.minimizeApp === 'function') AppPlugin.minimizeApp(); return; }
+        if(ev && ev.canGoBack) window.history.back();
+        else if(typeof AppPlugin.exitApp === 'function') AppPlugin.exitApp();
+      });
     }
   }catch(e){}
 })();
