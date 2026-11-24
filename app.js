@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-24T14:15:21Z';
+const APP_VERSION = '2026-11-24T14:58:39Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -266,7 +266,6 @@ const ICONS = {
   bulb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.45 1 1.2 1 2.1h5c0-.9.4-1.65 1-2.1A6 6 0 0 0 12 3z"/></svg>',
   coach: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5.5h16v11H8l-4 4v-4H4z"/></svg>',
   refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>',
-  send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>',
   faceBad: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M8.5 15.5c1-1.3 2.2-2 3.5-2s2.5.7 3.5 2"/><circle cx="9" cy="9.5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="9.5" r="1" fill="currentColor" stroke="none"/></svg>',
   faceGood: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M8 14c1.2 1.3 2.6 2 4 2s2.8-.7 4-2"/><circle cx="9" cy="9.5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="9.5" r="1" fill="currentColor" stroke="none"/></svg>',
   faceGreat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M7.5 13.5c1.4 2 2.9 3 4.5 3s3.1-1 4.5-3"/><path d="M7.7 9.2a2 2 0 0 1 2.6 0M13.7 9.2a2 2 0 0 1 2.6 0"/></svg>',
@@ -286,7 +285,6 @@ const ICONS = {
   // Mismo ícono que usa el tab "Plan" de la tabbar (index.html) -- lo reusamos acá para
   // que "agregar al calendario" se lea visualmente como la misma acción en toda la app.
   flame: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c.6 3.2 4.5 5 4.5 9.6A4.5 4.5 0 0 1 12 17a4.5 4.5 0 0 1-4.5-4.4c0-1.6.7-2.7 1.5-3.6.3 1 .9 1.6 1.7 1.8C10.4 8.2 10.8 5.2 12 3z"/><path d="M12 21a3 3 0 0 0 3-3"/></svg>',
-  pause: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5v14M15 5v14"/></svg>',
   wxClear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></svg>',
   wxPartly: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.5" cy="8.5" r="2.8"/><path d="M8.5 3v1.2M3 8.5h1.2M4.6 4.6l.9.9M12.4 4.6l-.9.9"/><path d="M8.5 19h8.8a3.6 3.6 0 0 0 .4-7.2A5 5 0 0 0 8 13a3 3 0 0 0 .5 6z"/></svg>',
   wxCloud: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h10.5a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.4 10.6 3.8 3.8 0 0 0 7 18z"/></svg>',
@@ -999,7 +997,6 @@ function parseDistInput(val){
   return isImperial() ? n * KM_PER_MI : n;
 }
 function fmtWeight(kg){ return Math.round(isImperial() ? kg * LB_PER_KG : kg); }
-function weightUnit(){ return isImperial() ? 'lb' : 'kg'; }
 // 25-250kg: generoso a propósito (cubre desde un chico chiquito hasta un físico grandote de
 // verdad), pero rechaza los típos obvios (ej. "5" en vez de "50", o un "900" con un cero de
 // más) que antes pasaban derecho con solo el chequeo de ">0" -- guardando un peso imposible
@@ -1015,7 +1012,6 @@ function parseWeightInput(val){
 // más de ~1 pulgada de precisión al redondear) cuando el corredor eligió sistema imperial.
 // Pedido del usuario: la altura mostraba "cm" fijo aunque estuviera en modo imperial.
 function fmtHeight(cm){ return isImperial() ? (cm*FT_PER_CM).toFixed(1) : Math.round(cm); }
-function heightUnit(){ return isImperial() ? 'ft' : 'cm'; }
 // 100-230cm: mismo criterio que parseWeightInput -- generoso para no rechazar a nadie real,
 // pero rechaza un típo obvio (ej. "10" en vez de "170").
 function parseHeightInput(val){
@@ -1079,7 +1075,6 @@ const LAST_EMAIL_KEY = 'zancada_last_email';
 function rememberLastEmail(email){
   try{ if(getRememberMe() && email) localStorage.setItem(LAST_EMAIL_KEY, String(email).slice(0, 200)); else localStorage.removeItem(LAST_EMAIL_KEY); }catch(e){}
 }
-function clearLastEmail(){ try{ localStorage.removeItem(LAST_EMAIL_KEY); }catch(e){} }
 function prefillLoginEmail(){
   try{
     const el = document.getElementById('login-email');
@@ -2200,12 +2195,6 @@ function goLogin(){ document.getElementById('splash').style.display='none'; docu
 function goBackToStart(){ document.getElementById('login').style.display='none'; document.getElementById('splash').style.display=''; }
 function goSignup(){ document.getElementById('login').style.display='none'; document.getElementById('signup').style.display='block'; prefetchCaptcha('captcha-signup'); }
 function goBackToLogin(){ document.getElementById('signup').style.display='none'; document.getElementById('login').style.display='block'; prefillLoginEmail(); prefetchCaptcha('captcha-login'); }
-function goToLoginFromSignup(){
-  // Le pasamos el email ya tipeado a la pantalla de login para que no tenga que
-  // volver a escribirlo -- viene del cartel de "ya existe una cuenta con ese email".
-  document.getElementById('login-email').value = document.getElementById('signup-email').value;
-  goBackToLogin();
-}
 const GOOGLE_APP_RETURN = 'https://www.zancada.org/auth/app';
 // Vuelta de Google a la app (App Link): termina el inicio de sesión con el código (flujo PKCE: el verificador quedó guardado en la app al empezar). Devuelve true si la URL era esta vuelta.
 async function finishGoogleAppReturn(url){
@@ -2888,7 +2877,7 @@ async function updateSuuntoStatusDisplay(){
   const btn = document.getElementById('suunto-connect-btn');
   if(!el || !currentUserId) return;
   try{
-    const { data, error: suuntoErr } = await supabaseClient.from('suunto_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
+    const { data } = await supabaseClient.from('suunto_connections').select('user_id').eq('user_id', currentUserId).maybeSingle();
     // La verdad la dice el SERVIDOR (api/suunto-status.js). La consulta directa de arriba devolvió
     // vacía SIN error en el iPhone aunque la cuenta estaba conectada (encontrado con el aviso de
     // diagnóstico a Sentry), y las marcas que el plan deja en state pueden quedar viejas: otro
@@ -5232,7 +5221,7 @@ function renderObPlanPreview(){
 }
 async function finishOnboard(){
   const { profile, healthNotes } = obBuildProfile();
-  const name = profile.name, terrain = profile.terrain;
+  const name = profile.name;
   state.profile = profile;
   // Antes esto era un flag propio (hasInjuryNote) que, a diferencia de toda otra señal de
   // cautela, no tenía forma de destildarse -- una molestia mencionada una sola vez en el
@@ -8495,7 +8484,6 @@ function generatePlan(p, weekNumber, weekStartDate){
       principiantes con trote/caminata que progresa semana a semana, series y cuestas por duración,
       tempo como un bloque continuo, tirada larga por minutos. d.durMin es la fuente de verdad en ese modo
       (d.dist queda solo como estimación para estadísticas, calendario y relojes). */
-const LEVEL_TEST_SECONDS = 720;
 const LEVEL_TEST_MIN_M = 1200, LEVEL_TEST_MAX_M = 4500;   // menos de 1200 m en 12 minutos es caminata: no alcanza para estimar ritmos (daba rangos invertidos y 12 a 18 min/km)
 // Fecha (ISO) del test agendado que pasó sin hacerse -- solo si no quedó otro test agendado más adelante.
 function missedLevelTestIso(){
@@ -10942,7 +10930,6 @@ function buildDayListHtml(wd){
     // index.html). Antes este tilde de "hecho" usaba --hivis puro y quedaba casi invisible
     // en modo claro -- reportado por el usuario.
     const statusIcon = d.status==='done' ? `<div class="icon-sq" style="width:16px; height:16px; color:var(--hivis-text);">${ICONS.check}</div>` : d.status==='skipped' ? `<div class="icon-sq" style="width:16px; height:16px; color:var(--danger);">${ICONS.cross}</div>` : '';
-    const zoneDetail = (d.zone && z && z[d.zone] && !isEventDay) ? `<br><br><span class="zone-chip zone-${d.zone}">${t('zone_word')} ${d.zone}</span> <span class="mono muted">${z[d.zone].min}-${z[d.zone].max} bpm</span>` : '';
     let statusBlock = '';
     if(d.status==='done'){
       const run = d.linkedRunId ? state.runs.find(r=>r.id===d.linkedRunId) : null;
@@ -10985,19 +10972,19 @@ function initPlanDrag(){
   const list = document.getElementById('plan-list');
   if(!list || list.dataset.dragInit) return;
   list.dataset.dragInit = '1';
-  let timer = null, drag = null, sx = 0, sy = 0, sRow = null;
+  let timer = null, drag = null, sx = 0, sy = 0;
   const overRow = (x, y) => { const el = document.elementFromPoint(x, y); return el && el.closest ? el.closest('#plan-list .day-row[data-drop]') : null; };
   const clearOver = () => list.querySelectorAll('.drag-over').forEach(e => e.classList.remove('drag-over'));
   const reset = () => {
     clearTimeout(timer); timer = null;
     if(drag){ drag.row.classList.remove('drag-src'); drag.row.style.transform = ''; drag.row.style.pointerEvents = ''; }
-    list.classList.remove('plan-dragging'); clearOver(); drag = null; sRow = null;
+    list.classList.remove('plan-dragging'); clearOver(); drag = null;
   };
   list.addEventListener('touchstart', e => {
     if(e.touches.length !== 1) return;
     const row = e.target.closest ? e.target.closest('.day-row[data-src]') : null;
     if(!row) return;
-    sRow = row; sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY;
     timer = setTimeout(() => {
       drag = {row, idx: parseInt(row.dataset.idx, 10), target: null};
       row.classList.add('drag-src'); list.classList.add('plan-dragging');
@@ -14464,7 +14451,6 @@ function computePaceSeriesFromPoints(points){
 // carrera (más abajo, MAP_TILE_SIZE/routeTileUrl) queda aparte, en 256px fijo sin retina.
 const MAPBOX_TOKEN = 'pk.eyJ1IjoiemFuY2FkYSIsImEiOiJjbXU0cm9sbGEwM2tzMndwczE4emExdzVnIn0.kzrV4ltOY_PjTd_YIuh1vQ';
 const MAPBOX_STYLE = 'streets-v12';
-const MAPBOX_TILE_URL = `https://api.mapbox.com/styles/v1/mapbox/${MAPBOX_STYLE}/tiles/256/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`;
 /* ---- Mapas vectoriales (Mapbox GL): el texto y las líneas se dibujan a la resolución real de la pantalla (en un iPhone con 3x de densidad las
    tiles de imagen, aun en @2x, quedan blandas). Se usa en el detalle de carrera y en el mapa de calor; si no carga o el equipo no soporta WebGL, los
    dos caen al mapa de imágenes de siempre. La librería es la versión "CSP" (su worker se sirve desde vendor/, sin blobs) y se carga recién al abrir un mapa. ---- */
@@ -16526,19 +16512,6 @@ function getGoalRaceKm(){
    Se abre desde la tarjeta de "Próximos eventos" de Perfil, y si hay marcas
    personales cargadas se sugiere un tiempo con la misma fórmula de Riegel que
    ya usa el bloque de "ritmo objetivo estimado" de esa misma tarjeta. */
-function parseHMS(str){
-  // Acepta "mm:ss" o "h:mm:ss" (con 1 o 2 dígitos en cada parte) -- lo que
-  // el usuario probablemente tipee a mano en vez de forzarlo a un formato
-  // rígido con inputs separados de horas/minutos/segundos.
-  const parts = String(str||'').trim().split(':').map(p=>p.trim());
-  if(parts.length<2 || parts.length>3 || parts.some(p=>p==='' || isNaN(p))) return null;
-  const nums = parts.map(Number);
-  if(nums.some(n=>n<0)) return null;
-  let sec;
-  if(nums.length===2) sec = nums[0]*60 + nums[1];
-  else sec = nums[0]*3600 + nums[1]*60 + nums[2];
-  return sec>0 ? sec : null;
-}
 /* Selector de horas/minutos/segundos de la calculadora de ritmo: 3 <select> en vez de
    un campo de texto libre (antes había que tipear "1:45:00" a mano). Las opciones se
    generan una sola vez (quedan vacías la primera vez que se abre el modal). */
@@ -17003,9 +16976,7 @@ function renderHeatmapRaster(runs){
   }
   if(heatLayer){ heatLayer.remove(); heatLayer = null; }
   heatLayer = L.layerGroup().addTo(heatMap);
-  let km = 0;
   runs.forEach(r => {
-    km += r.distanceKm || 0;
     const step = Math.max(1, Math.floor(r.points.length / 500));   // 500 puntos por carrera alcanzan de sobra para dibujar el trazo
     const ll = [];
     for(let i=0;i<r.points.length;i+=step){ const p = r.points[i]; if(Number.isFinite(p.lat) && Number.isFinite(p.lon)) ll.push([p.lat, p.lon]); }
@@ -17022,7 +16993,6 @@ function renderHistory(){
   scheduleMapPreload();
   const el = document.getElementById('history-list');
   const stravaSyncCard = buildStravaSyncBanner();
-  const weekRuns = (state.runs||[]).filter(r => getMondayISO(new Date(r.date)) === state.weekStart);
   const tr = computeTrends();
   const daily = computeDailyTrend(14);
   const maxKmDay = Math.max(...daily.map(x=>x.km), 1);
@@ -17705,7 +17675,6 @@ document.addEventListener('touchmove', e=>{
   const mapEl = document.getElementById('rd-map-full');
   if(!mapEl || rdMapDragStartY===0) return;
   const dy = rdMapDragStartY - e.touches[0].clientY;
-  const dx = 0;
   if(!rdMapDragAxisLocked){
     if(Math.abs(dy) > 8){
       rdMapDragAxisLocked = true;
@@ -17762,7 +17731,6 @@ function renderRDRitmo(panel){
   const splitPaces = splits.map(s=>s.paceMin).filter(p=>p>0);
   const fullPaces = humanPaces(fullSplitsOnly(splits).map(s=>s.paceMin));
   const fastest = fullPaces.length ? Math.min(...fullPaces) : paceMin;
-  const maxPaceForBar = Math.max(...splitPaces, paceMin) * 1.02 || 1;
   const pacingAnalysis = analyzeSplitPacing(splits);
   panel.innerHTML = `
     ${runHighlightBlock(r)}

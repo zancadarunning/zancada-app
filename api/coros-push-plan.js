@@ -30,7 +30,6 @@ const NOT_EDITABLE_RE = /not\s+editable|cannot be (edited|modified|updated)|comp
 function adminList() {
   return String(process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 }
-const REJECT_RE = /reject|invalid|error|fail|not allowed|must be|is required|violat|cannot|unable|denied/i;
 const errText = e => String((e && e.message) || e).slice(0, 400);
 
 module.exports = withSentry(async (req, res) => {
