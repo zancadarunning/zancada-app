@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-23T13:35:03Z';
+const APP_VERSION = '2026-11-24T12:48:16Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -3027,16 +3027,18 @@ function watchDayPayload(d, date){
     iv = { reps: rw.reps, workMin: rw.runSec / 60, restMin: rw.walkSec / 60, recoveryMin: rw.walkSec / 60 };
     repSecX = rw.runSec; recSecX = rw.walkSec;
   }
+  // Test de nivel (Cooper): UN paso de 12 minutos a esfuerzo máximo, sin objetivo de pulso ni de ritmo; siempre por tiempo, aunque la persona entrene por distancia. La carrera que baja del reloj la lee sola autoReadLevelTest().
+  const isLevelTest = d.typeKey === 'test';
   return {
     date, name: lbl.type, typeKey: d.typeKey, zone: d.zone||null, distKm: d.dist,
-    durMin: planDurationMin(d),
+    durMin: isLevelTest ? 12 : planDurationMin(d),
     desc: lbl.desc, interval: iv,
     // los mismos minutos que dice el texto de la sesión (planLabel): calentamiento de 10 min en las sesiones de calidad y de 5 en rodajes y tiradas; vuelta a la calma 5
     warmupMin: d.dist > 0 ? (['intervals','tempo','fartlek','hills','progression','test'].includes(d.typeKey) ? 10 : 5) : 0,
     cooldownMin: d.dist > 0 ? 5 : 0,
     repSec: repSecX || ((d.interval && d.interval.repSec>0) ? Math.round(d.interval.repSec) : ((isTimeMode() && d.interval && d.interval.repMeters) ? Math.round(repDurationSec(d.interval.repMeters)) : 0)),
     restSec: recSecX || ((d.interval && d.interval.recSec>0) ? Math.round(d.interval.recSec) : 0),
-    timeBased: !!(d.timeBased && isTimeMode())
+    timeBased: isLevelTest ? true : !!(d.timeBased && isTimeMode())
   };
 }
 // El día de la carrera cargada en "Próximos eventos" (con distancia): lo que se manda a los relojes y se muestra en Inicio. Es una sola vuelta de distancia, sin entrada en calor ni vuelta a la calma
@@ -3062,7 +3064,7 @@ function buildWatchPlanDays(){
       const race = eventRaceDayPayload(date);
       if(race){ if(!(d && (d.status==='done' || d.status==='skipped'))) out.push(race); return; }
       if(state.event && state.event.date === date) return;   // carrera sin distancia: tampoco se manda la sesión normal de ese día
-      if(!d || !(d.dist>0) || d.raceDay || d.typeKey==='test' || d.status==='done' || d.status==='skipped') return;
+      if(!d || !(d.dist>0) || d.raceDay || d.status==='done' || d.status==='skipped') return;   // el test de nivel también va al reloj (un paso de 12 minutos, sin objetivo de pulso)
       out.push(watchDayPayload(d, date));
     });
   };
