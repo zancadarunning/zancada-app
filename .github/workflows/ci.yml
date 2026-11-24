@@ -33,7 +33,20 @@ jobs:
         run: node --check app.js
       - name: Pruebas
         run: npm test
-      # el despliegue minifica app.js (scripts/build-minify.js): se prueba aca que el minificado se genera y que la bateria de pruebas que carga la app pasa igual con esa version
+
+  # El despliegue minifica app.js (scripts/build-minify.js): se prueba acá que el minificado se genera y que la batería de pruebas que carga la app pasa igual con esa versión.
+  # Va en un trabajo APARTE para que corra en paralelo con "test" (antes iba después, en el mismo trabajo, y el chequeo tardaba el doble). El chequeo obligatorio sigue siendo "test".
+  test-minificado:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1   # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Minificado de app.js
         run: |
           node scripts/build-minify.js
