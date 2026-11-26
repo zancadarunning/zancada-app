@@ -26,6 +26,7 @@ test('tope global agotado: contesta "ocupado", no llama a Claude y avisa a Sentr
     const u = String(url);
     const ok = data => ({ ok: true, status: 200, json: async () => data, text: async () => JSON.stringify(data) });
     if (u.includes('/auth/v1/user')) return ok({ id: 'u1', email: 'a@b.com', email_confirmed_at: '2026-01-01' });
+    if (u.includes('/rest/v1/app_state')) return ok([{ ai: true }]);   // la cuenta tiene la IA activada
     if (u.includes('increment_chat_usage')) { rpcCalls++; return ok(rpcCalls % 2 === 1); }   // 1.º: la persona dentro de su tope; 2.º: el global agotado
     if (u.includes('api.anthropic.com')) { anthropicCalls++; return ok({ content: [{ type: 'text', text: 'hola' }] }); }
     return ok({});

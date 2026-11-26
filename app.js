@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-11-24T18:11:39Z';
+const APP_VERSION = '2026-11-26T21:12:42Z';
 /* Se usa para detectar si hay una versión más nueva publicada y recargar sola la app
    (ver checkForAppUpdate más abajo). Un hook de pre-commit local (.git/hooks/pre-commit)
    la actualiza sola a la hora actual en cada commit que toque app.js/index.html.
@@ -224,7 +224,7 @@ function collectCustomTextHolders(target){
   return holders;
 }
 async function translateCustomPlanTexts(target){
-  if(customI18nRunning || !state || !state.onboarded) return;
+  if(customI18nRunning || !state || !state.onboarded || !aiEnabled()) return;   // sin IA activada los textos quedan en el idioma en que se escribieron
   const holders = collectCustomTextHolders(target);
   if(!holders.length) return;
   customI18nRunning = true;
@@ -1773,9 +1773,64 @@ if(typeof window !== 'undefined'){
    Versión 2 (2026-11-02): el consentimiento de IA y el de Términos pasan a ser propios (antes iban dentro del de salud), así que las cuentas con versión 1 lo vuelven a confirmar una vez. */
 const CONSENT_VERSION = 2;
 const CONSENT_FIELDS = ['terms', 'health', 'ai', 'age'];
+// La IA es OPCIONAL (2026-11-26): para usar la app alcanzan términos, datos de salud y edad. La IA se prende o apaga cuando se quiera (aiEnabled / setAiEnabled).
+const CONSENT_REQUIRED = ['terms', 'health', 'age'];
 function hasConsent(){
   const c = state && state.consent;
-  return !!(c && c.v >= CONSENT_VERSION && c.age16 === true && c.health === true && c.ai === true && c.terms === true);
+  return !!(c && c.v >= CONSENT_VERSION && c.age16 === true && c.health === true && typeof c.ai === 'boolean' && c.terms === true);
+}
+// Zonda (IA) solo funciona si la persona la activó. El servidor lo comprueba otra vez (api/_lib/ai-consent.js).
+function aiEnabled(){ return !!(state && state.consent && state.consent.ai === true); }
+async function setAiEnabled(on){
+  if(!state.consent) return;
+  const at = new Date().toISOString();
+  const log = (Array.isArray(state.consent.aiLog) ? state.consent.aiLog : []).concat({ on: !!on, at }).slice(-20);
+  state.consent = Object.assign({}, state.consent, { ai: !!on, aiAt: at, aiLog: log });
+  syncAiToggle();
+  // se guarda y se espera: el servidor lee este dato antes de mandar nada a la IA
+  await persist();
+  await waitForPendingPersist();
+}
+function syncAiToggle(){
+  const on = aiEnabled();
+  const box = document.getElementById('ai-toggle'); if(box) box.checked = on;
+  const status = document.getElementById('perfil-ai-status'); if(status) status.textContent = t(on ? 'ai_status_on' : 'ai_status_off');
+}
+// Interruptor de Perfil: al prender se explica a quién se envían los datos y se pide confirmación; apagar es directo.
+async function handleAiToggle(on){
+  if(on){
+    const ok = await showConfirm(t('ai_confirm_on'), { confirmText: t('ai_off_activate') });
+    if(!ok){ syncAiToggle(); return; }
+  }
+  await setAiEnabled(!!on);
+  showToast(t(on ? 'ai_toast_on' : 'ai_toast_off'), 'success');
+}
+// Con la IA apagada, tocar a Zonda muestra qué hace y un botón que lleva al interruptor.
+function openAiOffModal(){ const m = document.getElementById('ai-off-modal'); if(m){ m.style.display = 'block'; m.scrollTop = 0; } }
+function closeAiOffModal(){ const m = document.getElementById('ai-off-modal'); if(m) m.style.display = 'none'; }
+function openAiSettings(){
+  closeAiOffModal();
+  showView('perfil');
+  syncAiToggle();
+  const card = document.getElementById('perfil-ai-card');
+  if(!card) return;
+  card.classList.add('ai-highlight');
+  setTimeout(()=>{ try{ card.scrollIntoView({ behavior:'smooth', block:'center' }); }catch(e){} }, 60);
+  setTimeout(()=>{ card.classList.remove('ai-highlight'); }, 4500);
+}
+// A la IA no se le manda el nombre. Las respuestas ANTERIORES de Zonda (y el saludo inicial) pueden nombrar a la persona y vuelven en el historial: se les saca antes de enviarlas.
+// Distingue mayúsculas y solo toma palabras enteras ("Sol" no borra "sol"). Lo que escribe la persona no se toca.
+function stripUserName(text, name){
+  const full = String(name || '').trim();
+  if(!full) return String(text);
+  const parts = [full].concat(full.split(/\s+/)).filter(p => p.length > 1);
+  let out = String(text);
+  parts.forEach(p => {
+    const esc = p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp('(?<![\\p{L}\\p{N}])' + esc + '(?![\\p{L}\\p{N}])', 'gu'), '');
+  });
+  if(out === String(text)) return out;
+  return out.replace(/[ \t]+([,.!?:;])/g, '$1').replace(/,(?=[.!?:;])/g, '').replace(/[ \t]{2,}/g, ' ').trim();
 }
 let consentResolve = null;
 function consentEl(field){ return document.getElementById('consent-' + field); }
@@ -1824,7 +1879,9 @@ function showConsentScreen(){
     if(window.zcBootDone) window.zcBootDone();
   });
 }
-function allConsentChecked(){ return CONSENT_FIELDS.every(k => { const e = consentEl(k); return !!(e && e.checked); }); }
+function consentChecked(k){ const e = consentEl(k); return !!(e && e.checked); }
+function allConsentChecked(){ return CONSENT_FIELDS.every(consentChecked); }
+function requiredConsentChecked(){ return CONSENT_REQUIRED.every(consentChecked); }
 // "Aceptar todo" tilda o destilda los cuatro
 function toggleConsentAll(){
   const on = !!(consentEl('all') && consentEl('all').checked);
@@ -1832,14 +1889,15 @@ function toggleConsentAll(){
   updateConsentButton();
 }
 function updateConsentButton(){
-  const ok = allConsentChecked();
-  const all = consentEl('all'); if(all) all.checked = ok;   // "Aceptar todo" refleja si están los cuatro
+  const all = consentEl('all'); if(all) all.checked = allConsentChecked();   // "Aceptar todo" refleja si están los cuatro
   const btn = document.getElementById('consent-accept-btn');
-  if(btn) btn.disabled = !ok;
+  if(btn) btn.disabled = !requiredConsentChecked();   // la IA es opcional: alcanza con los obligatorios
 }
 function acceptConsent(){
-  if(!allConsentChecked()) return;   // el botón gris ya no deja, pero por las dudas
-  state.consent = { v: CONSENT_VERSION, at: new Date().toISOString(), age16: true, health: true, ai: true, terms: true };
+  if(!requiredConsentChecked()) return;   // el botón gris ya no deja, pero por las dudas
+  const at = new Date().toISOString();
+  const ai = consentChecked('ai');
+  state.consent = { v: CONSENT_VERSION, at, age16: true, health: true, ai, aiAt: at, aiLog: [{ on: ai, at }], terms: true };
   document.getElementById('consent-modal').style.display = 'none';
   const done = consentResolve; consentResolve = null;
   if(done) done(true);
@@ -9665,6 +9723,7 @@ function dismissAdjustWeek(){
   refreshHomeAlerts();
 }
 function askZondaAdjustWeek(){
+  if(!aiEnabled()){ openAiOffModal(); return; }
   const n = skippedSessionCount();
   state.adjustDismissed = state.weekStart;
   persist();
@@ -9698,6 +9757,7 @@ function dismissLoadCard(){
   refreshHomeAlerts();
 }
 function askZondaLowerLoad(){
+  if(!aiEnabled()){ openAiOffModal(); return; }
   const sp = weeklyLoadSpike();
   state.loadDismissed = state.weekStart;
   persist();
@@ -11749,6 +11809,7 @@ function deleteCoachNote(i){
   renderCoachNotes(); persist();
 }
 function renderPerfil(){
+  syncAiToggle();
   try{ checkAdminOnce(); }catch(e){}
   try{ renderCoachNotes(); }catch(e){}
   const p = state.profile;
@@ -13204,6 +13265,7 @@ window.addEventListener('scroll', () => { if(!headerTitleTicking){ headerTitleTi
 const VIEW_ORDER = ['inicio','plan','correr','history','perfil','coach'];
 let lastViewName = null;
 async function showView(v){
+  if(v==='coach' && !aiEnabled()){ openAiOffModal(); return; }   // Zonda apagado: en vez del chat, la explicación con el botón para activarlo
   // Direccion de la transicion (ver .view.active en el CSS): hacia la derecha si la pestana nueva esta mas adelante en la barra.
   if(lastViewName && lastViewName !== v){
     document.documentElement.setAttribute('data-nav-dir', VIEW_ORDER.indexOf(v) < VIEW_ORDER.indexOf(lastViewName) ? 'back' : 'fwd');
@@ -13276,6 +13338,7 @@ async function showView(v){
   if(v==='correr'){ renderRunTodayCard(); renderRunModeChoice(); initIdleMap(); }
 }
 function goCoachWithPrompt(prefill){
+  if(!aiEnabled()){ openAiOffModal(); return; }
   showView('coach');
   if(prefill){ document.getElementById('chatInput').value = prefill; }
   document.getElementById('chatInput').focus();
@@ -20023,7 +20086,8 @@ function buildContext(){
   const tomorrowSessionDesc = raceDayDesc(addDaysToIsoLocal(todayLocalISO(), 1)) || describePlanDayForCtx(tomorrowIsNextWeek ? nw.plan[tomorrowIdx] : state.plan[tomorrowIdx]);
   let ctx = `HOY es ${todayLabel}, ${nowTimeLabel} hs (código de día: ${DAY_KEYS[todayIdx]}). Mañana es ${t('day_'+DAY_KEYS[tomorrowIdx])} (código: ${DAY_KEYS[tomorrowIdx]})${tomorrowNote}. Usá esto como la referencia exacta para cualquier pedido con "hoy", "mañana", "ayer" u otro día relativo, y para saber si es de mañana/tarde/noche -- nunca lo adivines mirando el estado del plan NI un "hoy es..." que vos mismo hayas dicho en un mensaje anterior de esta charla: los mensajes viejos pueden ser de otro día, así que este dato (el de ESTE mensaje) manda siempre, incluso si contradice algo que dijiste antes. Los mensajes anteriores de esta charla que empiezan con una fecha entre corchetes, como [lunes 5 de octubre], son de ESE día, no de hoy: nunca copies de ellos qué día es, y jamás escribas esos corchetes en tus respuestas. La sesión de HOY es: ${todaySessionDesc}. La sesión de MAÑANA es: ${tomorrowSessionDesc}. Estos dos datos ya están resueltos -- no hace falta que los recalcules ni los cruces contra el resto del plan más abajo, y si contradicen algo que vos mismo dijiste antes en esta charla, estos mandan siempre.${yesterdayNote}${p.tz ? ` Zona horaria del corredor: ${p.tz} (usala para inferir de qué país/región es -- por ejemplo para saber si está en el hemisferio sur o norte a la hora de hablar de estaciones del año, clima o época de carreras).` : ''} `;
   const ageForCtx = ageFromBirth(p.birth);
-  ctx += `Nombre: ${p.name}.${ageForCtx !== null ? ` Edad aprox: ${ageForCtx}.` : ''} Peso: ${p.weight}kg. Altura: ${p.height}cm. Corre ${p.weeklyKm}km/semana (calculado automáticamente según objetivo y fecha de carrera). Terreno: ${p.terrain}. Objetivo: ${t('ob_goal_'+p.goal)}. Zonas de FC (bpm): ${JSON.stringify(p.hrZones)}.`;
+  // El nombre NO se manda a la IA (minimización de datos, 2026-11-26).
+  ctx += `${ageForCtx !== null ? `Edad aprox: ${ageForCtx}. ` : ''}Peso: ${p.weight}kg. Altura: ${p.height}cm. Corre ${p.weeklyKm}km/semana (calculado automáticamente según objetivo y fecha de carrera). Terreno: ${p.terrain}. Objetivo: ${t('ob_goal_'+p.goal)}. Zonas de FC (bpm): ${JSON.stringify(p.hrZones)}.`;
   // El plan generado (generatePlan) YA sabe si es principiante y le arma sesiones en
   // consecuencia (zona 1 fija, sin series/tempo/cuestas -- o zona 2 + algún fartlek si ya
   // tiene base de otro deporte de impacto, ver hasRunningImpactBase), pero el coach del chat
@@ -21022,6 +21086,7 @@ Formato del texto: el chat solo interpreta **negrita** (usala con moderación, p
 Sé breve (4-6 líneas salvo que pidan más detalle). Si mencionan dolor agudo, que empeora al correr, o que persiste más de unos días, recomendá frenar y consultar a un profesional de la salud antes de seguir entrenando — no intentes diagnosticar vos la causa.`;
 }
 async function sendChat(){
+  if(!aiEnabled()){ openAiOffModal(); return; }   // nada sale hacia la IA si está apagada (el mensaje queda en la caja)
   // Mismo chequeo (y mismo motivo) que se agregó en showView('coach') -- se repite acá porque
   // sendChat() también se dispara desde los chips rápidos (sendChatChip) y desde
   // goCoachWithPrompt() sin pasar necesariamente por una entrada fresca a la vista, y porque
@@ -21079,7 +21144,7 @@ async function sendChat(){
   // los mensajes marcados noAi (resumen semanal, récords, logros, devolución de la sesión: llevan números de carreras que pueden venir de Strava) NO se reenvían a la IA; la política de Strava prohíbe usar sus datos como contexto de una conversación
   let messages = state.chat.filter(m=>(m.role==='user'||m.role==='coach') && !m.noAi).slice(0,-1).slice(-CHAT_HISTORY_LIMIT).map(m=>({
     role: m.role==='user'?'user':'assistant',
-    content: ((m.ts && dayKeyOfTs(m.ts) !== todayKeyNow) ? `[${dateLabelOfTs(m.ts)}] ${String(m.text).slice(0, 2000)}` : String(m.text).slice(0, 2000)) + (m.role==='coach' && Array.isArray(m.acciones) && m.acciones.length ? `\n[Registro de la app (no lo escribió el corredor): en esa respuesta YA se aplicaron estos cambios: ${m.acciones.join(' | ').slice(0, 600)}. No los repitas.]` : '')
+    content: ((m.ts && dayKeyOfTs(m.ts) !== todayKeyNow) ? `[${dateLabelOfTs(m.ts)}] ` : '') + (m.role==='coach' ? stripUserName(m.text, state.profile.name) : String(m.text)).slice(0, 2000) + (m.role==='coach' && Array.isArray(m.acciones) && m.acciones.length ? `\n[Registro de la app (no lo escribió el corredor): en esa respuesta YA se aplicaron estos cambios: ${m.acciones.join(' | ').slice(0, 600)}. No los repitas.]` : '')
   }));
   const nowLabelFull = nowDate.toLocaleDateString(LOCALE_MAP[lang], {weekday:'long', day:'numeric', month:'long'});
   const nowClock = nowDate.toLocaleTimeString(LOCALE_MAP[lang], {hour:'2-digit', minute:'2-digit', hour12:false});

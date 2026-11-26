@@ -54,6 +54,7 @@ function setup({ confirmed = true, userWithin = true, globalWithin = true }) {
       const id = JSON.parse(opts.body).p_user_id; calls.rpc.push(id);
       return { ok: true, json: async () => (id === '00000000-0000-0000-0000-000000000000' ? globalWithin : userWithin) };
     }
+    if (u.includes('/rest/v1/app_state')) return { ok: true, json: async () => [{ ai: true }] };   // la cuenta tiene la IA activada
     if (u.includes('api.anthropic.com')) { calls.anthropic++; return { status: 200, ok: true, json: async () => ({ content: [{ type: 'text', text: 'hola' }] }) }; }
     throw new Error('url inesperada ' + u);
   };
@@ -138,6 +139,7 @@ test('endpoint: las reglas fijas del servidor van antes del texto de la app en l
     const u = String(url); const okr = d => ({ ok: true, status: 200, json: async () => d, text: async () => '' });
     if (u.includes('/auth/v1/user')) return okr({ id: 'u1', email: 'a@b.com', email_confirmed_at: '2026-01-01' });
     if (u.includes('increment_chat_usage')) return okr(true);
+    if (u.includes('/rest/v1/app_state')) return okr([{ ai: true }]);
     if (u.includes('api.anthropic.com')) { sent.push(JSON.parse(opts.body)); return okr({ content: [{ type: 'text', text: 'hola' }] }); }
     return okr({});
   };
