@@ -6,6 +6,16 @@ const { fetchWithTimeout } = require('./_lib/fetch-with-timeout');
 const { pick } = require('./_lib/own');
 const { sanitizeChatRequest } = require('./_lib/chat-guard');
 const { pickModel } = require('./_lib/chat-model');
+const { aiAllowed } = require('./_lib/ai-consent');
+
+const AI_OFF_MSG = {
+  es: 'Zonda está apagado. Activalo desde Perfil para usarlo.',
+  en: 'Zonda is turned off. Turn it on in Profile to use it.',
+  pt: 'O Zonda está desligado. Ative no Perfil para usar.',
+  fr: 'Zonda est désactivé. Active-le dans Profil pour l’utiliser.',
+  it: 'Zonda è disattivato. Attivalo da Profilo per usarlo.',
+  de: 'Zonda ist ausgeschaltet. Aktiviere ihn im Profil, um ihn zu nutzen.'
+};
 
 // Mensajes que sí le mostramos al corredor tal cual, en su idioma. Antes, cualquier error
 // que no fuera "muy solicitado" (token de sesión faltante/vencido, un error interno de la
@@ -124,6 +134,18 @@ module.exports = withSentry(async (req, res) => {
   if (!apiKey) {
     console.error('chat: falta configurar ANTHROPIC_API_KEY en las variables de entorno de Vercel.');
     res.status(500).json({ error: { message: pick(GENERIC_ERROR_MSG, lang, 'es') } });
+    return;
+  }
+
+  // La IA es opcional: si la cuenta no la tiene activada (o no se puede comprobar), no se envía nada y no se gasta cupo.
+  const allowedAi = await aiAllowed(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, auth.userId);
+  if (allowedAi === false) {
+    res.status(403).json({ error: { message: pick(AI_OFF_MSG, lang, 'es'), code: 'ai_disabled' } });
+    return;
+  }
+  if (allowedAi !== true) {
+    console.error('chat: no se pudo comprobar el consentimiento de IA, usuario', auth.userId);
+    res.status(503).json({ error: { message: pick(GENERIC_ERROR_MSG, lang, 'es') } });
     return;
   }
 

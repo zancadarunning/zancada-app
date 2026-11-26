@@ -578,6 +578,9 @@
   .switch-slider{position:absolute; cursor:pointer; inset:0; background:var(--asphalt-4); transition:.2s; border-radius:999px;}
   .switch-slider:before{content:""; position:absolute; height:27px; width:27px; left:2px; top:2px; background:#fff; transition:.2s; border-radius:50%; box-shadow:0 2px 4px rgba(0,0,0,.3);}
   .switch input:checked + .switch-slider{background:var(--hivis);}
+  /* Resalta el interruptor de Zonda cuando se llega desde "Activar Zonda". */
+  #perfil-ai-card{transition:box-shadow .3s ease;}
+  #perfil-ai-card.ai-highlight{box-shadow:0 0 0 2px var(--hivis-line, var(--hivis)), 0 0 18px var(--hivis-glow);}
   .switch input:checked + .switch-slider:before{transform:translateX(20px);}
   .two-col{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
   .divider-or{display:flex; align-items:center; gap:10px; margin:20px 0; color:var(--mist-dim);
@@ -4898,6 +4901,21 @@ body{overflow-wrap:break-word;}
     </div>
   </div>
 
+  <!-- Se muestra al tocar a Zonda cuando está apagada: qué hace, qué datos usa y un botón que lleva al interruptor de Perfil. -->
+  <div class="overlay" id="ai-off-modal" style="display:none; z-index:59; overflow-y:auto;" role="dialog" aria-modal="true" aria-labelledby="ai-off-title">
+    <h2 class="subtitle" id="ai-off-title" style="font-size:24px; text-align:center;" data-i18n="ai_off_title"></h2>
+    <p class="lead" style="margin-top:14px;" data-i18n="ai_off_intro"></p>
+    <ul style="margin:10px 0 0; padding-left:20px; line-height:1.8; text-align:left;">
+      <li data-i18n="ai_off_cap1"></li>
+      <li data-i18n="ai_off_cap2"></li>
+      <li data-i18n="ai_off_cap3"></li>
+    </ul>
+    <p class="muted" style="margin-top:16px; font-size:14px; line-height:1.55;" data-i18n="ai_off_data"></p>
+    <p class="muted" style="margin-top:8px; font-size:13px; line-height:1.5;" data-i18n="ai_off_medical"></p>
+    <button class="btn btn-primary" style="width:100%; margin-top:24px;" data-on-click="openAiSettings()" data-i18n="ai_off_activate"></button>
+    <button type="button" class="ob-skip" style="display:block; width:100%; text-align:center;" data-on-click="closeAiOffModal()" data-i18n="ai_off_later"></button>
+  </div>
+
   <div class="overlay" id="hist-info-modal" style="display:none; z-index:59;">
     <div class="icon-sq" style="width:38px; height:38px; margin:0 auto 8px; color:var(--hivis-text);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></div>
     <h2 class="subtitle" style="font-size:22px;" data-i18n="hist_info_title"></h2>
@@ -4995,8 +5013,8 @@ body{overflow-wrap:break-word;}
         <label class="legal-checkbox-row cs-row cs-all"><input type="checkbox" id="consent-all" data-on-change="toggleConsentAll()"><span id="consent-all-label"></span></label>
         <label class="legal-checkbox-row cs-row"><input type="checkbox" id="consent-terms" data-on-change="updateConsentButton()"><span id="consent-terms-label"></span></label>
         <label class="legal-checkbox-row cs-row"><input type="checkbox" id="consent-health" data-on-change="updateConsentButton()"><span id="consent-health-label"></span></label>
-        <label class="legal-checkbox-row cs-row"><input type="checkbox" id="consent-ai" data-on-change="updateConsentButton()"><span id="consent-ai-label"></span></label>
         <label class="legal-checkbox-row cs-row"><input type="checkbox" id="consent-age" data-on-change="updateConsentButton()"><span id="consent-age-label"></span></label>
+        <label class="legal-checkbox-row cs-row"><input type="checkbox" id="consent-ai" data-on-change="updateConsentButton()"><span id="consent-ai-label"></span></label>
       </div>
       <button class="btn btn-primary ob-cta" id="consent-accept-btn" disabled data-on-click="acceptConsent()"></button>
       <button type="button" class="ob-skip" id="consent-decline-btn" data-on-click="declineConsent()"></button>
@@ -5225,6 +5243,21 @@ body{overflow-wrap:break-word;}
         <h3 data-i18n="perfil_preferences"></h3>
         <p class="muted" data-i18n="perfil_preferences_desc"></p>
       </div>
+    </div>
+
+    <!-- Zonda es opcional: este interruptor la prende o apaga (ver setAiEnabled en app.js). Apagado, no se envía nada a la IA. -->
+    <div class="card" id="perfil-ai-card">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <div style="flex:1; padding-right:12px;">
+          <h3 id="perfil-ai-title" style="margin-bottom:2px;" data-i18n="perfil_ai_title"></h3>
+          <p class="muted" id="perfil-ai-status" style="font-size:13px;"></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="ai-toggle" aria-labelledby="perfil-ai-title" aria-describedby="perfil-ai-desc" data-on-change="handleAiToggle(this.checked)">
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+      <p class="muted" id="perfil-ai-desc" style="margin-top:8px; font-size:13px; line-height:1.5;" data-i18n="perfil_ai_desc"></p>
     </div>
 
     <!-- Notificaciones push había pasado a vivir dentro de "Relojes" (mismo recuadro

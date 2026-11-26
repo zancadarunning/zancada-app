@@ -17,11 +17,13 @@ function setup() {
 }
 const FULL = { v: 2, at: '2026-11-02T00:00:00Z', age16: true, health: true, ai: true, terms: true };
 
-test('hasConsent: exige versión vigente y los cuatro en true (16+, salud, IA y Términos)', () => {
+test('hasConsent: exige versión vigente, 16+, salud y Términos; la IA es opcional pero tiene que estar respondida', () => {
   const { app } = setup();
   app.state.consent = undefined; assert.equal(app.hasConsent(), false);
   app.state.consent = FULL; assert.equal(app.hasConsent(), true);
-  for (const k of ['age16', 'health', 'ai', 'terms']) {
+  app.state.consent = Object.assign({}, FULL, { ai: false }); assert.equal(app.hasConsent(), true, 'sin IA también se puede usar la app');
+  app.state.consent = Object.assign({}, FULL); delete app.state.consent.ai; assert.equal(app.hasConsent(), false, 'sin respuesta sobre la IA se vuelve a preguntar');
+  for (const k of ['age16', 'health', 'terms']) {
     app.state.consent = Object.assign({}, FULL, { [k]: false }); assert.equal(app.hasConsent(), false, k);
     app.state.consent = Object.assign({}, FULL); delete app.state.consent[k]; assert.equal(app.hasConsent(), false, 'sin ' + k);
   }
