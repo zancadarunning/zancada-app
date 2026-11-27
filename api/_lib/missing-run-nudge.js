@@ -2,7 +2,7 @@
 //
 // Aviso de la noche "hoy tenías una salida planeada y todavía no aparece cargada": send-reminders.js (cron cada 30 minutos) se lo manda a
 // quien tenía una sesión planeada HOY, no la marcó como resuelta y no tiene ninguna carrera guardada hoy, a las 20:00 de su hora local.
-// Sirve para dos cosas: acordarse de salir, y darse cuenta de que la carrera ya hecha no llegó (a veces hay que abrir Strava o la app del
+// Sirve para dos cosas: acordarse de salir, y darse cuenta de que la carrera ya hecha no llegó (a veces hay que abrir la app del
 // reloj para que se sincronice).
 //
 // El cron solo decide a quién le toca; acá están el momento, la pregunta a la base y el texto (funciones puras, se prueban aparte).
@@ -15,12 +15,12 @@ const NUDGE_HOUR = 20;           // hora local en que sale (la primera mitad de 
 const MI_PER_KM = 0.621371;
 
 const TEXTS = {
-  es: { title: 'Zancada', body: (what) => `Hoy tenías ${what} y todavía no aparece cargado. Si ya corriste, abrí Strava o la app de tu reloj para que se sincronice.` },
-  en: { title: 'Zancada', body: (what) => `Today you had ${what} planned and it hasn't shown up yet. If you already ran, open Strava or your watch app so it syncs.` },
-  pt: { title: 'Zancada', body: (what) => `Hoje você tinha ${what} no plano e ainda não apareceu. Se você já correu, abra o Strava ou o app do seu relógio para sincronizar.` },
-  fr: { title: 'Zancada', body: (what) => `Aujourd'hui, tu avais prévu ${what} et rien n'apparaît encore. Si tu as déjà couru, ouvre Strava ou l'appli de ta montre pour la synchroniser.` },
-  it: { title: 'Zancada', body: (what) => `Oggi avevi in programma ${what} e non risulta ancora caricato. Se hai già corso, apri Strava o l'app del tuo orologio per sincronizzare.` },
-  de: { title: 'Zancada', body: (what) => `Heute stand ${what} auf dem Plan und es ist noch nicht aufgetaucht. Wenn du schon gelaufen bist, öffne Strava oder die App deiner Uhr zum Synchronisieren.` }
+  es: { title: 'Zancada', body: (what) => `Hoy tenías ${what} y todavía no aparece cargado. Si ya corriste, abrí la app de tu reloj para que se sincronice.` },
+  en: { title: 'Zancada', body: (what) => `Today you had ${what} planned and it hasn't shown up yet. If you already ran, open your watch app so it syncs.` },
+  pt: { title: 'Zancada', body: (what) => `Hoje você tinha ${what} no plano e ainda não apareceu. Se você já correu, abra o app do seu relógio para sincronizar.` },
+  fr: { title: 'Zancada', body: (what) => `Aujourd'hui, tu avais prévu ${what} et rien n'apparaît encore. Si tu as déjà couru, ouvre l'appli de ta montre pour synchroniser ta course.` },
+  it: { title: 'Zancada', body: (what) => `Oggi avevi in programma ${what} e non risulta ancora caricato. Se hai già corso, apri l'app del tuo orologio per sincronizzare.` },
+  de: { title: 'Zancada', body: (what) => `Heute stand ${what} auf dem Plan und es ist noch nicht aufgetaucht. Wenn du schon gelaufen bist, öffne die App deiner Uhr zum Synchronisieren.` }
 };
 
 // ¿Le toca el aviso a esta persona ahora? Su plan guardado tiene que ser el de ESTA semana (si no, no sabemos qué tocaba hoy), con sesión

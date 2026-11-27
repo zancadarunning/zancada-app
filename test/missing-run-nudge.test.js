@@ -51,7 +51,8 @@ test('texto: kilómetros, millas y minutos, limpio de saltos de línea, en los 6
   for (const l of ['es', 'en', 'pt', 'fr', 'it', 'de']) {
     const m = nudge.buildNudge(l, 'X · 8.0 km');
     assert.equal(m.title, 'Zancada');
-    assert.ok(m.body.includes('X · 8.0 km') && /Strava/.test(m.body), l);
+    assert.ok(m.body.includes('X · 8.0 km'), l);
+    assert.doesNotMatch(m.body, /strava/i, l + ': el aviso solo nombra la app del reloj (Strava no está en la app)');
   }
   assert.ok(nudge.buildNudge('zz', 'X').body.includes('Hoy tenías'), 'idioma desconocido cae a español');
 });
