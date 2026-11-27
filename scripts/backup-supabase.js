@@ -12,14 +12,22 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+// Toda tabla nueva tiene que quedar en una de estas tres listas (lo controla test/respaldo-tablas.test.js): si no, se pierde sin que nadie se entere.
 const TABLES = [
-  'app_state', 'push_subscriptions',
+  'app_state', 'run_tracks', 'entitlements', 'push_subscriptions', 'known_devices',
   'chat_usage', 'sent_notifications', 'sync_cooldowns'
 ];
-const TOKEN_TABLES = ['strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'huawei_connections', 'suunto_connections'];
+const TOKEN_TABLES = ['strava_connections', 'polar_connections', 'wahoo_connections', 'coros_connections', 'huawei_connections', 'suunto_connections', 'garmin_connections'];
+// No se copian a propósito: usage_alert_state solo recuerda qué avisos de consumo ya se mandaron (no tiene datos de personas).
+const EXCLUDED_TABLES = ['usage_alert_state'];
 const PAGE = 1000;
 // Tablas sin las cuales el respaldo no sirve: si no existen (404) es un error de configuración, no "tabla opcional" -- antes se anotaba "no existe" y el respaldo salía "exitoso" sin los datos de los corredores.
-const ESSENTIAL_TABLES = ['app_state'];
+const ESSENTIAL_TABLES = ['app_state', 'run_tracks'];   // run_tracks tiene el recorrido GPS y las series de cada carrera
+// Orden para paginar: la clave primaria completa. Ordenando solo por user_id, con más de una página las filas de una misma persona podrían repetirse o faltar.
+const ORDER = {
+  run_tracks: 'user_id,run_id', known_devices: 'user_id,device_hash', push_subscriptions: 'user_id,device_id',
+  chat_usage: 'user_id,usage_date', sent_notifications: 'user_id,kind,period', sync_cooldowns: 'user_id,provider'
+};
 
 function loadDotEnv() {
   const f = path.join(__dirname, '..', '.env');
@@ -33,7 +41,7 @@ function loadDotEnv() {
 async function fetchAll(base, headers, table) {
   const rows = [];
   for (let from = 0; ; from += PAGE) {
-    const res = await fetch(`${base}/rest/v1/${table}?select=*&order=user_id`, { headers: { ...headers, Range: `${from}-${from + PAGE - 1}`, 'Range-Unit': 'items' } });
+    const res = await fetch(`${base}/rest/v1/${table}?select=*&order=${ORDER[table] || 'user_id'}`, { headers: { ...headers, Range: `${from}-${from + PAGE - 1}`, 'Range-Unit': 'items' } });
     if (res.status === 404 && !ESSENTIAL_TABLES.includes(table)) return null;   // la tabla no existe en esta base (solo se tolera en las opcionales)
     if (!res.ok) throw new Error(`${table}: HTTP ${res.status}`);
     const page = await res.json();
@@ -91,4 +99,6 @@ async function main() {
   console.log('Listo. Estos archivos tienen datos personales: no los subas a GitHub ni a un lugar público.');
 }
 
-main().catch(e => { console.error(e.message); process.exit(1); });
+module.exports = { TABLES, TOKEN_TABLES, EXCLUDED_TABLES, ESSENTIAL_TABLES, ORDER, fetchAll };
+
+if (require.main === module) main().catch(e => { console.error(e.message); process.exit(1); });
